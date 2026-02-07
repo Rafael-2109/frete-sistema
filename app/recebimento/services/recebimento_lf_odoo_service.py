@@ -39,6 +39,7 @@ import logging
 import os
 import time
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 from redis import Redis
 
@@ -176,7 +177,7 @@ class RecebimentoLfOdooService:
 
             # Sucesso!
             recebimento.status = 'processado'
-            recebimento.processado_em = datetime.utcnow()
+            recebimento.processado_em = agora_utc_naive()
             recebimento.erro_mensagem = None
             commit_with_retry(db.session)
 
@@ -958,13 +959,13 @@ class RecebimentoLfOdooService:
                 if existente:
                     existente.lote_nome = lote.lote_nome
                     existente.data_validade = lote.data_validade
-                    existente.atualizado_em = datetime.utcnow()
+                    existente.atualizado_em = agora_utc_naive()
                     continue
 
                 entrada = MovimentacaoEstoque(
                     cod_produto=str(cod_produto),
                     nome_produto=lote.odoo_product_name or cadastro.nome_produto,
-                    data_movimentacao=datetime.utcnow().date(),
+                    data_movimentacao=agora_utc_naive().date(),
                     tipo_movimentacao='ENTRADA',
                     local_movimentacao='COMPRA',
                     qtd_movimentacao=lote.quantidade,

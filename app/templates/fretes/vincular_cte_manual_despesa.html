@@ -224,7 +224,7 @@
                                     </td>
                                     <td>
                                         {% if cte.data_emissao %}
-                                        {{ cte.data_emissao.strftime('%d/%m/%Y') }}
+                                        {{ cte.data_emissao|formatar_data_segura }}
                                         {% else %}
                                         <span class="text-muted">N/A</span>
                                         {% endif %}

@@ -168,7 +168,7 @@
                             data-odoo-po-name="{{ item.odoo_po_name or '' }}">
                             <!-- Data / NF -->
                             <td class="text-center">
-                                <small class="text-muted">{{ item.data_nf.strftime('%d/%m/%Y') if item.data_nf else 'N/A' }}</small>
+                                <small class="text-muted">{{ item.data_nf|formatar_data_segura or 'N/A' }}</small>
                                 <br><strong class="text-primary">{{ item.numero_nf or '-' }}</strong>
                                 <br>
                                 <div class="btn-group btn-group-sm">

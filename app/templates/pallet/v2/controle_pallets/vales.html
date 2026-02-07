@@ -669,14 +669,14 @@
                         </td>
                         <td>
                             {% if doc.data_emissao %}
-                            {{ doc.data_emissao.strftime('%d/%m/%Y') }}
+                            {{ doc.data_emissao|formatar_data_segura }}
                             {% else %}
                             -
                             {% endif %}
                         </td>
                         <td class="vencimento-cell {% if doc.vencido %}vencido{% elif doc.prestes_a_vencer %}a-vencer{% else %}ok{% endif %}">
                             {% if doc.data_validade %}
-                            {{ doc.data_validade.strftime('%d/%m/%Y') }}
+                            {{ doc.data_validade|formatar_data_segura }}
                             {% if doc.dias_para_vencer is not none %}
                                 {% if doc.dias_para_vencer < 0 %}
                                 <small class="text-danger">({{ doc.dias_para_vencer|abs }} dias atrás)</small>
@@ -918,12 +918,12 @@
                     </tr>
                     <tr>
                         <th>Data de Emissão</th>
-                        <td>{{ doc.data_emissao.strftime('%d/%m/%Y') if doc.data_emissao else '-' }}</td>
+                        <td>{{ doc.data_emissao|formatar_data_segura or '-' }}</td>
                     </tr>
                     <tr>
                         <th>Data de Validade</th>
                         <td>
-                            {{ doc.data_validade.strftime('%d/%m/%Y') if doc.data_validade else '-' }}
+                            {{ doc.data_validade|formatar_data_segura or '-' }}
                             {% if doc.dias_para_vencer is not none %}
                                 {% if doc.dias_para_vencer < 0 %}
                                 <span class="badge bg-danger">Vencido há {{ doc.dias_para_vencer|abs }} dia(s)</span>
@@ -950,7 +950,7 @@
                     {% if doc.recebido %}
                     <tr>
                         <th>Recebido em</th>
-                        <td>{{ doc.recebido_em.strftime('%d/%m/%Y %H:%M') if doc.recebido_em else '-' }}</td>
+                        <td>{{ doc.recebido_em|formatar_data_hora_brasil or '-' }}</td>
                     </tr>
                     <tr>
                         <th>Recebido por</th>
@@ -965,7 +965,7 @@
                     {% endif %}
                     <tr>
                         <th>Criado em</th>
-                        <td>{{ doc.criado_em.strftime('%d/%m/%Y %H:%M') if doc.criado_em else '-' }}</td>
+                        <td>{{ doc.criado_em|formatar_data_hora_brasil or '-' }}</td>
                     </tr>
                     <tr>
                         <th>Criado por</th>

@@ -45,7 +45,7 @@
                         {% for rem in remessas %}
                         <tr>
                             <td><strong>{{ rem.numero_nf or '-' }}</strong></td>
-                            <td>{{ rem.data_movimentacao.strftime('%d/%m/%Y') if rem.data_movimentacao else '-' }}</td>
+                            <td>{{ rem.data_movimentacao|formatar_data_segura or '-' }}</td>
                             <td>
                                 <span class="badge bg-info mb-1">TRANSPORTADORA</span><br>
                                 <small>{{ rem.cnpj_destinatario }}</small><br>

@@ -30,7 +30,7 @@ from typing import Dict, List, Optional
 from app import db
 from app.devolucao.models import NFDevolucao, OcorrenciaDevolucao
 from app.monitoramento.models import EntregaMonitorada
-from app.utils.timezone import agora_utc, agora_brasil
+from app.utils.timezone import agora_utc, agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +237,7 @@ class MonitoramentoSyncService:
             descricao_motivo=descricao,
 
             # Auditoria
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por='Sistema Monitoramento',
         )
 
@@ -297,7 +297,7 @@ class MonitoramentoSyncService:
             descricao_comercial=descricao,
 
             # Auditoria
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por='Sistema Monitoramento',
         )
 
@@ -338,7 +338,7 @@ class MonitoramentoSyncService:
             for nfd in nfds:
                 if entrega.status_finalizacao in STATUS_DEVOLUCAO:
                     nfd.status_monitoramento = entrega.status_finalizacao
-                    nfd.atualizado_em = agora_brasil()
+                    nfd.atualizado_em = agora_utc_naive()
                     nfd.atualizado_por = 'Sistema Monitoramento'
                     atualizadas += 1
 

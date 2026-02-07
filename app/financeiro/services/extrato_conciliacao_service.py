@@ -38,6 +38,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import (
     ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
 )
@@ -473,7 +474,7 @@ class ExtratoConciliacaoService:
 
         # Atualizar status
         item.status = 'CONCILIADO'
-        item.processado_em = datetime.utcnow()
+        item.processado_em = agora_utc_naive()
         item.mensagem = f"Conciliado: Saldo {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
 
         logger.info(f"  ✅ OK - Saldo: {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}")
@@ -1297,7 +1298,7 @@ class ExtratoConciliacaoService:
 
         # Atualizar status
         item.status = 'CONCILIADO'
-        item.processado_em = datetime.utcnow()
+        item.processado_em = agora_utc_naive()
         item.mensagem = "Sincronizado do Odoo - conciliação já existente"
 
         logger.info(
@@ -1479,7 +1480,7 @@ class ExtratoConciliacaoService:
 
         # Atualizar status
         item.status = 'CONCILIADO'
-        item.processado_em = datetime.utcnow()
+        item.processado_em = agora_utc_naive()
         item.mensagem = mensagem_resultado
 
         logger.info(
@@ -1548,7 +1549,7 @@ class ExtratoConciliacaoService:
             try:
                 resultado = self._conciliar_titulo_individual(item, vinculo)
                 vinculo.status = 'CONCILIADO'
-                vinculo.processado_em = datetime.utcnow()
+                vinculo.processado_em = agora_utc_naive()
                 vinculo.mensagem = resultado.get('mensagem', 'OK')
                 resultados.append(resultado)
                 total_conciliados += 1
@@ -1557,7 +1558,7 @@ class ExtratoConciliacaoService:
             except Exception as e:
                 logger.error(f"  ❌ Erro no título: {e}")
                 vinculo.status = 'ERRO'
-                vinculo.processado_em = datetime.utcnow()
+                vinculo.processado_em = agora_utc_naive()
                 vinculo.mensagem = str(e)
                 resultados.append({
                     'vinculo_id': vinculo.id,
@@ -1581,7 +1582,7 @@ class ExtratoConciliacaoService:
             item.status = 'ERRO'
             item.mensagem = f"Nenhum título conciliado (0/{len(vinculos)})"
 
-        item.processado_em = datetime.utcnow()
+        item.processado_em = agora_utc_naive()
 
         logger.info(f"\n{'=' * 60}")
         logger.info(f"RESULTADO FINAL - Item {item.id}")

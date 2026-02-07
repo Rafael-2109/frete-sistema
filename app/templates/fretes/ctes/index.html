@@ -267,7 +267,7 @@
                         <tr>
                             <td>
                                 <span class="badge bg-light text-dark" style="font-size: 0.75rem;">
-                                    {{ cte.data_emissao.strftime('%d/%m/%y') if cte.data_emissao else '-' }}
+                                    {{ cte.data_emissao|formatar_data_segura or '-' }}
                                 </span>
                                 <br>
                                 <strong>{{ cte.numero_cte }}</strong>

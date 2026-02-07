@@ -178,9 +178,9 @@
                         {% if vale %}
                         <div class="alert alert-light mb-4">
                             <small>
-                                <strong>Criado em:</strong> {{ vale.criado_em.strftime('%d/%m/%Y %H:%M') if vale.criado_em else '-' }}
+                                <strong>Criado em:</strong> {{ vale.criado_em|formatar_data_hora_brasil or '-' }}
                                 por {{ vale.criado_por or '-' }} |
-                                <strong>Atualizado em:</strong> {{ vale.atualizado_em.strftime('%d/%m/%Y %H:%M') if vale.atualizado_em else '-' }}
+                                <strong>Atualizado em:</strong> {{ vale.atualizado_em|formatar_data_hora_brasil or '-' }}
                                 por {{ vale.atualizado_por or '-' }}
                             </small>
                         </div>
@@ -198,7 +198,7 @@
                                             {{ 'Recebido' if vale.recebido else 'Nao Recebido' }}
                                         </span>
                                         {% if vale.recebido_em %}
-                                            <br><small class="text-muted">{{ vale.recebido_em.strftime('%d/%m/%Y') }}</small>
+                                            <br><small class="text-muted">{{ vale.recebido_em|formatar_data_segura }}</small>
                                         {% endif %}
                                     </div>
                                     <div class="col-md-4">
@@ -207,7 +207,7 @@
                                             {{ 'Enviado p/ Resolucao' if vale.enviado_coleta else 'Nao Enviado' }}
                                         </span>
                                         {% if vale.enviado_coleta_em %}
-                                            <br><small class="text-muted">{{ vale.enviado_coleta_em.strftime('%d/%m/%Y') }}</small>
+                                            <br><small class="text-muted">{{ vale.enviado_coleta_em|formatar_data_segura }}</small>
                                         {% endif %}
                                     </div>
                                     <div class="col-md-4">
@@ -216,7 +216,7 @@
                                             {{ 'Resolvido' if vale.resolvido else 'Nao Resolvido' }}
                                         </span>
                                         {% if vale.resolvido_em %}
-                                            <br><small class="text-muted">{{ vale.resolvido_em.strftime('%d/%m/%Y') }}</small>
+                                            <br><small class="text-muted">{{ vale.resolvido_em|formatar_data_segura }}</small>
                                         {% endif %}
                                     </div>
                                 </div>

@@ -14,7 +14,7 @@ import logging
 import argparse
 import subprocess
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 import boto3
 from botocore.exceptions import NoCredentialsError
@@ -129,7 +129,7 @@ class BackupManager:
     def create_backup_metadata(self, backup_type: str, components: List[str]) -> Dict:
         """Create metadata for backup"""
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "type": backup_type,
             "components": components,
             "version": "1.0",

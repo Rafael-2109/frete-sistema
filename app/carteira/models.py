@@ -1,7 +1,7 @@
 
 from app import db
 from datetime import datetime, timezone
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_, Index, func
 import logging
 import hashlib
@@ -119,8 +119,8 @@ class CarteiraPrincipal(db.Model):
     percentual_perda_snapshot = db.Column(db.Numeric(5, 2), nullable=True)  # % Perda
 
     # 🛡️ AUDITORIA
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     created_by = db.Column(db.String(100), nullable=True)
     updated_by = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
@@ -220,8 +220,8 @@ class CarteiraCopia(db.Model):
     qtd_saldo_produto_calculado = db.Column(db.Numeric(15, 3), nullable=False)  # Calculado: qtd - cancelado - baixa
     
     # 🛡️ AUDITORIA
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     created_by = db.Column(db.String(100), nullable=True)
     updated_by = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
@@ -315,7 +315,7 @@ class ControleCruzadoSeparacao(db.Model):
     observacao_resolucao = db.Column(db.Text, nullable=True)
     
     # 🛡️ AUDITORIA
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     conferido_em = db.Column(db.DateTime, nullable=True)
     
     # 📊 ÍNDICES
@@ -353,7 +353,7 @@ class InconsistenciaFaturamento(db.Model):
     observacao_resolucao = db.Column(db.Text, nullable=True)
     
     # 🛡️ AUDITORIA
-    detectada_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    detectada_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     resolvida_em = db.Column(db.DateTime, nullable=True)
     resolvida_por = db.Column(db.String(100), nullable=True)
     
@@ -404,7 +404,7 @@ class TipoCarga(db.Model):
     # "Carga completa planejada", "Separação parcial por peso", etc.
     
     criado_por = db.Column(db.String(100), nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     
     # 🔗 RELACIONAMENTO COM COMPLEMENTARES
     carga_principal_id = db.Column(db.Integer, db.ForeignKey('tipo_carga.id'), nullable=True)
@@ -490,7 +490,7 @@ class FaturamentoParcialJustificativa(db.Model):
     observacoes_acao = db.Column(db.Text, nullable=True)
     
     # 🛡️ AUDITORIA
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
     
     # 📊 ÍNDICES
@@ -563,7 +563,7 @@ class SaldoStandby(db.Model):
     observacoes = db.Column(db.Text, nullable=True)  # JSON com histórico de observações
     
     # 🛡️ AUDITORIA
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
     
     def __repr__(self):
@@ -1249,9 +1249,9 @@ class CadastroCliente(db.Model):
     cliente_ativo = db.Column(db.Boolean, default=True)
     
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     atualizado_por = db.Column(db.String(100), nullable=True)
     
     # Índices

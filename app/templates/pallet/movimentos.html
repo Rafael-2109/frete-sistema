@@ -117,7 +117,7 @@
                         <tr>
                             <td>{{ mov.id }}</td>
                             <td>
-                                {{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}
+                                {{ mov.data_movimentacao|formatar_data_segura or '-' }}
                                 {% if mov.tipo_movimentacao == 'REMESSA' and not mov.baixado and mov.data_vencimento %}
                                     <br>
                                     {% if mov.dias_ate_vencimento < 0 %}
@@ -126,10 +126,10 @@
                                         </span>
                                     {% elif mov.dias_ate_vencimento <= 5 %}
                                         <span class="badge bg-warning text-dark" title="Vence em {{ mov.dias_ate_vencimento|int }} dia(s)">
-                                            <i class="fas fa-clock"></i> {{ mov.data_vencimento.strftime('%d/%m') }}
+                                            <i class="fas fa-clock"></i> {{ mov.data_vencimento|formatar_data_segura }}
                                         </span>
                                     {% else %}
-                                        <small class="text-muted">Venc: {{ mov.data_vencimento.strftime('%d/%m') }}</small>
+                                        <small class="text-muted">Venc: {{ mov.data_vencimento|formatar_data_segura }}</small>
                                     {% endif %}
                                 {% endif %}
                             </td>
@@ -229,7 +229,7 @@
                                     {% if mov.baixado %}
                                         <span class="badge bg-success">Baixado</span>
                                         {% if mov.baixado_em %}
-                                        <br><small class="text-muted">{{ mov.baixado_em.strftime('%d/%m/%Y') }}</small>
+                                        <br><small class="text-muted">{{ mov.baixado_em|formatar_data_segura }}</small>
                                         {% endif %}
                                     {% else %}
                                         <span class="badge bg-warning text-dark">Pendente</span>

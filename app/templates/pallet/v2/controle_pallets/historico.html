@@ -526,8 +526,8 @@
                     <tr>
                         <td><strong>#{{ solucao.id }}</strong></td>
                         <td>
-                            {{ solucao.criado_em.strftime('%d/%m/%Y') if solucao.criado_em else '-' }}
-                            <br><small class="text-muted">{{ solucao.criado_em.strftime('%H:%M') if solucao.criado_em else '' }}</small>
+                            {{ solucao.criado_em|formatar_data_segura or '-' }}
+                            <br><small class="text-muted">{{ solucao.criado_em|formatar_hora_brasil }}</small>
                         </td>
                         <td>
                             <span class="tipo-badge {{ solucao.tipo }}">
@@ -578,7 +578,7 @@
                             {% elif solucao.tipo == 'RECEBIMENTO' %}
                                 <small>{{ solucao.local_recebimento or '-' }}</small>
                                 {% if solucao.data_recebimento %}
-                                <br><small class="text-muted">{{ solucao.data_recebimento.strftime('%d/%m/%Y') }}</small>
+                                <br><small class="text-muted">{{ solucao.data_recebimento|formatar_data_segura }}</small>
                                 {% endif %}
                             {% elif solucao.tipo == 'SUBSTITUICAO' %}
                                 {% if solucao.credito_destino %}

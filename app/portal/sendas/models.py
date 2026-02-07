@@ -5,6 +5,7 @@ Incluindo tabela DE-PARA de produtos
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 class ProdutoDeParaSendas(db.Model):
     """
@@ -32,8 +33,8 @@ class ProdutoDeParaSendas(db.Model):
     
     # Controle
     ativo = db.Column(db.Boolean, default=True, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     # Índice único para evitar duplicatas
@@ -128,7 +129,7 @@ class ProdutoDeParaSendas(db.Model):
                         depara.descricao_nosso = row.get('descricao_nosso', depara.descricao_nosso)
                         depara.descricao_sendas = row.get('descricao_sendas', depara.descricao_sendas)
                         depara.fator_conversao = float(row.get('fator_conversao', 1.0))
-                        depara.atualizado_em = datetime.utcnow()
+                        depara.atualizado_em = agora_utc_naive()
                         registros_atualizados += 1
                     else:
                         # Criar novo
@@ -245,8 +246,8 @@ class FilialDeParaSendas(db.Model):
     
     # Controle
     ativo = db.Column(db.Boolean, default=True, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     @classmethod
@@ -463,7 +464,7 @@ class FilialDeParaSendas(db.Model):
                         filial_depara.nome_filial = row.get('nome_filial')
                         filial_depara.cidade = row.get('cidade')
                         filial_depara.uf = row.get('uf')
-                        filial_depara.atualizado_em = datetime.utcnow()
+                        filial_depara.atualizado_em = agora_utc_naive()
                         filial_depara.ativo = True
                         registros_atualizados += 1
                     else:

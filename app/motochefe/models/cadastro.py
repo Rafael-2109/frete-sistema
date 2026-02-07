@@ -5,6 +5,7 @@ Mantidos dos models antigos, com auditoria padronizada
 from app import db
 from datetime import datetime
 from decimal import Decimal
+from app.utils.timezone import agora_utc_naive
 
 
 class VendedorMoto(db.Model):
@@ -17,9 +18,9 @@ class VendedorMoto(db.Model):
     # OBRIGATÓRIO: Todo vendedor DEVE estar em uma equipe
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -89,9 +90,9 @@ class EquipeVendasMoto(db.Model):
     tabela_precos = db.relationship('TabelaPrecoEquipe', backref='equipe', lazy='dynamic', cascade='all, delete-orphan')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -144,9 +145,9 @@ class TabelaPrecoEquipe(db.Model):
     modelo = db.relationship('ModeloMoto', backref='precos_equipes')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -171,9 +172,9 @@ class TransportadoraMoto(db.Model):
     cod_banco = db.Column(db.String(10), nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -218,9 +219,9 @@ class ClienteMoto(db.Model):
     # ⚠️ crossdocking_obj REMOVIDO: Não há mais FK para CrossDocking
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -259,9 +260,9 @@ class EmpresaVendaMoto(db.Model):
 
     # Auditoria
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
@@ -344,9 +345,9 @@ class CrossDocking(db.Model):
     tabela_precos = db.relationship('TabelaPrecoCrossDocking', backref='crossdocking', lazy='dynamic', cascade='all, delete-orphan')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -399,9 +400,9 @@ class TabelaPrecoCrossDocking(db.Model):
     modelo = db.relationship('ModeloMoto', backref='precos_crossdocking')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 

@@ -22,7 +22,7 @@ from app.devolucao.models import (
 )
 from app.monitoramento.models import EntregaMonitorada
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 ai_bp = Blueprint(
     'devolucao_ai',
@@ -292,7 +292,7 @@ def api_atualizar_motivo_nfd(nfd_id: int):
                     entrega.teve_devolucao = True
 
         # Auditoria
-        nfd.atualizado_em = agora_brasil()
+        nfd.atualizado_em = agora_utc_naive()
         nfd.atualizado_por = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
 
         db.session.commit()
@@ -556,7 +556,7 @@ def api_confirmar_resolucao(linha_id: int):
                     unidade_medida_cliente=linha.unidade_medida,
                     unidade_medida_nosso='CX',  # Nos vendemos em caixas
                     ativo=True,
-                    criado_em=agora_brasil(),
+                    criado_em=agora_utc_naive(),
                     criado_por=usuario,
                 )
                 db.session.add(depara)
@@ -693,7 +693,7 @@ def api_criar_depara():
                 existente.unidade_medida_nosso = data.get('unidade_medida_nosso')
                 existente.nome_grupo = data.get('nome_grupo')
                 existente.ativo = True
-                existente.atualizado_em = agora_brasil()
+                existente.atualizado_em = agora_utc_naive()
                 existente.atualizado_por = usuario
                 db.session.commit()
 
@@ -714,7 +714,7 @@ def api_criar_depara():
             unidade_medida_nosso=data.get('unidade_medida_nosso'),
             nome_grupo=data.get('nome_grupo'),
             ativo=True,
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por=usuario,
         )
 
@@ -767,7 +767,7 @@ def api_atualizar_depara(depara_id: int):
             depara.nome_grupo = data['nome_grupo']
 
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        depara.atualizado_em = agora_brasil()
+        depara.atualizado_em = agora_utc_naive()
         depara.atualizado_por = usuario
 
         db.session.commit()
@@ -803,7 +803,7 @@ def api_excluir_depara(depara_id: int):
 
         depara.ativo = False
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        depara.atualizado_em = agora_brasil()
+        depara.atualizado_em = agora_utc_naive()
         depara.atualizado_por = usuario
 
         db.session.commit()
@@ -1156,7 +1156,7 @@ def api_importar_depara():
                             existente.nosso_codigo = nosso_codigo
                             existente.descricao_nosso = descricao_nosso
                             existente.fator_conversao = fator_conversao
-                            existente.atualizado_em = agora_brasil()
+                            existente.atualizado_em = agora_utc_naive()
                             existente.atualizado_por = usuario
                             atualizados += 1
                         else:
@@ -1167,7 +1167,7 @@ def api_importar_depara():
                         existente.descricao_nosso = descricao_nosso
                         existente.fator_conversao = fator_conversao
                         existente.ativo = True
-                        existente.atualizado_em = agora_brasil()
+                        existente.atualizado_em = agora_utc_naive()
                         existente.atualizado_por = usuario
                         atualizados += 1
                 else:
@@ -1266,7 +1266,7 @@ def api_exportar_depara():
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name=f'depara_produtos_{agora_brasil().strftime("%Y%m%d")}.xlsx'
+            download_name=f'depara_produtos_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
         )
 
     except Exception as e:

@@ -578,7 +578,7 @@ def executar_separacao(simulacao: dict) -> dict:
     from app import db
     from app.separacao.models import Separacao
     from app.utils.lote_utils import gerar_lote_id
-    from app.utils.timezone import agora_brasil
+    from app.utils.timezone import agora_utc_naive
     from datetime import datetime
     from flask_login import current_user
 
@@ -625,7 +625,7 @@ def executar_separacao(simulacao: dict) -> dict:
                 tipo_envio=simulacao['tipo_envio'],
                 status='ABERTO',
                 sincronizado_nf=False,
-                criado_em=agora_brasil(),
+                criado_em=agora_utc_naive(),
                 criado_por=current_user.nome if current_user else 'Agente Logistico'  # Identificar origem da criação
             )
 

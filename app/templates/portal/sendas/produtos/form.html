@@ -101,10 +101,10 @@
                         {% if mapeamento %}
                         <div class="alert alert-light">
                             <small>
-                                <strong>Criado em:</strong> {{ mapeamento.criado_em.strftime('%d/%m/%Y %H:%M') if mapeamento.criado_em else '-' }}<br>
+                                <strong>Criado em:</strong> {{ mapeamento.criado_em|formatar_data_hora_brasil or '-' }}<br>
                                 <strong>Criado por:</strong> {{ mapeamento.criado_por or '-' }}<br>
                                 {% if mapeamento.atualizado_em %}
-                                <strong>Última atualização:</strong> {{ mapeamento.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                                <strong>Última atualização:</strong> {{ mapeamento.atualizado_em|formatar_data_hora_brasil }}
                                 {% endif %}
                             </small>
                         </div>

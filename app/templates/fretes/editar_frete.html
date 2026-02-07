@@ -61,7 +61,7 @@
                                 <strong>CTe {{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}</strong><br>
                                 <small class="text-muted">
                                     Emitente: {{ cte.nome_emitente }}<br>
-                                    Emissão: {{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else 'N/A' }}<br>
+                                    Emissão: {{ cte.data_emissao|formatar_data_segura or 'N/A' }}<br>
                                     Valor Total: {{ (cte.valor_total or 0)|moeda_carteira }}<br>
                                 </small>
                             </div>
@@ -117,7 +117,7 @@
                                         <strong>{{ cte.numero_cte }}{% if cte.serie_cte %}/{{ cte.serie_cte }}{% endif %}</strong>
                                     </td>
                                     <td>{{ cte.nome_emitente }}</td>
-                                    <td>{{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else 'N/A' }}</td>
+                                    <td>{{ cte.data_emissao|formatar_data_segura or 'N/A' }}</td>
                                     <td>{{ (cte.valor_frete or 0)|moeda_carteira }}</td>
                                     <td>
                                         <span class="badge bg-secondary">

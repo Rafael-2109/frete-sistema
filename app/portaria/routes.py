@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import os
 import traceback
 import logging
@@ -133,7 +134,7 @@ def cadastrar_motorista():
             if motorista:
                 # Atualiza motorista existente
                 form.populate_obj(motorista)
-                motorista.atualizado_em = datetime.utcnow()
+                motorista.atualizado_em = agora_utc_naive()
                 acao = 'atualizado'
             else:
                 # Verifica se CPF já existe

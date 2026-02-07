@@ -22,7 +22,7 @@
                                 <strong>Qtd Original:</strong> {{ remessa.qtd_movimentacao|int }} pallets
                             </div>
                             <div class="col-md-3">
-                                <strong>Data:</strong> {{ remessa.data_movimentacao.strftime('%d/%m/%Y') if remessa.data_movimentacao else '-' }}
+                                <strong>Data:</strong> {{ remessa.data_movimentacao|formatar_data_segura or '-' }}
                             </div>
                             <div class="col-md-3">
                                 <strong>Transportadora:</strong><br>

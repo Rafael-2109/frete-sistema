@@ -118,7 +118,7 @@
                             <td>
                                 {% if c.status == 'PAGO' %}
                                 <span class="badge bg-success">{{ c.status }}</span><br>
-                                <small class="text-muted">{{ c.data_pagamento.strftime('%d/%m/%Y') if c.data_pagamento else '' }}</small>
+                                <small class="text-muted">{{ c.data_pagamento|formatar_data_segura }}</small>
                                 {% else %}
                                 <span class="badge bg-warning">{{ c.status }}</span>
                                 {% endif %}

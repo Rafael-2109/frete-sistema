@@ -2,6 +2,7 @@ from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy.orm import validates # type: ignore
 
 class Usuario(db.Model, UserMixin):
@@ -26,7 +27,7 @@ class Usuario(db.Model, UserMixin):
     sistema_motochefe = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema motochefe
     
     # Dados de controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     aprovado_em = db.Column(db.DateTime, nullable=True)
     aprovado_por = db.Column(db.String(120), nullable=True)  # Email do admin que aprovou
     ultimo_login = db.Column(db.DateTime, nullable=True)
@@ -49,7 +50,7 @@ class Usuario(db.Model, UserMixin):
     def aprovar(self, admin_email, vendedor_vinculado=None):
         """Aprova o usuário"""
         self.status = 'ativo'
-        self.aprovado_em = datetime.utcnow()
+        self.aprovado_em = agora_utc_naive()
         self.aprovado_por = admin_email
         if vendedor_vinculado:
             self.vendedor_vinculado = vendedor_vinculado

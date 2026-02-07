@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 class TabelaFrete(db.Model):
     __tablename__ = 'tabelas_frete'
@@ -35,7 +36,7 @@ class TabelaFrete(db.Model):
     icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela (substitui ICMS da cidade se informado)
 
     criado_por = db.Column(db.String(120), nullable=False)  # usuário que criou a tabela
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)  # horário do cadastro automático
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)  # horário do cadastro automático
 
     transportadora = db.relationship('Transportadora', backref='tabelas_frete')
 
@@ -141,6 +142,6 @@ class HistoricoTabelaFrete(db.Model):
     icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
 
     criado_por = db.Column(db.String(120), nullable=False)  # usuário que criou a tabela
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)  # horário do cadastro automático
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)  # horário do cadastro automático
 
     transportadora = db.relationship('Transportadora', backref='historico_tabelas_frete')

@@ -75,7 +75,7 @@
                     </p>
                     {% if despesa.lancado_odoo_em %}
                     <hr>
-                    <p><strong>Lançado em:</strong><br>{{ despesa.lancado_odoo_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                    <p><strong>Lançado em:</strong><br>{{ despesa.lancado_odoo_em|formatar_data_hora_brasil }}</p>
                     <p><strong>Por:</strong> {{ despesa.lancado_odoo_por }}</p>
                     {% endif %}
                 </div>
@@ -141,7 +141,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {{ log.executado_em.strftime('%d/%m/%Y %H:%M:%S') if log.executado_em else 'N/A' }}
+                                        {{ log.executado_em|formatar_data_hora_brasil or 'N/A' }}
                                     </td>
                                 </tr>
                                 {% if log.erro_detalhado %}

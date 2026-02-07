@@ -28,7 +28,7 @@ from app.devolucao.services.frete_placeholder_service import (
 )
 from app.producao.models import CadastroPalletizacao
 from app.transportadoras.models import Transportadora
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from app.utils.file_storage import get_file_storage
 
 # Blueprint
@@ -266,7 +266,7 @@ def atualizar_frete(frete_id: int):
             frete.observacoes = data['observacoes']
 
         frete.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        frete.atualizado_em = agora_brasil()
+        frete.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -326,7 +326,7 @@ def atualizar_status_frete(frete_id: int):
             # Atualizar ocorrencia
             if frete.ocorrencia:
                 frete.ocorrencia.localizacao_atual = 'CD'
-                frete.ocorrencia.data_chegada_cd = agora_brasil()
+                frete.ocorrencia.data_chegada_cd = agora_utc_naive()
 
         if data.get('numero_cte'):
             frete.numero_cte = data['numero_cte']
@@ -334,7 +334,7 @@ def atualizar_status_frete(frete_id: int):
             frete.chave_cte = data['chave_cte']
 
         frete.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        frete.atualizado_em = agora_brasil()
+        frete.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -364,7 +364,7 @@ def excluir_frete(frete_id: int):
 
         frete.ativo = False
         frete.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        frete.atualizado_em = agora_brasil()
+        frete.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -541,12 +541,12 @@ def atualizar_status_descarte(descarte_id: int):
 
         # Campos adicionais por status
         if novo_status == 'TERMO_ENVIADO':
-            descarte.termo_enviado_em = agora_brasil()
+            descarte.termo_enviado_em = agora_utc_naive()
             if data.get('termo_enviado_para'):
                 descarte.termo_enviado_para = data['termo_enviado_para']
 
         if novo_status == 'TERMO_RETORNADO':
-            descarte.termo_retornado_em = agora_brasil()
+            descarte.termo_retornado_em = agora_utc_naive()
 
         if novo_status == 'DESCARTADO':
             if data.get('data_descarte'):
@@ -558,7 +558,7 @@ def atualizar_status_descarte(descarte_id: int):
                 descarte.ocorrencia.localizacao_atual = 'DESCARTADO'
 
         descarte.atualizado_por = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
-        descarte.atualizado_em = agora_brasil()
+        descarte.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -612,7 +612,7 @@ def upload_documento_descarte(descarte_id: int, tipo: str):
         elif tipo == 'termo_assinado':
             descarte.termo_assinado_path = path
             descarte.termo_assinado_nome_arquivo = nome
-            descarte.termo_retornado_em = agora_brasil()
+            descarte.termo_retornado_em = agora_utc_naive()
             if descarte.status == 'TERMO_ENVIADO':
                 descarte.status = 'TERMO_RETORNADO'
         elif tipo == 'comprovante':
@@ -624,7 +624,7 @@ def upload_documento_descarte(descarte_id: int, tipo: str):
                 descarte.ocorrencia.localizacao_atual = 'DESCARTADO'
 
         descarte.atualizado_por = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
-        descarte.atualizado_em = agora_brasil()
+        descarte.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -655,7 +655,7 @@ def excluir_descarte(descarte_id: int):
 
         descarte.ativo = False
         descarte.atualizado_por = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
-        descarte.atualizado_em = agora_brasil()
+        descarte.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -724,7 +724,7 @@ def download_termo_descarte(descarte_id: int):
 
         # Registrar download
         descarte.termo_salvo_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        descarte.termo_salvo_em = agora_brasil()
+        descarte.termo_salvo_em = agora_utc_naive()
         db.session.commit()
 
         # Renderizar HTML
@@ -734,7 +734,7 @@ def download_termo_descarte(descarte_id: int):
             nfd=nfd,
             itens=itens,
             valor_total=float(valor_total),
-            data_geracao=agora_brasil().strftime('%d/%m/%Y %H:%M'),
+            data_geracao=agora_utc_naive().strftime('%d/%m/%Y %H:%M'),
             usuario_geracao=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
         )
 
@@ -804,7 +804,7 @@ def imprimir_termo_descarte(descarte_id: int):
 
         # Registrar impressao
         descarte.termo_impresso_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        descarte.termo_impresso_em = agora_brasil()
+        descarte.termo_impresso_em = agora_utc_naive()
         db.session.commit()
 
         return render_template(
@@ -813,7 +813,7 @@ def imprimir_termo_descarte(descarte_id: int):
             nfd=nfd,
             itens=itens,
             valor_total=float(valor_total),
-            data_geracao=agora_brasil().strftime('%d/%m/%Y %H:%M'),
+            data_geracao=agora_utc_naive().strftime('%d/%m/%Y %H:%M'),
             usuario_geracao=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
         )
 

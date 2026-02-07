@@ -21,6 +21,7 @@ import logging
 from datetime import datetime, timedelta
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.utils.database_retry import commit_with_retry
 from app.recebimento.models import RecebimentoLf, RecebimentoLfLote
 from app.odoo.utils.connection import get_odoo_connection
@@ -302,7 +303,7 @@ class RecebimentoLfService:
 
                 if not pickings:
                     # Fallback: buscar pickings recentes (ultimos 30 dias)
-                    data_limite = (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d')
+                    data_limite = (agora_utc_naive() - timedelta(days=30)).strftime('%Y-%m-%d')
                     pickings = odoo.execute_kw(
                         'stock.picking', 'search_read',
                         [[

@@ -182,7 +182,7 @@
                             <td class="text-center">
                                 {% if conta.vencimento %}
                                 <span class="fin-text-mono {% if conta.vencimento < hoje and not conta.parcela_paga %}text-danger{% endif %}">
-                                    {{ conta.vencimento.strftime('%d/%m/%Y') }}
+                                    {{ conta.vencimento|formatar_data_segura }}
                                 </span>
                                 {% if conta.dias_vencidos > 0 and not conta.parcela_paga %}
                                 <small class="text-danger">({{ conta.dias_vencidos }}d)</small>

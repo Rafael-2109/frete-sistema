@@ -9,6 +9,7 @@ from app.utils.importacao.utils_importacao import salvar_temp
 from sqlalchemy.exc import IntegrityError
 from io import BytesIO
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import traceback
 import pandas as pd
 
@@ -193,7 +194,7 @@ def editar_transportadora_ajax(id):
 
         # TODO: Adicionar campos de auditoria no futuro
         # transportadora.alterado_por = current_user.nome
-        # transportadora.alterado_em = datetime.utcnow()
+        # transportadora.alterado_em = agora_utc_naive()
         
         db.session.commit()
         

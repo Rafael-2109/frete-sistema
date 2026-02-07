@@ -160,7 +160,7 @@
                                 <small class="text-muted d-block">Serie {{ item.serie }}</small>
                                 {% endif %}
                                 {% if item.data_emissao %}
-                                <small class="text-muted d-block">{{ item.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                <small class="text-muted d-block">{{ item.data_emissao|formatar_data_segura }}</small>
                                 {% endif %}
                             </td>
                             <td>

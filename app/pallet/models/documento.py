@@ -11,7 +11,7 @@ Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
 from datetime import datetime
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 class PalletDocumento(db.Model):
@@ -75,9 +75,9 @@ class PalletDocumento(db.Model):
     observacao = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Soft delete
@@ -142,7 +142,7 @@ class PalletDocumento(db.Model):
             usuario: Usuário que registrou o recebimento
         """
         self.recebido = True
-        self.recebido_em = agora_brasil()
+        self.recebido_em = agora_utc_naive()
         self.recebido_por = usuario
 
     def to_dict(self):

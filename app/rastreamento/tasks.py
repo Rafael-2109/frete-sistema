@@ -7,6 +7,7 @@ Conformidade com LGPD (Lei 13.709/2018)
 from app import db
 from app.rastreamento.models import RastreamentoEmbarque, PingGPS, LogRastreamento
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from flask import current_app
 
 
@@ -24,7 +25,7 @@ def limpar_dados_expirados_lgpd():
         tuple: (total_expurgado, total_erros)
     """
     try:
-        data_limite = datetime.utcnow()
+        data_limite = agora_utc_naive()
 
         # Buscar rastreamentos expirados (data_expurgo_lgpd <= hoje)
         rastreamentos_expirados = RastreamentoEmbarque.query.filter(
@@ -88,7 +89,7 @@ def verificar_rastreamentos_inativos():
     from datetime import timedelta
 
     try:
-        limite_inatividade = datetime.utcnow() - timedelta(hours=24)
+        limite_inatividade = agora_utc_naive() - timedelta(hours=24)
 
         # Buscar rastreamentos ativos mas sem pings há 24h
         rastreamentos_inativos = RastreamentoEmbarque.query.filter(
@@ -136,7 +137,7 @@ def gerar_relatorio_rastreamento():
 
         # Total de pings nas últimas 24h
         from datetime import timedelta
-        ontem = datetime.utcnow() - timedelta(days=1)
+        ontem = agora_utc_naive() - timedelta(days=1)
 
         total_pings_24h = PingGPS.query.filter(
             PingGPS.criado_em >= ontem
@@ -145,7 +146,7 @@ def gerar_relatorio_rastreamento():
         current_app.logger.info(f"   - Pings nas últimas 24h: {total_pings_24h}")
 
         # Rastreamentos que chegaram ao destino hoje
-        hoje_inicio = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        hoje_inicio = agora_utc_naive().replace(hour=0, minute=0, second=0, microsecond=0)
 
         chegaram_hoje = RastreamentoEmbarque.query.filter(
             RastreamentoEmbarque.chegou_destino_em >= hoje_inicio

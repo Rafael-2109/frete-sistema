@@ -153,7 +153,7 @@
                         {% for item in items %}
                         <tr data-id="{{ item.id }}">
                             <td class="text-center">
-                                <small class="text-muted">{{ item.data_nf.strftime('%d/%m/%Y') if item.data_nf else 'N/A' }}</small>
+                                <small class="text-muted">{{ item.data_nf|formatar_data_segura or 'N/A' }}</small>
                                 <br><strong class="text-primary">{{ item.numero_nf or item.odoo_dfe_id }}</strong>
                             </td>
                             <td>
@@ -217,7 +217,7 @@
 
                                 {% if receb %}
                                     {% if receb.odoo_status == 'done' or receb.status == 'processado' %}
-                                    <br><span class="badge bg-success mt-1" title="Recebido em {{ receb.processado_em.strftime('%d/%m %H:%M') if receb.processado_em else '-' }}">
+                                    <br><span class="badge bg-success mt-1" title="Recebido em {{ receb.processado_em|formatar_data_hora_brasil or '-' }}">
                                         <i class="fas fa-check-double me-1"></i>Recebido
                                     </span>
                                     {% elif receb.status == 'processando' %}
@@ -257,7 +257,7 @@
                                 {% if item.po_consolidado_name %}
                                 <a href="#" class="text-info fw-bold">{{ item.po_consolidado_name }}</a>
                                 {% if item.consolidado_em %}
-                                <br><small class="text-muted">{{ item.consolidado_em.strftime('%d/%m %H:%M') }}</small>
+                                <br><small class="text-muted">{{ item.consolidado_em|formatar_data_hora_brasil }}</small>
                                 {% endif %}
                                 {% elif item.status == 'finalizado_odoo' and item.odoo_po_vinculado_name %}
                                 <span class="text-dark fw-bold" title="PO vinculado no Odoo">

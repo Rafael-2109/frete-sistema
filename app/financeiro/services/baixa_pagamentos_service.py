@@ -32,6 +32,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import BaixaPagamentoLote, BaixaPagamentoItem
 
 logger = logging.getLogger(__name__)
@@ -883,7 +884,7 @@ class BaixaPagamentosService:
 
         # 9. Atualizar status
         item.status = 'SUCESSO'
-        item.processado_em = datetime.utcnow()
+        item.processado_em = agora_utc_naive()
 
         logger.info(f"  ✅ Item processado com sucesso! Saldo: {item.saldo_antes} -> {item.saldo_depois}")
 
@@ -929,7 +930,7 @@ class BaixaPagamentosService:
                 logger.error(f"Erro no item {item.id}: {e}")
                 item.status = 'ERRO'
                 item.mensagem = str(e)[:500]
-                item.processado_em = datetime.utcnow()
+                item.processado_em = agora_utc_naive()
                 self.estatisticas['erro'] += 1
 
             self.estatisticas['processados'] += 1
@@ -937,7 +938,7 @@ class BaixaPagamentosService:
 
         # Atualizar lote
         lote.status = 'CONCLUIDO'
-        lote.processado_em = datetime.utcnow()
+        lote.processado_em = agora_utc_naive()
         lote.linhas_processadas = self.estatisticas['processados']
         lote.linhas_sucesso = self.estatisticas['sucesso']
         lote.linhas_erro = self.estatisticas['erro']

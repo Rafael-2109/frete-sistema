@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.carteira.models import CadastroCliente
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.integracoes.tagplus.models import NFPendenteTagPlus
@@ -363,7 +364,7 @@ class ImportadorTagPlusV2:
                 empresa_endereco_ent=dados.get('razao_social', dados.get('nome', '')),
                 
                 # Controle
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             
             db.session.add(cliente)
@@ -527,7 +528,7 @@ class ImportadorTagPlusV2:
             logger.debug(f"NF {numero_nf} importada com {len(itens_criados)} itens")
 
             if pendentes_resolvidos:
-                agora = datetime.utcnow()
+                agora = agora_utc_naive()
                 for pendente in pendentes_resolvidos:
                     if not pendente.importado:
                         pendente.importado = True

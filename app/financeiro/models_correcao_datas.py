@@ -12,6 +12,7 @@ Data: 11/12/2025
 from app import db
 from datetime import datetime
 from sqlalchemy import Index, UniqueConstraint
+from app.utils.timezone import agora_utc_naive
 
 
 class CorrecaoDataNFCredito(db.Model):
@@ -53,7 +54,7 @@ class CorrecaoDataNFCredito(db.Model):
     erro_mensagem = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    diagnosticado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    diagnosticado_em = db.Column(db.DateTime, default=agora_utc_naive)
     corrigido_em = db.Column(db.DateTime, nullable=True)
     corrigido_por = db.Column(db.String(100), nullable=True)
 

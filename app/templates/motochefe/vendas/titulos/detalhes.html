@@ -52,13 +52,13 @@
                         </tr>
                         <tr>
                             <th>Data Emissão:</th>
-                            <td>{{ titulo.data_emissao.strftime('%d/%m/%Y') if titulo.data_emissao else 'N/A' }}</td>
+                            <td>{{ titulo.data_emissao|formatar_data_segura or 'N/A' }}</td>
                         </tr>
                         <tr>
                             <th>Data Vencimento:</th>
                             <td>
                                 {% if titulo.data_vencimento %}
-                                    {{ titulo.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {{ titulo.data_vencimento|formatar_data_segura }}
                                 {% else %}
                                     <span class="text-muted">Não definida</span>
                                 {% endif %}
@@ -94,7 +94,7 @@
                     <small class="text-muted">{{ titulo.empresa_recebedora.tipo_conta }}</small>
                     {% endif %}
                     {% if titulo.data_ultimo_pagamento %}
-                    <p class="mt-2 mb-0"><small>Último pagamento: {{ titulo.data_ultimo_pagamento.strftime('%d/%m/%Y') }}</small></p>
+                    <p class="mt-2 mb-0"><small>Último pagamento: {{ titulo.data_ultimo_pagamento|formatar_data_segura }}</small></p>
                     {% endif %}
                 </div>
             </div>
@@ -152,7 +152,7 @@
                         </tr>
                         <tr>
                             <th>Data Pedido:</th>
-                            <td>{{ titulo.pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ titulo.pedido.data_pedido|formatar_data_segura }}</td>
                         </tr>
                         <tr>
                             <th>NF:</th>
@@ -227,7 +227,7 @@
                         <tbody>
                             {% for mov in titulo.movimentacoes %}
                             <tr>
-                                <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ mov.data_movimentacao|formatar_data_segura }}</td>
                                 <td>
                                     {% if mov.tipo == 'RECEBIMENTO' %}
                                     <span class="badge bg-success">{{ mov.tipo }}</span>

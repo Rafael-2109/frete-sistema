@@ -30,7 +30,7 @@ from app.financeiro.models_comprovante import (
     ComprovantePagamentoBoleto,
     LancamentoComprovante,
 )
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +278,7 @@ class ComprovanteLancamentoService:
 
             # 6. Atualizar status
             lanc.status = 'LANCADO'
-            lanc.lancado_em = agora_brasil()
+            lanc.lancado_em = agora_utc_naive()
             lanc.lancado_por = usuario
             lanc.erro_lancamento = None
 
@@ -632,7 +632,7 @@ class ComprovanteLancamentoService:
 
             # 5. Atualizar status
             lanc.status = 'LANCADO'
-            lanc.lancado_em = agora_brasil()
+            lanc.lancado_em = agora_utc_naive()
             lanc.lancado_por = usuario
             lanc.erro_lancamento = None
 
@@ -913,7 +913,7 @@ class ComprovanteLancamentoService:
                 logger.warning(f"  Falha ao verificar extrato reconciliado: {e}")
 
         lanc.status = 'LANCADO'
-        lanc.lancado_em = agora_brasil()
+        lanc.lancado_em = agora_utc_naive()
         lanc.lancado_por = usuario
         lanc.erro_lancamento = None
         comp.odoo_is_reconciled = True

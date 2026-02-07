@@ -127,7 +127,7 @@
                                     </td>
                                     <td>
                                         <small class="text-muted">
-                                            {{ sr.created_at.strftime('%d/%m/%Y %H:%M') if sr.created_at else '-' }}
+                                            {{ sr.created_at|formatar_data_hora_brasil or '-' }}
                                         </small>
                                     </td>
                                 </tr>

@@ -22,7 +22,7 @@
                                 <strong>Quantidade:</strong> {{ venda.qtd_movimentacao|int }} pallets
                             </div>
                             <div class="col-md-3">
-                                <strong>Data:</strong> {{ venda.data_movimentacao.strftime('%d/%m/%Y') if venda.data_movimentacao else '-' }}
+                                <strong>Data:</strong> {{ venda.data_movimentacao|formatar_data_segura or '-' }}
                             </div>
                             <div class="col-md-3">
                                 <strong>Comprador:</strong> {{ venda.nome_destinatario or venda.cnpj_destinatario or '-' }}
@@ -64,7 +64,7 @@
                                                 <strong>{{ remessa.numero_nf }}</strong>
                                             </label>
                                         </td>
-                                        <td>{{ remessa.data_movimentacao.strftime('%d/%m/%Y') if remessa.data_movimentacao else '-' }}</td>
+                                        <td>{{ remessa.data_movimentacao|formatar_data_segura or '-' }}</td>
                                         <td>
                                             <span class="badge bg-{{ 'info' if remessa.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
                                                 {{ remessa.tipo_destinatario }}

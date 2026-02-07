@@ -5,6 +5,7 @@ Calcula custos de produtos comprados, intermediarios e acabados
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date
 import logging
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.custeio.models import CustoMensal, CustoConsiderado
@@ -634,7 +635,7 @@ class ServicoCusteio:
 
         registro.tipo_produto = tipo_produto
         registro.status = 'FECHADO'
-        registro.fechado_em = datetime.utcnow()
+        registro.fechado_em = agora_utc_naive()
         registro.fechado_por = usuario
 
     @staticmethod
@@ -664,7 +665,7 @@ class ServicoCusteio:
                     tipo_produto=custo.tipo_produto,
                     versao=1,
                     custo_atual=True,
-                    vigencia_inicio=datetime.utcnow(),
+                    vigencia_inicio=agora_utc_naive(),
                     motivo_alteracao=f'Fechamento {mes}/{ano}'
                 )
                 db.session.add(considerado)
@@ -840,7 +841,7 @@ class ServicoCusteio:
         """
         # Marcar versao atual como historica
         custo_atual.custo_atual = False
-        custo_atual.vigencia_fim = datetime.utcnow()
+        custo_atual.vigencia_fim = agora_utc_naive()
 
         # Criar nova versao
         nova_versao = CustoConsiderado(
@@ -849,7 +850,7 @@ class ServicoCusteio:
             tipo_produto=custo_atual.tipo_produto,
             versao=custo_atual.versao + 1,
             custo_atual=True,
-            vigencia_inicio=datetime.utcnow(),
+            vigencia_inicio=agora_utc_naive(),
             motivo_alteracao=motivo,
             # Copiar valores da versao anterior
             custo_medio_mes=custo_atual.custo_medio_mes,
@@ -953,7 +954,7 @@ class ServicoCusteio:
                 tipo_produto=tipo_produto,
                 versao=1,
                 custo_atual=True,
-                vigencia_inicio=datetime.utcnow(),
+                vigencia_inicio=agora_utc_naive(),
                 motivo_alteracao=motivo or 'Cadastro manual inicial',
                 tipo_custo_selecionado=tipo_custo,
                 custo_considerado=custo_considerado,
@@ -1179,7 +1180,7 @@ class ServicoCusteio:
 
             # Criar nova versão
             custo_atual.custo_atual = False
-            custo_atual.vigencia_fim = datetime.utcnow()
+            custo_atual.vigencia_fim = agora_utc_naive()
 
             nova_versao = CustoConsiderado(
                 cod_produto=cod_produto,
@@ -1187,7 +1188,7 @@ class ServicoCusteio:
                 tipo_produto=tipo_produto,
                 versao=custo_atual.versao + 1,
                 custo_atual=True,
-                vigencia_inicio=datetime.utcnow(),
+                vigencia_inicio=agora_utc_naive(),
                 motivo_alteracao='Propagacao automatica via BOM',
                 tipo_custo_selecionado='BOM',
                 custo_considerado=custo_considerado,
@@ -1205,7 +1206,7 @@ class ServicoCusteio:
                 tipo_produto=tipo_produto,
                 versao=1,
                 custo_atual=True,
-                vigencia_inicio=datetime.utcnow(),
+                vigencia_inicio=agora_utc_naive(),
                 motivo_alteracao='Propagacao automatica via BOM',
                 tipo_custo_selecionado='BOM',
                 custo_considerado=custo_considerado,

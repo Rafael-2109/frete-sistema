@@ -15,7 +15,9 @@ Criado em: 30/12/2024
 """
 from datetime import datetime
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
+
+
 
 
 # =============================================================================
@@ -48,7 +50,7 @@ class NFDevolucao(db.Model):
     # DADOS DO REGISTRO INICIAL (preenchido pelo monitoramento)
     # =========================================================================
     numero_nfd = db.Column(db.String(20), nullable=False, index=True)
-    data_registro = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    data_registro = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
 
     # Motivo da devolucao
     MOTIVOS_DEVOLUCAO = [
@@ -175,9 +177,9 @@ class NFDevolucao(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
@@ -412,8 +414,8 @@ class NFDevolucaoLinha(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
     # =========================================================================
     # RELACIONAMENTOS
@@ -526,7 +528,7 @@ class NFDevolucaoNFReferenciada(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
 
     # =========================================================================
@@ -716,16 +718,16 @@ class OcorrenciaDevolucao(db.Model):
     # =========================================================================
     # TIMESTAMPS
     # =========================================================================
-    data_abertura = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    data_abertura = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     data_acao_comercial = db.Column(db.DateTime, nullable=True)
     data_resolucao = db.Column(db.DateTime, nullable=True)
 
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
@@ -759,7 +761,7 @@ class OcorrenciaDevolucao(db.Model):
         """Gera proximo numero de ocorrencia no formato YYYYMM-XXXX"""
         from sqlalchemy import func
 
-        agora = agora_brasil()
+        agora = agora_utc_naive()
         prefixo = f"{agora.strftime('%Y%m')}-"
 
         # Busca ultimo numero do mes
@@ -893,9 +895,9 @@ class FreteDevolucao(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
@@ -1019,15 +1021,15 @@ class ContagemDevolucao(db.Model):
     # =========================================================================
     # CONTROLE
     # =========================================================================
-    data_contagem = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    data_contagem = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     conferente = db.Column(db.String(100), nullable=False)
 
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # =========================================================================
@@ -1141,7 +1143,7 @@ class AnexoOcorrencia(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
@@ -1250,9 +1252,9 @@ class DeParaProdutoCliente(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # =========================================================================
@@ -1349,7 +1351,7 @@ class DescarteDevolucao(db.Model):
     # AUTORIZACAO
     # =========================================================================
     numero_termo = db.Column(db.String(50), nullable=True, index=True)  # Numero do termo de descarte
-    data_autorizacao = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    data_autorizacao = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     autorizado_por = db.Column(db.String(100), nullable=False)  # Quem autorizou internamente
 
     # Motivo do descarte (por que nao retornar?)
@@ -1441,9 +1443,9 @@ class DescarteDevolucao(db.Model):
     # =========================================================================
     # AUDITORIA
     # =========================================================================
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
@@ -1554,8 +1556,8 @@ class DescarteItem(db.Model):
     valor_descarte = db.Column(db.Numeric(15, 2), nullable=False, default=0)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
     # Relacionamentos
     descarte = db.relationship(

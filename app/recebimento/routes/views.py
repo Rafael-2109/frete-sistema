@@ -22,6 +22,7 @@ Referencia:
 import json
 from decimal import Decimal
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
@@ -512,7 +513,7 @@ def ncm_ibscbs_salvar():
         ncm.observacao = request.form.get('observacao', '').strip() or None
         ncm.ativo = request.form.get('ativo') == '1'
         ncm.validado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        ncm.validado_em = datetime.utcnow()
+        ncm.validado_em = agora_utc_naive()
 
         if not ncm_id:
             db.session.add(ncm)
@@ -541,7 +542,7 @@ def ncm_ibscbs_excluir(ncm_id):
 
         # Soft delete - apenas desativa
         ncm.ativo = False
-        ncm.atualizado_em = datetime.utcnow()
+        ncm.atualizado_em = agora_utc_naive()
         db.session.commit()
 
         flash(f'NCM {ncm.ncm_prefixo} desativado com sucesso', 'success')
@@ -667,7 +668,7 @@ def pendencia_ibscbs_resolver(pendencia_id):
         pendencia.resolucao = resolucao
         pendencia.justificativa = justificativa
         pendencia.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        pendencia.resolvido_em = datetime.utcnow()
+        pendencia.resolvido_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -1118,7 +1119,7 @@ def ncm_ibscbs_salvar_ajax():
         ncm.observacao = (dados.get('observacao') or '').strip() or None
         ncm.ativo = dados.get('ativo', True)
         ncm.validado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        ncm.validado_em = datetime.utcnow()
+        ncm.validado_em = agora_utc_naive()
 
         if not ncm_id:
             db.session.add(ncm)

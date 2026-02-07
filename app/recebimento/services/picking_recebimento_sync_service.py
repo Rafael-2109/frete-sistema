@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import (
     PickingRecebimento,
     PickingRecebimentoProduto,
@@ -611,8 +612,8 @@ class PickingRecebimentoSyncService:
                 'write_date': self._parse_datetime(p.get('write_date')),
                 'location_id': p['location_id'][0] if p.get('location_id') else None,
                 'location_dest_id': p['location_dest_id'][0] if p.get('location_dest_id') else None,
-                'sincronizado_em': datetime.utcnow(),
-                'atualizado_em': datetime.utcnow(),
+                'sincronizado_em': agora_utc_naive(),
+                'atualizado_em': agora_utc_naive(),
             }
 
             if picking_local:

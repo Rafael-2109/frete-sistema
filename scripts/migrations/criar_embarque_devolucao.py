@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app import create_app, db
 from sqlalchemy import text
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def criar_embarque_devolucao():
@@ -63,7 +64,7 @@ def criar_embarque_devolucao():
                 )
             """), {
                 'transportadora_id': transportadora_id,
-                'criado_em': datetime.utcnow()
+                'criado_em': agora_utc_naive()
             })
             db.session.commit()
 

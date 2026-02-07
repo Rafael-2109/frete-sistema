@@ -48,12 +48,12 @@
                         </tr>
                         <tr>
                             <th>Data Criação:</th>
-                            <td>{{ titulo.criado_em.strftime('%d/%m/%Y %H:%M') if titulo.criado_em else 'N/A' }}</td>
+                            <td>{{ titulo.criado_em|formatar_data_hora_brasil or 'N/A' }}</td>
                         </tr>
                         {% if titulo.data_ultimo_pagamento %}
                         <tr>
                             <th>Último Pagamento:</th>
-                            <td>{{ titulo.data_ultimo_pagamento.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ titulo.data_ultimo_pagamento|formatar_data_segura }}</td>
                         </tr>
                         {% endif %}
                         <tr>
@@ -154,7 +154,7 @@
                         </tr>
                         <tr>
                             <th>Data Pedido:</th>
-                            <td>{{ titulo.pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ titulo.pedido.data_pedido|formatar_data_segura }}</td>
                         </tr>
                         <tr>
                             <th>NF:</th>
@@ -214,7 +214,7 @@
                         <tbody>
                             {% for mov in titulo.movimentacoes_financeiras %}
                             <tr>
-                                <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ mov.data_movimentacao|formatar_data_segura }}</td>
                                 <td>
                                     {% if mov.tipo == 'PAGAMENTO' %}
                                     <span class="badge bg-danger">{{ mov.tipo }}</span>

@@ -25,6 +25,7 @@ import time
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.estoque.models import MovimentacaoEstoque
 from app.pallet.services.nf_service import NFService
 from app.pallet.services.match_service import MatchService
@@ -770,7 +771,7 @@ class PalletSyncService:
                         ).first()
                         if remessa:
                             remessa.baixado = True
-                            remessa.baixado_em = datetime.utcnow()
+                            remessa.baixado_em = agora_utc_naive()
                             remessa.baixado_por = 'SYNC_ODOO'
                             remessa.movimento_baixado_id = movimento.id
                             remessa.observacao = (remessa.observacao or '') + f'\n[BAIXA] Devolucao NF {numero_nf}'
@@ -949,7 +950,7 @@ class PalletSyncService:
                         if remessa:
                             remessa.status_nf = 'CANCELADO'
                             remessa.baixado = True
-                            remessa.baixado_em = datetime.utcnow()
+                            remessa.baixado_em = agora_utc_naive()
                             remessa.baixado_por = 'SYNC_ODOO'
                             remessa.observacao = (remessa.observacao or '') + '\n[CANCELAMENTO] NF cancelada no Odoo'
 

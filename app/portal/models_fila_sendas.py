@@ -5,6 +5,7 @@ Simples e focado apenas no necessário para a planilha
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 
 class FilaAgendamentoSendas(db.Model):
@@ -41,7 +42,7 @@ class FilaAgendamentoSendas(db.Model):
     # valores: pendente, processado, erro
     
     # Controle mínimo
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     processado_em = db.Column(db.DateTime)
     
     # Índice para busca eficiente
@@ -158,7 +159,7 @@ class FilaAgendamentoSendas(db.Model):
         
         for item in itens:
             item.status = 'processado'
-            item.processado_em = datetime.utcnow()
+            item.processado_em = agora_utc_naive()
         
         db.session.commit()
         return len(itens)
@@ -188,7 +189,7 @@ class FilaAgendamentoSendas(db.Model):
         """
         from datetime import timedelta
         
-        limite = datetime.utcnow() - timedelta(days=dias)
+        limite = agora_utc_naive() - timedelta(days=dias)
         
         cls.query.filter(
             cls.status == 'processado',

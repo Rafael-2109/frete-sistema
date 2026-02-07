@@ -12,7 +12,7 @@ Herança e sobrescrita de permissões
 
 from app import db
 from datetime import datetime
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import Index, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSON
 import logging
@@ -39,7 +39,7 @@ class PermissionCategory(db.Model):
     cor = db.Column(db.String(7), default='#007bff')
     ordem = db.Column(db.Integer, default=0)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Relacionamentos
@@ -68,7 +68,7 @@ class PermissionModule(db.Model):
     cor = db.Column(db.String(7), default='#6c757d')
     ordem = db.Column(db.Integer, default=0)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Relacionamentos
@@ -103,7 +103,7 @@ class PermissionSubModule(db.Model):
     critical_level = db.Column(db.String(10), default='NORMAL')  # LOW, NORMAL, HIGH, CRITICAL
     ordem = db.Column(db.Integer, default=0)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Índices
@@ -142,7 +142,7 @@ class UserPermission(db.Model):
     
     # Controle
     granted_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    granted_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    granted_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     
     # Relacionamentos
@@ -176,7 +176,7 @@ class Vendedor(db.Model):
     email = db.Column(db.String(120), nullable=True)
     telefone = db.Column(db.String(20), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Relacionamentos
@@ -197,7 +197,7 @@ class EquipeVendas(db.Model):
     descricao = db.Column(db.String(255), nullable=True)
     gerente_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Relacionamentos
@@ -223,7 +223,7 @@ class UserVendedor(db.Model):
     tipo_acesso = db.Column(db.String(20), default='view')  # view, edit, full
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     adicionado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    adicionado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    adicionado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     observacoes = db.Column(db.String(255), nullable=True)
     
     # Relacionamentos
@@ -249,7 +249,7 @@ class UserEquipe(db.Model):
     tipo_acesso = db.Column(db.String(20), default='member')  # member, supervisor, manager
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     adicionado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    adicionado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    adicionado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     observacoes = db.Column(db.String(255), nullable=True)
     
     # Relacionamentos
@@ -278,7 +278,7 @@ class VendedorPermission(db.Model):
     can_view = db.Column(db.Boolean, default=False, nullable=False)
     can_edit = db.Column(db.Boolean, default=False, nullable=False)
     granted_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    granted_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    granted_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     
     # Relacionamentos
@@ -303,7 +303,7 @@ class EquipePermission(db.Model):
     can_view = db.Column(db.Boolean, default=False, nullable=False)
     can_edit = db.Column(db.Boolean, default=False, nullable=False)
     granted_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    granted_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    granted_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     
     # Relacionamentos
@@ -334,9 +334,9 @@ class PermissionTemplate(db.Model):
     template_data = db.Column(JSON, nullable=False)  # Estrutura de permissões
     is_system = db.Column(db.Boolean, default=False, nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
     
     def __repr__(self):
         return f'<PermissionTemplate {self.nome}>'
@@ -362,7 +362,7 @@ class PermissionTemplate(db.Model):
                         user_id=user_id,
                         submodule_id=int(submodule_id),
                         granted_by=applied_by,
-                        granted_at=agora_brasil()
+                        granted_at=agora_utc_naive()
                     )
                     db.session.add(permission)
                 
@@ -397,7 +397,7 @@ class PerfilUsuario(db.Model):
     descricao = db.Column(db.String(255), nullable=True)
     nivel_hierarquico = db.Column(db.Integer, default=0)  # 0=mais baixo, 10=mais alto
     ativo = db.Column(db.Boolean, default=True, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     
     # Relacionamentos
@@ -426,7 +426,7 @@ class PermissionLog(db.Model):
     ip_address = db.Column(db.String(45), nullable=True)
     user_agent = db.Column(db.String(255), nullable=True)
     session_id = db.Column(db.String(100), nullable=True)
-    timestamp = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
     
     # Relacionamentos
     user = db.relationship('Usuario', backref='permission_logs')
@@ -480,7 +480,7 @@ class BatchOperation(db.Model):
     operation_type = db.Column(db.String(20), nullable=False)  # GRANT, REVOKE, COPY, TEMPLATE, MIGRATION
     description = db.Column(db.String(255), nullable=True)
     executed_by = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(20), default='PENDING')  # PENDING, IN_PROGRESS, COMPLETED, FAILED
     affected_users = db.Column(db.Integer, default=0)
@@ -508,7 +508,7 @@ class PermissionCache(db.Model):
     cache_key = db.Column(db.String(255), unique=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     permission_data = db.Column(JSON, nullable=False)
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     
     # Índices
@@ -521,7 +521,7 @@ class PermissionCache(db.Model):
     def clean_expired(cls):
         """Remove entradas expiradas do cache"""
         try:
-            cls.query.filter(cls.expires_at < agora_brasil()).delete()
+            cls.query.filter(cls.expires_at < agora_utc_naive()).delete()
             db.session.commit()
         except Exception as e:
             logger.error(f"Erro ao limpar cache: {e}")

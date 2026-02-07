@@ -1,5 +1,6 @@
 from app import db  # ou de onde você estiver importando seu `db`
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import text, event
 from sqlalchemy.ext.hybrid import hybrid_property
 
@@ -69,7 +70,7 @@ class Separacao(db.Model):
     # Relacionamento com cotação (para manter compatibilidade com Pedido)
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=True)
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)  # Usuario que criou a separacao
     
     # Índices compostos para performance (ordem correta: mais seletivo primeiro)

@@ -15,7 +15,7 @@ Data: 2026-01-18
 
 from flask import current_app
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 class OdooRastreamentoIntegrationService:
@@ -64,9 +64,9 @@ class OdooRastreamentoIntegrationService:
                 nf_origem=entrega.numero_nf,
                 motivo_devolucao=motivo or 'Informado pelo motorista via rastreamento',
                 status='PENDENTE',
-                data_emissao=agora_brasil().date(),
+                data_emissao=agora_utc_naive().date(),
                 criado_por='Rastreamento GPS',
-                criado_em=agora_brasil()
+                criado_em=agora_utc_naive()
             )
             db.session.add(nfd)
             db.session.flush()
@@ -148,7 +148,7 @@ class OdooRastreamentoIntegrationService:
                 status='PENDENTE',
                 observacoes=f'Pagamento de descarga informado pelo motorista via rastreamento. '
                            f'Entrega: {entrega.descricao_completa}',
-                criado_em=agora_brasil(),
+                criado_em=agora_utc_naive(),
                 criado_por='Rastreamento GPS'
             )
 

@@ -11,6 +11,7 @@ Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 
 class ValePallet(db.Model):
@@ -90,9 +91,9 @@ class ValePallet(db.Model):
     observacao = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Soft delete

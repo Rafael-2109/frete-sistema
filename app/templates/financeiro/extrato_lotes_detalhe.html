@@ -228,7 +228,7 @@
 
                             <div class="fin-info-line">
                                 <i class="fas fa-calendar-day"></i>
-                                <strong>{{ item.data_transacao.strftime('%d/%m/%Y') }}</strong>
+                                <strong>{{ item.data_transacao|formatar_data_segura }}</strong>
                             </div>
                             <div class="fin-info-line">
                                 <i class="fas fa-building"></i>
@@ -309,7 +309,7 @@
                                     {% endif %}
                                     <div class="fin-info-line">
                                         <i class="fas fa-calendar-check"></i>
-                                        Venc: <strong>{{ item.titulo_vencimento.strftime('%d/%m/%Y') if item.titulo_vencimento else 'N/A' }}</strong>
+                                        Venc: <strong>{{ item.titulo_vencimento|formatar_data_segura or 'N/A' }}</strong>
                                     </div>
                                 </div>
                             </div>

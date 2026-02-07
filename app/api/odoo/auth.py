@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from flask import request, g
 from functools import wraps
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ def require_jwt_token():
             
             # Verificar se token não expirou
             if 'exp' in payload:
-                if datetime.utcnow() > datetime.fromtimestamp(payload['exp']):
+                if agora_utc_naive() > datetime.fromtimestamp(payload['exp']):
                     logger.warning("JWT Token expirado")
                     return False
             
@@ -151,8 +152,8 @@ def generate_jwt_token(user_id, username, permissions=None, expires_in_hours=24)
             'user_id': user_id,
             'username': username,
             'permissions': permissions or [],
-            'iat': datetime.utcnow(),
-            'exp': datetime.utcnow() + timedelta(hours=expires_in_hours)
+            'iat': agora_utc_naive(),
+            'exp': agora_utc_naive() + timedelta(hours=expires_in_hours)
         }
         
         token = jwt.encode(payload, JWT_SECRET_KEY, algorithm='HS256')
@@ -232,7 +233,7 @@ def check_rate_limit(identifier, limit=100, window=3600):
         bool: True se dentro do limite, False caso contrário
     """
     try:
-        now = datetime.utcnow()
+        now = agora_utc_naive()
         
         # Limpar registros antigos
         cutoff = now - timedelta(seconds=window)

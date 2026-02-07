@@ -252,13 +252,13 @@
                 <div class="d-flex align-items-center gap-2 mb-2">
                   <strong>Data:</strong> 
                   {% if ag.data_agendada %}
-                    {{ ag.data_agendada.strftime('%d/%m/%Y') }}
+                    {{ ag.data_agendada|formatar_data_segura }}
                   {% else %}
                     -
                   {% endif %}
                   <strong>Hora:</strong> 
                   {% if ag.hora_agendada %}
-                    {{ ag.hora_agendada.strftime('%H:%M') }}
+                    {{ ag.hora_agendada|formatar_data_hora_brasil }}
                   {% else %}
                     -
                   {% endif %}
@@ -465,7 +465,7 @@
 
 {% if entrega.finalizado_em %}
 <div class="alert alert-info">
-  <strong>Finalizada em:</strong> {{ (entrega.data_hora_entrega_realizada if entrega.data_hora_entrega_realizada else entrega.finalizado_em).strftime('%d/%m/%Y %H:%M') if (entrega.data_hora_entrega_realizada or entrega.finalizado_em) else '-' }}<br>
+  <strong>Finalizada em:</strong> {{ (entrega.data_hora_entrega_realizada if entrega.data_hora_entrega_realizada else entrega.finalizado_em)|formatar_data_hora_brasil or '-' }}<br>
   <strong>Status:</strong> {{ entrega.status_finalizacao }}<br>
   <strong>Por:</strong> {{ entrega.finalizado_por }}<br>
   <strong>Registrado em:</strong> {{ entrega.finalizado_em | formatar_data_hora_brasil }}<br>

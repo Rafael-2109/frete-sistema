@@ -1067,7 +1067,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                            {{ nf.data_emissao|formatar_data_segura or '-' }}
                         </td>
                         <td>
                             <span class="empresa-badge {{ nf.empresa|lower if nf.empresa else '' }}">

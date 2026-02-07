@@ -22,6 +22,7 @@ from typing import Optional, Callable, Any
 from datetime import datetime, timedelta
 from functools import wraps
 import threading
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ class OdooCircuitBreaker:
         if not self._opened_at:
             return False
 
-        elapsed = (datetime.utcnow() - self._opened_at).total_seconds()
+        elapsed = (agora_utc_naive() - self._opened_at).total_seconds()
         return elapsed >= self.timeout_duration
 
     def _should_auto_reset_counters(self) -> bool:
@@ -124,13 +125,13 @@ class OdooCircuitBreaker:
         if not self._last_failure_time:
             return False
 
-        elapsed = (datetime.utcnow() - self._last_failure_time).total_seconds()
+        elapsed = (agora_utc_naive() - self._last_failure_time).total_seconds()
         return elapsed >= self.auto_reset_after
 
     def _record_success(self):
         """Registra sucesso"""
         with self._lock:
-            self._last_success_time = datetime.utcnow()
+            self._last_success_time = agora_utc_naive()
             self._total_successes += 1
 
             if self._state == CircuitState.HALF_OPEN:
@@ -154,7 +155,7 @@ class OdooCircuitBreaker:
     def _record_failure(self, error: Exception):
         """Registra falha"""
         with self._lock:
-            self._last_failure_time = datetime.utcnow()
+            self._last_failure_time = agora_utc_naive()
             self._total_failures += 1
 
             # Verifica se é um erro grave (timeout ou conexão recusada)
@@ -190,7 +191,7 @@ class OdooCircuitBreaker:
     def _open_circuit(self):
         """Abre o circuit (bloqueia chamadas)"""
         self._state = CircuitState.OPEN
-        self._opened_at = datetime.utcnow()
+        self._opened_at = agora_utc_naive()
         self._times_opened += 1
 
         logger.error(
@@ -255,7 +256,7 @@ class OdooCircuitBreaker:
             # Bloquear se circuit estiver aberto
             if self._state == CircuitState.OPEN:
                 time_remaining = self.timeout_duration - (
-                    datetime.utcnow() - self._opened_at
+                    agora_utc_naive() - self._opened_at
                 ).total_seconds()
 
                 raise Exception(
@@ -279,12 +280,12 @@ class OdooCircuitBreaker:
             time_since_last_failure = None
             if self._last_failure_time:
                 time_since_last_failure = (
-                    datetime.utcnow() - self._last_failure_time
+                    agora_utc_naive() - self._last_failure_time
                 ).total_seconds()
 
             time_until_retry = None
             if self._state == CircuitState.OPEN and self._opened_at:
-                elapsed = (datetime.utcnow() - self._opened_at).total_seconds()
+                elapsed = (agora_utc_naive() - self._opened_at).total_seconds()
                 time_until_retry = max(0, self.timeout_duration - elapsed)
 
             return {

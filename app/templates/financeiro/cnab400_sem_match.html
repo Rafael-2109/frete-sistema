@@ -422,7 +422,7 @@
                     </td>
                     <td>
                         {% if item.data_vencimento %}
-                            {{ item.data_vencimento.strftime('%d/%m/%Y') }}
+                            {{ item.data_vencimento|formatar_data_segura }}
                         {% else %}
                             -
                         {% endif %}

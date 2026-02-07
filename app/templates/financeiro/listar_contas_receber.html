@@ -344,9 +344,9 @@
                     <!-- Emissão com tooltip data_embarque -->
                     <td class="text-center">
                         {% if conta.emissao %}
-                            <span title="{% if em and em.data_embarque %}Embarque: {{ em.data_embarque.strftime('%d/%m/%Y') }}{% else %}Sem data de embarque{% endif %}"
+                            <span title="{% if em and em.data_embarque %}Embarque: {{ em.data_embarque|formatar_data_segura }}{% else %}Sem data de embarque{% endif %}"
                                   data-bs-toggle="tooltip">
-                                {{ conta.emissao.strftime('%d/%m/%Y') }}
+                                {{ conta.emissao|formatar_data_segura }}
                             </span>
                         {% else %}
                             -
@@ -357,9 +357,9 @@
                     <td class="text-center">
                         {% if conta.vencimento %}
                             {% if conta.vencimento < hoje and not conta.parcela_paga %}
-                                <span class="text-danger fw-bold">{{ conta.vencimento.strftime('%d/%m/%Y') }}</span>
+                                <span class="text-danger fw-bold">{{ conta.vencimento|formatar_data_segura }}</span>
                             {% else %}
-                                {{ conta.vencimento.strftime('%d/%m/%Y') }}
+                                {{ conta.vencimento|formatar_data_segura }}
                             {% endif %}
                         {% else %}
                             -
@@ -369,7 +369,7 @@
                     <!-- Liberação Antecipação -->
                     <td class="text-center">
                         {% if conta.liberacao_prevista_antecipacao %}
-                            {{ conta.liberacao_prevista_antecipacao.strftime('%d/%m/%Y') }}
+                            {{ conta.liberacao_prevista_antecipacao|formatar_data_segura }}
                         {% else %}
                             -
                         {% endif %}
@@ -436,7 +436,7 @@
                             {% if conta.acao_necessaria_tipo %}
                                 {{ conta.acao_necessaria_tipo.tipo[:10] }}{% if conta.acao_necessaria_tipo.tipo|length > 10 %}..{% endif %}
                                 {% if conta.data_lembrete %}
-                                    <small class="d-block text-muted">{{ conta.data_lembrete.strftime('%d/%m') }}</small>
+                                    <small class="d-block text-muted">{{ conta.data_lembrete|formatar_data_segura }}</small>
                                 {% endif %}
                             {% else %}
                                 <i class="fas fa-plus text-muted"></i>
@@ -448,16 +448,16 @@
                     <td>
                         <div class="d-flex align-items-center gap-1">
                             {% if em and em.status_finalizacao == 'Entregue' %}
-                                <span class="badge bg-success badge-status" title="Entregue em {{ em.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') if em.data_hora_entrega_realizada else '-' }}">
-                                    {{ em.data_hora_entrega_realizada.strftime('%d/%m') if em.data_hora_entrega_realizada else 'Entregue' }}
+                                <span class="badge bg-success badge-status" title="Entregue em {{ em.data_hora_entrega_realizada|formatar_data_hora_brasil or '-' }}">
+                                    {{ em.data_hora_entrega_realizada|formatar_data_segura or 'Entregue' }}
                                 </span>
                             {% elif em and em.status_finalizacao %}
                                 <span class="badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% elif em.status_finalizacao == 'Sinistro' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">
                                     {{ em.status_finalizacao[:10] }}
                                 </span>
                             {% elif em and em.data_hora_entrega_realizada %}
-                                <span class="badge bg-success badge-status" title="Entregue em {{ em.data_hora_entrega_realizada.strftime('%d/%m/%Y %H:%M') }}">
-                                    {{ em.data_hora_entrega_realizada.strftime('%d/%m') }}
+                                <span class="badge bg-success badge-status" title="Entregue em {{ em.data_hora_entrega_realizada|formatar_data_hora_brasil }}">
+                                    {{ em.data_hora_entrega_realizada|formatar_data_segura }}
                                 </span>
                             {% else %}
                                 <span class="badge bg-secondary badge-status">-</span>
@@ -487,15 +487,15 @@
                             {# Tem agendamento #}
                             {% if ultimo_ag.status == 'confirmado' %}
                                 <span class="previsao-confirmado"
-                                      title="Agend: {{ ultimo_ag.data_agendada.strftime('%d/%m/%Y') }} | Status: {{ ultimo_ag.status }} | Protocolo: {{ ultimo_ag.protocolo_agendamento or '-' }}"
+                                      title="Agend: {{ ultimo_ag.data_agendada|formatar_data_segura }} | Status: {{ ultimo_ag.status }} | Protocolo: {{ ultimo_ag.protocolo_agendamento or '-' }}"
                                       data-bs-toggle="tooltip">
-                                    Agend. {{ ultimo_ag.data_agendada.strftime('%d/%m') }}
+                                    Agend. {{ ultimo_ag.data_agendada|formatar_data_segura }}
                                 </span>
                             {% else %}
                                 <span class="previsao-agendado"
-                                      title="Agend: {{ ultimo_ag.data_agendada.strftime('%d/%m/%Y') }} | Status: {{ ultimo_ag.status }} | Protocolo: {{ ultimo_ag.protocolo_agendamento or '-' }}"
+                                      title="Agend: {{ ultimo_ag.data_agendada|formatar_data_segura }} | Status: {{ ultimo_ag.status }} | Protocolo: {{ ultimo_ag.protocolo_agendamento or '-' }}"
                                       data-bs-toggle="tooltip">
-                                    Agend. {{ ultimo_ag.data_agendada.strftime('%d/%m') }}
+                                    Agend. {{ ultimo_ag.data_agendada|formatar_data_segura }}
                                 </span>
                             {% endif %}
                         {% elif em and em.data_entrega_prevista %}
@@ -503,7 +503,7 @@
                             <span class="previsao-prevista"
                                   title="Previsão de entrega"
                                   data-bs-toggle="tooltip">
-                                Prev. {{ em.data_entrega_prevista.strftime('%d/%m') }}
+                                Prev. {{ em.data_entrega_prevista|formatar_data_segura }}
                             </span>
                         {% else %}
                             -

@@ -97,7 +97,7 @@
                         <!-- Coluna 5: Criação (Criado Por em cima, Criado Em embaixo) -->
                         <td>
                             <div><small><i class="fas fa-user"></i> {{ equipe.criado_por or '-' }}</small></div>
-                            <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ equipe.criado_em.strftime('%d/%m/%Y %H:%M') if equipe.criado_em else '-' }}</small></div>
+                            <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ equipe.criado_em|formatar_data_hora_brasil or '-' }}</small></div>
                         </td>
 
                         <!-- Coluna 7: Ações -->

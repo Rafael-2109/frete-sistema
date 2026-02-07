@@ -30,6 +30,7 @@ from app.separacao.models import Separacao
 from app.embarques.models import EmbarqueItem
 from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -388,12 +389,12 @@ class SincronizadorAgendamentoService:
                 status=status,
                 autor=self.usuario,
                 motivo='Sincronização automática',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
 
             if confirmado:
                 agendamento.confirmado_por = self.usuario
-                agendamento.confirmado_em = datetime.utcnow()
+                agendamento.confirmado_em = agora_utc_naive()
 
             db.session.add(agendamento)
             self.log_operacoes.append(f"AgendamentoEntrega: Criado (status={status})")

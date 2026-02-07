@@ -25,6 +25,7 @@ import logging
 from datetime import datetime
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import (
     RecebimentoFisico,
     RecebimentoLote,
@@ -97,7 +98,7 @@ class RecebimentoFisicoOdooService:
                         "Marcando como processado."
                     )
                     recebimento.status = 'processado'
-                    recebimento.processado_em = datetime.utcnow()
+                    recebimento.processado_em = agora_utc_naive()
                     db.session.commit()
                     return {'status': 'ja_processado', 'picking_state': 'done'}
                 else:
@@ -179,7 +180,7 @@ class RecebimentoFisicoOdooService:
                 f"[Recebimento {recebimento_id}] Passo 7/8: Atualizando status local"
             )
             recebimento.status = 'processado'
-            recebimento.processado_em = datetime.utcnow()
+            recebimento.processado_em = agora_utc_naive()
             recebimento.erro_mensagem = None
             db.session.commit()
 
@@ -551,7 +552,7 @@ class RecebimentoFisicoOdooService:
                     existente.recebimento_lote_id = lote.id
                     existente.lote_nome = lote.lote_nome
                     existente.data_validade = lote.data_validade
-                    existente.atualizado_em = datetime.utcnow()
+                    existente.atualizado_em = agora_utc_naive()
                     existente.atualizado_por = recebimento.usuario or 'Sistema Recebimento'
                     movimentacoes_atualizadas += 1
                     logger.debug(
@@ -566,7 +567,7 @@ class RecebimentoFisicoOdooService:
                     nome_produto=lote.odoo_product_name or cadastro.nome_produto,
 
                     # Movimentacao
-                    data_movimentacao=datetime.utcnow().date(),
+                    data_movimentacao=agora_utc_naive().date(),
                     tipo_movimentacao='ENTRADA',
                     local_movimentacao='COMPRA',
                     qtd_movimentacao=lote.quantidade,

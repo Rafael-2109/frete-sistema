@@ -220,8 +220,8 @@
                             <!-- Data Resolucao -->
                             <td>
                                 {% if item.resolvido_em %}
-                                <small>{{ item.resolvido_em.strftime('%d/%m/%Y') }}</small>
-                                <br><small class="text-muted">{{ item.resolvido_em.strftime('%H:%M') }}</small>
+                                <small>{{ item.resolvido_em|formatar_data_segura }}</small>
+                                <br><small class="text-muted">{{ item.resolvido_em|formatar_hora_brasil }}</small>
                                 {% else %}
                                 <small class="text-muted">-</small>
                                 {% endif %}

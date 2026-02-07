@@ -4,6 +4,7 @@ Modelo para registro de pedidos inseridos no Odoo via importação de PDF
 
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 
 class RegistroPedidoOdoo(db.Model):
@@ -54,7 +55,7 @@ class RegistroPedidoOdoo(db.Model):
     # ========== Auditoria ==========
     inserido_por = db.Column(db.String(100), nullable=False)
     aprovado_por = db.Column(db.String(100), nullable=True)  # Quem aprovou divergência
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     processado_em = db.Column(db.DateTime, nullable=True)  # Quando foi enviado ao Odoo
 
     # ========== Constraints ==========
@@ -100,13 +101,13 @@ class RegistroPedidoOdoo(db.Model):
         self.status_odoo = 'SUCESSO'
         self.odoo_order_id = odoo_order_id
         self.odoo_order_name = odoo_order_name
-        self.processado_em = datetime.utcnow()
+        self.processado_em = agora_utc_naive()
         self.mensagem_erro = None
 
     def marcar_erro(self, mensagem: str):
         """Marca o registro como erro"""
         self.status_odoo = 'ERRO'
-        self.processado_em = datetime.utcnow()
+        self.processado_em = agora_utc_naive()
         self.mensagem_erro = mensagem
 
     def aprovar_divergencia(self, usuario: str, justificativa: str):
@@ -248,8 +249,8 @@ class PedidoImportacaoTemp(db.Model):
 
     # ========== Auditoria ==========
     usuario = db.Column(db.String(100), nullable=False)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     expira_em = db.Column(db.DateTime, nullable=True)  # Para cleanup automático
 
     # ========== Resultado do lançamento ==========
@@ -314,7 +315,7 @@ class PedidoImportacaoTemp(db.Model):
                 return sanitize_value(d)
 
         # Gera chave única
-        chave = f"imp_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        chave = f"imp_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         # Extrai identificação
         identificacao = dados.get('identificacao', {})
@@ -448,7 +449,7 @@ class PedidoImportacaoTemp(db.Model):
             tem_divergencia=dados.get('tem_divergencia', False),
             pode_inserir=dados.get('pode_inserir', False),
             usuario=usuario,
-            expira_em=datetime.utcnow() + timedelta(hours=24)
+            expira_em=agora_utc_naive() + timedelta(hours=24)
         )
 
         return registro
@@ -598,7 +599,7 @@ class PedidoImportacaoTemp(db.Model):
             Número de registros removidos
         """
         expirados = cls.query.filter(
-            cls.expira_em < datetime.utcnow(),
+            cls.expira_em < agora_utc_naive(),
             cls.status.in_(['PROCESSADO', 'ERRO'])  # Não remove LANCADO
         ).all()
 

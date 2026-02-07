@@ -137,9 +137,9 @@
                                 {% for rem in remessas_vencidas %}
                                 <tr>
                                     <td><strong>{{ rem.numero_nf or '-' }}</strong></td>
-                                    <td>{{ rem.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ rem.data_movimentacao|formatar_data_segura }}</td>
                                     <td>
-                                        <span class="text-danger fw-bold">{{ rem.data_vencimento.strftime('%d/%m/%Y') }}</span>
+                                        <span class="text-danger fw-bold">{{ rem.data_vencimento|formatar_data_segura }}</span>
                                         <br><small class="text-muted">ha {{ (-rem.dias_ate_vencimento)|int }} dias</small>
                                     </td>
                                     <td>
@@ -196,7 +196,7 @@
                                 <tr>
                                     <td><strong>{{ rem.numero_nf or '-' }}</strong></td>
                                     <td>
-                                        <span class="text-warning fw-bold">{{ rem.data_vencimento.strftime('%d/%m/%Y') }}</span>
+                                        <span class="text-warning fw-bold">{{ rem.data_vencimento|formatar_data_segura }}</span>
                                         <br><small>em {{ rem.dias_ate_vencimento|int }} dias</small>
                                     </td>
                                     <td>{{ rem.nome_destinatario or rem.cnpj_destinatario or '-' }}</td>
@@ -242,7 +242,7 @@
                                 {% for venda in vendas_pendentes_vinculo[:10] %}
                                 <tr>
                                     <td><strong>{{ venda.numero_nf or '-' }}</strong></td>
-                                    <td>{{ venda.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ venda.data_movimentacao|formatar_data_segura }}</td>
                                     <td>{{ venda.nome_destinatario or venda.cnpj_destinatario or '-' }}</td>
                                     <td class="text-center fw-bold">{{ venda.qtd_movimentacao|int }}</td>
                                     <td>
@@ -398,13 +398,13 @@
                                     </td>
                                     <td>
                                         {% if vale.vencido %}
-                                            <span class="text-danger fw-bold">{{ vale.data_validade.strftime('%d/%m/%Y') }}</span>
+                                            <span class="text-danger fw-bold">{{ vale.data_validade|formatar_data_segura }}</span>
                                             <br><small class="text-danger">VENCIDO</small>
                                         {% elif vale.prestes_a_vencer %}
-                                            <span class="text-warning fw-bold">{{ vale.data_validade.strftime('%d/%m/%Y') }}</span>
+                                            <span class="text-warning fw-bold">{{ vale.data_validade|formatar_data_segura }}</span>
                                             <br><small class="text-warning">{{ vale.dias_para_vencer }}d</small>
                                         {% else %}
-                                            {{ vale.data_validade.strftime('%d/%m/%Y') }}
+                                            {{ vale.data_validade|formatar_data_segura }}
                                         {% endif %}
                                     </td>
                                     <td>{{ vale.nome_cliente or vale.cnpj_cliente or '-' }}</td>
@@ -533,7 +533,7 @@
                             <tbody>
                                 {% for mov in retornos_devolucoes %}
                                 <tr>
-                                    <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ mov.data_movimentacao|formatar_data_segura }}</td>
                                     <td>
                                         {% if mov.tipo_movimentacao == 'ENTRADA' %}
                                             <span class="badge bg-success">RETORNO</span>

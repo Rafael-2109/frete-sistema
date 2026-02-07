@@ -155,7 +155,7 @@
         <div class="header">
             <h1>Nacom Goya</h1>
             <h2>Termo de Autorizacao de Descarte</h2>
-            <p><strong>Numero:</strong> {{ descarte.numero_termo }} | <strong>Data:</strong> {{ descarte.data_autorizacao.strftime('%d/%m/%Y') if descarte.data_autorizacao else '-' }}</p>
+            <p><strong>Numero:</strong> {{ descarte.numero_termo }} | <strong>Data:</strong> {{ descarte.data_autorizacao|formatar_data_segura or '-' }}</p>
         </div>
 
         <!-- Dados da Empresa Autorizada -->
@@ -187,7 +187,7 @@
                 </div>
                 <div class="info-item">
                     <span class="info-label">Data Emissao:</span>
-                    <span class="info-value">{{ nfd.data_emissao.strftime('%d/%m/%Y') if nfd.data_emissao else '-' }}</span>
+                    <span class="info-value">{{ nfd.data_emissao|formatar_data_segura or '-' }}</span>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Emitente:</span>

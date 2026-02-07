@@ -141,7 +141,7 @@
                                         {% if item.lote_separacao %}
                                             <strong>Lote: {{ item.lote_separacao }}</strong>
                                             {% if item.data_separacao %}
-                                                <br><small class="text-muted">{{ item.data_separacao.strftime('%d/%m/%Y') }}</small>
+                                                <br><small class="text-muted">{{ item.data_separacao|formatar_data_segura }}</small>
                                             {% endif %}
                                         {% endif %}
                                     </td>
@@ -181,7 +181,7 @@
                                         {% else %}
                                             <div class="small">
                                                 {% if item.data_fatura %}
-                                                    <strong>Data:</strong> {{ item.data_fatura.strftime('%d/%m/%Y') }}<br>
+                                                    <strong>Data:</strong> {{ item.data_fatura|formatar_data_segura }}<br>
                                                 {% endif %}
                                                 {% if item.valor_total %}
                                                     <strong>Valor:</strong> R$ {{ "%.2f"|format(item.valor_total)|replace('.', ',')|replace(',', '.', 1) }}<br>

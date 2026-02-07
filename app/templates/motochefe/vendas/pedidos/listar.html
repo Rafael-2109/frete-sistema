@@ -67,12 +67,12 @@
 
                             {# Coluna 2: Pedido - Data + Cliente #}
                             <td>
-                                <strong>{{ p.numero_pedido }}</strong> - {{ p.data_pedido.strftime('%d/%m/%Y') if p.data_pedido else '-' }}<br>
+                                <strong>{{ p.numero_pedido }}</strong> - {{ p.data_pedido|formatar_data_segura or '-' }}<br>
                                 <small class="text-muted">{{ p.cliente.cliente if p.cliente else '-' }}</small>
                             </td>
 
                             {# Coluna 3: Entrega (data_expedicao) #}
-                            <td>{{ p.data_expedicao.strftime('%d/%m/%Y') if p.data_expedicao else '-' }}</td>
+                            <td>{{ p.data_expedicao|formatar_data_segura or '-' }}</td>
 
                             {# Coluna 4: Qtd Motos + Total #}
                             <td>
@@ -84,7 +84,7 @@
                             <td>
                                 {% set primeiro_titulo = p.titulos|selectattr('numero_parcela', 'equalto', 1)|selectattr('status', 'ne', 'CANCELADO')|first %}
                                 {% if primeiro_titulo and primeiro_titulo.data_vencimento %}
-                                    {{ primeiro_titulo.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {{ primeiro_titulo.data_vencimento|formatar_data_segura }}
                                     {% if primeiro_titulo.atrasado %}
                                         <br><span class="badge bg-danger">VENCIDO</span>
                                     {% endif %}
@@ -132,7 +132,7 @@
                                        class="btn {% if p.impresso %}btn-success{% else %}btn-warning{% endif %}"
                                        target="_blank"
                                        {% if p.impresso %}
-                                       title="Impresso em {{ p.impresso_em.strftime('%d/%m/%Y às %H:%M') if p.impresso_em else '-' }} por {{ p.impresso_por or 'N/A' }}"
+                                       title="Impresso em {{ p.impresso_em|formatar_data_hora_brasil or '-' }} por {{ p.impresso_por or 'N/A' }}"
                                        {% else %}
                                        title="Imprimir Pedido"
                                        {% endif %}

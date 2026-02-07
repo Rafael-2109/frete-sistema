@@ -22,6 +22,7 @@ from flask import render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar
 from app.financeiro.services.extrato_service import ExtratoService
@@ -1024,7 +1025,7 @@ def extrato_aprovar_item():
         }), 400
 
     item.aprovado = aprovar
-    item.aprovado_em = datetime.utcnow() if aprovar else None
+    item.aprovado_em = agora_utc_naive() if aprovar else None
     item.aprovado_por = current_user.nome if current_user and aprovar else None
     item.status = 'APROVADO' if aprovar else item.status_match
 
@@ -1057,7 +1058,7 @@ def extrato_aprovar_todos():
     for item in itens:
         if item.titulo_receber_id:  # FK correta para clientes
             item.aprovado = True
-            item.aprovado_em = datetime.utcnow()
+            item.aprovado_em = agora_utc_naive()
             item.aprovado_por = current_user.nome if current_user else 'Sistema'
             item.status = 'APROVADO'
             aprovados += 1
@@ -1361,7 +1362,7 @@ def extrato_conciliar_lote():
         lote.status = 'CONCLUIDO'
         lote.linhas_conciliadas = resultado['conciliados']
         lote.linhas_erro = resultado['erros']
-        lote.processado_em = datetime.utcnow()
+        lote.processado_em = agora_utc_naive()
         lote.processado_por = current_user.nome if current_user else 'Sistema'
         db.session.commit()
 
@@ -1401,7 +1402,7 @@ def extrato_aprovar_todos_multiplos():
     for item in itens:
         if item.titulo_receber_id:  # FK correta para clientes
             item.aprovado = True
-            item.aprovado_em = datetime.utcnow()
+            item.aprovado_em = agora_utc_naive()
             item.aprovado_por = current_user.nome if current_user else 'Sistema'
             item.status = 'APROVADO'
             aprovados += 1
@@ -1445,7 +1446,7 @@ def extrato_conciliar_multiplos():
 
             lote.linhas_conciliadas = (lote.linhas_conciliadas or 0) + resultado['conciliados']
             lote.linhas_erro = (lote.linhas_erro or 0) + resultado['erros']
-            lote.processado_em = datetime.utcnow()
+            lote.processado_em = agora_utc_naive()
             lote.processado_por = current_user.nome if current_user else 'Sistema'
 
             # Só marca como concluído se todos os aprovados foram conciliados

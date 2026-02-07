@@ -9,6 +9,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 
 
@@ -76,7 +77,7 @@ def api_responder_pendencia_financeira(pendencia_id):
         data = request.get_json()
 
         pendencia.resposta_logistica = data.get('resposta')
-        pendencia.respondida_em = datetime.utcnow()
+        pendencia.respondida_em = agora_utc_naive()
         pendencia.respondida_por = current_user.nome
 
         db.session.commit()

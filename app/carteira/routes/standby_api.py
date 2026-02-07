@@ -8,6 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import func
 import logging
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.carteira.models import CarteiraPrincipal, SaldoStandby
@@ -217,7 +218,7 @@ def atualizar_status_standby():
         for item in itens_standby:
             item.status_standby = novo_status
             if novo_status == "CONFIRMADO":
-                item.data_resolucao = datetime.utcnow()
+                item.data_resolucao = agora_utc_naive()
                 item.resolvido_por = current_user.nome if hasattr(current_user, "nome") else "Sistema"
                 item.resolucao_final = "RETORNO_CARTEIRA"
 

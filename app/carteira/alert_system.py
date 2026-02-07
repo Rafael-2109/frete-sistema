@@ -12,6 +12,7 @@ INTEGRADO COM: app.notificacoes.services.NotificationDispatcher
 from datetime import datetime
 from app.utils.logging_config import logger
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 class AlertaSistemaCarteira:
     """
@@ -44,10 +45,10 @@ class AlertaSistemaCarteira:
                     'separacoes_afetadas': [s.separacao_lote_id for s in separacoes_cotadas],
                     'mensagem': f'ATENCAO: {len(separacoes_cotadas)} separacoes COTADAS podem ser afetadas',
                     'recomendacao': 'Confirme se estas separacoes ja foram processadas fisicamente',
-                    'timestamp': datetime.utcnow()
+                    'timestamp': agora_utc_naive()
                 }
             
-            return {'alertas': False, 'timestamp': datetime.utcnow()}
+            return {'alertas': False, 'timestamp': agora_utc_naive()}
             
         except ImportError:
             logger.warning("Modulo separacao nao disponivel para verificacao de alertas")
@@ -84,7 +85,7 @@ class AlertaSistemaCarteira:
                         'pedido': alteracao['num_pedido'],
                         'produto': alteracao.get('cod_produto', 'N/A'),
                         'alteracao': alteracao['tipo_alteracao'],
-                        'timestamp': datetime.utcnow(),
+                        'timestamp': agora_utc_naive(),
                         'mensagem': f'URGENTE: Separacao COTADA {separacao_cotada.separacao_lote_id} foi afetada por alteracao no Odoo',
                         'acao_requerida': 'Verificar impacto no processo fisico imediatamente'
                     })
@@ -115,7 +116,7 @@ class AlertaSistemaCarteira:
             alerta = {
                 'nivel': 'CRITICO',
                 'tipo': tipo,
-                'timestamp': datetime.utcnow(),
+                'timestamp': agora_utc_naive(),
                 'dados': dados
             }
 
@@ -204,7 +205,7 @@ class AlertaSistemaCarteira:
                 'nivel': alerta.get('nivel', 'INFO'),
                 'titulo': alerta.get('tipo', 'ALERTA'),
                 'mensagem': alerta.get('mensagem', 'Alerta sem detalhes'),
-                'timestamp': alerta.get('timestamp', datetime.utcnow()).strftime('%d/%m/%Y %H:%M:%S'),
+                'timestamp': alerta.get('timestamp', agora_utc_naive()).strftime('%d/%m/%Y %H:%M:%S'),
                 'acao': alerta.get('acao_requerida', 'Nenhuma acao especifica'),
                 'dados': alerta.get('dados', {})
             }
@@ -240,7 +241,7 @@ class MonitoramentoSincronizacao:
         return {
             'safe_to_sync': not resultado_cotadas.get('alertas', False),
             'warnings': [resultado_cotadas] if resultado_cotadas.get('alertas') else [],
-            'timestamp': datetime.utcnow()
+            'timestamp': agora_utc_naive()
         }
     
     @staticmethod
@@ -261,5 +262,5 @@ class MonitoramentoSincronizacao:
         return {
             'alertas_criticos': alertas_cotadas,
             'total_alteracoes': len(alteracoes),
-            'timestamp': datetime.utcnow()
+            'timestamp': agora_utc_naive()
         }

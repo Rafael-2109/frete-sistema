@@ -86,7 +86,7 @@
                         <td>{{ tit.numero_parcela }}/{{ tit.total_parcelas }}</td>
                         <td>
                             {% if tit.data_vencimento %}
-                                {{ tit.data_vencimento.strftime('%d/%m/%Y') }}
+                                {{ tit.data_vencimento|formatar_data_segura }}
                                 {% if tit.atrasado %}
                                     <span class="badge bg-danger">VENCIDO</span>
                                 {% endif %}
@@ -159,7 +159,7 @@
                 <tbody>
                     {% for mov in movimentacoes %}
                     <tr>
-                        <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
+                        <td>{{ mov.data_movimentacao|formatar_data_segura or '-' }}</td>
                         <td>{{ mov.categoria }}</td>
                         <td><strong class="text-success">R$ {{ mov.valor|valor_br }}</strong></td>
                         <td>{{ mov.empresa_destino.empresa if mov.empresa_destino else '-' }}</td>

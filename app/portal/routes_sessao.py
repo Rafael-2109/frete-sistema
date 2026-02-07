@@ -11,6 +11,7 @@ from app.portal.session_manager import SessionManager
 from app.portal.utils.grupo_empresarial import GrupoEmpresarial
 from app import db
 from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive
 import os
 import json
 import logging
@@ -36,7 +37,7 @@ def configurar_sessao():
     
     # Buscar sessões válidas
     sessoes = PortalSessao.query.filter(
-        PortalSessao.valido_ate > datetime.utcnow()
+        PortalSessao.valido_ate > agora_utc_naive()
     ).all()
     
     # Grupos empresariais disponíveis
@@ -95,7 +96,7 @@ def salvar_credenciais():
         # Adicionar outros portais aqui quando necessário
         
         config.ativo = True
-        config.atualizado_em = datetime.utcnow()
+        config.atualizado_em = agora_utc_naive()
         
         db.session.commit()
         
@@ -204,7 +205,7 @@ def verificar_sessao(portal):
         # Verificar sessão no banco
         sessao_banco = PortalSessao.query.filter(
             PortalSessao.portal == portal,
-            PortalSessao.valido_ate > datetime.utcnow()
+            PortalSessao.valido_ate > agora_utc_naive()
         ).first()
         
         # Verificar credenciais configuradas
@@ -379,9 +380,9 @@ def salvar_sessao_banco(portal, usuario, client):
         # Atualizar dados
         sessao.cookies_criptografados = cookies_criptografados
         sessao.storage_state = storage
-        sessao.valido_ate = datetime.utcnow() + timedelta(hours=24)
-        sessao.ultima_utilizacao = datetime.utcnow()
-        sessao.atualizado_em = datetime.utcnow()
+        sessao.valido_ate = agora_utc_naive() + timedelta(hours=24)
+        sessao.ultima_utilizacao = agora_utc_naive()
+        sessao.atualizado_em = agora_utc_naive()
         
         db.session.commit()
         logger.info(f"Sessão salva no banco para {portal}")

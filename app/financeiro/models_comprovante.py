@@ -8,7 +8,7 @@ LancamentoComprovante: Resultado do match entre comprovante e fatura Odoo.
 """
 
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 class ComprovantePagamentoBoleto(db.Model):
@@ -63,7 +63,7 @@ class ComprovantePagamentoBoleto(db.Model):
     arquivo_origem = db.Column(db.String(255), nullable=True)
     pagina_origem = db.Column(db.Integer, nullable=True)
     importado_por = db.Column(db.String(100), nullable=True)
-    importado_em = db.Column(db.DateTime, default=agora_brasil)
+    importado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # 📦 S3 — Path do PDF original no storage
     # 1 PDF pode gerar N comprovantes — todos compartilham o mesmo path
@@ -209,7 +209,7 @@ class LancamentoComprovante(db.Model):
     status = db.Column(db.String(20), default='PENDENTE', nullable=False, index=True)
 
     # 🕐 Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     confirmado_em = db.Column(db.DateTime, nullable=True)
     confirmado_por = db.Column(db.String(100), nullable=True)
     rejeitado_em = db.Column(db.DateTime, nullable=True)

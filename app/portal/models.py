@@ -4,6 +4,7 @@ Modelos do banco de dados para integração com portais
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import func
@@ -37,8 +38,8 @@ class PortalIntegracao(db.Model):
     resposta_portal = db.Column(JSONB)
     
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, index=True)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     
     # Relacionamentos
     logs = db.relationship('PortalLog', backref='integracao', lazy='dynamic', cascade='all, delete-orphan')
@@ -123,8 +124,8 @@ class PortalConfiguracao(db.Model):
     seletores_css = db.Column(JSONB)  # Seletores para automação
     login_indicators = db.Column(JSONB)  # Seletores para detectar página de login
     ativo = db.Column(db.Boolean, default=True, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     
     __table_args__ = (
         db.UniqueConstraint('portal', 'cnpj_cliente', name='portal_cliente_unique'),
@@ -145,7 +146,7 @@ class PortalLog(db.Model):
     mensagem = db.Column(db.Text)
     screenshot_path = db.Column(db.String(500))
     dados_contexto = db.Column(JSONB)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, index=True)
     
     def __repr__(self):
         return f"<PortalLog {self.acao} - {self.sucesso}>"
@@ -162,8 +163,8 @@ class PortalSessao(db.Model):
     storage_state = db.Column(JSONB)
     valido_ate = db.Column(db.DateTime, index=True)
     ultima_utilizacao = db.Column(db.DateTime)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     
     def __repr__(self):
         return f"<PortalSessao {self.portal} - {self.usuario}>"

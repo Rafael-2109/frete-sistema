@@ -20,6 +20,7 @@ Uso:
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import re
+from app.utils.timezone import agora_utc_naive
 import hashlib
 import logging
 
@@ -343,7 +344,7 @@ class Cnab400ProcessorService:
 
             # Marcar item como processado
             item.processado = True
-            item.data_processamento = datetime.utcnow()
+            item.data_processamento = agora_utc_naive()
             item.status_match = 'PROCESSADO'
 
             db.session.commit()
@@ -1120,13 +1121,13 @@ class Cnab400ProcessorService:
                 extrato.match_criterio = 'BAIXA_AUTO_VIA_CNAB'
                 extrato.aprovado = True
                 extrato.aprovado_por = usuario or 'SISTEMA_CNAB_AUTO'
-                extrato.aprovado_em = datetime.utcnow()
-                extrato.processado_em = datetime.utcnow()
+                extrato.aprovado_em = agora_utc_naive()
+                extrato.processado_em = agora_utc_naive()
                 extrato.mensagem = f"[BAIXA_AUTO] Conciliado via CNAB400 - Lote {item.lote_id}"
 
             # 6. SÓ SE ODOO OK: Marcar item CNAB como processado
             item.processado = True
-            item.data_processamento = datetime.utcnow()
+            item.data_processamento = agora_utc_naive()
             item.erro_mensagem = None  # Limpar erro anterior se houver
 
             # 7. Log para auditoria
@@ -1226,8 +1227,8 @@ class Cnab400ProcessorService:
                     extrato.match_criterio = f'VIA_CNAB+{item.match_criterio_extrato or "MANUAL"}'
                     extrato.aprovado = True
                     extrato.aprovado_por = usuario or 'CNAB_AUTO'
-                    extrato.aprovado_em = datetime.utcnow()
-                    extrato.processado_em = datetime.utcnow()
+                    extrato.aprovado_em = agora_utc_naive()
+                    extrato.processado_em = agora_utc_naive()
                     extrato.mensagem = f"Conciliado via CNAB400 - Lote {item.lote_id}"
 
                     resultado['extrato'] = True
@@ -1306,7 +1307,7 @@ class Cnab400ProcessorService:
 
             # 4. Marcar CNAB como processado
             item.processado = True
-            item.data_processamento = datetime.utcnow()
+            item.data_processamento = agora_utc_naive()
             item.status_match = 'PROCESSADO'
 
             if resultado['extrato']:

@@ -338,7 +338,7 @@
                                 {{ nf.numero_nf }}{% if nf.serie %}<small class="text-muted">/{{ nf.serie }}</small>{% endif %}
                             </a>
                         </td>
-                        <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</td>
+                        <td>{{ nf.data_emissao|formatar_data_segura or '-' }}</td>
                         <td>
                             <span class="badge bg-secondary">{{ nf.empresa }}</span>
                         </td>

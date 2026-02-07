@@ -394,7 +394,7 @@
                                 {{ mov.nf_remessa.numero_nf }}{% if mov.nf_remessa.serie %}<small class="text-muted">/{{ mov.nf_remessa.serie }}</small>{% endif %}
                             </a>
                         </td>
-                        <td>{{ mov.nf_remessa.data_emissao.strftime('%d/%m/%Y') if mov.nf_remessa.data_emissao else '-' }}</td>
+                        <td>{{ mov.nf_remessa.data_emissao|formatar_data_segura or '-' }}</td>
                         <td>
                             <span class="badge tipo-badge bg-{{ 'info' if mov.nf_remessa.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }}">
                                 {{ 'TRANSP' if mov.nf_remessa.tipo_destinatario == 'TRANSPORTADORA' else 'CLIENTE' }}

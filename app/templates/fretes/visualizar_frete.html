@@ -521,7 +521,7 @@
 
                         <div class="mb-2">
                             <small class="text-muted">Lançado em:</small>
-                            <div>{{ frete.lancado_odoo_em.strftime('%d/%m/%Y %H:%M') if frete.lancado_odoo_em else 'N/A' }}</div>
+                            <div>{{ frete.lancado_odoo_em|formatar_data_hora_brasil or 'N/A' }}</div>
                         </div>
 
                         <div class="mb-3">
@@ -854,7 +854,7 @@
                                     <td>{{ email.remetente[:30] if email.remetente else '-' }}{% if email.remetente and email.remetente|length > 30 %}...{% endif %}</td>
                                     <td>
                                         {% if email.data_envio %}
-                                            {{ email.data_envio.strftime('%d/%m/%Y %H:%M') }}
+                                            {{ email.data_envio|formatar_data_hora_brasil }}
                                         {% else %}
                                             -
                                         {% endif %}
@@ -867,7 +867,7 @@
                                     </td>
                                     <td>
                                         <small>
-                                            {{ email.criado_em.strftime('%d/%m/%Y %H:%M') }}<br>
+                                            {{ email.criado_em|formatar_data_hora_brasil }}<br>
                                             por {{ email.criado_por[:15] if email.criado_por else 'Sistema' }}
                                         </small>
                                     </td>
@@ -1213,7 +1213,7 @@ function lancarFreteOdoo() {
                 {% if frete.vencimento %}
                 <div class="alert alert-success">
                     <i class="fas fa-calendar-check"></i>
-                    Vencimento atual do frete: <strong>{{ frete.vencimento.strftime('%d/%m/%Y') }}</strong>
+                    Vencimento atual do frete: <strong>{{ frete.vencimento|formatar_data_segura }}</strong>
                 </div>
                 {% endif %}
 

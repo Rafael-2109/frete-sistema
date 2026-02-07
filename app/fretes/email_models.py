@@ -3,6 +3,7 @@ Modelos para gerenciamento de emails anexados às despesas de frete
 """
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 
 class EmailAnexado(db.Model):
@@ -33,7 +34,7 @@ class EmailAnexado(db.Model):
     conteudo_preview = db.Column(db.Text)  # Primeiros 500 caracteres do email
     
     # Controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     
     # Relacionamento

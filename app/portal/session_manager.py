@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +65,8 @@ class SessionManager:
                 db.session.add(sessao)
             
             sessao.cookies_criptografados = encrypted.decode()
-            sessao.valido_ate = datetime.utcnow() + timedelta(hours=8)
-            sessao.ultima_utilizacao = datetime.utcnow()
+            sessao.valido_ate = agora_utc_naive() + timedelta(hours=8)
+            sessao.ultima_utilizacao = agora_utc_naive()
             
             # Salvar storage state se for Playwright
             if hasattr(driver, 'context'):
@@ -88,7 +89,7 @@ class SessionManager:
             # Buscar sessão válida
             sessao = PortalSessao.query.filter(
                 PortalSessao.portal == portal_name,
-                PortalSessao.valido_ate > datetime.utcnow()
+                PortalSessao.valido_ate > agora_utc_naive()
             ).order_by(PortalSessao.ultima_utilizacao.desc()).first()
             
             if not sessao:
@@ -117,7 +118,7 @@ class SessionManager:
                 driver.context.add_cookies(cookies)
             
             # Atualizar última utilização
-            sessao.ultima_utilizacao = datetime.utcnow()
+            sessao.ultima_utilizacao = agora_utc_naive()
             db.session.commit()
             
             logger.info(f"Cookies carregados para {portal_name}")

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, session,
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime
 import logging
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.auth.forms import LoginForm, RegistroForm, AprovarUsuarioForm, RejeitarUsuarioForm, EditarUsuarioForm
@@ -19,7 +20,7 @@ def login():
         if usuario and usuario.verificar_senha(form.senha.data):
             if usuario.is_approved:
                 # Atualizar último login
-                usuario.ultimo_login = datetime.utcnow()
+                usuario.ultimo_login = agora_utc_naive()
                 db.session.commit()
                 
                 # ✅ CORREÇÃO: Configura sessão permanente (4 horas)

@@ -29,7 +29,7 @@ from app.financeiro.models_comprovante import (
     LancamentoComprovante,
 )
 from app.financeiro.services.ofx_parser_service import parsear_ofx
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -461,7 +461,7 @@ def _criar_lancamento_pre_conciliado(comprovante, dados_conciliacao):
         beneficiario_e_financeira=False,
         # Status LANCADO direto
         status='LANCADO',
-        lancado_em=agora_brasil(),
+        lancado_em=agora_utc_naive(),
         lancado_por='importacao_ofx',
         # Reconciliação
         odoo_full_reconcile_id=titulo.get('full_reconcile_id'),
@@ -649,7 +649,7 @@ def processar_ofx_e_vincular(
         )
 
     # ─── FASE 3: Vincular Comprovante → Odoo (lookup local) ──────────
-    agora = agora_brasil()
+    agora = agora_utc_naive()
     # Coletar comprovantes com extrato já reconciliado para busca batch (FASE 3.5)
     comprovantes_reconciliados = {}  # {comp.id: {'statement_line_id': ..., 'odoo_move_id': ...}}
     # Mapear fitid → comprovante para referência na FASE 3.5

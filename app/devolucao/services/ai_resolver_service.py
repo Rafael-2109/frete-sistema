@@ -2006,7 +2006,7 @@ class AIResolverService:
     ):
         """Grava De-Para no banco."""
         try:
-            from app.utils.timezone import agora_brasil
+            from app.utils.timezone import agora_utc_naive
 
             # Verificar se ja existe (inclui inativos para evitar violacao de constraint)
             existente = DeParaProdutoCliente.query.filter_by(
@@ -2023,7 +2023,7 @@ class AIResolverService:
                     existente.descricao_nosso = descricao_nosso
                     existente.descricao_cliente = descricao_cliente
                     existente.ativo = True
-                    existente.atualizado_em = agora_brasil()
+                    existente.atualizado_em = agora_utc_naive()
                     existente.atualizado_por = 'AIResolverService'
                     logger.info(f"[AI_RESOLVER] De-Para reativado: {codigo_cliente} -> {nosso_codigo}")
                     return
@@ -2035,7 +2035,7 @@ class AIResolverService:
                 nosso_codigo=nosso_codigo,
                 descricao_nosso=descricao_nosso,
                 ativo=True,
-                criado_em=agora_brasil(),
+                criado_em=agora_utc_naive(),
                 criado_por='AIResolverService',
             )
 

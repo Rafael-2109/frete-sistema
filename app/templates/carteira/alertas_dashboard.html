@@ -102,7 +102,7 @@
             {% for item in alertas %}
             <tr class="{% if item.is_orfao %}table-danger{% endif %}">
               <td>{{ item.alerta.id if item.alerta else '-' }}</td>
-              <td>{{ item.alerta.data_alerta.strftime('%d/%m/%Y %H:%M') if item.alerta and item.alerta.data_alerta else '-' }}</td>
+              <td>{{ item.alerta.data_alerta|formatar_data_hora_brasil if item.alerta else '-' }}</td>
               <td>{{ item.alerta.separacao_lote_id if item.alerta else '-' }}</td>
               <td>{{ item.alerta.num_pedido if item.alerta else '-' }}</td>
               <td>

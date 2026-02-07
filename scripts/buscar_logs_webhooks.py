@@ -9,10 +9,11 @@ Uso:
     python scripts/buscar_logs_webhooks.py --nfe 12345
 """
 
+import sys
 import requests
 import json
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import re
 from typing import List, Dict
@@ -66,7 +67,7 @@ class BuscadorLogsWebhook:
 
         url = f'{self.base_url}/services/{self.service_id}/logs'
 
-        since_time = (datetime.utcnow() - timedelta(hours=horas)).isoformat() + 'Z'
+        since_time = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=horas)).isoformat() + 'Z'
 
         params = {
             'since': since_time,

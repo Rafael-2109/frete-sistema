@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from flask import session
 from datetime import datetime, timedelta
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ class TagPlusOAuth2V2:
                     ).first()
 
                     if token_record:
-                        token_record.ultimo_refresh = datetime.utcnow()
+                        token_record.ultimo_refresh = agora_utc_naive()
                         token_record.total_refreshes += 1
                         db.session.commit()
                 except Exception as e:
@@ -200,7 +201,7 @@ class TagPlusOAuth2V2:
 
         # Calcula expiração (margem de 5 minutos)
         expires_in = token_data.get('expires_in', 86400)
-        expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 300)
+        expires_at = agora_utc_naive() + timedelta(seconds=expires_in - 300)
         self.token_expires_at = time.time() + expires_in - 300
 
         try:
@@ -213,7 +214,7 @@ class TagPlusOAuth2V2:
             token_record.expires_at = expires_at
             token_record.token_type = token_data.get('token_type', 'Bearer')
             token_record.scope = token_data.get('scope')
-            token_record.atualizado_em = datetime.utcnow()
+            token_record.atualizado_em = agora_utc_naive()
 
             db.session.commit()
             logger.info(f"✅ Tokens salvos no banco para {self.api_type}")
@@ -258,7 +259,7 @@ class TagPlusOAuth2V2:
                     self.token_expires_at = token_record.expires_at.timestamp()
 
                 # Atualiza última requisição
-                token_record.ultima_requisicao = datetime.utcnow()
+                token_record.ultima_requisicao = agora_utc_naive()
                 db.session.commit()
 
                 logger.info(f"✅ Tokens carregados do banco para {self.api_type}")

@@ -8,6 +8,7 @@ Este arquivo substitui models.py quando Pedido se torna uma VIEW
 from app import db
 from datetime import datetime
 from sqlalchemy import text
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy.ext.hybrid import hybrid_property
 
 class Pedido(db.Model):
@@ -74,7 +75,7 @@ class Pedido(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     
     # Timestamps
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     @property
     def status_calculado(self):

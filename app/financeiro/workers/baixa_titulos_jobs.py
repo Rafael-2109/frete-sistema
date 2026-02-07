@@ -27,6 +27,7 @@ import traceback
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +405,7 @@ def processar_itens_baixa_job(
                     # Erro no item
                     item.status = 'ERRO'
                     item.mensagem = str(e)
-                    item.processado_em = datetime.utcnow()
+                    item.processado_em = agora_utc_naive()
 
                     item_resultado['success'] = False
                     item_resultado['message'] = str(e)
@@ -546,7 +547,7 @@ def processar_lote_baixa_job(
 
             if not itens:
                 lote.status = 'CONCLUIDO'
-                lote.processado_em = datetime.utcnow()
+                lote.processado_em = agora_utc_naive()
                 db.session.commit()
 
                 resultado['success'] = True
@@ -568,7 +569,7 @@ def processar_lote_baixa_job(
 
             # Atualizar lote
             lote.status = 'CONCLUIDO'
-            lote.processado_em = datetime.utcnow()
+            lote.processado_em = agora_utc_naive()
             lote.linhas_processadas = resultado['total_itens']
             lote.linhas_sucesso = resultado['itens_sucesso']
             lote.linhas_erro = resultado['itens_erro']
@@ -602,7 +603,7 @@ def processar_lote_baixa_job(
                 lote = db.session.get(BaixaTituloLote,lote_id) if lote_id else None
                 if lote:
                     lote.status = 'ERRO'
-                    lote.processado_em = datetime.utcnow()
+                    lote.processado_em = agora_utc_naive()
                     db.session.commit()
         except Exception:
             pass

@@ -6,6 +6,7 @@ PedidoVendaAuditoria: Auditoria de ações sobre pedidos (inserção e cancelame
 """
 from app import db
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 
 class PedidoVendaMoto(db.Model):
@@ -78,9 +79,9 @@ class PedidoVendaMoto(db.Model):
     itens = db.relationship('PedidoVendaMotoItem', backref='pedido', lazy='dynamic', cascade='all, delete-orphan')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -153,7 +154,7 @@ class PedidoVendaMotoItem(db.Model):
     empresa_pagadora_montagem = db.relationship('EmpresaVendaMoto', foreign_keys=[empresa_pagadora_montagem_id], backref='montagens_pagas')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -231,7 +232,7 @@ class PedidoVendaAuditoria(db.Model):
     # Solicitação
     observacao = db.Column(db.Text, nullable=True)  # Motivo/justificativa
     solicitado_por = db.Column(db.String(100), nullable=False)
-    solicitado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    solicitado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
 
     # Confirmação/Rejeição (mutuamente exclusivas)
     confirmado = db.Column(db.Boolean, default=False, nullable=False, index=True)

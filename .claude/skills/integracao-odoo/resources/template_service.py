@@ -24,6 +24,7 @@ from app.fretes.models import (
     LancamentoFreteOdooAuditoria
 )
 from app.fretes.services.lancamento_odoo_service import LancamentoOdooService
+from app.utils.timezone import agora_utc_naive
 
 
 class LancamentoXxxOdooService(LancamentoOdooService):
@@ -196,7 +197,7 @@ class LancamentoXxxOdooService(LancamentoOdooService):
             # xxx.odoo_dfe_id = dfe_id
             # xxx.odoo_purchase_order_id = po_id
             # xxx.odoo_invoice_id = invoice_id
-            # xxx.lancado_odoo_em = agora_brasil()
+            # xxx.lancado_odoo_em = agora_utc_naive()
             # xxx.lancado_odoo_por = self.usuario_nome
             # xxx.status = 'LANCADO_ODOO'
             # db.session.commit()

@@ -36,7 +36,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app.faturamento.models import FaturamentoProduto
 from app.estoque.models import MovimentacaoEstoque
 from app.odoo.utils.connection import get_odoo_connection
-from app.utils.timezone import agora_utc, agora_brasil
+from app.utils.timezone import agora_utc, agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -595,7 +595,7 @@ class ReversaoService:
                 nfd.status_monitoramento = entrega.status_finalizacao
 
         # Auditoria
-        nfd.atualizado_em = agora_brasil()
+        nfd.atualizado_em = agora_utc_naive()
         nfd.atualizado_por = 'Sistema Odoo - Reversao'
 
         # Se não tem linhas, tentar buscar e criar
@@ -676,7 +676,7 @@ class ReversaoService:
             descricao_motivo='NF de venda revertida - Nota de Credito emitida no Odoo',
 
             # Auditoria
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por='Sistema Odoo - Reversao',
         )
 
@@ -731,7 +731,7 @@ class ReversaoService:
             descricao_comercial=f'NF revertida importada do Odoo. Cliente: {nfd.nome_emitente or "N/A"}',
 
             # Auditoria
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por='Sistema Odoo - Reversao',
         )
 
@@ -800,7 +800,7 @@ class ReversaoService:
                 # 2.1. Marcar FaturamentoProduto como revertida
                 item.revertida = True
                 item.nota_credito_id = nota_credito_id
-                item.data_reversao = agora_brasil()
+                item.data_reversao = agora_utc_naive()
                 # NAO altera status_nf - continua 'Lancado'
                 resultado['faturamento_marcados'] += 1
 
@@ -831,7 +831,7 @@ class ReversaoService:
                     status_nf='REVERTIDA',              # Status especifico
                     tipo_origem='ODOO',
                     observacao=f'Reversao NF {numero_nf} via NC {nota_credito_name}',
-                    criado_em=agora_brasil(),
+                    criado_em=agora_utc_naive(),
                     criado_por='Sistema Odoo - Reversao'
                 )
                 db.session.add(mov)

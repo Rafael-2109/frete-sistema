@@ -59,6 +59,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, List
 from decimal import Decimal, ROUND_HALF_UP
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.recebimento.models import PendenciaFiscalIbsCbs, NcmIbsCbsValidado
@@ -871,7 +872,7 @@ class ValidacaoIbsCbsService:
         from sqlalchemy import and_
 
         # Calcular data limite baseada na janela de tempo
-        data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+        data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
 
         # Subquery para CTes que ja tem pendencia
         subquery = db.session.query(PendenciaFiscalIbsCbs.chave_acesso).filter(
@@ -960,7 +961,7 @@ class ValidacaoIbsCbsService:
             existente.reducao_aliquota = Decimal(str(reducao_aliquota)) if reducao_aliquota else None
             existente.descricao_ncm = descricao or existente.descricao_ncm
             existente.validado_por = usuario
-            existente.validado_em = datetime.utcnow()
+            existente.validado_em = agora_utc_naive()
             existente.ativo = True
             db.session.commit()
             logger.info(f"NCM {ncm_prefixo} atualizado")
@@ -977,7 +978,7 @@ class ValidacaoIbsCbsService:
             reducao_aliquota=Decimal(str(reducao_aliquota)) if reducao_aliquota else None,
             ativo=True,
             validado_por=usuario,
-            validado_em=datetime.utcnow()
+            validado_em=agora_utc_naive()
         )
 
         db.session.add(ncm)
@@ -1029,7 +1030,7 @@ class ValidacaoIbsCbsService:
         pendencia.resolucao = resolucao
         pendencia.justificativa = justificativa
         pendencia.resolvido_por = usuario
-        pendencia.resolvido_em = datetime.utcnow()
+        pendencia.resolvido_em = agora_utc_naive()
 
         db.session.commit()
 

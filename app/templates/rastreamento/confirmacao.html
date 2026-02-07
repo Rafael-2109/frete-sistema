@@ -85,7 +85,7 @@
 
         <div class="info-box">
             <p class="mb-2"><strong>Embarque:</strong> #{{ embarque.numero or embarque.id }}</p>
-            <p class="mb-2"><strong>Data/Hora:</strong> {{ rastreamento.canhoto_enviado_em.strftime('%d/%m/%Y %H:%M') if rastreamento.canhoto_enviado_em else 'Agora' }}</p>
+            <p class="mb-2"><strong>Data/Hora:</strong> {{ rastreamento.canhoto_enviado_em|formatar_data_hora_brasil or 'Agora' }}</p>
             {% if rastreamento.distancia_minima_atingida %}
             <p class="mb-0"><strong>Distancia final:</strong> {{ (rastreamento.distancia_minima_atingida)|round(0)|int }}m do destino</p>
             {% endif %}

@@ -437,7 +437,7 @@
                                 <i class="fas fa-times-circle" style="color: var(--fin-accent-danger);" title="Journal nao encontrado"></i>
                                 {% endif %}
                             </td>
-                            <td class="mono">{{ item.data_excel.strftime('%d/%m/%Y') if item.data_excel else '-' }}</td>
+                            <td class="mono">{{ item.data_excel|formatar_data_segura or '-' }}</td>
                             <td class="text-center">
                                 <input type="checkbox" class="fin-checkbox"
                                        id="ativo{{ item.id }}"

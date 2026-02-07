@@ -51,7 +51,7 @@
                             Protocolo: <code>{{ integracao_existente.protocolo }}</code><br>
                             {% endif %}
                             {% if integracao_existente.data_agendamento %}
-                            Data Agendamento: {{ integracao_existente.data_agendamento.strftime('%d/%m/%Y') }}
+                            Data Agendamento: {{ integracao_existente.data_agendamento|formatar_data_segura }}
                             {% endif %}
                         </div>
                     {% else %}

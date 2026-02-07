@@ -64,7 +64,7 @@ Usado no monitoramento para registrar devolucoes durante a finalizacao de entreg
                             </span>
                         </td>
                         <td>
-                            <small>{{ nfd.criado_em.strftime('%d/%m/%Y %H:%M') }}</small>
+                            <small>{{ nfd.criado_em|formatar_data_hora_brasil }}</small>
                             <br><small class="text-muted">por {{ nfd.criado_por }}</small>
                         </td>
                         <td>

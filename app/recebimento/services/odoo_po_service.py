@@ -34,6 +34,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao
 from app.manufatura.models import PedidoCompras
 from app.odoo.utils.connection import get_odoo_connection
@@ -117,7 +118,7 @@ def _marcar_dfes_afetados_por_pos(po_ids: list) -> int:
             if validacao and validacao.status == 'aprovado':
                 if not validacao.po_modificada_apos_validacao:
                     validacao.po_modificada_apos_validacao = True
-                    validacao.atualizado_em = datetime.utcnow()
+                    validacao.atualizado_em = agora_utc_naive()
                     dfes_marcados += 1
                     logger.info(
                         f"⚠️ DFE {validacao.odoo_dfe_id} (NF {validacao.numero_nf}) "
@@ -843,7 +844,7 @@ class OdooPoService:
             validacao.acao_executada = {
                 'tipo': 'split_consolidacao',
                 'usuario': usuario,
-                'data': datetime.utcnow().isoformat(),
+                'data': agora_utc_naive().isoformat(),
                 'po_conciliador': {
                     'id': po_conciliador_id,
                     'name': po_conciliador_name,
@@ -855,8 +856,8 @@ class OdooPoService:
                     for po_id, po_name in pos_com_saldo
                 ]
             }
-            validacao.consolidado_em = datetime.utcnow()
-            validacao.atualizado_em = datetime.utcnow()
+            validacao.consolidado_em = agora_utc_naive()
+            validacao.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 
@@ -1071,7 +1072,7 @@ class OdooPoService:
                 {
                     'default': {
                         'partner_id': fornecedor_id,
-                        'date_order': validacao.data_nf.isoformat() if validacao.data_nf else datetime.utcnow().isoformat(),
+                        'date_order': validacao.data_nf.isoformat() if validacao.data_nf else agora_utc_naive().isoformat(),
                         'origin': f'Conciliacao NF {validacao.numero_nf or validacao.odoo_dfe_id}',
                         'state': 'draft',
                         'order_line': False,  # Limpar linhas - serao criadas manualmente depois
@@ -1584,7 +1585,7 @@ class OdooPoService:
             validacao.pos_saldo_ids = None
             validacao.pos_cancelados_ids = None
             validacao.consolidado_em = None
-            validacao.atualizado_em = datetime.utcnow()
+            validacao.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 

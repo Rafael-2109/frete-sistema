@@ -19,7 +19,6 @@ from app import db
 from app.fretes.models import (
     DespesaExtra, Frete, ConhecimentoTransporte, LancamentoFreteOdooAuditoria
 )
-from app.utils.timezone import agora_brasil
 from app.utils.cnpj_utils import normalizar_cnpj
 
 logger = logging.getLogger(__name__)

@@ -13,7 +13,7 @@ CONFORMIDADE LGPD:
 from app import db
 from datetime import datetime, timedelta
 import secrets
-from app.utils.timezone import agora_brasil, agora_utc
+from app.utils.timezone import agora_utc, agora_utc_naive
 
 
 class RastreamentoEmbarque(db.Model):
@@ -56,7 +56,7 @@ class RastreamentoEmbarque(db.Model):
     canhoto_longitude = db.Column(db.Float, nullable=True)
 
     # Auditoria e LGPD
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False, default='Sistema')
     data_expurgo_lgpd = db.Column(db.DateTime, nullable=True)  # Automaticamente 90 dias após criação
 
@@ -72,7 +72,7 @@ class RastreamentoEmbarque(db.Model):
             self.token_acesso = secrets.token_urlsafe(48)  # 64 caracteres
         # Define data de expurgo LGPD (90 dias)
         if not self.data_expurgo_lgpd:
-            self.data_expurgo_lgpd = agora_brasil() + timedelta(days=90)
+            self.data_expurgo_lgpd = agora_utc_naive() + timedelta(days=90)
 
     @property
     def url_rastreamento(self):
@@ -117,14 +117,14 @@ class RastreamentoEmbarque(db.Model):
         """Retorna tempo em segundos desde o último ping"""
         if not self.ultimo_ping_em:
             return None
-        return (datetime.utcnow() - self.ultimo_ping_em).total_seconds()
+        return (agora_utc_naive() - self.ultimo_ping_em).total_seconds()
 
     @property
     def dias_para_expurgo(self):
         """Retorna quantos dias faltam para expurgo LGPD"""
         if not self.data_expurgo_lgpd:
             return None
-        delta = self.data_expurgo_lgpd - datetime.utcnow()
+        delta = self.data_expurgo_lgpd - agora_utc_naive()
         return max(0, delta.days)
 
     def registrar_log(self, evento, detalhes=None):
@@ -167,7 +167,7 @@ class PingGPS(db.Model):
     bateria_carregando = db.Column(db.Boolean, default=False)
 
     # Timestamp
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
     timestamp_dispositivo = db.Column(db.DateTime, nullable=True)  # Horário do dispositivo
 
     def __repr__(self):
@@ -193,7 +193,7 @@ class LogRastreamento(db.Model):
     detalhes = db.Column(db.Text, nullable=True)  # JSON ou texto livre
 
     # Timestamp
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
 
     def __repr__(self):
         return f'<LogRastreamento {self.evento} - {self.criado_em}>'
@@ -225,7 +225,7 @@ class ConfiguracaoRastreamento(db.Model):
     notificar_inatividade_minutos = db.Column(db.Integer, default=30, nullable=True)  # NULL = desabilitado
 
     # Controle
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     @staticmethod
@@ -295,7 +295,7 @@ class EntregaRastreada(db.Model):
     entregue_distancia_metros = db.Column(db.Float, nullable=True)  # Distância do cliente quando entregou
 
     # Controle
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
 
     # Relacionamentos
     rastreamento = db.relationship('RastreamentoEmbarque', backref=db.backref('entregas', lazy='dynamic'))

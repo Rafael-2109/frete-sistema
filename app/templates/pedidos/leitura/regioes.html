@@ -96,7 +96,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <small>{{ r.criado_em.strftime('%d/%m/%Y') }}</small>
+                                <small>{{ r.criado_em|formatar_data_segura }}</small>
                             </td>
                             <td class="text-center">
                                 <div class="btn-group btn-group-sm">

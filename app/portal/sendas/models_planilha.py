@@ -5,6 +5,7 @@ Etapa 1 do novo processo semi-automatizado
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 class PlanilhaModeloSendas(db.Model):
     """
@@ -35,7 +36,7 @@ class PlanilhaModeloSendas(db.Model):
     unidade_medida = db.Column(db.String(20))                    # Coluna 16
 
     # Controle
-    data_importacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_importacao = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     usuario_importacao = db.Column(db.String(100))
 
     # Índices para busca na Etapa 2

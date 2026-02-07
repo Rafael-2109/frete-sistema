@@ -30,7 +30,7 @@
                     <span class="lote-meta-item">
                         <i class="fas fa-calendar"></i>
                         {% if lote.data_arquivo %}
-                            {{ lote.data_arquivo.strftime('%d/%m/%Y') }}
+                            {{ lote.data_arquivo|formatar_data_segura }}
                         {% else %}
                             N/D
                         {% endif %}
@@ -201,14 +201,14 @@
                         </td>
                         <td>
                             {% if item.data_ocorrencia %}
-                                {{ item.data_ocorrencia.strftime('%d/%m/%Y') }}
+                                {{ item.data_ocorrencia|formatar_data_segura }}
                             {% else %}
                                 -
                             {% endif %}
                         </td>
                         <td>
                             {% if item.data_vencimento %}
-                                {{ item.data_vencimento.strftime('%d/%m/%Y') }}
+                                {{ item.data_vencimento|formatar_data_segura }}
                             {% else %}
                                 -
                             {% endif %}

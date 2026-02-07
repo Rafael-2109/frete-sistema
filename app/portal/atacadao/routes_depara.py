@@ -9,6 +9,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.portal.atacadao.models import ProdutoDeParaAtacadao
 from app.producao.models import CadastroPalletizacao
 import logging
@@ -114,7 +115,7 @@ def editar(id):
             mapeamento.fator_conversao = float(request.form.get('fator_conversao', 1.0))
             mapeamento.observacoes = request.form.get('observacoes', '')
             mapeamento.ativo = request.form.get('ativo') == 'on'
-            mapeamento.atualizado_em = datetime.utcnow()
+            mapeamento.atualizado_em = agora_utc_naive()
             
             db.session.commit()
             
@@ -311,7 +312,7 @@ def importar():
                             existe.fator_conversao = fator_conversao
                         if observacoes:
                             existe.observacoes = observacoes
-                        existe.atualizado_em = datetime.utcnow()
+                        existe.atualizado_em = agora_utc_naive()
                         contador_atualizados += 1
                     else:
                         # Buscar descrição do nosso produto

@@ -13,6 +13,7 @@ Data: 11/12/2025
 
 from datetime import datetime, date
 from typing import List, Dict, Optional, Tuple
+from app.utils.timezone import agora_utc_naive
 import logging
 
 from app import db
@@ -471,7 +472,7 @@ class CorrecaoDatasService:
                         datetime.strptime(data_linhas_depois, '%Y-%m-%d').date()
                         if data_linhas_depois else None
                     )
-                    correcao.corrigido_em = datetime.utcnow()
+                    correcao.corrigido_em = agora_utc_naive()
                     correcao.corrigido_por = usuario
 
                     resultado['corrigidos'] += 1

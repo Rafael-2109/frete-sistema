@@ -12,6 +12,7 @@ import pandas as pd
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func
 import traceback
 from io import BytesIO
@@ -240,8 +241,8 @@ def importar_comissoes_historico(df_comissoes, usuario='IMPORTACAO_HISTORICO'):
                 empresa_pagadora_id=empresa_pagadora.id if empresa_pagadora else None,
                 # lote_pagamento_id será preenchido depois (se PAGO)
 
-                criado_em=datetime.utcnow(),
-                atualizado_em=datetime.utcnow()
+                criado_em=agora_utc_naive(),
+                atualizado_em=agora_utc_naive()
             )
             db.session.add(comissao)
             db.session.flush()

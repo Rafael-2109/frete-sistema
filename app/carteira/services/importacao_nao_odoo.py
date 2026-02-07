@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraCopia, CadastroCliente, CarteiraPrincipal
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_
 import re
 
@@ -381,7 +381,7 @@ class ImportadorPedidosNaoOdoo:
         try:
             num_pedido = dados_cabecalho['num_pedido']
             cnpj_formatado = self.formatar_cnpj(cliente.cnpj_cpf)
-            data_atual = agora_brasil()
+            data_atual = agora_utc_naive()
             
             # Verifica se pode substituir pedido existente
             pode_substituir = self._verificar_pode_substituir_pedido(num_pedido)

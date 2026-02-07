@@ -41,6 +41,7 @@ from app.financeiro.models import (
     ContasAReceberDocumento,
     ContasAReceberLinhaCredito
 )
+from app.utils.timezone import agora_utc_naive, agora_brasil
 
 # Configurar logging
 logging.basicConfig(
@@ -234,7 +235,7 @@ class ImportadorBaixasOdoo:
                     if documento:
                         reconciliacao.documento_id = documento.id
 
-        reconciliacao.ultima_sincronizacao = datetime.utcnow()
+        reconciliacao.ultima_sincronizacao = agora_utc_naive()
 
         if not existente:
             self.estatisticas['reconciliacoes_criadas'] += 1
@@ -305,7 +306,7 @@ class ImportadorBaixasOdoo:
         linha.parent_state = linha_odoo.get('parent_state')
         linha.odoo_create_date = self._parse_datetime(linha_odoo.get('create_date'))
         linha.odoo_write_date = self._parse_datetime(linha_odoo.get('write_date'))
-        linha.ultima_sincronizacao = datetime.utcnow()
+        linha.ultima_sincronizacao = agora_utc_naive()
 
         self._linhas_credito_importadas.add(odoo_id)
 
@@ -376,7 +377,7 @@ class ImportadorBaixasOdoo:
         pagamento.odoo_create_user = self._extrair_nome(pag_odoo.get('create_uid'))
         pagamento.odoo_write_date = self._parse_datetime(pag_odoo.get('write_date'))
         pagamento.odoo_write_user = self._extrair_nome(pag_odoo.get('write_uid'))
-        pagamento.ultima_sincronizacao = datetime.utcnow()
+        pagamento.ultima_sincronizacao = agora_utc_naive()
 
         # Buscar CNPJ do parceiro se disponível
         if pagamento.partner_id:
@@ -465,7 +466,7 @@ class ImportadorBaixasOdoo:
         documento.odoo_create_user = self._extrair_nome(doc_odoo.get('create_uid'))
         documento.odoo_write_date = self._parse_datetime(doc_odoo.get('write_date'))
         documento.odoo_write_user = self._extrair_nome(doc_odoo.get('write_uid'))
-        documento.ultima_sincronizacao = datetime.utcnow()
+        documento.ultima_sincronizacao = agora_utc_naive()
 
         # Buscar CNPJ do parceiro se disponível
         if documento.partner_id:
@@ -578,7 +579,7 @@ def main():
     print("="*80)
     print("IMPORTAÇÃO DE BAIXAS/RECONCILIAÇÕES DO ODOO")
     print("="*80)
-    print(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Início: {agora_brasil().strftime('%Y-%m-%d %H:%M:%S')}")
 
     app = create_app()
 
@@ -646,7 +647,7 @@ def main():
         print(f"   Documentos criados:       {importador.estatisticas['documentos_criados']}")
         print(f"   Linhas crédito criadas:   {importador.estatisticas['linhas_credito_criadas']}")
         print(f"   Erros:                    {importador.estatisticas['erros']}")
-        print(f"\nFim: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"\nFim: {agora_brasil().strftime('%Y-%m-%d %H:%M:%S')}")
 
 
 if __name__ == '__main__':

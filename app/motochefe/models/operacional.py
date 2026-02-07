@@ -5,6 +5,7 @@ DespesaMensal: Despesas mensais (salários, aluguel, etc)
 """
 from app import db
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 
 class CustosOperacionais(db.Model):
@@ -32,9 +33,9 @@ class CustosOperacionais(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
@@ -86,9 +87,9 @@ class DespesaMensal(db.Model):
     empresa_pagadora = db.relationship('EmpresaVendaMoto', backref='despesas_pagas')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 

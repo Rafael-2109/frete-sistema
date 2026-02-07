@@ -94,7 +94,7 @@
                     <table class="table table-sm table-borderless">
                         <tr>
                             <th width="45%">Data Pagamento:</th>
-                            <td><strong>{{ comissao.data_pagamento.strftime('%d/%m/%Y') }}</strong></td>
+                            <td><strong>{{ comissao.data_pagamento|formatar_data_segura }}</strong></td>
                         </tr>
                         <tr>
                             <th>Valor Pago:</th>
@@ -134,7 +134,7 @@
                         </tr>
                         <tr>
                             <th>Data Pedido:</th>
-                            <td>{{ comissao.pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ comissao.pedido.data_pedido|formatar_data_segura }}</td>
                         </tr>
                         <tr>
                             <th>Valor Total Pedido:</th>
@@ -147,7 +147,7 @@
                         {% if comissao.pedido.data_nf %}
                         <tr>
                             <th>Data NF:</th>
-                            <td>{{ comissao.pedido.data_nf.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ comissao.pedido.data_nf|formatar_data_segura }}</td>
                         </tr>
                         {% endif %}
                         <tr>
@@ -245,7 +245,7 @@
                                         <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ c.data_pagamento.strftime('%d/%m/%Y') if c.data_pagamento else '-' }}</td>
+                                <td>{{ c.data_pagamento|formatar_data_segura or '-' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

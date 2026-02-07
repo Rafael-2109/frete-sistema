@@ -36,6 +36,7 @@ from app.financeiro.services.sincronizacao_contas_receber_service import Sincron
 from app.financeiro.models import ContasAReceber
 from app.monitoramento.models import EntregaMonitorada
 from app.faturamento.models import RelatorioFaturamentoImportado
+from app.utils.timezone import agora_utc_naive
 import logging
 
 # Configurar logging
@@ -243,7 +244,7 @@ class ImportadorContasReceberExcel:
             parcela=parcela
         ).first()
 
-        odoo_write_date = datetime.utcnow()
+        odoo_write_date = agora_utc_naive()
 
         if conta:
             # Atualizar registro existente
@@ -285,7 +286,7 @@ class ImportadorContasReceberExcel:
             parcela_paga=bool(row.get('l10n_br_paga')),
             status_pagamento_odoo=row.get('x_studio_status_de_pagamento'),
             odoo_write_date=odoo_write_date,
-            ultima_sincronizacao=datetime.utcnow(),
+            ultima_sincronizacao=agora_utc_naive(),
             criado_por='Importação Excel'
         )
 
@@ -317,7 +318,7 @@ class ImportadorContasReceberExcel:
         conta.status_pagamento_odoo = row.get('x_studio_status_de_pagamento') or conta.status_pagamento_odoo
 
         conta.odoo_write_date = odoo_write_date
-        conta.ultima_sincronizacao = datetime.utcnow()
+        conta.ultima_sincronizacao = agora_utc_naive()
         conta.atualizado_por = 'Importação Excel'
 
     def _enriquecer_dados_locais(self):

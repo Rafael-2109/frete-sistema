@@ -6,6 +6,7 @@ Modelos para validação de preços de redes de atacarejo
 
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 
 class TabelaRede(db.Model):
@@ -37,8 +38,8 @@ class TabelaRede(db.Model):
     vigencia_fim = db.Column(db.Date, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
@@ -118,7 +119,7 @@ class RegiaoTabelaRede(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
 
     # Constraints

@@ -13,9 +13,9 @@
             </h4>
             <p class="text-muted mb-0">
                 <span class="badge bg-secondary me-2">{{ lote.journal_code }}</span>
-                {{ lote.data_inicio.strftime('%d/%m/%Y') if lote.data_inicio else '' }}
+                {{ lote.data_inicio|formatar_data_segura }}
                 {% if lote.data_fim and lote.data_fim != lote.data_inicio %}
-                    a {{ lote.data_fim.strftime('%d/%m/%Y') }}
+                    a {{ lote.data_fim|formatar_data_segura }}
                 {% endif %}
             </p>
         </div>
@@ -174,7 +174,7 @@
                                 <i class="bi bi-check-circle-fill text-success"></i>
                                 {% endif %}
                             </td>
-                            <td>{{ item.data_transacao.strftime('%d/%m') if item.data_transacao else '-' }}</td>
+                            <td>{{ item.data_transacao|formatar_data_segura or '-' }}</td>
                             <td>
                                 <span title="{{ item.nome_beneficiario or '-' }}">
                                     {{ (item.nome_beneficiario or '-')[:25] }}{% if item.nome_beneficiario and item.nome_beneficiario|length > 25 %}...{% endif %}
@@ -219,7 +219,7 @@
                                 {% if item.titulo_valor %}
                                 R$ {{ '{:,.2f}'.format(item.titulo_valor) }}
                                 {% if item.titulo_vencimento %}
-                                <br><small class="text-muted">Venc: {{ item.titulo_vencimento.strftime('%d/%m') }}</small>
+                                <br><small class="text-muted">Venc: {{ item.titulo_vencimento|formatar_data_segura }}</small>
                                 {% endif %}
                                 {% endif %}
                             </td>

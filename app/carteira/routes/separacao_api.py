@@ -9,7 +9,7 @@ from datetime import datetime
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
     buscar_rota_por_uf,
@@ -151,7 +151,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 status='ABERTO',  # CORRIGIDO: Cria como ABERTO primeiro
                 sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
                 # vendedor=item.vendedor,  # REMOVIDO: campo não existe em Separacao
-                criado_em=agora_brasil(),
+                criado_em=agora_utc_naive(),
             )
 
             db.session.add(separacao)
@@ -416,7 +416,7 @@ def salvar_separacao_generic():
                 sub_rota=sub_rota,
                 status=status,
                 sincronizado_nf=False,  # Sempre cria como não sincronizado
-                criado_em=agora_brasil()
+                criado_em=agora_utc_naive()
             )
             
             db.session.add(nova_separacao)

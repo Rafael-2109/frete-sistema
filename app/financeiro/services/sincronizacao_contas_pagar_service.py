@@ -21,6 +21,7 @@ from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import ContasAPagar
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -372,8 +373,8 @@ class SincronizacaoContasAPagarService:
             conta.valor_residual = valor_residual
             conta.parcela_paga = parcela_paga
             conta.reconciliado = reconciliado
-            conta.odoo_write_date = datetime.utcnow()
-            conta.ultima_sincronizacao = datetime.utcnow()
+            conta.odoo_write_date = agora_utc_naive()
+            conta.ultima_sincronizacao = agora_utc_naive()
             conta.atualizado_por = 'Sistema Odoo'
 
             # Atualizar status_sistema se pago
@@ -400,8 +401,8 @@ class SincronizacaoContasAPagarService:
                 parcela_paga=parcela_paga,
                 reconciliado=reconciliado,
                 status_sistema='PAGO' if parcela_paga else 'PENDENTE',
-                odoo_write_date=datetime.utcnow(),
-                ultima_sincronizacao=datetime.utcnow(),
+                odoo_write_date=agora_utc_naive(),
+                ultima_sincronizacao=agora_utc_naive(),
                 criado_por='Sistema Odoo'
             )
             db.session.add(conta)

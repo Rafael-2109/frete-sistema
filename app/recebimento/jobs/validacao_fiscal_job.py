@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import ValidacaoFiscalDfe
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
 from app.odoo.utils.connection import get_odoo_connection
@@ -155,7 +156,7 @@ class ValidacaoFiscalJob:
         odoo = self._get_odoo()
 
         # Calcular data limite
-        data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+        data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
         data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
 
         # Buscar DFEs de compra no Odoo
@@ -267,8 +268,8 @@ class ValidacaoFiscalJob:
             registro.linhas_divergentes -
             registro.linhas_primeira_compra
         )
-        registro.validado_em = datetime.utcnow()
-        registro.atualizado_em = datetime.utcnow()
+        registro.validado_em = agora_utc_naive()
+        registro.atualizado_em = agora_utc_naive()
 
         if resultado.get('erro'):
             registro.erro_mensagem = resultado['erro']
@@ -300,7 +301,7 @@ class ValidacaoFiscalJob:
 
         if registro:
             registro.status = 'validando'
-            registro.atualizado_em = datetime.utcnow()
+            registro.atualizado_em = agora_utc_naive()
         else:
             registro = ValidacaoFiscalDfe(
                 odoo_dfe_id=dfe_id,
@@ -326,7 +327,7 @@ class ValidacaoFiscalJob:
         if registro:
             registro.status = status
             registro.erro_mensagem = erro_msg
-            registro.atualizado_em = datetime.utcnow()
+            registro.atualizado_em = agora_utc_naive()
             db.session.commit()
 
 

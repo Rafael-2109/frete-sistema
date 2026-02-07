@@ -144,7 +144,7 @@
                             </td>
                             <td class="text-center fw-bold">{{ vale.quantidade }}</td>
                             <td>
-                                {{ vale.data_validade.strftime('%d/%m/%Y') if vale.data_validade else '-' }}
+                                {{ vale.data_validade|formatar_data_segura or '-' }}
                                 {% if vale.dias_para_vencer is not none %}
                                     <br>
                                     {% if vale.dias_para_vencer < 0 %}

@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from app.integracoes.tagplus.oauth2_v2 import TagPlusOAuth2V2
 from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
 from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -696,7 +697,7 @@ def set_tokens_manual():
             db.session.add(token_record)
 
         # Calcula expiração (24h menos 5 min de margem)
-        expires_at = datetime.utcnow() + timedelta(hours=24) - timedelta(minutes=5)
+        expires_at = agora_utc_naive() + timedelta(hours=24) - timedelta(minutes=5)
 
         # Atualiza tokens no banco
         token_record.access_token = access_token
@@ -705,7 +706,7 @@ def set_tokens_manual():
         token_record.expires_at = expires_at
         token_record.token_type = 'Bearer'
         token_record.ativo = True
-        token_record.atualizado_em = datetime.utcnow()
+        token_record.atualizado_em = agora_utc_naive()
 
         db.session.commit()
         logger.info(f"✅ Token manual salvo no BANCO para {api_type}")

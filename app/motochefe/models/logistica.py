@@ -5,6 +5,7 @@ EmbarquePedido: Relação N:N entre Embarque e Pedido (com rateio de frete)
 """
 from app import db
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 
 class EmbarqueMoto(db.Model):
@@ -53,9 +54,9 @@ class EmbarqueMoto(db.Model):
     empresa_pagadora = db.relationship('EmpresaVendaMoto', backref='embarques_pagos')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -104,7 +105,7 @@ class EmbarquePedido(db.Model):
     pedido = db.relationship('PedidoVendaMoto', backref='embarques')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
 
     def __repr__(self):
         return f'<EmbarquePedido Embarque:{self.embarque_id} Pedido:{self.pedido_id}>'

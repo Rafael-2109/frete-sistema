@@ -244,7 +244,7 @@
                         {% if logs %}
                             {% for log in logs %}
                             <tr>
-                                <td><small>{{ log.data_hora.strftime('%d/%m/%Y %H:%M') }}</small></td>
+                                <td><small>{{ log.data_hora|formatar_data_hora_brasil }}</small></td>
                                 <td><small>{{ log.descricao_acao }}</small></td>
                                 <td><small>{{ log.admin.nome if log.admin else '-' }}</small></td>
                             </tr>

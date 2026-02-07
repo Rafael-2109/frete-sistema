@@ -2,7 +2,7 @@
 Utilitários específicos para o workspace de montagem
 """
 
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from app import db
 from app.carteira.models import CarteiraPrincipal
 # MIGRADO: SaldoEstoque -> SaldoEstoqueCompativel (02/09/2025)
@@ -58,7 +58,7 @@ def calcular_data_disponibilidade_real(projecao_29_dias, qtd_necessaria):
         if not projecao_29_dias:
             return 'Sem previsão'
 
-        hoje = agora_brasil().date()
+        hoje = agora_utc_naive().date()
 
         # Verificar cada dia da projeção
         for dia_info in projecao_29_dias:
@@ -154,7 +154,7 @@ def obter_producao_hoje(cod_produto, resumo_estoque):
                 return 0
         
         # Fallback: calcular diretamente do SaldoEstoque
-        hoje = agora_brasil().date()
+        hoje = agora_utc_naive().date()
         producao = SaldoEstoque.calcular_producao_periodo(cod_produto, hoje, hoje)
         return float(producao)
         
@@ -228,7 +228,7 @@ def calcular_disponibilidade_para_pedido(projecao, qtd_pedido):
         if not projecao or not qtd_pedido:
             return None, None
         
-        hoje = agora_brasil().date()
+        hoje = agora_utc_naive().date()
         
         for dia_info in projecao:
             # Garantir que dia_info é um dicionário
@@ -309,7 +309,7 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
             estoque_atual = resumo_estoque.get('estoque_atual', 0)
             if estoque_atual >= qtd_pedido:
                 # Se tem estoque hoje, usar hoje como data de disponibilidade
-                data_disponibilidade = agora_brasil().date().isoformat()
+                data_disponibilidade = agora_utc_naive().date().isoformat()
                 qtd_disponivel = estoque_atual
             else:
                 # Calcular quando estará disponível com saldo maior que o pedido
@@ -345,7 +345,7 @@ def processar_dados_workspace_produto(produto, resumo_estoque):
         else:
             # Fallback se não conseguir calcular
             estoque_data_expedicao = float(estoque_hoje or 0)
-            data_disponibilidade = agora_brasil().date().isoformat()
+            data_disponibilidade = agora_utc_naive().date().isoformat()
             qtd_disponivel = 0
 
         # Contar clientes programados

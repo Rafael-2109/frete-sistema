@@ -11,6 +11,7 @@ from app.portal.workers import enqueue_job
 from app.portal.workers.atacadao_jobs import processar_agendamento_atacadao
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -504,7 +505,7 @@ def reprocessar_integracao(integracao_id):
         # Atualizar integração
         integracao.status = 'enfileirado'
         integracao.job_id = job.id
-        integracao.atualizado_em = datetime.utcnow()
+        integracao.atualizado_em = agora_utc_naive()
         
         # Log
         log_reprocessamento = PortalLog(

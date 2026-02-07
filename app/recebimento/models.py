@@ -36,6 +36,7 @@ Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 class PerfilFiscalProdutoFornecedor(db.Model):
@@ -85,9 +86,9 @@ class PerfilFiscalProdutoFornecedor(db.Model):
 
     # Auditoria
     criado_por = db.Column(db.String(100), nullable=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
     ativo = db.Column(db.Boolean, default=True)
 
     # Unique constraint: empresa compradora + fornecedor + produto
@@ -164,7 +165,7 @@ class DivergenciaFiscal(db.Model):
     resolvido_em = db.Column(db.DateTime, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Relacionamento
     perfil_fiscal = db.relationship(
@@ -299,7 +300,7 @@ class CadastroPrimeiraCompra(db.Model):
     observacao = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     def __repr__(self):
         return f'<CadastroPrimeiraCompra {self.id} - {self.cod_produto} ({self.status})>'
@@ -349,9 +350,9 @@ class ValidacaoFiscalDfe(db.Model):
     erro_mensagem = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     validado_em = db.Column(db.DateTime, nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
 
     def __repr__(self):
         return f'<ValidacaoFiscalDfe {self.odoo_dfe_id} ({self.status})>'
@@ -405,8 +406,8 @@ class NcmIbsCbsValidado(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     validado_por = db.Column(db.String(100), nullable=True)
     validado_em = db.Column(db.DateTime, nullable=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
 
     def __repr__(self):
         return f'<NcmIbsCbsValidado {self.ncm_prefixo}>'
@@ -495,7 +496,7 @@ class PendenciaFiscalIbsCbs(db.Model):
     resolvido_em = db.Column(db.DateTime, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), default='SISTEMA')
 
     # Relacionamento
@@ -587,9 +588,9 @@ class ProdutoFornecedorDepara(db.Model):
 
     # Auditoria
     criado_por = db.Column(db.String(100), nullable=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
 
     # Unique constraint
     __table_args__ = (
@@ -707,10 +708,10 @@ class ValidacaoNfPoDfe(db.Model):
     po_ids_usados = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     validado_em = db.Column(db.DateTime, nullable=True)
     consolidado_em = db.Column(db.DateTime, nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
 
     # Relacionamentos
     itens_match_rel = db.relationship('MatchNfPoItem', backref='validacao',
@@ -844,7 +845,7 @@ class MatchNfPoItem(db.Model):
     motivo_bloqueio = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     def __repr__(self):
         return f'<MatchNfPoItem {self.odoo_dfe_line_id} ({self.status_match})>'
@@ -915,7 +916,7 @@ class MatchAlocacao(db.Model):
     ordem = db.Column(db.Integer, default=1)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Relacionamento com MatchNfPoItem
     match_item = db.relationship('MatchNfPoItem', backref=db.backref(
@@ -1002,7 +1003,7 @@ class DivergenciaNfPo(db.Model):
     resolvido_em = db.Column(db.DateTime, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     def __repr__(self):
         return f'<DivergenciaNfPo {self.id} - {self.tipo_divergencia} ({self.status})>'
@@ -1083,7 +1084,7 @@ class RecebimentoFisico(db.Model):
     job_id = db.Column(db.String(100), nullable=True)
 
     # Timestamps
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     processado_em = db.Column(db.DateTime, nullable=True)
     usuario = db.Column(db.String(100), nullable=True)
 
@@ -1258,7 +1259,7 @@ class PickingRecebimento(db.Model):
     write_date = db.Column(db.DateTime, nullable=True)
     location_id = db.Column(db.Integer, nullable=True)
     location_dest_id = db.Column(db.Integer, nullable=True)
-    sincronizado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    sincronizado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True)
 
     # Relacionamentos
@@ -1510,8 +1511,8 @@ class RecebimentoLf(db.Model):
     job_id = db.Column(db.String(100), nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     processado_em = db.Column(db.DateTime, nullable=True)
     usuario = db.Column(db.String(100), nullable=True)
 

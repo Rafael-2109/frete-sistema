@@ -82,7 +82,7 @@
                                     <td>
                                         <strong>{{ nf.numero_nf }}</strong>
                                     </td>
-                                    <td>{{ nf.data_fatura.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ nf.data_fatura|formatar_data_segura }}</td>
                                     <td>{{ nf.cnpj_cliente }}</td>
                                     <td>{{ nf.nome_cliente }}</td>
                                     <td>

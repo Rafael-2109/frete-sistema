@@ -13,6 +13,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_, or_, desc, func
 import os
 import logging
@@ -745,7 +746,7 @@ def processar_lancamento_frete():
             fatura_frete_id=fatura_frete_id,
             # Controle
             criado_por=current_user.nome,
-            lancado_em=datetime.utcnow(),
+            lancado_em=agora_utc_naive(),
             lancado_por=current_user.nome,
         )
 
@@ -872,7 +873,7 @@ def editar_frete(frete_id):
         else:
             # Se não requer aprovação, marca como lançado
             frete.status = "LANCADO"
-            frete.lancado_em = datetime.utcnow()
+            frete.lancado_em = agora_utc_naive()
             frete.lancado_por = current_user.nome
 
         # ✅ NOVA LÓGICA: Conta corrente baseada na função deve_lancar_conta_corrente
@@ -946,7 +947,7 @@ def vincular_cte_ao_frete(frete_id, cte_id):
         # ✅ VINCULAR novo CTe
         cte.frete_id = frete_id
         cte.vinculado_manualmente = True
-        cte.vinculado_em = datetime.utcnow()
+        cte.vinculado_em = agora_utc_naive()
         cte.vinculado_por = current_user.nome
 
         db.session.commit()
@@ -1962,7 +1963,7 @@ def aprovar_conferencia_fatura(fatura_id):
         fatura.valor_total_fatura = valor_final_float
         fatura.status_conferencia = "CONFERIDO"
         fatura.conferido_por = current_user.nome
-        fatura.conferido_em = datetime.utcnow()
+        fatura.conferido_em = agora_utc_naive()
         fatura.observacoes_conferencia = observacoes
 
         # Bloqueia edição dos fretes e despesas
@@ -2862,12 +2863,12 @@ def processar_aprovacao(aprovacao_id):
             # Aprova o frete
             aprovacao.status = "APROVADO"
             aprovacao.aprovador = current_user.nome
-            aprovacao.aprovado_em = datetime.utcnow()
+            aprovacao.aprovado_em = agora_utc_naive()
             aprovacao.observacoes_aprovacao = observacoes
 
             frete.status = "APROVADO"
             frete.aprovado_por = current_user.nome
-            frete.aprovado_em = datetime.utcnow()
+            frete.aprovado_em = agora_utc_naive()
             frete.observacoes_aprovacao = observacoes
 
             # ✅ Se aprovado, verifica se deve lançar diferença na conta corrente
@@ -2898,7 +2899,7 @@ def processar_aprovacao(aprovacao_id):
         elif acao == "REJEITAR":
             aprovacao.status = "REJEITADO"
             aprovacao.aprovador = current_user.nome
-            aprovacao.aprovado_em = datetime.utcnow()
+            aprovacao.aprovado_em = agora_utc_naive()
             aprovacao.observacoes_aprovacao = observacoes
 
             frete.status = "REJEITADO"
@@ -3290,7 +3291,7 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
             fatura_frete_id=None,
             # Controle
             criado_por=usuario,
-            lancado_em=datetime.utcnow(),
+            lancado_em=agora_utc_naive(),
             lancado_por=usuario,
         )
 
@@ -4161,7 +4162,7 @@ def excluir_despesa_extra(despesa_id):
             # Soft delete do FreteDevolucao (mesmo comportamento da rota de exclusão de frete)
             frete_dev.ativo = False
             frete_dev.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-            frete_dev.atualizado_em = datetime.utcnow()
+            frete_dev.atualizado_em = agora_utc_naive()
             frete_devolucao_excluido = True
 
         # Exclui a despesa
@@ -4506,7 +4507,7 @@ def emitir_fatura_freteiro(transportadora_id):
                     frete.vencimento = data_vencimento
                     frete.status = "APROVADO"
                     frete.aprovado_por = current_user.nome
-                    frete.aprovado_em = datetime.utcnow()
+                    frete.aprovado_em = agora_utc_naive()
 
                     ctes_criados.append(nome_cte)
 
@@ -4546,7 +4547,7 @@ def emitir_fatura_freteiro(transportadora_id):
                 vencimento=data_vencimento,
                 status_conferencia="CONFERIDO",  # Automaticamente conferida
                 conferido_por=current_user.nome,
-                conferido_em=datetime.utcnow(),
+                conferido_em=agora_utc_naive(),
                 observacoes_conferencia=f"Fatura criada automaticamente via lançamento freteiros. {observacoes}",
                 criado_por=current_user.nome,
             )

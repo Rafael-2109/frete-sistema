@@ -33,7 +33,7 @@ from app.financeiro.models_comprovante import (
     ComprovantePagamentoBoleto,
     LancamentoComprovante,
 )
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ class ComprovanteMatchService:
             return {'sucesso': False, 'erro': f'Status atual: {lanc.status}. Apenas PENDENTE pode ser confirmado.'}
 
         lanc.status = 'CONFIRMADO'
-        lanc.confirmado_em = agora_brasil()
+        lanc.confirmado_em = agora_utc_naive()
         lanc.confirmado_por = usuario
 
         # Rejeitar outros lancamentos PENDENTES e CONFIRMADOS do mesmo comprovante
@@ -328,7 +328,7 @@ class ComprovanteMatchService:
         ).all()
         for outro in outros:
             outro.status = 'REJEITADO'
-            outro.rejeitado_em = agora_brasil()
+            outro.rejeitado_em = agora_utc_naive()
             outro.rejeitado_por = usuario
             outro.motivo_rejeicao = f'Substituido: lancamento {lancamento_id} confirmado por {usuario}'
 
@@ -369,7 +369,7 @@ class ComprovanteMatchService:
         ).all()
         for lanc_exist in existentes:
             lanc_exist.status = 'REJEITADO'
-            lanc_exist.rejeitado_em = agora_brasil()
+            lanc_exist.rejeitado_em = agora_utc_naive()
             lanc_exist.rejeitado_por = usuario
             lanc_exist.motivo_rejeicao = f'Substituido: confirmacao direta por {usuario}'
 
@@ -403,7 +403,7 @@ class ComprovanteMatchService:
             diferenca_valor=candidato_data.get('diferenca_valor'),
             beneficiario_e_financeira=candidato_data.get('beneficiario_e_financeira', False),
             status='CONFIRMADO',
-            confirmado_em=agora_brasil(),
+            confirmado_em=agora_utc_naive(),
             confirmado_por=usuario,
         )
         db.session.add(lanc)
@@ -569,7 +569,7 @@ class ComprovanteMatchService:
         ).all()
         for lanc_exist in existentes:
             lanc_exist.status = 'REJEITADO'
-            lanc_exist.rejeitado_em = agora_brasil()
+            lanc_exist.rejeitado_em = agora_utc_naive()
             lanc_exist.rejeitado_por = usuario
             lanc_exist.motivo_rejeicao = f'Substituído: confirmação Multi-NF por {usuario}'
 
@@ -609,7 +609,7 @@ class ComprovanteMatchService:
                 beneficiario_e_financeira=cd.get('beneficiario_e_financeira', False),
                 valor_alocado=va,
                 status='CONFIRMADO',
-                confirmado_em=agora_brasil(),
+                confirmado_em=agora_utc_naive(),
                 confirmado_por=usuario,
             )
             db.session.add(lanc)
@@ -641,7 +641,7 @@ class ComprovanteMatchService:
             return {'sucesso': False, 'erro': f'Status atual: {lanc.status}. Apenas PENDENTE pode ser rejeitado.'}
 
         lanc.status = 'REJEITADO'
-        lanc.rejeitado_em = agora_brasil()
+        lanc.rejeitado_em = agora_utc_naive()
         lanc.rejeitado_por = usuario
         lanc.motivo_rejeicao = motivo
 
@@ -713,7 +713,7 @@ class ComprovanteMatchService:
             ).all()
             for existente in existentes:
                 existente.status = 'REJEITADO'
-                existente.rejeitado_em = agora_brasil()
+                existente.rejeitado_em = agora_utc_naive()
                 existente.rejeitado_por = usuario
                 existente.motivo_rejeicao = (
                     f'Substituido por vinculacao manual: NF {nf}/{parcela}'
@@ -735,7 +735,7 @@ class ComprovanteMatchService:
                 valor_recalculado=None,
             )
             lanc.status = 'CONFIRMADO'
-            lanc.confirmado_em = agora_brasil()
+            lanc.confirmado_em = agora_utc_naive()
             lanc.confirmado_por = usuario
 
             db.session.add(lanc)

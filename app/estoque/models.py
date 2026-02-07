@@ -13,7 +13,7 @@ if 'postgres' in os.getenv('DATABASE_URL', ''):
         pass
 
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -98,8 +98,8 @@ class MovimentacaoEstoque(db.Model):
     nome_responsavel = db.Column(db.String(255), nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
@@ -241,8 +241,8 @@ class UnificacaoCodigos(db.Model):
     
     # Auditoria completa
     ativo = db.Column(db.Boolean, default=True, index=True)
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     created_by = db.Column(db.String(100), nullable=True)
     updated_by = db.Column(db.String(100), nullable=True)
     
@@ -462,13 +462,13 @@ class UnificacaoCodigos(db.Model):
     def ativar(self, usuario=None, motivo=None):
         """Ativa a unificação"""
         self.ativo = True
-        self.data_ativacao = agora_brasil()
+        self.data_ativacao = agora_utc_naive()
         self.updated_by = usuario
         self.motivo_desativacao = None
         
     def desativar(self, usuario=None, motivo=None):
         """Desativa a unificação"""
         self.ativo = False
-        self.data_desativacao = agora_brasil()
+        self.data_desativacao = agora_utc_naive()
         self.updated_by = usuario
         self.motivo_desativacao = motivo

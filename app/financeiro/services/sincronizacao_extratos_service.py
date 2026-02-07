@@ -19,6 +19,7 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import (
     ExtratoItem,
     ExtratoLote,
@@ -72,12 +73,12 @@ class SincronizacaoExtratosService:
             'atualizados_por_cnab': 0,
             'sem_alteracao': 0,
             'erros': 0,
-            'inicio': datetime.utcnow().isoformat()
+            'inicio': agora_utc_naive().isoformat()
         }
 
         try:
             # 1. Buscar extratos pendentes
-            data_limite = datetime.utcnow() - timedelta(minutes=janela_minutos)
+            data_limite = agora_utc_naive() - timedelta(minutes=janela_minutos)
 
             extratos_pendentes = ExtratoItem.query.filter(
                 ExtratoItem.status.in_(['PENDENTE', 'MATCH_ENCONTRADO', 'APROVADO']),
@@ -106,7 +107,7 @@ class SincronizacaoExtratosService:
             # 3. Commit das alterações
             db.session.commit()
 
-            self.stats['fim'] = datetime.utcnow().isoformat()
+            self.stats['fim'] = agora_utc_naive().isoformat()
             logger.info(f"[SYNC_EXTRATOS] Concluído: {self.stats}")
 
             return {
@@ -374,7 +375,7 @@ class SincronizacaoExtratosService:
             'atualizados_por_cnab': 0,
             'sem_alteracao': 0,
             'erros': 0,
-            'inicio': datetime.utcnow().isoformat()
+            'inicio': agora_utc_naive().isoformat()
         }
 
         try:
@@ -467,7 +468,7 @@ class SincronizacaoExtratosService:
             # Commit final
             db.session.commit()
 
-            stats['fim'] = datetime.utcnow().isoformat()
+            stats['fim'] = agora_utc_naive().isoformat()
             logger.info(f"[SYNC_EXTRATOS] Revalidação COMPLETA concluída: {stats}")
 
             return {
@@ -515,7 +516,7 @@ class SincronizacaoExtratosService:
             'extratos_nao_encontrados': 0,
             'ja_conciliados': 0,
             'erros': 0,
-            'inicio': datetime.utcnow().isoformat()
+            'inicio': agora_utc_naive().isoformat()
         }
 
         try:
@@ -527,7 +528,7 @@ class SincronizacaoExtratosService:
 
             # Calcular data de corte para write_date
             # Odoo armazena write_date em UTC
-            data_corte = datetime.utcnow() - timedelta(minutes=janela_minutos)
+            data_corte = agora_utc_naive() - timedelta(minutes=janela_minutos)
             data_corte_str = data_corte.strftime('%Y-%m-%d %H:%M:%S')
 
             logger.info(f"[SYNC_EXTRATOS_ODOO] Buscando linhas modificadas desde {data_corte_str}")
@@ -575,7 +576,7 @@ class SincronizacaoExtratosService:
                         f"Conciliado no Odoo (detectado via write_date). "
                         f"Última modificação: {linha.get('write_date')}"
                     )
-                    extrato.processado_em = datetime.utcnow()
+                    extrato.processado_em = agora_utc_naive()
 
                     stats['extratos_atualizados'] += 1
 
@@ -591,7 +592,7 @@ class SincronizacaoExtratosService:
             # Commit final
             db.session.commit()
 
-            stats['fim'] = datetime.utcnow().isoformat()
+            stats['fim'] = agora_utc_naive().isoformat()
             logger.info(f"[SYNC_EXTRATOS_ODOO] Concluído: {stats}")
 
             return {
@@ -719,7 +720,7 @@ class SincronizacaoExtratosService:
             'ja_conciliados_sistema': 0,
             'atualizados': 0,
             'erros': 0,
-            'inicio': datetime.utcnow().isoformat()
+            'inicio': agora_utc_naive().isoformat()
         }
 
         try:
@@ -811,7 +812,7 @@ class SincronizacaoExtratosService:
                                     f"Conciliado no Odoo (revalidação completa). "
                                     f"Ref: {linha_odoo.get('payment_ref', 'N/D')[:50] if linha_odoo.get('payment_ref') else 'N/D'}"
                                 )
-                                extrato.processado_em = datetime.utcnow()
+                                extrato.processado_em = agora_utc_naive()
                                 stats['atualizados'] += 1
                             else:
                                 stats['ja_conciliados_sistema'] += 1
@@ -833,7 +834,7 @@ class SincronizacaoExtratosService:
             # Commit final
             db.session.commit()
 
-            stats['fim'] = datetime.utcnow().isoformat()
+            stats['fim'] = agora_utc_naive().isoformat()
             logger.info(f"[SYNC_EXTRATOS_ODOO_FULL] Revalidação concluída: {stats}")
 
             return {
@@ -889,7 +890,7 @@ class SincronizacaoExtratosService:
             journals = [j.strip() for j in journals_env.split(',')]
 
         stats = {
-            'inicio': datetime.utcnow().isoformat(),
+            'inicio': agora_utc_naive().isoformat(),
             'journals_processados': 0,
             'total_importados': 0,
             'total_ja_existentes': 0,
@@ -944,7 +945,7 @@ class SincronizacaoExtratosService:
 
             db.session.commit()
 
-            stats['fim'] = datetime.utcnow().isoformat()
+            stats['fim'] = agora_utc_naive().isoformat()
             logger.info(f"[IMPORT_EXTRATOS_AUTO] Importação concluída: {stats['total_importados']} extratos importados")
 
             return {
@@ -987,7 +988,7 @@ class SincronizacaoExtratosService:
             }
         """
         stats = {
-            'inicio': datetime.utcnow().isoformat(),
+            'inicio': agora_utc_naive().isoformat(),
             'cnabs_verificados': 0,
             'matches_encontrados': 0,
             'extratos_atualizados': 0,
@@ -1028,8 +1029,8 @@ class SincronizacaoExtratosService:
                             extrato.status_match = 'VIA_CNAB_RETROATIVO'
                             extrato.aprovado = True
                             extrato.aprovado_por = 'VINCULAR_CNAB_AUTO'
-                            extrato.aprovado_em = datetime.utcnow()
-                            extrato.processado_em = datetime.utcnow()
+                            extrato.aprovado_em = agora_utc_naive()
+                            extrato.processado_em = agora_utc_naive()
                             extrato.mensagem = f"Conciliado retroativamente via CNAB item {cnab.id}"
 
                             # Vincular título se não tiver
@@ -1062,7 +1063,7 @@ class SincronizacaoExtratosService:
 
             db.session.commit()
 
-            stats['fim'] = datetime.utcnow().isoformat()
+            stats['fim'] = agora_utc_naive().isoformat()
             logger.info(
                 f"[VINCULAR_CNAB_EXTRATO] Concluído: "
                 f"{stats['matches_encontrados']} matches, "

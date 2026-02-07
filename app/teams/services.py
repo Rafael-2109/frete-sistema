@@ -314,7 +314,7 @@ def _get_or_create_teams_session(
         ).order_by(AgentSession.updated_at.desc()).first()
 
         # Verifica se sessão expirou (TTL de 4h)
-        # P1-TZ: Dados existentes no banco podem ser naive (datetime.utcnow antigo).
+        # P1-TZ: Dados existentes no banco podem ser naive (agora_utc_naive antigo).
         # Usar .replace(tzinfo=None) para garantir comparação safe naive vs naive.
         session_expired = False
         if session and session.updated_at:

@@ -11,7 +11,7 @@ Data: 2025-01-21
 
 from app import db
 from datetime import datetime
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 class PermissaoComercial(db.Model):
@@ -27,7 +27,7 @@ class PermissaoComercial(db.Model):
     valor = db.Column(db.String(100), nullable=False)  # Nome da equipe ou vendedor
 
     # Timestamps
-    criado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=False)  # Email do admin que criou
 
     # Relacionamento
@@ -56,7 +56,7 @@ class LogPermissaoComercial(db.Model):
     acao = db.Column(db.String(20), nullable=False)  # 'adicionar', 'remover', 'limpar_todas'
     tipo = db.Column(db.String(20), nullable=True)  # 'equipe' ou 'vendedor' (null se for limpar_todas)
     valor = db.Column(db.String(100), nullable=True)  # Nome da equipe ou vendedor (null se for limpar_todas)
-    data_hora = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    data_hora = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
 
     # Informações adicionais
     ip_address = db.Column(db.String(45), nullable=True)  # IP do admin

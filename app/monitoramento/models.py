@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 class EntregaMonitorada(db.Model):
     __tablename__ = 'entregas_monitoradas'
@@ -30,7 +31,7 @@ class EntregaMonitorada(db.Model):
     pendencia_financeira = db.Column(db.Boolean, default=False)
     resposta_financeiro = db.Column(db.Text, nullable=True)
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
     nf_cd = db.Column(db.Boolean, default=False)  # Indica se está no CD
     separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de separação
@@ -93,7 +94,7 @@ class AgendamentoEntrega(db.Model):
     motivo = db.Column(db.String(255))
     observacao = db.Column(db.Text)  # ← NOVO CAMPO
     autor = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     # ✅ NOVOS CAMPOS DE STATUS
     status = db.Column(db.String(20), default='aguardando')  # aguardando, confirmado (novos agendamentos aguardam por padrão)
@@ -119,7 +120,7 @@ class EventoEntrega(db.Model):
     tipo_evento = db.Column(db.String(50))  # entrega, reentrega, tentativa, NF no CD
     observacao = db.Column(db.Text)
     autor = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
 
     entrega = db.relationship('EntregaMonitorada', backref='eventos')
@@ -133,7 +134,7 @@ class CustoExtraEntrega(db.Model):
     valor = db.Column(db.Float)
     motivo = db.Column(db.String(255))
     autor = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
 
     entrega = db.relationship('EntregaMonitorada', backref='custos_extras')
@@ -144,7 +145,7 @@ class RegistroLogEntrega(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'))
     autor = db.Column(db.String(100))
-    data_hora = db.Column(db.DateTime, default=datetime.utcnow)
+    data_hora = db.Column(db.DateTime, default=agora_utc_naive)
     descricao = db.Column(db.Text)
     tipo = db.Column(db.String(50))  # ação, contato, info
     lembrete_para = db.Column(db.DateTime, nullable=True)
@@ -159,7 +160,7 @@ class ComentarioNF(db.Model):
     entrega_id = db.Column(db.Integer, db.ForeignKey('entregas_monitoradas.id'), nullable=False)
     autor = db.Column(db.String(150), nullable=False)
     texto = db.Column(db.Text, nullable=False)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     arquivo = db.Column(db.String(255), nullable=True)
     resposta_a_id = db.Column(db.Integer, db.ForeignKey('comentarios_nf.id'), nullable=True)
     
@@ -175,7 +176,7 @@ class HistoricoDataPrevista(db.Model):
     data_nova = db.Column(db.Date, nullable=False)  # Nova data
     motivo_alteracao = db.Column(db.Text, nullable=False)  # Motivo da alteração
     alterado_por = db.Column(db.String(100), nullable=False)  # Quem alterou
-    alterado_em = db.Column(db.DateTime, default=datetime.utcnow)  # Quando foi alterado
+    alterado_em = db.Column(db.DateTime, default=agora_utc_naive)  # Quando foi alterado
     
     entrega = db.relationship('EntregaMonitorada', backref='historico_data_prevista')
 
@@ -193,7 +194,7 @@ class ArquivoEntrega(db.Model):
     tipo_storage = db.Column(db.String(20), nullable=False)    # 'local' ou 's3'
     tamanho_bytes = db.Column(db.Integer)                      # Tamanho do arquivo
     content_type = db.Column(db.String(100))                   # Tipo MIME
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     
     # Relacionamento

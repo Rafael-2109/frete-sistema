@@ -23,6 +23,7 @@ from app.financeiro.models import (
 )
 from app.monitoramento.models import EntregaMonitorada
 from app.faturamento.models import RelatorioFaturamentoImportado
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import text
 import logging
 
@@ -166,7 +167,7 @@ class SincronizacaoContasReceberService:
             parcela=parcela
         ).first()
 
-        odoo_write_date = datetime.utcnow()
+        odoo_write_date = agora_utc_naive()
 
         if conta:
             # Atualizar registro existente
@@ -210,7 +211,7 @@ class SincronizacaoContasReceberService:
             parcela_paga=bool(row.get('l10n_br_paga')),
             status_pagamento_odoo=row.get('x_studio_status_de_pagamento'),
             odoo_write_date=odoo_write_date,
-            ultima_sincronizacao=datetime.utcnow(),
+            ultima_sincronizacao=agora_utc_naive(),
             criado_por='Sistema Odoo'
         )
 
@@ -263,7 +264,7 @@ class SincronizacaoContasReceberService:
 
         # Atualizar metadados
         conta.odoo_write_date = odoo_write_date
-        conta.ultima_sincronizacao = datetime.utcnow()
+        conta.ultima_sincronizacao = agora_utc_naive()
         conta.atualizado_por = 'Sistema Odoo'
 
         if alteracoes:

@@ -36,6 +36,7 @@ from datetime import datetime, date
 from collections import defaultdict
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import (
     ValidacaoNfPoDfe,
     MatchNfPoItem,
@@ -147,8 +148,8 @@ class ValidacaoNfPoService:
 
                 validacao.status = 'bloqueado'
                 validacao.erro_mensagem = f'NF {situacao} na SEFAZ - Nao pode ser lancada'
-                validacao.validado_em = datetime.utcnow()
-                validacao.atualizado_em = datetime.utcnow()
+                validacao.validado_em = agora_utc_naive()
+                validacao.atualizado_em = agora_utc_naive()
                 db.session.commit()
 
                 return {
@@ -191,8 +192,8 @@ class ValidacaoNfPoService:
                     )
 
                 validacao.status = 'finalizado_odoo'
-                validacao.validado_em = datetime.utcnow()
-                validacao.atualizado_em = datetime.utcnow()
+                validacao.validado_em = agora_utc_naive()
+                validacao.atualizado_em = agora_utc_naive()
                 db.session.commit()
 
                 return {
@@ -232,7 +233,7 @@ class ValidacaoNfPoService:
                 )
                 validacao.status = 'bloqueado'
                 validacao.itens_sem_depara = len(itens_sem_depara)
-                validacao.atualizado_em = datetime.utcnow()
+                validacao.atualizado_em = agora_utc_naive()
                 db.session.commit()
 
                 return {
@@ -258,7 +259,7 @@ class ValidacaoNfPoService:
                 )
                 validacao.status = 'bloqueado'
                 validacao.itens_sem_po = len(itens_convertidos)
-                validacao.atualizado_em = datetime.utcnow()
+                validacao.atualizado_em = agora_utc_naive()
                 db.session.commit()
 
                 return {
@@ -366,7 +367,7 @@ class ValidacaoNfPoService:
                     validacao, itens_falha, dfe_data
                 )
                 validacao.status = 'bloqueado'
-                validacao.atualizado_em = datetime.utcnow()
+                validacao.atualizado_em = agora_utc_naive()
                 db.session.commit()
 
                 return {
@@ -380,8 +381,8 @@ class ValidacaoNfPoService:
 
             # ETAPA 5: 100% match - preparar consolidacao
             validacao.status = 'aprovado'
-            validacao.validado_em = datetime.utcnow()
-            validacao.atualizado_em = datetime.utcnow()
+            validacao.validado_em = agora_utc_naive()
+            validacao.atualizado_em = agora_utc_naive()
 
             # Identificar POs envolvidos
             pos_envolvidos = self._agrupar_pos_para_consolidar(resultados_match)
@@ -395,7 +396,7 @@ class ValidacaoNfPoService:
             detector = PoChangesDetectorService()
             po_ids_usados = detector.extrair_pos_usadas(validacao.id)
             validacao.po_ids_usados = json.dumps(po_ids_usados) if po_ids_usados else None
-            validacao.ultima_validacao_em = datetime.utcnow()
+            validacao.ultima_validacao_em = agora_utc_naive()
             validacao.po_modificada_apos_validacao = False  # Reset flag após validação bem-sucedida
 
             db.session.commit()
@@ -514,7 +515,7 @@ class ValidacaoNfPoService:
 
             # Marcar data de importacao se algum PO foi encontrado
             if validacao.odoo_po_vinculado_id or validacao.odoo_po_fiscal_id:
-                validacao.pos_vinculados_importados_em = datetime.utcnow()
+                validacao.pos_vinculados_importados_em = agora_utc_naive()
 
         except Exception as e:
             logger.warning(f"Erro ao importar POs vinculados do DFE {validacao.odoo_dfe_id}: {e}")
@@ -1154,7 +1155,7 @@ class ValidacaoNfPoService:
                 valor_nf=item.get('cod_produto_fornecedor'),
                 valor_po='N/A',
                 status='pendente',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(div)
 
@@ -1189,7 +1190,7 @@ class ValidacaoNfPoService:
                 valor_nf=item.get('cod_produto_interno'),
                 valor_po='Nenhum PO encontrado',
                 status='pendente',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(div)
 
@@ -1208,7 +1209,7 @@ class ValidacaoNfPoService:
                 fator_conversao=float(item.get('fator_conversao', 1)),
                 status_match='sem_po',
                 motivo_bloqueio='Nenhum PO encontrado para o produto',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(match)
 
@@ -1287,7 +1288,7 @@ class ValidacaoNfPoService:
                 odoo_po_name=resultado.get('po_name'),
                 odoo_po_line_id=resultado.get('po_line_id'),
                 status='pendente',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(div)
 
@@ -1380,7 +1381,7 @@ class ValidacaoNfPoService:
                 odoo_po_name=po_principal.get('po_name'),
                 odoo_po_line_id=po_principal.get('po_line_id'),
                 status='pendente',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(div)
 
@@ -1414,7 +1415,7 @@ class ValidacaoNfPoService:
             preco_po=resultado.get('preco_po'),
             status_match=resultado.get('status', 'sem_po'),
             motivo_bloqueio=resultado.get('motivo'),
-            criado_em=datetime.utcnow()
+            criado_em=agora_utc_naive()
         )
         db.session.add(match)
 
@@ -1432,7 +1433,7 @@ class ValidacaoNfPoService:
             validacao = ValidacaoNfPoDfe(
                 odoo_dfe_id=odoo_dfe_id,
                 status='pendente',
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(validacao)
             db.session.flush()
@@ -1946,7 +1947,7 @@ class ValidacaoNfPoService:
             data_nf=self._parse_date(item.get('data_nf')) if item.get('data_nf') else None,
             status_match=resultado.get('status', 'sem_po'),
             motivo_bloqueio=resultado.get('motivo'),
-            criado_em=datetime.utcnow()
+            criado_em=agora_utc_naive()
         )
 
         # Se teve match, preencher dados do PO principal (primeiro da lista)
@@ -1974,7 +1975,7 @@ class ValidacaoNfPoService:
                 preco_po=float(aloc['preco_po']) if aloc.get('preco_po') else None,
                 data_po=aloc.get('data_po'),
                 ordem=aloc.get('ordem', 1),
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
             db.session.add(alocacao)
 

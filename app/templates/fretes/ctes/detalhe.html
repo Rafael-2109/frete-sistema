@@ -59,11 +59,11 @@
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="text-muted small">Data Emissão</label>
-                            <div>{{ cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else '-' }}</div>
+                            <div>{{ cte.data_emissao|formatar_data_segura or '-' }}</div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="text-muted small">Data Entrada</label>
-                            <div>{{ cte.data_entrada.strftime('%d/%m/%Y') if cte.data_entrada else '-' }}</div>
+                            <div>{{ cte.data_entrada|formatar_data_segura or '-' }}</div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="text-muted small">Status Odoo</label>
@@ -193,7 +193,7 @@
                                     <td>
                                         <strong>{{ cte_comp.numero_cte }}/{{ cte_comp.serie_cte }}</strong>
                                     </td>
-                                    <td>{{ cte_comp.data_emissao.strftime('%d/%m/%Y') if cte_comp.data_emissao else '-' }}</td>
+                                    <td>{{ cte_comp.data_emissao|formatar_data_segura or '-' }}</td>
                                     <td style="max-width: 300px;">
                                         <small class="d-block"
                                                style="white-space: normal;
@@ -361,7 +361,7 @@
                         <i class="fas fa-check-circle"></i> <strong>Vinculado</strong>
                         <hr>
                         <p class="mb-2"><strong>Frete ID:</strong> {{ cte.frete_id }}</p>
-                        <p class="mb-2"><strong>Vinculado em:</strong> {{ cte.vinculado_em.strftime('%d/%m/%Y %H:%M') if cte.vinculado_em else '-' }}</p>
+                        <p class="mb-2"><strong>Vinculado em:</strong> {{ cte.vinculado_em|formatar_data_hora_brasil or '-' }}</p>
                         <p class="mb-2"><strong>Vinculado por:</strong> {{ cte.vinculado_por or '-' }}</p>
                         <p class="mb-0">
                             <strong>Tipo:</strong>
@@ -450,7 +450,7 @@
                                         <a href="{{ url_for('cte.detalhar_cte', cte_id=cte_conc.id) }}" target="_blank" class="text-decoration-none">
                                             CTe {{ cte_conc.numero_cte }}/{{ cte_conc.serie_cte }}
                                         </a>
-                                        - {{ cte_conc.data_emissao.strftime('%d/%m/%Y') if cte_conc.data_emissao else 'S/D' }}
+                                        - {{ cte_conc.data_emissao|formatar_data_segura or 'S/D' }}
                                         - {{ (cte_conc.valor_total or 0)|moeda_carteira }}
                                     </li>
                                     {% endfor %}
@@ -644,11 +644,11 @@
                     </div>
                     <div class="mb-2">
                         <label class="text-muted small">Importado em</label>
-                        <div>{{ cte.importado_em.strftime('%d/%m/%Y %H:%M') if cte.importado_em else '-' }}</div>
+                        <div>{{ cte.importado_em|formatar_data_hora_brasil or '-' }}</div>
                     </div>
                     <div class="mb-0">
                         <label class="text-muted small">Atualizado em</label>
-                        <div>{{ cte.atualizado_em.strftime('%d/%m/%Y %H:%M') if cte.atualizado_em else '-' }}</div>
+                        <div>{{ cte.atualizado_em|formatar_data_hora_brasil or '-' }}</div>
                     </div>
                 </div>
             </div>

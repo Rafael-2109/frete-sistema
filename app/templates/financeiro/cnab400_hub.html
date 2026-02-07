@@ -169,7 +169,7 @@
                     </td>
                     <td>
                         {% if lote.data_arquivo %}
-                            {{ lote.data_arquivo.strftime('%d/%m/%Y') }}
+                            {{ lote.data_arquivo|formatar_data_segura }}
                         {% else %}
                             <span class="text-muted">-</span>
                         {% endif %}

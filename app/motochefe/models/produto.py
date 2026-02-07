@@ -5,6 +5,7 @@ Moto: Registro único por chassi (central do sistema)
 """
 from app import db
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 
 class ModeloMoto(db.Model):
@@ -32,9 +33,9 @@ class ModeloMoto(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
@@ -99,9 +100,9 @@ class Moto(db.Model):
     modelo_rejeitado = db.Column(db.String(100), nullable=True)  # Nome do modelo não encontrado (quando ativo=False)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 

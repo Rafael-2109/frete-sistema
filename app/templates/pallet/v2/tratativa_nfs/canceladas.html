@@ -746,14 +746,14 @@
                             <div class="qtd-value">{{ nf.quantidade }}</div>
                         </td>
                         <td class="data-cell">
-                            {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                            {{ nf.data_emissao|formatar_data_segura or '-' }}
                             {% if nf.data_emissao %}
-                            <small>{{ nf.data_emissao.strftime('%H:%M') }}</small>
+                            <small>{{ nf.data_emissao|formatar_hora_brasil }}</small>
                             {% endif %}
                         </td>
                         <td class="cancelamento-cell">
                             <div class="cancelamento-data">
-                                {{ nf.cancelada_em.strftime('%d/%m/%Y') if nf.cancelada_em else '-' }}
+                                {{ nf.cancelada_em|formatar_data_segura or '-' }}
                             </div>
                             {% if nf.cancelada_por %}
                             <span class="cancelamento-usuario">

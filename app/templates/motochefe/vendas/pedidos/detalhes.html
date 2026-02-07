@@ -51,7 +51,7 @@
                             <p class="mb-0"><strong>NF IMP:</strong> {{ pedido.numero_nf_importada }}</p>
                         {% endif %}
                         {% if pedido.data_nf %}
-                            <small>{{ pedido.data_nf.strftime('%d/%m/%Y') }}</small>
+                            <small>{{ pedido.data_nf|formatar_data_segura }}</small>
                         {% endif %}
                     {% else %}
                         <h4 class="text-warning"><i class="fas fa-clock"></i> PENDENTE</h4>
@@ -78,7 +78,7 @@
                     {% if pedido.impresso %}
                         <h4 class="text-success"><i class="fas fa-print"></i> IMPRESSO</h4>
                         <p class="mb-0" style="font-size: 0.85rem;">
-                            {{ pedido.impresso_em.strftime('%d/%m/%Y às %H:%M') if pedido.impresso_em else '-' }}
+                            {{ pedido.impresso_em|formatar_data_hora_brasil or '-' }}
                         </p>
                         <small class="text-muted">por {{ pedido.impresso_por or 'N/A' }}</small>
                     {% else %}
@@ -115,12 +115,12 @@
                         </tr>
                         <tr>
                             <th>Data Pedido:</th>
-                            <td>{{ pedido.data_pedido.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ pedido.data_pedido|formatar_data_segura }}</td>
                         </tr>
                         {% if pedido.data_expedicao %}
                         <tr>
                             <th>Data Expedição:</th>
-                            <td>{{ pedido.data_expedicao.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ pedido.data_expedicao|formatar_data_segura }}</td>
                         </tr>
                         {% endif %}
                         <tr>
@@ -315,7 +315,7 @@
                                 <td>{{ t.numero_parcela }}</td>
                                 <td>
                                     {% if t.data_vencimento %}
-                                        {{ t.data_vencimento.strftime('%d/%m/%Y') }}
+                                        {{ t.data_vencimento|formatar_data_segura }}
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
@@ -414,7 +414,7 @@
                                 <td class="text-right">R$ {{ item.valor_montagem|float|valor_br }}</td>
                                 <td>
                                     {% if item.data_pagamento_montagem %}
-                                        {{ item.data_pagamento_montagem.strftime('%d/%m/%Y') }}
+                                        {{ item.data_pagamento_montagem|formatar_data_segura }}
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}

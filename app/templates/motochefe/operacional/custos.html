@@ -59,7 +59,7 @@
                         <h6 class="card-title"><i class="fas fa-history"></i> Histórico</h6>
                         <small class="text-muted">
                             <strong>Última atualização:</strong>
-                            {{ custos.atualizado_em.strftime('%d/%m/%Y %H:%M') if custos.atualizado_em else custos.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                            {{ custos.atualizado_em|formatar_data_hora_brasil if custos.atualizado_em else custos.criado_em|formatar_data_hora_brasil }}
                             {% if custos.atualizado_por %}por {{ custos.atualizado_por }}{% endif %}
                         </small>
                     </div>

@@ -61,7 +61,7 @@
                             <td>
                                 <strong>{{ aud.pedido.numero_pedido }}</strong><br>
                                 <small class="text-muted">
-                                    {{ aud.pedido.data_pedido.strftime('%d/%m/%Y') if aud.pedido.data_pedido else '-' }}
+                                    {{ aud.pedido.data_pedido|formatar_data_segura or '-' }}
                                 </small>
                             </td>
 
@@ -82,7 +82,7 @@
                             <td>
                                 <small>
                                     <strong>{{ aud.solicitado_por }}</strong><br>
-                                    {{ aud.solicitado_em.strftime('%d/%m/%Y %H:%M') if aud.solicitado_em else '-' }}
+                                    {{ aud.solicitado_em|formatar_data_hora_brasil or '-' }}
                                 </small>
                             </td>
 

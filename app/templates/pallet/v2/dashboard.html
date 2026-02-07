@@ -446,7 +446,7 @@
                         <td class="fw-bold">{{ credito.qtd_saldo }}</td>
                         <td>
                             {% if credito.data_vencimento %}
-                            <span class="text-danger">{{ credito.data_vencimento.strftime('%d/%m/%Y') }}</span>
+                            <span class="text-danger">{{ credito.data_vencimento|formatar_data_segura }}</span>
                             {% else %}
                             -
                             {% endif %}
@@ -546,7 +546,7 @@
                                     <strong>{{ nf.numero_nf }}</strong>
                                     {% if nf.serie %}<small class="text-muted">/{{ nf.serie }}</small>{% endif %}
                                 </td>
-                                <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</td>
+                                <td>{{ nf.data_emissao|formatar_data_segura or '-' }}</td>
                                 <td>
                                     <span class="badge bg-{{ 'info' if nf.tipo_destinatario == 'TRANSPORTADORA' else 'secondary' }} me-1">
                                         {{ nf.tipo_destinatario[:4] if nf.tipo_destinatario else '-' }}
@@ -608,7 +608,7 @@
                                 <td><strong>{{ nf.numero_nf }}</strong></td>
                                 <td>{{ nf.nome_destinatario or '-' }}</td>
                                 <td class="text-center">{{ nf.quantidade }}</td>
-                                <td>{{ nf.atualizado_em.strftime('%d/%m/%Y') if nf.atualizado_em else '-' }}</td>
+                                <td>{{ nf.atualizado_em|formatar_data_segura or '-' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

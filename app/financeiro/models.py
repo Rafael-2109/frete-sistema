@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime, date, timedelta
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 import json
@@ -32,7 +33,7 @@ class ContasAReceberTipo(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
 
     __table_args__ = (
@@ -91,7 +92,7 @@ class MapeamentoTipoOdoo(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
 
     # Relacionamento
@@ -158,9 +159,9 @@ class LiberacaoAntecipacao(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     __table_args__ = (
@@ -389,9 +390,9 @@ class ContasAReceber(db.Model):
     # AUDITORIA E CONTROLE
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Controle de sincronização
@@ -604,9 +605,9 @@ class ContasAReceberAbatimento(db.Model):
     # AUDITORIA
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Relacionamentos
@@ -681,7 +682,7 @@ class ContasAReceberSnapshot(db.Model):
     valor_novo = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    alterado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     alterado_por = db.Column(db.String(100), nullable=True)
 
     # Referência do Odoo
@@ -824,7 +825,7 @@ class ContasAReceberReconciliacao(db.Model):
     # CONTROLE LOCAL
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     ultima_sincronizacao = db.Column(db.DateTime, nullable=True)
 
     # =========================================================================
@@ -942,7 +943,7 @@ class BaixaTituloLote(db.Model):
     status = db.Column(db.String(20), default='IMPORTADO', nullable=False, index=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
     processado_em = db.Column(db.DateTime, nullable=True)
     processado_por = db.Column(db.String(100), nullable=True)
@@ -1080,7 +1081,7 @@ class BaixaTituloItem(db.Model):
     # AUDITORIA
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     validado_em = db.Column(db.DateTime, nullable=True)
     processado_em = db.Column(db.DateTime, nullable=True)
 
@@ -1229,7 +1230,7 @@ class ExtratoLote(db.Model):
     tipo_transacao = db.Column(db.String(20), default='entrada', nullable=False, index=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
     processado_em = db.Column(db.DateTime, nullable=True)
     processado_por = db.Column(db.String(100), nullable=True)
@@ -1396,7 +1397,7 @@ class ExtratoItem(db.Model):
     # AUDITORIA
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     processado_em = db.Column(db.DateTime, nullable=True)
 
     __table_args__ = (
@@ -1625,7 +1626,7 @@ class ExtratoItemTitulo(db.Model):
     # AUDITORIA
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     processado_em = db.Column(db.DateTime, nullable=True)
 
     __table_args__ = (
@@ -1739,7 +1740,7 @@ class PendenciaFinanceiraNF(db.Model):
     resposta_logistica = db.Column(db.Text, nullable=True)
     respondida_em = db.Column(db.DateTime, nullable=True)
     respondida_por = db.Column(db.String(100), nullable=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     # Campos para soft delete APENAS DAS RESPOSTAS (pendência nunca é apagada)
@@ -1812,7 +1813,7 @@ class BaixaPagamentoLote(db.Model):
     status = db.Column(db.String(30), default='IMPORTADO', nullable=False, index=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
     processado_em = db.Column(db.DateTime, nullable=True)
     processado_por = db.Column(db.String(100), nullable=True)
@@ -1971,7 +1972,7 @@ class BaixaPagamentoItem(db.Model):
     # AUDITORIA
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     processado_em = db.Column(db.DateTime, nullable=True)
 
     __table_args__ = (
@@ -2144,9 +2145,9 @@ class ContasAPagar(db.Model):
     # AUDITORIA E CONTROLE
     # =========================================================================
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Controle de sincronização
@@ -2264,7 +2265,7 @@ class CnabRetornoLote(db.Model):
     banco_codigo = db.Column(db.String(3), nullable=False)  # 274 = BMP
     banco_nome = db.Column(db.String(100))
     data_arquivo = db.Column(db.Date)
-    data_processamento = db.Column(db.DateTime, default=datetime.utcnow)
+    data_processamento = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Estatísticas
     total_registros = db.Column(db.Integer, default=0)
@@ -2296,7 +2297,7 @@ class CnabRetornoLote(db.Model):
     batch_id = db.Column(db.String(36), index=True, nullable=True)  # UUID do batch
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Relacionamento
     itens = db.relationship('CnabRetornoItem', backref='lote', lazy='dynamic',
@@ -2424,7 +2425,7 @@ class CnabRetornoItem(db.Model):
     numero_linha = db.Column(db.Integer)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     __table_args__ = (
         Index('idx_cnab_item_lote_status', 'lote_id', 'status_match'),

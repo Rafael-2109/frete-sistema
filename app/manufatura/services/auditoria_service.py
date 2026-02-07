@@ -5,6 +5,7 @@ Registra todas as alterações (CRIAR, EDITAR, INATIVAR, REATIVAR) no histórico
 from app import db
 from app.manufatura.models import ListaMateriais, ListaMateriaisHistorico
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class ServicoAuditoria:
                 qtd_utilizada_depois=componente.qtd_utilizada,
                 status_depois=componente.status,
                 # Metadados
-                alterado_em=datetime.utcnow(),
+                alterado_em=agora_utc_naive(),
                 alterado_por=usuario,
                 motivo=motivo
             )
@@ -99,7 +100,7 @@ class ServicoAuditoria:
                 qtd_utilizada_depois=componente.qtd_utilizada,
                 status_depois=componente.status,
                 # Metadados
-                alterado_em=datetime.utcnow(),
+                alterado_em=agora_utc_naive(),
                 alterado_por=usuario,
                 motivo=motivo
             )
@@ -152,7 +153,7 @@ class ServicoAuditoria:
                 qtd_utilizada_depois=componente.qtd_utilizada,
                 status_depois='inativo',
                 # Metadados
-                alterado_em=datetime.utcnow(),
+                alterado_em=agora_utc_naive(),
                 alterado_por=usuario,
                 motivo=motivo or 'Componente removido da estrutura'
             )
@@ -160,7 +161,7 @@ class ServicoAuditoria:
             db.session.add(historico)
 
             # Atualizar campos de auditoria no componente
-            componente.inativado_em = datetime.utcnow()
+            componente.inativado_em = agora_utc_naive()
             componente.inativado_por = usuario
             componente.motivo_inativacao = motivo
 
@@ -211,7 +212,7 @@ class ServicoAuditoria:
                 qtd_utilizada_depois=componente.qtd_utilizada,
                 status_depois='ativo',
                 # Metadados
-                alterado_em=datetime.utcnow(),
+                alterado_em=agora_utc_naive(),
                 alterado_por=usuario,
                 motivo=motivo or 'Componente reativado na estrutura'
             )

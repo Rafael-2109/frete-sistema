@@ -9,6 +9,7 @@ IMPORTANTE - SEGURANÇA:
 from flask import Blueprint, request, jsonify
 import logging
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import re
 import hashlib
 import hmac
@@ -320,7 +321,7 @@ def atualizar_cliente_webhook(cliente, dados):
         cliente.cod_uf = dados.get('uf', '')
     
     cliente.updated_by = 'WebhookTagPlus'
-    cliente.updated_at = datetime.utcnow()
+    cliente.updated_at = agora_utc_naive()
     
     logger.info(f"Cliente {cliente.raz_social} atualizado via webhook")
 
@@ -514,7 +515,7 @@ def cancelar_nfe_webhook(nfe_data):
         for item in itens:
             item.status_nf = 'Cancelado'
             item.updated_by = 'WebhookTagPlus'
-            item.updated_at = datetime.utcnow()
+            item.updated_at = agora_utc_naive()
         
         db.session.commit()
         logger.info(f"NF {numero_nf} cancelada via webhook")

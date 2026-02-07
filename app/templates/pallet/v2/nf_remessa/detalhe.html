@@ -478,7 +478,7 @@
                 NF de Remessa {{ nf.numero_nf }}{% if nf.serie %}/{{ nf.serie }}{% endif %}
             </h1>
             <p class="pallet-detalhe__subtitle">
-                Emitida em {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                Emitida em {{ nf.data_emissao|formatar_data_segura or '-' }}
                 {% if nf.empresa %}| Empresa: {{ nf.empresa }}{% endif %}
             </p>
         </div>
@@ -507,7 +507,7 @@
         </div>
         <p class="mb-1"><strong>Motivo:</strong> {{ nf.motivo_cancelamento or 'Nao informado' }}</p>
         <small class="text-muted">
-            Cancelada em {{ nf.cancelada_em.strftime('%d/%m/%Y as %H:%M') if nf.cancelada_em else '-' }}
+            Cancelada em {{ nf.cancelada_em|formatar_data_hora_brasil or '-' }}
             por {{ nf.cancelada_por or '-' }}
         </small>
     </div>
@@ -532,7 +532,7 @@
                 <div class="pallet-info-item">
                     <div class="pallet-info-item__label">Data Emissao</div>
                     <div class="pallet-info-item__value">
-                        {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                        {{ nf.data_emissao|formatar_data_segura or '-' }}
                     </div>
                 </div>
                 <div class="pallet-info-item">
@@ -838,7 +838,7 @@
                                 <span class="pallet-timeline__title ms-2">{{ solucao.quantidade }} pallets</span>
                             </div>
                             <span class="pallet-timeline__date">
-                                {{ solucao.criado_em.strftime('%d/%m/%Y %H:%M') if solucao.criado_em else '-' }}
+                                {{ solucao.criado_em|formatar_data_hora_brasil or '-' }}
                             </span>
                         </div>
                         <div class="pallet-timeline__body">
@@ -885,11 +885,11 @@
             <div class="row">
                 <div class="col-md-6">
                     <small class="text-muted">Criado em:</small>
-                    <p class="mb-2">{{ nf.criado_em.strftime('%d/%m/%Y as %H:%M') if nf.criado_em else '-' }} por {{ nf.criado_por or '-' }}</p>
+                    <p class="mb-2">{{ nf.criado_em|formatar_data_hora_brasil or '-' }} por {{ nf.criado_por or '-' }}</p>
                 </div>
                 <div class="col-md-6">
                     <small class="text-muted">Ultima atualizacao:</small>
-                    <p class="mb-2">{{ nf.atualizado_em.strftime('%d/%m/%Y as %H:%M') if nf.atualizado_em else '-' }} por {{ nf.atualizado_por or '-' }}</p>
+                    <p class="mb-2">{{ nf.atualizado_em|formatar_data_hora_brasil or '-' }} por {{ nf.atualizado_por or '-' }}</p>
                 </div>
                 {% if nf.odoo_account_move_id %}
                 <div class="col-md-6">

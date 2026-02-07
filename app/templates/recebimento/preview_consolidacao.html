@@ -28,7 +28,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>Data:</strong>
-                    <p class="mb-0">{{ validacao.data_nf.strftime('%d/%m/%Y') if validacao.data_nf else 'N/A' }}</p>
+                    <p class="mb-0">{{ validacao.data_nf|formatar_data_segura or 'N/A' }}</p>
                 </div>
                 <div class="col-md-3">
                     <strong>Fornecedor:</strong>

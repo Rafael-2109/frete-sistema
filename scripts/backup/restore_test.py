@@ -13,7 +13,7 @@ import logging
 import argparse
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional
 import docker
 import psycopg2
@@ -38,7 +38,7 @@ class RestoreTest:
         
         # Test results tracking
         self.test_results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "tests_run": 0,
             "tests_passed": 0,
             "tests_failed": 0,
@@ -507,7 +507,7 @@ class RestoreTest:
         full_test_result = {
             "backup": backup_name,
             "test_name": test_name,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "components": []
         }
         

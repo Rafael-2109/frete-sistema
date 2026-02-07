@@ -17,7 +17,7 @@ from app.devolucao.models import (
     NFDevolucaoNFReferenciada
 )
 from app.monitoramento.models import EntregaMonitorada
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import or_, func
 from datetime import datetime, timedelta
 
@@ -470,7 +470,7 @@ def api_atualizar_logistica(ocorrencia_id):
 
         # Auditoria
         ocorrencia.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
-        ocorrencia.atualizado_em = agora_brasil()
+        ocorrencia.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -528,12 +528,12 @@ def api_atualizar_comercial(ocorrencia_id):
 
             # Marcar data de resolucao se mudou para RESOLVIDA
             if data['status'] == 'RESOLVIDA' and status_anterior != 'RESOLVIDA':
-                ocorrencia.data_resolucao = agora_brasil()
+                ocorrencia.data_resolucao = agora_utc_naive()
                 ocorrencia.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
 
             # Marcar data de acao comercial se mudou para EM_ANALISE
             if data['status'] == 'EM_ANALISE' and status_anterior == 'ABERTA':
-                ocorrencia.data_acao_comercial = agora_brasil()
+                ocorrencia.data_acao_comercial = agora_utc_naive()
 
         if 'origem' in data:
             ocorrencia.origem = data['origem']
@@ -549,7 +549,7 @@ def api_atualizar_comercial(ocorrencia_id):
 
         # Auditoria
         ocorrencia.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
-        ocorrencia.atualizado_em = agora_brasil()
+        ocorrencia.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 

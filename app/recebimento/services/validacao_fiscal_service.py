@@ -32,6 +32,7 @@ from datetime import datetime
 from collections import Counter
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import (
     PerfilFiscalProdutoFornecedor,
     DivergenciaFiscal,
@@ -1308,7 +1309,7 @@ class ValidacaoFiscalService:
         divergencia.atualizar_baseline = atualizar_baseline
         divergencia.justificativa = justificativa
         divergencia.resolvido_por = usuario
-        divergencia.resolvido_em = datetime.utcnow()
+        divergencia.resolvido_em = agora_utc_naive()
 
         # Se atualizar baseline
         if atualizar_baseline and divergencia.perfil_fiscal_id:
@@ -1345,7 +1346,7 @@ class ValidacaoFiscalService:
         divergencia.resolucao = 'rejeitar'
         divergencia.justificativa = justificativa
         divergencia.resolvido_por = usuario
-        divergencia.resolvido_em = datetime.utcnow()
+        divergencia.resolvido_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -1377,7 +1378,7 @@ class ValidacaoFiscalService:
             perfil.aliquota_ipi_esperada = Decimal(novo_valor)
 
         perfil.atualizado_por = usuario
-        perfil.atualizado_em = datetime.utcnow()
+        perfil.atualizado_em = agora_utc_naive()
 
         logger.info(f"Perfil {perfil.id} atualizado: {campo}={novo_valor}")
 
@@ -1420,7 +1421,7 @@ class ValidacaoFiscalService:
             # Perfil já existe - apenas marcar cadastro como validado
             cadastro.status = 'validado'
             cadastro.validado_por = usuario
-            cadastro.validado_em = datetime.utcnow()
+            cadastro.validado_em = agora_utc_naive()
             cadastro.observacao = observacao or 'Perfil fiscal já existia'
 
             db.session.commit()
@@ -1477,7 +1478,7 @@ class ValidacaoFiscalService:
         # Atualizar cadastro
         cadastro.status = 'validado'
         cadastro.validado_por = usuario
-        cadastro.validado_em = datetime.utcnow()
+        cadastro.validado_em = agora_utc_naive()
         cadastro.observacao = observacao
 
         db.session.commit()
@@ -1505,7 +1506,7 @@ class ValidacaoFiscalService:
             for outro in outros_pendentes:
                 outro.status = 'validado'
                 outro.validado_por = f'PROPAGADO_DE_{cadastro_id}'
-                outro.validado_em = datetime.utcnow()
+                outro.validado_em = agora_utc_naive()
                 outro.observacao = f'Validado automaticamente por propagação do registro {cadastro_id}'
                 ids_propagados.append(outro.id)
 
@@ -1572,7 +1573,7 @@ class ValidacaoFiscalService:
         for cadastro in pendentes:
             cadastro.status = 'validado'
             cadastro.validado_por = f'AUTO_PERFIL_{perfil.id}'
-            cadastro.validado_em = datetime.utcnow()
+            cadastro.validado_em = agora_utc_naive()
             cadastro.observacao = f'Validado automaticamente ao criar/atualizar perfil fiscal {perfil.id}'
             ids_validados.append(cadastro.id)
 
@@ -1605,7 +1606,7 @@ class ValidacaoFiscalService:
 
         cadastro.status = 'rejeitado'
         cadastro.validado_por = usuario
-        cadastro.validado_em = datetime.utcnow()
+        cadastro.validado_em = agora_utc_naive()
         cadastro.observacao = observacao
 
         db.session.commit()

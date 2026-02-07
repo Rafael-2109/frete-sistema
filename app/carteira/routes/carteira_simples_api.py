@@ -21,7 +21,7 @@ from app.carteira.utils.separacao_utils import (
     buscar_sub_rota_por_uf_cidade,
 )
 from app.utils.lote_utils import gerar_lote_id
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from app.embarques.models import Embarque, EmbarqueItem
 from app.transportadoras.models import Transportadora
 
@@ -1297,7 +1297,7 @@ def gerar_separacao():
                 tipo_envio=tipo_envio_correto,  # 🔧 CORRIGIDO: Usa determinar_tipo_envio()
                 status='ABERTO',
                 sincronizado_nf=False,
-                criado_em=agora_brasil()
+                criado_em=agora_utc_naive()
             )
 
             db.session.add(separacao)
@@ -2136,7 +2136,7 @@ def adicionar_itens_separacao():
                     status=separacao_referencia.status,  # ✅ COPIAR STATUS
                     cotacao_id=separacao_referencia.cotacao_id,  # ✅ COPIAR COTACAO_ID
                     sincronizado_nf=False,
-                    criado_em=agora_brasil()
+                    criado_em=agora_utc_naive()
                 )
 
                 db.session.add(nova_separacao)

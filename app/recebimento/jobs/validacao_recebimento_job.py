@@ -39,6 +39,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from flask import current_app
+from app.utils.timezone import agora_utc_naive
 from app import db
 from app.recebimento.models import ValidacaoFiscalDfe, ValidacaoNfPoDfe
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
@@ -378,7 +379,7 @@ class ValidacaoRecebimentoJob:
                                 )
 
                     if tem_po:
-                        validacao.pos_vinculados_importados_em = datetime.utcnow()
+                        validacao.pos_vinculados_importados_em = agora_utc_naive()
                         resultado['dfes_atualizados'] += 1
 
                         # Gap 3 FIX: Marcar para revalidação se DFE já tinha sido processado
@@ -650,7 +651,7 @@ class ValidacaoRecebimentoJob:
         odoo = self._get_odoo()
 
         # Calcular data limite
-        data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+        data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
         data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
 
         filtro = [
@@ -826,8 +827,8 @@ class ValidacaoRecebimentoJob:
             registro.linhas_divergentes -
             registro.linhas_primeira_compra
         )
-        registro.validado_em = datetime.utcnow()
-        registro.atualizado_em = datetime.utcnow()
+        registro.validado_em = agora_utc_naive()
+        registro.atualizado_em = agora_utc_naive()
 
         if resultado.get('erro'):
             registro.erro_mensagem = resultado['erro']

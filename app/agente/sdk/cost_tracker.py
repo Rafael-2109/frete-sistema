@@ -17,6 +17,8 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from collections import defaultdict
 
+from app.utils.timezone import agora_utc_naive
+
 logger = logging.getLogger(__name__)
 
 
@@ -153,7 +155,7 @@ class CostTracker:
         # Cria entrada
         entry = CostEntry(
             message_id=message_id,
-            timestamp=datetime.utcnow(),
+            timestamp=agora_utc_naive(),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost_usd=cost_usd,
@@ -264,7 +266,7 @@ class CostTracker:
     def get_daily_summary(self, date: datetime = None) -> CostSummary:
         """Obtém resumo do dia."""
         if date is None:
-            date = datetime.utcnow()
+            date = agora_utc_naive()
 
         start = date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
@@ -281,7 +283,7 @@ class CostTracker:
         Returns:
             Número de entradas removidas
         """
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = agora_utc_naive() - timedelta(days=days)
         original_count = len(self._entries)
 
         self._entries = [e for e in self._entries if e.timestamp >= cutoff]

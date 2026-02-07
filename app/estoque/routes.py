@@ -7,7 +7,7 @@ from app.estoque.models import MovimentacaoEstoque, UnificacaoCodigos
 # from app.estoque.models import SaldoEstoque
 from app.estoque.services.compatibility_layer import SaldoEstoque
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import logging
 import tempfile
@@ -1017,7 +1017,7 @@ def processar_nova_unificacao():
         nova_unificacao.codigo_destino = codigo_destino
         nova_unificacao.observacao = observacao
         nova_unificacao.created_by = current_user.nome
-        nova_unificacao.data_ativacao = agora_brasil()
+        nova_unificacao.data_ativacao = agora_utc_naive()
         
         db.session.add(nova_unificacao)
         db.session.commit()
@@ -1164,7 +1164,7 @@ def processar_importacao_unificacao():
                 nova_unificacao.codigo_destino = codigo_destino
                 nova_unificacao.observacao = observacao
                 nova_unificacao.created_by = current_user.nome
-                nova_unificacao.data_ativacao = agora_brasil()
+                nova_unificacao.data_ativacao = agora_utc_naive()
                 
                 db.session.add(nova_unificacao)
                 unificacoes_importadas += 1

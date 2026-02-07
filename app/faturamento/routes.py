@@ -10,6 +10,7 @@ from app.fretes.routes import validar_cnpj_embarque_faturamento
 from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
 from sqlalchemy import func
+from app.utils.timezone import agora_utc_naive
 
 faturamento_bp = Blueprint('faturamento', __name__,url_prefix='/faturamento')
 
@@ -343,7 +344,7 @@ def inativar_nfs():
                 if nf_faturamento:
                     if nf_faturamento.ativo:  # Só inativa se estiver ativa
                         nf_faturamento.ativo = False
-                        nf_faturamento.inativado_em = datetime.utcnow()
+                        nf_faturamento.inativado_em = agora_utc_naive()
                         nf_faturamento.inativado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
                         nfs_inativadas += 1
                     

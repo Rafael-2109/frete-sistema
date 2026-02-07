@@ -1,6 +1,5 @@
 from app import db
-from datetime import datetime
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 class RelatorioFaturamentoImportado(db.Model):
     __tablename__ = 'relatorio_faturamento_importado'
@@ -24,7 +23,7 @@ class RelatorioFaturamentoImportado(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)  # 🆕 Campo para inativação
     inativado_em = db.Column(db.DateTime, nullable=True)  # 🆕 Data de inativação
     inativado_por = db.Column(db.String(100), nullable=True)  # 🆕 Quem inativou
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     def __repr__(self):
         return f"<NF {self.numero_nf} - {self.nome_cliente}>"
@@ -76,8 +75,8 @@ class FaturamentoProduto(db.Model):
     data_reversao = db.Column(db.DateTime, nullable=True)
 
     # Auditoria
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     created_by = db.Column(db.String(100), nullable=True)
     updated_by = db.Column(db.String(100), nullable=True)
 

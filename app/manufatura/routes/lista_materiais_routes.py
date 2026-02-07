@@ -11,6 +11,7 @@ from app.manufatura.services.bom_service import ServicoBOM
 from app.manufatura.services.auditoria_service import ServicoAuditoria
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 from io import BytesIO
 import pandas as pd
 import tempfile
@@ -345,7 +346,7 @@ def register_lista_materiais_routes(bp):
                 qtd_utilizada=qtd_utilizada,
                 versao=versao,
                 status='ativo',
-                criado_em=datetime.utcnow(),
+                criado_em=agora_utc_naive(),
                 criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
             )
 
@@ -443,7 +444,7 @@ def register_lista_materiais_routes(bp):
 
             # ✅ AUDITORIA: Atualizar campos de auditoria
             usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
-            componente.atualizado_em = datetime.utcnow()
+            componente.atualizado_em = agora_utc_naive()
             componente.atualizado_por = usuario
 
             db.session.commit()
@@ -889,7 +890,7 @@ def register_lista_materiais_routes(bp):
                         # Atualizar
                         qtd_anterior = existente.qtd_utilizada
                         existente.qtd_utilizada = qtd_utilizada
-                        existente.atualizado_em = datetime.utcnow()
+                        existente.atualizado_em = agora_utc_naive()
                         existente.atualizado_por = usuario
 
                         # Registrar auditoria
@@ -912,7 +913,7 @@ def register_lista_materiais_routes(bp):
                             qtd_utilizada=qtd_utilizada,
                             versao=versao,
                             status='ativo',
-                            criado_em=datetime.utcnow(),
+                            criado_em=agora_utc_naive(),
                             criado_por=usuario
                         )
 

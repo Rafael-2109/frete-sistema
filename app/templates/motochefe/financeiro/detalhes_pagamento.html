@@ -38,7 +38,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>Data:</strong><br>
-                    {{ movimentacao_pai.data_movimentacao.strftime('%d/%m/%Y') }}
+                    {{ movimentacao_pai.data_movimentacao|formatar_data_segura }}
                 </div>
                 <div class="col-md-3">
                     {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}
@@ -387,7 +387,7 @@
                         <td>{{ titulo.numero_chassi }}</td>
                         <td><span class="badge bg-secondary">{{ titulo.tipo_titulo }}</span></td>
                         <td>{{ titulo.numero_parcela }}/{{ titulo.total_parcelas }}</td>
-                        <td>{{ titulo.data_vencimento.strftime('%d/%m/%Y') if titulo.data_vencimento else '-' }}</td>
+                        <td>{{ titulo.data_vencimento|formatar_data_segura or '-' }}</td>
                         <td>
                             {% if titulo.status == 'PAGO' %}
                                 <span class="badge bg-success">PAGO</span>
@@ -440,7 +440,7 @@
         <div class="card-body">
             <div class="row">
                 <div class="col-md-6">
-                    <strong>Criado em:</strong> {{ movimentacao_pai.criado_em.strftime('%d/%m/%Y %H:%M:%S') if movimentacao_pai.criado_em else '-' }}
+                    <strong>Criado em:</strong> {{ movimentacao_pai.criado_em|formatar_data_hora_brasil or '-' }}
                 </div>
                 <div class="col-md-6">
                     <strong>Criado por:</strong> {{ movimentacao_pai.criado_por or '-' }}

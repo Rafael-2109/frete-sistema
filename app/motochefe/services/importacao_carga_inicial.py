@@ -23,6 +23,7 @@ from sqlalchemy import func
 import traceback
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.motochefe.models import (
     # Cadastros
     EquipeVendasMoto, VendedorMoto, TransportadoraMoto, ClienteMoto,
@@ -217,7 +218,7 @@ class ImportacaoCargaInicialService:
                     # Atualizar
                     resultado.atualizados += 1
                     equipe.atualizado_por = usuario
-                    equipe.atualizado_em = datetime.utcnow()
+                    equipe.atualizado_em = agora_utc_naive()
                 else:
                     # Inserir
                     equipe = EquipeVendasMoto()
@@ -305,7 +306,7 @@ class ImportacaoCargaInicialService:
                 if transp:
                     resultado.atualizados += 1
                     transp.atualizado_por = usuario
-                    transp.atualizado_em = datetime.utcnow()
+                    transp.atualizado_em = agora_utc_naive()
                 else:
                     transp = TransportadoraMoto()
                     transp.transportadora = nome
@@ -369,7 +370,7 @@ class ImportacaoCargaInicialService:
                 if empresa:
                     resultado.atualizados += 1
                     empresa.atualizado_por = usuario
-                    empresa.atualizado_em = datetime.utcnow()
+                    empresa.atualizado_em = agora_utc_naive()
                 else:
                     empresa = EmpresaVendaMoto()
                     empresa.empresa = nome
@@ -430,7 +431,7 @@ class ImportacaoCargaInicialService:
             if cd:
                 resultado.atualizados += 1
                 cd.atualizado_por = usuario
-                cd.atualizado_em = datetime.utcnow()
+                cd.atualizado_em = agora_utc_naive()
             else:
                 cd = CrossDocking()
                 cd.criado_por = usuario
@@ -567,7 +568,7 @@ class ImportacaoCargaInicialService:
                 if vendedor:
                     resultado.atualizados += 1
                     vendedor.atualizado_por = usuario
-                    vendedor.atualizado_em = datetime.utcnow()
+                    vendedor.atualizado_em = agora_utc_naive()
                 else:
                     vendedor = VendedorMoto()
                     vendedor.vendedor = nome
@@ -628,7 +629,7 @@ class ImportacaoCargaInicialService:
                 if modelo:
                     resultado.atualizados += 1
                     modelo.atualizado_por = usuario
-                    modelo.atualizado_em = datetime.utcnow()
+                    modelo.atualizado_em = agora_utc_naive()
                 else:
                     modelo = ModeloMoto()
                     modelo.nome_modelo = nome
@@ -715,7 +716,7 @@ class ImportacaoCargaInicialService:
                 if cliente:
                     resultado.atualizados += 1
                     cliente.atualizado_por = usuario
-                    cliente.atualizado_em = datetime.utcnow()
+                    cliente.atualizado_em = agora_utc_naive()
                 else:
                     cliente = ClienteMoto()
                     cliente.cnpj_cliente = cnpj
@@ -821,7 +822,7 @@ class ImportacaoCargaInicialService:
                 if moto:
                     resultado.atualizados += 1
                     moto.atualizado_por = usuario
-                    moto.atualizado_em = datetime.utcnow()
+                    moto.atualizado_em = agora_utc_naive()
                 else:
                     moto = Moto()
                     moto.numero_chassi = chassi

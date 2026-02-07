@@ -5,6 +5,7 @@ Incluindo tabelas DE-PARA para produtos (EAN) e locais de entrega
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 class ProdutoDeParaEAN(db.Model):
@@ -33,8 +34,8 @@ class ProdutoDeParaEAN(db.Model):
     
     # Controle
     ativo = db.Column(db.Boolean, default=True, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     # Índice único para evitar duplicatas
@@ -162,7 +163,7 @@ class ProdutoDeParaEAN(db.Model):
                             depara.descricao_ean = str(row['descricao_ean'])
                         if 'fator_conversao' in row and not pd.isna(row['fator_conversao']):
                             depara.fator_conversao = float(row['fator_conversao'])
-                        depara.atualizado_em = datetime.utcnow()
+                        depara.atualizado_em = agora_utc_naive()
                         registros_atualizados += 1
                     else:
                         # Criar novo
@@ -219,8 +220,8 @@ class LocalEntregaDeParaTenda(db.Model):
     
     # Controle
     ativo = db.Column(db.Boolean, default=True, index=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     @classmethod
@@ -307,7 +308,7 @@ class LocalEntregaDeParaTenda(db.Model):
                             local.nome_cliente = str(row['nome_cliente'])
                         local.grupo_empresarial_nome = str(row['grupo_empresarial_nome'])
                         local.filial_nome = str(row['filial_nome'])
-                        local.atualizado_em = datetime.utcnow()
+                        local.atualizado_em = agora_utc_naive()
                         registros_atualizados += 1
                     else:
                         # Criar novo
@@ -378,8 +379,8 @@ class AgendamentoTenda(db.Model):
     mensagem_retorno = db.Column(db.Text)
     
     # Controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     @classmethod

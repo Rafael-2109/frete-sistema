@@ -28,6 +28,7 @@ def executar_teste():
     from app.recebimento.jobs.validacao_recebimento_job import ValidacaoRecebimentoJob
     from app.recebimento.services.depara_service import DeparaService
     from app.odoo.utils.connection import get_odoo_connection
+    from app.utils.timezone import agora_utc_naive
 
     app = create_app()
     with app.app_context():
@@ -175,8 +176,8 @@ def executar_teste():
                     registro1.linhas_divergentes -
                     registro1.linhas_primeira_compra
                 )
-                registro1.validado_em = datetime.utcnow()
-                registro1.atualizado_em = datetime.utcnow()
+                registro1.validado_em = agora_utc_naive()
+                registro1.atualizado_em = agora_utc_naive()
 
                 if resultado1.get('erro'):
                     registro1.erro_mensagem = resultado1['erro']

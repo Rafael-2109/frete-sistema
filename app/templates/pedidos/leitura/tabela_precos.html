@@ -112,7 +112,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <small>{{ r.atualizado_em.strftime('%d/%m/%Y') if r.atualizado_em else r.criado_em.strftime('%d/%m/%Y') }}</small>
+                                <small>{{ r.atualizado_em|formatar_data_segura or r.criado_em|formatar_data_segura }}</small>
                             </td>
                             <td class="text-center">
                                 <div class="btn-group btn-group-sm">

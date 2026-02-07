@@ -5,6 +5,7 @@ Executados em worker dedicado via Redis Queue
 
 import logging
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
             
             # Atualizar status para processando
             integracao.status = 'processando'
-            integracao.atualizado_em = datetime.utcnow()
+            integracao.atualizado_em = agora_utc_naive()
             db.session.commit()
             
             # Log de início
@@ -107,7 +108,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 integracao.status = 'aguardando_confirmacao'
                 integracao.protocolo = resultado.get('protocolo')
                 integracao.resposta_portal = resultado
-                integracao.atualizado_em = datetime.utcnow()
+                integracao.atualizado_em = agora_utc_naive()
                 
                 # Atualizar registros no banco de dados
                 if resultado.get('protocolo'):
@@ -170,7 +171,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 
                 integracao.status = 'erro'
                 integracao.resposta_portal = resultado or {'message': 'Erro desconhecido'}
-                integracao.atualizado_em = datetime.utcnow()
+                integracao.atualizado_em = agora_utc_naive()
                 
                 # Log de erro
                 log_erro = PortalLog(
@@ -197,7 +198,7 @@ def processar_agendamento_atacadao(integracao_id, dados_agendamento):
                 if integracao:
                     integracao.status = 'erro'
                     integracao.resposta_portal = {'error': str(e)}
-                    integracao.atualizado_em = datetime.utcnow()
+                    integracao.atualizado_em = agora_utc_naive()
                     
                     # Log de erro fatal
                     log_erro_fatal = PortalLog(
@@ -253,7 +254,7 @@ def verificar_status_protocolo_atacadao(protocolo):
             return {
                 'protocolo': protocolo,
                 'status': status,
-                'verificado_em': datetime.utcnow().isoformat()
+                'verificado_em': agora_utc_naive().isoformat()
             }
             
         except Exception as e:

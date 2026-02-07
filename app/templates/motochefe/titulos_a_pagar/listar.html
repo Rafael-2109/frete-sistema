@@ -196,7 +196,7 @@
                                 <td><span class="badge bg-info">{{ t.tipo }}</span></td>
                                 <td>{{ t.fornecedor_nome or '-' }}</td>
                                 <td class="text-end">R$ {{ t.valor_saldo|valor_br }}</td>
-                                <td><small>{{ t.criado_em.strftime('%d/%m/%Y') if t.criado_em else '-' }}</small></td>
+                                <td><small>{{ t.criado_em|formatar_data_segura or '-' }}</small></td>
                                 <td><span class="badge bg-warning text-dark">{{ t.status }}</span></td>
                                 <td>
                                     <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
@@ -303,7 +303,7 @@
                                     <td><span class="badge bg-info">{{ t.tipo }}</span></td>
                                     <td>{{ t.fornecedor_nome or '-' }}</td>
                                     <td class="text-end">R$ {{ t.valor_original|valor_br }}</td>
-                                    <td><small>{{ t.data_ultimo_pagamento.strftime('%d/%m/%Y') if t.data_ultimo_pagamento else '-' }}</small></td>
+                                    <td><small>{{ t.data_ultimo_pagamento|formatar_data_segura or '-' }}</small></td>
                                     <td><span class="badge bg-success">{{ t.status }}</span></td>
                                     <td>
                                         <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">

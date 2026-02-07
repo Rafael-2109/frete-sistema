@@ -87,7 +87,7 @@
                         <!-- Coluna 6: Criação -->
                         <td>
                             <div><small><i class="fas fa-user"></i> {{ cd.criado_por or '-' }}</small></div>
-                            <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ cd.criado_em.strftime('%d/%m/%Y %H:%M') if cd.criado_em else '-' }}</small></div>
+                            <div><small class="text-muted"><i class="fas fa-calendar"></i> {{ cd.criado_em|formatar_data_hora_brasil or '-' }}</small></div>
                         </td>
 
                         <!-- Coluna 7: Ações -->

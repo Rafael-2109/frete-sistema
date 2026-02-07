@@ -14,7 +14,7 @@ import logging
 import argparse
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional
 import psycopg2
 import redis
@@ -32,7 +32,7 @@ class BackupVerifier:
         self.logger = setup_logger("backup_verifier")
         self.backup_dir = Path(self.config.get("backup_dir", "/var/backups/mcp"))
         self.verification_results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "backups_verified": 0,
             "backups_passed": 0,
             "backups_failed": 0,
@@ -505,7 +505,7 @@ class BackupVerifier:
         verification_result = {
             "backup": backup_name,
             "path": str(backup_path),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "status": "unknown",
             "components": []
         }

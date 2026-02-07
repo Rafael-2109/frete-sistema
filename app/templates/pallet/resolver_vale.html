@@ -45,7 +45,7 @@
                                 </span>
                                 <br><small class="text-muted">Recebido</small>
                                 {% if vale.recebido_em %}
-                                    <br><small>{{ vale.recebido_em.strftime('%d/%m') }}</small>
+                                    <br><small>{{ vale.recebido_em|formatar_data_segura }}</small>
                                 {% endif %}
                             </div>
                             <div class="flex-grow-1 align-self-center">
@@ -61,7 +61,7 @@
                                 </span>
                                 <br><small class="text-muted">Enviado</small>
                                 {% if vale.enviado_coleta_em %}
-                                    <br><small>{{ vale.enviado_coleta_em.strftime('%d/%m') }}</small>
+                                    <br><small>{{ vale.enviado_coleta_em|formatar_data_segura }}</small>
                                 {% endif %}
                             </div>
                             <div class="flex-grow-1 align-self-center">

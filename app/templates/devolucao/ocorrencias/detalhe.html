@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h4 class="mb-0 d-inline">{{ ocorrencia.numero_ocorrencia }}</h4>
-            <small class="text-muted ms-3">Sincronizada em {{ ocorrencia.data_abertura.strftime('%d/%m/%Y %H:%M') }}</small>
+            <small class="text-muted ms-3">Sincronizada em {{ ocorrencia.data_abertura|formatar_data_hora_brasil }}</small>
         </div>
         <div>
             <a href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}" class="btn btn-sm btn-outline-secondary">
@@ -33,7 +33,7 @@
                         {# Status baseado no tipo de documento #}
                         {% if tipo_doc == 'NFD' %}
                             {% if nfd.odoo_status_codigo == '06' %}
-                                <span class="badge bg-success" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Concluído' }}{% if nfd.data_entrada %} | Entrada: {{ nfd.data_entrada.strftime('%d/%m/%Y') }}{% endif %}">Entrada OK</span>
+                                <span class="badge bg-success" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Concluído' }}{% if nfd.data_entrada %} | Entrada: {{ nfd.data_entrada|formatar_data_segura }}{% endif %}">Entrada OK</span>
                             {% else %}
                                 <span class="badge bg-warning text-dark" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Pendente' }} | Aguardando entrada física">Pendente</span>
                             {% endif %}
@@ -73,7 +73,7 @@
                     <small class="text-muted">Local:</small>
                     <span class="badge bg-secondary">{{ ocorrencia.localizacao_atual or 'CLIENTE' }}</span>
                     {% if ocorrencia.data_resolucao %}
-                    <small class="text-success ms-2">Resolvida {{ ocorrencia.data_resolucao.strftime('%d/%m/%Y') }}</small>
+                    <small class="text-success ms-2">Resolvida {{ ocorrencia.data_resolucao|formatar_data_segura }}</small>
                     {% endif %}
                 </div>
                 <div class="btn-group btn-group-sm">
@@ -121,7 +121,7 @@
                 <div class="col-md-2">
                     <small class="text-muted">Emissao</small><br>
                     {% if nfd.data_emissao %}
-                    {{ nfd.data_emissao.strftime('%d/%m/%Y') }}
+                    {{ nfd.data_emissao|formatar_data_segura }}
                     {% else %}
                     -
                     {% endif %}
@@ -198,7 +198,7 @@
                                 <a href="{{ url_for('monitoramento.visualizar_entrega', id=nf_ref.entrega_id) }}"
                                    class="btn btn-sm btn-outline-primary me-1 mb-1"
                                    title="Ver entrega no monitoramento">
-                                    NF {{ nf_ref.numero_nf }}{% if nf_ref.data_entrega %} - Ent: {{ nf_ref.data_entrega.strftime('%d/%m/%Y') }}{% endif %}
+                                    NF {{ nf_ref.numero_nf }}{% if nf_ref.data_entrega %} - Ent: {{ nf_ref.data_entrega|formatar_data_segura }}{% endif %}
                                 </a>
                             {% else %}
                                 <span class="badge bg-secondary me-1 mb-1">
@@ -491,7 +491,7 @@
                                             {% endif %}
                                         </td>
                                         <td><small>{{ anexo.tamanho_kb }} KB</small></td>
-                                        <td><small>{{ anexo.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+                                        <td><small>{{ anexo.criado_em|formatar_data_hora_brasil }}</small></td>
                                         <td><small>{{ anexo.criado_por }}</small></td>
                                         <td>
                                             <a href="/devolucao/ocorrencias/api/{{ ocorrencia.id }}/anexos/{{ anexo.id }}/download"
@@ -652,7 +652,7 @@
                                             {% if frete.local_coleta %}<small class="text-muted">{{ frete.local_coleta }}</small><br>{% endif %}
                                             {{ frete.cidade_origem }}/{{ frete.uf_origem }} → {{ frete.cidade_destino }}/{{ frete.uf_destino }}
                                         </td>
-                                        <td>{{ frete.data_cotacao.strftime('%d/%m/%Y') if frete.data_cotacao else '-' }}</td>
+                                        <td>{{ frete.data_cotacao|formatar_data_segura or '-' }}</td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirFrete({{ frete.id }})">
                                                 <i class="bi bi-trash"></i>
@@ -1160,7 +1160,7 @@
                                                 <option value="CANCELADO" {% if desc.status == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
                                             </select>
                                         </td>
-                                        <td>{{ desc.data_autorizacao.strftime('%d/%m/%Y') if desc.data_autorizacao else '-' }}</td>
+                                        <td>{{ desc.data_autorizacao|formatar_data_segura or '-' }}</td>
                                         <td>
                                             <div class="btn-group-vertical btn-group-sm">
                                                 <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadTermoDescarte({{ desc.id }})" title="Baixar termo">

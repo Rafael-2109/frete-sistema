@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from app import db
+from app.utils.timezone import agora_utc_naive
 from flask_login import current_user
 from flask import current_app
 from sqlalchemy import func
@@ -169,7 +170,7 @@ def sincronizar_entrega_por_nf(numero_nf):
         # Só preenche confirmação se realmente confirmado
         if agendamento_confirmado:
             novo_ag.confirmado_por = get_usuario_nome()
-            novo_ag.confirmado_em = datetime.utcnow()
+            novo_ag.confirmado_em = agora_utc_naive()
 
         db.session.add(novo_ag)
 
@@ -200,7 +201,7 @@ def sincronizar_entrega_por_nf(numero_nf):
                 # Só preenche confirmação se realmente confirmado
                 if agendamento_confirmado:
                     novo_ag.confirmado_por = get_usuario_nome()
-                    novo_ag.confirmado_em = datetime.utcnow()
+                    novo_ag.confirmado_em = agora_utc_naive()
 
                 db.session.add(novo_ag)
 
@@ -314,14 +315,14 @@ def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
             data_agendada=data_agenda_item,
             forma_agendamento="Reenvio do CD",
             autor=get_usuario_nome(),
-            criado_em=datetime.utcnow(),
+            criado_em=agora_utc_naive(),
             status=status_agendamento,  # ✅ Respeita EmbarqueItem.agendamento_confirmado
         )
 
         # Só preenche confirmação se realmente confirmado
         if agendamento_confirmado:
             novo_ag.confirmado_por = get_usuario_nome()
-            novo_ag.confirmado_em = datetime.utcnow()
+            novo_ag.confirmado_em = agora_utc_naive()
 
         db.session.add(novo_ag)
 

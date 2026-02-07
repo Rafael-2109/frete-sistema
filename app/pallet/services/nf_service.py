@@ -24,7 +24,7 @@ from app import db
 from app.pallet.models.nf_remessa import PalletNFRemessa
 from app.pallet.models.nf_solucao import PalletNFSolucao
 from app.pallet.services.credito_service import CreditoService
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -444,7 +444,7 @@ class NFService:
 
             # Usar metodo do modelo para atualizar status
             nf_remessa.atualizar_status()
-            nf_remessa.atualizado_em = agora_brasil()
+            nf_remessa.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 

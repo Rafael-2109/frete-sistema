@@ -8,6 +8,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 
 
@@ -141,7 +142,7 @@ def api_atualizar_liberacao(config_id):
         config.dias_uteis_previsto = int(data.get('dias_uteis_previsto', config.dias_uteis_previsto))
         config.ativo = data.get('ativo', config.ativo)
         config.atualizado_por = current_user.nome
-        config.atualizado_em = datetime.utcnow()
+        config.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -168,7 +169,7 @@ def api_excluir_liberacao(config_id):
         # Soft delete
         config.ativo = False
         config.atualizado_por = current_user.nome
-        config.atualizado_em = datetime.utcnow()
+        config.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 

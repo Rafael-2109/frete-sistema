@@ -75,11 +75,11 @@
                     <div class="header-info">
                         <div class="info-item">
                             <i class="fas fa-calendar me-1"></i>
-                            Periodo: <strong>{{ data_inicio.strftime('%d/%m/%Y') }}</strong> a <strong>{{ data_fim.strftime('%d/%m/%Y') }}</strong>
+                            Periodo: <strong>{{ data_inicio|formatar_data_segura }}</strong> a <strong>{{ data_fim|formatar_data_segura }}</strong>
                         </div>
                         <div class="info-item">
                             <i class="fas fa-clock me-1"></i>
-                            Impresso em: <strong>{{ data_impressao.strftime('%d/%m/%Y %H:%M') }}</strong>
+                            Impresso em: <strong>{{ data_impressao|formatar_data_hora_brasil }}</strong>
                         </div>
                     </div>
                 </div>
@@ -130,7 +130,7 @@
                     <tbody>
                         {% set ns = namespace(data_anterior='', subtotal_dia=0) %}
                         {% for prog in programacoes %}
-                            {% set data_atual = prog.data_programacao.strftime('%d/%m/%Y') %}
+                            {% set data_atual = prog.data_programacao|formatar_data_segura %}
 
                             {# Se mudou a data, mostra subtotal do dia anterior #}
                             {% if ns.data_anterior and ns.data_anterior != data_atual %}

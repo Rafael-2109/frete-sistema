@@ -1,5 +1,6 @@
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.embarques.models import Embarque
 from app.veiculos.models import Veiculo
 
@@ -18,8 +19,8 @@ class Motorista(db.Model):
     foto_documento = db.Column(db.String(255), nullable=True)  # Caminho para arquivo da foto
     
     # Timestamps
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     
     # Relacionamentos
     registros_portaria = db.relationship('ControlePortaria', backref='motorista_obj', lazy='dynamic')
@@ -70,8 +71,8 @@ class ControlePortaria(db.Model):
     hora_saida = db.Column(db.Time, nullable=True)
     
     # Timestamps
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     
     # ✅ NOVOS CAMPOS: Auditoria de usuários
     registrado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
@@ -112,8 +113,8 @@ class ControlePortaria(db.Model):
     
     def registrar_chegada(self):
         """Registra data e hora de chegada no timezone brasileiro"""
-        from app.utils.timezone import agora_brasil
-        agora = agora_brasil()
+        from app.utils.timezone import agora_utc_naive
+        agora = agora_utc_naive()
         self.data_chegada = agora.date()
         self.hora_chegada = agora.time()
     
@@ -121,8 +122,8 @@ class ControlePortaria(db.Model):
         """Registra data e hora de entrada no timezone brasileiro"""
         if not self.pode_registrar_entrada:
             raise ValueError("Não é possível registrar entrada sem chegada")
-        from app.utils.timezone import agora_brasil
-        agora = agora_brasil()
+        from app.utils.timezone import agora_utc_naive
+        agora = agora_utc_naive()
         self.data_entrada = agora.date()
         self.hora_entrada = agora.time()
     
@@ -130,8 +131,8 @@ class ControlePortaria(db.Model):
         """Registra data e hora de saída no timezone brasileiro"""
         if not self.pode_registrar_saida:
             raise ValueError("Não é possível registrar saída sem entrada")
-        from app.utils.timezone import agora_brasil
-        agora = agora_brasil()
+        from app.utils.timezone import agora_utc_naive
+        agora = agora_utc_naive()
         self.data_saida = agora.date()
         self.hora_saida = agora.time()
     

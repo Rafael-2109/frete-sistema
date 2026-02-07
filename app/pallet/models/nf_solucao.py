@@ -16,7 +16,7 @@ Tipos de Solução:
 Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 class PalletNFSolucao(db.Model):
@@ -109,9 +109,9 @@ class PalletNFSolucao(db.Model):
     observacao = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Soft delete
@@ -172,7 +172,7 @@ class PalletNFSolucao(db.Model):
             usuario: Usuário que confirmou
         """
         self.confirmado = True
-        self.confirmado_em = agora_brasil()
+        self.confirmado_em = agora_utc_naive()
         self.confirmado_por = usuario
 
     def rejeitar(self, usuario: str, motivo: str):
@@ -184,7 +184,7 @@ class PalletNFSolucao(db.Model):
             motivo: Motivo da rejeição
         """
         self.rejeitado = True
-        self.rejeitado_em = agora_brasil()
+        self.rejeitado_em = agora_utc_naive()
         self.rejeitado_por = usuario
         self.motivo_rejeicao = motivo
 

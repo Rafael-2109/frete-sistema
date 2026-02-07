@@ -101,7 +101,7 @@
                                 <small>{{ unificacao.created_by or '-' }}</small>
                             </td>
                             <td>
-                                <small>{{ unificacao.created_at.strftime('%d/%m/%Y %H:%M') if unificacao.created_at else '-' }}</small>
+                                <small>{{ unificacao.created_at|formatar_data_hora_brasil or '-' }}</small>
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">

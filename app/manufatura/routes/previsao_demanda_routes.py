@@ -8,6 +8,7 @@ from app.manufatura.models import PrevisaoDemanda, GrupoEmpresarial, HistoricoPe
 from app.manufatura.services.demanda_service import extrair_prefixo_cnpj
 from app.producao.models import CadastroPalletizacao
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func
 
 
@@ -202,7 +203,7 @@ def register_previsao_demanda_routes(bp):
             previsao.qtd_demanda_prevista = qtd_prevista
             previsao.disparo_producao = dados.get('disparo_producao', 'MTS')
             previsao.criado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
-            previsao.criado_em = datetime.utcnow()
+            previsao.criado_em = agora_utc_naive()
 
             # Se houver demanda realizada, atualiza também
             if 'qtd_realizada' in dados: # type: ignore
@@ -524,7 +525,7 @@ def register_previsao_demanda_routes(bp):
                         previsao.qtd_demanda_prevista = qtd_prevista
                         previsao.disparo_producao = disparo
                         previsao.nome_produto = nome_produto  # ✅ Sempre atualizar com nome do cadastro
-                        previsao.atualizado_em = datetime.utcnow()
+                        previsao.atualizado_em = agora_utc_naive()
                         atualizados += 1
                     else:
                         # Inserir

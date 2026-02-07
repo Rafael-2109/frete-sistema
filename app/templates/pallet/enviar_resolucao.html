@@ -23,7 +23,7 @@
                                 <span class="text-muted">Cliente: {{ vale.nome_cliente or vale.cnpj_cliente or '-' }}</span>
                             </div>
                             <div class="col-md-4">
-                                <strong>Validade: {{ vale.data_validade.strftime('%d/%m/%Y') if vale.data_validade else '-' }}</strong><br>
+                                <strong>Validade: {{ vale.data_validade|formatar_data_segura or '-' }}</strong><br>
                                 {% if vale.dias_para_vencer is not none %}
                                     {% if vale.dias_para_vencer < 0 %}
                                         <span class="text-danger">{{ vale.dias_para_vencer|abs }} dias atrasado</span>

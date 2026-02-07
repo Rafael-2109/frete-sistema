@@ -13,6 +13,7 @@ Data: 2025-11-28
 
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
+from app.utils.timezone import agora_utc_naive
 from app import db
 from app.financeiro.models import (
     ContasAReceber,
@@ -116,7 +117,7 @@ class VinculacaoAbatimentosService:
             return abatimento.reconciliacao_odoo
 
         # Registrar tentativa
-        abatimento.ultima_tentativa_vinculacao = datetime.utcnow()
+        abatimento.ultima_tentativa_vinculacao = agora_utc_naive()
 
         # 1. Buscar mapeamentos para o tipo do abatimento
         mapeamentos = []
@@ -204,7 +205,7 @@ class VinculacaoAbatimentosService:
         # Vincular
         abatimento.reconciliacao_odoo_id = reconciliacao_id
         abatimento.status_vinculacao = 'VINCULADO'
-        abatimento.ultima_tentativa_vinculacao = datetime.utcnow()
+        abatimento.ultima_tentativa_vinculacao = agora_utc_naive()
         abatimento.atualizado_por = usuario
 
         return True, 'Vinculação realizada com sucesso'

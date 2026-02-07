@@ -319,9 +319,9 @@
                                     </td>
                                     <td>
                                         <div class="small">
-                                            <strong>Criada:</strong><br>{{ just.data_criacao.strftime('%d/%m/%Y %H:%M') if just.data_criacao else '-' }}
+                                            <strong>Criada:</strong><br>{{ just.data_criacao|formatar_data_hora_brasil or '-' }}
                                             {% if just.data_aprovacao %}
-                                                <br><strong>Aprovada:</strong><br>{{ just.data_aprovacao.strftime('%d/%m/%Y %H:%M') }}
+                                                <br><strong>Aprovada:</strong><br>{{ just.data_aprovacao|formatar_data_hora_brasil }}
                                             {% endif %}
                                         </div>
                                     </td>

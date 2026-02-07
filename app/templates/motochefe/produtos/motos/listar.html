@@ -168,7 +168,7 @@
                             <td>{{ moto.cor }}</td>
                             <td>{{ moto.ano_fabricacao or '-' }}</td>
                             <td>{{ moto.nf_entrada }}</td>
-                            <td>{{ moto.data_entrada.strftime('%d/%m/%Y') if moto.data_entrada else '-' }}</td>
+                            <td>{{ moto.data_entrada|formatar_data_segura or '-' }}</td>
                             <td>{{ moto.fornecedor }}</td>
                             <td>R$ {{ moto.custo_aquisicao|valor_br }}</td>
                             <td>{{ moto.pallet or '-' }}</td>

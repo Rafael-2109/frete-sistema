@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import PendenciaFiscalIbsCbs
 from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
 from app.odoo.utils.connection import get_odoo_connection
@@ -121,7 +122,7 @@ class ValidacaoIbsCbsJob:
 
         try:
             odoo = self._get_odoo()
-            data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+            data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
 
             # Buscar NF-es de compra processadas
             # l10n_br_status = '04' significa processado/concluido

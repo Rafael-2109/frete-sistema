@@ -94,7 +94,7 @@
                             <strong>Valor Pago:</strong> R$ {{ despesa.valor_pago or 0|valor_br }}<br>
                             <strong>Saldo Aberto:</strong> R$ {{ despesa.saldo_aberto|valor_br }}<br>
                             {% if despesa.data_pagamento %}
-                            <strong>Data Pagamento:</strong> {{ despesa.data_pagamento.strftime('%d/%m/%Y') }}<br>
+                            <strong>Data Pagamento:</strong> {{ despesa.data_pagamento|formatar_data_segura }}<br>
                             {% endif %}
                         </small>
                     </div>

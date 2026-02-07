@@ -9,6 +9,7 @@ from flask_login import login_required, current_user
 from datetime import datetime, date
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 
 
@@ -79,7 +80,7 @@ def api_atualizar_observacao(conta_id):
 
         conta.observacao = data.get('observacao', '')
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -103,7 +104,7 @@ def api_toggle_alerta(conta_id):
 
         conta.alerta = not conta.alerta
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -164,7 +165,7 @@ def api_confirmacao(conta_id):
 
         # Se está definindo confirmação pela primeira vez, registrar log
         if not conta.data_confirmacao and (data.get('confirmacao_tipo_id') or data.get('confirmacao_entrega')):
-            conta.data_confirmacao = datetime.utcnow()
+            conta.data_confirmacao = agora_utc_naive()
             conta.confirmado_por = current_user.nome
 
         tipo_id = data.get('confirmacao_tipo_id')
@@ -172,7 +173,7 @@ def api_confirmacao(conta_id):
         conta.forma_confirmacao_tipo_id = data.get('forma_confirmacao_tipo_id')
         conta.confirmacao_entrega = data.get('confirmacao_entrega', '')
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -238,7 +239,7 @@ def api_acao_necessaria(conta_id):
             conta.data_lembrete = None
 
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 

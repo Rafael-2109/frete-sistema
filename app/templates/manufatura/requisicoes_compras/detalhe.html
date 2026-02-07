@@ -47,7 +47,7 @@
 
                                 <dt class="col-sm-5">Data Criação:</dt>
                                 <dd class="col-sm-7">
-                                    {{ requisicao.data_requisicao_criacao.strftime('%d/%m/%Y') if requisicao.data_requisicao_criacao else '-' }}
+                                    {{ requisicao.data_requisicao_criacao|formatar_data_segura or '-' }}
                                 </dd>
 
                                 <dt class="col-sm-5">Criado por:</dt>
@@ -65,7 +65,7 @@
                             <dl class="row">
                                 <dt class="col-sm-5">Data Solicitada:</dt>
                                 <dd class="col-sm-7">
-                                    {{ requisicao.data_requisicao_solicitada.strftime('%d/%m/%Y') if requisicao.data_requisicao_solicitada else '-' }}
+                                    {{ requisicao.data_requisicao_solicitada|formatar_data_segura or '-' }}
                                 </dd>
 
                                 <dt class="col-sm-5">Lead Time:</dt>

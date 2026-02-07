@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 from io import BytesIO
 import logging
+from app.utils.timezone import agora_utc_naive
 
 from app.custeio.services.custeio_service import ServicoCusteio
 
@@ -846,7 +847,7 @@ def register_custeio_routes(bp):
 
                 registro.valor = valor
                 registro.descricao = descricao
-                registro.atualizado_em = datetime.utcnow()
+                registro.atualizado_em = agora_utc_naive()
                 registro.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
             else:
                 # Verificar se chave já existe - atualizar se existir
@@ -855,7 +856,7 @@ def register_custeio_routes(bp):
                     # Atualizar registro existente
                     existente.valor = valor
                     existente.descricao = descricao
-                    existente.atualizado_em = datetime.utcnow()
+                    existente.atualizado_em = agora_utc_naive()
                     existente.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
                     registro = existente
                 else:
@@ -1238,7 +1239,7 @@ def register_custeio_routes(bp):
                     if existente:
                         existente.valor = valor
                         existente.descricao = descricao
-                        existente.atualizado_em = datetime.utcnow()
+                        existente.atualizado_em = agora_utc_naive()
                         existente.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
                         atualizados += 1
                     else:
@@ -2757,7 +2758,7 @@ def register_custeio_routes(bp):
                 registro.prioridade = dados.get('prioridade', 0)
                 registro.descricao = dados.get('descricao')
                 registro.ativo = dados.get('ativo', True)
-                registro.atualizado_em = datetime.utcnow()
+                registro.atualizado_em = agora_utc_naive()
                 registro.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
             else:
                 # Criar novo
@@ -2807,7 +2808,7 @@ def register_custeio_routes(bp):
                 return jsonify({'erro': 'Regra nao encontrada'}), 404
 
             registro.ativo = False
-            registro.atualizado_em = datetime.utcnow()
+            registro.atualizado_em = agora_utc_naive()
             registro.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
             db.session.commit()
 

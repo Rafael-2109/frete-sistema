@@ -228,11 +228,11 @@
                                     <div class="fin-periodo">
                                         <div class="fin-periodo__row">
                                             <span class="fin-periodo__label">De:</span>
-                                            <span class="fin-periodo__value">{{ item.data_de.strftime('%d/%m/%y') if item.data_de else '-' }}</span>
+                                            <span class="fin-periodo__value">{{ item.data_de|formatar_data_segura or '-' }}</span>
                                         </div>
                                         <div class="fin-periodo__row">
                                             <span class="fin-periodo__label">Até:</span>
-                                            <span class="fin-periodo__value fin-periodo__value--sub">{{ item.data_ate.strftime('%d/%m/%y') if item.data_ate else '-' }}</span>
+                                            <span class="fin-periodo__value fin-periodo__value--sub">{{ item.data_ate|formatar_data_segura or '-' }}</span>
                                         </div>
                                     </div>
                                 </td>

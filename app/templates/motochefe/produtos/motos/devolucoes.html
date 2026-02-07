@@ -77,7 +77,7 @@
                                 <br><button type="button" class="btn btn-sm btn-link" onclick="mostrarObservacao('{{ moto.numero_chassi }}', `{{ moto.observacao|replace('`', '\\`')|replace('\n', '\\n') }}`)">Ver completa</button>
                                 {% endif %}
                             </td>
-                            <td>{{ moto.atualizado_em.strftime('%d/%m/%Y %H:%M') if moto.atualizado_em else '-' }}</td>
+                            <td>{{ moto.atualizado_em|formatar_data_hora_brasil or '-' }}</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button type="button" class="btn btn-success" onclick="reverterMoto('{{ moto.numero_chassi }}')" title="Reverter para Disponível">

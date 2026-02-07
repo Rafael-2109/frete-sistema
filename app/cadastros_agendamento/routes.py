@@ -7,6 +7,7 @@ from app import db
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.cadastros_agendamento.forms import ContatoAgendamentoForm, ImportarAgendamentosForm, EditarContatoAgendamentoForm, PesquisarAgendamentoForm
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 cadastros_agendamento_bp = Blueprint('cadastros_agendamento', __name__, url_prefix='/cadastros-agendamento')
 
@@ -33,7 +34,7 @@ def listar_contatos():
             forma=form.forma.data,
             contato=form.contato.data,
             observacao=form.observacao.data,
-            atualizado_em=datetime.utcnow()
+            atualizado_em=agora_utc_naive()
         )
         db.session.add(contato)
         db.session.commit()
@@ -97,7 +98,7 @@ def editar_contato(id):
         contato.contato = form.contato.data
         contato.observacao = form.observacao.data
         contato.nao_aceita_nf_pallet = form.nao_aceita_nf_pallet.data
-        contato.atualizado_em = datetime.utcnow()
+        contato.atualizado_em = agora_utc_naive()
 
         db.session.commit()
         flash("Contato atualizado com sucesso.", "success")
@@ -232,7 +233,7 @@ def importar_contatos():
                             contato_existente.observacao = observacao
                         if nao_aceita_nf_pallet is not None:
                             contato_existente.nao_aceita_nf_pallet = nao_aceita_nf_pallet
-                        contato_existente.atualizado_em = datetime.utcnow()
+                        contato_existente.atualizado_em = agora_utc_naive()
                     else:
                         # Cria novo contato
                         novo_contato = ContatoAgendamento(
@@ -241,7 +242,7 @@ def importar_contatos():
                             contato=contato,  # Pode ser None
                             observacao=observacao,  # Pode ser None
                             nao_aceita_nf_pallet=nao_aceita_nf_pallet if nao_aceita_nf_pallet is not None else False,
-                            atualizado_em=datetime.utcnow()
+                            atualizado_em=agora_utc_naive()
                         )
                         db.session.add(novo_contato)
                     

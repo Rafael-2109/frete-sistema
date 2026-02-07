@@ -165,7 +165,7 @@
                                     <strong class="text-dark">
                                         {% if email.data_envio %}
                                             <i class="far fa-calendar-alt me-1"></i>
-                                            {{ email.data_envio.strftime('%d/%m/%Y às %H:%M') }}
+                                            {{ email.data_envio|formatar_data_hora_brasil }}
                                         {% else %}
                                             <span class="text-muted">Não informado</span>
                                         {% endif %}
@@ -201,7 +201,7 @@
                             <div class="col-md-4">
                                 <small class="text-muted">
                                     <i class="far fa-clock me-1"></i>
-                                    Anexado em: <strong>{{ email.criado_em.strftime('%d/%m/%Y %H:%M') }}</strong>
+                                    Anexado em: <strong>{{ email.criado_em|formatar_data_hora_brasil }}</strong>
                                 </small>
                             </div>
                             <div class="col-md-4">
@@ -308,7 +308,7 @@
                             De: {{ outro_email.remetente[:25] or '-' }}{% if outro_email.remetente and outro_email.remetente|length > 25 %}...{% endif %}
                         </p>
                         <small class="text-muted">
-                            {{ outro_email.data_envio.strftime('%d/%m/%Y') if outro_email.data_envio else '-' }}
+                            {{ outro_email.data_envio|formatar_data_segura or '-' }}
                         </small>
                     </a>
                     {% endfor %}

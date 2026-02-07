@@ -187,7 +187,7 @@
                                 {% for mov in movimentacoes.items %}
                                 <tr id="row-{{ mov.id }}">
                                     <td class="text-muted">{{ mov.id }}</td>
-                                    <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') if mov.data_movimentacao else '-' }}</td>
+                                    <td>{{ mov.data_movimentacao|formatar_data_segura or '-' }}</td>
                                     <td>
                                         <div class="d-flex flex-column">
                                             <span class="fw-bold

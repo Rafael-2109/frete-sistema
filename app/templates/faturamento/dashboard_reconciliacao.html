@@ -190,7 +190,7 @@
                                             <br><small class="text-muted">{{ nf.municipio }}/{{ nf.estado }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ nf.data_fatura.strftime('%d/%m/%Y') if nf.data_fatura else '-' }}</td>
+                                    <td>{{ nf.data_fatura|formatar_data_segura or '-' }}</td>
                                     <td>R$ {{ "%.2f"|format(nf.valor_total or 0)|replace('.', ',')|replace(',', '.', 1) }}</td>
                                     <td>
                                         <span class="badge bg-danger">Órfã</span>
@@ -252,7 +252,7 @@
                                 <tr>
                                     <td>
                                         <strong>{{ sep.lote_separacao }}</strong>
-                                        <br><small class="text-muted">{{ sep.data_separacao.strftime('%d/%m/%Y') if sep.data_separacao else '-' }}</small>
+                                        <br><small class="text-muted">{{ sep.data_separacao|formatar_data_segura or '-' }}</small>
                                     </td>
                                     <td>
                                         {{ sep.cod_produto }}

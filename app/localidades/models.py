@@ -1,5 +1,5 @@
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 class Cidade(db.Model):
     __tablename__ = 'cidades'
@@ -35,8 +35,8 @@ class CadastroRota(db.Model):
     ativa = db.Column(db.Boolean, nullable=False, default=True)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
 
     def __repr__(self):
         return f'<CadastroRota {self.cod_uf} - {self.rota}>'
@@ -69,8 +69,8 @@ class CadastroSubRota(db.Model):
     ativa = db.Column(db.Boolean, nullable=False, default=True)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
 
     # Índice composto
     __table_args__ = (

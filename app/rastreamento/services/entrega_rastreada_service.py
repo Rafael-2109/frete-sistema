@@ -11,6 +11,7 @@ from app.rastreamento.services.gps_service import GPSService
 from app.embarques.models import Embarque
 from app.carteira.models import CarteiraPrincipal
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from flask import current_app
 
 
@@ -61,7 +62,7 @@ class EntregaRastreadaService:
                 uf=item.uf_destino,
                 destino_latitude=lat,
                 destino_longitude=lon,
-                geocodificado_em=datetime.utcnow() if lat else None,
+                geocodificado_em=agora_utc_naive() if lat else None,
                 ordem_entrega=idx if embarque.tipo_carga == 'DIRETA' else None,
                 status='PENDENTE'
             )

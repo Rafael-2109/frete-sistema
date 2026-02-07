@@ -24,6 +24,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.utils.valores_brasileiros import converter_valor_brasileiro
 from app.estoque.models import MovimentacaoEstoque
 from app.embarques.models import Embarque
@@ -467,7 +468,7 @@ def registrar_retorno():
                     if qtd_remessa <= quantidade_restante:
                         # Baixa total da remessa
                         remessa.baixado = True
-                        remessa.baixado_em = datetime.utcnow()
+                        remessa.baixado_em = agora_utc_naive()
                         remessa.baixado_por = usuario
                         remessa.movimento_baixado_id = movimento.id
                         remessa.observacao = (remessa.observacao or '') + f'\n[BAIXA AUTOMATICA] Retorno registrado - {quantidade_retorno} pallets'
@@ -511,7 +512,7 @@ def baixar_movimento(movimento_id):
         try:
             # Marcar como baixado
             saida.baixado = True
-            saida.baixado_em = datetime.utcnow()
+            saida.baixado_em = agora_utc_naive()
             saida.baixado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
             # Se foi informado um movimento de retorno, vincular
@@ -572,7 +573,7 @@ def desfazer_baixa(movimento_id):
     try:
         # Registrar quem e quando desfez
         usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        obs_desfazer = f'\n[BAIXA DESFEITA em {datetime.utcnow().strftime("%d/%m/%Y %H:%M")} por {usuario}]'
+        obs_desfazer = f'\n[BAIXA DESFEITA em {agora_utc_naive().strftime("%d/%m/%Y %H:%M")} por {usuario}]'
 
         # Guardar info anterior na observacao
         if movimento.baixado_em:
@@ -884,7 +885,7 @@ def baixar_nf_remessa_automaticamente(numero_nf: str, usuario: str) -> dict:
     # Se soma dos vales >= quantidade da remessa, baixar
     if total_vales >= remessa.qtd_movimentacao:
         remessa.baixado = True
-        remessa.baixado_em = datetime.utcnow()
+        remessa.baixado_em = agora_utc_naive()
         remessa.baixado_por = usuario
         remessa.observacao = (remessa.observacao or '') + f'\n[BAIXA AUTOMATICA] Vales totalizam {total_vales} pallets'
         return {
@@ -1003,7 +1004,7 @@ def editar_vale(vale_id):
             vale.aba_arquivo = request.form.get('aba_arquivo')
             vale.observacao = request.form.get('observacao')
             vale.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-            vale.atualizado_em = datetime.utcnow()
+            vale.atualizado_em = agora_utc_naive()
 
             db.session.commit()
             flash('Vale pallet atualizado com sucesso!', 'success')
@@ -1041,12 +1042,12 @@ def receber_vale(vale_id):
 
     try:
         vale.recebido = True
-        vale.recebido_em = datetime.utcnow()
+        vale.recebido_em = agora_utc_naive()
         vale.recebido_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
         vale.posse_atual = 'NACOM'
         vale.cnpj_posse = None
         vale.nome_posse = 'NACOM GOYA'
-        vale.atualizado_em = datetime.utcnow()
+        vale.atualizado_em = agora_utc_naive()
         vale.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
         db.session.commit()
@@ -1077,9 +1078,9 @@ def enviar_resolucao(vale_id):
             if valor:
                 vale.valor_resolucao = converter_valor_brasileiro(valor)
             vale.enviado_coleta = True
-            vale.enviado_coleta_em = datetime.utcnow()
+            vale.enviado_coleta_em = agora_utc_naive()
             vale.enviado_coleta_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-            vale.atualizado_em = datetime.utcnow()
+            vale.atualizado_em = agora_utc_naive()
             vale.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
             db.session.commit()
@@ -1116,9 +1117,9 @@ def resolver_vale(vale_id):
             if valor:
                 vale.valor_resolucao = converter_valor_brasileiro(valor)
             vale.resolvido = True
-            vale.resolvido_em = datetime.utcnow()
+            vale.resolvido_em = agora_utc_naive()
             vale.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-            vale.atualizado_em = datetime.utcnow()
+            vale.atualizado_em = agora_utc_naive()
             vale.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
             # Adicionar observacao
@@ -1144,7 +1145,7 @@ def excluir_vale(vale_id):
 
     try:
         vale.ativo = False
-        vale.atualizado_em = datetime.utcnow()
+        vale.atualizado_em = agora_utc_naive()
         vale.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
         db.session.commit()
         flash('Vale pallet excluido com sucesso!', 'success')
@@ -1340,7 +1341,7 @@ def registrar_substituicao(remessa_id):
             if saldo_apos_substituicao <= 0:
                 # Substituição total: baixar a remessa original
                 remessa_origem.baixado = True
-                remessa_origem.baixado_em = datetime.utcnow()
+                remessa_origem.baixado_em = agora_utc_naive()
                 remessa_origem.baixado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
                 remessa_origem.observacao = (remessa_origem.observacao or '') + f'\n[SUBSTITUICAO TOTAL] NF cliente: {request.form.get("numero_nf")}'
             else:
@@ -1389,12 +1390,12 @@ def vincular_venda(movimento_id):
             # Vincular venda a remessa
             venda.movimento_baixado_id = remessa.id
             venda.baixado = True
-            venda.baixado_em = datetime.utcnow()
+            venda.baixado_em = agora_utc_naive()
             venda.baixado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
             # Marcar remessa como baixada (parcial ou total)
             remessa.baixado = True
-            remessa.baixado_em = datetime.utcnow()
+            remessa.baixado_em = agora_utc_naive()
             remessa.baixado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
 
             # Adicionar observacao

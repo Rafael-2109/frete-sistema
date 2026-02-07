@@ -30,7 +30,7 @@ from app.fretes.models import (
     LancamentoFreteOdooAuditoria
 )
 from app.fretes.services.lancamento_odoo_service import LancamentoOdooService
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -1389,7 +1389,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 despesa.odoo_dfe_id = dfe_id
                 despesa.odoo_purchase_order_id = po_id
                 despesa.odoo_invoice_id = invoice_id
-                despesa.lancado_odoo_em = agora_brasil()
+                despesa.lancado_odoo_em = agora_utc_naive()
                 despesa.lancado_odoo_por = self.usuario_nome
                 despesa.status = 'LANCADO_ODOO'
 

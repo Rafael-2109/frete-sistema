@@ -23,6 +23,7 @@ from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
 
 logger = logging.getLogger(__name__)
@@ -205,7 +206,7 @@ class BaixaTitulosService:
                 logger.error(f"Erro no item {item.id}: {e}")
                 item.status = 'ERRO'
                 item.mensagem = str(e)
-                item.processado_em = datetime.utcnow()
+                item.processado_em = agora_utc_naive()
                 self.estatisticas['erro'] += 1
 
             self.estatisticas['processados'] += 1
@@ -213,7 +214,7 @@ class BaixaTitulosService:
 
         # Atualizar lote
         lote.status = 'CONCLUIDO'
-        lote.processado_em = datetime.utcnow()
+        lote.processado_em = agora_utc_naive()
         lote.linhas_processadas = self.estatisticas['processados']
         lote.linhas_sucesso = self.estatisticas['sucesso']
         lote.linhas_erro = self.estatisticas['erro']
@@ -531,8 +532,8 @@ class BaixaTitulosService:
             item.partial_reconcile_id = self._buscar_partial_reconcile(item.titulo_odoo_id)
 
         item.status = 'SUCESSO'
-        item.processado_em = datetime.utcnow()
-        item.validado_em = datetime.utcnow()
+        item.processado_em = agora_utc_naive()
+        item.validado_em = agora_utc_naive()
 
         # Log de conclusao
         pagamentos_criados = []

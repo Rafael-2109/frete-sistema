@@ -214,7 +214,7 @@
                         </div>
                         <div class="col-6">
                             <strong>Data:</strong>
-                            <div class="value">{{ embarque.data_embarque.strftime('%d/%m/%Y') if embarque.data_embarque else 'N/A' }}</div>
+                            <div class="value">{{ embarque.data_embarque|formatar_data_segura or 'N/A' }}</div>
                         </div>
                     </div>
                     {% if embarque.itens and embarque.itens|length > 0 %}

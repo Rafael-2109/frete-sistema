@@ -12,7 +12,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app import db, csrf
 from datetime import datetime
 import json
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 # ========================================
@@ -66,7 +66,7 @@ def aceite_lgpd(token):
         return redirect(url_for('rastreamento.rastrear', token=token))
 
     # Verificar se expirou
-    if rastreamento.token_expiracao and agora_brasil() > rastreamento.token_expiracao:
+    if rastreamento.token_expiracao and agora_utc_naive() > rastreamento.token_expiracao:
         rastreamento.status = 'EXPIRADO'
         db.session.commit()
         return render_template('rastreamento/erro.html',
@@ -103,11 +103,11 @@ def processar_aceite_lgpd(token):
     try:
         # Coletar dados do aceite
         rastreamento.aceite_lgpd = True
-        rastreamento.aceite_lgpd_em = agora_brasil()
+        rastreamento.aceite_lgpd_em = agora_utc_naive()
         rastreamento.aceite_lgpd_ip = request.remote_addr
         rastreamento.aceite_lgpd_user_agent = request.headers.get('User-Agent', '')[:500]
         rastreamento.status = 'ATIVO'
-        rastreamento.rastreamento_iniciado_em = agora_brasil()
+        rastreamento.rastreamento_iniciado_em = agora_utc_naive()
 
         # Registrar log
         rastreamento.registrar_log(
@@ -232,7 +232,7 @@ def receber_ping_gps(token):
         db.session.add(ping)
 
         # Atualizar rastreamento
-        rastreamento.ultimo_ping_em = agora_brasil()
+        rastreamento.ultimo_ping_em = agora_utc_naive()
 
         # ✅ NOVO: Detectar proximidade de TODAS entregas pendentes
         from app.rastreamento.services.entrega_rastreada_service import EntregaRastreadaService
@@ -250,7 +250,7 @@ def receber_ping_gps(token):
         if distancia_destino and distancia_destino <= config.distancia_chegada_metros:
             if rastreamento.status != 'CHEGOU_DESTINO':
                 rastreamento.status = 'CHEGOU_DESTINO'
-                rastreamento.chegou_destino_em = agora_brasil()
+                rastreamento.chegou_destino_em = agora_utc_naive()
                 rastreamento.distancia_minima_atingida = distancia_destino
 
                 # Registrar log
@@ -421,7 +421,7 @@ def processar_upload_canhoto(token):
         entrega.canhoto_arquivo = file_path
         entrega.canhoto_latitude = float(latitude) if latitude and GPSService.validar_coordenadas(latitude, longitude) else None
         entrega.canhoto_longitude = float(longitude) if longitude and GPSService.validar_coordenadas(latitude, longitude) else None
-        entrega.entregue_em = agora_brasil()
+        entrega.entregue_em = agora_utc_naive()
         entrega.entregue_distancia_metros = distancia_entrega
         entrega.status = 'ENTREGUE'
 
@@ -447,7 +447,7 @@ def processar_upload_canhoto(token):
             if entrega_mon:
                 entrega_mon.canhoto_arquivo = file_path
                 entrega_mon.entregue = True
-                entrega_mon.data_hora_entrega_realizada = agora_brasil()
+                entrega_mon.data_hora_entrega_realizada = agora_utc_naive()
                 current_app.logger.info(
                     f"✅ EntregaMonitorada atualizada: NF {entrega_mon.numero_nf}"
                 )
@@ -461,7 +461,7 @@ def processar_upload_canhoto(token):
 
         if todas_concluidas:
             rastreamento.status = 'ENTREGUE'
-            rastreamento.rastreamento_finalizado_em = agora_brasil()
+            rastreamento.rastreamento_finalizado_em = agora_utc_naive()
             current_app.logger.info(
                 f"✅ TODAS entregas concluídas - Rastreamento finalizado para embarque #{rastreamento.embarque_id}"
             )
@@ -694,7 +694,7 @@ def encerrar_rastreamento(rastreamento_id):
 
         # Atualizar status
         rastreamento.status = 'CANCELADO'
-        rastreamento.rastreamento_finalizado_em = agora_brasil()
+        rastreamento.rastreamento_finalizado_em = agora_utc_naive()
 
         # Registrar log
         rastreamento.registrar_log(
@@ -1017,7 +1017,7 @@ def api_enviar_comentario():
                 'mensagem': mensagem,
                 'tipo': tipo,
                 'entrega_id': entrega_id,
-                'timestamp': agora_brasil().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             })
         )
 
@@ -1083,7 +1083,7 @@ def api_rastreamentos_ativos():
             # Calcular tempo no cliente (se chegou próximo)
             tempo_no_cliente = None
             if rastr.chegou_destino_em:
-                delta = agora_brasil() - rastr.chegou_destino_em
+                delta = agora_utc_naive() - rastr.chegou_destino_em
                 tempo_no_cliente = int(delta.total_seconds() / 60)  # Em minutos
 
             # Buscar entregas pendentes
@@ -1165,7 +1165,7 @@ def api_entregas_com_dificuldade():
         ).all()
 
         entregas_dificuldade = []
-        agora = agora_brasil()
+        agora = agora_utc_naive()
 
         for rastr in rastreamentos:
             # Calcular tempo no cliente
@@ -1326,7 +1326,7 @@ def api_finalizar_entrega():
                     canhoto_base64 = canhoto_base64.split(',')[1]
 
                 img_data = base64.b64decode(canhoto_base64)
-                filename = f"canhoto_{entrega_id}_{int(agora_brasil().timestamp())}.jpg"
+                filename = f"canhoto_{entrega_id}_{int(agora_utc_naive().timestamp())}.jpg"
 
                 # Salvar usando o storage
                 from io import BytesIO
@@ -1345,7 +1345,7 @@ def api_finalizar_entrega():
                 current_app.logger.error(f"Erro ao salvar canhoto base64: {str(e)}")
 
         # Atualizar entrega
-        entrega.entregue_em = agora_brasil()
+        entrega.entregue_em = agora_utc_naive()
         entrega.entregue_distancia_metros = distancia_entrega
         entrega.canhoto_latitude = float(latitude) if latitude else None
         entrega.canhoto_longitude = float(longitude) if longitude else None
@@ -1397,7 +1397,7 @@ def api_finalizar_entrega():
                     if ',' in comprovante_base64:
                         comprovante_base64 = comprovante_base64.split(',')[1]
                     img_data = base64.b64decode(comprovante_base64)
-                    filename = f"comprovante_descarga_{entrega_id}_{int(agora_brasil().timestamp())}.jpg"
+                    filename = f"comprovante_descarga_{entrega_id}_{int(agora_utc_naive().timestamp())}.jpg"
                     file_obj = WZFileStorage(
                         stream=BytesIO(img_data),
                         filename=filename,
@@ -1479,7 +1479,7 @@ def api_finalizar_entrega():
 
             if entrega_mon:
                 entrega_mon.entregue = entregue
-                entrega_mon.data_hora_entrega_realizada = agora_brasil()
+                entrega_mon.data_hora_entrega_realizada = agora_utc_naive()
                 if canhoto_path:
                     entrega_mon.canhoto_arquivo = canhoto_path
                 if nfd_criada:
@@ -1496,7 +1496,7 @@ def api_finalizar_entrega():
 
         if todas_concluidas:
             rastreamento.status = 'ENTREGUE'
-            rastreamento.rastreamento_finalizado_em = agora_brasil()
+            rastreamento.rastreamento_finalizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -1615,7 +1615,7 @@ def tela_monitoramento():
     }
 
     # Contar entregas com dificuldade (>40min)
-    agora = agora_brasil()
+    agora = agora_utc_naive()
     entregas_dificuldade = 0
 
     for rastr in rastreamentos_ativos:

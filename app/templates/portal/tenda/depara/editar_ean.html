@@ -77,8 +77,8 @@
                         <i class="fas fa-info-circle"></i> Informações
                     </h6>
                     <ul class="mb-0">
-                        <li>Criado em: {{ depara.criado_em.strftime('%d/%m/%Y %H:%M') if depara.criado_em else '-' }}</li>
-                        <li>Última atualização: {{ depara.atualizado_em.strftime('%d/%m/%Y %H:%M') if depara.atualizado_em else '-' }}</li>
+                        <li>Criado em: {{ depara.criado_em|formatar_data_hora_brasil or '-' }}</li>
+                        <li>Última atualização: {{ depara.atualizado_em|formatar_data_hora_brasil or '-' }}</li>
                         <li>Criado por: {{ depara.criado_por or 'Sistema' }}</li>
                     </ul>
                 </div>

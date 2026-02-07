@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Set
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.manufatura.models import PedidoCompras
 from app.recebimento.models import ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao
 
@@ -59,7 +60,7 @@ class PoChangesDetectorService:
                 'validacoes_afetadas': 3
             }
         """
-        data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+        data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
 
         logger.info(
             f"🔍 Detectando mudanças em POs desde {data_limite.strftime('%Y-%m-%d %H:%M:%S')}"
@@ -136,7 +137,7 @@ class PoChangesDetectorService:
             if validacao.status == 'aprovado':
                 if not validacao.po_modificada_apos_validacao:
                     validacao.po_modificada_apos_validacao = True
-                    validacao.atualizado_em = datetime.utcnow()
+                    validacao.atualizado_em = agora_utc_naive()
                     dfes_marcados += 1
                     logger.warning(
                         f"⚠️  DFE {validacao.odoo_dfe_id} (NF {validacao.numero_nf}) "

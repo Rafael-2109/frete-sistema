@@ -14,7 +14,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.devolucao.models import NFDevolucao, OcorrenciaDevolucao
 from app.monitoramento.models import EntregaMonitorada
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 # Blueprint
 registro_bp = Blueprint('devolucao_registro', __name__, url_prefix='/registro')
@@ -226,7 +226,7 @@ def api_atualizar_nfd(nfd_id):
             nfd.numero_nfd = data['numero_nfd']
 
         nfd.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
-        nfd.atualizado_em = agora_brasil()
+        nfd.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -258,13 +258,13 @@ def api_excluir_nfd(nfd_id):
         # Soft delete
         nfd.ativo = False
         nfd.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
-        nfd.atualizado_em = agora_brasil()
+        nfd.atualizado_em = agora_utc_naive()
 
         # Desativar ocorrencia tambem
         if nfd.ocorrencia:
             nfd.ocorrencia.ativo = False
             nfd.ocorrencia.atualizado_por = nfd.atualizado_por
-            nfd.ocorrencia.atualizado_em = agora_brasil()
+            nfd.ocorrencia.atualizado_em = agora_utc_naive()
 
         # Verificar se entrega ainda tem outras NFDs ativas
         if nfd.entrega_monitorada:

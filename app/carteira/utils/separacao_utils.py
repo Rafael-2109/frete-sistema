@@ -151,7 +151,7 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
     """
     try:
         from app.separacao.models import Separacao
-        from app.utils.timezone import agora_brasil
+        from app.utils.timezone import agora_utc_naive
         
         # Buscar informações dos produtos na carteira
         produtos_carteira = {}
@@ -236,7 +236,7 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
                 protocolo=protocolo,
                 tipo_envio=tipo_envio,
                 sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
-                criado_em=agora_brasil()
+                criado_em=agora_utc_naive()
             )
             
             db.session.add(separacao)

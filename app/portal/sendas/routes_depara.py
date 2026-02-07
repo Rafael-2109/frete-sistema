@@ -10,6 +10,7 @@ import os
 import re
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.portal.sendas.models import ProdutoDeParaSendas, FilialDeParaSendas
 from app.producao.models import CadastroPalletizacao
 import logging
@@ -151,7 +152,7 @@ def editar_produto(id):
             mapeamento.fator_conversao = float(request.form.get('fator_conversao', 1.0))
             mapeamento.observacoes = request.form.get('observacoes', '')
             mapeamento.ativo = request.form.get('ativo') == 'on'
-            mapeamento.atualizado_em = datetime.utcnow()
+            mapeamento.atualizado_em = agora_utc_naive()
             
             db.session.commit()
             
@@ -336,7 +337,7 @@ def editar_filial(id):
             filial.cidade = request.form.get('cidade', '').strip()
             filial.uf = request.form.get('uf', '').strip().upper()
             filial.ativo = request.form.get('ativo') == 'on'
-            filial.atualizado_em = datetime.utcnow()
+            filial.atualizado_em = agora_utc_naive()
 
             db.session.commit()
             

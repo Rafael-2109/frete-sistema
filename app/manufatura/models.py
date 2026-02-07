@@ -4,6 +4,7 @@ Modelos do módulo de Manufatura/PCP
 from app import db
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
+from app.utils.timezone import agora_utc_naive
 
 
 class GrupoEmpresarial(db.Model):
@@ -13,7 +14,7 @@ class GrupoEmpresarial(db.Model):
     nome_grupo = db.Column(db.String(100), nullable=False, index=True)
     prefixo_cnpj = db.Column(db.String(8), nullable=False, index=True)  # 1 prefixo por linha
     descricao = db.Column(db.String(255), nullable=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     ativo = db.Column(db.Boolean, default=True)
     
@@ -45,7 +46,7 @@ class HistoricoPedidos(db.Model):
     icms_produto_pedido = db.Column(db.Numeric(15, 2))
     pis_produto_pedido = db.Column(db.Numeric(15, 2))
     cofins_produto_pedido = db.Column(db.Numeric(15, 2))
-    importado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    importado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     __table_args__ = (
         db.UniqueConstraint('num_pedido', 'cod_produto'),
@@ -64,9 +65,9 @@ class PrevisaoDemanda(db.Model):
     qtd_demanda_prevista = db.Column(db.Numeric(15, 3), nullable=False)
     qtd_demanda_realizada = db.Column(db.Numeric(15, 3), default=0)
     disparo_producao = db.Column(db.String(3))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100))
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
     
     __table_args__ = (
         db.UniqueConstraint('data_mes', 'data_ano', 'cod_produto', 'nome_grupo'),
@@ -92,7 +93,7 @@ class PlanoMestreProducao(db.Model):
     qtd_lote_minimo = db.Column(db.Numeric(15, 3))
     status_geracao = db.Column(db.String(20), default='rascunho', index=True)
     criado_por = db.Column(db.String(100))
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     __table_args__ = (
         db.UniqueConstraint('data_mes', 'data_ano', 'cod_produto'),
@@ -113,7 +114,7 @@ class RecursosProducao(db.Model):
     eficiencia_media = db.Column(db.Numeric(5, 2), default=85.00)
     tempo_setup = db.Column(db.Integer, default=30)
     disponivel = db.Column(db.Boolean, default=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     __table_args__ = (
         # Removido UniqueConstraint para permitir múltiplas linhas por produto
@@ -153,7 +154,7 @@ class RequisicaoCompras(db.Model):
     data_envio_odoo = db.Column(db.DateTime)
     data_confirmacao_odoo = db.Column(db.DateTime)
     observacoes_odoo = db.Column(db.Text)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # ✅ Constraint única: requisição + produto + empresa (permite múltiplas linhas por requisição)
     __table_args__ = (
@@ -206,8 +207,8 @@ class PedidoCompras(db.Model):
     # Esse campo armazena explicitamente o ID do header para uso em consolidacao
     odoo_purchase_order_id = db.Column(db.String(50), nullable=True, index=True)
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # ✅ ADICIONADO
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)  # ✅ ADICIONADO
 
     # ✅ NOVO: Campos para Documento Fiscal Eletrônico (DFe) - NF de entrada
     dfe_id = db.Column(db.String(50), nullable=True, index=True)           # ID do l10n_br_ciel_it_account.dfe no Odoo
@@ -240,7 +241,7 @@ class LeadTimeFornecedor(db.Model):
     nome_produto = db.Column(db.String(255))
     lead_time_previsto = db.Column(db.Integer, nullable=False)
     lead_time_historico = db.Column(db.Numeric(5, 1))
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     
     __table_args__ = (
         db.UniqueConstraint('cnpj_fornecedor', 'cod_produto'),
@@ -264,9 +265,9 @@ class ListaMateriais(db.Model):
     versao = db.Column(db.String(100), default='v1')
 
     # Campos de auditoria expandidos
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
     inativado_em = db.Column(db.DateTime, nullable=True)
     inativado_por = db.Column(db.String(100), nullable=True)
@@ -326,7 +327,7 @@ class ListaMateriaisHistorico(db.Model):
     status_depois = db.Column(db.String(10), nullable=True)
 
     # Metadados da alteração
-    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    alterado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
     alterado_por = db.Column(db.String(100), nullable=False, index=True)
     motivo = db.Column(db.Text, nullable=True)  # Motivo da alteração (opcional)
 
@@ -375,7 +376,7 @@ class HistoricoRequisicaoCompras(db.Model):
     # ================================================
     requisicao_id = db.Column(db.Integer, db.ForeignKey('requisicao_compras.id', ondelete='CASCADE'), nullable=False, index=True)
     operacao = db.Column(db.String(20), nullable=False, index=True)  # 'CRIAR', 'EDITAR'
-    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    alterado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
     alterado_por = db.Column(db.String(100), nullable=False, index=True)  # 'Odoo' ou usuário
     write_date_odoo = db.Column(db.DateTime, nullable=True)
 
@@ -473,7 +474,7 @@ class HistoricoPedidoCompras(db.Model):
     # ================================================
     pedido_compra_id = db.Column(db.Integer, db.ForeignKey('pedido_compras.id', ondelete='CASCADE'), nullable=False, index=True)
     operacao = db.Column(db.String(20), nullable=False, index=True)  # 'CRIAR', 'EDITAR'
-    alterado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    alterado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
     alterado_por = db.Column(db.String(100), nullable=False, index=True)  # 'Odoo' ou usuário
     write_date_odoo = db.Column(db.DateTime, nullable=True)
 
@@ -582,7 +583,7 @@ class LogIntegracao(db.Model):
     mensagem = db.Column(db.Text)
     registros_processados = db.Column(db.Integer, default=0)
     registros_erro = db.Column(db.Integer, default=0)
-    data_execucao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_execucao = db.Column(db.DateTime, default=agora_utc_naive)
     tempo_execucao = db.Column(db.Float)
     detalhes = db.Column(JSONB)
 
@@ -659,8 +660,8 @@ class RequisicaoCompraAlocacao(db.Model):
     # ================================================
 
     importado_odoo = db.Column(db.Boolean, default=True)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
     # Datas do Odoo
     create_date_odoo = db.Column(db.DateTime, nullable=True)

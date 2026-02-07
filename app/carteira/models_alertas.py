@@ -8,6 +8,7 @@ que precisam de reimpressão após sincronização com Odoo.
 
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_
 
 
@@ -32,7 +33,7 @@ class AlertaSeparacaoCotada(db.Model):
     
     # Controle de reimpressão
     reimpresso = db.Column(db.Boolean, default=False, index=True)
-    data_alerta = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_alerta = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     data_reimpressao = db.Column(db.DateTime, nullable=True)
     reimpresso_por = db.Column(db.String(100), nullable=True)
     
@@ -66,7 +67,7 @@ class AlertaSeparacaoCotada(db.Model):
             alerta_existente.qtd_nova = qtd_nova
             alerta_existente.qtd_diferenca = qtd_nova - alerta_existente.qtd_anterior
             alerta_existente.tipo_alteracao = tipo_alteracao
-            alerta_existente.data_alerta = datetime.utcnow()
+            alerta_existente.data_alerta = agora_utc_naive()
             return alerta_existente
         
         # Criar novo alerta
@@ -188,7 +189,7 @@ class AlertaSeparacaoCotada(db.Model):
         
         for alerta in alertas:
             alerta.reimpresso = True
-            alerta.data_reimpressao = datetime.utcnow()
+            alerta.data_reimpressao = agora_utc_naive()
             alerta.reimpresso_por = usuario
         
         db.session.commit()

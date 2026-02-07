@@ -5,6 +5,7 @@ ComissaoVendedor: Comissões calculadas por venda
 """
 from app import db
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 
 class TituloFinanceiro(db.Model):
@@ -92,9 +93,9 @@ class TituloFinanceiro(db.Model):
     # ====================
     # AUDITORIA
     # ====================
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # ====================
@@ -183,8 +184,8 @@ class ComissaoVendedor(db.Model):
     empresa_pagadora = db.relationship('EmpresaVendaMoto', foreign_keys=[empresa_pagadora_id], backref='comissoes_pagas')
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
@@ -281,7 +282,7 @@ class MovimentacaoFinanceira(db.Model):
     # ====================
     # AUDITORIA
     # ====================
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), nullable=True)
 
     # ====================
@@ -370,9 +371,9 @@ class TituloAPagar(db.Model):
     # ====================
     # AUDITORIA
     # ====================
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), default='SISTEMA', nullable=True)
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=True)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive, nullable=True)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # ====================

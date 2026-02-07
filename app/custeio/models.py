@@ -3,6 +3,7 @@ Modelos do modulo de Custeio
 """
 from app import db
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 
 class CustoMensal(db.Model):
@@ -88,8 +89,8 @@ class CustoMensal(db.Model):
     fechado_em = db.Column(db.DateTime, nullable=True)
     fechado_por = db.Column(db.String(100), nullable=True)
 
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
     __table_args__ = (
         db.UniqueConstraint('mes', 'ano', 'cod_produto', name='uq_custo_mensal_periodo_produto'),
@@ -170,7 +171,7 @@ class CustoConsiderado(db.Model):
     custo_atual = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     # Periodo de vigencia
-    vigencia_inicio = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    vigencia_inicio = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     vigencia_fim = db.Column(db.DateTime, nullable=True)
 
     # Motivo da alteracao (para auditoria)
@@ -227,7 +228,7 @@ class CustoConsiderado(db.Model):
     ultimo_ano_fechado = db.Column(db.Integer, nullable=True)
 
     # Auditoria
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     __table_args__ = (
@@ -304,7 +305,7 @@ class CustoFrete(db.Model):
     vigencia_fim = db.Column(db.Date, nullable=True)  # NULL = vigente
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
 
     __table_args__ = (
@@ -372,7 +373,7 @@ class ParametroCusteio(db.Model):
     descricao = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
@@ -467,9 +468,9 @@ class RegraComissao(db.Model):
     ativo = db.Column(db.Boolean, default=True, index=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100))
-    atualizado_em = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100))
 
     def to_dict(self):

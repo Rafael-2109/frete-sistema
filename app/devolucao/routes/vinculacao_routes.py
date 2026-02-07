@@ -335,7 +335,7 @@ def api_adicionar_nf_referenciada(nfd_id: int):
             }), 400
 
         # Criar novo registro
-        from app.utils.timezone import agora_brasil
+        from app.utils.timezone import agora_utc_naive
         from app import db
 
         ref = NFDevolucaoNFReferenciada(
@@ -344,7 +344,7 @@ def api_adicionar_nf_referenciada(nfd_id: int):
             serie_nf=data.get('serie_nf'),
             chave_nf=data.get('chave_nf'),
             origem='MANUAL',
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id),
         )
 

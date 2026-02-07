@@ -18,6 +18,7 @@ from datetime import datetime
 from flask import render_template, request, jsonify, session, send_file
 from flask_login import login_required, current_user
 import io
+from app.utils.timezone import agora_utc_naive
 import logging
 
 from app.financeiro.routes import financeiro_bp
@@ -204,7 +205,7 @@ def correcao_datas_api_exportar():
 
         # Marcar como exportados
         for item in items:
-            item.exportado_em = datetime.utcnow()
+            item.exportado_em = agora_utc_naive()
         db.session.commit()
 
         filename = f"correcao_datas_nf_credito_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"

@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import ContasAReceber, ContasAReceberReconciliacao
 from app.financeiro.services.vinculacao_abatimentos_service import VinculacaoAbatimentosService
 
@@ -347,7 +348,7 @@ class SincronizacaoBaixasService:
                     ref=linha_info.get('ref')
                 )
 
-        reconciliacao.ultima_sincronizacao = datetime.utcnow()
+        reconciliacao.ultima_sincronizacao = agora_utc_naive()
 
         return criada
 

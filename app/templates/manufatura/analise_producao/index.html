@@ -271,7 +271,7 @@
                             <td class="text-center">
                                 <i class="fas fa-chevron-right chevron-icon"></i>
                             </td>
-                            <td>{{ item.ultima_data.strftime('%d/%m/%Y') if item.ultima_data else '-' }}</td>
+                            <td>{{ item.ultima_data|formatar_data_segura or '-' }}</td>
                             <td><strong>{{ item.cod_produto }}</strong></td>
                             <td>
                                 {{ item.nome_produto }}
@@ -298,7 +298,7 @@
                         {# ===== LINHA INDIVIDUAL (sem OP) ===== #}
                         <tr>
                             <td></td>
-                            <td>{{ item.ultima_data.strftime('%d/%m/%Y') if item.ultima_data else '-' }}</td>
+                            <td>{{ item.ultima_data|formatar_data_segura or '-' }}</td>
                             <td><strong>{{ item.cod_produto }}</strong></td>
                             <td>{{ item.nome_produto }}</td>
                             <td class="text-end text-success fw-bold">{{ item.qtd_total|valor_br }}</td>

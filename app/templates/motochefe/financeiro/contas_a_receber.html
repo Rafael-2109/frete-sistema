@@ -139,7 +139,7 @@
                                                                                onchange="handleCheckboxChange(this)">
                                                                     </td>
                                                                     <td>{{ titulo.tipo_titulo }}</td>
-                                                                    <td>{{ titulo.data_vencimento.strftime('%d/%m/%Y') if titulo.data_vencimento else 'Sem vencimento' }}</td>
+                                                                    <td>{{ titulo.data_vencimento|formatar_data_segura or 'Sem vencimento' }}</td>
                                                                     <td><strong>R$ {{ titulo.valor_saldo|valor_br }}</strong></td>
                                                                     <td>
                                                                         <input type="number"

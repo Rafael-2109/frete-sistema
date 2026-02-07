@@ -148,12 +148,12 @@
                         {% if mapeamento %}
                         <div class="text-muted text-center">
                             <small>
-                                Criado em: {{ mapeamento.criado_em.strftime('%d/%m/%Y %H:%M') if mapeamento.criado_em else '-' }}
+                                Criado em: {{ mapeamento.criado_em|formatar_data_hora_brasil or '-' }}
                                 {% if mapeamento.criado_por %}
                                     por {{ mapeamento.criado_por }}
                                 {% endif %}
                                 {% if mapeamento.atualizado_em %}
-                                    <br>Última atualização: {{ mapeamento.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                                    <br>Última atualização: {{ mapeamento.atualizado_em|formatar_data_hora_brasil }}
                                 {% endif %}
                             </small>
                         </div>

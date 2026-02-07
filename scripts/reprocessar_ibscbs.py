@@ -72,6 +72,7 @@ from app.recebimento.models import PendenciaFiscalIbsCbs
 from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
 from app.fretes.models import ConhecimentoTransporte
 from app.odoo.utils.cte_xml_parser import CTeXMLParser
+from app.utils.timezone import agora_utc_naive, agora_brasil
 
 
 def reprocessar_ctes(dry_run: bool = True, limite: int = None, verbose: bool = False):
@@ -107,7 +108,7 @@ def reprocessar_ctes(dry_run: bool = True, limite: int = None, verbose: bool = F
     print("="*70)
     print(f"Modo: {'DRY-RUN (simulacao)' if dry_run else 'EXECUCAO REAL'}")
     print(f"Limite: {limite if limite else 'Sem limite'}")
-    print(f"Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Inicio: {agora_brasil().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*70 + "\n")
 
     # Buscar pendencias de CTe pendentes
@@ -203,9 +204,9 @@ def reprocessar_ctes(dry_run: bool = True, limite: int = None, verbose: bool = F
                     # Marcar como resolvido ao inves de deletar (para historico)
                     pendencia.status = 'aprovado'
                     pendencia.resolucao = 'reprocessamento_regra_corrigida'
-                    pendencia.justificativa = f"Reprocessado em {datetime.now().strftime('%Y-%m-%d %H:%M')} - Base IBS/CBS com teste duplo: (vBC_ICMS - vICMS) × (0.9635 ou 0.9075)"
+                    pendencia.justificativa = f"Reprocessado em {agora_brasil().strftime('%Y-%m-%d %H:%M')} - Base IBS/CBS com teste duplo: (vBC_ICMS - vICMS) × (0.9635 ou 0.9075)"
                     pendencia.resolvido_por = 'sistema_reprocessamento'
-                    pendencia.resolvido_em = datetime.utcnow()
+                    pendencia.resolvido_em = agora_utc_naive()
             else:
                 # Continua com divergencias
                 if verbose:
@@ -312,9 +313,9 @@ def reprocessar_todos_ctes_regime_normal(dry_run: bool = True, limite: int = Non
                     # Tinha pendencia mas agora passou - resolver
                     pendencia_existente.status = 'aprovado'
                     pendencia_existente.resolucao = 'reprocessamento_regra_corrigida'
-                    pendencia_existente.justificativa = f"Reprocessado em {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                    pendencia_existente.justificativa = f"Reprocessado em {agora_brasil().strftime('%Y-%m-%d %H:%M')}"
                     pendencia_existente.resolvido_por = 'sistema_reprocessamento'
-                    pendencia_existente.resolvido_em = datetime.utcnow()
+                    pendencia_existente.resolvido_em = agora_utc_naive()
                     stats['pendencia_resolvida'] += 1
                     if verbose:
                         print(f"  ✅ OK - Pendencia anterior resolvida")
@@ -351,7 +352,7 @@ def imprimir_resumo(stats: dict, modo: str):
     print("RESUMO DO PROCESSAMENTO")
     print("="*70)
     print(f"Modo: {modo}")
-    print(f"Fim: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Fim: {agora_brasil().strftime('%Y-%m-%d %H:%M:%S')}")
     print("-"*70)
 
     for chave, valor in stats.items():

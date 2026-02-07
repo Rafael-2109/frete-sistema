@@ -327,7 +327,7 @@
                 <h1>PEDIDO DE VENDA</h1>
                 <div class="numero-pedido">Nº {{ pedido.numero_pedido }}</div>
                 <div class="data-pedido">
-                    Data: {{ pedido.data_pedido.strftime('%d/%m/%Y') if pedido.data_pedido else '-' }}
+                    Data: {{ pedido.data_pedido|formatar_data_segura or '-' }}
                 </div>
             </div>
         </div>
@@ -390,7 +390,7 @@
                 </div>
                 <div class="info-item">
                     <span class="info-label">Data de Entrega</span>
-                    <span class="info-value">{{ pedido.data_expedicao.strftime('%d/%m/%Y') if pedido.data_expedicao else '-' }}</span>
+                    <span class="info-value">{{ pedido.data_expedicao|formatar_data_segura or '-' }}</span>
                 </div>
             </div>
 
@@ -490,7 +490,7 @@
                 </div>
                 <div class="info-item">
                     <span class="info-label">Data da NF</span>
-                    <span class="info-value">{{ pedido.data_nf.strftime('%d/%m/%Y') if pedido.data_nf else '-' }}</span>
+                    <span class="info-value">{{ pedido.data_nf|formatar_data_segura or '-' }}</span>
                 </div>
             </div>
         </div>
@@ -499,7 +499,7 @@
         <!-- Rodapé -->
         <div class="footer">
             <p>Documento gerado eletronicamente pelo sistema MotoCHEFE</p>
-            <p>Pedido: {{ pedido.numero_pedido }} | Criado em {{ pedido.criado_em.strftime('%d/%m/%Y') if pedido.criado_em else '-' }} por {{ pedido.criado_por or 'Sistema' }}</p>
+            <p>Pedido: {{ pedido.numero_pedido }} | Criado em {{ pedido.criado_em|formatar_data_segura or '-' }} por {{ pedido.criado_por or 'Sistema' }}</p>
         </div>
     </div>
 

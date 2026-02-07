@@ -34,7 +34,7 @@
                         {% for registro in registros.items %}
                         <tr>
                             <td>
-                                {{ registro.criado_em.strftime('%d/%m/%Y %H:%M') if registro.criado_em else '-' }}
+                                {{ registro.criado_em|formatar_data_hora_brasil or '-' }}
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ registro.rede }}</span>

@@ -107,7 +107,7 @@
                             <div class="info-item">
                                 <i class="fas fa-clock"></i>
                                 {% if rastr.ultimo_ping_em %}
-                                    {{ rastr.ultimo_ping_em.strftime('%H:%M') }}
+                                    {{ rastr.ultimo_ping_em|formatar_data_hora_brasil }}
                                 {% else %}
                                     -
                                 {% endif %}

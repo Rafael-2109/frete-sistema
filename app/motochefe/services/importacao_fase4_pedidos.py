@@ -19,6 +19,7 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func
 import traceback
 
@@ -341,7 +342,7 @@ class ImportacaoFase4Service:
                 if pedido:
                     resultado.pedidos_atualizados += 1
                     pedido.atualizado_por = usuario
-                    pedido.atualizado_em = datetime.utcnow()
+                    pedido.atualizado_em = agora_utc_naive()
                 else:
                     pedido = PedidoVendaMoto()
                     pedido.numero_pedido = numero_pedido

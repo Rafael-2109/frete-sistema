@@ -27,6 +27,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import ProdutoFornecedorDepara
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -216,7 +217,7 @@ class DeparaService:
                     existente.fator_conversao = fator_conversao
                     existente.sincronizado_odoo = False
                     existente.atualizado_por = criado_por
-                    existente.atualizado_em = datetime.utcnow()
+                    existente.atualizado_em = agora_utc_naive()
 
                     # Buscar razao social se nao informada
                     if razao_fornecedor:
@@ -285,7 +286,7 @@ class DeparaService:
                 ativo=True,
                 sincronizado_odoo=False,
                 criado_por=criado_por,
-                criado_em=datetime.utcnow()
+                criado_em=agora_utc_naive()
             )
 
             db.session.add(novo)
@@ -406,7 +407,7 @@ class DeparaService:
             # Marcar como nao sincronizado (mudou localmente)
             item.sincronizado_odoo = False
             item.atualizado_por = atualizado_por
-            item.atualizado_em = datetime.utcnow()
+            item.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 
@@ -499,7 +500,7 @@ class DeparaService:
             # Soft delete local
             item.ativo = False
             item.sincronizado_odoo = False  # Marcar como nao sincronizado
-            item.atualizado_em = datetime.utcnow()
+            item.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 
@@ -902,7 +903,7 @@ class DeparaService:
 
             # Marcar como sincronizado
             item.sincronizado_odoo = True
-            item.atualizado_em = datetime.utcnow()
+            item.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 
@@ -950,7 +951,7 @@ class DeparaService:
             ]
 
             # Filtrar por write_date (apenas modificados recentemente)
-            data_limite = datetime.utcnow() - timedelta(minutes=minutos_janela)
+            data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
             data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
             domain.append(('write_date', '>=', data_limite_str))
 
@@ -1138,7 +1139,7 @@ class DeparaService:
                         existente.fator_conversao = fator_conversao
                         existente.um_fornecedor = um_fornecedor
                         existente.sincronizado_odoo = True
-                        existente.atualizado_em = datetime.utcnow()
+                        existente.atualizado_em = agora_utc_naive()
                         # Flush para garantir que a atualização foi aplicada
                         db.session.flush()
                         atualizados += 1
@@ -1157,7 +1158,7 @@ class DeparaService:
                             fator_conversao=fator_conversao,
                             sincronizado_odoo=True,
                             ativo=True,
-                            criado_em=datetime.utcnow()
+                            criado_em=agora_utc_naive()
                         )
                         db.session.add(novo)
                         # Flush após cada operação bem-sucedida
@@ -1553,7 +1554,7 @@ class DeparaService:
                     existente.razao_fornecedor = razao_fornecedor or existente.razao_fornecedor
                     existente.sincronizado_odoo = False  # Marca para re-sync
                     existente.atualizado_por = usuario
-                    existente.atualizado_em = datetime.utcnow()
+                    existente.atualizado_em = agora_utc_naive()
                     existente.ativo = True  # Reativa se estava inativo
 
                     db.session.flush()
@@ -1575,7 +1576,7 @@ class DeparaService:
                         ativo=True,
                         sincronizado_odoo=False,
                         criado_por=usuario,
-                        criado_em=datetime.utcnow()
+                        criado_em=agora_utc_naive()
                     )
                     db.session.add(novo)
                     db.session.flush()

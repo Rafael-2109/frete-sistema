@@ -64,7 +64,7 @@
                             <div class="metric-label">Último Ping</div>
                             <div class="metric-value" style="font-size: 1.2rem;">
                                 {% if rastreamento.ultimo_ping_em %}
-                                    {{ rastreamento.ultimo_ping_em.strftime('%d/%m %H:%M') }}
+                                    {{ rastreamento.ultimo_ping_em|formatar_data_hora_brasil }}
                                 {% else %}
                                     -
                                 {% endif %}
@@ -110,7 +110,7 @@
                                 <div class="timeline-item">
                                     <div class="timeline-header">
                                         <span class="timeline-title">✅ Aceite LGPD</span>
-                                        <span class="timeline-time">{{ rastreamento.aceite_lgpd_em.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+                                        <span class="timeline-time">{{ rastreamento.aceite_lgpd_em|formatar_data_hora_brasil }}</span>
                                     </div>
                                     <small class="text-muted">
                                         IP: {{ rastreamento.aceite_lgpd_ip or 'N/A' }}<br>
@@ -124,7 +124,7 @@
                                 <div class="timeline-item">
                                     <div class="timeline-header">
                                         <span class="timeline-title">🚀 Rastreamento Iniciado</span>
-                                        <span class="timeline-time">{{ rastreamento.rastreamento_iniciado_em.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+                                        <span class="timeline-time">{{ rastreamento.rastreamento_iniciado_em|formatar_data_hora_brasil }}</span>
                                     </div>
                                 </div>
                                 {% endif %}
@@ -134,7 +134,7 @@
                                 <div class="timeline-item chegada">
                                     <div class="timeline-header">
                                         <span class="timeline-title">🎯 Chegou ao Destino</span>
-                                        <span class="timeline-time">{{ rastreamento.chegou_destino_em.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+                                        <span class="timeline-time">{{ rastreamento.chegou_destino_em|formatar_data_hora_brasil }}</span>
                                     </div>
                                     <small class="text-muted">
                                         Distância mínima: {{ (rastreamento.distancia_minima_atingida)|round(0)|int }} metros
@@ -147,7 +147,7 @@
                                 <div class="timeline-item entregue">
                                     <div class="timeline-header">
                                         <span class="timeline-title">📸 Canhoto Enviado</span>
-                                        <span class="timeline-time">{{ rastreamento.canhoto_enviado_em.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+                                        <span class="timeline-time">{{ rastreamento.canhoto_enviado_em|formatar_data_hora_brasil }}</span>
                                     </div>
                                     {% if rastreamento.canhoto_latitude and rastreamento.canhoto_longitude %}
                                     <small class="text-muted">
@@ -162,7 +162,7 @@
                                 <div class="timeline-item entregue">
                                     <div class="timeline-header">
                                         <span class="timeline-title">✅ Rastreamento Finalizado</span>
-                                        <span class="timeline-time">{{ rastreamento.rastreamento_finalizado_em.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+                                        <span class="timeline-time">{{ rastreamento.rastreamento_finalizado_em|formatar_data_hora_brasil }}</span>
                                     </div>
                                 </div>
                                 {% endif %}
@@ -214,7 +214,7 @@
                                     <tbody>
                                         {% for ping in pings[:50] %}
                                         <tr>
-                                            <td>{{ ping.criado_em.strftime('%d/%m %H:%M:%S') }}</td>
+                                            <td>{{ ping.criado_em|formatar_data_hora_brasil }}</td>
                                             <td>
                                                 {% if ping.distancia_destino %}
                                                     {{ (ping.distancia_destino / 1000)|round(2) }} km

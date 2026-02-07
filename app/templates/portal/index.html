@@ -108,16 +108,16 @@
                                     </td>
                                     <td>
                                         {% if integracao.data_agendamento %}
-                                            {{ integracao.data_agendamento.strftime('%d/%m/%Y') }}
+                                            {{ integracao.data_agendamento|formatar_data_segura }}
                                             {% if integracao.hora_agendamento %}
-                                                {{ integracao.hora_agendamento.strftime('%H:%M') }}
+                                                {{ integracao.hora_agendamento|formatar_data_hora_brasil }}
                                             {% endif %}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {{ integracao.criado_em.strftime('%d/%m %H:%M') }}
+                                        {{ integracao.criado_em|formatar_data_hora_brasil }}
                                     </td>
                                     <td>
                                         <button class="btn btn-sm btn-info" 

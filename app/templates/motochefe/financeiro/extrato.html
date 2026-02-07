@@ -140,7 +140,7 @@
                 <tbody>
                     {% for mov in movimentacoes %}
                     <tr class="{% if mov.tipo == 'RECEBIMENTO' %}table-success{% else %}table-danger{% endif %}">
-                        <td>{{ mov.data_movimentacao.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ mov.data_movimentacao|formatar_data_segura }}</td>
                         <td>
                             <span class="badge {% if mov.tipo == 'RECEBIMENTO' %}bg-success{% else %}bg-danger{% endif %}">
                                 {{ mov.categoria }}

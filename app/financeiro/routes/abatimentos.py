@@ -9,6 +9,7 @@ from datetime import datetime
 from io import BytesIO
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 
 
@@ -124,7 +125,7 @@ def api_criar_abatimento(conta_id):
         # Recalcular valor do título
         conta.atualizar_valor_titulo()
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -158,7 +159,7 @@ def api_atualizar_abatimento(abatimento_id):
         abatimento.valor = float(data.get('valor', 0))
         abatimento.previsto = data.get('previsto', True)
         abatimento.atualizado_por = current_user.nome
-        abatimento.atualizado_em = datetime.utcnow()
+        abatimento.atualizado_em = agora_utc_naive()
 
         # Converter datas
         if data.get('data'):
@@ -174,7 +175,7 @@ def api_atualizar_abatimento(abatimento_id):
         conta = abatimento.conta_a_receber
         conta.atualizar_valor_titulo()
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -206,7 +207,7 @@ def api_excluir_abatimento(abatimento_id):
         # Recalcular valor do título
         conta.atualizar_valor_titulo()
         conta.atualizado_por = current_user.nome
-        conta.atualizado_em = datetime.utcnow()
+        conta.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 

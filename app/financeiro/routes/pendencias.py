@@ -11,6 +11,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import PendenciaFinanceiraNF
 from app.financeiro.forms import UploadExcelForm
 from app.monitoramento.models import EntregaMonitorada, RegistroLogEntrega
@@ -80,7 +81,7 @@ def responder_pendencia(numero_nf):
 
     pendencia = PendenciaFinanceiraNF.query.filter_by(numero_nf=numero_nf, respondida_em=None).first_or_404()
     pendencia.resposta_logistica = resposta
-    pendencia.respondida_em = datetime.utcnow()
+    pendencia.respondida_em = agora_utc_naive()
     pendencia.respondida_por = current_user.nome
     db.session.commit()
 

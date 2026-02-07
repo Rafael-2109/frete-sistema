@@ -113,7 +113,7 @@
                                 <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
                                 <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
                                 {% if cte.data_emissao %}
-                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao|formatar_data_segura }}</small>
                                 {% endif %}
                             </div>
                             <button type="submit" class="btn btn-primary">
@@ -151,7 +151,7 @@
                                 <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
                                 <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
                                 {% if cte.data_emissao %}
-                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao|formatar_data_segura }}</small>
                                 {% endif %}
                             </div>
                             <button type="submit" class="btn btn-success">
@@ -259,7 +259,7 @@
                                 <small><strong>Emitente:</strong> {{ cte.nome_emitente }}</small><br>
                                 <small><strong>Valor:</strong> {{ (cte.valor_total or 0)|moeda_carteira }}</small>
                                 {% if cte.data_emissao %}
-                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao.strftime('%d/%m/%Y') }}</small>
+                                <small> | <strong>Emissão:</strong> {{ cte.data_emissao|formatar_data_segura }}</small>
                                 {% endif %}
                             </div>
                             <button type="submit" class="btn btn-secondary">

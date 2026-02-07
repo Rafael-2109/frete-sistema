@@ -124,7 +124,7 @@
                             <span class="badge bg-warning">{{ d.status_dinamico }}</span>
                             {% endif %}
                         </td>
-                        <td>{{ d.data_vencimento.strftime('%d/%m/%Y') if d.data_vencimento else '-' }}</td>
+                        <td>{{ d.data_vencimento|formatar_data_segura or '-' }}</td>
                         <td>
                             <div class="btn-group btn-group-sm">
                                 <a href="{{ url_for('motochefe.editar_despesa', id=d.id) }}" class="btn btn-warning">

@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 class Embarque(db.Model):
     __tablename__ = 'embarques'
@@ -33,7 +34,7 @@ class Embarque(db.Model):
     pallet_total = db.Column(db.Float)  # Soma de EmbarqueItem.pallets (TEÓRICO)
     tipo_carga = db.Column(db.String(20))  # 'FRACIONADA' ou 'DIRETA'
 
-    criado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False, default='Administrador')
 
     # Campos do motorista

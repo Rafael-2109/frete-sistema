@@ -723,7 +723,7 @@
                         {% set print_info = pedidos_impressos.get(item.separacao_lote_id) %}
                         {% if print_info.impresso %}
                           <i class="fas fa-print print-icon-inline printed"
-                             title="Impresso em {{ print_info.impresso_em.strftime('%d/%m/%Y %H:%M') if print_info.impresso_em }}&#10;Por: {{ print_info.impresso_por }}"></i>
+                             title="Impresso em {{ print_info.impresso_em|formatar_data_hora_brasil }}&#10;Por: {{ print_info.impresso_por }}"></i>
                         {% else %}
                           <i class="fas fa-print print-icon-inline not-printed" title="Não impresso"></i>
                         {% endif %}

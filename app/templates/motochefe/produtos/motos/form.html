@@ -160,10 +160,10 @@
                             </div>
                             <div class="col-md-6">
                                 <small class="text-muted">
-                                    <strong>Criado em:</strong> {{ moto.criado_em.strftime('%d/%m/%Y %H:%M') if moto.criado_em else '-' }}<br>
+                                    <strong>Criado em:</strong> {{ moto.criado_em|formatar_data_hora_brasil or '-' }}<br>
                                     <strong>Criado por:</strong> {{ moto.criado_por or '-' }}<br>
                                     {% if moto.atualizado_em %}
-                                    <strong>Última atualização:</strong> {{ moto.atualizado_em.strftime('%d/%m/%Y %H:%M') }}<br>
+                                    <strong>Última atualização:</strong> {{ moto.atualizado_em|formatar_data_hora_brasil }}<br>
                                     <strong>Por:</strong> {{ moto.atualizado_por or '-' }}
                                     {% endif %}
                                 </small>

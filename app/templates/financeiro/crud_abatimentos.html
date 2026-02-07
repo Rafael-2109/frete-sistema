@@ -174,8 +174,8 @@
                                     <span class="fin-badge fin-badge--muted">Nao</span>
                                 {% endif %}
                             </td>
-                            <td class="fin-text-mono">{{ abat.data.strftime('%d/%m/%Y') if abat.data else '-' }}</td>
-                            <td class="fin-text-mono text-muted">{{ abat.criado_em.strftime('%d/%m/%Y %H:%M') if abat.criado_em else '-' }}</td>
+                            <td class="fin-text-mono">{{ abat.data|formatar_data_segura or '-' }}</td>
+                            <td class="fin-text-mono text-muted">{{ abat.criado_em|formatar_data_hora_brasil or '-' }}</td>
                         </tr>
                         {% else %}
                         <tr>

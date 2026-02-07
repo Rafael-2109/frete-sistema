@@ -113,7 +113,7 @@
                             <td>
                                 <strong>{{ aud.pedido.numero_pedido }}</strong><br>
                                 <small class="text-muted">
-                                    {{ aud.pedido.data_pedido.strftime('%d/%m/%Y') if aud.pedido.data_pedido else '-' }}
+                                    {{ aud.pedido.data_pedido|formatar_data_segura or '-' }}
                                 </small>
                             </td>
 
@@ -133,7 +133,7 @@
                             <td>
                                 <small>
                                     <strong>{{ aud.solicitado_por }}</strong><br>
-                                    {{ aud.solicitado_em.strftime('%d/%m/%Y %H:%M') if aud.solicitado_em else '-' }}
+                                    {{ aud.solicitado_em|formatar_data_hora_brasil or '-' }}
                                 </small>
                             </td>
 
@@ -141,7 +141,7 @@
                             <td>
                                 <small>
                                     <strong>{{ aud.confirmado_por or '-' }}</strong><br>
-                                    {{ aud.confirmado_em.strftime('%d/%m/%Y %H:%M') if aud.confirmado_em else '-' }}
+                                    {{ aud.confirmado_em|formatar_data_hora_brasil or '-' }}
                                 </small>
                             </td>
 
@@ -174,7 +174,7 @@
                                         <div class="row mb-3">
                                             <div class="col-md-6">
                                                 <strong>Número:</strong> {{ aud.pedido.numero_pedido }}<br>
-                                                <strong>Data:</strong> {{ aud.pedido.data_pedido.strftime('%d/%m/%Y') if aud.pedido.data_pedido else '-' }}<br>
+                                                <strong>Data:</strong> {{ aud.pedido.data_pedido|formatar_data_segura or '-' }}<br>
                                                 <strong>Cliente:</strong> {{ aud.pedido.cliente.cliente if aud.pedido.cliente else '-' }}
                                             </div>
                                             <div class="col-md-6">
@@ -220,7 +220,7 @@
                                         </h6>
                                         <div class="mb-3">
                                             <strong>Solicitado por:</strong> {{ aud.solicitado_por }}<br>
-                                            <strong>Data/Hora:</strong> {{ aud.solicitado_em.strftime('%d/%m/%Y às %H:%M:%S') if aud.solicitado_em else '-' }}<br>
+                                            <strong>Data/Hora:</strong> {{ aud.solicitado_em|formatar_data_hora_brasil or '-' }}<br>
                                             <strong>Observação:</strong>
                                             <div class="alert alert-secondary mt-2">
                                                 {{ aud.observacao or 'Sem observação' }}
@@ -233,7 +233,7 @@
                                         </h6>
                                         <div class="mb-3">
                                             <strong>Confirmado por:</strong> {{ aud.confirmado_por or '-' }}<br>
-                                            <strong>Data/Hora:</strong> {{ aud.confirmado_em.strftime('%d/%m/%Y às %H:%M:%S') if aud.confirmado_em else '-' }}<br>
+                                            <strong>Data/Hora:</strong> {{ aud.confirmado_em|formatar_data_hora_brasil or '-' }}<br>
 
                                             {% if aud.rejeitado %}
                                             <strong>Motivo da Rejeição:</strong>

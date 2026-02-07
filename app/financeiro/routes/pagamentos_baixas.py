@@ -22,6 +22,7 @@ from flask import render_template, request, jsonify, flash, redirect, url_for
 from sqlalchemy import func, case
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 from app.financeiro.models import (
     BaixaPagamentoLote, BaixaPagamentoItem,
@@ -481,7 +482,7 @@ def pagamentos_aprovar_item():
             return jsonify({'success': False, 'message': 'Item não tem título vinculado'})
 
         item.aprovado = aprovar
-        item.aprovado_em = datetime.utcnow() if aprovar else None
+        item.aprovado_em = agora_utc_naive() if aprovar else None
         item.aprovado_por = 'Usuario' if aprovar else None
         item.status = 'APROVADO' if aprovar else 'PENDENTE'
 
@@ -506,7 +507,7 @@ def pagamentos_aprovar_todos(lote_id):
             aprovado=False
         ).update({
             'aprovado': True,
-            'aprovado_em': datetime.utcnow(),
+            'aprovado_em': agora_utc_naive(),
             'aprovado_por': 'Usuario',
             'status': 'APROVADO'
         })

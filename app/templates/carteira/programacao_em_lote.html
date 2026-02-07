@@ -310,8 +310,7 @@
                                                 </div>
                                                 <div class="col-md-2">
                                                     <strong>Data:</strong><br>
-                                                    {{ pedido.data_pedido.strftime('%d/%m/%Y') if pedido.data_pedido
-                                                    else '-' }}
+                                                    {{ pedido.data_pedido|formatar_data_segura or '-' }}
                                                 </div>
                                                 <div class="col-md-2">
                                                     <strong>Pedido Cliente:</strong><br>
@@ -362,10 +361,8 @@
                                                     </span>
                                                     <span
                                                         class="badge {% if sep.agendamento_confirmado %}bg-success{% else %}bg-secondary{% endif %}">
-                                                        Exp: {{ sep.expedicao.strftime('%d/%m') if sep.expedicao else
-                                                        '-' }} |
-                                                        Agenda: {{ sep.agendamento.strftime('%d/%m') if sep.agendamento
-                                                        else '-' }}
+                                                        Exp: {{ sep.expedicao|formatar_data_segura or '-' }} |
+                                                        Agenda: {{ sep.agendamento|formatar_data_segura or '-' }}
                                                     </span>
                                                     {% if sep.protocolo %}
                                                     <span class="badge bg-secondary">
@@ -399,10 +396,8 @@
                                                     </span>
                                                     {% if nf.expedicao or nf.agendamento %}
                                                     <span class="badge bg-secondary">
-                                                        Exp: {{ nf.expedicao.strftime('%d/%m') if nf.expedicao else '-'
-                                                        }} |
-                                                        Agenda: {{ nf.agendamento.strftime('%d/%m') if nf.agendamento
-                                                        else '-' }}
+                                                        Exp: {{ nf.expedicao|formatar_data_segura or '-' }} |
+                                                        Agenda: {{ nf.agendamento|formatar_data_segura or '-' }}
                                                     </span>
                                                     {% endif %}
                                                     {% if nf.protocolo %}

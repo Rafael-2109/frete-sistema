@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app import create_app, db
 from app.manufatura.models import PedidoCompras
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def buscar_dados_batch_odoo(connection, odoo_line_ids: list) -> dict:
@@ -268,7 +269,7 @@ Exemplos:
                         if args.dry_run:
                             print(f"  [DRY-RUN] {pedido.num_pedido}: {', '.join(alteracoes)}")
                         else:
-                            pedido.atualizado_em = datetime.utcnow()
+                            pedido.atualizado_em = agora_utc_naive()
 
                 if not args.dry_run:
                     db.session.commit()

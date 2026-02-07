@@ -6,6 +6,7 @@ from app import db
 from datetime import datetime
 from sqlalchemy import Index
 from sqlalchemy.ext.hybrid import hybrid_property
+from app.utils.timezone import agora_utc_naive
 
 class BiFreteAgregado(db.Model):
     """
@@ -92,7 +93,7 @@ class BiFreteAgregado(db.Model):
     percentual_divergencia = db.Column(db.Float)
     
     # Controle ETL
-    processado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, default=agora_utc_naive)
     versao_etl = db.Column(db.String(10))
     
     # Índices compostos para performance
@@ -165,7 +166,7 @@ class BiDespesaDetalhada(db.Model):
     tendencia = db.Column(db.String(20))  # CRESCENTE, ESTAVEL, DECRESCENTE
     
     # Controle
-    processado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     __table_args__ = (
         Index('idx_bi_despesa_periodo', 'data_referencia', 'tipo_despesa'),
@@ -232,7 +233,7 @@ class BiPerformanceTransportadora(db.Model):
     recomendacao = db.Column(db.Text)  # Sugestões automáticas baseadas em análise
     
     # Controle
-    calculado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    calculado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     __table_args__ = (
         Index('idx_bi_perf_transp_periodo', 'transportadora_id', 'periodo_inicio', 'periodo_fim'),
@@ -290,7 +291,7 @@ class BiAnaliseRegional(db.Model):
     posicao_ranking_volume = db.Column(db.Integer)
     
     # Controle
-    processado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    processado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     __table_args__ = (
         Index('idx_bi_regional_periodo', 'data_referencia', 'regiao'),
@@ -349,7 +350,7 @@ class BiIndicadorMensal(db.Model):
     percentual_atingimento_meta = db.Column(db.Float)
     
     # Controle
-    calculado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    calculado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     __table_args__ = (
         db.UniqueConstraint('ano', 'mes', name='uq_bi_indicador_periodo'),

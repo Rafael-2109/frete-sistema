@@ -19,7 +19,7 @@
                     <table class="table table-borderless mb-0">
                         <tr>
                             <th width="40%">Data:</th>
-                            <td>{{ saida.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>{{ saida.criado_em|formatar_data_hora_brasil }}</td>
                         </tr>
                         <tr>
                             <th>Tipo Destinatario:</th>
@@ -80,7 +80,7 @@
                                 <option value="">Sem vinculo - Baixa manual</option>
                                 {% for ret in retornos_disponiveis %}
                                 <option value="{{ ret.id }}">
-                                    #{{ ret.id }} - {{ ret.criado_em.strftime('%d/%m/%Y') }} -
+                                    #{{ ret.id }} - {{ ret.criado_em|formatar_data_segura }} -
                                     {{ ret.nome_destinatario or ret.cnpj_destinatario }} -
                                     {{ ret.qtd_movimentacao|int }} pallets
                                 </option>
@@ -125,7 +125,7 @@
                                         {{ ret.nome_destinatario or ret.cnpj_destinatario }}
                                     </h6>
                                     <small class="text-muted">
-                                        {{ ret.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                                        {{ ret.criado_em|formatar_data_hora_brasil }}
                                         {% if ret.numero_nf %} | NF: {{ ret.numero_nf }}{% endif %}
                                     </small>
                                 </div>

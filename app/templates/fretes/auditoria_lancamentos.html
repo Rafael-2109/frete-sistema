@@ -227,7 +227,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <small>{{ lanc.ultimo_executado.strftime('%d/%m/%Y %H:%M') if lanc.ultimo_executado else 'N/A' }}</small><br>
+                                <small>{{ lanc.ultimo_executado|formatar_data_hora_brasil or 'N/A' }}</small><br>
                                 <small class="text-muted">{{ lanc.executado_por }}</small>
                             </td>
                             <td>

@@ -118,7 +118,7 @@
                                         <td class="text-end">{{ "%.2f"|format(pedido.qtd_total or 0) }}</td>
                                         <td class="text-end">R$ {{ "{:,.2f}".format(pedido.valor_total or 0) }}</td>
                                         <td class="text-center">{{ pedido.total_itens }}</td>
-                                        <td>{{ pedido.data_expedicao.strftime('%d/%m/%Y') if pedido.data_expedicao else '-' }}</td>
+                                        <td>{{ pedido.data_expedicao|formatar_data_segura or '-' }}</td>
                                         <td class="text-center">
                                             <form method="POST" action="{{ url_for('sync_integrada.sincronizar_pedido_individual', num_pedido=pedido.num_pedido) }}"
                                                   onsubmit="return confirmarSincPedido('{{ pedido.num_pedido }}');" style="display:inline;">

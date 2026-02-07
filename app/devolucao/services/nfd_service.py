@@ -42,7 +42,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app.odoo.utils.connection import get_odoo_connection
 from app.devolucao.services.nfd_xml_parser import NFDXMLParser, extrair_nfs_referenciadas, extrair_itens_nfd
 from app.utils.file_storage import get_file_storage
-from app.utils.timezone import agora_utc, agora_brasil
+from app.utils.timezone import agora_utc, agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -573,7 +573,7 @@ class NFDService:
         if nfd.status == 'REGISTRADA':
             nfd.status = 'VINCULADA_DFE'
 
-        nfd.atualizado_em = agora_brasil()
+        nfd.atualizado_em = agora_utc_naive()
         nfd.atualizado_por = 'Sistema Odoo'
 
     def _criar_nfd_orfa(self, nfd_data: Dict) -> NFDevolucao:
@@ -634,7 +634,7 @@ class NFDService:
             descricao_motivo='NFD importada do Odoo sem registro no monitoramento',
 
             # Auditoria
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por='Sistema Odoo',
         )
 
@@ -678,7 +678,7 @@ class NFDService:
             descricao_comercial=f'NFD importada automaticamente do Odoo. Cliente: {nfd.nome_emitente or "N/A"}',
 
             # Auditoria
-            criado_em=agora_brasil(),
+            criado_em=agora_utc_naive(),
             criado_por='Sistema Odoo',
         )
 
@@ -753,7 +753,7 @@ class NFDService:
                     chave_nf=nf_ref.get('chave'),
                     entrega_monitorada_id=entrega_id,  # Vincular à entrega
                     origem='XML',
-                    criado_em=agora_brasil(),
+                    criado_em=agora_utc_naive(),
                     criado_por='Sistema Odoo',
                 )
 
@@ -831,7 +831,7 @@ class NFDService:
                     ncm=item.get('ncm'),
                     peso_bruto=Decimal(str(item.get('peso_bruto'))) if item.get('peso_bruto') else None,
                     peso_liquido=Decimal(str(item.get('peso_liquido'))) if item.get('peso_liquido') else None,
-                    criado_em=agora_brasil(),
+                    criado_em=agora_utc_naive(),
                 )
 
                 db.session.add(linha)
@@ -1091,7 +1091,7 @@ class NFDService:
             # Vincular NFD à entrega
             nfd.entrega_monitorada_id = entrega_monitorada_id
             nfd.numero_nf_venda = entrega.numero_nf  # Atualizar numero_nf_venda
-            nfd.atualizado_em = agora_brasil()
+            nfd.atualizado_em = agora_utc_naive()
             nfd.atualizado_por = usuario
 
             # Sincronizar status_monitoramento com a entrega

@@ -60,7 +60,7 @@
         Ultima sincronizacao:
         <span id="ultimaSync">
             {% if ultima_sync %}
-            {{ ultima_sync.strftime('%d/%m/%Y %H:%M') }}
+            {{ ultima_sync|formatar_data_hora_brasil }}
             {% else %}
             Nunca
             {% endif %}

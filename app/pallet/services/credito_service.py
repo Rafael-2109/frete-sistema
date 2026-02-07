@@ -19,7 +19,6 @@ from app.pallet.models.nf_remessa import PalletNFRemessa
 from app.pallet.models.credito import PalletCredito
 from app.pallet.models.documento import PalletDocumento
 from app.pallet.models.solucao import PalletSolucao
-from app.utils.timezone import agora_brasil
 
 logger = logging.getLogger(__name__)
 

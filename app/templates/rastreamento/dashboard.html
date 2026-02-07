@@ -132,7 +132,7 @@
                                     </td>
                                     <td>
                                         {% if rastr.ultimo_ping_em %}
-                                            {{ rastr.ultimo_ping_em.strftime('%d/%m %H:%M') }}
+                                            {{ rastr.ultimo_ping_em|formatar_data_hora_brasil }}
                                         {% else %}
                                             -
                                         {% endif %}

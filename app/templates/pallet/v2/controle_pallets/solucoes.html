@@ -968,7 +968,7 @@
                             {% elif credito.prestes_a_vencer %}a-vencer
                             {% else %}ok{% endif %}">
                             {% if credito.data_vencimento %}
-                            {{ credito.data_vencimento.strftime('%d/%m/%Y') }}
+                            {{ credito.data_vencimento|formatar_data_segura }}
                             {% if credito.dias_para_vencer is not none %}
                                 {% if credito.dias_para_vencer < 0 %}
                                 <br><small class="text-danger">({{ credito.dias_para_vencer|abs }} dias atrás)</small>

@@ -112,7 +112,7 @@
                             </p>
                         </div>
                         <div class="col-md-4">
-                            <p class="mb-1"><strong>Lançado em:</strong> {{ frete.lancado_odoo_em.strftime('%d/%m/%Y %H:%M:%S') if frete.lancado_odoo_em else 'N/A' }}</p>
+                            <p class="mb-1"><strong>Lançado em:</strong> {{ frete.lancado_odoo_em|formatar_data_hora_brasil or 'N/A' }}</p>
                             <p class="mb-1"><strong>Lançado por:</strong> {{ frete.lancado_odoo_por or 'N/A' }}</p>
                         </div>
                     </div>
@@ -179,7 +179,7 @@
                                 <div class="col-md-3 text-end">
                                     <small>
                                         <i class="fas fa-calendar"></i>
-                                        {{ auditoria.executado_em.strftime('%d/%m/%Y %H:%M:%S') if auditoria.executado_em else 'N/A' }}
+                                        {{ auditoria.executado_em|formatar_data_hora_brasil or 'N/A' }}
                                     </small>
                                 </div>
                             </div>

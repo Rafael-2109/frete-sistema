@@ -51,7 +51,7 @@
                             <tr>
                                 <td><strong>{{ e.numero_embarque }}</strong></td>
                                 <td>{{ e.transportadora.transportadora if e.transportadora else '-' }}</td>
-                                <td>{{ e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-' }}</td>
+                                <td>{{ e.data_embarque|formatar_data_segura or '-' }}</td>
                                 <td class="text-center">
                                     <span class="badge bg-info">{{ e.total_pedidos }}</span>
                                 </td>

@@ -1,5 +1,5 @@
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 class ProgramacaoProducao(db.Model):
     """
@@ -28,8 +28,8 @@ class ProgramacaoProducao(db.Model):
     ordem_producao = db.Column(db.String(50), nullable=True)  # Número da ordem de produção (OP)
 
     # Auditoria
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     created_by = db.Column(db.String(100), nullable=True)
     updated_by = db.Column(db.String(100), nullable=True)
 
@@ -100,8 +100,8 @@ class CadastroPalletizacao(db.Model):
     ativo = db.Column(db.Boolean, nullable=False, default=True)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=agora_brasil, nullable=False)
-    updated_at = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil, nullable=False)
+    created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    updated_at = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
 
     def __repr__(self):
         return f'<CadastroPalletizacao {self.cod_produto} - Pallet: {self.palletizacao}>'

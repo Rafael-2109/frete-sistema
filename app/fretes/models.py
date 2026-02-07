@@ -1,6 +1,6 @@
 from app import db
 from datetime import datetime
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 class Frete(db.Model):
     """
@@ -83,7 +83,7 @@ class Frete(db.Model):
 
     # Controle
     considerar_diferenca = db.Column(db.Boolean, default=False)  # Para lançar na conta corrente mesmo com diferença até R$ 5,00
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     lancado_em = db.Column(db.DateTime)
     lancado_por = db.Column(db.String(100))
@@ -279,7 +279,7 @@ class FaturaFrete(db.Model):
     observacoes_conferencia = db.Column(db.Text)
     
     # Controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     
     # Relacionamentos
@@ -415,7 +415,7 @@ class DespesaExtra(db.Model):
     observacoes = db.Column(db.Text)
 
     # Controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
 
     # ================================================
@@ -499,7 +499,7 @@ class ContaCorrenteTransportadora(db.Model):
     compensacao_frete_id = db.Column(db.Integer, db.ForeignKey('fretes.id'))  # Frete usado para compensação
     
     # Controle
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     
     # Relacionamentos
@@ -523,7 +523,7 @@ class AprovacaoFrete(db.Model):
     # Dados da aprovação
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE, APROVADO, REJEITADO
     solicitado_por = db.Column(db.String(100), nullable=False)
-    solicitado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    solicitado_em = db.Column(db.DateTime, default=agora_utc_naive)
     motivo_solicitacao = db.Column(db.Text)
     
     # Dados do aprovador
@@ -695,9 +695,9 @@ class ConhecimentoTransporte(db.Model):
     # ================================================
     # AUDITORIA
     # ================================================
-    importado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False)
+    importado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     importado_por = db.Column(db.String(100), default='Sistema Odoo')
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
 
@@ -1028,7 +1028,7 @@ class LancamentoFreteOdooAuditoria(db.Model):
     tempo_execucao_ms = db.Column(db.Integer, nullable=True)  # Tempo em milissegundos
 
     # Auditoria
-    executado_em = db.Column(db.DateTime, default=agora_brasil, nullable=False, index=True)
+    executado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
     executado_por = db.Column(db.String(100), nullable=False)  # Usuário que executou
     ip_usuario = db.Column(db.String(50), nullable=True)  # IP do usuário
 

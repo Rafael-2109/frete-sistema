@@ -71,7 +71,7 @@
                             <tr>
                                 <td>{{ extrato.statement_name or extrato.nome }}</td>
                                 <td><span class="fin-badge fin-badge--muted">{{ extrato.journal_code }}</span></td>
-                                <td class="fin-text-mono">{{ extrato.data_extrato.strftime('%d/%m/%Y') if extrato.data_extrato else '-' }}</td>
+                                <td class="fin-text-mono">{{ extrato.data_extrato|formatar_data_segura or '-' }}</td>
                                 <td class="text-center">
                                     <span class="fin-badge {% if extrato.status == 'CONCLUIDO' %}fin-badge--success{% else %}fin-badge--warning{% endif %}">
                                         {{ extrato.status }}
@@ -161,7 +161,7 @@
                                 </a>
                             </td>
                             <td><span class="fin-badge fin-badge--muted">{{ lote.journal_code or '-' }}</span></td>
-                            <td class="fin-text-mono">{{ lote.data_inicio.strftime('%d/%m/%Y') if lote.data_inicio else '-' }}</td>
+                            <td class="fin-text-mono">{{ lote.data_inicio|formatar_data_segura or '-' }}</td>
                             <td class="text-center fin-text-mono">{{ lote.total_linhas }}</td>
                             <td class="text-end">
                                 <span class="fin-valor-destaque--sm">R$ {{ '{:,.2f}'.format(lote.valor_total or 0) }}</span>

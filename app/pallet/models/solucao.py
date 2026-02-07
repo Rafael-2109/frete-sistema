@@ -10,7 +10,7 @@ Um crédito pode ter múltiplas soluções parciais.
 Spec: .claude/ralph-loop/specs/prd-reestruturacao-modulo-pallets.md
 """
 from app import db
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_utc_naive
 
 
 class PalletSolucao(db.Model):
@@ -105,9 +105,9 @@ class PalletSolucao(db.Model):
     observacao = db.Column(db.Text, nullable=True)
 
     # Auditoria
-    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
-    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
 
     # Soft delete
@@ -277,7 +277,7 @@ class PalletSolucao(db.Model):
             quantidade=quantidade,
             motivo_baixa=motivo,
             confirmado_cliente=confirmado,
-            data_confirmacao=agora_brasil().date() if confirmado else None,
+            data_confirmacao=agora_utc_naive().date() if confirmado else None,
             criado_por=usuario,
             observacao=observacao
         )

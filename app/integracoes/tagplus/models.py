@@ -4,6 +4,7 @@ Modelos para integração TagPlus
 
 from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 
 class NFPendenteTagPlus(db.Model):
@@ -42,7 +43,7 @@ class NFPendenteTagPlus(db.Model):
     importado = db.Column(db.Boolean, default=False, index=True)
 
     # Auditoria básica
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     pedido_preenchido_em = db.Column(db.DateTime, nullable=True)
     pedido_preenchido_por = db.Column(db.String(100), nullable=True)
     resolvido_em = db.Column(db.DateTime, nullable=True)
@@ -88,8 +89,8 @@ class TagPlusOAuthToken(db.Model):
     scope = db.Column(db.String(255), nullable=True)
 
     # 📊 Auditoria e estatísticas
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False)
     ultimo_refresh = db.Column(db.DateTime, nullable=True)  # Última renovação
     total_refreshes = db.Column(db.Integer, default=0)  # Contador de renovações
     ultima_requisicao = db.Column(db.DateTime, nullable=True)  # Último uso
@@ -112,7 +113,7 @@ class TagPlusOAuthToken(db.Model):
 
         from datetime import timedelta
         margem = timedelta(minutes=5)
-        return datetime.utcnow() >= (self.expires_at - margem)
+        return agora_utc_naive() >= (self.expires_at - margem)
 
     @property
     def tem_refresh_token(self):
@@ -124,7 +125,7 @@ class TagPlusOAuthToken(db.Model):
         """Retorna timedelta até expiração (None se já expirado)"""
         if not self.expires_at or self.esta_expirado:
             return None
-        return self.expires_at - datetime.utcnow()
+        return self.expires_at - agora_utc_naive()
 
     def to_dict(self):
         """Converte para dicionário (não expõe tokens completos)"""

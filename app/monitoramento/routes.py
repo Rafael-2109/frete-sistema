@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
+from app.utils.timezone import agora_utc_naive
 import os
 import pandas as pd
 import tempfile
@@ -234,7 +235,7 @@ def adicionar_log(id):
             descricao=form_log.descricao.data,
             tipo=form_log.tipo.data,
             lembrete_para=form_log.lembrete_para.data,
-            data_hora=datetime.utcnow(),
+            data_hora=agora_utc_naive(),
         )
         db.session.add(log)
         db.session.commit()
@@ -273,7 +274,7 @@ def adicionar_evento(id):
             tipo_evento=form_evento.tipo_evento.data,
             observacao=form_evento.observacao.data,
             autor=current_user.nome,
-            criado_em=datetime.utcnow(),
+            criado_em=agora_utc_naive(),
         )
         db.session.add(evento)
 
@@ -321,7 +322,7 @@ def adicionar_custo(id):
             valor=form_custo.valor.data,
             motivo=form_custo.motivo.data,
             autor=current_user.nome,
-            criado_em=datetime.utcnow(),
+            criado_em=agora_utc_naive(),
         )
         db.session.add(custo)
         db.session.commit()
@@ -372,7 +373,7 @@ def adicionar_agendamento(id):
         # Se criado já confirmado, preenche campos de confirmação
         if status == 'confirmado':
             ag.confirmado_por = current_user.nome
-            ag.confirmado_em = datetime.utcnow()
+            ag.confirmado_em = agora_utc_naive()
         
         db.session.add(ag)
 
@@ -422,7 +423,7 @@ def confirmar_agendamento(agendamento_id):
     # Atualiza para confirmado
     agendamento.status = 'confirmado'
     agendamento.confirmado_por = current_user.nome
-    agendamento.confirmado_em = datetime.utcnow()
+    agendamento.confirmado_em = agora_utc_naive()
 
     # Pega observações do POST se houver
     observacoes = request.form.get('observacoes_confirmacao', '').strip()
@@ -571,7 +572,7 @@ def finalizar_entrega(id):
         entrega.data_hora_entrega_realizada = datetime.strptime(data_str, "%Y-%m-%dT%H:%M")
         descricao_log = "Entrega realizada"
 
-    entrega.finalizado_em = datetime.utcnow()
+    entrega.finalizado_em = agora_utc_naive()
     entrega.finalizado_por = current_user.nome
 
     db.session.commit()
@@ -1575,7 +1576,7 @@ def responder_pendencia(id):
         
         if pendencia.entrega_id == entrega.id:
             pendencia.resposta_logistica = resposta_logistica.strip()
-            pendencia.respondida_em = datetime.utcnow()
+            pendencia.respondida_em = agora_utc_naive()
             pendencia.respondida_por = current_user.nome
             
             # Verifica se ainda há pendências não respondidas (pendência nunca é excluída)
@@ -1611,7 +1612,7 @@ def apagar_resposta_pendencia(pendencia_id):
         return redirect(request.referrer)
     
     # Soft delete da resposta - mantém histórico
-    pendencia.resposta_excluida_em = datetime.utcnow()
+    pendencia.resposta_excluida_em = agora_utc_naive()
     pendencia.resposta_excluida_por = current_user.nome
     
     # A pendência volta a ser "não respondida" para efeitos de contagem
@@ -1663,7 +1664,7 @@ def alterar_data_prevista(id):
             data_nova=nova_data,
             motivo_alteracao=motivo_alteracao,
             alterado_por=current_user.nome
-            # alterado_em usa o default do modelo (datetime.utcnow)
+            # alterado_em usa o default do modelo (agora_utc_naive)
         )
         
         # Atualiza a data na entrega

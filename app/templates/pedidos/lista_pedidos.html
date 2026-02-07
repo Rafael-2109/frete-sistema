@@ -294,7 +294,7 @@
                                         btn-info
                                         {% else %}btn-outline-primary{% endif %}">
                                     <i class="far fa-calendar-check"></i>
-                                    {{ dados.data.strftime('%d/%m') }}
+                                    {{ dados.data|formatar_data_segura }}
                                     <span class="badge badge-contador-theme">{{ dados.total }}</span>
                                     </a>
                                     <!-- ABERTO -->

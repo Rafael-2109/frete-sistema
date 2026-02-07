@@ -88,7 +88,7 @@
                             <span class="badge bg-warning text-dark d-none" id="badge-fonte-cadastrada">
                                 <i class="fas fa-sync"></i> Tabela atual
                                 {% if tabela_cadastrada %}
-                                (atualizada em {{ tabela_cadastrada.criado_em.strftime('%d/%m/%Y') }})
+                                (atualizada em {{ tabela_cadastrada.criado_em|formatar_data_segura }})
                                 {% endif %}
                             </span>
                         </div>
