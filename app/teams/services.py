@@ -396,47 +396,34 @@ def _obter_resposta_agente(
 
     # Executa a coroutine de forma sincrona
     try:
-        # asyncio.run() configura child watcher para subprocess support.
-        # new_event_loop() NAO configura, causando CLIConnectionError no SDK.
-        # Mesmo padrao usado pelo agente web (routes.py:609).
-        response = asyncio.run(
-            client.get_response(
-                prompt=prompt_completo,
-                user_name=usuario,
-                sdk_session_id=sdk_session_id,
-                user_id=user_id,
-                model=TEAMS_DEFAULT_MODEL,
-                can_use_tool=can_use_tool,
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            response = loop.run_until_complete(
+                client.get_response(
+                    prompt=prompt_completo,
+                    user_name=usuario,
+                    sdk_session_id=sdk_session_id,
+                    user_id=user_id,
+                    model=TEAMS_DEFAULT_MODEL,
+                    can_use_tool=can_use_tool,
+                )
             )
-        )
+        finally:
+            loop.close()
 
         resposta_texto = _extrair_texto_resposta(response)
-
-        # Capturar novo sdk_session_id do response
         new_sdk_session_id = getattr(response, 'session_id', None)
-
-        # Detectar resposta sintetica de erro: texto presente mas 0 tokens = nenhuma
-        # chamada API real ocorreu (CLIConnectionError, race condition no subprocess).
-        # Retorna None para permitir retry no caller.
-        if resposta_texto and getattr(response, 'input_tokens', 0) == 0 and getattr(response, 'output_tokens', 0) == 0:
-            logger.warning(
-                f"[TEAMS-BOT] Resposta sintetica (0 tokens) detectada, "
-                f"retornando None para retry: {resposta_texto[:80]}..."
-            )
-            return None, new_sdk_session_id
 
         return resposta_texto, new_sdk_session_id
 
     except asyncio.TimeoutError:
         logger.error("[TEAMS-BOT] Timeout ao aguardar resposta do agente")
-        # Retorna None para permitir retry no caller (nao texto sintetico)
-        return None, None
+        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.", None
 
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter resposta do agente: {e}", exc_info=True)
-        # Retorna None para permitir retry no caller.
-        # Texto de erro so deve ser criado APOS todos os retries falharem.
-        return None, None
+        return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", None
 
 
 def _extrair_texto_resposta(response) -> Optional[str]:
@@ -639,13 +626,10 @@ def process_teams_task_async(
             set_current_session_id(teams_session_id)
             set_teams_task_context(teams_session_id, task_id)
 
-            # Retry com backoff exponencial na chamada do agente.
-            # CLIConnectionError (race condition no subprocess) é transiente —
-            # tipicamente resolvido na 2a ou 3a tentativa quando o subprocess aquece.
+            # Fix 3b: Retry na chamada do agente (max 2 tentativas)
             resposta_texto = None
             new_sdk_session_id = None
-            max_retries = 3
-            retry_delays = [2, 5, 10]  # backoff exponencial em segundos
+            max_retries = 2
 
             for attempt in range(max_retries):
                 try:
@@ -658,34 +642,26 @@ def process_teams_task_async(
                     )
                     if resposta_texto:
                         break
-                    # Resposta None/vazia — retry com backoff
                     if attempt < max_retries - 1:
-                        delay = retry_delays[attempt]
                         logger.warning(
-                            f"[TEAMS-ASYNC] Tentativa {attempt + 1}/{max_retries}: "
-                            f"resposta vazia. Retry em {delay}s..."
+                            f"[TEAMS-ASYNC] Tentativa {attempt + 1}: resposta vazia. Retry..."
                         )
-                        time.sleep(delay)
+                        time.sleep(2)
                 except Exception as agent_err:
                     if attempt < max_retries - 1:
-                        delay = retry_delays[attempt]
                         logger.warning(
-                            f"[TEAMS-ASYNC] Tentativa {attempt + 1}/{max_retries} "
-                            f"falhou: {agent_err}. Retry em {delay}s..."
+                            f"[TEAMS-ASYNC] Tentativa {attempt + 1} falhou: {agent_err}. Retry..."
                         )
-                        time.sleep(delay)
+                        time.sleep(2)
                     else:
                         logger.error(
-                            f"[TEAMS-ASYNC] Todas as {max_retries} tentativas falharam",
+                            f"[TEAMS-ASYNC] Todas as {max_retries} tentativas falharam: {agent_err}",
                             exc_info=True,
                         )
-
-            # Mensagem de erro SOMENTE apos todos os retries falharem
-            if not resposta_texto:
-                resposta_texto = (
-                    "Desculpe, ocorreu um erro ao processar sua mensagem. "
-                    "Tente novamente."
-                )
+                        resposta_texto = (
+                            "Desculpe, ocorreu um erro ao processar sua mensagem. "
+                            "Tente novamente."
+                        )
 
             # Salvar mensagens e sdk_session_id na sessão
             if session:

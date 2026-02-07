@@ -417,6 +417,25 @@ def _stream_chat_response(
             set_current_session_id(our_session_id)
             set_event_queue(our_session_id, event_queue)
 
+            # Garantir que AgentSession existe no DB ANTES do stream iniciar.
+            # Sem isso, AskUserQuestion falha porque user-answer valida ownership
+            # via DB query, mas a sessão só seria criada em _save_messages_to_db().
+            from .models import AgentSession
+            try:
+                with app.app_context():
+                    _sess, _created = AgentSession.get_or_create(
+                        session_id=our_session_id,
+                        user_id=user_id,
+                    )
+                    if _created:
+                        db.session.commit()
+                        logger.debug(
+                            f"[AGENTE] AgentSession pré-criada para AskUserQuestion: "
+                            f"{our_session_id[:8]}..."
+                        )
+            except Exception as e:
+                logger.warning(f"[AGENTE] Erro ao pré-criar AgentSession: {e}")
+
             # =============================================================
             # PROCESSAMENTO DE EVENTOS DO STREAM
             # =============================================================

@@ -611,7 +611,6 @@ Nunca invente informações."""
                 HookMatcher, PreToolUseHookInput, PostToolUseHookInput,
                 PostToolUseFailureHookInput,
                 PreCompactHookInput, StopHookInput, UserPromptSubmitHookInput,
-                SubagentStartHookInput, SubagentStopHookInput,
                 HookContext,
             )
 
@@ -887,73 +886,6 @@ Nunca invente informações."""
                     logger.debug(f"[HOOK:UserPromptSubmit] Suppressed (stream likely closed): {e}")
                     return {}
 
-            # ─── P1-1: SubagentStop Hook — logging quando subagentes terminam ───
-            async def _subagent_stop_hook(
-                hook_input: SubagentStopHookInput, signal, context: HookContext
-            ):
-                """Loga quando um subagente (analista-carteira, especialista-odoo, etc.) termina.
-
-                P1-1: Auditoria e analytics para Insights dashboard.
-                Registra: agente, duração, status de conclusão.
-                """
-                try:
-                    agent_name = hook_input.get('agent_name', 'unknown')
-                    session_id_sub = hook_input.get('session_id', '')
-
-                    logger.info(
-                        f"[HOOK:SubagentStop] Subagente finalizado: "
-                        f"agent={agent_name} | "
-                        f"session={session_id_sub[:12] + '...' if session_id_sub else 'N/A'}"
-                    )
-
-                    return {}
-                except Exception as e:
-                    logger.debug(f"[HOOK:SubagentStop] Suppressed: {e}")
-                    return {}
-
-            # ─── P1-2: SubagentStart Hook — injeta memórias do usuário em subagentes ───
-            async def _subagent_start_hook(
-                hook_input: SubagentStartHookInput, signal, context: HookContext
-            ):
-                """Injeta memórias do usuário como contexto adicional no subagente.
-
-                P1-2: Subagentes (analista-carteira, especialista-odoo, raio-x-pedido)
-                atualmente não recebem memórias do usuário. Este hook injeta as memórias
-                via additionalContext para melhorar qualidade das respostas.
-                """
-                try:
-                    agent_name = hook_input.get('agent_name', 'unknown')
-
-                    logger.info(f"[HOOK:SubagentStart] Subagente iniciado: agent={agent_name}")
-
-                    # Injetar memórias do usuário no subagente
-                    additional_context = None
-                    if user_id:
-                        try:
-                            additional_context = _load_user_memories_for_context(user_id)
-                        except Exception as mem_err:
-                            logger.warning(
-                                f"[HOOK:SubagentStart] Erro ao carregar memórias "
-                                f"para subagente {agent_name}: {mem_err}"
-                            )
-
-                    if additional_context:
-                        logger.info(
-                            f"[HOOK:SubagentStart] Memórias injetadas em {agent_name}: "
-                            f"{len(additional_context)} chars"
-                        )
-                        return {
-                            "hookSpecificOutput": {
-                                "hookEventName": "SubagentStart",
-                                "additionalContext": additional_context,
-                            }
-                        }
-
-                    return {}
-                except Exception as e:
-                    logger.debug(f"[HOOK:SubagentStart] Suppressed: {e}")
-                    return {}
-
             # ─── Registrar TODOS os hooks ───
             options_dict["hooks"] = {
                 "PreToolUse": [
@@ -964,7 +896,7 @@ Nunca invente informações."""
                 ],
                 "PostToolUse": [
                     HookMatcher(
-                        matcher=None,  # Audita TODAS as tools (inclui mcp__*)
+                        matcher="Bash|Skill",
                         hooks=[_audit_post_tool_use],
                     ),
                 ],
@@ -989,22 +921,11 @@ Nunca invente informações."""
                         hooks=[_user_prompt_submit_hook],
                     ),
                 ],
-                "SubagentStart": [
-                    HookMatcher(
-                        hooks=[_subagent_start_hook],
-                    ),
-                ],
-                "SubagentStop": [
-                    HookMatcher(
-                        hooks=[_subagent_stop_hook],
-                    ),
-                ],
             }
             logger.debug(
-                "[AGENT_CLIENT] Hooks SDK configurados (SDK 0.1.31): "
-                "PreToolUse(+additionalContext) + PostToolUse(ALL tools, +tool_use_id) + "
-                "PostToolUseFailure + PreCompact + Stop + UserPromptSubmit + "
-                "SubagentStart(+memory injection) + SubagentStop(+logging)"
+                "[AGENT_CLIENT] Hooks SDK configurados: "
+                "PreToolUse(+additionalContext) + PostToolUse(+tool_use_id) + "
+                "PostToolUseFailure + PreCompact + Stop + UserPromptSubmit"
             )
         except (ImportError, Exception) as e:
             logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
