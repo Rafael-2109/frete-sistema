@@ -61,7 +61,8 @@
       "Bash(head:*)",
       "WebFetch(domain:oneryalcin.medium.com)",
       "WebFetch(domain:pypi.org)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:docs.aiohttp.org)"
     ],
     "deny": []
   },

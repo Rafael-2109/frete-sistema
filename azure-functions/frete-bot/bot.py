@@ -18,6 +18,7 @@ import os
 import json
 import asyncio
 import logging
+import re
 from datetime import datetime
 
 import aiohttp
@@ -82,33 +83,11 @@ def build_confirmation_card(task_id: str, descricao: str, usuario: str) -> dict:
                 "color": "Warning",
             },
             {
-                "type": "ColumnSet",
-                "columns": [
-                    {
-                        "type": "Column",
-                        "width": "auto",
-                        "items": [
-                            {
-                                "type": "Image",
-                                "url": "https://adaptivecards.io/content/pending.png",
-                                "size": "Small",
-                            }
-                        ],
-                    },
-                    {
-                        "type": "Column",
-                        "width": "stretch",
-                        "items": [
-                            {
-                                "type": "TextBlock",
-                                "text": "O agente precisa da sua aprovacao para executar a operacao abaixo:",
-                                "wrap": True,
-                                "size": "Small",
-                                "color": "Light",
-                            }
-                        ],
-                    },
-                ],
+                "type": "TextBlock",
+                "text": "O agente precisa da sua aprovacao para executar a operacao abaixo:",
+                "wrap": True,
+                "size": "Small",
+                "color": "Light",
             },
             {
                 "type": "TextBlock",
@@ -210,13 +189,24 @@ def build_ask_user_card(task_id: str, questions: list) -> dict:
         header = q.get("header", "")
         multi_select = q.get("multiSelect", False)
 
+        # Header como tag/label curto (se disponivel)
+        if header:
+            body.append({
+                "type": "TextBlock",
+                "text": header.upper(),
+                "weight": "Bolder",
+                "size": "Small",
+                "color": "Accent",
+                "spacing": "Medium",
+            })
+
         # Label da pergunta
         body.append({
             "type": "TextBlock",
             "text": question_text,
             "weight": "Bolder",
             "wrap": True,
-            "spacing": "Medium",
+            "spacing": "Small" if header else "Medium",
         })
 
         input_id = f"answer_{idx}"
@@ -254,7 +244,6 @@ def build_ask_user_card(task_id: str, questions: list) -> dict:
                 "id": f"{input_id}_other",
                 "placeholder": "Se selecionou 'Outro', digite aqui...",
                 "isMultiline": False,
-                "isVisible": True,
             })
         else:
             # Texto livre
@@ -298,13 +287,18 @@ def build_ask_user_card(task_id: str, questions: list) -> dict:
 # BACKEND CLIENT
 # ═══════════════════════════════════════════════════════════════
 
-async def call_backend(endpoint: str, payload: dict) -> dict:
+async def call_backend(
+    endpoint: str,
+    payload: dict,
+    session: aiohttp.ClientSession = None,
+) -> dict:
     """
     Chama o backend no Render via HTTP POST.
 
     Args:
         endpoint: Path relativo (ex: /api/teams/bot/message)
         payload: JSON body
+        session: aiohttp.ClientSession reutilizavel (recomendado)
 
     Returns:
         dict: Resposta JSON do backend
@@ -317,11 +311,11 @@ async def call_backend(endpoint: str, payload: dict) -> dict:
         "Content-Type": "application/json",
         "X-API-Key": BACKEND_API_KEY,
     }
-    timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
 
     logger.info(f"[BOT] POST {url}")
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    # Se session fornecida, reutiliza; senao cria temporaria (fallback)
+    if session:
         async with session.post(url, json=payload, headers=headers) as resp:
             if resp.status != 200:
                 text = await resp.text()
@@ -329,14 +323,28 @@ async def call_backend(endpoint: str, payload: dict) -> dict:
                     f"Backend retornou {resp.status}: {text[:300]}"
                 )
             return await resp.json()
+    else:
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as tmp_session:
+            async with tmp_session.post(url, json=payload, headers=headers) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise Exception(
+                        f"Backend retornou {resp.status}: {text[:300]}"
+                    )
+                return await resp.json()
 
 
-async def call_backend_get(endpoint: str) -> dict:
+async def call_backend_get(
+    endpoint: str,
+    session: aiohttp.ClientSession = None,
+) -> dict:
     """
     Chama o backend no Render via HTTP GET.
 
     Args:
         endpoint: Path relativo (ex: /api/teams/bot/status/uuid)
+        session: aiohttp.ClientSession reutilizavel (recomendado)
 
     Returns:
         dict: Resposta JSON do backend
@@ -348,9 +356,10 @@ async def call_backend_get(endpoint: str) -> dict:
     headers = {
         "X-API-Key": BACKEND_API_KEY,
     }
-    timeout = aiohttp.ClientTimeout(total=30)  # Polling rápido
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    logger.info(f"[BOT] GET {url}")
+
+    if session:
         async with session.get(url, headers=headers) as resp:
             if resp.status != 200:
                 text = await resp.text()
@@ -358,6 +367,16 @@ async def call_backend_get(endpoint: str) -> dict:
                     f"Backend retornou {resp.status}: {text[:300]}"
                 )
             return await resp.json()
+    else:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as tmp_session:
+            async with tmp_session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise Exception(
+                        f"Backend retornou {resp.status}: {text[:300]}"
+                    )
+                return await resp.json()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -435,6 +454,7 @@ async def _poll_and_respond(
     turn_context: TurnContext,
     task_id: str,
     user_name: str,
+    http_session: aiohttp.ClientSession = None,
 ) -> None:
     """
     Faz polling de status de uma TeamsTask e responde quando pronta.
@@ -447,13 +467,19 @@ async def _poll_and_respond(
     - awaiting_user_input → envia Adaptive Card com perguntas
     - timeout → mensagem de timeout
 
+    Circuit breaker: aborta apos MAX_CONSECUTIVE_ERRORS erros consecutivos.
+
     Args:
         turn_context: Contexto do turno do Bot Framework
         task_id: ID da TeamsTask
         user_name: Nome do usuário
+        http_session: aiohttp.ClientSession reutilizavel
     """
     poll_count = 0
     interval = POLL_INTERVAL_PROCESSING
+    card_sent = False  # Fix 1: Enviar Adaptive Card apenas 1 vez
+    consecutive_errors = 0
+    MAX_CONSECUTIVE_ERRORS = 5
 
     while poll_count < POLL_MAX_ATTEMPTS:
         try:
@@ -461,12 +487,23 @@ async def _poll_and_respond(
             poll_count += 1
 
             result = await call_backend_get(
-                f"/api/teams/bot/status/{task_id}"
+                f"/api/teams/bot/status/{task_id}",
+                session=http_session,
             )
 
             status = result.get("status", "unknown")
+            consecutive_errors = 0  # Reset no sucesso
 
             if status == "processing":
+                # Se voltou para processing (usuario respondeu card), reset flag
+                if card_sent:
+                    card_sent = False
+                    interval = POLL_INTERVAL_PROCESSING
+                    logger.info(
+                        f"[BOT] Task voltou para processing (usuario respondeu): "
+                        f"task={task_id[:8]}..."
+                    )
+
                 # Refresh typing indicator a cada 3 polls (~9s)
                 if poll_count % 3 == 0:
                     try:
@@ -501,23 +538,26 @@ async def _poll_and_respond(
                 questions = result.get("questions", [])
                 card_task_id = result.get("task_id", task_id)
 
-                if questions:
+                if questions and not card_sent:
+                    # Enviar card apenas 1 vez (Fix 1)
                     card = build_ask_user_card(card_task_id, questions)
                     await turn_context.send_activity(
                         MessageFactory.attachment(
                             CardFactory.adaptive_card(card)
                         )
                     )
+                    card_sent = True
                     logger.info(
-                        f"[BOT] Adaptive Card enviado: {len(questions)} perguntas "
-                        f"para task={task_id[:8]}..."
+                        f"[BOT] Adaptive Card enviado (unico): "
+                        f"{len(questions)} perguntas para task={task_id[:8]}..."
                     )
-                else:
+                elif not questions:
                     await turn_context.send_activity(
                         "O agente precisa de mais informacoes, mas nao consegui "
                         "apresentar as perguntas. Tente novamente."
                     )
                     return
+                # Se card_sent=True e questions existem, apenas continua polling
 
                 # Continua polling com intervalo maior (aguardando resposta do card)
                 interval = POLL_INTERVAL_AWAITING
@@ -541,17 +581,24 @@ async def _poll_and_respond(
                 continue
 
         except Exception as e:
+            consecutive_errors += 1
             logger.error(
-                f"[BOT] Erro no polling (attempt {poll_count}): {e}",
+                f"[BOT] Erro no polling (attempt {poll_count}, "
+                f"consecutive={consecutive_errors}): {e}",
                 exc_info=True,
             )
-            # Continua polling — pode ser erro transiente
-            if poll_count >= 3 and poll_count % 10 == 0:
-                # A cada 10 falhas, loga mais detalhado
-                logger.error(
-                    f"[BOT] Múltiplas falhas de polling: task={task_id[:8]}... "
-                    f"attempts={poll_count}"
+
+            # Circuit breaker: aborta apos N erros consecutivos (backend provavelmente DOWN)
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                await turn_context.send_activity(
+                    "O sistema esta temporariamente indisponivel. "
+                    "Tente novamente em alguns minutos."
                 )
+                logger.error(
+                    f"[BOT] Circuit breaker ativado: {consecutive_errors} erros consecutivos. "
+                    f"task={task_id[:8]}... Abortando polling."
+                )
+                return
 
     # Timeout de polling (5 min)
     await turn_context.send_activity(
@@ -586,6 +633,16 @@ class FreteBot(ActivityHandler):
     3. POST /api/teams/bot/message → aguarda resposta completa
     4. Responde com texto
     """
+
+    def __init__(self, bot_app: "BotApp" = None):
+        super().__init__()
+        self._bot_app = bot_app
+
+    async def _get_session(self) -> aiohttp.ClientSession | None:
+        """Obtem session HTTP compartilhada do BotApp (se disponivel)."""
+        if self._bot_app:
+            return await self._bot_app.get_http_session()
+        return None
 
     async def on_message_activity(self, turn_context: TurnContext):
         """Trata mensagens de texto e respostas de Adaptive Cards."""
@@ -628,7 +685,9 @@ class FreteBot(ActivityHandler):
             Activity(type=ActivityTypes.typing)
         )
 
-        # 2. Chama o backend
+        # 2. Chama o backend (reutiliza session HTTP compartilhada)
+        http_session = await self._get_session()
+
         try:
             result = await call_backend(
                 endpoint="/api/teams/bot/message",
@@ -638,6 +697,7 @@ class FreteBot(ActivityHandler):
                     "usuario_id": str(user_id),
                     "conversation_id": conversation_id,
                 },
+                session=http_session,
             )
         except TimeoutError:
             logger.error("[BOT] Timeout ao chamar backend")
@@ -683,7 +743,9 @@ class FreteBot(ActivityHandler):
 
             # status == "processing" → inicia polling
             logger.info(f"[BOT] Modo async: polling task={task_id[:8]}...")
-            await _poll_and_respond(turn_context, task_id, user_name)
+            await _poll_and_respond(
+                turn_context, task_id, user_name, http_session=http_session
+            )
             return
 
         # Modo sincrono / fallback: resposta direta
@@ -730,6 +792,9 @@ class FreteBot(ActivityHandler):
             f"task_id={task_id}, user={user_name}, conv={conversation_id[:30]}..."
         )
 
+        # Session HTTP compartilhada
+        http_session = await self._get_session()
+
         if action == "confirm" and task_id:
             # Typing enquanto executa
             await turn_context.send_activity(
@@ -743,6 +808,7 @@ class FreteBot(ActivityHandler):
                         "task_id": task_id,
                         "conversation_id": conversation_id,
                     },
+                    session=http_session,
                 )
                 resposta = result.get(
                     "resposta", "Operacao executada com sucesso."
@@ -790,6 +856,7 @@ class FreteBot(ActivityHandler):
                         "task_id": task_id,
                         "answers": answers,
                     },
+                    session=http_session,
                 )
 
                 if result.get("status") == "ok":
@@ -797,7 +864,9 @@ class FreteBot(ActivityHandler):
                         "Resposta recebida! Processando..."
                     )
                     # Continua polling para resultado final
-                    await _poll_and_respond(turn_context, task_id, user_name)
+                    await _poll_and_respond(
+                        turn_context, task_id, user_name, http_session=http_session
+                    )
                 else:
                     error = result.get("error", "Erro desconhecido")
                     await turn_context.send_activity(
@@ -821,6 +890,7 @@ class FreteBot(ActivityHandler):
                         "task_id": task_id,
                         "answers": {"__cancelled__": "true"},
                     },
+                    session=http_session,
                 )
             except Exception:
                 pass  # Melhor esforço
@@ -868,8 +938,10 @@ class FreteBot(ActivityHandler):
                 if other_val:
                     answer_val = other_val
                 else:
-                    answer_val = ""  # Ignorar se não digitou nada
+                    # P3-4: Campo "Outro" vazio — enviar indicador ao inves de dropar
+                    answer_val = "(sem resposta)"
 
+            # Inclui resposta mesmo se string vazia (agente recebe todas as perguntas)
             if answer_val:
                 answers[f"question_{idx}"] = answer_val
 
@@ -887,13 +959,11 @@ class FreteBot(ActivityHandler):
         Este metodo limpa a mencao e retorna so a pergunta.
         Em chats 1:1, retorna o texto original.
         """
-        import re
-
         text = (turn_context.activity.text or "").strip()
         if not text:
             return ""
 
-        # Remove tags <at>...</at> (mencao do bot)
+        # Remove tags <at>...</at> (mencao do bot) — regex importado no topo do arquivo
         text = re.sub(r"<at>.*?</at>\s*", "", text).strip()
 
         return text
@@ -918,9 +988,20 @@ class BotApp:
     Encapsula BotFrameworkAdapter + FreteBot.
 
     Expoe process() para ser chamado pelo function_app.py.
+    Gerencia aiohttp.ClientSession compartilhada para reutilizacao de conexoes TCP.
     """
 
     def __init__(self):
+        # P3-3: Validar env vars criticas no startup
+        if not BACKEND_API_KEY:
+            logger.warning(
+                "[BOT] BACKEND_API_KEY nao configurada — chamadas ao backend falharao"
+            )
+        if not MICROSOFT_APP_ID:
+            logger.warning(
+                "[BOT] MICROSOFT_APP_ID nao configurada — autenticacao do bot pode falhar"
+            )
+
         self.settings = BotFrameworkAdapterSettings(
             app_id=MICROSOFT_APP_ID,
             app_password=MICROSOFT_APP_PASSWORD,
@@ -928,7 +1009,29 @@ class BotApp:
         )
         self.adapter = BotFrameworkAdapter(self.settings)
         self.adapter.on_turn_error = self._on_error
-        self.bot = FreteBot()
+        self.bot = FreteBot(bot_app=self)
+
+        # P0-1: Session HTTP compartilhada (lazy init)
+        self._http_session: aiohttp.ClientSession | None = None
+
+    async def get_http_session(self) -> aiohttp.ClientSession:
+        """
+        Retorna aiohttp.ClientSession compartilhada (cria se necessario).
+
+        Reutiliza pool de conexoes TCP ao inves de criar nova session por request.
+        Ref: https://docs.aiohttp.org/en/stable/http_request_lifecycle.html
+        """
+        if self._http_session is None or self._http_session.closed:
+            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            self._http_session = aiohttp.ClientSession(timeout=timeout)
+            logger.info("[BOT] Nova aiohttp.ClientSession criada (compartilhada)")
+        return self._http_session
+
+    async def close(self):
+        """Fecha session HTTP compartilhada (chamar no shutdown)."""
+        if self._http_session and not self._http_session.closed:
+            await self._http_session.close()
+            logger.info("[BOT] aiohttp.ClientSession fechada")
 
     async def _on_error(self, context: TurnContext, error: Exception):
         """Handler global de erros do adapter."""

@@ -1688,6 +1688,7 @@ Nunca invente informações."""
         output_tokens = 0
         stop_reason = ""
         result_session_id = sdk_session_id
+        errors = []  # Fix 2c: Capturar error events
 
         async for event in self.stream_response(
             prompt=prompt,
@@ -1701,6 +1702,11 @@ Nunca invente informações."""
                 result_session_id = event.content.get('session_id')
             elif event.type == 'text':
                 full_text += event.content
+            elif event.type == 'error':
+                # Fix 2c: Capturar mensagens de erro para montar texto sintetico
+                error_content = event.content if isinstance(event.content, str) else str(event.content)
+                errors.append(error_content)
+                logger.warning(f"[AGENT_CLIENT] Error event em get_response: {error_content[:200]}")
             elif event.type == 'tool_call':
                 tool_calls.append(ToolCall(
                     id=event.metadata.get('tool_id', ''),
@@ -1714,6 +1720,15 @@ Nunca invente informações."""
                 done_session_id = event.content.get('session_id')
                 if done_session_id:
                     result_session_id = done_session_id
+
+        # Fix 2c: Se full_text vazio mas houve errors, montar texto sintetico
+        # Evita retornar AgentResponse(text="") que vira repr() no Teams
+        if not full_text and errors:
+            full_text = "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente."
+            logger.warning(
+                f"[AGENT_CLIENT] get_response: text vazio com {len(errors)} errors. "
+                f"Usando texto sintetico. Errors: {'; '.join(errors[:3])}"
+            )
 
         return AgentResponse(
             text=full_text,

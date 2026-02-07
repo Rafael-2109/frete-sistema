@@ -10,10 +10,11 @@ Endpoints:
 """
 
 import os
+import hmac
 import logging
 import functools
 import threading
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 from app.teams import teams_bp
 from app import csrf
 
@@ -40,7 +41,7 @@ def require_bot_api_key(f):
             return jsonify({"error": "API key nao configurada no servidor"}), 500
 
         api_key = request.headers.get("X-API-Key", "")
-        if not api_key or api_key != TEAMS_BOT_API_KEY:
+        if not api_key or not hmac.compare_digest(api_key, TEAMS_BOT_API_KEY):
             logger.warning("[TEAMS-BOT] Tentativa com API key invalida")
             return jsonify({"error": "API key invalida"}), 401
 
@@ -88,6 +89,9 @@ def bot_message():
 
         if not mensagem:
             return jsonify({"error": "Campo 'mensagem' e obrigatorio"}), 400
+
+        if len(mensagem) > 10000:
+            return jsonify({"error": "Mensagem excede o tamanho maximo permitido (10000 caracteres)"}), 400
 
         logger.info(
             f"[TEAMS-BOT] Mensagem de {usuario} ({usuario_id}) "
@@ -165,10 +169,14 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
     task_id = task.id
     logger.info(f"[TEAMS-BOT] Task criada: {task_id[:8]}... — iniciando daemon thread")
 
+    # Fix 3: Passar app real do gunicorn ao inves de criar novo via create_app()
+    # Reutilizar o app context evita problemas com inicializacao de hooks/MCP
+    app = current_app._get_current_object()
+
     # Iniciar daemon thread para processamento
     t = threading.Thread(
         target=process_teams_task_async,
-        args=(task_id, mensagem, usuario, conversation_id, teams_user_id),
+        args=(app, task_id, mensagem, usuario, conversation_id, teams_user_id),
         daemon=True,
         name=f"teams-task-{task_id[:8]}",
     )

@@ -40,9 +40,15 @@ logger = logging.getLogger(__name__)
 _stream_context: Dict[str, Any] = {}  # session_id → {'event_queue': Queue}
 _context_lock = threading.Lock()
 
+# Fix 5: threading.local() para session_id — cada thread ve apenas SEU session_id.
+# Resolve race condition onde Thread B sobrescrevia session_id de Thread A.
+# O dict global _stream_context continua para event_queue (precisa ser cross-thread).
+_thread_local = threading.local()
+
 
 def set_current_session_id(session_id: str) -> None:
-    """Define session_id no contexto global."""
+    """Define session_id no contexto da thread atual (thread-safe via threading.local)."""
+    _thread_local.session_id = session_id
     with _context_lock:
         if session_id not in _stream_context:
             _stream_context[session_id] = {}
@@ -53,17 +59,10 @@ def get_current_session_id() -> str | None:
     """
     Obtém session_id da thread atual.
 
-    NOTA: Como temos múltiplas threads, não podemos usar threading.local().
-    Procuramos a sessão mais recente marcada como ativa.
+    Fix 5: Usa threading.local() ao invés de buscar "última ativa" no dict global.
+    Cada daemon thread (Teams) e cada request Flask vê apenas SEU session_id.
     """
-    with _context_lock:
-        active_sessions = [
-            sid for sid, ctx in _stream_context.items()
-            if ctx.get('_active', False)
-        ]
-        if active_sessions:
-            return active_sessions[-1]  # Última ativa
-        return None
+    return getattr(_thread_local, 'session_id', None)
 
 
 def set_event_queue(session_id: str, event_queue: Any) -> None:
@@ -328,6 +327,26 @@ async def can_use_tool(
                             f"[PERMISSION] AskUserQuestion Teams timeout: "
                             f"session={current_session_id[:8]}..."
                         )
+
+                        # Fix 4: Atualizar TeamsTask para nao ficar presa em awaiting_user_input
+                        # Sem isso, o polling do bot continua re-enviando Adaptive Cards (Bug 1)
+                        try:
+                            task = db.session.get(TeamsTask, teams_task_id)
+                            if task and task.status == 'awaiting_user_input':
+                                task.status = 'processing'
+                                task.pending_questions = None
+                                task.pending_question_session_id = None
+                                db.session.commit()
+                                logger.info(
+                                    f"[PERMISSION] TeamsTask {teams_task_id[:8]}... "
+                                    f"resetada de awaiting_user_input para processing (timeout)"
+                                )
+                        except Exception:
+                            logger.error(
+                                "[PERMISSION] Erro ao resetar task apos timeout",
+                                exc_info=True,
+                            )
+
                         return PermissionResultDeny(
                             message=(
                                 "Tempo esgotado para a resposta do usuário no Teams. "

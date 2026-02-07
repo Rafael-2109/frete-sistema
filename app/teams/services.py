@@ -11,8 +11,9 @@ import logging
 import asyncio
 import re
 import hashlib
+import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def _get_or_create_teams_user(usuario: str) -> Optional[int]:
             cargo='Usuário Teams',
             sistema_logistica=True,
             sistema_motochefe=False,
-            aprovado_em=datetime.utcnow(),
+            aprovado_em=datetime.now(timezone.utc),
             aprovado_por='sistema-teams-bot',
             observacoes='Auto-cadastrado via Teams Bot',
         )
@@ -124,6 +125,43 @@ PERGUNTA DO USUÁRIO:
 TEAMS_SESSION_TTL_HOURS = 4
 
 
+def _commit_with_retry(log_prefix: str = "[TEAMS]") -> bool:
+    """
+    Commit com retry para conexoes PostgreSQL stale (SSL dropped pelo Render).
+
+    P1-1: Apos db.session.close(), objetos ficam detached. Em vez de commitar
+    transacao vazia, fazemos apenas o commit inicial e logamos warning no retry
+    (o caller deve re-fetch objetos se necessario).
+
+    Args:
+        log_prefix: Prefixo para mensagens de log
+
+    Returns:
+        True se commit bem-sucedido, False se falhou
+    """
+    from app import db
+
+    try:
+        db.session.commit()
+        return True
+    except Exception as commit_err:
+        err_str = str(commit_err).lower()
+        if 'ssl' in err_str or 'connection' in err_str or 'closed' in err_str:
+            logger.warning(
+                f"{log_prefix} Conexão perdida no commit, reconectando: {commit_err}"
+            )
+            db.session.rollback()
+            db.session.close()  # Devolve conexão stale ao pool, obtém fresh
+            # P1-1: Apos close(), objetos estao detached — commit commitaria transacao vazia.
+            # Retorna False para sinalizar ao caller que precisa re-fetch e re-apply.
+            logger.warning(
+                f"{log_prefix} Conexão resetada. Objetos detached — caller deve re-fetch."
+            )
+            return False
+        else:
+            raise  # Erro não relacionado a conexão — propaga
+
+
 def processar_mensagem_bot(
     mensagem: str,
     usuario: str,
@@ -170,65 +208,69 @@ def processar_mensagem_bot(
     # Configurar session context para permissions.py (AskUserQuestion)
     teams_session_id = session.session_id if session else None
     if teams_session_id:
-        from app.agente.config.permissions import set_current_session_id, can_use_tool as agent_can_use_tool
+        from app.agente.config.permissions import set_current_session_id, cleanup_session_context, can_use_tool as agent_can_use_tool
         set_current_session_id(teams_session_id)
     else:
         from app.agente.config.permissions import can_use_tool as agent_can_use_tool
 
-    # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
-    resposta_texto, new_sdk_session_id = _obter_resposta_agente(
-        mensagem=mensagem,
-        usuario=usuario,
-        sdk_session_id=sdk_session_id,
-        user_id=teams_user_id,
-        can_use_tool=agent_can_use_tool,
-    )
+    try:
+        # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
+        resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+            mensagem=mensagem,
+            usuario=usuario,
+            sdk_session_id=sdk_session_id,
+            user_id=teams_user_id,
+            can_use_tool=agent_can_use_tool,
+        )
 
-    # Salvar mensagens e atualizar sdk_session_id
-    if session:
-        try:
-            from app import db
-
-            session.add_user_message(mensagem)
-            if resposta_texto:
-                session.add_assistant_message(resposta_texto)
-            if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
-                session.set_sdk_session_id(new_sdk_session_id)
-                logger.info(f"[TEAMS-BOT] Novo sdk_session_id salvo: {new_sdk_session_id[:20]}...")
-
-            # Commit com retry — conexão PostgreSQL pode cair durante requests longas (30-40s)
-            # O agente processa tools enquanto a conexão fica idle → SSL dropped pelo Render.
+        # Salvar mensagens e atualizar sdk_session_id
+        if session:
             try:
-                db.session.commit()
-            except Exception as commit_err:
-                err_str = str(commit_err).lower()
-                if 'ssl' in err_str or 'connection' in err_str or 'closed' in err_str:
-                    logger.warning(
-                        f"[TEAMS-BOT] Conexão perdida no commit, reconectando: {commit_err}"
-                    )
-                    db.session.rollback()
-                    db.session.close()  # Devolve conexão stale ao pool, obtém fresh
-                    # Retry com conexão nova
-                    try:
+                session.add_user_message(mensagem)
+                if resposta_texto:
+                    session.add_assistant_message(resposta_texto)
+                if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
+                    session.set_sdk_session_id(new_sdk_session_id)
+                    logger.info(f"[TEAMS-BOT] Novo sdk_session_id salvo: {new_sdk_session_id[:20]}...")
+
+                # Commit com retry — conexão PostgreSQL pode cair durante requests longas (30-40s)
+                # O agente processa tools enquanto a conexão fica idle → SSL dropped pelo Render.
+                # P1-A: Se commit falhar (SSL dropped), re-fetch session e re-apply mensagens.
+                commit_ok = _commit_with_retry("[TEAMS-BOT]")
+                if not commit_ok:
+                    logger.warning("[TEAMS-BOT] Commit falhou — re-fetching session para re-apply")
+                    from app import db
+                    from app.agente.models import AgentSession
+                    session = AgentSession.query.filter_by(
+                        session_id=teams_session_id
+                    ).first()
+                    if session:
+                        session.add_user_message(mensagem)
+                        if resposta_texto:
+                            session.add_assistant_message(resposta_texto)
+                        if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
+                            session.set_sdk_session_id(new_sdk_session_id)
                         db.session.commit()
-                        logger.info("[TEAMS-BOT] Retry commit bem-sucedido")
-                    except Exception as retry_err:
-                        logger.error(
-                            f"[TEAMS-BOT] Retry commit falhou: {retry_err}",
-                            exc_info=True
-                        )
-                        db.session.rollback()
-                else:
-                    raise  # Erro não relacionado a conexão — propaga
-        except Exception as e:
-            logger.error(f"[TEAMS-BOT] Erro ao salvar sessao: {e}", exc_info=True)
-            # Nao bloqueia resposta se falhar ao salvar
+                        logger.info("[TEAMS-BOT] Re-apply + commit bem-sucedido")
+                    else:
+                        logger.error("[TEAMS-BOT] Session nao encontrada no re-fetch")
+            except Exception as e:
+                logger.error(f"[TEAMS-BOT] Erro ao salvar sessao: {e}", exc_info=True)
+                # Nao bloqueia resposta se falhar ao salvar
 
-    if not resposta_texto:
-        raise RuntimeError("O agente nao retornou uma resposta")
+        if not resposta_texto:
+            raise RuntimeError("O agente nao retornou uma resposta")
 
-    logger.info(f"[TEAMS-BOT] Resposta obtida: {len(resposta_texto)} caracteres")
-    return resposta_texto
+        logger.info(f"[TEAMS-BOT] Resposta obtida: {len(resposta_texto)} caracteres")
+        return resposta_texto
+
+    finally:
+        # P0-2: Cleanup de _stream_context para evitar memory leak no path sincrono
+        if teams_session_id:
+            try:
+                cleanup_session_context(teams_session_id)
+            except Exception:
+                pass  # Cleanup nao pode bloquear a resposta
 
 
 def _get_or_create_teams_session(
@@ -274,10 +316,10 @@ def _get_or_create_teams_session(
         # Verifica se sessão expirou (TTL de 4h)
         session_expired = False
         if session and session.updated_at:
-            ttl_threshold = datetime.utcnow() - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
+            ttl_threshold = datetime.now(timezone.utc) - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
             if session.updated_at < ttl_threshold:
                 session_expired = True
-                hours_inactive = (datetime.utcnow() - session.updated_at).total_seconds() / 3600
+                hours_inactive = (datetime.now(timezone.utc) - session.updated_at).total_seconds() / 3600
                 logger.info(
                     f"[TEAMS-BOT] Sessao expirada ({hours_inactive:.1f}h inativa), "
                     f"criando nova"
@@ -287,7 +329,7 @@ def _get_or_create_teams_session(
         if not session or session_expired:
             # Adiciona timestamp para sessões expiradas (permite histórico)
             if session_expired:
-                session_id = f"{base_session_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                session_id = f"{base_session_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
             else:
                 session_id = base_session_id
 
@@ -352,24 +394,24 @@ def _obter_resposta_agente(
 
     # Executa a coroutine de forma sincrona
     try:
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                raise RuntimeError("Loop fechado")
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        # P1-4: asyncio.get_event_loop() deprecated desde 3.10, quebrará em 3.14+.
+        # Criar loop dedicado e fechar no finally.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-        response = loop.run_until_complete(
-            client.get_response(
-                prompt=prompt_completo,
-                user_name=usuario,
-                sdk_session_id=sdk_session_id,
-                user_id=user_id,
-                model=TEAMS_DEFAULT_MODEL,
-                can_use_tool=can_use_tool,
+        try:
+            response = loop.run_until_complete(
+                client.get_response(
+                    prompt=prompt_completo,
+                    user_name=usuario,
+                    sdk_session_id=sdk_session_id,
+                    user_id=user_id,
+                    model=TEAMS_DEFAULT_MODEL,
+                    can_use_tool=can_use_tool,
+                )
             )
-        )
+        finally:
+            loop.close()
 
         resposta_texto = _extrair_texto_resposta(response)
 
@@ -384,18 +426,23 @@ def _obter_resposta_agente(
 
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter resposta do agente: {e}", exc_info=True)
-        return None, None
+        # Fix 2b: Retornar mensagem de erro amigavel ao inves de None
+        # Evita que o caller receba None e caia em "AgentResponse(text='', ...)" ou RuntimeError
+        return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", None
 
 
 def _extrair_texto_resposta(response) -> Optional[str]:
     """
     Extrai texto da resposta do SDK, tratando diferentes formatos.
 
+    Fix 2: Trata AgentResponse com text vazio ANTES de cair no fallback str(response),
+    evitando que "AgentResponse(text='', ...)" seja exibido ao usuario.
+
     Args:
         response: Objeto de resposta do SDK
 
     Returns:
-        str: Texto extraido e limpo
+        str: Texto extraido e limpo, ou None se vazio/erro
     """
     texto = None
 
@@ -403,10 +450,21 @@ def _extrair_texto_resposta(response) -> Optional[str]:
     if hasattr(response, 'text'):
         logger.debug(f"[TEAMS-BOT] response.text presente: {bool(response.text)}")
 
-    # Tenta diferentes formas de extrair o texto
-    if hasattr(response, 'text') and response.text:
-        texto = response.text
-        logger.debug(f"[TEAMS-BOT] Texto extraido via response.text: {len(texto)} chars")
+    # Fix 2: Tratar AgentResponse (ou qualquer objeto com .text) ANTES do fallback
+    # Se tem atributo .text, usa ele — mesmo que vazio (retorna None, não str(response))
+    if hasattr(response, 'text'):
+        if response.text:
+            texto = response.text
+            logger.debug(f"[TEAMS-BOT] Texto extraido via response.text: {len(texto)} chars")
+        else:
+            # response.text vazio — agente nao gerou texto (erro, CLIConnectionError, etc.)
+            # Retorna None para que _obter_resposta_agente trate corretamente
+            logger.warning(
+                "[TEAMS-BOT] response.text vazio — agente nao gerou texto. "
+                f"type={type(response).__name__}"
+            )
+            return None
+
     elif hasattr(response, 'content') and response.content:
         if isinstance(response.content, list):
             partes = []
@@ -437,7 +495,16 @@ def _extrair_texto_resposta(response) -> Optional[str]:
     elif isinstance(response, bytes):
         texto = response.decode('utf-8', errors='replace')
     else:
+        # Fallback: converte para string mas NUNCA para objetos com __repr__
+        # que geram "ClassName(field='', ...)"
         texto = str(response)
+        # Detectar repr() de dataclass/namedtuple (ex: "AgentResponse(text='', ...)")
+        type_name = type(response).__name__
+        if texto.startswith(f"{type_name}("):
+            logger.warning(
+                f"[TEAMS-BOT] str(response) gerou repr() de {type_name} — ignorando"
+            )
+            return None
         if texto.startswith("b'") or texto.startswith('b"'):
             logger.warning(f"[TEAMS-BOT] str(response) gerou padrao bytes: {texto[:50]}")
             texto = texto[2:-1]
@@ -499,6 +566,7 @@ def _sanitizar_texto(texto: str) -> str:
 # ═══════════════════════════════════════════════════════════════
 
 def process_teams_task_async(
+    app,
     task_id: str,
     mensagem: str,
     usuario: str,
@@ -508,23 +576,22 @@ def process_teams_task_async(
     """
     Processa uma TeamsTask em daemon thread (background).
 
-    Cria app_context próprio, configura session context para permissions.py,
-    chama o agente, e atualiza a TeamsTask no banco com o resultado.
+    Fix 3: Recebe app como parametro ao inves de criar novo via create_app().
+    Isso reutiliza o app context do gunicorn worker e evita problemas com
+    inicializacao de hooks/MCP em ambiente headless.
 
     IMPORTANTE: Esta função roda no MESMO processo gunicorn (daemon thread).
     Isso permite que pending_questions.py (threading.Event) funcione
     para AskUserQuestion cross-thread.
 
     Args:
+        app: Flask app instance (do gunicorn worker)
         task_id: ID da TeamsTask
         mensagem: Texto da mensagem do usuário
         usuario: Nome do usuário
         conversation_id: ID da conversa do Teams
         teams_user_id: ID real do usuário na tabela usuarios
     """
-    from app import create_app
-
-    app = create_app()
     with app.app_context():
         from app.teams.models import TeamsTask
         from app import db
@@ -564,14 +631,45 @@ def process_teams_task_async(
             set_current_session_id(teams_session_id)
             set_teams_task_context(teams_session_id, task_id)
 
-            # Obter resposta do agente
-            resposta_texto, new_sdk_session_id = _obter_resposta_agente(
-                mensagem=mensagem,
-                usuario=usuario,
-                sdk_session_id=sdk_session_id,
-                user_id=teams_user_id,
-                can_use_tool=agent_can_use_tool,
-            )
+            # Fix 3b: Retry na chamada do agente (max 2 tentativas)
+            # CLIConnectionError pode ocorrer na 1a tentativa (race condition no subprocess),
+            # mas tipicamente funciona na 2a.
+            resposta_texto = None
+            new_sdk_session_id = None
+            max_retries = 2
+
+            for attempt in range(max_retries):
+                try:
+                    resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+                        mensagem=mensagem,
+                        usuario=usuario,
+                        sdk_session_id=sdk_session_id,
+                        user_id=teams_user_id,
+                        can_use_tool=agent_can_use_tool,
+                    )
+                    if resposta_texto:
+                        break
+                    # Se resposta vazia na 1a tentativa, retry
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"[TEAMS-ASYNC] Tentativa {attempt + 1}: resposta vazia. Retry..."
+                        )
+                        time.sleep(2)
+                except Exception as agent_err:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"[TEAMS-ASYNC] Tentativa {attempt + 1} falhou: {agent_err}. Retry..."
+                        )
+                        time.sleep(2)
+                    else:
+                        logger.error(
+                            f"[TEAMS-ASYNC] Todas as {max_retries} tentativas falharam: {agent_err}",
+                            exc_info=True,
+                        )
+                        resposta_texto = (
+                            "Desculpe, ocorreu um erro ao processar sua mensagem. "
+                            "Tente novamente."
+                        )
 
             # Salvar mensagens e sdk_session_id na sessão
             if session:
@@ -592,11 +690,11 @@ def process_teams_task_async(
                 if resposta_texto:
                     task.status = 'completed'
                     task.resposta = _sanitizar_texto(resposta_texto)
-                    task.completed_at = datetime.utcnow()
+                    task.completed_at = datetime.now(timezone.utc)
                 else:
                     task.status = 'error'
                     task.resposta = 'O agente não retornou uma resposta.'
-                    task.completed_at = datetime.utcnow()
+                    task.completed_at = datetime.now(timezone.utc)
 
                 try:
                     db.session.commit()
@@ -608,9 +706,23 @@ def process_teams_task_async(
                         )
                         db.session.rollback()
                         db.session.close()
+                        # P1-1: Após close(), objetos ficam detached — commit commitaria
+                        # transação vazia. Re-fetch task e re-apply mudanças.
                         try:
-                            db.session.commit()
-                            logger.info("[TEAMS-ASYNC] Retry commit bem-sucedido")
+                            task = db.session.get(TeamsTask, task_id)
+                            if task:
+                                if resposta_texto:
+                                    task.status = 'completed'
+                                    task.resposta = _sanitizar_texto(resposta_texto)
+                                    task.completed_at = datetime.now(timezone.utc)
+                                else:
+                                    task.status = 'error'
+                                    task.resposta = 'O agente não retornou uma resposta.'
+                                    task.completed_at = datetime.now(timezone.utc)
+                                db.session.commit()
+                                logger.info("[TEAMS-ASYNC] Retry commit bem-sucedido (re-fetched)")
+                            else:
+                                logger.error(f"[TEAMS-ASYNC] Task {task_id} não encontrada no retry")
                         except Exception as retry_err:
                             logger.error(f"[TEAMS-ASYNC] Retry commit falhou: {retry_err}")
                             db.session.rollback()
@@ -633,7 +745,7 @@ def process_teams_task_async(
                 if task and task.status not in ('completed', 'error'):
                     task.status = 'error'
                     task.resposta = f'Erro ao processar: {str(e)[:500]}'
-                    task.completed_at = datetime.utcnow()
+                    task.completed_at = datetime.now(timezone.utc)
                     db.session.commit()
             except Exception:
                 logger.error("[TEAMS-ASYNC] Erro ao marcar task como error", exc_info=True)
@@ -666,18 +778,21 @@ def cleanup_stale_teams_tasks() -> int:
         from app.teams.models import TeamsTask
         from app import db
 
-        threshold = datetime.utcnow() - timedelta(minutes=5)
+        threshold = datetime.now(timezone.utc) - timedelta(minutes=5)
 
+        # P2-C: Usar updated_at ao invés de created_at para evitar matar tasks legítimas.
+        # Uma task criada há 5+ min pode ter mudado para awaiting_user_input há 30s.
+        # Com created_at, seria marcada como timeout enquanto o usuário ainda responde.
         stale_tasks = TeamsTask.query.filter(
-            TeamsTask.status.in_(['pending', 'processing']),
-            TeamsTask.created_at < threshold,
+            TeamsTask.status.in_(['pending', 'processing', 'awaiting_user_input']),
+            TeamsTask.updated_at < threshold,
         ).all()
 
         count = 0
         for task in stale_tasks:
             task.status = 'timeout'
             task.resposta = 'Tempo limite excedido no processamento.'
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             count += 1
 
         if count > 0:
