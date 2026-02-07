@@ -538,7 +538,7 @@ try:
                     "is_error": True,
                 }
 
-            errors = result_error["logs"]
+            errors = result_error["logs"] or []
             total_errors = len(errors)
 
             # Formatar resultado

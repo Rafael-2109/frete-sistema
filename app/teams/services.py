@@ -314,12 +314,14 @@ def _get_or_create_teams_session(
         ).order_by(AgentSession.updated_at.desc()).first()
 
         # Verifica se sessão expirou (TTL de 4h)
+        # P1-TZ: Dados existentes no banco podem ser naive (datetime.utcnow antigo).
+        # Usar .replace(tzinfo=None) para garantir comparação safe naive vs naive.
         session_expired = False
         if session and session.updated_at:
-            ttl_threshold = datetime.now(timezone.utc) - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
-            if session.updated_at < ttl_threshold:
+            ttl_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
+            if session.updated_at.replace(tzinfo=None) < ttl_threshold:
                 session_expired = True
-                hours_inactive = (datetime.now(timezone.utc) - session.updated_at).total_seconds() / 3600
+                hours_inactive = (datetime.now(timezone.utc).replace(tzinfo=None) - session.updated_at.replace(tzinfo=None)).total_seconds() / 3600
                 logger.info(
                     f"[TEAMS-BOT] Sessao expirada ({hours_inactive:.1f}h inativa), "
                     f"criando nova"

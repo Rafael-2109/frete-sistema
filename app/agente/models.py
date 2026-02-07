@@ -10,7 +10,7 @@ Arquitetura:
 - Quando SDK expira, injeta histórico de mensagens como contexto
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
@@ -65,8 +65,8 @@ class AgentSession(db.Model):
     summary_message_count = db.Column(db.Integer, default=0)  # message_count quando gerado
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relacionamento - cascade delete quando usuário é deletado
     user = db.relationship(
@@ -174,7 +174,7 @@ class AgentSession(db.Model):
             'id': f'msg_{uuid.uuid4().hex[:12]}',
             'role': 'user',
             'content': content,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).isoformat() + 'Z',
         }
 
         self.data['messages'].append(message)
@@ -185,7 +185,7 @@ class AgentSession(db.Model):
         if not self.title:
             self.title = self._generate_title()
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
         # Marca data como modificado para SQLAlchemy detectar
         from sqlalchemy.orm.attributes import flag_modified
@@ -218,7 +218,7 @@ class AgentSession(db.Model):
             'id': f'msg_{uuid.uuid4().hex[:12]}',
             'role': 'assistant',
             'content': content,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).isoformat() + 'Z',
             'tokens': {
                 'input': input_tokens,
                 'output': output_tokens,
@@ -234,7 +234,7 @@ class AgentSession(db.Model):
         total_new_tokens = input_tokens + output_tokens
         self.data['total_tokens'] = self.data.get('total_tokens', 0) + total_new_tokens
         self.message_count = (self.message_count or 0) + 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
         # Marca data como modificado
         from sqlalchemy.orm.attributes import flag_modified
@@ -295,7 +295,7 @@ class AgentSession(db.Model):
             summary_data: Dicionário com resumo estruturado
         """
         self.summary = summary_data
-        self.summary_updated_at = datetime.utcnow()
+        self.summary_updated_at = datetime.now(timezone.utc)
         self.summary_message_count = self.message_count or 0
 
         from sqlalchemy.orm.attributes import flag_modified
@@ -429,8 +429,8 @@ class AgentMemory(db.Model):
     is_directory = db.Column(db.Boolean, default=False, nullable=False)
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relacionamento - cascade delete quando usuário é deletado
     user = db.relationship(
@@ -647,7 +647,7 @@ class AgentMemoryVersion(db.Model):
     version = db.Column(db.Integer, nullable=False)
 
     # Timestamp da mudança
-    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Quem fez a mudança
     changed_by = db.Column(db.String(50), nullable=True)  # 'user', 'haiku', 'claude'
