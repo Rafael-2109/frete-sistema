@@ -150,7 +150,7 @@ MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_G
 # Opus 4.6: ~91s por resposta com tools, custo $5/$25 per 1M tokens
 # Sonnet 4.5: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens
 # Para usar Opus no Teams: TEAMS_DEFAULT_MODEL=claude-opus-4-6
-TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-4-5-20250929")
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-6")
 
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
