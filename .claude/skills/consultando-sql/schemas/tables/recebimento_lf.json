@@ -104,6 +104,11 @@
       "description": "Data de criação"
     },
     {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
       "name": "processado_em",
       "type": "timestamp"
     },
@@ -114,23 +119,23 @@
   ],
   "indices": [
     {
+      "name": "ix_recebimento_lf_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_recebimento_lf_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_recebimento_lf_chave_nfe",
       "columns": [
         "chave_nfe"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_recebimento_lf_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     }

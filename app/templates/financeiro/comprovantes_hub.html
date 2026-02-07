@@ -82,7 +82,7 @@
         <div>
             <h2 class="mb-0">
                 <i class="fas fa-receipt text-warning"></i>
-                Comprovantes de Pagamento de Boleto
+                Comprovantes de Pagamento
             </h2>
             <small class="text-muted">
                 <span id="total-comprovantes">{{ total_comprovantes }}</span> comprovante(s) importado(s)
@@ -429,6 +429,18 @@
 
                     <span class="text-muted">|</span>
 
+                    <!-- Filtro Tipo (Boleto/PIX) -->
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-tag me-1"></i>Tipo:</span>
+                        <select class="form-select form-select-sm filtro-tipo" id="filtro-tipo" style="width: 110px;">
+                            <option value="">Todos</option>
+                            <option value="boleto">Boleto</option>
+                            <option value="pix">PIX</option>
+                        </select>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
                     <!-- Checkboxes Pipeline -->
                     <div class="form-check form-check-inline mb-0">
                         <input class="form-check-input filtro-check" type="checkbox" id="filtro-ofx" value="ofx" data-tristate="neutral">
@@ -506,6 +518,7 @@
                                 <input type="checkbox" id="check-todos" class="form-check-input"
                                        title="Selecionar todos pendentes">
                             </th>
+                            <th>Tipo</th>
                             <th>Data</th>
                             <th>Beneficiário</th>
                             <th>Documento</th>
@@ -1147,7 +1160,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 searchable: false,
                 width: '35px',
             },
-            // ── COL 1: DATA (Data Pgto + Vencimento + Atraso) ──
+            // ── COL 1: TIPO (badge boleto/pix) ──
+            {
+                data: 'tipo',
+                render: function(val, type, row) {
+                    if (type !== 'display') return val || 'boleto';
+                    if (val === 'pix') {
+                        return '<span class="badge bg-success" style="font-size:0.78em">' +
+                               '<i class="fas fa-bolt me-1"></i>PIX</span>';
+                    }
+                    return '<span class="badge bg-primary" style="font-size:0.78em">' +
+                           '<i class="fas fa-barcode me-1"></i>Boleto</span>';
+                },
+                defaultContent: '<span class="badge bg-primary" style="font-size:0.78em"><i class="fas fa-barcode me-1"></i>Boleto</span>',
+                width: '65px',
+                className: 'text-center',
+            },
+            // ── COL 2: DATA (Data Pgto + Vencimento + Atraso) ──
             {
                 data: 'data_pagamento',
                 render: function(val, type, row) {
@@ -2931,6 +2960,13 @@ document.addEventListener('DOMContentLoaded', function() {
         var rowData = tabela.row(dataIndex).data();
         if (!rowData) return true;
 
+        // --- FILTRO TIPO (Boleto/PIX) ---
+        var filtroTipo = document.getElementById('filtro-tipo').value;
+        if (filtroTipo) {
+            var tipoRow = rowData.tipo || 'boleto';
+            if (tipoRow !== filtroTipo) return false;
+        }
+
         // --- 0. Filtro de Data (Dia/Mês/Ano) ---
         var filtroDia = document.getElementById('filtro-dia').value.trim();
         var filtroMes = document.getElementById('filtro-mes').value;
@@ -3020,6 +3056,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Event handlers para mudanca nos filtros
+    // Handler filtro tipo (boleto/pix)
+    $('#filtro-tipo').on('change', function() {
+        tabela.draw();
+    });
+
     // Handler filtros de data (dia/mes/ano)
     $('.filtro-data').on('change input', function() {
         tabela.draw();
@@ -3083,6 +3124,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.confianca-check').forEach(function(cb) {
             cb.checked = false;
         });
+        // Reset filtro tipo
+        document.getElementById('filtro-tipo').value = '';
         // Reset filtros de data
         document.getElementById('filtro-dia').value = '';
         document.getElementById('filtro-mes').value = '';
@@ -3117,6 +3160,9 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             badgeConf.style.display = 'none';
         }
+
+        // Contar filtro tipo
+        if (document.getElementById('filtro-tipo').value) count++;
 
         // Contar filtros de data ativos
         if (document.getElementById('filtro-dia').value.trim()) count++;

@@ -18,7 +18,10 @@ class ComprovantePagamentoBoleto(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # 🔑 CHAVE ÚNICA - Número do agendamento bancário
+    # 🏷️ TIPO: 'boleto' ou 'pix'
+    tipo = db.Column(db.String(20), default='boleto', nullable=False, index=True)
+
+    # 🔑 CHAVE ÚNICA - Número do agendamento bancário (boleto) ou EndToEndId (PIX)
     numero_agendamento = db.Column(
         db.String(50), nullable=False, unique=True, index=True
     )
@@ -106,6 +109,7 @@ class ComprovantePagamentoBoleto(db.Model):
         """Serializa para dicionário (uso em APIs JSON)."""
         return {
             'id': self.id,
+            'tipo': self.tipo,
             'numero_agendamento': self.numero_agendamento,
             'data_comprovante': self.data_comprovante.strftime('%d/%m/%Y') if self.data_comprovante else None,
             'cooperativa': self.cooperativa,

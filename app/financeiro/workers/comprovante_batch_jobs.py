@@ -187,6 +187,8 @@ def processar_batch_comprovantes_job(
         with _app_context_safe():
             from io import BytesIO
             from app.financeiro.services.comprovante_service import processar_pdf_comprovantes
+            from app.financeiro.services.comprovante_pix_service import processar_pdf_comprovantes_pix
+            from app.financeiro.parsers.dispatcher import detectar_tipo_e_banco
             from app.utils.file_storage import get_file_storage
 
             for idx, arq in enumerate(arquivos_info, 1):
@@ -222,13 +224,24 @@ def processar_batch_comprovantes_job(
                     except Exception as e:
                         logger.warning(f"[Comprovante Batch] Erro ao salvar PDF definitivo no S3: {nome}: {e}")
 
-                    # Processar via service (OCR + persistência com retry)
-                    res = processar_pdf_comprovantes(
-                        arquivo_bytes=pdf_bytes,
-                        nome_arquivo=nome,
-                        usuario=usuario_nome,
-                        arquivo_s3_path=s3_path_definitivo,
-                    )
+                    # Detectar tipo automaticamente (boleto ou PIX)
+                    tipo_detectado, banco_det = detectar_tipo_e_banco(pdf_bytes)
+
+                    if tipo_detectado == 'pix':
+                        res = processar_pdf_comprovantes_pix(
+                            arquivo_bytes=pdf_bytes,
+                            nome_arquivo=nome,
+                            usuario=usuario_nome,
+                            arquivo_s3_path=s3_path_definitivo,
+                        )
+                    else:
+                        # Default: boleto (OCR + persistência com retry)
+                        res = processar_pdf_comprovantes(
+                            arquivo_bytes=pdf_bytes,
+                            nome_arquivo=nome,
+                            usuario=usuario_nome,
+                            arquivo_s3_path=s3_path_definitivo,
+                        )
 
                     # Acumular stats
                     resultado['novos'] += res['novos']

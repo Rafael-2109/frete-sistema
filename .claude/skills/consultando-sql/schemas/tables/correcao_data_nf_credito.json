@@ -93,16 +93,16 @@
   ],
   "indices": [
     {
-      "name": "idx_correcao_status",
+      "name": "idx_correcao_data_emissao",
       "columns": [
-        "status"
+        "data_emissao"
       ],
       "unique": false
     },
     {
-      "name": "idx_correcao_data_emissao",
+      "name": "idx_correcao_status",
       "columns": [
-        "data_emissao"
+        "status"
       ],
       "unique": false
     },

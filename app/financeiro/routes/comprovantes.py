@@ -62,10 +62,13 @@ def comprovantes_hub():
 @login_required
 def comprovantes_api_upload():
     """
-    Upload síncrono de um ou mais PDFs de comprovantes.
+    Upload síncrono de um ou mais PDFs de comprovantes (boleto ou PIX).
     Ideal para poucos arquivos (1-20). Processa e retorna resumo.
+    O tipo é detectado automaticamente pelo dispatcher.
     """
     from app.financeiro.services.comprovante_service import processar_pdf_comprovantes
+    from app.financeiro.services.comprovante_pix_service import processar_pdf_comprovantes_pix
+    from app.financeiro.parsers.dispatcher import detectar_tipo_e_banco
 
     arquivos = request.files.getlist('arquivos')
 
@@ -115,12 +118,24 @@ def comprovantes_api_upload():
             except Exception as e:
                 logger.warning(f"Erro ao salvar PDF no S3: {nome}: {e}")
 
-            resultado = processar_pdf_comprovantes(
-                arquivo_bytes=arquivo_bytes,
-                nome_arquivo=nome,
-                usuario=current_user.nome if hasattr(current_user, 'nome') else current_user.username,
-                arquivo_s3_path=s3_path,
-            )
+            # Detectar tipo automaticamente (boleto ou PIX)
+            tipo_detectado, banco = detectar_tipo_e_banco(arquivo_bytes)
+
+            if tipo_detectado == 'pix':
+                resultado = processar_pdf_comprovantes_pix(
+                    arquivo_bytes=arquivo_bytes,
+                    nome_arquivo=nome,
+                    usuario=current_user.nome if hasattr(current_user, 'nome') else current_user.username,
+                    arquivo_s3_path=s3_path,
+                )
+            else:
+                # Default: boleto (inclui 'boleto' e 'desconhecido' — OCR pode funcionar)
+                resultado = processar_pdf_comprovantes(
+                    arquivo_bytes=arquivo_bytes,
+                    nome_arquivo=nome,
+                    usuario=current_user.nome if hasattr(current_user, 'nome') else current_user.username,
+                    arquivo_s3_path=s3_path,
+                )
 
             resumo_geral['novos'] += resultado['novos']
             resumo_geral['duplicados'] += resultado['duplicados']

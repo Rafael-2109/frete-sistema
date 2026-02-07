@@ -214,13 +214,6 @@
   ],
   "indices": [
     {
-      "name": "idx_extrato_item_lote",
-      "columns": [
-        "lote_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_extrato_item_lote_id",
       "columns": [
         "lote_id"
@@ -273,6 +266,13 @@
       "name": "ix_extrato_item_cnpj_pagador",
       "columns": [
         "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_lote",
+      "columns": [
+        "lote_id"
       ],
       "unique": false
     }

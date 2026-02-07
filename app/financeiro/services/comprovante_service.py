@@ -389,6 +389,7 @@ def processar_pdf_comprovantes(
         try:
             savepoint = db.session.begin_nested()
             registro = ComprovantePagamentoBoleto(
+                tipo='boleto',
                 numero_agendamento=comp.numero_agendamento,
                 data_comprovante=_converter_data_br(comp.data_comprovante),
                 cooperativa=comp.cooperativa,
@@ -503,6 +504,7 @@ def _fallback_commit_individual(
 
         try:
             registro = ComprovantePagamentoBoleto(
+                tipo='boleto',
                 numero_agendamento=comp.numero_agendamento,
                 data_comprovante=_converter_data_br(comp.data_comprovante),
                 cooperativa=comp.cooperativa,

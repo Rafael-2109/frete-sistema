@@ -235,9 +235,9 @@
       "name": "comprovante_pagamento_boleto",
       "description": "Comprovantes de pagamento de boletos.",
       "key_fields": [
+        "tipo",
         "numero_agendamento",
-        "data_comprovante",
-        "cooperativa"
+        "data_comprovante"
       ]
     },
     {

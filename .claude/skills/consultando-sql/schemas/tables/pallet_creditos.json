@@ -133,16 +133,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_creditos_nf_remessa_id",
+      "name": "ix_pallet_creditos_cnpj_responsavel",
       "columns": [
-        "nf_remessa_id"
+        "cnpj_responsavel"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_creditos_cnpj_responsavel",
+      "name": "ix_pallet_creditos_nf_remessa_id",
       "columns": [
-        "cnpj_responsavel"
+        "nf_remessa_id"
       ],
       "unique": false
     }

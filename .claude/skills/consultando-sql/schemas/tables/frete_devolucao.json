@@ -155,13 +155,6 @@
       "unique": false
     },
     {
-      "name": "idx_frete_dev_transportadora",
-      "columns": [
-        "transportadora_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_frete_devolucao_status",
       "columns": [
         "status"
@@ -169,16 +162,23 @@
       "unique": false
     },
     {
-      "name": "idx_frete_dev_data_cotacao",
+      "name": "ix_frete_devolucao_ativo",
       "columns": [
-        "data_cotacao"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_frete_devolucao_ativo",
+      "name": "idx_frete_dev_transportadora",
       "columns": [
-        "ativo"
+        "transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_frete_dev_data_cotacao",
+      "columns": [
+        "data_cotacao"
       ],
       "unique": false
     },

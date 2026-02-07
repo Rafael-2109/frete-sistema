@@ -21,6 +21,7 @@ Uso:
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 
 from app import db
@@ -523,6 +524,8 @@ def processar_ofx_e_vincular(
         'sem_comprovante': 0,
         'sem_odoo': 0,
         'ja_vinculados': 0,
+        'pix_transacoes': 0,
+        'pix_vinculados': 0,
         'erros': 0,
         'detalhes': [],
     }
@@ -552,8 +555,11 @@ def processar_ofx_e_vincular(
         resultado['sucesso'] = True
         return resultado
 
-    # Filtrar transações com CHECKNUM
-    transacoes_com_checknum = [t for t in transacoes if t.get('checknum')]
+    # Filtrar transações com CHECKNUM (excluir PIX que tem checknum="0")
+    transacoes_com_checknum = [
+        t for t in transacoes
+        if t.get('checknum') and t['checknum'] != '0'
+    ]
     resultado['com_checknum'] = len(transacoes_com_checknum)
 
     if not transacoes_com_checknum:
@@ -639,6 +645,98 @@ def processar_ofx_e_vincular(
             )
 
         resultado['detalhes'].append(detalhe)
+
+    # ─── FASE 1B: Match OFX → Comprovante PIX ─────────────────────────
+    # Transações PIX no OFX: REFNUM="Pix", CHECKNUM=0 ou ausente, TRNTYPE=DEBIT
+    transacoes_pix = [
+        t for t in transacoes
+        if t.get('refnum') == 'Pix'
+        and (not t.get('checknum') or t.get('checknum') == '0')
+        and t.get('trntype') == 'DEBIT'
+    ]
+
+    resultado['pix_transacoes'] = len(transacoes_pix)
+    resultado['pix_vinculados'] = 0
+
+    for trn_pix in transacoes_pix:
+        fitid_pix = trn_pix.get('fitid')
+        detalhe_pix = {
+            'checknum': trn_pix.get('checknum', '0'),
+            'fitid': fitid_pix,
+            'valor': float(trn_pix['trnamt']) if trn_pix.get('trnamt') else None,
+            'data': trn_pix['dtposted'].strftime('%d/%m/%Y') if trn_pix.get('dtposted') else None,
+            'memo': trn_pix.get('memo'),
+            'tipo': 'pix',
+            'status_comprovante': 'sem_match',
+            'status_odoo': 'nao_buscou',
+            'mensagem': '',
+        }
+
+        # Extrair CNPJ do campo NAME: "Pagamento Pix XX.XXX.XXX XXXX-XX"
+        name_field = trn_pix.get('name', '')
+        cnpj_match = re.search(r'(\d{2}\.\d{3}\.\d{3})\s*(\d{4}-\d{2})', name_field)
+        if not cnpj_match:
+            detalhe_pix['status_comprovante'] = 'sem_match'
+            detalhe_pix['mensagem'] = 'PIX sem CNPJ no campo NAME — match manual necessário'
+            resultado['detalhes'].append(detalhe_pix)
+            continue
+
+        # 6 dígitos centrais do CNPJ (sem pontos): "722252"
+        cnpj_parcial = cnpj_match.group(1).replace('.', '')  # "00722252" → pegar centrais
+        # Na verdade extraímos XX.XXX.XXX = 8 dígitos. Os centrais do CNPJ
+        # (posição 3-8 do CNPJ completo XX.XXX.XXX/XXXX-XX) são os mais
+        # discriminantes. Usamos contains no beneficiario_cnpj_cpf mascarado.
+        # Ex: comprovante tem "**.722.252/0001-**", queremos match nos "722252"
+        cnpj_busca = cnpj_parcial[2:]  # Remove os 2 primeiros dígitos (raiz), fica "722252"
+
+        # Match: data + valor + CNPJ parcial contra comprovantes PIX
+        data_pix = trn_pix.get('dtposted')
+        valor_pix = abs(trn_pix.get('trnamt', 0))
+
+        query = ComprovantePagamentoBoleto.query.filter(
+            ComprovantePagamentoBoleto.tipo == 'pix',
+            ComprovantePagamentoBoleto.data_pagamento == data_pix,
+            ComprovantePagamentoBoleto.valor_pago == valor_pix,
+            ComprovantePagamentoBoleto.beneficiario_cnpj_cpf.contains(cnpj_busca),
+            ComprovantePagamentoBoleto.ofx_fitid.is_(None),  # ainda não vinculado
+        )
+        comprovante_pix = query.first()
+
+        if comprovante_pix:
+            try:
+                comprovante_pix.ofx_fitid = fitid_pix
+                comprovante_pix.ofx_checknum = '0'
+                comprovante_pix.ofx_memo = trn_pix.get('memo')
+                comprovante_pix.ofx_valor = trn_pix.get('trnamt')
+                comprovante_pix.ofx_data = data_pix
+                comprovante_pix.ofx_arquivo_origem = nome_arquivo
+
+                detalhe_pix['status_comprovante'] = 'vinculado'
+                detalhe_pix['mensagem'] = (
+                    f'PIX vinculado: {comprovante_pix.beneficiario_razao_social} '
+                    f'| EndToEnd: {comprovante_pix.numero_agendamento}'
+                )
+                resultado['pix_vinculados'] += 1
+                resultado['vinculados_comprovante'] += 1
+
+                # Adicionar para Fase 2 (Odoo)
+                if fitid_pix:
+                    comprovantes_vinculados.append((comprovante_pix, fitid_pix))
+
+            except Exception as e:
+                detalhe_pix['status_comprovante'] = 'erro'
+                detalhe_pix['mensagem'] = f'Erro ao vincular PIX: {str(e)}'
+                resultado['erros'] += 1
+                logger.error(f"[OFX Vinculação] Erro ao vincular PIX FITID {fitid_pix}: {e}")
+        else:
+            detalhe_pix['status_comprovante'] = 'sem_match'
+            detalhe_pix['mensagem'] = (
+                f'PIX sem comprovante: data={detalhe_pix["data"]}, '
+                f'valor={detalhe_pix["valor"]}, CNPJ parcial={cnpj_busca}'
+            )
+            resultado['sem_comprovante'] += 1
+
+        resultado['detalhes'].append(detalhe_pix)
 
     # ─── FASE 2: Batch query no Odoo ─────────────────────────────────
     odoo_por_ref = {}
