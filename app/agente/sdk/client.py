@@ -13,6 +13,7 @@ ARQUITETURA (v2 — query() + resume):
 - resume=sdk_session_id restaura contexto da conversa anterior (CLI carrega sessão do disco).
 """
 
+import asyncio
 import logging
 import time
 from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
@@ -1638,6 +1639,13 @@ Nunca invente informações."""
             "type": "user",
             "message": {"role": "user", "content": content_blocks}
         }
+
+        # CRITICAL: Manter stream aberto para evitar race condition em stream_input().
+        # Sem isso, stream_input() chama end_input() que fecha stdin do CLI.
+        # Se houver _handle_control_request pendente (can_use_tool, hook, MCP),
+        # o write falha com CLIConnectionError: ProcessTransport is not ready for writing.
+        # O TaskGroup cancellation em query.close() limpa isso automaticamente.
+        await asyncio.Event().wait()
 
     @staticmethod
     def _with_resume(options: 'ClaudeAgentOptions', sdk_session_id: str) -> 'ClaudeAgentOptions':

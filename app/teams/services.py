@@ -314,18 +314,25 @@ def _get_or_create_teams_session(
         ).order_by(AgentSession.updated_at.desc()).first()
 
         # Verifica se sessão expirou (TTL de 4h)
-        # P1-TZ: Dados existentes no banco podem ser naive (agora_utc_naive antigo).
-        # Usar .replace(tzinfo=None) para garantir comparação safe naive vs naive.
+        # Usa agora_utc_naive() (padrão do projeto) para comparação safe naive vs naive.
+        # Try/except captura TypeError (comparação naive/aware) e AttributeError (campo None).
         session_expired = False
         if session and session.updated_at:
-            ttl_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
-            if session.updated_at.replace(tzinfo=None) < ttl_threshold:
+            try:
+                from app.utils.timezone import agora_utc_naive
+                ttl_threshold = agora_utc_naive() - timedelta(hours=TEAMS_SESSION_TTL_HOURS)
+                # Forçar naive para dados legados que podem ter tzinfo
+                updated_naive = session.updated_at.replace(tzinfo=None) if session.updated_at.tzinfo else session.updated_at
+                if updated_naive < ttl_threshold:
+                    session_expired = True
+                    hours_inactive = (agora_utc_naive() - updated_naive).total_seconds() / 3600
+                    logger.info(
+                        f"[TEAMS-BOT] Sessao expirada ({hours_inactive:.1f}h inativa), "
+                        f"criando nova"
+                    )
+            except (TypeError, AttributeError) as tz_err:
+                logger.warning(f"[TEAMS-BOT] Erro ao verificar TTL, criando nova sessão: {tz_err}")
                 session_expired = True
-                hours_inactive = (datetime.now(timezone.utc).replace(tzinfo=None) - session.updated_at.replace(tzinfo=None)).total_seconds() / 3600
-                logger.info(
-                    f"[TEAMS-BOT] Sessao expirada ({hours_inactive:.1f}h inativa), "
-                    f"criando nova"
-                )
 
         # Cria nova sessão se não existe ou expirou
         if not session or session_expired:
@@ -688,7 +695,9 @@ def process_teams_task_async(
                 db.session.rollback()
 
             # Atualizar TeamsTask com resultado (retry para SSL dropped)
-            task = db.session.get(TeamsTask, task_id)
+            # no_autoflush previne flush automático de dirty objects ao fazer get()
+            with db.session.no_autoflush:
+                task = db.session.get(TeamsTask, task_id)
             if task:
                 if resposta_texto:
                     task.status = 'completed'
@@ -747,7 +756,9 @@ def process_teams_task_async(
                 # Fix: rollback dirty state antes de buscar task para evitar
                 # autoflush failure que impede task de chegar a status terminal
                 db.session.rollback()
-                task = db.session.get(TeamsTask, task_id)
+                # no_autoflush previne flush automático de dirty objects ao fazer get()
+                with db.session.no_autoflush:
+                    task = db.session.get(TeamsTask, task_id)
                 if task and task.status not in ('completed', 'error'):
                     task.status = 'error'
                     task.resposta = f'Erro ao processar: {str(e)[:500]}'
