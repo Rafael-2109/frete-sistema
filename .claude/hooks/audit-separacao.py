@@ -17,7 +17,7 @@ Uso: Configurado em .claude/settings.local.json como PostToolUse hook
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Palavras-chave que identificam operacoes de separacao
