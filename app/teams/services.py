@@ -396,24 +396,19 @@ def _obter_resposta_agente(
 
     # Executa a coroutine de forma sincrona
     try:
-        # P1-4: asyncio.get_event_loop() deprecated desde 3.10, quebrará em 3.14+.
-        # Criar loop dedicado e fechar no finally.
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            response = loop.run_until_complete(
-                client.get_response(
-                    prompt=prompt_completo,
-                    user_name=usuario,
-                    sdk_session_id=sdk_session_id,
-                    user_id=user_id,
-                    model=TEAMS_DEFAULT_MODEL,
-                    can_use_tool=can_use_tool,
-                )
+        # asyncio.run() configura child watcher para subprocess support.
+        # new_event_loop() NAO configura, causando CLIConnectionError no SDK.
+        # Mesmo padrao usado pelo agente web (routes.py:609).
+        response = asyncio.run(
+            client.get_response(
+                prompt=prompt_completo,
+                user_name=usuario,
+                sdk_session_id=sdk_session_id,
+                user_id=user_id,
+                model=TEAMS_DEFAULT_MODEL,
+                can_use_tool=can_use_tool,
             )
-        finally:
-            loop.close()
+        )
 
         resposta_texto = _extrair_texto_resposta(response)
 
