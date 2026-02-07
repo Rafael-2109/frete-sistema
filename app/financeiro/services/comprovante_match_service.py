@@ -416,6 +416,187 @@ class ComprovanteMatchService:
         )
         return {'sucesso': True, 'lancamento': lanc.to_dict()}
 
+    def confirmar_multiplos(
+        self, comprovante_id: int, titulos: List[Dict], usuario: str
+    ) -> Dict:
+        """
+        Confirma múltiplos candidatos para o mesmo comprovante (Multi-NF).
+
+        1 comprovante → N títulos, cada um com valor_alocado.
+        Usado quando fornecedor agrupa 2+ NFs em 1 boleto.
+
+        Args:
+            comprovante_id: ID do comprovante
+            titulos: Lista de dicts com:
+                - candidato_data: Dict com dados do candidato (mesmo formato de buscar_candidatos)
+                - valor_alocado: float — quanto do comprovante vai para este título
+            usuario: Nome do usuário
+
+        Returns:
+            Dict com sucesso + lista de lançamentos criados
+
+        Validações:
+            - soma(valor_alocado) == comp.valor_pago (tolerância R$ 0.01)
+            - todos do mesmo odoo_partner_id (mesmo fornecedor)
+            - todos da mesma company (mesmo company_id)
+            - cada valor_alocado > 0
+            - cada titulo com saldo suficiente (odoo_valor_residual >= valor_alocado)
+        """
+        comp = ComprovantePagamentoBoleto.query.get(comprovante_id)
+        if not comp:
+            return {'sucesso': False, 'erro': f'Comprovante {comprovante_id} não encontrado'}
+
+        if not titulos or len(titulos) < 2:
+            return {'sucesso': False, 'erro': 'Multi-NF requer pelo menos 2 títulos'}
+
+        valor_pago = float(comp.valor_pago or 0)
+        if valor_pago <= 0:
+            return {'sucesso': False, 'erro': 'Comprovante sem valor_pago'}
+
+        # --- Validações ---
+
+        # 1. Cada valor_alocado > 0
+        for i, t in enumerate(titulos):
+            va = t.get('valor_alocado')
+            if va is None or float(va) <= 0:
+                return {
+                    'sucesso': False,
+                    'erro': f'Título {i+1}: valor_alocado deve ser > 0 (recebido: {va})',
+                }
+
+        # 2. Soma valor_alocado == valor_pago (tolerância 0.01)
+        soma_alocado = sum(float(t['valor_alocado']) for t in titulos)
+        if abs(soma_alocado - valor_pago) > 0.01:
+            return {
+                'sucesso': False,
+                'erro': (
+                    f'Soma dos valores alocados (R$ {soma_alocado:.2f}) '
+                    f'difere do valor pago (R$ {valor_pago:.2f}). '
+                    f'Diferença: R$ {abs(soma_alocado - valor_pago):.2f}'
+                ),
+            }
+
+        # 3. Todos do mesmo partner (fornecedor)
+        partner_ids = set()
+        for t in titulos:
+            cd = t.get('candidato_data', {})
+            pid = cd.get('odoo_partner_id')
+            if pid:
+                partner_ids.add(pid)
+        if len(partner_ids) > 1:
+            return {
+                'sucesso': False,
+                'erro': (
+                    f'Todos os títulos devem ser do mesmo fornecedor. '
+                    f'Encontrados partner_ids: {sorted(partner_ids)}'
+                ),
+            }
+
+        # 4. Todos da mesma company
+        company_ids = set()
+        for t in titulos:
+            cd = t.get('candidato_data', {})
+            cid = cd.get('odoo_company_id')
+            if cid:
+                company_ids.add(cid)
+        if len(company_ids) > 1:
+            return {
+                'sucesso': False,
+                'erro': (
+                    f'Todos os títulos devem ser da mesma empresa. '
+                    f'Encontrados company_ids: {sorted(company_ids)}'
+                ),
+            }
+
+        # 5. Cada titulo com saldo suficiente
+        for i, t in enumerate(titulos):
+            cd = t.get('candidato_data', {})
+            residual = float(cd.get('odoo_valor_residual') or 0)
+            va = float(t['valor_alocado'])
+            if residual > 0 and va > residual + 0.01:
+                return {
+                    'sucesso': False,
+                    'erro': (
+                        f'Título {i+1} (NF {cd.get("nf_numero", "?")}): '
+                        f'valor alocado R$ {va:.2f} excede saldo residual R$ {residual:.2f}'
+                    ),
+                }
+
+        # 6. Sem move_line_id duplicado
+        move_line_ids = [t.get('candidato_data', {}).get('odoo_move_line_id') for t in titulos]
+        if len(set(move_line_ids)) != len(move_line_ids):
+            return {'sucesso': False, 'erro': 'Títulos duplicados na seleção'}
+
+        # --- Rejeitar lançamentos PENDENTE/CONFIRMADO existentes ---
+        existentes = LancamentoComprovante.query.filter(
+            LancamentoComprovante.comprovante_id == comprovante_id,
+            LancamentoComprovante.status.in_(['PENDENTE', 'CONFIRMADO']),
+        ).all()
+        for lanc_exist in existentes:
+            lanc_exist.status = 'REJEITADO'
+            lanc_exist.rejeitado_em = agora_brasil()
+            lanc_exist.rejeitado_por = usuario
+            lanc_exist.motivo_rejeicao = f'Substituído: confirmação Multi-NF por {usuario}'
+
+        # --- Criar N lançamentos CONFIRMADOS ---
+        lancamentos_criados = []
+        for t in titulos:
+            cd = t.get('candidato_data', {})
+            va = float(t['valor_alocado'])
+
+            # Parsear vencimento
+            vencimento = None
+            venc_str = cd.get('odoo_vencimento')
+            if venc_str:
+                try:
+                    vencimento = datetime.strptime(venc_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    pass
+
+            lanc = LancamentoComprovante(
+                comprovante_id=comprovante_id,
+                odoo_move_line_id=cd.get('odoo_move_line_id'),
+                odoo_move_id=cd.get('odoo_move_id'),
+                odoo_move_name=cd.get('odoo_move_name'),
+                odoo_partner_id=cd.get('odoo_partner_id'),
+                odoo_partner_name=cd.get('odoo_partner_name'),
+                odoo_partner_cnpj=cd.get('odoo_partner_cnpj'),
+                odoo_company_id=cd.get('odoo_company_id'),
+                nf_numero=cd.get('nf_numero'),
+                parcela=cd.get('parcela'),
+                odoo_valor_original=cd.get('odoo_valor_original'),
+                odoo_valor_residual=cd.get('odoo_valor_residual'),
+                odoo_valor_recalculado=cd.get('odoo_valor_recalculado'),
+                odoo_vencimento=vencimento,
+                match_score=cd.get('score', 0),
+                match_criterios=json.dumps(cd.get('criterios', []), ensure_ascii=False),
+                diferenca_valor=cd.get('diferenca_valor'),
+                beneficiario_e_financeira=cd.get('beneficiario_e_financeira', False),
+                valor_alocado=va,
+                status='CONFIRMADO',
+                confirmado_em=agora_brasil(),
+                confirmado_por=usuario,
+            )
+            db.session.add(lanc)
+            lancamentos_criados.append(lanc)
+
+        db.session.commit()
+
+        logger.info(
+            f"Multi-NF CONFIRMADO: comp={comprovante_id}, "
+            f"{len(lancamentos_criados)} títulos, "
+            f"soma_alocado=R$ {soma_alocado:.2f}, "
+            f"por {usuario}"
+        )
+
+        return {
+            'sucesso': True,
+            'multi_nf': True,
+            'total_titulos': len(lancamentos_criados),
+            'soma_alocado': round(soma_alocado, 2),
+            'lancamentos': [l.to_dict() for l in lancamentos_criados],
+        }
+
     def rejeitar_match(self, lancamento_id: int, usuario: str, motivo: str = None) -> Dict:
         """Rejeita um match (PENDENTE -> REJEITADO)."""
         lanc = LancamentoComprovante.query.get(lancamento_id)

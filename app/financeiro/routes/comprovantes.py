@@ -368,11 +368,19 @@ def comprovantes_api_dados():
     # Buscar lançamentos associados (melhor match por comprovante)
     # Prioridade: LANCADO > CONFIRMADO > PENDENTE
     lancamentos_por_comp = {}
+    # Multi-NF: contar lançamentos CONFIRMADOS/LANCADOS por comprovante
+    lancamentos_count_por_comp = {}
     lancamentos = LancamentoComprovante.query.filter(
         LancamentoComprovante.status.in_(['PENDENTE', 'CONFIRMADO', 'LANCADO'])
     ).all()
 
     for lanc in lancamentos:
+        # Contar CONFIRMADOS + LANCADOS por comprovante (para detectar Multi-NF)
+        if lanc.status in ('CONFIRMADO', 'LANCADO'):
+            lancamentos_count_por_comp[lanc.comprovante_id] = (
+                lancamentos_count_por_comp.get(lanc.comprovante_id, 0) + 1
+            )
+
         existente = lancamentos_por_comp.get(lanc.comprovante_id)
         prioridade = {'LANCADO': 3, 'CONFIRMADO': 2, 'PENDENTE': 1}
         prio_lanc = prioridade.get(lanc.status, 0)
@@ -424,6 +432,11 @@ def comprovantes_api_dados():
             item['lancamento_lancado_por'] = lanc.lancado_por
             item['lancamento_odoo_debit_line_id'] = lanc.odoo_debit_line_id
             item['lancamento_odoo_credit_line_id'] = lanc.odoo_credit_line_id
+            item['lancamento_valor_alocado'] = float(lanc.valor_alocado) if lanc.valor_alocado else None
+            # Multi-NF: quantos lançamentos CONFIRMADOS/LANCADOS este comprovante tem
+            count = lancamentos_count_por_comp.get(c.id, 0)
+            item['lancamento_count'] = count
+            item['multi_nf'] = count > 1
         else:
             item['lancamento_id'] = None
             item['lancamento_status'] = None
@@ -456,6 +469,9 @@ def comprovantes_api_dados():
             item['lancamento_lancado_por'] = None
             item['lancamento_odoo_debit_line_id'] = None
             item['lancamento_odoo_credit_line_id'] = None
+            item['lancamento_valor_alocado'] = None
+            item['lancamento_count'] = 0
+            item['multi_nf'] = False
 
         dados.append(item)
 

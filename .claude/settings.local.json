@@ -62,9 +62,11 @@
       "WebFetch(domain:oneryalcin.medium.com)",
       "WebFetch(domain:pypi.org)",
       "mcp__ide__getDiagnostics",
-      "WebFetch(domain:docs.aiohttp.org)"
+      "WebFetch(domain:docs.aiohttp.org)",
+      "mcp__render__get_service"
     ],
     "deny": []
   },
-  "outputStyle": "precision-engineer"
+  "outputStyle": "precision-engineer",
+  "prefersReducedMotion": false
 }

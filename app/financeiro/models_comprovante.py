@@ -193,6 +193,10 @@ class LancamentoComprovante(db.Model):
     odoo_valor_recalculado = db.Column(db.Numeric(15, 2), nullable=True)    # valor após recálculo
     odoo_vencimento = db.Column(db.Date, nullable=True)                     # date_maturity
 
+    # 💰 Multi-NF: quanto do comprovante vai para este título
+    # NULL = comportamento antigo (1:1, valor total do comprovante)
+    valor_alocado = db.Column(db.Numeric(15, 2), nullable=True)
+
     # 📊 Resultado do matching
     match_score = db.Column(db.Integer, nullable=False, default=0)          # 0-100
     match_criterios = db.Column(db.Text, nullable=True)                     # JSON com critérios
@@ -260,6 +264,7 @@ class LancamentoComprovante(db.Model):
             'odoo_valor_original': float(self.odoo_valor_original) if self.odoo_valor_original else None,
             'odoo_valor_residual': float(self.odoo_valor_residual) if self.odoo_valor_residual else None,
             'odoo_valor_recalculado': float(self.odoo_valor_recalculado) if self.odoo_valor_recalculado else None,
+            'valor_alocado': float(self.valor_alocado) if self.valor_alocado else None,
             'odoo_vencimento': self.odoo_vencimento.strftime('%d/%m/%Y') if self.odoo_vencimento else None,
             # Match
             'match_score': self.match_score,

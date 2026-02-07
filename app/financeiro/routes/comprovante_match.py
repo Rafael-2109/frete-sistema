@@ -208,6 +208,87 @@ def comprovante_match_confirmar_direto(comprovante_id):
 
 
 # =============================================================================
+# CONFIRMAR MÚLTIPLOS CANDIDATOS (MULTI-NF)
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/match/<int:comprovante_id>/confirmar-multiplos', methods=['POST'])
+@login_required
+def comprovante_match_confirmar_multiplos(comprovante_id):
+    """
+    Confirma múltiplos candidatos para o mesmo comprovante (Multi-NF).
+
+    1 comprovante → N títulos, cada um com valor_alocado.
+    Usado quando fornecedor agrupa 2+ NFs em 1 boleto.
+
+    Body JSON:
+    {
+        "titulos": [
+            {"candidato_data": {...}, "valor_alocado": 5000.00},
+            {"candidato_data": {...}, "valor_alocado": 7000.00}
+        ]
+    }
+    """
+    try:
+        from app.financeiro.services.comprovante_match_service import ComprovanteMatchService
+
+        dados = request.get_json(silent=True) or {}
+        titulos = dados.get('titulos', [])
+
+        if not titulos or len(titulos) < 2:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Multi-NF requer pelo menos 2 títulos no campo "titulos"',
+            }), 400
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        service = ComprovanteMatchService()
+        resultado = service.confirmar_multiplos(comprovante_id, titulos, usuario)
+
+        if resultado.get('sucesso'):
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+
+    except Exception as e:
+        logger.error(f"Erro confirmar multiplos comp={comprovante_id}: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
+# LANÇAMENTO GRUPO NO ODOO (MULTI-NF)
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/lancamento/<int:comprovante_id>/lancar-grupo', methods=['POST'])
+@login_required
+def comprovante_lancamento_grupo(comprovante_id):
+    """
+    Lança grupo de lançamentos CONFIRMADOS do mesmo comprovante no Odoo (Multi-NF).
+
+    Cria 1 payment outbound POR título, usando valor_alocado como valor.
+    Reconcilia todos os payments com o statement line do extrato.
+    """
+    try:
+        from app.financeiro.services.comprovante_lancamento_service import (
+            ComprovanteLancamentoService,
+        )
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        service = ComprovanteLancamentoService()
+        resultado = service.lancar_grupo_no_odoo(comprovante_id, usuario)
+
+        if resultado.get('sucesso'):
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+
+    except Exception as e:
+        logger.error(f"Erro lançamento grupo comp={comprovante_id}: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
 # CONFIRMAR MATCH EM BATCH
 # =============================================================================
 

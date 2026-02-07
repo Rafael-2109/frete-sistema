@@ -562,6 +562,23 @@
                         <div class="mt-2">Buscando candidatos no Odoo...</div>
                     </div>
 
+                    <!-- Barra Multi-NF (aparece quando 2+ candidatos selecionados) -->
+                    <div id="multi-nf-bar" class="alert alert-info py-2 mb-2" style="display: none;">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="fas fa-layer-group me-1"></i>
+                                <strong>Multi-NF:</strong>
+                                <span id="multi-nf-count">0</span> titulo(s) selecionado(s)
+                                — Total alocado: <strong id="multi-nf-soma">R$ 0,00</strong>
+                                / Valor pago: <strong id="multi-nf-valor-pago">R$ 0,00</strong>
+                                <span id="multi-nf-diff" class="ms-2"></span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-success" id="btn-confirmar-multiplos" disabled>
+                                <i class="fas fa-check-double"></i> Confirmar Selecionados
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Lista de candidatos -->
                     <div id="modal-candidatos-lista" style="display: none;"></div>
 
@@ -1266,6 +1283,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         var scoreC = row.lancamento_match_score != null ? ' ' + row.lancamento_match_score + '%' : '';
                         html += '<span class="badge bg-info text-white" title="Pronto para lancar">' +
                                 '<i class="fas fa-check me-1"></i>Confirmado' + scoreC + '</span>';
+                        if (row.multi_nf) {
+                            html += '<br><span class="badge bg-primary" title="Multi-NF: ' + row.lancamento_count + ' titulos">' +
+                                    '<i class="fas fa-layer-group me-1"></i>Multi-NF (' + row.lancamento_count + ')</span>';
+                        }
                     } else if (val === 'LANCADO') {
                         var tooltip = 'Baixado no Odoo';
                         if (row.lancamento_odoo_payment_name) tooltip += ' | ' + row.lancamento_odoo_payment_name;
@@ -1281,6 +1302,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         html += '<span class="badge bg-success" title="' + tooltip + '">' +
                                 '<i class="fas fa-check-double me-1"></i>Baixado' + reconcIcons + '</span>';
+                        if (row.multi_nf) {
+                            html += '<br><span class="badge bg-primary" title="Multi-NF: ' + row.lancamento_count + ' titulos">' +
+                                    '<i class="fas fa-layer-group me-1"></i>Multi-NF (' + row.lancamento_count + ')</span>';
+                        }
                     } else if (row.lancamento_erro) {
                         html += '<span class="badge bg-danger" title="Erro: ' +
                                 (row.lancamento_erro || '').substring(0, 200) + '">' +
@@ -1344,9 +1369,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             'onclick="abrirModalMatch(' + val + ')" title="Buscar match no Odoo">' +
                             '<i class="fas fa-search-dollar"></i></button>';
                     if (row.lancamento_status === 'CONFIRMADO' && row.lancamento_id) {
-                        html += '<button class="btn btn-primary py-0 px-1" ' +
-                                'onclick="lancarIndividual(' + row.lancamento_id + ')" title="Lancar no Odoo">' +
-                                '<i class="fas fa-paper-plane"></i></button>';
+                        if (row.multi_nf) {
+                            // Multi-NF: botão lança grupo (todos os títulos do comprovante)
+                            html += '<button class="btn btn-primary py-0 px-1" ' +
+                                    'onclick="lancarGrupo(' + val + ')" title="Lancar Multi-NF (' + row.lancamento_count + ' titulos)">' +
+                                    '<i class="fas fa-layer-group"></i></button>';
+                        } else {
+                            html += '<button class="btn btn-primary py-0 px-1" ' +
+                                    'onclick="lancarIndividual(' + row.lancamento_id + ')" title="Lancar no Odoo">' +
+                                    '<i class="fas fa-paper-plane"></i></button>';
+                        }
                     }
                     html += '</div>';
 
@@ -1926,11 +1958,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.abrirModalMatch = async function(comprovanteId) {
         comprovanteAtualId = comprovanteId;
+        candidatosAtuais = [];
+        valorPagoAtual = 0;
 
         const modal = new bootstrap.Modal(document.getElementById('modalCandidatos'));
         document.getElementById('modal-loading').style.display = 'block';
         document.getElementById('modal-candidatos-lista').style.display = 'none';
         document.getElementById('modal-sem-candidatos').style.display = 'none';
+        document.getElementById('multi-nf-bar').style.display = 'none';
 
         // Limpar info anterior
         document.getElementById('modal-benef').textContent = '...';
@@ -1956,6 +1991,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ? 'R$ ' + comp.valor_documento.toLocaleString('pt-BR', {minimumFractionDigits: 2})
                     : '-';
                 document.getElementById('modal-venc').textContent = comp.data_vencimento || '-';
+                valorPagoAtual = comp.valor_pago || comp.valor_documento || 0;
             }
 
             if (data.candidatos && data.candidatos.length > 0) {
@@ -1973,12 +2009,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // Armazena candidatos para referência no Multi-NF
+    let candidatosAtuais = [];
+    let valorPagoAtual = 0;
+
     function renderizarCandidatos(candidatos) {
         const container = document.getElementById('modal-candidatos-lista');
         container.style.display = 'block';
         container.innerHTML = '';
+        candidatosAtuais = candidatos;
 
-        for (const cand of candidatos) {
+        for (let idx = 0; idx < candidatos.length; idx++) {
+            const cand = candidatos[idx];
             const scoreClass = cand.score >= 85 ? 'score-alto-border' :
                                cand.score >= 60 ? 'score-medio-border' : 'score-baixo-border';
             const scoreBg = cand.score >= 85 ? 'score-alto' :
@@ -2004,10 +2046,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const moveName = moveMatch ? moveMatch[1] : moveRaw;
             const moveRef = moveMatch ? moveMatch[2] : '';
 
+            // Valor sugerido para alocação: residual ou original
+            const valorSugerido = cand.odoo_valor_residual || cand.odoo_valor_original || 0;
+
             container.innerHTML += `
-                <div class="match-candidato ${scoreClass} border rounded" data-move-line-id="${cand.odoo_move_line_id}">
+                <div class="match-candidato ${scoreClass} border rounded" data-move-line-id="${cand.odoo_move_line_id}" data-cand-idx="${idx}">
                     <div class="row align-items-center">
-                        <div class="col-md-1 text-center">
+                        <div class="col-auto text-center pe-0" style="width: 35px;">
+                            <input type="checkbox" class="form-check-input multi-nf-check"
+                                   data-idx="${idx}" data-valor-sugerido="${valorSugerido}"
+                                   title="Selecionar para Multi-NF">
+                        </div>
+                        <div class="col-auto text-center" style="width: 55px;">
                             <span class="badge ${scoreBg} fs-6">${cand.score}%</span>
                         </div>
                         <div class="col-md-3">
@@ -2019,18 +2069,25 @@ document.addEventListener('DOMContentLoaded', function() {
                             <strong>NF:</strong> ${cand.nf_numero || '-'}
                             <br><strong>Parcela:</strong> ${cand.parcela || '-'}
                         </div>
-                        <div class="col-md-2">
+                        <div class="col">
                             <strong>Valor:</strong> ${valorOriginal}${valorRecalc}
+                            <div class="multi-nf-alocacao mt-1" style="display: none;">
+                                <label class="form-label small mb-0 text-primary fw-bold">Alocar R$:</label>
+                                <input type="number" class="form-control form-control-sm multi-nf-valor"
+                                       data-idx="${idx}" step="0.01" min="0.01"
+                                       value="${valorSugerido.toFixed(2)}"
+                                       style="max-width: 130px;">
+                            </div>
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-auto" style="width: 65px;">
                             <strong>Diff:</strong> ${diff}
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-auto" style="width: 80px;">
                             <strong>Venc:</strong><br>
                             <small>${cand.odoo_vencimento_fmt || '-'}</small>
                         </div>
-                        <div class="col-md-2 text-end">
-                            <button class="btn btn-sm btn-success"
+                        <div class="col-auto text-end" style="width: 100px;">
+                            <button class="btn btn-sm btn-success btn-confirmar-individual"
                                     onclick="salvarEConfirmarMatch(${comprovanteAtualId}, ${JSON.stringify(cand).replace(/"/g, '&quot;')})">
                                 <i class="fas fa-check"></i> Confirmar
                             </button>
@@ -2040,6 +2097,72 @@ document.addEventListener('DOMContentLoaded', function() {
                         <small class="text-muted">${(cand.criterios || []).join(' | ')}</small>
                     </div>
                 </div>`;
+        }
+
+        // Bind eventos dos checkboxes Multi-NF
+        container.querySelectorAll('.multi-nf-check').forEach(cb => {
+            cb.addEventListener('change', atualizarMultiNfUI);
+        });
+        container.querySelectorAll('.multi-nf-valor').forEach(input => {
+            input.addEventListener('input', atualizarMultiNfSoma);
+        });
+    }
+
+    function atualizarMultiNfUI() {
+        const checks = document.querySelectorAll('.multi-nf-check:checked');
+        const totalChecked = checks.length;
+        const multiBar = document.getElementById('multi-nf-bar');
+        const btnConfirmarMultiplos = document.getElementById('btn-confirmar-multiplos');
+
+        if (totalChecked >= 2) {
+            multiBar.style.display = 'block';
+            // Mostrar inputs de alocação nos selecionados, esconder nos demais
+            document.querySelectorAll('.multi-nf-alocacao').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.btn-confirmar-individual').forEach(btn => btn.style.display = 'none');
+            checks.forEach(cb => {
+                const div = cb.closest('.match-candidato');
+                div.querySelector('.multi-nf-alocacao').style.display = 'block';
+            });
+            // Mostrar botões individuais dos não-selecionados
+            document.querySelectorAll('.multi-nf-check:not(:checked)').forEach(cb => {
+                const div = cb.closest('.match-candidato');
+                div.querySelector('.btn-confirmar-individual').style.display = 'inline-block';
+            });
+        } else {
+            multiBar.style.display = 'none';
+            document.querySelectorAll('.multi-nf-alocacao').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.btn-confirmar-individual').forEach(btn => btn.style.display = 'inline-block');
+        }
+
+        document.getElementById('multi-nf-count').textContent = totalChecked;
+        document.getElementById('multi-nf-valor-pago').textContent =
+            'R$ ' + valorPagoAtual.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        btnConfirmarMultiplos.disabled = totalChecked < 2;
+
+        atualizarMultiNfSoma();
+    }
+
+    function atualizarMultiNfSoma() {
+        const checks = document.querySelectorAll('.multi-nf-check:checked');
+        let soma = 0;
+        checks.forEach(cb => {
+            const idx = cb.dataset.idx;
+            const input = document.querySelector(`.multi-nf-valor[data-idx="${idx}"]`);
+            soma += parseFloat(input.value) || 0;
+        });
+
+        document.getElementById('multi-nf-soma').textContent =
+            'R$ ' + soma.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+        const diff = Math.abs(soma - valorPagoAtual);
+        const diffEl = document.getElementById('multi-nf-diff');
+        if (diff <= 0.01) {
+            diffEl.innerHTML = '<span class="badge bg-success">OK</span>';
+            document.getElementById('btn-confirmar-multiplos').disabled = false;
+        } else {
+            diffEl.innerHTML = '<span class="badge bg-danger">Diferenca: R$ ' +
+                diff.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</span>';
+            document.getElementById('btn-confirmar-multiplos').disabled = true;
         }
     }
 
@@ -2128,6 +2251,120 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerHTML = '<i class="fas fa-link"></i> Vincular Manual';
         }
     });
+
+    // =========================================================================
+    // CONFIRMAR MÚLTIPLOS (MULTI-NF)
+    // =========================================================================
+    document.getElementById('btn-confirmar-multiplos').addEventListener('click', async () => {
+        const checks = document.querySelectorAll('.multi-nf-check:checked');
+        if (checks.length < 2) return;
+
+        // Montar lista de títulos
+        const titulos = [];
+        let somaAlocado = 0;
+        for (const cb of checks) {
+            const idx = parseInt(cb.dataset.idx);
+            const input = document.querySelector(`.multi-nf-valor[data-idx="${idx}"]`);
+            const valorAlocado = parseFloat(input.value) || 0;
+            titulos.push({
+                candidato_data: candidatosAtuais[idx],
+                valor_alocado: valorAlocado,
+            });
+            somaAlocado += valorAlocado;
+        }
+
+        // Validar soma
+        if (Math.abs(somaAlocado - valorPagoAtual) > 0.01) {
+            alert(`Soma dos valores alocados (R$ ${somaAlocado.toFixed(2)}) difere do valor pago (R$ ${valorPagoAtual.toFixed(2)}).`);
+            return;
+        }
+
+        // Confirmar com usuário
+        let resumo = 'Confirmar Multi-NF?\n\n';
+        for (const t of titulos) {
+            const cd = t.candidato_data;
+            resumo += `- NF ${cd.nf_numero || '?'}/${cd.parcela || '?'} → R$ ${t.valor_alocado.toFixed(2)}\n`;
+        }
+        resumo += `\nTotal: R$ ${somaAlocado.toFixed(2)} (Valor pago: R$ ${valorPagoAtual.toFixed(2)})`;
+
+        if (!confirm(resumo)) return;
+
+        const btn = document.getElementById('btn-confirmar-multiplos');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirmando...';
+
+        try {
+            const resp = await fetchComRetry(
+                `/financeiro/comprovantes/api/match/${comprovanteAtualId}/confirmar-multiplos`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ titulos: titulos }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+            const resultado = await resp.json();
+
+            if (resultado.sucesso) {
+                alert(`Multi-NF confirmado!\n${resultado.total_titulos} titulo(s), total R$ ${resultado.soma_alocado.toFixed(2)}`);
+                bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (resultado.erro || 'Erro desconhecido'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-double"></i> Confirmar Selecionados';
+        }
+    });
+
+    // =========================================================================
+    // LANÇAMENTO GRUPO (MULTI-NF)
+    // =========================================================================
+    window.lancarGrupo = async function(comprovanteId) {
+        if (!confirm('Confirma o lancamento Multi-NF no Odoo?\n\nIsso ira criar 1 payment por titulo, baixar cada titulo e reconciliar com o extrato.')) {
+            return;
+        }
+
+        try {
+            const resp = await fetchComRetry(
+                `/financeiro/comprovantes/api/lancamento/${comprovanteId}/lancar-grupo`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (data.sucesso) {
+                alert(`Lancamento Multi-NF realizado!\n\n${data.total_sucesso}/${data.total_titulos} titulo(s) lancado(s).`);
+                recarregarTabela();
+            } else {
+                let msg = 'Erro no lancamento grupo: ' + (data.erro || 'Erro desconhecido');
+                if (data.detalhes) {
+                    const erros = data.detalhes.filter(d => !d.sucesso);
+                    if (erros.length > 0) {
+                        msg += '\n\nDetalhes:';
+                        for (const e of erros) {
+                            msg += `\n- Lanc ${e.lancamento_id}: ${e.erro}`;
+                        }
+                    }
+                }
+                alert(msg);
+                recarregarTabela();
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
 
     // =========================================================================
     // LANÇAMENTO INDIVIDUAL (SÍNCRONO)
