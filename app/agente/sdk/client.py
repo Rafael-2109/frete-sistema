@@ -852,6 +852,13 @@ Nunca invente informações."""
                     # ============================================================
                     # Injeção automática de memórias (independente de EXPANDED_HOOKS)
                     # ============================================================
+                    # Log de diagnóstico — confirma propagação de user_id (Teams + Web)
+                    logger.info(
+                        f"[HOOK:UserPromptSubmit] user_id={user_id or 'None'} | "
+                        f"auto_memory={'ON' if USE_AUTO_MEMORY_INJECTION else 'OFF'} | "
+                        f"prompt_len={len(prompt)} chars"
+                    )
+
                     additional_context = None
                     if USE_AUTO_MEMORY_INJECTION and user_id:
                         try:

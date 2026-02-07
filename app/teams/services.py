@@ -98,24 +98,24 @@ def _get_teams_context() -> str:
 DATA ATUAL: {dia_semana}, {data_atual}
 
 REGRAS OBRIGATÓRIAS:
-1. RESPOSTA ÚNICA - Você terá APENAS UMA chance de responder
-2. SEJA DIRETO - Vá direto ao ponto, sem introduções
-3. AÇÃO SILENCIOSA - NUNCA diga "vou consultar...", "deixa eu verificar...", "analisando..."
+1. SEJA DIRETO - Vá direto ao ponto, sem introduções
+2. AÇÃO SILENCIOSA - NUNCA diga "vou consultar...", "deixa eu verificar...", "analisando..."
    Execute as consultas SILENCIOSAMENTE e retorne APENAS o resultado
-4. SEM MARKDOWN COMPLEXO - NÃO use tabelas (| col |), headers (##), code blocks
+3. SEM MARKDOWN COMPLEXO - NÃO use tabelas (| col |), headers (##), code blocks
    Use apenas: texto simples, listas com "- item", negrito com *texto*
-5. TAMANHO MÁXIMO - 2000 caracteres
+4. TAMANHO IDEAL - Até 3000 caracteres (respostas longas serão divididas automaticamente)
+5. PERGUNTAS INTERATIVAS - Se precisar de mais informações do usuário, use AskUserQuestion normalmente. O sistema apresentará as opções via Adaptive Card no Teams.
 
 PROIBIDO:
-❌ "Vou consultar o banco de dados..."
-❌ "Deixa eu verificar os pedidos..."
-❌ "Analisando os dados disponíveis..."
-❌ "Primeiro preciso..."
+- "Vou consultar o banco de dados..."
+- "Deixa eu verificar os pedidos..."
+- "Analisando os dados disponíveis..."
+- "Primeiro preciso..."
 
 CORRETO:
-✅ "Encontrei 3 pedidos do Atacadão: [lista]"
-✅ "O estoque de palmito é 1.500 caixas"
-✅ "NF 144533 foi entregue em 15/01/2025"
+- "Encontrei 3 pedidos do Atacadão: [lista]"
+- "O estoque de palmito é 1.500 caixas"
+- "NF 144533 foi entregue em 15/01/2025"
 
 PERGUNTA DO USUÁRIO:
 """
@@ -167,12 +167,21 @@ def processar_mensagem_bot(
     if sdk_session_id:
         logger.info(f"[TEAMS-BOT] Resuming sessao SDK: {sdk_session_id[:20]}...")
 
-    # Obter resposta do agente
+    # Configurar session context para permissions.py (AskUserQuestion)
+    teams_session_id = session.session_id if session else None
+    if teams_session_id:
+        from app.agente.config.permissions import set_current_session_id, can_use_tool as agent_can_use_tool
+        set_current_session_id(teams_session_id)
+    else:
+        from app.agente.config.permissions import can_use_tool as agent_can_use_tool
+
+    # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
     resposta_texto, new_sdk_session_id = _obter_resposta_agente(
         mensagem=mensagem,
         usuario=usuario,
         sdk_session_id=sdk_session_id,
         user_id=teams_user_id,
+        can_use_tool=agent_can_use_tool,
     )
 
     # Salvar mensagens e atualizar sdk_session_id
@@ -312,6 +321,7 @@ def _obter_resposta_agente(
     usuario: str,
     sdk_session_id: str = None,
     user_id: int = None,
+    can_use_tool=None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Obtem resposta do Agente Claude SDK.
@@ -321,6 +331,7 @@ def _obter_resposta_agente(
         usuario: Nome do usuario
         sdk_session_id: ID da sessao SDK para resume (opcional)
         user_id: ID real do usuario na tabela usuarios (para memorias)
+        can_use_tool: Callback de permissão (para AskUserQuestion no Teams)
 
     Returns:
         Tuple[resposta_texto, new_sdk_session_id]
@@ -356,6 +367,7 @@ def _obter_resposta_agente(
                 sdk_session_id=sdk_session_id,
                 user_id=user_id,
                 model=TEAMS_DEFAULT_MODEL,
+                can_use_tool=can_use_tool,
             )
         )
 
@@ -465,8 +477,215 @@ def _sanitizar_texto(texto: str) -> str:
     # Remove multiplas quebras de linha consecutivas
     texto = re.sub(r'\n{3,}', '\n\n', texto)
 
-    # Limita tamanho (Teams tem limite de card)
-    if len(texto) > 2500:
-        texto = texto[:2497] + "..."
+    # Limita tamanho (Teams suporta ~28KB, mas cards ficam legíveis até ~4000)
+    if len(texto) > 3800:
+        # Tenta cortar em quebra de parágrafo para manter legibilidade
+        corte = texto[:3700].rfind('\n\n')
+        if corte > 2000:
+            texto = texto[:corte] + '\n\n_(resposta truncada)_'
+        else:
+            # Fallback: cortar na última quebra de linha
+            corte = texto[:3700].rfind('\n')
+            if corte > 2000:
+                texto = texto[:corte] + '\n\n_(resposta truncada)_'
+            else:
+                texto = texto[:3700] + '\n\n_(resposta truncada)_'
 
     return texto.strip()
+
+
+# ═══════════════════════════════════════════════════════════════
+# PROCESSAMENTO ASSÍNCRONO (daemon threads)
+# ═══════════════════════════════════════════════════════════════
+
+def process_teams_task_async(
+    task_id: str,
+    mensagem: str,
+    usuario: str,
+    conversation_id: str,
+    teams_user_id: Optional[int],
+) -> None:
+    """
+    Processa uma TeamsTask em daemon thread (background).
+
+    Cria app_context próprio, configura session context para permissions.py,
+    chama o agente, e atualiza a TeamsTask no banco com o resultado.
+
+    IMPORTANTE: Esta função roda no MESMO processo gunicorn (daemon thread).
+    Isso permite que pending_questions.py (threading.Event) funcione
+    para AskUserQuestion cross-thread.
+
+    Args:
+        task_id: ID da TeamsTask
+        mensagem: Texto da mensagem do usuário
+        usuario: Nome do usuário
+        conversation_id: ID da conversa do Teams
+        teams_user_id: ID real do usuário na tabela usuarios
+    """
+    from app import create_app
+
+    app = create_app()
+    with app.app_context():
+        from app.teams.models import TeamsTask
+        from app import db
+        from app.agente.config.permissions import (
+            set_current_session_id,
+            set_teams_task_context,
+            cleanup_teams_task_context,
+            cleanup_session_context,
+            can_use_tool as agent_can_use_tool,
+        )
+
+        teams_session_id = None
+
+        try:
+            # Atualizar status para processing
+            task = db.session.get(TeamsTask, task_id)
+            if not task:
+                logger.error(f"[TEAMS-ASYNC] Task {task_id} não encontrada")
+                return
+
+            task.status = 'processing'
+            db.session.commit()
+
+            logger.info(
+                f"[TEAMS-ASYNC] Iniciando processamento: task={task_id[:8]}... "
+                f"user={usuario} msg={mensagem[:80]}..."
+            )
+
+            # Obter/criar sessão
+            session = _get_or_create_teams_session(
+                conversation_id, usuario, user_id=teams_user_id
+            )
+            sdk_session_id = session.get_sdk_session_id() if session else None
+            teams_session_id = session.session_id if session else f"teams_async_{task_id}"
+
+            # Configurar context para permissions.py
+            set_current_session_id(teams_session_id)
+            set_teams_task_context(teams_session_id, task_id)
+
+            # Obter resposta do agente
+            resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+                mensagem=mensagem,
+                usuario=usuario,
+                sdk_session_id=sdk_session_id,
+                user_id=teams_user_id,
+                can_use_tool=agent_can_use_tool,
+            )
+
+            # Salvar mensagens e sdk_session_id na sessão
+            if session:
+                try:
+                    session.add_user_message(mensagem)
+                    if resposta_texto:
+                        session.add_assistant_message(resposta_texto)
+                    if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
+                        session.set_sdk_session_id(new_sdk_session_id)
+                except Exception as sess_err:
+                    logger.warning(
+                        f"[TEAMS-ASYNC] Erro ao salvar sessão (ignorado): {sess_err}"
+                    )
+
+            # Atualizar TeamsTask com resultado (retry para SSL dropped)
+            task = db.session.get(TeamsTask, task_id)
+            if task:
+                if resposta_texto:
+                    task.status = 'completed'
+                    task.resposta = _sanitizar_texto(resposta_texto)
+                    task.completed_at = datetime.utcnow()
+                else:
+                    task.status = 'error'
+                    task.resposta = 'O agente não retornou uma resposta.'
+                    task.completed_at = datetime.utcnow()
+
+                try:
+                    db.session.commit()
+                except Exception as commit_err:
+                    err_str = str(commit_err).lower()
+                    if 'ssl' in err_str or 'connection' in err_str or 'closed' in err_str:
+                        logger.warning(
+                            f"[TEAMS-ASYNC] Conexão perdida no commit, reconectando: {commit_err}"
+                        )
+                        db.session.rollback()
+                        db.session.close()
+                        try:
+                            db.session.commit()
+                            logger.info("[TEAMS-ASYNC] Retry commit bem-sucedido")
+                        except Exception as retry_err:
+                            logger.error(f"[TEAMS-ASYNC] Retry commit falhou: {retry_err}")
+                            db.session.rollback()
+                    else:
+                        raise
+
+            logger.info(
+                f"[TEAMS-ASYNC] Task completada: task={task_id[:8]}... "
+                f"status={task.status if task else 'N/A'} "
+                f"resposta_len={len(resposta_texto) if resposta_texto else 0}"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"[TEAMS-ASYNC] Erro fatal: task={task_id[:8]}... error={e}",
+                exc_info=True,
+            )
+            try:
+                task = db.session.get(TeamsTask, task_id)
+                if task and task.status not in ('completed', 'error'):
+                    task.status = 'error'
+                    task.resposta = f'Erro ao processar: {str(e)[:500]}'
+                    task.completed_at = datetime.utcnow()
+                    db.session.commit()
+            except Exception:
+                logger.error("[TEAMS-ASYNC] Erro ao marcar task como error", exc_info=True)
+                db.session.rollback()
+
+        finally:
+            # Cleanup de contextos
+            if teams_session_id:
+                cleanup_teams_task_context(teams_session_id)
+                cleanup_session_context(teams_session_id)
+
+            try:
+                db.session.remove()
+            except Exception:
+                pass
+
+            logger.debug(f"[TEAMS-ASYNC] Cleanup finalizado: task={task_id[:8]}...")
+
+
+def cleanup_stale_teams_tasks() -> int:
+    """
+    Marca tasks stale (pending/processing > 5 min) como timeout.
+
+    Chamado no início de cada bot_message() (lazy cleanup, sem cron extra).
+
+    Returns:
+        Número de tasks marcadas como timeout
+    """
+    try:
+        from app.teams.models import TeamsTask
+        from app import db
+
+        threshold = datetime.utcnow() - timedelta(minutes=5)
+
+        stale_tasks = TeamsTask.query.filter(
+            TeamsTask.status.in_(['pending', 'processing']),
+            TeamsTask.created_at < threshold,
+        ).all()
+
+        count = 0
+        for task in stale_tasks:
+            task.status = 'timeout'
+            task.resposta = 'Tempo limite excedido no processamento.'
+            task.completed_at = datetime.utcnow()
+            count += 1
+
+        if count > 0:
+            db.session.commit()
+            logger.warning(f"[TEAMS-CLEANUP] {count} tasks stale marcadas como timeout")
+
+        return count
+
+    except Exception as e:
+        logger.error(f"[TEAMS-CLEANUP] Erro no cleanup: {e}", exc_info=True)
+        return 0

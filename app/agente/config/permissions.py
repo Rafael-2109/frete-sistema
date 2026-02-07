@@ -87,6 +87,44 @@ def cleanup_session_context(session_id: str) -> None:
         _stream_context.pop(session_id, None)
 
 
+# =============================================================================
+# TEAMS: Context storage para AskUserQuestion via Adaptive Cards
+# =============================================================================
+# Quando o agente roda em daemon thread (Teams async), usamos este dict para
+# associar session_id → teams_task_id. Isso permite que permissions.py saiba
+# que deve salvar perguntas na TeamsTask (ao invés de emitir SSE para frontend web).
+# Funciona porque daemon thread roda no MESMO processo (gunicorn worker) —
+# threading.Event de pending_questions.py funciona cross-thread.
+# =============================================================================
+_teams_task_context: Dict[str, str] = {}  # session_id → task_id
+
+
+def set_teams_task_context(session_id: str, task_id: str) -> None:
+    """Associa session_id a um teams_task_id para path Teams no AskUserQuestion."""
+    with _context_lock:
+        _teams_task_context[session_id] = task_id
+        logger.debug(
+            f"[PERMISSION] Teams task context set: "
+            f"session={session_id[:8]}... → task={task_id[:8]}..."
+        )
+
+
+def get_teams_task_id(session_id: str) -> str | None:
+    """Obtém teams_task_id associado a uma sessão."""
+    with _context_lock:
+        return _teams_task_context.get(session_id)
+
+
+def cleanup_teams_task_context(session_id: str) -> None:
+    """Remove associação session_id → teams_task_id."""
+    with _context_lock:
+        removed = _teams_task_context.pop(session_id, None)
+        if removed:
+            logger.debug(
+                f"[PERMISSION] Teams task context cleaned: session={session_id[:8]}..."
+            )
+
+
 # Diretório temporário padrão do sistema
 TEMP_DIR = tempfile.gettempdir()  # /tmp no Linux
 
@@ -254,15 +292,76 @@ async def can_use_tool(
                     f"event: ask_user_question\ndata: {json.dumps(sse_data, ensure_ascii=False)}\n\n"
                 )
             else:
-                logger.error(
-                    f"[PERMISSION] AskUserQuestion: event_queue não disponível para "
+                # Verifica se é contexto Teams com task ativa (Fase 2)
+                teams_task_id = get_teams_task_id(current_session_id)
+                if teams_task_id:
+                    # Path Teams: salva perguntas na TeamsTask e bloqueia até resposta
+                    logger.info(
+                        f"[PERMISSION] AskUserQuestion via Teams: "
+                        f"session={current_session_id[:8]}... task={teams_task_id[:8]}..."
+                    )
+                    try:
+                        from app.teams.models import TeamsTask
+                        from app import db
+
+                        task = db.session.get(TeamsTask, teams_task_id)
+                        if task:
+                            task.status = 'awaiting_user_input'
+                            task.pending_questions = questions
+                            task.pending_question_session_id = current_session_id
+                            db.session.commit()
+                            logger.info(
+                                f"[PERMISSION] TeamsTask {teams_task_id[:8]}... "
+                                f"atualizada: awaiting_user_input ({len(questions)} perguntas)"
+                            )
+                        else:
+                            logger.error(f"[PERMISSION] TeamsTask {teams_task_id} não encontrada")
+                    except Exception as e:
+                        logger.error(f"[PERMISSION] Erro ao atualizar TeamsTask: {e}", exc_info=True)
+
+                    # Bloqueia até o usuário responder via card no Teams (timeout 120s)
+                    from app.agente.config.feature_flags import TEAMS_ASK_USER_TIMEOUT
+                    answers = wait_for_answer(current_session_id, timeout=TEAMS_ASK_USER_TIMEOUT)
+
+                    if answers is None:
+                        logger.warning(
+                            f"[PERMISSION] AskUserQuestion Teams timeout: "
+                            f"session={current_session_id[:8]}..."
+                        )
+                        return PermissionResultDeny(
+                            message=(
+                                "Tempo esgotado para a resposta do usuário no Teams. "
+                                "Reformule sua resposta sem precisar de perguntas interativas, "
+                                "incluindo todas as alternativas possíveis na resposta."
+                            )
+                        )
+
+                    # Retorna com as respostas do usuário
+                    updated = dict(tool_input)
+                    updated['answers'] = answers
+                    logger.info(
+                        f"[PERMISSION] AskUserQuestion Teams respondido: "
+                        f"session={current_session_id[:8]}... "
+                        f"answers={list(answers.keys())}"
+                    )
+                    return PermissionResultAllow(updated_input=updated)
+
+                # Path sem event_queue e sem Teams: Graceful Denial
+                # O agente receberá a negação e reformulará automaticamente
+                logger.warning(
+                    f"[PERMISSION] AskUserQuestion: sem event_queue e sem teams_task "
+                    f"(provável Teams sincrono). Negando para agente reformular. "
                     f"session={current_session_id[:8]}..."
                 )
-                # Cancela pergunta pendente e nega
                 from ..sdk.pending_questions import cancel_pending
                 cancel_pending(current_session_id)
                 return PermissionResultDeny(
-                    message="Erro interno: não foi possível enviar perguntas ao frontend."
+                    message=(
+                        "Não é possível fazer perguntas interativas neste canal (Teams). "
+                        "Reformule sua resposta incluindo TODAS as alternativas possíveis "
+                        "diretamente, sem precisar perguntar ao usuário. "
+                        "Se houver ambiguidade, liste todas as opções com detalhes."
+                    )
                 )
 
             # BLOQUEIA até o usuário responder via POST /api/user-answer (ou timeout 55s)

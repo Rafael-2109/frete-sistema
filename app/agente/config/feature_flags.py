@@ -152,6 +152,16 @@ MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_G
 # Para usar Opus no Teams: TEAMS_DEFAULT_MODEL=claude-opus-4-6
 TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-4-5-20250929")
 
+# Modo assincrono para o bot do Teams
+# Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
+# Quando false: fluxo sincrono legado (resposta direta na mesma request)
+TEAMS_ASYNC_MODE = os.getenv("TEAMS_ASYNC_MODE", "true").lower() == "true"
+
+# Timeout para AskUserQuestion no Teams (segundos)
+# O usuario tem este tempo para responder o Adaptive Card antes de timeout
+# Default 120s (2 minutos) — maior que web (55s) pois Teams e mais lento
+TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "120"))
+
 # ====================================================================
 # Hooks Expandidos (P3)
 # ====================================================================
