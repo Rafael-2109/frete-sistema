@@ -571,6 +571,9 @@
                                 <span id="multi-nf-count">0</span> titulo(s) selecionado(s)
                                 — Total alocado: <strong id="multi-nf-soma">R$ 0,00</strong>
                                 / Valor pago: <strong id="multi-nf-valor-pago">R$ 0,00</strong>
+                                <span id="multi-nf-juros" class="badge bg-warning text-dark ms-1" style="display: none;">
+                                    Juros: <span id="multi-nf-juros-valor">R$ 0,00</span>
+                                </span>
                                 <span id="multi-nf-diff" class="ms-2"></span>
                             </div>
                             <button type="button" class="btn btn-sm btn-success" id="btn-confirmar-multiplos" disabled>
@@ -1992,6 +1995,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     : '-';
                 document.getElementById('modal-venc').textContent = comp.data_vencimento || '-';
                 valorPagoAtual = comp.valor_pago || comp.valor_documento || 0;
+                valorJurosAtual = comp.valor_juros_multa || 0;
             }
 
             if (data.candidatos && data.candidatos.length > 0) {
@@ -2012,6 +2016,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Armazena candidatos para referência no Multi-NF
     let candidatosAtuais = [];
     let valorPagoAtual = 0;
+    let valorJurosAtual = 0;
 
     function renderizarCandidatos(candidatos) {
         const container = document.getElementById('modal-candidatos-lista');
@@ -2139,7 +2144,46 @@ document.addEventListener('DOMContentLoaded', function() {
             'R$ ' + valorPagoAtual.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         btnConfirmarMultiplos.disabled = totalChecked < 2;
 
+        // Auto-distribuir juros quando detectado
+        if (totalChecked >= 2) {
+            redistribuirJuros();
+        }
+
         atualizarMultiNfSoma();
+    }
+
+    function redistribuirJuros() {
+        const checks = document.querySelectorAll('.multi-nf-check:checked');
+        if (checks.length < 2) return;
+
+        // Calcular soma dos residuais selecionados
+        let somaResid = 0;
+        const infos = [];
+        checks.forEach(cb => {
+            const idx = cb.dataset.idx;
+            const residual = parseFloat(cb.dataset.valorSugerido) || 0;
+            infos.push({ idx, residual });
+            somaResid += residual;
+        });
+
+        const juros = valorPagoAtual - somaResid;
+        if (juros <= 0.01 || somaResid <= 0) return; // Sem juros, não redistribuir
+
+        // Distribuir proporcionalmente: valor_alocado = residual + (juros * residual/somaResid)
+        let somaDistribuida = 0;
+        for (let i = 0; i < infos.length; i++) {
+            const { idx, residual } = infos[i];
+            const input = document.querySelector(`.multi-nf-valor[data-idx="${idx}"]`);
+            if (i < infos.length - 1) {
+                const valorComJuros = Math.round((residual + juros * (residual / somaResid)) * 100) / 100;
+                input.value = valorComJuros.toFixed(2);
+                somaDistribuida += valorComJuros;
+            } else {
+                // Último título: ajustar centavo residual
+                const valorFinal = Math.round((valorPagoAtual - somaDistribuida) * 100) / 100;
+                input.value = valorFinal.toFixed(2);
+            }
+        }
     }
 
     function atualizarMultiNfSoma() {
@@ -2163,6 +2207,19 @@ document.addEventListener('DOMContentLoaded', function() {
             diffEl.innerHTML = '<span class="badge bg-danger">Diferenca: R$ ' +
                 diff.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</span>';
             document.getElementById('btn-confirmar-multiplos').disabled = true;
+        }
+
+        // Mostrar badge de juros quando detectado
+        const somaResid = Array.from(checks).reduce((acc, cb) =>
+            acc + (parseFloat(cb.dataset.valorSugerido) || 0), 0);
+        const jurosDetectado = valorPagoAtual - somaResid;
+        const jurosEl = document.getElementById('multi-nf-juros');
+        if (jurosDetectado > 0.01 && checks.length >= 2) {
+            jurosEl.style.display = 'inline';
+            document.getElementById('multi-nf-juros-valor').textContent =
+                'R$ ' + jurosDetectado.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        } else {
+            jurosEl.style.display = 'none';
         }
     }
 

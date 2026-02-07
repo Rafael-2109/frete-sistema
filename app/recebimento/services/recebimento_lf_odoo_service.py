@@ -231,7 +231,7 @@ class RecebimentoLfOdooService:
             {
                 'fields': ['id', 'l10n_br_status', 'l10n_br_situacao_dfe',
                            'nfe_infnfe_ide_nnf', 'protnfe_infnfe_chnfe',
-                           'purchase_ids'],
+                           'purchase_id'],
                 'limit': 1,
             }
         )
@@ -339,15 +339,17 @@ class RecebimentoLfOdooService:
             if po_search:
                 po_id = po_search[0]['id']
 
-        # Buscar pelo purchase_ids do DFe
+        # Buscar pelo purchase_id do DFe (many2one → [id, 'name'] ou False)
         if not po_id:
             dfe_data = odoo.execute_kw(
                 'l10n_br_ciel_it_account.dfe', 'read',
                 [[dfe_id]],
-                {'fields': ['purchase_ids']}
+                {'fields': ['purchase_id']}
             )
-            if dfe_data and dfe_data[0].get('purchase_ids'):
-                po_id = dfe_data[0]['purchase_ids'][-1]  # Ultimo PO
+            if dfe_data:
+                purchase_ref = dfe_data[0].get('purchase_id')
+                if purchase_ref:
+                    po_id = purchase_ref[0]  # many2one: [id, 'name']
 
         if not po_id:
             raise ValueError("Purchase Order nao foi criado apos action_gerar_po_dfe")

@@ -508,19 +508,54 @@ class ComprovanteMatchService:
                 ),
             }
 
-        # 5. Cada titulo com saldo suficiente
-        for i, t in enumerate(titulos):
-            cd = t.get('candidato_data', {})
-            residual = float(cd.get('odoo_valor_residual') or 0)
-            va = float(t['valor_alocado'])
-            if residual > 0 and va > residual + 0.01:
-                return {
-                    'sucesso': False,
-                    'erro': (
-                        f'Título {i+1} (NF {cd.get("nf_numero", "?")}): '
-                        f'valor alocado R$ {va:.2f} excede saldo residual R$ {residual:.2f}'
-                    ),
-                }
+        # 5. Validar alocações vs saldo residual (com suporte a juros)
+        soma_residuais = sum(
+            float(t.get('candidato_data', {}).get('odoo_valor_residual') or 0)
+            for t in titulos
+        )
+        juros_implicito = max(valor_pago - soma_residuais, 0)
+
+        if juros_implicito <= 0.01:
+            # SEM JUROS: manter validação estrita original
+            for i, t in enumerate(titulos):
+                cd = t.get('candidato_data', {})
+                residual = float(cd.get('odoo_valor_residual') or 0)
+                va = float(t['valor_alocado'])
+                if residual > 0 and va > residual + 0.01:
+                    return {
+                        'sucesso': False,
+                        'erro': (
+                            f'Título {i+1} (NF {cd.get("nf_numero", "?")}): '
+                            f'valor alocado R$ {va:.2f} excede saldo residual R$ {residual:.2f}'
+                        ),
+                    }
+        else:
+            # COM JUROS: permitir excedente proporcional ao juros
+            # O lançamento posterior distribui juros via _distribuir_juros() + write-off
+            logger.info(
+                f"Multi-NF com juros: valor_pago=R$ {valor_pago:.2f}, "
+                f"soma_residuais=R$ {soma_residuais:.2f}, "
+                f"juros_implicito=R$ {juros_implicito:.2f}"
+            )
+            for i, t in enumerate(titulos):
+                cd = t.get('candidato_data', {})
+                residual = float(cd.get('odoo_valor_residual') or 0)
+                va = float(t['valor_alocado'])
+                if residual > 0 and soma_residuais > 0:
+                    # Limite = residual + proporção do juros + tolerância generosa
+                    juros_prop = juros_implicito * (residual / soma_residuais)
+                    limite = residual + juros_prop
+                    # Tolerância de 50% do juros proporcional (usuário pode distribuir diferente)
+                    tolerancia = max(0.01, juros_prop * 0.5)
+                    if va > limite + tolerancia:
+                        return {
+                            'sucesso': False,
+                            'erro': (
+                                f'Título {i+1} (NF {cd.get("nf_numero", "?")}): '
+                                f'valor alocado R$ {va:.2f} excede limite R$ {limite:.2f} '
+                                f'(residual R$ {residual:.2f} + juros proporcional R$ {juros_prop:.2f})'
+                            ),
+                        }
 
         # 6. Sem move_line_id duplicado
         move_line_ids = [t.get('candidato_data', {}).get('odoo_move_line_id') for t in titulos]

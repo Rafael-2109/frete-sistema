@@ -44,7 +44,7 @@ class RecebimentoLfService:
         'nfe_infnfe_emit_xnome', 'nfe_infnfe_dest_cnpj',
         'nfe_infnfe_total_icmstot_vnf',
         'protnfe_infnfe_chnfe', 'l10n_br_tipo_pedido',
-        'l10n_br_data_entrada', 'purchase_ids',
+        'l10n_br_data_entrada', 'purchase_id',
     ]
 
     # Campos das linhas do DFe
@@ -100,7 +100,7 @@ class RecebimentoLfService:
             for r in recebimentos_existentes:
                 dfe_ids_processados.add(r.odoo_dfe_id)
 
-            # Filtrar DFes que ja tem PO vinculado (purchase_ids preenchido E status >= 04)
+            # Filtrar DFes que ja tem PO vinculado (purchase_id preenchido E status >= 06)
             # Esses ja foram processados por outro meio
             dfes_disponiveis = []
             for dfe in dfes_odoo:
@@ -111,7 +111,7 @@ class RecebimentoLfService:
                     continue
 
                 # Pular se ja tem PO e status >= 06 (concluido)
-                if dfe.get('purchase_ids') and dfe.get('l10n_br_status') in ('06', '07'):
+                if dfe.get('purchase_id') and dfe.get('l10n_br_status') in ('06', '07'):
                     continue
 
                 dfes_disponiveis.append({
@@ -125,7 +125,7 @@ class RecebimentoLfService:
                     'chave_nfe': dfe.get('protnfe_infnfe_chnfe', ''),
                     'status_dfe': dfe.get('l10n_br_status', ''),
                     'tipo_pedido': dfe.get('l10n_br_tipo_pedido', ''),
-                    'tem_po': bool(dfe.get('purchase_ids')),
+                    'tem_po': bool(dfe.get('purchase_id')),
                 })
 
             return {
