@@ -350,7 +350,7 @@ def _format_service_status(status_data: Dict, servico: str) -> str:
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
 
     # -----------------------------------------------------------------
     # Tool 1: consultar_logs
@@ -374,6 +374,12 @@ try:
             "horas": int,
             "limite": int,
         },
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
     )
     async def consultar_logs(args: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -491,6 +497,12 @@ try:
             "minutos": int,
             "texto": str,
         },
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
     )
     async def consultar_erros(args: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -587,6 +599,12 @@ try:
             "Exemplos: 'como esta o servidor?', 'esta no ar?', 'ultimo deploy'."
         ),
         {},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
     )
     async def status_servicos(args: Dict[str, Any]) -> Dict[str, Any]:  # noqa: ARG001
         """

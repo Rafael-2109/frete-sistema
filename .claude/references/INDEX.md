@@ -9,8 +9,9 @@
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| Campos CarteiraPrincipal / Separacao | [modelos/CAMPOS_CARTEIRA_SEPARACAO.md](modelos/CAMPOS_CARTEIRA_SEPARACAO.md) |
-| Campos Embarque, Faturamento, etc. | [modelos/MODELOS_CAMPOS.md](modelos/MODELOS_CAMPOS.md) |
+| Regras CarteiraPrincipal / Separacao (listeners, status, gotchas) | [modelos/REGRAS_CARTEIRA_SEPARACAO.md](modelos/REGRAS_CARTEIRA_SEPARACAO.md) |
+| Regras Embarque, Faturamento, etc. (status, gotchas, naming traps) | [modelos/REGRAS_MODELOS.md](modelos/REGRAS_MODELOS.md) |
+| Campos e tipos de QUALQUER tabela | Schemas auto-gerados: `skills/consultando-sql/schemas/tables/{tabela}.json` |
 | Queries SQL / JOINs | [modelos/QUERIES_MAPEAMENTO.md](modelos/QUERIES_MAPEAMENTO.md) |
 | Cadeia Pedido -> Entrega (JOINs, estados, formulas) | [modelos/CADEIA_PEDIDO_ENTREGA.md](modelos/CADEIA_PEDIDO_ENTREGA.md) |
 | Regras de negocio | [negocio/REGRAS_NEGOCIO.md](negocio/REGRAS_NEGOCIO.md) |
@@ -75,7 +76,7 @@ Quais references cada skill consome:
 | `integracao-odoo` | odoo/PADROES_AVANCADOS, odoo/IDS_FIXOS, odoo/GOTCHAS |
 | `rastreando-odoo` | odoo/MODELOS_CAMPOS, odoo/IDS_FIXOS |
 | `descobrindo-odoo-estrutura` | odoo/MODELOS_CAMPOS |
-| `gerindo-expedicao` | modelos/CAMPOS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
+| `gerindo-expedicao` | modelos/REGRAS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
 | `frontend-design` | design/MAPEAMENTO_CORES |
 
 ---

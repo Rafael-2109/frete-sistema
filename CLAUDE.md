@@ -104,8 +104,9 @@ Sem isso, o agente web nao enxerga os campos novos.
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| Campos de CarteiraPrincipal / Separacao | `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md` |
-| Campos de outros modelos (Embarque, Faturamento, etc.) | `.claude/references/modelos/MODELOS_CAMPOS.md` |
+| Regras de CarteiraPrincipal / Separacao (listeners, status, gotchas) | `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md` |
+| Regras de outros modelos (status transitions, gotchas, naming traps) | `.claude/references/modelos/REGRAS_MODELOS.md` |
+| Campos e tipos de QUALQUER tabela | Schema auto-gerado: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json` |
 | Cadeia Pedido -> Entrega (JOINs, estados, formulas) | `.claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md` |
 | Regras de negocio (CNPJ, bonificacao, roteirizacao) | `.claude/references/negocio/REGRAS_NEGOCIO.md` |
 | Frete Real vs Teorico (4 valores, divergencias, conta corrente) | `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md` |
@@ -188,62 +189,40 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-# SKILLS POR DOMINIO
+# SKILLS (21 total)
 
-## Agente Web (Render/Producao)
-Skills usadas exclusivamente pelo agente logistico web:
-- `gerindo-expedicao` - Consultas logisticas, estoque, separacoes
-- `monitorando-entregas` - Status de entregas, canhotos, devolucoes
-- `memoria-usuario` - Memoria persistente entre sessoes
+Referencia completa: cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
+O routing table acima (Passo 1) indica QUAL skill usar para QUAL contexto.
 
-Custom Tools MCP (in-process, sem subprocess):
-- `consultar_sql` (mcp__sql__consultar_sql) - Consultas analiticas SQL via linguagem natural
-- `consultar_logs` (mcp__render__consultar_logs) - Logs de aplicacao/request/build dos servicos Render
-- `consultar_erros` (mcp__render__consultar_erros) - Erros recentes dos servicos Render
-- `status_servicos` (mcp__render__status_servicos) - Status, deploys e metricas dos servicos Render
+### MCP Custom Tools (agente web, in-process)
+`mcp__sql__consultar_sql`, `mcp__memory__*` (6 tools), `mcp__schema__*` (2 tools),
+`mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status)
 
-## Claude Code (Desenvolvimento)
-Skills para desenvolvimento no Cursor/Terminal:
+### Skills Odoo (Claude Code)
+`rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
+`integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`
 
-### Integracao Odoo
-| Skill | Responsabilidade |
-|-------|-----------------|
-| `rastreando-odoo` | Seguir rastro de NF, PO, SO, pagamento |
-| `executando-odoo-financeiro` | Criar pagamentos, reconciliar extratos |
-| `descobrindo-odoo-estrutura` | Explorar campos/modelos nao mapeados |
-| `integracao-odoo` | Criar novas integracoes (16 etapas) |
-| `validacao-nf-po` | Fase 2: Match NF x PO |
-| `conciliando-odoo-po` | Fase 3: Consolidacao PO |
-| `recebimento-fisico-odoo` | Fase 4: Recebimento fisico |
-| `razao-geral-odoo` | Exportar razao geral |
-
-### Desenvolvimento
-| Skill | Responsabilidade |
-|-------|-----------------|
-| `frontend-design` | Interfaces Flask/Jinja2 com CSS Nacom |
-| `skill_creator` | Criar/atualizar skills |
-| `ralph-wiggum` | Loops autonomos de desenvolvimento |
-| `prd-generator` | Gerar specs/PRDs |
+### Skills Dev (Claude Code)
+`frontend-design`, `skill_creator`, `ralph-wiggum`, `prd-generator`
 
 ### Utilitarios (compartilhados)
-| Skill | Responsabilidade |
-|-------|-----------------|
-| `exportando-arquivos` | Gerar Excel, CSV, JSON |
-| `lendo-arquivos` | Processar Excel/CSV enviados |
-| `consultando-sql` | Consultas analiticas SQL via linguagem natural (CLI para Claude Code; Custom Tool MCP para agente web) |
-| `cotando-frete` | Cotacao de fretes, consulta de tabelas, calculo detalhado |
-| `visao-produto` | Visao 360 de produto (cadastro, estoque, custo, demanda, faturamento, producao) |
-| `resolvendo-entidades` | Resolver cliente/grupo/produto/pedido para IDs do sistema |
+`exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
+`visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`, `memoria-usuario`
 
 ---
 
 # MODELOS CRITICOS
 
-**ANTES de usar campos de CarteiraPrincipal ou Separacao**:
--> LER `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md`
+### REGRA: Campos de Tabelas
+NUNCA consultar reference docs para campos/tipos.
+SEMPRE usar schemas auto-gerados: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
+References contem APENAS regras de negocio e gotchas.
 
-**ANTES de usar campos de outros modelos (Embarque, Faturamento, etc.)**:
--> LER `.claude/references/modelos/MODELOS_CAMPOS.md`
+**ANTES de usar regras de CarteiraPrincipal ou Separacao**:
+-> LER `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`
+
+**ANTES de usar regras de outros modelos (Embarque, Faturamento, etc.)**:
+-> LER `.claude/references/modelos/REGRAS_MODELOS.md`
 
 ### Regras Rapidas:
 - CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo`)
@@ -280,17 +259,19 @@ Skills para desenvolvimento no Cursor/Terminal:
 ```
 app/agente/
   models.py                    # AgentSession, AgentMemory, AgentMemoryVersion
-  routes.py                    # API endpoints (/api/agente/...)
-  memory_tool.py               # DatabaseMemoryTool
-  prompts/system_prompt.md     # Prompt agente web (v3.0.0)
-  sdk/client.py                # AgentClient — query() + resume (self-contained)
-  sdk/session_pool.py          # DEPRECADO (vazio — mantido para compat)
+  routes.py                    # API endpoints, SSE streaming, file upload, insights
+  prompts/system_prompt.md     # Prompt agente web (v3.3.0)
+  sdk/client.py                # AgentClient — query() + resume, hooks, MCP registration
   sdk/pending_questions.py     # AskUserQuestion: threading.Event wait/set
-  tools/text_to_sql_tool.py    # Custom Tool MCP: consultar_sql (in-process)
-  tools/memory_mcp_tool.py     # Custom Tool MCP: memoria persistente
+  tools/text_to_sql_tool.py    # MCP: consultar_sql (in-process)
+  tools/memory_mcp_tool.py     # MCP: 6 memory operations (in-process)
+  tools/schema_mcp_tool.py     # MCP: schema discovery (in-process)
+  tools/session_search_tool.py # MCP: session search (in-process)
+  tools/render_logs_tool.py    # MCP: logs/erros/status Render (in-process)
   config/settings.py           # AgentSettings (model, pricing, tools_enabled)
-  config/feature_flags.py      # Feature flags (env vars, default false)
-  config/permissions.py        # can_use_tool callback (Write/Edit → /tmp only)
+  config/feature_flags.py      # Feature flags (20+, env var based)
+  config/permissions.py        # can_use_tool + reversibility check
+  services/memory_consolidator.py # Consolidacao Haiku periodica
 ```
 
 ---

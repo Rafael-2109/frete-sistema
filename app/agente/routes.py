@@ -1549,12 +1549,39 @@ def api_health():
         client = get_client()
         health = client.health_check()
 
+        # Verificar disponibilidade dos MCP servers (import check)
+        mcp_status = {}
+        for mcp_name, mcp_module_path in [
+            ('sql', 'app.agente.tools.text_to_sql_tool'),
+            ('memory', 'app.agente.tools.memory_mcp_tool'),
+            ('schema', 'app.agente.tools.schema_mcp_tool'),
+            ('sessions', 'app.agente.tools.session_search_tool'),
+            ('render', 'app.agente.tools.render_logs_tool'),
+        ]:
+            try:
+                import importlib
+                mod = importlib.import_module(mcp_module_path)
+                server_attr = f"{mcp_name}_server" if mcp_name != 'sql' else 'sql_server'
+                if mcp_name == 'memory':
+                    server_attr = 'memory_server'
+                elif mcp_name == 'schema':
+                    server_attr = 'schema_server'
+                elif mcp_name == 'sessions':
+                    server_attr = 'sessions_server'
+                elif mcp_name == 'render':
+                    server_attr = 'render_server'
+                server = getattr(mod, server_attr, None)
+                mcp_status[mcp_name] = 'ok' if server is not None else 'unavailable'
+            except Exception:
+                mcp_status[mcp_name] = 'error'
+
         result = {
             'success': True,
             'status': health.get('status', 'unknown'),
             'model': settings.model,
             'api_connected': health.get('api_connected', False),
             'sdk': 'claude-agent-sdk',
+            'mcp_servers': mcp_status,
             'timestamp': datetime.now(timezone.utc).isoformat(),
         }
 

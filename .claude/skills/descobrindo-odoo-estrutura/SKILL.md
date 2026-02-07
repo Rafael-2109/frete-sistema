@@ -110,7 +110,7 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
 # Resultado esperado: Lista campos como barcode, barcode_ids, etc.
 ```
 
-**Acao apos descoberta**: Documentar em `.claude/references/odoo/MODELOS_CAMPOS.md` se for campo Odoo, ou `.claude/references/modelos/MODELOS_CAMPOS.md` se for campo local, caso seja frequentemente usado.
+**Acao apos descoberta**: Documentar em `.claude/references/odoo/MODELOS_CAMPOS.md` se for campo Odoo, ou `.claude/references/modelos/REGRAS_MODELOS.md` se for regra/gotcha de campo local. Para campos, a fonte de verdade sao os schemas auto-gerados em `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`.
 
 ---
 

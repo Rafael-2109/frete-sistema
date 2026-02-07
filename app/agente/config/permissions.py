@@ -491,6 +491,18 @@ _DESTRUCTIVE_PATTERNS = [
         'description': 'Comando SQL que modifica ou apaga dados',
         'reversibility': 'irreversible',
     },
+    # Bash: comandos de remoção destrutivos
+    {
+        'tool': 'Bash',
+        'input_field': 'command',
+        'value_patterns': [
+            r'rm\s+-rf\b', r'rm\s+-r\b', r'rm\s+-fr\b',
+            r'rmdir\s+', r'find\s+.*-delete',
+        ],
+        'action': 'remocao_arquivos',
+        'description': 'Comando que remove arquivos ou diretórios',
+        'reversibility': 'irreversible',
+    },
     # Write em paths críticos (já bloqueado para fora de /tmp, mas double-check)
     {
         'tool': 'Write',

@@ -93,8 +93,9 @@ source .venv/bin/activate && python .claude/skills/descobrindo-odoo-estrutura/sc
 | Modelos Odoo e campos | `.claude/references/odoo/MODELOS_CAMPOS.md` |
 | Padroes avancados (auditoria, batch, locks) | `.claude/references/odoo/PADROES_AVANCADOS.md` |
 | Pipeline Recebimento (Fases 1-4) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
-| Campos locais (Carteira, Separacao) | `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md` |
-| Outros modelos locais | `.claude/references/modelos/MODELOS_CAMPOS.md` |
+| Regras locais (Carteira, Separacao) | `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md` |
+| Regras outros modelos locais | `.claude/references/modelos/REGRAS_MODELOS.md` |
+| Campos de QUALQUER tabela | Schemas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json` |
 
 ---
 

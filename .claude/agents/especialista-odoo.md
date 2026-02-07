@@ -53,8 +53,9 @@ Voce possui visao COMPLETA de todos os modelos, relacoes e fluxos do Odoo usados
 | Padroes avancados (auditoria, batch, locks) | `.claude/references/odoo/PADROES_AVANCADOS.md` |
 | Pipeline Recebimento (Fases 1-4) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
 | Conversao UoM (Milhar, fator_un) | `.claude/references/odoo/CONVERSAO_UOM.md` |
-| Campos locais (Carteira, Separacao) | `.claude/references/modelos/CAMPOS_CARTEIRA_SEPARACAO.md` |
-| Outros modelos locais | `.claude/references/modelos/MODELOS_CAMPOS.md` |
+| Regras locais (Carteira, Separacao) | `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md` |
+| Regras outros modelos locais | `.claude/references/modelos/REGRAS_MODELOS.md` |
+| Campos de QUALQUER tabela | Schemas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json` |
 
 ---
 

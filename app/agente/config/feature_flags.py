@@ -107,7 +107,7 @@ USE_AGENT_INSIGHTS = os.getenv("AGENT_INSIGHTS", "true").lower() == "true"
 # Intercepta Skills e Bash que podem executar acoes destrutivas (criar separacao, modificar dados)
 # Emite evento SSE 'destructive_action_warning' para dialog de confirmacao no frontend
 # Default false: ativar apos validar que a classificacao nao gera falsos positivos
-USE_REVERSIBILITY_CHECK = os.getenv("AGENT_REVERSIBILITY_CHECK", "false").lower() == "true"
+USE_REVERSIBILITY_CHECK = os.getenv("AGENT_REVERSIBILITY_CHECK", "true").lower() == "true"
 
 # Friction Analysis — analisa sessoes e identifica pontos de friccao
 # Detecta: queries repetidas (operador nao obteve resposta), mensagens curtas apos erro,
