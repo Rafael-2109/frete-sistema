@@ -686,6 +686,17 @@ def process_teams_task_async(
                         f"[TEAMS-ASYNC] Erro ao salvar sessão (ignorado): {sess_err}"
                     )
 
+            # Fix: Commitar mudanças da sessão para limpar dirty state ANTES
+            # de buscar TeamsTask. Sem isso, autoflush dispara ao fazer
+            # db.session.get() e falha se a sessão tiver objetos dirty/invalid.
+            try:
+                db.session.commit()
+            except Exception as flush_err:
+                logger.warning(
+                    f"[TEAMS-ASYNC] Erro ao commitar sessão antes de buscar task: {flush_err}"
+                )
+                db.session.rollback()
+
             # Atualizar TeamsTask com resultado (retry para SSL dropped)
             task = db.session.get(TeamsTask, task_id)
             if task:
@@ -743,6 +754,9 @@ def process_teams_task_async(
                 exc_info=True,
             )
             try:
+                # Fix: rollback dirty state antes de buscar task para evitar
+                # autoflush failure que impede task de chegar a status terminal
+                db.session.rollback()
                 task = db.session.get(TeamsTask, task_id)
                 if task and task.status not in ('completed', 'error'):
                     task.status = 'error'

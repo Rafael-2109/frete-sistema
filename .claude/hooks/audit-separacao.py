@@ -153,7 +153,7 @@ def main():
 
         # Cria entrada de auditoria
         audit_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "tool": tool_name,
             "file_path": tool_input.get("file_path", ""),
             "user": os.environ.get("USER", "unknown"),

@@ -97,6 +97,11 @@ def cleanup_session_context(session_id: str) -> None:
 # =============================================================================
 _teams_task_context: Dict[str, str] = {}  # session_id → task_id
 
+# Contador de tentativas de AskUserQuestion por sessão Teams.
+# Limita a 1 tentativa para evitar loop infinito de Adaptive Cards.
+# Cleanup em cleanup_teams_task_context().
+_teams_ask_attempts: Dict[str, int] = {}  # session_id → count de tentativas
+
 
 def set_teams_task_context(session_id: str, task_id: str) -> None:
     """Associa session_id a um teams_task_id para path Teams no AskUserQuestion."""
@@ -115,9 +120,10 @@ def get_teams_task_id(session_id: str) -> str | None:
 
 
 def cleanup_teams_task_context(session_id: str) -> None:
-    """Remove associação session_id → teams_task_id."""
+    """Remove associação session_id → teams_task_id e reset do contador de tentativas."""
     with _context_lock:
         removed = _teams_task_context.pop(session_id, None)
+        _teams_ask_attempts.pop(session_id, None)
         if removed:
             logger.debug(
                 f"[PERMISSION] Teams task context cleaned: session={session_id[:8]}..."
@@ -294,9 +300,33 @@ async def can_use_tool(
                 # Verifica se é contexto Teams com task ativa (Fase 2)
                 teams_task_id = get_teams_task_id(current_session_id)
                 if teams_task_id:
+                    # Fix: Limitar AskUserQuestion a 1 tentativa por sessão Teams.
+                    # Se já tentou antes (timeout ou sem resposta), negar imediatamente
+                    # para evitar loop infinito de Adaptive Cards.
+                    with _context_lock:
+                        attempts = _teams_ask_attempts.get(current_session_id, 0)
+                    if attempts >= 1:
+                        logger.warning(
+                            f"[PERMISSION] AskUserQuestion BLOQUEADO (tentativa #{attempts + 1}): "
+                            f"session={current_session_id[:8]}... Limite de 1 tentativa excedido."
+                        )
+                        from ..sdk.pending_questions import cancel_pending
+                        cancel_pending(current_session_id)
+                        return PermissionResultDeny(
+                            message=(
+                                "PROIBIDO usar AskUserQuestion novamente nesta sessão Teams. "
+                                "O usuário não respondeu à pergunta anterior. "
+                                "Responda diretamente incluindo TODAS as alternativas possíveis "
+                                "no texto da resposta, sem fazer perguntas interativas."
+                            )
+                        )
+                    # Incrementar contador ANTES de enviar (mesmo padrão do card_sent)
+                    with _context_lock:
+                        _teams_ask_attempts[current_session_id] = attempts + 1
+
                     # Path Teams: salva perguntas na TeamsTask e bloqueia até resposta
                     logger.info(
-                        f"[PERMISSION] AskUserQuestion via Teams: "
+                        f"[PERMISSION] AskUserQuestion via Teams (tentativa {attempts + 1}): "
                         f"session={current_session_id[:8]}... task={teams_task_id[:8]}..."
                     )
                     try:

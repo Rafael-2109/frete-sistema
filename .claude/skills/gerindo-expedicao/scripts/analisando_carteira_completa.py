@@ -389,12 +389,12 @@ def calcular_opcoes_frete_com_leadtime(
 def encontrar_data_disponibilidade(projecao: list, qtd_necessaria: float) -> str:
     """Encontra a primeira data em que haverá estoque suficiente."""
     if not projecao:
-        return None
+        return None # type: ignore
     for dia in projecao:
         saldo = dia.get('saldo_final', 0)
         if saldo >= qtd_necessaria:
             return dia.get('data')
-    return None  # Sem previsão nos próximos 28 dias
+    return None # type: ignore  # Sem previsão nos próximos 28 dias
 
 
 def analisar_disponibilidade_pedido(num_pedido: str, itens_pedido: list, estoque_dict: dict, projecao_dict: dict = None) -> dict:
@@ -727,9 +727,9 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
             'qtd_saldo': qtd,
             'valor': qtd * preco
         })
-        pedidos_dict[num]['valor_total'] += qtd * preco
+        pedidos_dict[num]['valor_total'] += qtd * preco # type: ignore
         pedidos_dict[num]['peso_total'] += peso_item
-        pedidos_dict[num]['pallets_total'] += pallets_item
+        pedidos_dict[num]['pallets_total'] += pallets_item # type: ignore
         pedidos_dict[num]['cnpj'] = item.cnpj_cpf
         pedidos_dict[num]['cliente'] = item.raz_social_red
         pedidos_dict[num]['cidade'] = item.nome_cidade
@@ -1088,7 +1088,7 @@ def analisar_carteira_completa(limit=None, prioridade_filtro=None):
                 'estoque_atual': round(estoque_atual, 0),
                 'qtd_faltante': round(qtd_faltante, 0),
                 'qtd_pedidos': len(info['pedidos_afetados']),
-                'pedidos': info['pedidos_afetados'][:10],  # Limitar para não poluir
+                'pedidos': info['pedidos_afetados'][:10], # type: ignore  # Limitar para não poluir
                 'dia_ruptura': dia_ruptura,  # Data em que estoque fica negativo
                 'mensagem_pcp': msg
             })

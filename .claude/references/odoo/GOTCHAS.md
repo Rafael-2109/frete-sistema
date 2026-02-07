@@ -45,6 +45,7 @@ entidade = db.session.get(MinhaEntidade, entidade_id)
 
 | Campo ERRADO | Modelo | Campo CORRETO |
 |--------------|--------|---------------|
+| `purchase_ids` | dfe | `purchase_id` (many2one → purchase.order, retorna `[id, 'name']` ou `False`) |
 | `nfe_infnfe_dest_xnome` | dfe | NAO EXISTE - buscar via `res.partner` pelo CNPJ |
 | `reserved_uom_qty` | stock.move.line | `quantity` (reservado) ou `qty_done` (realizado) |
 | `lines_ids` | dfe | NAO EXISTE - buscar via `dfe.line` com filtro `dfe_id` |

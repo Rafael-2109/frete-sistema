@@ -539,18 +539,26 @@ async def _poll_and_respond(
                 card_task_id = result.get("task_id", task_id)
 
                 if questions and not card_sent:
-                    # Enviar card apenas 1 vez (Fix 1)
-                    card = build_ask_user_card(card_task_id, questions)
-                    await turn_context.send_activity(
-                        MessageFactory.attachment(
-                            CardFactory.adaptive_card(card)
-                        )
-                    )
+                    # Fix: setar card_sent ANTES de send_activity para evitar
+                    # reenvio se send_activity lançar exceção após enviar o card
                     card_sent = True
-                    logger.info(
-                        f"[BOT] Adaptive Card enviado (unico): "
-                        f"{len(questions)} perguntas para task={task_id[:8]}..."
-                    )
+                    try:
+                        card = build_ask_user_card(card_task_id, questions)
+                        await turn_context.send_activity(
+                            MessageFactory.attachment(
+                                CardFactory.adaptive_card(card)
+                            )
+                        )
+                        logger.info(
+                            f"[BOT] Adaptive Card enviado (unico): "
+                            f"{len(questions)} perguntas para task={task_id[:8]}..."
+                        )
+                    except Exception as card_err:
+                        logger.error(
+                            f"[BOT] Erro ao enviar Adaptive Card: {card_err}",
+                            exc_info=True,
+                        )
+                        # card_sent ja e True — NAO reenvia mesmo se falhar
                 elif not questions:
                     await turn_context.send_activity(
                         "O agente precisa de mais informacoes, mas nao consegui "
