@@ -511,8 +511,12 @@ Nunca invente informações."""
             # CWD: Diretório de trabalho para Skills
             "cwd": project_cwd,
 
-            # Setting Sources: Carrega configurações do projeto
-            "setting_sources": ["user", "project"],
+            # Setting Sources: Em headless (servidor), NÃO carregar settings files
+            # para evitar que enabledPlugins (pyright-lsp, etc.) causem hang no
+            # CLI subprocess tentando instalar/inicializar plugins sem Node.js.
+            # Todas as configs necessárias já são passadas explicitamente nos options
+            # (permission_mode, allowed_tools, disallowed_tools, can_use_tool, etc.).
+            "setting_sources": [] if permission_mode == "acceptEdits" else ["user", "project"],
 
             # Tools permitidas — lê de settings.py (fonte única de verdade)
             "allowed_tools": list(self.settings.tools_enabled),
@@ -1182,6 +1186,14 @@ Nunca invente informações."""
             # query() é self-contained: spawna CLI process, executa, limpa.
             # Sem background tasks, sem estado persistente.
             # Quando o async for termina, o CLI process é limpo automaticamente.
+            logger.info(
+                f"[AGENT_SDK] Iniciando sdk_query() | "
+                f"model={getattr(options, 'model', '?')} | "
+                f"resume={bool(sdk_session_id)} | "
+                f"setting_sources={getattr(options, 'setting_sources', '?')} | "
+                f"mcp_servers={list(getattr(options, 'mcp_servers', {}).keys()) if hasattr(options, 'mcp_servers') and options.mcp_servers else '[]'}"
+            )
+            first_message_logged = False
             async for message in sdk_query(
                 prompt=query_prompt,
                 options=options,
@@ -1192,11 +1204,19 @@ Nunca invente informações."""
                 elapsed_since_last = current_time - last_message_time
                 last_message_time = current_time
 
-                logger.debug(
-                    f"[AGENT_SDK] msg={type(message).__name__} | "
-                    f"total={elapsed_total:.1f}s | "
-                    f"delta={elapsed_since_last:.1f}s"
-                )
+                # Log da primeira mensagem em INFO para diagnostico de hang
+                if not first_message_logged:
+                    first_message_logged = True
+                    logger.info(
+                        f"[AGENT_SDK] Primeira mensagem recebida: {type(message).__name__} | "
+                        f"{elapsed_total:.1f}s apos inicio"
+                    )
+                else:
+                    logger.debug(
+                        f"[AGENT_SDK] msg={type(message).__name__} | "
+                        f"total={elapsed_total:.1f}s | "
+                        f"delta={elapsed_since_last:.1f}s"
+                    )
 
                 # ─── SystemMessage (init do SDK) ───
                 if isinstance(message, SystemMessage):
@@ -1463,8 +1483,10 @@ Nunca invente informações."""
         except ProcessError as e:
             elapsed_total = time.time() - stream_start_time
             exit_code = getattr(e, 'exit_code', None)
+            stderr = getattr(e, 'stderr', '') or ''
             logger.error(
-                f"[AGENT_SDK] ProcessError {elapsed_total:.1f}s | exit={exit_code} | msg={e}"
+                f"[AGENT_SDK] ProcessError {elapsed_total:.1f}s | "
+                f"exit={exit_code} | stderr={stderr[:500]} | msg={e}"
             )
             yield StreamEvent(
                 type='error',

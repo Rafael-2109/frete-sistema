@@ -76,7 +76,8 @@ MAX_STREAM_DURATION_SECONDS = 540
 
 # FIX: Timeout de inatividade do SDK - se não receber eventos em X segundos, considera travado
 # Este é o timeout CURTO para detectar quando o SDK para de emitir eventos
-SDK_INACTIVITY_TIMEOUT_SECONDS = 90  # 90 segundos sem eventos reais = travado
+# Reduzido de 90s para 60s — se CLI não emite nada em 60s, está travado
+SDK_INACTIVITY_TIMEOUT_SECONDS = 60
 
 logger = logging.getLogger(__name__)
 
