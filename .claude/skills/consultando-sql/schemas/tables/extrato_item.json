@@ -173,6 +173,11 @@
       "type": "integer"
     },
     {
+      "name": "payment_id",
+      "type": "integer",
+      "description": "account.payment criado no Odoo"
+    },
+    {
       "name": "titulo_saldo_antes",
       "type": "float"
     },
@@ -214,34 +219,6 @@
   ],
   "indices": [
     {
-      "name": "ix_extrato_item_lote_id",
-      "columns": [
-        "lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_cnpj",
-      "columns": [
-        "cnpj_pagador"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_status_match",
-      "columns": [
-        "status_match"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_item_statement_line",
       "columns": [
         "statement_line_id"
@@ -273,6 +250,34 @@
       "name": "idx_extrato_item_lote",
       "columns": [
         "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_lote_id",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_cnpj",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_status_match",
+      "columns": [
+        "status_match"
       ],
       "unique": false
     }

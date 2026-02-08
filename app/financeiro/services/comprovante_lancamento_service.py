@@ -285,6 +285,14 @@ class ComprovanteLancamentoService:
             # 7. Marcar comprovante como reconciliado
             comp.odoo_is_reconciled = True
 
+            # 8. Sincronizar com extrato (se existir) — NÃO-BLOQUEANTE
+            try:
+                from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
+                sync_service = ConciliacaoSyncService()
+                sync_service.sync_comprovante_para_extrato(comp.id)
+            except Exception as sync_err:
+                logger.warning(f"  Sync com extrato falhou (não-bloqueante): {sync_err}")
+
             db.session.commit()
 
             logger.info(
@@ -440,6 +448,14 @@ class ComprovanteLancamentoService:
         todos_sucesso = all(r.get('sucesso') for r in resultados)
         if todos_sucesso:
             comp.odoo_is_reconciled = True
+
+        # Sincronizar com extrato (se existir) — NÃO-BLOQUEANTE
+        try:
+            from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
+            sync_service = ConciliacaoSyncService()
+            sync_service.sync_comprovante_para_extrato(comp.id)
+        except Exception as sync_err:
+            logger.warning(f"  Sync grupo com extrato falhou (não-bloqueante): {sync_err}")
 
         db.session.commit()
 
@@ -917,6 +933,14 @@ class ComprovanteLancamentoService:
         lanc.lancado_por = usuario
         lanc.erro_lancamento = None
         comp.odoo_is_reconciled = True
+
+        # Sincronizar com extrato (se existir) — NÃO-BLOQUEANTE
+        try:
+            from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
+            sync_service = ConciliacaoSyncService()
+            sync_service.sync_comprovante_para_extrato(comp.id)
+        except Exception as sync_err:
+            logger.warning(f"  Sync título quitado com extrato falhou (não-bloqueante): {sync_err}")
 
         db.session.commit()
 

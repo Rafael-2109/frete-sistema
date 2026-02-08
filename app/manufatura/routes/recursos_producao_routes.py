@@ -1028,7 +1028,7 @@ def imprimir_programacao():
         ).filter(
             RecursosProducao.disponivel == True
         ).distinct().order_by(RecursosProducao.linha_producao).all()
-        linhas_disponiveis = [l[0] for l in linhas_disponiveis if l[0]]
+        linhas_disponiveis = [linha[0] for linha in linhas_disponiveis if linha[0]]
 
         return render_template(
             'manufatura/programacao_linhas_print.html',
@@ -1062,7 +1062,7 @@ def api_linhas_disponiveis():
 
         return jsonify({
             'success': True,
-            'linhas': [l[0] for l in linhas if l[0]]
+            'linhas': [linha[0] for linha in linhas if linha[0]]
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

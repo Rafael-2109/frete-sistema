@@ -91,16 +91,23 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_integracoes_job_id",
+      "name": "ix_portal_integracoes_lote_id",
       "columns": [
-        "job_id"
+        "lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_lote_id",
+      "name": "ix_portal_integracoes_status",
       "columns": [
-        "lote_id"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_integracoes_job_id",
+      "columns": [
+        "job_id"
       ],
       "unique": false
     },
@@ -117,13 +124,6 @@
         "protocolo"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_portal_integracoes_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
     }
   ]
 }

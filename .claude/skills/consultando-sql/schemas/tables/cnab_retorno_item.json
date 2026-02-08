@@ -165,6 +165,13 @@
   ],
   "indices": [
     {
+      "name": "ix_cnab_retorno_item_nosso_numero",
+      "columns": [
+        "nosso_numero"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_cnab_retorno_item_codigo_ocorrencia",
       "columns": [
         "codigo_ocorrencia"
@@ -232,13 +239,6 @@
       "name": "idx_cnab_item_seu_numero",
       "columns": [
         "seu_numero"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cnab_retorno_item_nosso_numero",
-      "columns": [
-        "nosso_numero"
       ],
       "unique": false
     }

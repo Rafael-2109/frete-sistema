@@ -63,7 +63,9 @@
       "WebFetch(domain:pypi.org)",
       "mcp__ide__getDiagnostics",
       "WebFetch(domain:docs.aiohttp.org)",
-      "mcp__render__get_service"
+      "mcp__render__get_service",
+      "Bash(for skill in /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/*/SKILL.md)",
+      "Bash(done)"
     ],
     "deny": []
   },

@@ -229,13 +229,6 @@
   ],
   "indices": [
     {
-      "name": "idx_sep_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_pedido_sync",
       "columns": [
         "num_pedido",
@@ -253,6 +246,13 @@
       "unique": false
     },
     {
+      "name": "ix_separacao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_produto_qtd_sync",
       "columns": [
         "cod_produto",
@@ -261,24 +261,17 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_separacao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_estoque_projetado",
       "columns": [
         "cod_produto",
         "expedicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -306,17 +299,17 @@
       "unique": false
     },
     {
-      "name": "idx_sep_falta_pgto_sync",
+      "name": "idx_sep_falta_item_sync",
       "columns": [
-        "falta_pagamento",
+        "falta_item",
         "sincronizado_nf"
       ],
       "unique": false
     },
     {
-      "name": "idx_sep_lote_sync",
+      "name": "idx_sep_falta_pgto_sync",
       "columns": [
-        "separacao_lote_id",
+        "falta_pagamento",
         "sincronizado_nf"
       ],
       "unique": false
@@ -330,9 +323,9 @@
       "unique": false
     },
     {
-      "name": "idx_sep_falta_item_sync",
+      "name": "idx_sep_lote_sync",
       "columns": [
-        "falta_item",
+        "separacao_lote_id",
         "sincronizado_nf"
       ],
       "unique": false
@@ -364,6 +357,13 @@
       "name": "idx_sep_nf_cd",
       "columns": [
         "nf_cd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_num_pedido",
+      "columns": [
+        "num_pedido"
       ],
       "unique": false
     }

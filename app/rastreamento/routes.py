@@ -1517,9 +1517,9 @@ def api_finalizar_entrega():
                 'despesa_registrada': despesa_criada is not None,
                 'pallet_info': pallet_info,
                 'redirect': url_for('rastreamento.rastrear', token=token) if not todas_concluidas
-                           else url_for('rastreamento.confirmacao_entrega', token=token)
+                           else url_for('rastreamento.confirmacao_entrega', token=token)},
             }
-        })
+        ), 200
 
     except Exception as e:
         db.session.rollback()

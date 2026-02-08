@@ -154,9 +154,11 @@ class ExtratoConciliacaoService:
         FLUXO:
         1. Verifica se item tem múltiplos títulos vinculados (M:N via ExtratoItemTitulo)
         2. Se sim: chama _conciliar_multiplos_titulos()
-        3. Se não: fluxo original (1:1 via FK legacy)
+        3. Se não: despacha por tipo de transação do lote
+           - 'saida': chama _conciliar_item_pagamento() (contas a PAGAR)
+           - 'entrada' (default): fluxo original (contas a RECEBER)
 
-        FLUXO MULTI-COMPANY (1:1):
+        FLUXO MULTI-COMPANY (1:1 entrada):
         1. Se título tem payment vinculado (CNAB): reconcilia linha PENDENTES com linha EXTRATO
         2. Se título não tem payment: tenta reconciliar diretamente (mesma empresa)
 
@@ -177,7 +179,16 @@ class ExtratoConciliacaoService:
             return self._conciliar_multiplos_titulos(item)
 
         # =========================================================================
-        # FLUXO ORIGINAL (1:1)
+        # DESPACHO POR TIPO DE TRANSAÇÃO
+        # =========================================================================
+        tipo_lote = item.lote.tipo_transacao if item.lote else 'entrada'
+
+        if tipo_lote == 'saida':
+            # Pagamento (contas a pagar) — fluxo novo
+            return self._conciliar_item_pagamento(item)
+
+        # =========================================================================
+        # FLUXO ORIGINAL — ENTRADA (1:1 recebimentos)
         # =========================================================================
         logger.info(f"Conciliando item {item.id}: NF {item.titulo_nf} P{item.titulo_parcela}")
 
@@ -477,6 +488,14 @@ class ExtratoConciliacaoService:
         item.processado_em = agora_utc_naive()
         item.mensagem = f"Conciliado: Saldo {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
 
+        # Sincronizar com comprovantes (se existir) — NÃO-BLOQUEANTE
+        try:
+            from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
+            sync_service = ConciliacaoSyncService()
+            sync_service.sync_extrato_para_comprovante(item.id)
+        except Exception as sync_err:
+            logger.warning(f"  Sync com comprovantes falhou (não-bloqueante): {sync_err}")
+
         logger.info(f"  ✅ OK - Saldo: {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}")
 
         return {
@@ -486,6 +505,484 @@ class ExtratoConciliacaoService:
             'saldo_antes': item.titulo_saldo_antes,
             'saldo_depois': item.titulo_saldo_depois,
             'partial_reconcile_id': item.partial_reconcile_id
+        }
+
+    # =========================================================================
+    # CONCILIAÇÃO DE PAGAMENTOS (SAÍDA) — Contas a Pagar
+    # =========================================================================
+
+    def _conciliar_item_pagamento(self, item: ExtratoItem) -> Dict:
+        """
+        Concilia um item de PAGAMENTO (saída) no Odoo.
+
+        Segue o mesmo fluxo do ComprovanteLancamentoService.lancar_no_odoo():
+        1. Validar item (título vinculado, credit_line_id)
+        2. Buscar título payable no Odoo (liability_payable)
+        3. Verificar saldo do título
+        4. Detectar juros (abs(valor_extrato) > valor_titulo + 0.01)
+        5. Criar account.payment outbound via BaixaPagamentosService
+        6. Postar payment
+        7. Reconciliar payment ↔ título
+        8. Trocar conta extrato: TRANSITÓRIA → PENDENTES
+        9. Atualizar partner_id e rótulo do extrato
+        10. Reconciliar payment ↔ extrato
+        11. Capturar snapshots antes/depois
+        12. Marcar item como CONCILIADO
+
+        Args:
+            item: ExtratoItem a conciliar (lote.tipo_transacao == 'saida')
+
+        Returns:
+            Dict com resultado
+        """
+        logger.info(
+            f"Conciliando PAGAMENTO item {item.id}: "
+            f"NF {item.titulo_nf} P{item.titulo_parcela}, "
+            f"valor=R$ {abs(item.valor):.2f}"
+        )
+
+        # Validação: precisa ter título a pagar vinculado
+        if not item.titulo_pagar_id:
+            raise ValueError("Item de pagamento não possui título a pagar vinculado")
+
+        if not item.credit_line_id:
+            # Buscar linha de crédito do extrato (para saída, o extrato gera crédito)
+            item.credit_line_id = self._buscar_linha_credito_saida(item.move_id)
+            if not item.credit_line_id:
+                raise ValueError(
+                    f"Linha de crédito/débito não encontrada para move_id {item.move_id}"
+                )
+
+        # Buscar título local
+        titulo_local = db.session.get(ContasAPagar, item.titulo_pagar_id)
+        if not titulo_local:
+            raise ValueError(f"Título a pagar {item.titulo_pagar_id} não encontrado")
+
+        # Buscar título no Odoo (liability_payable)
+        titulo_odoo = self._buscar_titulo_odoo_payable(
+            titulo_local.titulo_nf, titulo_local.parcela
+        )
+        if not titulo_odoo:
+            raise ValueError(
+                f"Título payable NF {titulo_local.titulo_nf} "
+                f"parcela {titulo_local.parcela} não encontrado no Odoo"
+            )
+
+        titulo_odoo_id = titulo_odoo['id']
+        titulo_company = titulo_odoo.get('company_id')
+        titulo_company_id = titulo_company[0] if isinstance(titulo_company, (list, tuple)) else titulo_company
+        titulo_company_name = titulo_company[1] if isinstance(titulo_company, (list, tuple)) else str(titulo_company)
+
+        logger.info(
+            f"  Título payable encontrado: ID={titulo_odoo_id}, "
+            f"Empresa={titulo_company_name}"
+        )
+
+        # Verificar se título já está reconciliado/quitado
+        titulo_reconciliado = titulo_odoo.get('reconciled', False)
+        titulo_residual = abs(float(titulo_odoo.get('amount_residual', 0)))
+
+        if titulo_reconciliado or titulo_residual < 0.01:
+            logger.info(
+                f"  Título {titulo_odoo_id} já quitado "
+                f"(reconciled={titulo_reconciliado}, residual={titulo_residual:.2f}). "
+                f"Verificando se extrato já está conciliado no Odoo..."
+            )
+            # Verificar se a linha do extrato já está reconciliada no Odoo
+            linha_extrato = self._verificar_linha_extrato_reconciliada(item.credit_line_id)
+            if linha_extrato and linha_extrato.get('reconciled'):
+                return self._sincronizar_conciliacao_existente(item, titulo_odoo, linha_extrato)
+
+            # Tentar reconciliar com payment existente
+            matched_debit_ids = titulo_odoo.get('matched_debit_ids', [])
+            if matched_debit_ids:
+                return self._marcar_conciliado_local_pagamento(
+                    item, titulo_odoo, matched_debit_ids
+                )
+
+            raise ValueError(
+                f"Título NF {titulo_local.titulo_nf} P{titulo_local.parcela} "
+                f"já quitado sem payment disponível para reconciliar extrato"
+            )
+
+        # Capturar snapshot ANTES
+        snapshot_antes = self._capturar_snapshot(titulo_odoo_id)
+        item.set_snapshot_antes(snapshot_antes)
+
+        # Inicializar BaixaPagamentosService (lazy)
+        baixa_pag_service = self._get_baixa_pagamentos_service()
+
+        # Extrair dados para criar payment
+        partner_id = titulo_odoo.get('partner_id')
+        partner_id_num = partner_id[0] if isinstance(partner_id, (list, tuple)) else partner_id
+        partner_name = partner_id[1] if isinstance(partner_id, (list, tuple)) else ''
+
+        move = titulo_odoo.get('move_id')
+        move_name = move[1] if isinstance(move, (list, tuple)) else str(move)
+
+        # Valor do extrato (absoluto) e juros
+        valor_extrato = abs(float(item.valor))
+        valor_titulo = titulo_residual
+        juros = round(valor_extrato - valor_titulo, 2) if valor_extrato > valor_titulo + 0.01 else 0
+        usou_writeoff = False
+
+        # Journal: do lote do extrato
+        from app.financeiro.services.comprovante_lancamento_service import SICOOB_JOURNAL_POR_COMPANY
+        journal_id = item.lote.journal_id if item.lote and item.lote.journal_id else (
+            SICOOB_JOURNAL_POR_COMPANY.get(titulo_company_id)
+        )
+        if not journal_id:
+            raise ValueError(
+                f"Não foi possível determinar journal_id para "
+                f"empresa {titulo_company_id}"
+            )
+
+        if juros > 0:
+            # COM JUROS: usar wizard com write-off
+            logger.info(
+                f"  Criando payment OUTBOUND COM juros: "
+                f"Principal R$ {valor_titulo:.2f} + Juros R$ {juros:.2f}"
+            )
+            payment_id, payment_name = baixa_pag_service.criar_pagamento_outbound_com_writeoff(
+                titulo_id=titulo_odoo_id,
+                partner_id=partner_id_num,
+                valor_titulo=valor_titulo,
+                valor_juros=juros,
+                journal_id=journal_id,
+                ref=move_name,
+                data=item.data_transacao or agora_utc_naive().date(),
+                company_id=titulo_company_id,
+            )
+            usou_writeoff = True
+            logger.info(f"  Payment Write-Off criado: {payment_name} (ID: {payment_id})")
+        else:
+            # SEM JUROS: payment outbound simples
+            logger.info(f"  Criando payment OUTBOUND: R$ {valor_titulo:.2f}")
+            payment_id, payment_name = baixa_pag_service.criar_pagamento_outbound(
+                partner_id=partner_id_num,
+                valor=valor_extrato,
+                journal_id=journal_id,
+                ref=move_name,
+                data=item.data_transacao or agora_utc_naive().date(),
+                company_id=titulo_company_id,
+            )
+            logger.info(f"  Payment criado: {payment_name} (ID: {payment_id})")
+
+        item.payment_id = payment_id
+
+        if not usou_writeoff:
+            # Postar payment (wizard já posta automaticamente)
+            baixa_pag_service.postar_pagamento(payment_id)
+            logger.info("  Payment postado")
+
+        # Buscar linhas do payment
+        linhas_payment = baixa_pag_service.buscar_linhas_payment(payment_id)
+        debit_line_id = linhas_payment.get('debit_line_id')
+        credit_line_id = linhas_payment.get('credit_line_id')
+
+        logger.info(f"  Linhas payment: debit={debit_line_id}, credit={credit_line_id}")
+
+        # Reconciliar payment com título
+        if debit_line_id and titulo_odoo_id:
+            if usou_writeoff:
+                logger.info("  Write-Off: reconciliação título feita pelo wizard")
+            else:
+                baixa_pag_service.reconciliar(debit_line_id, titulo_odoo_id)
+                logger.info("  Reconciliado: payment ↔ título")
+
+            # Buscar full_reconcile_id do título
+            titulo_atualizado = self._buscar_titulo_por_id(titulo_odoo_id)
+            if titulo_atualizado:
+                full_rec = titulo_atualizado.get('full_reconcile_id')
+                if full_rec:
+                    item.full_reconcile_id = (
+                        full_rec[0] if isinstance(full_rec, (list, tuple)) else full_rec
+                    )
+
+        # Reconciliar payment com extrato (se credit_line_id disponível)
+        if credit_line_id and item.move_id:
+            # Trocar conta: TRANSITÓRIA → PENDENTES
+            from app.financeiro.services.baixa_pagamentos_service import (
+                CONTA_TRANSITORIA as BP_CONTA_TRANSITORIA,
+                CONTA_PAGAMENTOS_PENDENTES as BP_CONTA_PENDENTES,
+            )
+            baixa_pag_service.trocar_conta_move_line_extrato(
+                move_id=item.move_id,
+                conta_origem=BP_CONTA_TRANSITORIA,
+                conta_destino=BP_CONTA_PENDENTES,
+            )
+
+            # Buscar linha de débito do extrato (agora na conta PENDENTES)
+            debit_line_extrato = baixa_pag_service.buscar_linha_debito_extrato(
+                item.move_id
+            )
+            if debit_line_extrato:
+                # Atualizar partner_id do statement line
+                if item.statement_line_id:
+                    baixa_pag_service.atualizar_statement_line_partner(
+                        statement_line_id=item.statement_line_id,
+                        partner_id=partner_id_num,
+                    )
+
+                # Atualizar rótulo do extrato
+                from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+                rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+                    valor=valor_extrato,
+                    nome_fornecedor=partner_name or '',
+                    data_pagamento=item.data_transacao,
+                )
+
+                if item.statement_line_id:
+                    baixa_pag_service.atualizar_rotulo_extrato(
+                        move_id=item.move_id,
+                        statement_line_id=item.statement_line_id,
+                        rotulo=rotulo,
+                    )
+
+                # Reconciliar payment com extrato
+                baixa_pag_service.reconciliar(credit_line_id, debit_line_extrato)
+                logger.info("  Reconciliado: payment ↔ extrato")
+
+                # Buscar full_reconcile_id do extrato
+                linha_ext = self.connection.search_read(
+                    'account.move.line',
+                    [['id', '=', debit_line_extrato]],
+                    fields=['full_reconcile_id'],
+                    limit=1,
+                )
+                if linha_ext and linha_ext[0].get('full_reconcile_id'):
+                    full_rec_ext = linha_ext[0]['full_reconcile_id']
+                    # Salvar como partial_reconcile_id para referência
+                    item.partial_reconcile_id = (
+                        full_rec_ext[0] if isinstance(full_rec_ext, (list, tuple)) else full_rec_ext
+                    )
+            else:
+                logger.warning(
+                    f"  Linha débito extrato não encontrada para move_id={item.move_id}"
+                )
+
+        # Capturar snapshot DEPOIS
+        snapshot_depois = self._capturar_snapshot(titulo_odoo_id)
+        item.set_snapshot_depois(snapshot_depois)
+
+        # Buscar dados atualizados
+        titulo_atualizado = self._buscar_titulo_por_id(titulo_odoo_id)
+        item.titulo_saldo_antes = titulo_residual
+        item.titulo_saldo_depois = (
+            abs(float(titulo_atualizado.get('amount_residual', 0)))
+            if titulo_atualizado else None
+        )
+
+        # Atualizar status
+        item.status = 'CONCILIADO'
+        item.processado_em = agora_utc_naive()
+        item.mensagem = (
+            f"Pagamento conciliado: {payment_name}, "
+            f"Saldo {item.titulo_saldo_antes:.2f} -> {item.titulo_saldo_depois}"
+        )
+
+        # Sincronizar com comprovantes (se existir) — NÃO-BLOQUEANTE
+        try:
+            from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
+            sync_service = ConciliacaoSyncService()
+            sync_service.sync_extrato_para_comprovante(item.id)
+        except Exception as sync_err:
+            logger.warning(f"  Sync pagamento com comprovantes falhou (não-bloqueante): {sync_err}")
+
+        logger.info(
+            f"  ✅ PAGAMENTO OK - Payment: {payment_name}, "
+            f"Saldo: {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
+        )
+
+        return {
+            'success': True,
+            'item_id': item.id,
+            'titulo_id': titulo_odoo_id,
+            'payment_id': payment_id,
+            'payment_name': payment_name,
+            'saldo_antes': item.titulo_saldo_antes,
+            'saldo_depois': item.titulo_saldo_depois,
+            'juros': juros,
+            'partial_reconcile_id': item.partial_reconcile_id,
+        }
+
+    def _buscar_titulo_odoo_payable(self, nf: str, parcela) -> Optional[Dict]:
+        """
+        Busca título a PAGAR no Odoo (liability_payable) por NF e parcela.
+
+        Similar a _buscar_titulo_odoo_multicompany mas para account_type = 'liability_payable'.
+
+        Args:
+            nf: Número da NF-e
+            parcela: Número da parcela
+
+        Returns:
+            Dict com dados do título ou None
+        """
+        parcela_limpa = str(parcela).upper().replace('P', '').strip() if parcela else None
+        try:
+            parcela_int = int(parcela_limpa) if parcela_limpa else None
+        except (ValueError, TypeError):
+            parcela_int = None
+
+        logger.info(f"  Buscando título payable: NF={nf}, parcela={parcela_int}")
+
+        # Busca principal: NF + parcela + liability_payable
+        domain = [
+            ['x_studio_nf_e', '=', str(nf)],
+            ['account_type', '=', 'liability_payable'],
+            ['parent_state', '=', 'posted'],
+        ]
+
+        if parcela_int:
+            domain.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+
+        titulos = self.connection.search_read(
+            'account.move.line',
+            domain,
+            fields=CAMPOS_SNAPSHOT_TITULO,
+            limit=5,
+        )
+
+        if titulos:
+            logger.info(f"  Encontrado(s) {len(titulos)} título(s) payable")
+            # Preferir não reconciliado
+            for t in titulos:
+                if not t.get('reconciled', False):
+                    return t
+            return titulos[0]
+
+        # Fallback: buscar pelo nome do move
+        domain_fallback = [
+            ['move_id.name', 'ilike', str(nf)],
+            ['account_type', '=', 'liability_payable'],
+            ['parent_state', '=', 'posted'],
+        ]
+
+        if parcela_int:
+            domain_fallback.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+
+        titulos = self.connection.search_read(
+            'account.move.line',
+            domain_fallback,
+            fields=CAMPOS_SNAPSHOT_TITULO,
+            limit=5,
+        )
+
+        if titulos:
+            logger.info(f"  Encontrado(s) {len(titulos)} título(s) payable via move_id.name")
+            for t in titulos:
+                if not t.get('reconciled', False):
+                    return t
+            return titulos[0]
+
+        logger.warning(f"  Título payable NF {nf} parcela {parcela_int} NÃO encontrado")
+        return None
+
+    def _buscar_linha_credito_saida(self, move_id: int) -> Optional[int]:
+        """
+        Busca a linha de contrapartida do extrato para SAÍDA (pagamento).
+
+        Para extratos de saída, o Odoo pode gerar:
+        - Linha de CRÉDITO na conta do banco
+        - Linha de DÉBITO na conta TRANSITÓRIA
+
+        Precisamos da linha na conta TRANSITÓRIA (será trocada para PENDENTES).
+
+        Args:
+            move_id: ID do account.move do extrato
+
+        Returns:
+            ID da linha ou None
+        """
+        if not move_id:
+            return None
+
+        # Para saída, buscar linha de crédito (credit > 0) — contrapartida do extrato
+        linhas = self.connection.search_read(
+            'account.move.line',
+            [
+                ['move_id', '=', move_id],
+                ['credit', '>', 0],
+            ],
+            fields=['id', 'account_id'],
+            limit=5,
+        )
+
+        if linhas:
+            return linhas[0]['id']
+
+        # Fallback: buscar qualquer linha (o Odoo pode ter invertido)
+        linhas = self.connection.search_read(
+            'account.move.line',
+            [
+                ['move_id', '=', move_id],
+                ['debit', '>', 0],
+            ],
+            fields=['id', 'account_id'],
+            limit=5,
+        )
+
+        return linhas[0]['id'] if linhas else None
+
+    def _get_baixa_pagamentos_service(self):
+        """
+        Retorna instância do BaixaPagamentosService.
+        Usa mesma conexão Odoo para reutilizar autenticação.
+        """
+        if not hasattr(self, '_baixa_pag_service') or self._baixa_pag_service is None:
+            from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+            self._baixa_pag_service = BaixaPagamentosService(connection=self.connection)
+        return self._baixa_pag_service
+
+    def _marcar_conciliado_local_pagamento(
+        self, item: ExtratoItem, titulo_odoo: Dict, matched_debit_ids: list
+    ) -> Dict:
+        """
+        Marca item de pagamento como conciliado quando título já está quitado.
+
+        Similar a _marcar_conciliado_local() mas para títulos payable:
+        - Usa matched_debit_ids (não matched_credit_ids)
+        - Busca linha CRÉDITO do payment na conta PENDENTES
+
+        Args:
+            item: ExtratoItem do sistema local
+            titulo_odoo: Dict com dados do título no Odoo
+            matched_debit_ids: IDs dos partial_reconcile vinculados ao título
+
+        Returns:
+            Dict com resultado
+        """
+        titulo_odoo_id = titulo_odoo['id']
+
+        # Capturar snapshot
+        snapshot = {'titulo': titulo_odoo, 'matched_debit_ids': matched_debit_ids}
+        item.set_snapshot_antes(snapshot)
+        item.set_snapshot_depois(snapshot)
+
+        item.titulo_saldo_antes = 0
+        item.titulo_saldo_depois = 0
+        item.status = 'CONCILIADO'
+        item.processado_em = agora_utc_naive()
+        item.mensagem = "Título payable já quitado no Odoo — marcado localmente"
+
+        # Tentar extrair partial_reconcile
+        if matched_debit_ids:
+            item.partial_reconcile_id = matched_debit_ids[-1] if isinstance(matched_debit_ids, list) else matched_debit_ids
+
+        logger.info(
+            f"  ✅ Pagamento marcado localmente: "
+            f"titulo_id={titulo_odoo_id}, já quitado"
+        )
+
+        return {
+            'success': True,
+            'item_id': item.id,
+            'titulo_id': titulo_odoo_id,
+            'saldo_antes': 0,
+            'saldo_depois': 0,
+            'partial_reconcile_id': item.partial_reconcile_id,
+            'mensagem': 'Título payable já quitado no Odoo',
         }
 
     def _buscar_linha_credito(self, move_id: int) -> Optional[int]:

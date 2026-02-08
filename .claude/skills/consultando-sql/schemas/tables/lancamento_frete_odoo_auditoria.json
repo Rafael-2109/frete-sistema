@@ -144,6 +144,20 @@
   ],
   "indices": [
     {
+      "name": "ix_lancamento_frete_odoo_auditoria_etapa",
+      "columns": [
+        "etapa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_despesa_extra_id",
+      "columns": [
+        "despesa_extra_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_lancamento_frete_odoo_auditoria_chave_cte",
       "columns": [
         "chave_cte"
@@ -168,20 +182,6 @@
       "name": "ix_lancamento_frete_odoo_auditoria_cte_id",
       "columns": [
         "cte_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lancamento_frete_odoo_auditoria_etapa",
-      "columns": [
-        "etapa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lancamento_frete_odoo_auditoria_despesa_extra_id",
-      "columns": [
-        "despesa_extra_id"
       ],
       "unique": false
     }

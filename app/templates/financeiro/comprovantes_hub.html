@@ -1298,6 +1298,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                 '<i class="fas fa-minus me-1"></i>Extrato</span>';
                     }
 
+                    // L2b: Cross-ref com extrato importado (sistema local)
+                    if (row.extrato_item_id) {
+                        var extSts = row.extrato_item_status || '?';
+                        var extCls = extSts === 'CONCILIADO' ? 'bg-success'
+                                   : extSts === 'APROVADO' ? 'bg-info'
+                                   : extSts === 'ERRO' ? 'bg-danger'
+                                   : 'bg-secondary';
+                        html += '<span class="badge ' + extCls + '" title="Extrato Item #' + row.extrato_item_id +
+                                ' (Lote ' + (row.extrato_lote_id || '?') + ')">' +
+                                '<i class="fas fa-receipt me-1"></i>Ext.Local: ' + extSts + '</span>';
+                    }
+
                     // L3: Status + Score + Reconciliação
                     if (!val) {
                         html += '<span class="badge bg-light text-muted">' +
@@ -2762,6 +2774,19 @@ document.addEventListener('DOMContentLoaded', function() {
             html += row('Journal ID', v(rowData.odoo_journal_id));
             html += row('Conciliado?', boolBadge(rowData.odoo_is_reconciled));
             html += row('Vinculado em', v(rowData.odoo_vinculado_em));
+
+            // Cross-reference: extrato importado
+            if (rowData.extrato_item_id) {
+                var extSts = rowData.extrato_item_status || '?';
+                var extCls = extSts === 'CONCILIADO' ? 'bg-success'
+                           : extSts === 'APROVADO' ? 'bg-info'
+                           : extSts === 'ERRO' ? 'bg-danger' : 'bg-secondary';
+                html += row('Extrato Local',
+                    '<span class="badge ' + extCls + '">Item #' + rowData.extrato_item_id + ' — ' + extSts + '</span>' +
+                    ' <a href="{{ url_for("financeiro.extrato_hub") }}?item=' + rowData.extrato_item_id +
+                    '" class="small">Ver lote</a>'
+                );
+            }
         } else {
             html += '<div class="text-muted text-center py-2"><i class="fas fa-minus-circle me-1"></i>Sem vínculo com extrato Odoo</div>';
         }

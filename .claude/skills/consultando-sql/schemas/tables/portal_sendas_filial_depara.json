@@ -63,16 +63,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_filial_depara_cnpj",
+      "name": "ix_portal_sendas_filial_depara_filial",
       "columns": [
-        "cnpj"
+        "filial"
       ],
       "unique": true
     },
     {
-      "name": "ix_portal_sendas_filial_depara_filial",
+      "name": "ix_portal_sendas_filial_depara_cnpj",
       "columns": [
-        "filial"
+        "cnpj"
       ],
       "unique": true
     },

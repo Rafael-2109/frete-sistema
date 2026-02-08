@@ -754,6 +754,17 @@ def extrato_lote_pagamentos_detalhe(lote_id):
         'conciliados': stats_query.conciliados or 0 if stats_query else 0,
     }
 
+    # Cross-reference: buscar comprovantes vinculados por statement_line_id
+    from app.financeiro.models_comprovante import ComprovantePagamentoBoleto
+    statement_line_ids_itens = [i.statement_line_id for i in itens if i.statement_line_id]
+    comprovantes_por_stl = {}
+    if statement_line_ids_itens:
+        comps = ComprovantePagamentoBoleto.query.filter(
+            ComprovantePagamentoBoleto.odoo_statement_line_id.in_(statement_line_ids_itens)
+        ).all()
+        for c in comps:
+            comprovantes_por_stl[c.odoo_statement_line_id] = c
+
     return render_template(
         'financeiro/extrato_lote_pagamentos_detalhe.html',
         lote=lote,
@@ -761,6 +772,7 @@ def extrato_lote_pagamentos_detalhe(lote_id):
         stats=stats,
         pagination=pagination,
         per_page=per_page,
+        comprovantes_por_stl=comprovantes_por_stl,
         filtro_cnpj=filtro_cnpj,
         filtro_data_inicio=filtro_data_inicio,
         filtro_data_fim=filtro_data_fim

@@ -405,9 +405,34 @@ def comprovantes_api_dados():
         ):
             lancamentos_por_comp[lanc.comprovante_id] = lanc
 
+    # Cross-reference: buscar ExtratoItem vinculados por statement_line_id
+    from app.financeiro.models import ExtratoItem
+    statement_line_ids = [
+        c.odoo_statement_line_id for c in comprovantes
+        if c.odoo_statement_line_id
+    ]
+    extrato_items_por_stl = {}
+    if statement_line_ids:
+        extrato_items = ExtratoItem.query.filter(
+            ExtratoItem.statement_line_id.in_(statement_line_ids)
+        ).all()
+        for ei in extrato_items:
+            extrato_items_por_stl[ei.statement_line_id] = ei
+
     dados = []
     for c in comprovantes:
         item = c.to_dict()
+
+        # Cross-reference: extrato vinculado via statement_line_id
+        extrato_item = extrato_items_por_stl.get(c.odoo_statement_line_id) if c.odoo_statement_line_id else None
+        if extrato_item:
+            item['extrato_item_id'] = extrato_item.id
+            item['extrato_item_status'] = extrato_item.status
+            item['extrato_lote_id'] = extrato_item.lote_id
+        else:
+            item['extrato_item_id'] = None
+            item['extrato_item_status'] = None
+            item['extrato_lote_id'] = None
 
         # Enriquecer com dados do lançamento
         lanc = lancamentos_por_comp.get(c.id)

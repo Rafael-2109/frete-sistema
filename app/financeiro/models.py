@@ -1384,6 +1384,7 @@ class ExtratoItem(db.Model):
     # IDs criados no Odoo
     partial_reconcile_id = db.Column(db.Integer, nullable=True)
     full_reconcile_id = db.Column(db.Integer, nullable=True)
+    payment_id = db.Column(db.Integer, nullable=True)  # account.payment criado no Odoo
 
     # Saldo do título após conciliação
     titulo_saldo_antes = db.Column(db.Float, nullable=True)
@@ -1447,6 +1448,7 @@ class ExtratoItem(db.Model):
             'mensagem': self.mensagem,
             # Resultado
             'partial_reconcile_id': self.partial_reconcile_id,
+            'payment_id': self.payment_id,
             'titulo_saldo_antes': self.titulo_saldo_antes,
             'titulo_saldo_depois': self.titulo_saldo_depois,
             # Auditoria
