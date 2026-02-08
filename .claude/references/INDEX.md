@@ -1,7 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 06/02/2026
-**Gerado por**: Reestruturacao arquitetural
+**Ultima atualizacao**: 08/02/2026
 
 ---
 
@@ -19,6 +18,8 @@
 | Margem e Custeio (formula margem, tabelas de custo) | [negocio/MARGEM_CUSTEIO.md](negocio/MARGEM_CUSTEIO.md) |
 | Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](negocio/RECEBIMENTO_MATERIAIS.md) |
 | Historico de decisoes | [negocio/historia_organizada.md](negocio/historia_organizada.md) |
+| **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
+| **Infraestrutura Render** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
 
 ---
 
@@ -43,28 +44,15 @@
 
 ---
 
-## Roadmaps
+## Planejamento (fora de references — nao operacional)
 
-| Documento | Descricao |
-|-----------|-----------|
-| [roadmaps/FEATURES_AGENTE.md](roadmaps/FEATURES_AGENTE.md) | Features futuras do Agente Logistico |
-| [roadmaps/IMPLEMENTACAO_ODOO.md](roadmaps/IMPLEMENTACAO_ODOO.md) | Status de implementacao Odoo |
-
----
-
-## Cookbooks (Exemplos Anthropic)
-
-Em [cookbooks/](cookbooks/):
-- `BUILDING_EVALS.md` - Construcao de avaliacoes
-- `CONTEXT_COMPACTION.md` - Compactacao de contexto
-- `METAPROMPT.md` - Meta-prompts
-- `PROMPT_CACHING.md` - Cache de prompts
+Roadmaps e planejamento futuro foram movidos para `.planning/roadmaps/`:
+- `FEATURES_AGENTE.md` — Features futuras do Agente Logistico
+- `IMPLEMENTACAO_ODOO.md` — Status de implementacao Odoo
 
 ---
 
 ## Mapeamento Skill -> References
-
-Quais references cada skill consome:
 
 | Skill | References Utilizadas |
 |-------|----------------------|
@@ -78,18 +66,3 @@ Quais references cada skill consome:
 | `descobrindo-odoo-estrutura` | odoo/MODELOS_CAMPOS |
 | `gerindo-expedicao` | modelos/REGRAS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
 | `frontend-design` | design/MAPEAMENTO_CORES |
-
----
-
-## Skills por Dominio
-
-### Agente Web (Render/Producao)
-- `gerindo-expedicao` - Consultas logisticas, estoque, separacoes
-- `memoria-usuario` - Memoria persistente entre sessoes
-
-### Claude Code (Desenvolvimento)
-- Odoo: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, integracao-odoo, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
-- Dev: frontend-design, skill_creator, ralph-wiggum, prd-generator
-
-### Compartilhados (ambos dominios)
-- `exportando-arquivos`, `lendo-arquivos`

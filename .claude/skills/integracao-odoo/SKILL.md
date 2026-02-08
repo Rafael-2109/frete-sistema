@@ -1,6 +1,6 @@
 ---
 name: integracao-odoo
-description: "Skill para CRIAR novas integracoes com Odoo. Cobre lancamento de CTes, despesas extras e documentos fiscais seguindo o processo de 16 etapas. Use quando precisar IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS existe skill especializada em rastreamento."
+description: "Cria e modifica integracoes com Odoo seguindo processo de 16 etapas. Cobre lancamento de CTes, despesas extras e documentos fiscais. Usar para IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS usar rastreando-odoo."
 ---
 
 ## QUANDO NAO USAR ESTA SKILL

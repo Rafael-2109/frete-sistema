@@ -1,10 +1,10 @@
 ---
 name: ralph-wiggum
 description: |
-  Ralph Wiggum technique for autonomous AI development loops.
-  Use when: (1) Starting Ralph loop in current session, (2) User says "/ralph-loop",
-  (3) Need to explain Ralph technique, (4) Setting up Ralph structure for a project,
-  (5) User mentions "autonomous loop", "I'm in danger", or "ralph".
+  Executa loops autonomos de desenvolvimento via tecnica Ralph Wiggum.
+  Usar quando: (1) Iniciar loop Ralph na sessao atual, (2) Usuario diz "/ralph-loop",
+  (3) Explicar a tecnica Ralph Wiggum, (4) Configurar estrutura Ralph para um projeto,
+  (5) Usuario menciona "autonomous loop", "I'm in danger" ou "ralph".
 ---
 
 # Ralph Wiggum Technique

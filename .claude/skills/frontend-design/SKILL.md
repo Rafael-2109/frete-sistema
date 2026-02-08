@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality using Flask/Jinja2 template structure. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications. Generates creative, polished code and UI design that avoids generic AI aesthetics with mandatory light/dark mode support. (project)
+description: Cria interfaces frontend de alta qualidade com Flask/Jinja2. Gera componentes web, paginas, dashboards e aplicacoes com design profissional, suporte obrigatorio light/dark mode e estetica nao-generica. Usar quando precisar construir telas, artefatos visuais ou posters.
 ---
 
 Create distinctive frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details.

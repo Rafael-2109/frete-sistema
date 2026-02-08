@@ -32,5 +32,24 @@
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/lembrar-regenerar-schemas.py\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/sincronizar-references.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

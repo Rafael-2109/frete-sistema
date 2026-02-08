@@ -55,7 +55,7 @@ email-validator==2.2.0
 # AI & CLAUDE INTEGRATION
 # ==========================================
 anthropic==0.77.0           # API direta Anthropic (fallback)
-claude-agent-sdk==0.1.31    # Claude Agent SDK oficial (upgraded from 0.1.26 — fix AssistantMessage.error, MCP annotations, new hooks)
+claude-agent-sdk==0.1.33    # Claude Agent SDK oficial (upgraded from 0.1.26 — fix AssistantMessage.error, MCP annotations, new hooks)
 mcp>=1.10.0                 # Model Context Protocol (latest stable)
 pydantic==2.11.7           # Data validation
 anyio==4.9.0               # Async support
