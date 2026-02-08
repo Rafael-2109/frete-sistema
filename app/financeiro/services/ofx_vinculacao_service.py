@@ -526,6 +526,7 @@ def processar_ofx_e_vincular(
         'ja_vinculados': 0,
         'pix_transacoes': 0,
         'pix_vinculados': 0,
+        'pix_colisoes': 0,
         'erros': 0,
         'detalhes': [],
     }
@@ -681,13 +682,12 @@ def processar_ofx_e_vincular(
             resultado['detalhes'].append(detalhe_pix)
             continue
 
-        # 6 dígitos centrais do CNPJ (sem pontos): "722252"
-        cnpj_parcial = cnpj_match.group(1).replace('.', '')  # "00722252" → pegar centrais
-        # Na verdade extraímos XX.XXX.XXX = 8 dígitos. Os centrais do CNPJ
-        # (posição 3-8 do CNPJ completo XX.XXX.XXX/XXXX-XX) são os mais
-        # discriminantes. Usamos contains no beneficiario_cnpj_cpf mascarado.
-        # Ex: comprovante tem "**.722.252/0001-**", queremos match nos "722252"
-        cnpj_busca = cnpj_parcial[2:]  # Remove os 2 primeiros dígitos (raiz), fica "722252"
+        # Usar mais dígitos para match: raiz visível (6 dig) + filial (4 dig)
+        # Mask: **.722.252/0001-** → parte visível: "722.252/0001"
+        # OFX:  group(1)="00.722.252", group(2)="0001-24"
+        raiz_visivel = cnpj_match.group(1)[3:]            # "00.722.252" → "722.252"
+        filial = cnpj_match.group(2).split('-')[0]         # "0001-24" → "0001"
+        cnpj_busca = f"{raiz_visivel}/{filial}"            # "722.252/0001"
 
         # Match: data + valor + CNPJ parcial contra comprovantes PIX
         data_pix = trn_pix.get('dtposted')
@@ -700,7 +700,21 @@ def processar_ofx_e_vincular(
             ComprovantePagamentoBoleto.beneficiario_cnpj_cpf.contains(cnpj_busca),
             ComprovantePagamentoBoleto.ofx_fitid.is_(None),  # ainda não vinculado
         )
-        comprovante_pix = query.first()
+        candidatos = query.all()
+
+        if len(candidatos) > 1:
+            # Colisão: múltiplos comprovantes candidatos — não vincular automaticamente
+            detalhe_pix['status_comprovante'] = 'colisao'
+            detalhe_pix['mensagem'] = (
+                f'PIX com {len(candidatos)} comprovantes candidatos '
+                f'(CNPJ {cnpj_busca}, valor {valor_pix}, data {detalhe_pix["data"]}) '
+                f'— vinculação manual necessária'
+            )
+            resultado['pix_colisoes'] += 1
+            resultado['detalhes'].append(detalhe_pix)
+            continue
+
+        comprovante_pix = candidatos[0] if candidatos else None
 
         if comprovante_pix:
             try:
