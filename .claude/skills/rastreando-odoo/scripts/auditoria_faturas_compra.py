@@ -20,10 +20,9 @@ import sys
 import os
 import argparse
 import json
-from datetime import datetime
 from typing import Dict, Any, List, Optional, Set
 from collections import defaultdict
-
+from app.utils.timezone import agora_utc_naive
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 
@@ -472,7 +471,7 @@ def extrair_auditoria(odoo, mes: int = None, ano: int = None, limit: int = 10000
             'faturas_com_estorno': total_com_estorno,
         },
         'faturas': resultados,
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': agora_utc_naive().isoformat(),
     }
 
 

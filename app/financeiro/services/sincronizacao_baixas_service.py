@@ -96,7 +96,7 @@ class SincronizacaoBaixasService:
         Returns:
             Dict com estatísticas da sincronização
         """
-        self.estatisticas['inicio'] = datetime.now()
+        self.estatisticas['inicio'] = agora_utc_naive()
         logger.info(f"=" * 60)
         logger.info(f"SINCRONIZAÇÃO DE BAIXAS - INÍCIO")
         logger.info(f"Janela: {janela_minutos} minutos")
@@ -150,7 +150,7 @@ class SincronizacaoBaixasService:
             db.session.rollback()
 
         # Finalizar estatísticas
-        self.estatisticas['fim'] = datetime.now()
+        self.estatisticas['fim'] = agora_utc_naive()
         self.estatisticas['duracao_segundos'] = (
             self.estatisticas['fim'] - self.estatisticas['inicio']
         ).total_seconds()
@@ -173,9 +173,9 @@ class SincronizacaoBaixasService:
         2. Títulos sincronizados recentemente (última janela de tempo)
         3. Títulos com vencimento nos últimos 30 dias ou próximos 15 dias
         """
-        data_corte = datetime.now() - timedelta(minutes=janela_minutos)
-        data_venc_inicio = datetime.now().date() - timedelta(days=30)
-        data_venc_fim = datetime.now().date() + timedelta(days=15)
+        data_corte = agora_utc_naive() - timedelta(minutes=janela_minutos)
+        data_venc_inicio = agora_utc_naive().date() - timedelta(days=30)
+        data_venc_fim = agora_utc_naive().date() + timedelta(days=15)
 
         query = ContasAReceber.query
 

@@ -26,7 +26,7 @@ Uso:
 
 import json
 import requests
-from datetime import datetime, timezone
+from app.utils.timezone import agora_utc_naive
 from typing import Optional, List, Dict, Any
 from app import db
 from app.utils.logging_config import logger
@@ -328,7 +328,7 @@ class NotificationDispatcher:
                     alerta.webhook_response = {
                         'status_code': response.status_code,
                         'body': response.text[:1000] if response.text else None,
-                        'timestamp': datetime.now(timezone.utc).isoformat()
+                        'timestamp': agora_utc_naive().isoformat()
                     }
                     db.session.commit()
                 except Exception:

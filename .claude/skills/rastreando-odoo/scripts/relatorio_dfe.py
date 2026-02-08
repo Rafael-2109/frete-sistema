@@ -17,9 +17,9 @@ import sys
 import os
 import argparse
 import json
+from typing import Dict, Any
+from app.utils.timezone import agora_utc_naive
 from datetime import datetime
-from typing import Dict, Any, List
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 
@@ -43,7 +43,7 @@ def extrair_dfe_completo(odoo, data_inicio: str, data_fim: str = None, limit: in
         Dict com resultados estruturados
     """
     resultado = {
-        'data_extracao': datetime.now().isoformat(),
+        'data_extracao': agora_utc_naive().isoformat(),
         'periodo': {'inicio': data_inicio, 'fim': data_fim or 'atual'},
         'total_dfes': 0,
         'total_itens': 0,

@@ -10,6 +10,7 @@ import logging
 from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_, or_
 from app import db
 from app.carteira.models import FaturamentoParcialJustificativa
@@ -142,7 +143,7 @@ def api_justificar_faturamento_parcial(id):
             
         if data.get('acao_comercial'):
             justificativa.acao_comercial = data['acao_comercial']
-            justificativa.data_acao = datetime.now()
+            justificativa.data_acao = agora_utc_naive()
             justificativa.executado_por = current_user.nome if hasattr(current_user, 'nome') else 'sistema'
             
         if data.get('observacoes_acao'):

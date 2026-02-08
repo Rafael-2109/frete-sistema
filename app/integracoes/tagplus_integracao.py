@@ -9,6 +9,7 @@ import json
 import os
 from urllib.parse import urlencode, parse_qs, urlparse
 from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive
 
 class TagPlusIntegration:
     """Cliente OAuth2 para TagPlus - Versão Definitiva"""
@@ -134,7 +135,7 @@ class TagPlusIntegration:
                 self.access_token = token_data.get('access_token')
                 self.refresh_token = token_data.get('refresh_token')
                 expires_in = token_data.get('expires_in', 86400)  # 24 horas
-                self.expires_at = datetime.now() + timedelta(seconds=expires_in)
+                self.expires_at = agora_utc_naive() + timedelta(seconds=expires_in)
 
                 self.save_tokens()
 
@@ -195,7 +196,7 @@ class TagPlusIntegration:
                     self.refresh_token = new_refresh
 
                 expires_in = token_data.get('expires_in', 86400)
-                self.expires_at = datetime.now() + timedelta(seconds=expires_in)
+                self.expires_at = agora_utc_naive() + timedelta(seconds=expires_in)
 
                 self.save_tokens()
                 print("✅ Token renovado!")

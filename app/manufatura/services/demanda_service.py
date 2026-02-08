@@ -11,6 +11,7 @@ from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.carteira.models import CarteiraPrincipal
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func, extract, or_
 from decimal import Decimal
 import logging
@@ -208,7 +209,7 @@ class DemandaService:
             
             total_realizado = realizado.scalar() or 0
             previsao.qtd_demanda_realizada = total_realizado
-            previsao.atualizado_em = datetime.now()
+            previsao.atualizado_em = agora_utc_naive()
         
         db.session.commit()
         return len(previsoes)

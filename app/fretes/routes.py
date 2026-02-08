@@ -2025,7 +2025,7 @@ def reabrir_fatura(fatura_id):
 
         # Atualiza status da fatura
         fatura.status_conferencia = "PENDENTE"
-        fatura.observacoes_conferencia = f"REABERTA EM {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome} - {motivo}\n\n{fatura.observacoes_conferencia or ''}"
+        fatura.observacoes_conferencia = f"REABERTA EM {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome} - {motivo}\n\n{fatura.observacoes_conferencia or ''}"
 
         # Libera edição dos fretes
         for frete in fretes:
@@ -2445,7 +2445,7 @@ def exportar_faturas_excel():
     output.seek(0)
 
     # Nome do arquivo
-    data_atual = datetime.now().strftime("%Y%m%d_%H%M%S")
+    data_atual = agora_utc_naive().strftime("%Y%m%d_%H%M%S")
     filename = f"faturas_frete_{data_atual}.xlsx"
 
     return send_file(
@@ -3328,7 +3328,7 @@ def cancelar_frete_por_embarque(embarque_id, cnpj_cliente=None, usuario="Sistema
             frete.status = "CANCELADO"
             # Adiciona observação sobre o cancelamento
             obs_atual = frete.observacoes_aprovacao or ""
-            frete.observacoes_aprovacao = f"{obs_atual}\nCancelado automaticamente em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {usuario} devido ao cancelamento do embarque."
+            frete.observacoes_aprovacao = f"{obs_atual}\nCancelado automaticamente em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {usuario} devido ao cancelamento do embarque."
 
         db.session.commit()
 
@@ -4542,7 +4542,7 @@ def emitir_fatura_freteiro(transportadora_id):
             nova_fatura = FaturaFrete(
                 transportadora_id=transportadora_id,
                 numero_fatura=nome_fatura,
-                data_emissao=datetime.now().date(),
+                data_emissao=agora_utc_naive().date(),
                 valor_total_fatura=valor_total_fatura,
                 vencimento=data_vencimento,
                 status_conferencia="CONFERIDO",  # Automaticamente conferida
@@ -5023,9 +5023,9 @@ def lancar_nfs_recibo(despesa_id):
 
         if observacoes:
             if despesa.observacoes:
-                despesa.observacoes += f"\n[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {observacoes}"
+                despesa.observacoes += f"\n[{agora_utc_naive().strftime('%d/%m/%Y %H:%M')}] {observacoes}"
             else:
-                despesa.observacoes = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {observacoes}"
+                despesa.observacoes = f"[{agora_utc_naive().strftime('%d/%m/%Y %H:%M')}] {observacoes}"
 
         # Processar upload de comprovante se enviado
         if "comprovante" in request.files:
@@ -5040,7 +5040,7 @@ def lancar_nfs_recibo(despesa_id):
                     # Gerar nome único
                     filename = secure_filename(arquivo.filename)
                     nome_arquivo = (
-                        f"comprovantes/despesa_{despesa_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+                        f"comprovantes/despesa_{despesa_id}_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}_{filename}"
                     )
 
                     # Upload para S3
@@ -5972,7 +5972,7 @@ def exportar_fechamento_freteiros():
     # Criar resposta
     response = make_response(output.read())
     response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    response.headers["Content-Disposition"] = f"attachment; filename=fechamento_freteiros_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response.headers["Content-Disposition"] = f"attachment; filename=fechamento_freteiros_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     return response
 
@@ -6036,7 +6036,7 @@ def api_relatorio_analise_fretes():
 
         output = gerar_excel_relatorio(dados, data_inicio, data_fim, abrir_despesa_tipo=abrir_despesa_tipo)
 
-        filename = f"analise_fretes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"analise_fretes_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             output,

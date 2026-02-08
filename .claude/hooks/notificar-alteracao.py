@@ -14,7 +14,7 @@ Uso: Configurado em .claude/settings.local.json como PostToolUse hook
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from app.utils.timezone import agora_utc_naive
 from pathlib import Path
 
 # Categorias de alteracoes importantes
@@ -173,7 +173,7 @@ def main():
 
         # Cria notificacao
         notification = {
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": agora_utc_naive().isoformat() + "Z",
             "nivel": nivel_max["nivel"],
             "tool": tool_name,
             "file_path": tool_input.get("file_path", ""),

@@ -4,7 +4,7 @@ Versão 2 - Usando a nova tabela NFPendenteTagPlus
 """
 
 import logging
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from typing import Dict, List, Optional, Any
 from app import db
 from app.integracoes.tagplus.models import NFPendenteTagPlus
@@ -114,7 +114,7 @@ class CorrecaoPedidosServiceV2:
                 numero_nf=numero_nf
             ).update({
                 'origem': numero_pedido,
-                'pedido_preenchido_em': datetime.now(),
+                'pedido_preenchido_em': agora_utc_naive(),
                 'pedido_preenchido_por': usuario,
                 'resolvido': False,
                 'resolvido_em': None,
@@ -193,7 +193,7 @@ class CorrecaoPedidosServiceV2:
             itens_atualizados = 0
             erros = []
 
-            agora = datetime.now()
+            agora = agora_utc_naive()
 
             # Criar/atualizar FaturamentoProduto para cada item
             for item in itens_pendentes:
@@ -344,7 +344,7 @@ class CorrecaoPedidosServiceV2:
                     valor_total=float(totais[0] or 0), #type: ignore
                     peso_bruto=0,
                     ativo=True,
-                    criado_em=datetime.now()
+                    criado_em=agora_utc_naive()
                 )
                 db.session.add(relatorio)
                 logger.info(f"RelatorioFaturamentoImportado criado para NF {numero_nf}")
@@ -378,7 +378,7 @@ class CorrecaoPedidosServiceV2:
             if not numero_pedido:
                 return
 
-            agora = datetime.now()
+            agora = agora_utc_naive()
 
             # Atualizar FaturamentoProduto
             FaturamentoProduto.query.filter_by(numero_nf=numero_nf).update({
@@ -468,7 +468,7 @@ class CorrecaoPedidosServiceV2:
             return status
 
         alterou = False
-        agora = datetime.now()
+        agora = agora_utc_naive()
 
         if status['resolvido']:
             for item in pendentes:

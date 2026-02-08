@@ -16,7 +16,7 @@ Referencia: "/home/rafaelnascimento/.claude/plans/plano-validacao-nf-po.md"
 
 import base64
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request, Response
 from flask_login import login_required, current_user
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
 from app.odoo.utils.connection import get_odoo_connection
 from app.utils.cnpj_utils import normalizar_cnpj, formatar_cnpj, obter_nome_empresa, EMPRESAS_CNPJ_NOME
+from app.utils.timezone import agora_utc_naive
 
 validacao_fiscal_bp = Blueprint('validacao_fiscal', __name__, url_prefix='/api/recebimento')
 
@@ -314,7 +315,7 @@ def limpar_primeiras_compras_orfas():
         for cadastro in orfaos:
             cadastro.status = 'validado'
             cadastro.validado_por = 'LIMPEZA_AUTOMATICA'
-            cadastro.validado_em = datetime.now(timezone.utc)
+            cadastro.validado_em = agora_utc_naive()
             cadastro.observacao = 'Perfil fiscal já existia - marcado como validado automaticamente'
             ids_atualizados.append(cadastro.id)
 
@@ -420,7 +421,7 @@ def importar_perfil_fiscal_excel():
     """
     import pandas as pd
     from decimal import Decimal, InvalidOperation
-    from datetime import datetime, timezone
+    from app.utils.timezone import agora_utc_naive
     import json
     import logging
 
@@ -681,7 +682,7 @@ def importar_perfil_fiscal_excel():
                     perfil.cst_cofins_esperado = cst_cofins
                     perfil.aliquota_cofins_esperada = aliq_cofins
                     perfil.atualizado_por = usuario
-                    perfil.atualizado_em = datetime.now(timezone.utc)
+                    perfil.atualizado_em = agora_utc_naive()
                     perfil.ativo = True
                     # Atualizar nomes (podem ter sido adicionados/corrigidos)
                     if nome_empresa:
@@ -713,7 +714,7 @@ def importar_perfil_fiscal_excel():
                         cst_cofins_esperado=cst_cofins,
                         aliquota_cofins_esperada=aliq_cofins,
                         criado_por=usuario,
-                        criado_em=datetime.now(timezone.utc),
+                        criado_em=agora_utc_naive(),
                         ativo=True
                     )
                     db.session.add(perfil)
@@ -1151,7 +1152,7 @@ def editar_perfil_fiscal(perfil_id):
     try:
         from app import db
         from decimal import Decimal, InvalidOperation
-        from datetime import datetime, timezone
+        from app.utils.timezone import agora_utc_naive
         import json
         import logging
 
@@ -1275,7 +1276,7 @@ def editar_perfil_fiscal(perfil_id):
             campos_alterados.append('aliquota_cofins_esperada')
 
         # Atualizar metadata
-        perfil.atualizado_em = datetime.now(timezone.utc)
+        perfil.atualizado_em = agora_utc_naive()
 
         db.session.commit()
 

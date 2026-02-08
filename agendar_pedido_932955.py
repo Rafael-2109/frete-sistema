@@ -4,10 +4,9 @@ Script para agendar o pedido 932955 com item 35640 (5 unidades)
 """
 
 from playwright.sync_api import sync_playwright
-from datetime import datetime
 import time
 import logging
-
+from app.utils.timezone import agora_utc_naive  
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -725,7 +724,7 @@ def agendar_pedido():
                     f.write(f"Pedido: 932955\n")
                     f.write(f"Item: 35640 - 5 unidades\n")
                     f.write(f"Data: {data_agendamento}\n")
-                    f.write(f"Criado em: {datetime.now()}\n")
+                    f.write(f"Criado em: {agora_utc_naive()}\n")
                 
                 return True
             else:
@@ -735,7 +734,7 @@ def agendar_pedido():
                 
         except Exception as e:
             print(f"\n❌ ERRO: {e}")
-            page.screenshot(path=f"erro_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            page.screenshot(path=f"erro_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.png")
             print(f"   Screenshot de erro salvo")
             return False
             

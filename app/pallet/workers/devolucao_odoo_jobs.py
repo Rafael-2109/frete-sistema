@@ -287,12 +287,11 @@ def get_devolucao_job_status(job_id: str) -> Dict[str, Any]:
                 job.ended_at - job.started_at
             ).total_seconds()
         elif job.started_at:
-            from datetime import timezone
-            now = datetime.now(timezone.utc)
+            from app.utils.timezone import agora_utc_naive
+            now = agora_utc_naive()
             started = job.started_at
-            if started.tzinfo is None:
-                from datetime import timezone
-                started = started.replace(tzinfo=timezone.utc)
+            if started.tzinfo is not None:
+                started = started.replace(tzinfo=None)
             result['duracao_segundos'] = (now - started).total_seconds()
 
         return result

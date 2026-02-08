@@ -18,9 +18,9 @@ import sys
 import os
 import json
 import argparse
-from datetime import datetime
 from collections import defaultdict
 from typing import Dict, List, Set, Optional
+from app.utils.timezone import agora_utc_naive
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
@@ -560,7 +560,7 @@ def executar_auditoria(data_inicio: str = '2024-01-01', data_fim: str = '2099-12
         'ncs_com_fatura_origem': ncs_com_origem,
         'ncs_sem_fatura_origem': ncs_sem_origem,
         'total_vinculos': len(resultado['vinculos_fatura_extrato']),
-        'gerado_em': datetime.now().isoformat(),
+        'gerado_em': agora_utc_naive().isoformat(),
     }
 
     return resultado

@@ -16,6 +16,7 @@ from flask import jsonify
 from app.utils.lote_utils import gerar_lote_id  # Função padronizada para gerar lotes
 from app.utils.embarque_numero import obter_proximo_numero_embarque
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from app.utils.tabela_frete_manager import TabelaFreteManager
 
 
@@ -1095,7 +1096,7 @@ def imprimir_separacao(lote_id):
         # Marcar como impressa
         for item in itens_separacao:
             item.separacao_impressa = True
-            item.separacao_impressa_em = datetime.now()
+            item.separacao_impressa_em = agora_utc_naive()
             item.separacao_impressa_por = current_user.nome if hasattr(current_user, 'nome') and current_user.nome else current_user.email
 
         db.session.commit()
@@ -1120,7 +1121,7 @@ def imprimir_separacao(lote_id):
             'pedidos/imprimir_separacao_antecipado.html',
             itens_separacao=itens_separacao,
             resumo_separacao=resumo_separacao,
-            data_impressao=datetime.now(),
+            data_impressao=agora_utc_naive(),
             current_user=current_user
         )
 
@@ -1750,8 +1751,8 @@ def processar_cotacao_manual():
             usuario_id=1,  # Ajustar conforme seu sistema de usuários
             transportadora_id=transportadora_id,
             status='Fechado',
-            data_criacao=datetime.now(),
-            data_fechamento=datetime.now(),
+            data_criacao=agora_utc_naive(),
+            data_fechamento=agora_utc_naive(),
             tipo_carga='DIRETA',  # ✅ CORRIGIDO: DIRETA ao invés de MANUAL
             valor_total=valor_total,
             peso_total=peso_total,
@@ -2018,8 +2019,8 @@ def embarque_fob():
             usuario_id=1,  # Sistema
             transportadora_id=transportadora_fob.id,
             status='Fechado',
-            data_criacao=datetime.now(),
-            data_fechamento=datetime.now(),
+            data_criacao=agora_utc_naive(),
+            data_fechamento=agora_utc_naive(),
             tipo_carga='FOB',
             valor_total=valor_total,
             peso_total=peso_total,
@@ -2255,7 +2256,7 @@ def gravar_nf(lote_id):
             item.sincronizado_nf = sincronizado  # Marca como sincronizado apenas se NF válida
 
             if sincronizado:
-                item.data_sincronizacao = datetime.now()
+                item.data_sincronizacao = agora_utc_naive()
 
             itens_atualizados += 1
 

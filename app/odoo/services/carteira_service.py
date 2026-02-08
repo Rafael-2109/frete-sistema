@@ -22,6 +22,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
 from app.custeio.models import CustoConsiderado
@@ -934,11 +935,11 @@ class CarteiraService:
 
                     # 🔄 SINCRONIZAÇÃO INCREMENTAL
                     'odoo_write_date': pedido.get('write_date'),  # write_date do Odoo
-                    'ultima_sync': datetime.now(),  # momento da sincronização
+                    'ultima_sync': agora_utc_naive(),  # momento da sincronização
 
                     # 🛡️ AUDITORIA (campos corretos do modelo)
-                    'created_at': datetime.now(),
-                    'updated_at': datetime.now(),
+                    'created_at': agora_utc_naive(),
+                    'updated_at': agora_utc_naive(),
                     'created_by': 'Sistema Odoo REALMENTE Otimizado',
                     'updated_by': 'Sistema Odoo REALMENTE Otimizado'
                 }
@@ -955,8 +956,8 @@ class CarteiraService:
                 'cod_produto': linha.get('product_id', ['', ''])[1] if linha.get('product_id') else '',
                 'qtd_produto_pedido': linha.get('product_uom_qty', 0),
                 'qtd_saldo_produto_pedido': linha.get('qty_saldo', 0),
-                'created_at': datetime.now(),
-                'updated_at': datetime.now(),
+                'created_at': agora_utc_naive(),
+                'updated_at': agora_utc_naive(),
                 'created_by': 'Sistema Odoo REALMENTE Otimizado',
                 'updated_by': 'Sistema Odoo REALMENTE Otimizado'
             }
@@ -2645,7 +2646,7 @@ class CarteiraService:
                                 forma='ODOO',
                                 contato='Importado do Odoo',
                                 observacao='Cliente necessita agendamento - Configurado automaticamente na importação',
-                                atualizado_em=datetime.now()
+                                atualizado_em=agora_utc_naive()
                             )
                             db.session.add(novo_contato)
                             contador_contatos_criados += 1
@@ -2659,7 +2660,7 @@ class CarteiraService:
                         contato_existente.forma = 'ODOO'
                         contato_existente.contato = 'Importado do Odoo'
                         contato_existente.observacao = 'Atualizado de SEM AGENDAMENTO para ODOO na importação'
-                        contato_existente.atualizado_em = datetime.now()
+                        contato_existente.atualizado_em = agora_utc_naive()
                         contador_contatos_atualizados += 1
                         logger.info(f"   🔄 Atualizado ContatoAgendamento para CNPJ {cnpj} de 'SEM AGENDAMENTO' para 'ODOO'")
 

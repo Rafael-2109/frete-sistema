@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.estoque.models import MovimentacaoEstoque
 from app.separacao.models import Separacao
@@ -469,7 +470,7 @@ class ProcessadorFaturamento:
             # 2. Atualizar Separações do lote
             separacoes_atualizadas = Separacao.query.filter_by(
                 separacao_lote_id=separacao_lote_id, num_pedido=nf.origem, sincronizado_nf=False
-            ).update({"numero_nf": nf.numero_nf, "sincronizado_nf": True, "data_sincronizacao": datetime.now()})
+            ).update({"numero_nf": nf.numero_nf, "sincronizado_nf": True, "data_sincronizacao": agora_utc_naive()})
 
             if separacoes_atualizadas > 0:
                 logger.info(f"✅ {separacoes_atualizadas} Separações marcadas como sincronizadas")
@@ -722,7 +723,7 @@ class ProcessadorFaturamento:
             logger.info(f"🔄 Atualizando {len(movs_sem_lote)} movimentações existentes com lote {lote_id}")
             for mov in movs_sem_lote:
                 mov.separacao_lote_id = lote_id
-                mov.atualizado_em = datetime.now()
+                mov.atualizado_em = agora_utc_naive()
                 mov.atualizado_por = "ProcessadorFaturamento - Lote preenchido"
 
             # 🔴 ATUALIZAR STATUS_NF DE 'SEM_LOTE' PARA 'Lançado'
@@ -1018,7 +1019,7 @@ class ProcessadorFaturamento:
                 sep_atualizadas = (
                     Separacao.query.filter_by(separacao_lote_id=item.separacao_lote_id)
                     .filter(Separacao.status != "FATURADO")
-                    .update({"status": "FATURADO", "numero_nf": item.nota_fiscal, "data_sincronizacao": datetime.now()})
+                    .update({"status": "FATURADO", "numero_nf": item.nota_fiscal, "data_sincronizacao": agora_utc_naive()})
                 )
 
                 if sep_atualizadas > 0:

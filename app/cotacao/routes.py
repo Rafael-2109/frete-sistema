@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 # Database
 from app import db
@@ -1299,7 +1300,7 @@ def fechar_frete():
             cotacao = Cotacao(
                 usuario_id=current_user.id,
                 transportadora_id=transportadora_id,
-                data_fechamento=datetime.now(),
+                data_fechamento=agora_utc_naive(),
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
@@ -1417,7 +1418,7 @@ def fechar_frete():
             cotacao = Cotacao(
                 usuario_id=current_user.id,
                 transportadora_id=transportadora_id,
-                data_fechamento=datetime.now(),
+                data_fechamento=agora_utc_naive(),
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
@@ -1455,12 +1456,12 @@ def fechar_frete():
                 valor_total=valor_mercadorias,
                 peso_total=peso_total,
                 pallet_total=pallets_total,
-                criado_em=datetime.now(),
+                criado_em=agora_utc_naive(),
                 criado_por=current_user.nome,
                 cotacao_id=cotacao.id,
                 transportadora_optante=transportadora.optante
             )
-            
+
             # ✅ CORREÇÃO PRINCIPAL: SALVA DADOS DA TABELA NO LOCAL CORRETO
             if tipo == 'DIRETA':
                 # ✅ CARGA DIRETA: Dados da tabela vão para o EMBARQUE
@@ -1744,7 +1745,7 @@ def fechar_frete_grupo():
         cotacao = Cotacao(
             usuario_id=current_user.id,
             transportadora_id=transportadora_id,
-            data_fechamento=datetime.now(),
+            data_fechamento=agora_utc_naive(),
             status='Fechada',
             tipo_carga=tipo,
             valor_total=valor_total,
@@ -1831,12 +1832,12 @@ def fechar_frete_grupo():
             valor_total=valor_total,
             peso_total=peso_total,
             pallet_total=pallets_total,
-            criado_em=datetime.now(),
+            criado_em=agora_utc_naive(),
             criado_por=current_user.nome,
             cotacao_id=cotacao.id,
             transportadora_optante=transportadora.optante
         )
-        
+
         # ✅ CORREÇÃO: NÃO SALVA DADOS DA TABELA NO EMBARQUE PARA CARGAS FRACIONADAS
         print(f"[DEBUG] ✅ CARGA FRACIONADA GRUPO: Dados da tabela irão para os EMBARQUE_ITENS")
         

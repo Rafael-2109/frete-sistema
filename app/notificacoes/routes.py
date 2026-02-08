@@ -114,7 +114,7 @@ def marcar_como_lida(id):
 def marcar_todas_como_lidas():
     """Marca todas as notificacoes do usuario como lidas"""
     try:
-        from datetime import datetime, timezone
+        from app.utils.timezone import agora_utc_naive
 
         notificacoes = AlertaNotificacao.query.filter(
             AlertaNotificacao.user_id == current_user.id,
@@ -122,7 +122,7 @@ def marcar_todas_como_lidas():
             AlertaNotificacao.canais.contains(['in_app'])
         ).all()
 
-        agora = datetime.now(timezone.utc)
+        agora = agora_utc_naive()
         for notificacao in notificacoes:
             notificacao.status_envio = 'lido'
             notificacao.lido_em = agora
@@ -402,8 +402,8 @@ def testar_webhook(id):
             dados={'teste': True, 'origem': 'manual'},
             criado_em=None,
         )
-        from datetime import datetime, timezone
-        alerta_teste.criado_em = datetime.now(timezone.utc)
+        from app.utils.timezone import agora_utc_naive
+        alerta_teste.criado_em = agora_utc_naive()
 
         # Enviar para o webhook
         result = dispatcher._enviar_webhook_single(

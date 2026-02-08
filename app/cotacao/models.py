@@ -1,5 +1,5 @@
 from app import db
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 class Cotacao(db.Model):
     """
@@ -11,7 +11,7 @@ class Cotacao(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='Em Aberto')
-    data_criacao = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    data_criacao = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     data_fechamento = db.Column(db.DateTime)
     tipo_carga = db.Column(db.String(20), nullable=False)  # DIRETA ou FRACIONADA
     valor_total = db.Column(db.Float, nullable=False)

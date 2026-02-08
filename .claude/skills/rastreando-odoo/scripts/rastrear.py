@@ -17,7 +17,7 @@ import os
 import argparse
 import json
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
@@ -459,7 +459,7 @@ def rastrear(odoo, entrada: str, fluxo_forcado: str = None) -> Dict[str, Any]:
     """
     resultado = {
         'entrada': entrada,
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': agora_utc_naive().isoformat(),
         'sucesso': False,
         'fluxo': None,
         'erro': None,

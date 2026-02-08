@@ -10,7 +10,8 @@ import colorlog
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from typing import Any, Dict, Optional, Union
 from functools import wraps
 import traceback
@@ -50,7 +51,7 @@ class AILogger:
         
         def add_timestamp(logger, method_name, event_dict):
             """Adiciona timestamp aos logs"""
-            event_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
+            event_dict["timestamp"] = agora_utc_naive().isoformat()
             return event_dict
         
         def add_level_name(logger, method_name, event_dict):

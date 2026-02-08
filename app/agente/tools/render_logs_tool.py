@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # =====================================================================
@@ -207,7 +207,7 @@ def _fetch_service_status(service_id: str) -> Dict[str, Any]:
                 result["deploy"] = deploys[0].get("deploy", deploys[0])
 
         # 3. Contar erros recentes (ultimos 15 min)
-        end_time = datetime.now(timezone.utc)
+        end_time = agora_utc_naive()
         start_time = end_time - timedelta(minutes=15)
         resp_errors = requests.get(
             f"{RENDER_API_BASE}/logs",
@@ -433,7 +433,7 @@ try:
             }
 
         # Calcular periodo
-        end_time = datetime.now(timezone.utc)
+        end_time = agora_utc_naive()
         start_time = end_time - timedelta(hours=horas)
 
         try:
@@ -529,7 +529,7 @@ try:
                 "is_error": True,
             }
 
-        end_time = datetime.now(timezone.utc)
+        end_time = agora_utc_naive()
         start_time = end_time - timedelta(minutes=minutos)
 
         try:

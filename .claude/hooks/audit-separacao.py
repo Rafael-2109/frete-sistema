@@ -17,7 +17,7 @@ Uso: Configurado em .claude/settings.local.json como PostToolUse hook
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from app.utils.timezone import agora_utc_naive
 from pathlib import Path
 
 # Palavras-chave que identificam operacoes de separacao
@@ -153,7 +153,7 @@ def main():
 
         # Cria entrada de auditoria
         audit_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "timestamp": agora_utc_naive().isoformat() + "Z",
             "tool": tool_name,
             "file_path": tool_input.get("file_path", ""),
             "user": os.environ.get("USER", "unknown"),

@@ -23,8 +23,7 @@ import logging
 import os
 import re
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timezone
-
+from app.utils.timezone import agora_utc_naive
 import anthropic
 
 # D2: Padrões perigosos para sanitização anti-injection em memórias
@@ -367,7 +366,7 @@ class MemoryAgent:
                     full_content = f"""<memoria type="{memory_type}" category="{category}">
 <content>{content}</content>
 <tags>{tags_str}</tags>
-<detected_at>{datetime.now(timezone.utc).isoformat()}</detected_at>
+<detected_at>{agora_utc_naive().isoformat()}</detected_at>
 <source>auto_haiku</source>
 </memoria>"""
 

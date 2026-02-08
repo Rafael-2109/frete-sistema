@@ -22,11 +22,10 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 import anthropic
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
@@ -205,7 +204,7 @@ def analyze_patterns(
 
         # Adiciona metadata
         patterns['_meta'] = {
-            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'generated_at': agora_utc_naive().isoformat(),
             'model': HAIKU_MODEL,
             'input_tokens': response.usage.input_tokens,
             'output_tokens': response.usage.output_tokens,
@@ -339,7 +338,7 @@ def _save_patterns_to_memory(
     from ..models import AgentMemory
 
     path = "/memories/learned/patterns.xml"
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = agora_utc_naive().isoformat()
     confianca = _xml_escape(patterns.get('confianca', 'baixa'))
     sessions_analyzed = patterns.get('_meta', {}).get('sessions_analyzed', 0)
 

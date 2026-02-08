@@ -8,8 +8,7 @@ import os
 import sys
 import psycopg2
 from urllib.parse import urlparse
-from datetime import datetime
-
+from app.utils.timezone import agora_utc_naive
 def get_db_connection():
     """Obter conexão com o banco de dados"""
     database_url = os.environ.get('DATABASE_URL')
@@ -19,7 +18,7 @@ def get_db_connection():
             from app import create_app
             app = create_app()
             database_url = app.config.get('SQLALCHEMY_DATABASE_URI')
-        except:
+        except Exception:
             print("❌ DATABASE_URL não encontrada!")
             sys.exit(1)
     
@@ -217,11 +216,11 @@ def downgrade():
     """No downgrade needed"""
     pass
 '''.format(
-        timestamp=datetime.now().strftime('%Y%m%d%H%M%S'),
-        date=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp=agora_utc_naive().strftime('%Y%m%d%H%M%S'),
+        date=agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')
     )
     
-    filename = f"migrations/versions/db_sync_{datetime.now().strftime('%Y%m%d%H%M%S')}.py"
+    filename = f"migrations/versions/db_sync_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}.py"
     with open(filename, 'w') as f:
         f.write(content)
     print(f"\n✅ Migração de sincronização criada: {filename}")

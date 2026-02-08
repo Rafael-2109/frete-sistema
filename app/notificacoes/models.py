@@ -5,8 +5,9 @@ MODELOS DE NOTIFICACAO
 Modelos SQLAlchemy para persistencia de alertas e notificacoes
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from app import db
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Index
 
@@ -58,7 +59,7 @@ class AlertaNotificacao(db.Model):
     webhook_response = db.Column(JSONB, nullable=True)  # Resposta do webhook
 
     # Metadados
-    criado_em = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    criado_em = db.Column(db.DateTime(timezone=True), default=agora_utc_naive, nullable=False)
     enviado_em = db.Column(db.DateTime(timezone=True), nullable=True)
     lido_em = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -111,7 +112,7 @@ class AlertaNotificacao(db.Model):
     def marcar_como_lido(self):
         """Marca notificacao como lida"""
         self.status_envio = 'lido'
-        self.lido_em = datetime.now(timezone.utc)
+        self.lido_em = agora_utc_naive()
         db.session.commit()
 
     def marcar_como_enviado(self, canal=None):
@@ -122,7 +123,7 @@ class AlertaNotificacao(db.Model):
             self.status_webhook = 'enviado'
         else:
             self.status_envio = 'enviado'
-        self.enviado_em = datetime.now(timezone.utc)
+        self.enviado_em = agora_utc_naive()
         db.session.commit()
 
     def marcar_como_falhou(self, erro, canal=None):
@@ -221,7 +222,7 @@ class AlertaNotificacao(db.Model):
     def buscar_por_tipo(cls, tipo, limite=100, dias=7):
         """Busca alertas por tipo nos ultimos N dias"""
         from datetime import timedelta
-        data_limite = datetime.now(timezone.utc) - timedelta(days=dias)
+        data_limite = agora_utc_naive() - timedelta(days=dias)
 
         return cls.query.filter(
             cls.tipo == tipo,
@@ -261,8 +262,8 @@ class WebhookConfig(db.Model):
     ativo = db.Column(db.Boolean, default=True)
 
     # Metadados
-    criado_em = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    atualizado_em = db.Column(db.DateTime(timezone=True), onupdate=lambda: datetime.now(timezone.utc))
+    criado_em = db.Column(db.DateTime(timezone=True), default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime(timezone=True), onupdate=agora_utc_naive)
 
     # Estatisticas
     total_envios = db.Column(db.Integer, default=0)
@@ -309,7 +310,7 @@ class WebhookConfig(db.Model):
         """Registra resultado de envio"""
         if sucesso:
             self.total_envios += 1
-            self.ultimo_envio = datetime.now(timezone.utc)
+            self.ultimo_envio = agora_utc_naive()
             self.ultimo_erro = None
         else:
             self.total_falhas += 1

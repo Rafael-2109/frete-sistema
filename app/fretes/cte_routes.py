@@ -498,7 +498,7 @@ def desvincular_frete(cte_id):
     """Desvincula um CTe de um Frete"""
 
     cte = ConhecimentoTransporte.query.get_or_404(cte_id)
-
+    from app.utils.timezone import agora_utc_naive
     if not cte.frete_id:
         flash('CTe não está vinculado a nenhum frete', 'warning')
         return redirect(url_for('cte.detalhar_cte', cte_id=cte_id))
@@ -509,7 +509,7 @@ def desvincular_frete(cte_id):
         cte.vinculado_manualmente = False
         cte.vinculado_em = None
         cte.vinculado_por = None
-        cte.atualizado_em = datetime.now()
+        cte.atualizado_em = agora_utc_naive()
         cte.atualizado_por = current_user.nome if current_user else 'Sistema'
 
         db.session.commit()

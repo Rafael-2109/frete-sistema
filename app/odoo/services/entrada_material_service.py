@@ -23,6 +23,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.estoque.models import MovimentacaoEstoque
 from app.manufatura.models import PedidoCompras
 from app.producao.models import CadastroPalletizacao
@@ -536,7 +537,7 @@ class EntradaMaterialService:
             if valor_total:
                 pedido_local.nf_valor_total = Decimal(str(valor_total))
 
-            pedido_local.atualizado_em = datetime.now()
+            pedido_local.atualizado_em = agora_utc_naive()
 
             logger.info(f"   ✅ PedidoCompras atualizado com dados da NF")
 
@@ -630,7 +631,7 @@ class EntradaMaterialService:
             logger.info(f"   🔄 Atualizando movimentação existente: {cod_produto}")
             movimentacao_existe.qtd_movimentacao = qtd_recebida
             movimentacao_existe.data_movimentacao = date_done
-            movimentacao_existe.atualizado_em = datetime.now()
+            movimentacao_existe.atualizado_em = agora_utc_naive()
             movimentacao_existe.atualizado_por = 'Sistema Odoo'
 
             return {'novo': False}
@@ -712,7 +713,7 @@ class EntradaMaterialService:
                         rem_raiz = normalizar_cnpj(rem.cnpj_destinatario)[:8] if rem.cnpj_destinatario else ''
                         if rem_raiz == raiz:
                             rem.baixado = True
-                            rem.baixado_em = datetime.now()
+                            rem.baixado_em = agora_utc_naive()
                             rem.baixado_por = 'Sistema Odoo (Retorno Automatico)'
                             rem.movimento_baixado_id = movimentacao.id
                             logger.info(f"   ✅ Remessa NF {rem.numero_nf} baixada automaticamente pelo retorno")

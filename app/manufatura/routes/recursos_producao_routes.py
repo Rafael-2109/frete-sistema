@@ -12,7 +12,7 @@ from decimal import Decimal
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
-
+from app.utils.timezone import agora_utc_naive
 recursos_bp = Blueprint('recursos_producao', __name__, url_prefix='/manufatura/recursos')
 
 
@@ -252,7 +252,7 @@ def exportar_xlsx():
         output.seek(0)
 
         # Nome do arquivo com data
-        filename = f'recursos_producao_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename = f'recursos_producao_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
 
         return send_file(
             output,
@@ -1040,7 +1040,7 @@ def imprimir_programacao():
             data_fim=data_fim,
             total_geral=sum(t['qtd_total'] for t in totais_por_linha.values()),
             total_itens=len(programacoes),
-            data_impressao=datetime.now()
+            data_impressao=agora_utc_naive()
         )
 
     except Exception as e:

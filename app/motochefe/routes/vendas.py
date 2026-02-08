@@ -5,6 +5,7 @@ from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from decimal import Decimal
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.motochefe.routes import motochefe_bp
@@ -250,7 +251,7 @@ def adicionar_pedido():
                 acao='INSERCAO',
                 observacao=f'Novo pedido criado via sistema',
                 solicitado_por=current_user.nome,
-                solicitado_em=datetime.now()
+                solicitado_em=agora_utc_naive()
             )
             db.session.add(auditoria)
 
@@ -987,7 +988,7 @@ def solicitar_cancelamento_pedido(id):
             acao='CANCELAMENTO',
             observacao=observacao,
             solicitado_por=current_user.nome,
-            solicitado_em=datetime.now()
+            solicitado_em=agora_utc_naive()
         )
         db.session.add(auditoria)
 
@@ -1048,7 +1049,7 @@ def aprovar_acao_pedido(auditoria_id):
         # Confirmar auditoria
         auditoria.confirmado = True
         auditoria.confirmado_por = current_user.nome
-        auditoria.confirmado_em = datetime.now()
+        auditoria.confirmado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -1111,7 +1112,7 @@ def rejeitar_acao_pedido(auditoria_id):
         auditoria.rejeitado = True
         auditoria.motivo_rejeicao = motivo_rejeicao
         auditoria.confirmado_por = current_user.nome
-        auditoria.confirmado_em = datetime.now()
+        auditoria.confirmado_em = agora_utc_naive()
 
         db.session.commit()
 
@@ -1206,7 +1207,7 @@ def imprimir_pedido(id):
     if not pedido.impresso:
         pedido.impresso = True
         pedido.impresso_por = current_user.nome
-        pedido.impresso_em = datetime.now()
+        pedido.impresso_em = agora_utc_naive()
         db.session.commit()
 
     return render_template('motochefe/vendas/pedidos/imprimir.html', pedido=pedido)

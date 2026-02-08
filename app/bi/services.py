@@ -10,7 +10,8 @@ from app.bi.models import (
 from app.bi.services_helpers import BiCalculosReais
 from app.fretes.models import Frete, DespesaExtra, ContaCorrenteTransportadora
 from app.transportadoras.models import Transportadora
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func, and_, case, distinct
 import logging
 
@@ -188,7 +189,7 @@ class BiETLService:
                 if bi_frete.distancia_km and bi_frete.distancia_km > 0:
                     bi_frete.custo_por_km = bi_frete.valor_pago_total / bi_frete.distancia_km
 
-                bi_frete.processado_em = datetime.now()
+                bi_frete.processado_em = agora_utc_naive()
                 bi_frete.versao_etl = '2.0'
                 
                 db.session.add(bi_frete)
@@ -295,7 +296,7 @@ class BiETLService:
                     r.tipo_despesa, r.setor_responsavel, periodo_atual, periodo_anterior
                 )
                 
-                bi_despesa.processado_em = datetime.now()
+                bi_despesa.processado_em = agora_utc_naive()
                 
                 db.session.add(bi_despesa)
             
@@ -413,7 +414,7 @@ class BiETLService:
                     transp.id, periodo_inicio, periodo_fim
                 )
                 
-                bi_perf.calculado_em = datetime.now()
+                bi_perf.calculado_em = agora_utc_naive()
                 
                 db.session.add(bi_perf)
             
@@ -531,7 +532,7 @@ class BiETLService:
                     r.uf_destino, data_inicio, data_fim
                 )
 
-                bi_regional.processado_em = datetime.now()
+                bi_regional.processado_em = agora_utc_naive()
 
                 db.session.add(bi_regional)
 
@@ -679,7 +680,7 @@ class BiETLService:
             bi_indicador.percentual_com_divergencia = BiCalculosReais.calcular_percentual_divergencia_mensal(ano, mes)
             bi_indicador.percentual_aprovado = BiCalculosReais.calcular_percentual_aprovado_mensal(ano, mes)
 
-            bi_indicador.calculado_em = datetime.now()
+            bi_indicador.calculado_em = agora_utc_naive()
 
             db.session.add(bi_indicador)
             db.session.commit()

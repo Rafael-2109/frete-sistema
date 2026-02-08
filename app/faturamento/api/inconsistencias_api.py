@@ -11,6 +11,7 @@ from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required
 from datetime import datetime
 from sqlalchemy import and_
+from app.utils.timezone import agora_utc_naive
 from app import db
 from app.carteira.models import InconsistenciaFaturamento
 from app.embarques.models import EmbarqueItem, Embarque
@@ -119,7 +120,7 @@ def api_resolver_inconsistencia(id):
         
         # Marcar como resolvida
         inconsistencia.resolvida = True
-        inconsistencia.resolvida_em = datetime.now()
+        inconsistencia.resolvida_em = agora_utc_naive()
         inconsistencia.resolvida_por = current_user.nome if hasattr(current_user, 'nome') else 'sistema'
         
         # Adicionar ação tomada se fornecida

@@ -8,7 +8,7 @@ import os
 import psycopg2
 from psycopg2.extras import DictCursor
 from dotenv import load_dotenv
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from tabulate import tabulate
 
 # Carrega variáveis de ambiente
@@ -325,12 +325,12 @@ def gerar_script_otimizacao(cursor, problemas):
     print("GERANDO SCRIPT DE OTIMIZAÇÃO")
     print("="*80)
     
-    filename = f"otimizacao_indices_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sql"
+    filename = f"otimizacao_indices_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.sql"
     
     with open(filename, 'w') as f:
         f.write("-- =====================================================\n")
         f.write("-- SCRIPT DE OTIMIZAÇÃO DE ÍNDICES\n")
-        f.write(f"-- Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"-- Gerado em: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("-- =====================================================\n\n")
         
         f.write("-- ATENÇÃO: Execute este script em horário de baixa demanda\n")

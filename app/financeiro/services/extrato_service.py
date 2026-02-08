@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Tuple
 
 from app import db
 from app.financeiro.models import ExtratoLote, ExtratoItem, CnabRetornoItem
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
@@ -100,7 +100,7 @@ class ExtratoService:
         journal_name = journal['name']
 
         # Criar lote
-        nome_lote = f"Importação {journal_code} {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        nome_lote = f"Importação {journal_code} {agora_utc_naive().strftime('%Y-%m-%d %H:%M')}"
         lote = ExtratoLote(
             nome=nome_lote,
             journal_code=journal_code,

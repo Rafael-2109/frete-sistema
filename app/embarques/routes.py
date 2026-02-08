@@ -10,6 +10,7 @@ from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf, sincroniz
 from app.monitoramento.models import EntregaMonitorada
 from app.localidades.models import Cidade
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from app.pedidos.models import Pedido
 from app.separacao.models import Separacao
 from app.cotacao.models import Cotacao
@@ -893,7 +894,7 @@ def cancelar_embarque(id):
         # Marca como cancelado em vez de excluir
         embarque.status = 'cancelado'
         embarque.motivo_cancelamento = form.motivo_cancelamento.data
-        embarque.cancelado_em = datetime.now()
+        embarque.cancelado_em = agora_utc_naive()
         embarque.cancelado_por = current_user.nome if current_user.is_authenticated else 'Sistema'
         
         # ✅ ATUALIZADO: Remover NFs dos itens e sincronizar com pedidos
@@ -1152,11 +1153,11 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
             separacao_lote_id=separacao_lote_id
         ).update({
             'separacao_impressa': True,
-            'separacao_impressa_em': datetime.now(),
+            'separacao_impressa_em': agora_utc_naive(),
             'separacao_impressa_por': current_user.nome if hasattr(current_user, 'nome') else current_user.email
         })
         db.session.commit()
-    
+
     # Busca todos os itens da separação com este lote_id
     itens_separacao = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id).all()
     
@@ -1186,10 +1187,10 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
         embarque=embarque,
         itens_separacao=itens_separacao,
         resumo_separacao=resumo_separacao,
-        data_impressao=datetime.now(),
+        data_impressao=agora_utc_naive(),
         current_user=current_user
     )
-    
+
     response = make_response(html)
     response.headers['Content-Type'] = 'text/html; charset=utf-8'
     return response
@@ -1214,7 +1215,7 @@ def imprimir_embarque(embarque_id):
     html = render_template(
         'embarques/imprimir_embarque.html',
         embarque=embarque,
-        data_impressao=datetime.now(),
+        data_impressao=agora_utc_naive(),
         current_user=current_user,
         qrcode_base64=qrcode_base64  # 🚚 QR Code
     )
@@ -1249,7 +1250,7 @@ def imprimir_embarque_completo(embarque_id):
                     separacao_lote_id=item.separacao_lote_id
                 ).update({
                     'separacao_impressa': True,
-                    'separacao_impressa_em': datetime.now(),
+                    'separacao_impressa_em': agora_utc_naive(),
                     'separacao_impressa_por': current_user.nome if hasattr(current_user, 'nome') else current_user.email
                 })
     db.session.commit()
@@ -1300,7 +1301,7 @@ def imprimir_embarque_completo(embarque_id):
         'embarques/imprimir_completo.html',
         embarque=embarque,
         separacoes_data=separacoes_data,
-        data_impressao=datetime.now(),
+        data_impressao=agora_utc_naive(),
         current_user=current_user,
         qrcode_base64=qrcode_base64  # 🚚 QR Code
     )
@@ -1325,7 +1326,7 @@ def registrar_impressao(embarque_id):
     # Registrar a impressão (você pode criar uma tabela específica para isso ou usar um campo no embarque)
     # Por enquanto, vamos apenas retornar os dados para exibir
     usuario_nome = current_user.nome if current_user.is_authenticated and hasattr(current_user, 'nome') and current_user.nome else (current_user.email if current_user.is_authenticated else 'Sistema')
-    data_impressao = datetime.now()
+    data_impressao = agora_utc_naive()
     
     return jsonify({
         'success': True, 
@@ -1523,8 +1524,8 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                         usuario_id=1,
                         transportadora_id=transportadora_fob.id,
                         status='Fechado',
-                        data_criacao=datetime.now(),
-                        data_fechamento=datetime.now(),
+                        data_criacao=agora_utc_naive(),
+                        data_fechamento=agora_utc_naive(),
                         tipo_carga='FOB',
                         valor_total=0,
                         peso_total=0,

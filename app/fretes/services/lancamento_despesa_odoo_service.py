@@ -601,7 +601,7 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             # ETAPA 2: Atualizar data de entrada no DFe
             # ========================================
             if continuar_de_etapa < 3:  # Só executa se não está retomando de etapa posterior
-                data_entrada = datetime.now().strftime('%Y-%m-%d')
+                data_entrada = agora_utc_naive().strftime('%Y-%m-%d')
 
                 # Preparar dados para atualização
                 dados_dfe = {'l10n_br_data_entrada': data_entrada}

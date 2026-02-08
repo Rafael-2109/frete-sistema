@@ -28,6 +28,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, Any, List
 
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # Timeout para processamento de arquivo individual (5 minutos)
@@ -81,7 +82,7 @@ def _atualizar_progresso_batch(batch_id: str, progresso: dict):
     try:
         redis_conn = _get_redis_connection()
         if redis_conn:
-            progresso['ultimo_update'] = datetime.now().isoformat()
+            progresso['ultimo_update'] = agora_utc_naive().isoformat()
             key = f'cnab_batch_progresso:{batch_id}'
             redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
             logger.debug(f"[CNAB Batch] Progresso atualizado: {progresso.get('arquivo_atual', 'N/A')}")
@@ -215,7 +216,7 @@ def processar_batch_cnab400_job(
         'arquivos_erro': 0,
         'arquivo_atual': None,
         'lotes': [],
-        'iniciado_em': datetime.now().isoformat(),
+        'iniciado_em': agora_utc_naive().isoformat(),
         'concluido_em': None
     }
     _atualizar_progresso_batch(batch_id, progresso)
@@ -317,7 +318,7 @@ def processar_batch_cnab400_job(
                 resultado['success'] = False
                 progresso['status'] = 'erro'
 
-            progresso['concluido_em'] = datetime.now().isoformat()
+            progresso['concluido_em'] = agora_utc_naive().isoformat()
             progresso['arquivo_atual'] = None
             _atualizar_progresso_batch(batch_id, progresso)
 
@@ -334,7 +335,7 @@ def processar_batch_cnab400_job(
 
         progresso['status'] = 'erro'
         progresso['erro_geral'] = erro_geral
-        progresso['concluido_em'] = datetime.now().isoformat()
+        progresso['concluido_em'] = agora_utc_naive().isoformat()
         _atualizar_progresso_batch(batch_id, progresso)
 
         logger.error(f"[CNAB Batch] Erro crítico: {erro_geral}")

@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import uuid
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto
@@ -266,7 +267,7 @@ class RecuperadorSeparacoesPerdidas:
                     # Marcar como sincronizado com NF (já que veio da NF)
                     separacao.sincronizado_nf = True
                     separacao.numero_nf = pedido.nf
-                    separacao.data_sincronizacao = datetime.now()
+                    separacao.data_sincronizacao = agora_utc_naive()
                     
                     # Adicionar ao banco
                     db.session.add(separacao)

@@ -19,7 +19,7 @@ Uso:
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
@@ -39,8 +39,8 @@ def get_insights_data(
     """
     try:
         from ..models import AgentSession
-
-        since = datetime.now(timezone.utc) - timedelta(days=days)
+        from app.utils.timezone import agora_utc_naive
+        since = agora_utc_naive() - timedelta(days=days)
 
         # Query base
         base_query = AgentSession.query.filter(
@@ -64,7 +64,7 @@ def get_insights_data(
 
         return {
             'period_days': days,
-            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'generated_at': agora_utc_naive().isoformat(),
             'overview': overview,
             'costs': cost_data,
             'tools': tool_data,
@@ -82,7 +82,7 @@ def _empty_insights(days: int) -> Dict[str, Any]:
     """Retorna estrutura vazia quando não há dados."""
     return {
         'period_days': days,
-        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'generated_at': agora_utc_naive().isoformat(),
         'overview': {
             'total_sessions': 0,
             'total_messages': 0,
@@ -287,7 +287,7 @@ def _calc_daily(sessions: List, days: int) -> Dict[str, Any]:
             daily[day_key]['cost'] += float(s.total_cost_usd or 0)
 
     # Preencher dias sem atividade
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = agora_utc_naive() - timedelta(days=days)
     dates = []
     session_counts = []
     message_counts = []

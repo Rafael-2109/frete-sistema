@@ -13,7 +13,6 @@ EXECUTAR ANTES de transformar Pedido em VIEW!
 
 import os
 import sys
-from datetime import datetime
 from decimal import Decimal
 import logging
 
@@ -26,7 +25,7 @@ from app.separacao.models import Separacao
 from app.faturamento.models import FaturamentoProduto
 from app.producao.models import CadastroPalletizacao
 from sqlalchemy import and_, or_, func
-
+from app.utils.timezone import agora_utc_naive
 # Configurar logging
 logging.basicConfig(
     level=logging.INFO,
@@ -181,9 +180,9 @@ def recompor_separacoes():
                                 # Controle
                                 numero_nf=pedido.nf,
                                 sincronizado_nf=True,  # Já está faturado
-                                data_sincronizacao=datetime.now(),
+                                data_sincronizacao=agora_utc_naive(),
                                 tipo_envio='total',
-                                criado_em=datetime.now()
+                                criado_em=agora_utc_naive()
                             )
                             
                             db.session.add(nova_separacao)
@@ -216,7 +215,7 @@ def recompor_separacoes():
                             if pedido.nf and not sep.sincronizado_nf:
                                 sep.numero_nf = pedido.nf
                                 sep.sincronizado_nf = True
-                                sep.data_sincronizacao = datetime.now()
+                                sep.data_sincronizacao = agora_utc_naive()
                         
                         estatisticas['separacoes_atualizadas'] += len(separacoes_existentes)
                     

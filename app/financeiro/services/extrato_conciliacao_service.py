@@ -397,7 +397,7 @@ class ExtratoConciliacaoService:
                         valor_juros=valor_juros,          # Valor que vai para receita financeira
                         journal_id=journal_id,
                         ref=move_name,
-                        data=item.data_transacao or datetime.now().date(),
+                        data=item.data_transacao or agora_utc_naive().date(),
                         company_id=titulo_company_id
                     )
                     logger.info(f"  Payment com Write-Off criado: {payment_name} (ID {payment_id})")
@@ -413,7 +413,7 @@ class ExtratoConciliacaoService:
                         valor=valor_principal,
                         journal_id=journal_id,
                         ref=move_name,
-                        data=item.data_transacao or datetime.now().date(),
+                        data=item.data_transacao or agora_utc_naive().date(),
                         company_id=titulo_company_id
                     )
                     logger.info(f"  Payment criado: {payment_name} (ID {payment_id})")
@@ -1711,7 +1711,7 @@ class ExtratoConciliacaoService:
                     valor_juros=valor_juros,
                     journal_id=journal_id,
                     ref=f"{move_name} (Extrato {item.id})",
-                    data=item.data_transacao or datetime.now().date(),
+                    data=item.data_transacao or agora_utc_naive().date(),
                     company_id=titulo_company_id
                 )
                 logger.info(f"    Payment com Write-Off criado: {payment_name} (ID {payment_id})")
@@ -1728,7 +1728,7 @@ class ExtratoConciliacaoService:
                     valor=valor_principal,
                     journal_id=journal_id,
                     ref=f"{move_name} (Extrato {item.id})",
-                    data=item.data_transacao or datetime.now().date(),
+                    data=item.data_transacao or agora_utc_naive().date(),
                     company_id=titulo_company_id
                 )
                 logger.info(f"    Payment criado: {payment_name} (ID {payment_id})")

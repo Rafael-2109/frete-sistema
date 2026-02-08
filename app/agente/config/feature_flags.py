@@ -34,7 +34,7 @@ USE_CONTEXT_CLEARING = os.getenv("AGENT_CONTEXT_CLEARING", "true").lower() == "t
 # O system_prompt.md do agente e extenso (~8K tokens)
 # NOTA (2026-02): prompt-caching foi promovido a GA.
 #   Beta header removido — flag controla apenas log/documentação.
-USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "false").lower() == "true"
+USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
 
 # ====================================================================
 # Architecture + Seguranca
@@ -87,7 +87,7 @@ USE_SENTIMENT_DETECTION = os.getenv("AGENT_SENTIMENT_DETECTION", "false").lower(
 # Custo: ~$0.002 por analise (~4K tokens input, ~800 output Haiku)
 # Trigger: a cada N sessoes do usuario (default 10)
 # Default false: requer historico suficiente de sessoes para ser util
-USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "false").lower() == "true"
+USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "true").lower() == "true"
 
 # Numero de sessoes entre analises de padrao
 # Analisa quando total_sessions % threshold == 0

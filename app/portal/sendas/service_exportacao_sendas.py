@@ -8,7 +8,7 @@ from app.portal.sendas.models_planilha import PlanilhaModeloSendas
 from app.portal.models_fila_sendas import FilaAgendamentoSendas
 from app.portal.sendas.models import FilialDeParaSendas
 from app.producao.models import CadastroPalletizacao
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import pandas as pd
 import io
 from typing import Dict, List, Tuple
@@ -341,7 +341,7 @@ class ExportacaoSendasService:
             for item_fila in itens_fila:
                 if item_fila.protocolo in protocolos_processados:
                     item_fila.status = 'processado'
-                    item_fila.processado_em = datetime.now()
+                    item_fila.processado_em = agora_utc_naive()
                     itens_marcados += 1
                 # Se protocolo NÃO está em protocolos_processados, mantém status='pendente'
             db.session.commit()

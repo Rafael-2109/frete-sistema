@@ -25,11 +25,11 @@ import sys
 import os
 import argparse
 import json
-from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive  
 from dateutil.relativedelta import relativedelta
 from typing import Dict, List, Set, Optional, Any
 from collections import defaultdict
-
+from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 
@@ -118,7 +118,7 @@ def extrair_mapeamento_completo(
             'data_inicio_extrato': data_inicio_extrato,
             'margem_meses': margem_meses
         },
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': agora_utc_naive().isoformat(),
         'extratos': [],
         'titulos': [],
         'faturas': [],

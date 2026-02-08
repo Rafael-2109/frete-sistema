@@ -22,7 +22,7 @@ from redis import Redis
 from rq import Worker, Queue, Connection
 from rq.job import Job
 import click
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 # Adicionar o diretório do projeto ao path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -44,7 +44,7 @@ def worker_startup():
     """Executa ao iniciar o worker"""
     logger.info("="*60)
     logger.info("🚀 WORKER ATACADÃO - INICIANDO")
-    logger.info(f"📅 Data/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"📅 Data/Hora: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"🔧 PID: {os.getpid()}")
     logger.info("="*60)
 
@@ -52,7 +52,7 @@ def worker_shutdown():
     """Executa ao parar o worker"""
     logger.info("="*60)
     logger.info("🛑 WORKER ATACADÃO - ENCERRANDO")
-    logger.info(f"📅 Data/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"📅 Data/Hora: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("="*60)
 
 # ✅ REMOVIDO Nov/2025: Função run_sendas_scheduler() - automação Playwright descontinuada

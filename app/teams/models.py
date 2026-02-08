@@ -6,9 +6,9 @@ Permite polling de status e suporte a AskUserQuestion via Adaptive Cards.
 """
 
 import uuid
-from datetime import datetime, timezone
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 
 class TeamsTask(db.Model):
@@ -55,13 +55,13 @@ class TeamsTask(db.Model):
     created_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=agora_utc_naive,
     )
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=agora_utc_naive,
+        onupdate=agora_utc_naive,
     )
     completed_at = db.Column(db.DateTime, nullable=True)
 

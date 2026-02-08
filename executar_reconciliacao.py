@@ -21,7 +21,7 @@ Para agendar via cron (executar todo dia às 2h da manhã):
 import sys
 import argparse
 import logging
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 # Configurar logging
 logging.basicConfig(
@@ -29,7 +29,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(f'logs/reconciliacao_{datetime.now().strftime("%Y%m%d")}.log')
+        logging.FileHandler(f'logs/reconciliacao_{agora_utc_naive().strftime("%Y%m%d")}.log')
     ]
 )
 
@@ -74,7 +74,7 @@ def main():
         with app.app_context():
             logger.info("=" * 60)
             logger.info("🚀 INICIANDO RECONCILIAÇÃO SEPARAÇÃO x NF")
-            logger.info(f"📅 Data/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"📅 Data/Hora: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info(f"📊 Parâmetros: dias={args.dias}, lote={args.lote}, dry_run={args.dry_run}")
             logger.info("=" * 60)
             

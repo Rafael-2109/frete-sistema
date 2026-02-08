@@ -1475,8 +1475,7 @@ class DescarteDevolucao(db.Model):
     @classmethod
     def gerar_numero_termo(cls):
         """Gera numero de termo: TD-YYYYMM-XXXX"""
-        from datetime import datetime
-        agora = datetime.now()
+        agora = agora_utc_naive()
         prefixo = f"TD-{agora.strftime('%Y%m')}-"
 
         ultimo = cls.query.filter(

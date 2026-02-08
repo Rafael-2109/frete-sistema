@@ -14,8 +14,9 @@ from flask_login import login_required
 from app.utils.logging_config import logger
 from app.carteira.alert_system import AlertaSistemaCarteira
 from app.notificacoes.models import AlertaNotificacao
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 # Blueprint para API de alertas (apenas endpoints JSON)
 alertas_bp = Blueprint('alertas', __name__, url_prefix='/carteira/alertas')
@@ -206,7 +207,7 @@ def _buscar_historico_alertas(horas=24):
     """
     try:
         # Calcular limite de tempo
-        data_limite = datetime.now(timezone.utc) - timedelta(hours=horas)
+        data_limite = agora_utc_naive() - timedelta(hours=horas)
 
         # Buscar alertas do período
         alertas = AlertaNotificacao.query.filter(

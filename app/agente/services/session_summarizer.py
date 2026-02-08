@@ -18,11 +18,10 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 import anthropic
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
@@ -174,7 +173,7 @@ def summarize_session(
 
         # Adiciona metadata
         summary['_meta'] = {
-            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'generated_at': agora_utc_naive().isoformat(),
             'model': HAIKU_MODEL,
             'input_tokens': response.usage.input_tokens,
             'output_tokens': response.usage.output_tokens,
@@ -349,7 +348,7 @@ def _save_summary_to_memory(
 
     topicos = ", ".join(summary.get('topicos_abordados', []))
     resumo = _xml_escape(summary.get('resumo_geral', ''))
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = agora_utc_naive().isoformat()
 
     content = f"""<session_summary session_id="{session_id}" updated_at="{timestamp}">
   <resumo>{resumo}</resumo>

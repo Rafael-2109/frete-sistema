@@ -14,6 +14,7 @@ from app.carteira.models import CarteiraPrincipal, PreSeparacaoItem
 from app.separacao.models import Separacao
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -218,7 +219,7 @@ def solicitar_agendamento():
         
         # Atualizar dados
         integracao.status = 'processando'
-        integracao.data_solicitacao = datetime.now()
+        integracao.data_solicitacao = agora_utc_naive()
         integracao.data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
         integracao.hora_agendamento = datetime.strptime(hora_agendamento, '%H:%M').time() if hora_agendamento else None
         integracao.usuario_solicitante = current_user.nome or 'Sistema'
@@ -559,11 +560,11 @@ def solicitar_agendamento_nf():
         }
         
         integracao.status = 'processando'
-        integracao.data_solicitacao = datetime.now()
+        integracao.data_solicitacao = agora_utc_naive()
         integracao.data_agendamento = datetime.strptime(data_agendamento, '%Y-%m-%d').date()
         integracao.hora_agendamento = datetime.strptime(hora_agendamento, '%H:%M').time() if hora_agendamento else None
         integracao.usuario_solicitante = current_user.nome or 'Sistema'
-        
+
         # Salvar antes de executar
         try:
             db.session.commit()
@@ -665,8 +666,8 @@ def verificar_status(integracao_id):
                     if novo_status != integracao.status:
                         integracao.status = novo_status
                         if novo_status == 'confirmado':
-                            integracao.data_confirmacao = datetime.now()
-                        
+                            integracao.data_confirmacao = agora_utc_naive()
+
                         # Log da mudança
                         log = PortalLog(
                             integracao_id=integracao_id,
@@ -906,7 +907,7 @@ def extrair_confirmacoes():
 
                         # Atualizar PortalIntegracao
                         integracao.status = 'confirmado'
-                        integracao.data_confirmacao = datetime.now()
+                        integracao.data_confirmacao = agora_utc_naive()
                         integracao.resposta_portal = resultado_portal
 
                         # Atualizar Separacao (fonte da verdade)

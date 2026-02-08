@@ -46,7 +46,7 @@ import uuid
 import tempfile
 import shutil
 import time
-from datetime import datetime, timezone
+
 from typing import Generator, Optional, List
 from werkzeug.utils import secure_filename
 
@@ -58,7 +58,7 @@ from flask_login import login_required, current_user
 
 from . import agente_bp
 from app import db
-
+from app.utils.timezone import agora_utc_naive
 # Configuração de uploads
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'agente_files')
 ALLOWED_EXTENSIONS = {'pdf', 'xlsx', 'xls', 'csv', 'png', 'jpg', 'jpeg', 'gif'}
@@ -368,7 +368,7 @@ def _stream_chat_response(
     from .config.permissions import can_use_tool
     from queue import Queue, Empty
     from threading import Thread
-
+    from app.utils.timezone import agora_utc_naive
     app = current_app._get_current_object()
     event_queue = Queue()
 
@@ -507,7 +507,7 @@ def _stream_chat_response(
                     }))
 
                 elif event.type == 'done':
-                    message_id = event.metadata.get('message_id', '') or str(datetime.now(timezone.utc).timestamp())
+                    message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)
                     response_state['output_tokens'] = event.content.get('output_tokens', 0)
                     cost_usd = event.content.get('total_cost_usd', 0)
@@ -761,7 +761,7 @@ def _stream_chat_response(
                 # FEAT-030: Envia heartbeat para manter conexão viva
                 current_time = time.time()
                 if current_time - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
-                    yield _sse_event('heartbeat', {'timestamp': datetime.now(timezone.utc).isoformat()})
+                    yield _sse_event('heartbeat', {'timestamp': agora_utc_naive().isoformat()})
                     last_heartbeat = current_time
                     logger.debug(f"[AGENTE] Heartbeat enviado (empty count: {consecutive_empty})")
 
@@ -1601,7 +1601,7 @@ def api_health():
             'api_connected': health.get('api_connected', False),
             'sdk': 'claude-agent-sdk',
             'mcp_servers': mcp_status,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'timestamp': agora_utc_naive().isoformat(),
         }
 
         # Atualizar cache
@@ -1680,12 +1680,12 @@ def api_feedback():
         if feedback_type == 'correction':
             correction_text = feedback_data.get('correction', '')
             if correction_text:
-                path = f"/memories/corrections/feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+                path = f"/memories/corrections/feedback_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xml"
                 content = f"""<correction>
 <text>{correction_text}</text>
 <context>{feedback_data.get('context', '')}</context>
 <source>user_feedback</source>
-<created_at>{datetime.now(timezone.utc).isoformat()}</created_at>
+<created_at>{agora_utc_naive().isoformat()}</created_at>
 </correction>"""
                 AgentMemory.create_file(user_id, path, content)
                 db.session.commit()
@@ -1699,7 +1699,7 @@ def api_feedback():
                 content = f"""<preferences>
 <{pref_key}>{pref_value}</{pref_key}>
 <source>user_feedback</source>
-<updated_at>{datetime.now(timezone.utc).isoformat()}</updated_at>
+<updated_at>{agora_utc_naive().isoformat()}</updated_at>
 </preferences>"""
                 existing = AgentMemory.get_by_path(user_id, path)
                 if existing:

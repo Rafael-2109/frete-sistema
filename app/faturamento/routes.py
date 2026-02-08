@@ -833,7 +833,7 @@ def cancelar_nf_devolvida():
         for produto in produtos_nf:
             if produto.status_nf != 'Cancelado':
                 produto.status_nf = 'Cancelado'
-                produto.updated_at = datetime.now()
+                produto.updated_at = agora_utc_naive()
                 produto.updated_by = f'Cancelamento Manual - {current_user.nome}'
                 produtos_cancelados += 1
 
@@ -847,7 +847,7 @@ def cancelar_nf_devolvida():
             # Marcar como inativa para reverter o estoque
             mov.ativo = False
             mov.status_nf = 'CANCELADO'
-            mov.atualizado_em = datetime.now()
+            mov.atualizado_em = agora_utc_naive()
             mov.atualizado_por = f'Cancelamento Manual - {current_user.nome}'
             mov.observacao = f'{mov.observacao or ""} | NF Devolvida - Cancelada manualmente em {datetime.now().strftime("%d/%m/%Y %H:%M")}'
             movimentacoes_revertidas += 1
@@ -856,7 +856,7 @@ def cancelar_nf_devolvida():
         relatorio_nf = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
         if relatorio_nf and relatorio_nf.ativo:
             relatorio_nf.ativo = False
-            relatorio_nf.inativado_em = datetime.now()
+            relatorio_nf.inativado_em = agora_utc_naive()
             relatorio_nf.inativado_por = f'Cancelamento Manual - {current_user.nome}'
 
         # Salvar todas as alterações

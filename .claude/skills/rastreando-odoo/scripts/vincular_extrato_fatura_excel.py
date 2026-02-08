@@ -34,7 +34,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from decimal import Decimal
-
+from app.utils.timezone import agora_utc_naive
 # Adicionar path do projeto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
@@ -878,12 +878,12 @@ def formatar_valor_br(valor: float) -> str:
 def formatar_data_br(data: str) -> str:
     """Converte data YYYY-MM-DD para DD/MM/YYYY."""
     if not data:
-        return datetime.now().strftime('%d/%m/%Y')
+        return agora_utc_naive().strftime('%d/%m/%Y')
     try:
-        dt = datetime.strptime(data, '%Y-%m-%d')
+        dt = agora_utc_naive().strptime(data, '%Y-%m-%d')
         return dt.strftime('%d/%m/%Y')
     except ValueError:
-        return data
+        return agora_utc_naive().strftime('%d/%m/%Y')
 
 
 def criar_payment_outbound(
@@ -1082,7 +1082,7 @@ def processar_linha(odoo, linha: LinhaExcel, dry_run: bool = False) -> LinhaExce
         move = titulo.get('move_id')
         move_name = extrair_nome(move)
         extrato_move_id = extrair_id(extrato.get('move_id'))
-        data_extrato = extrato.get('date', datetime.now().strftime('%Y-%m-%d'))
+        data_extrato = extrato.get('date', agora_utc_naive().strftime('%Y-%m-%d'))
 
         # =====================================================================
         # 3.1 PREPARAR EXTRATO (ajustar conta e partner)
@@ -1512,7 +1512,7 @@ def processar_excel_otimizado(
 
                 journal_id = extrair_id(extrato.get('journal_id'))
                 company_id = extrair_id(titulo.get('company_id'))
-                data_extrato = extrato.get('date', datetime.now().strftime('%Y-%m-%d'))
+                data_extrato = extrato.get('date', agora_utc_naive().strftime('%Y-%m-%d'))
 
                 linha.titulo_odoo_id = titulo['id']
                 linha.extrato_odoo_id = extrato['id']

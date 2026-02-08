@@ -20,6 +20,7 @@ from app.fretes.models import (
     DespesaExtra, Frete, ConhecimentoTransporte, LancamentoFreteOdooAuditoria
 )
 from app.utils.cnpj_utils import normalizar_cnpj
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -448,11 +449,11 @@ class DespesaCteService:
             # Normaliza e pega os 8 primeiros dígitos (prefixo do CNPJ)
             if not prefixo_cnpj_transportadora and frete.transportadora and frete.transportadora.cnpj:
                 cnpj_transp_limpo = normalizar_cnpj(frete.transportadora.cnpj)
-                prefixo_cnpj_transportadora = cnpj_transp_limpo[:8] if cnpj_transp_limpo else None
+                prefixo_cnpj_transportadora = cnpj_transp_limpo[:8] if cnpj_transp_limpo else None #type: ignore
 
             if not prefixo_cnpj_cliente and frete.cnpj_cliente:
                 cnpj_cliente_limpo = normalizar_cnpj(frete.cnpj_cliente)
-                prefixo_cnpj_cliente = cnpj_cliente_limpo[:8] if cnpj_cliente_limpo else None
+                prefixo_cnpj_cliente = cnpj_cliente_limpo[:8] if cnpj_cliente_limpo else None if cnpj_cliente_limpo else None #type: ignore
 
             # Registrar filtros aplicados
             resultado['filtros_aplicados'] = {
@@ -569,7 +570,7 @@ class DespesaCteService:
 
             # Registrar observação do vínculo manual
             obs_atual = despesa.observacoes or ''
-            obs_manual = f"[VÍNCULO MANUAL] CTe {cte.numero_cte} vinculado por {usuario} em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            obs_manual = f"[VÍNCULO MANUAL] CTe {cte.numero_cte} vinculado por {usuario} em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')}"
             despesa.observacoes = f"{obs_atual}\n{obs_manual}".strip()
 
             db.session.commit()

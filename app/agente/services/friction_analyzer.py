@@ -17,10 +17,10 @@ Uso:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from difflib import SequenceMatcher
 from typing import Dict, Any, List, Optional
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # Limite de similaridade para considerar query como "repetida"
@@ -48,7 +48,7 @@ def analyze_friction(
     try:
         from ..models import AgentSession
 
-        since = datetime.now(timezone.utc) - timedelta(days=days)
+        since = agora_utc_naive() - timedelta(days=days)
 
         base_query = AgentSession.query.filter(
             AgentSession.created_at >= since
@@ -113,7 +113,7 @@ def analyze_friction(
 
         return {
             'period_days': days,
-            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'generated_at': agora_utc_naive().isoformat(),
             'total_sessions_analyzed': len(sessions),
             'friction_score': friction_score,
             'repeated_queries': repeated[:20],  # Top 20
@@ -135,7 +135,7 @@ def _empty_friction(days: int) -> Dict[str, Any]:
     """Retorna estrutura vazia."""
     return {
         'period_days': days,
-        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'generated_at': agora_utc_naive().isoformat(),
         'total_sessions_analyzed': 0,
         'friction_score': 0.0,
         'repeated_queries': [],

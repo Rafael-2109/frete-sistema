@@ -7,7 +7,7 @@ from app import db
 from app.carteira.models_alertas import AlertaSeparacaoCotada
 from app.pedidos.models import Pedido
 from app.embarques.models import EmbarqueItem, Embarque
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func
 
 alertas_visualizacao_bp = Blueprint('alertas_visualizacao', __name__, url_prefix='/alertas')
@@ -93,7 +93,7 @@ def marcar_reimpresso(alerta_id):
     alerta = AlertaSeparacaoCotada.query.get_or_404(alerta_id)
     
     alerta.reimpresso = True
-    alerta.data_reimpressao = datetime.now()
+    alerta.data_reimpressao = agora_utc_naive()
     alerta.usuario_reimpressao = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
     
     db.session.commit()

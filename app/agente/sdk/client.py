@@ -18,7 +18,7 @@ import logging
 import time
 from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from app.utils.timezone import agora_utc_naive
 
 # SDK Oficial
 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/
@@ -41,7 +41,7 @@ from claude_agent_sdk import (
 
 # Fallback para API direta (health check)
 import anthropic
-
+from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
@@ -125,7 +125,7 @@ class ToolCall:
     id: str
     name: str
     input: Dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: agora_utc_naive())
 
 
 @dataclass
@@ -326,7 +326,7 @@ Nunca invente informações."""
         """
         prompt = self.system_prompt.replace(
             "{data_atual}",
-            datetime.now().strftime("%d/%m/%Y %H:%M")
+            agora_utc_naive().strftime("%d/%m/%Y %H:%M")
         )
         prompt = prompt.replace("{usuario_nome}", user_name)
 
@@ -1172,7 +1172,7 @@ Nunca invente informações."""
             type='init',
             content={'session_id': sdk_session_id or 'pending'},
             metadata={
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'timestamp': agora_utc_naive().isoformat(),
                 'resume': bool(sdk_session_id),
             }
         )

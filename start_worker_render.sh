@@ -48,7 +48,7 @@ python -c "
 import redis
 import os
 from rq import Worker
-from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive
 
 try:
     r = redis.from_url(os.environ.get('REDIS_URL', ''))
@@ -69,14 +69,14 @@ try:
                 last_heartbeat = w.last_heartbeat
                 if last_heartbeat:
                     # Se o heartbeat é muito antigo, worker está morto
-                    time_since_heartbeat = datetime.now() - last_heartbeat
+                    time_since_heartbeat = agora_utc_naive() - last_heartbeat
                     if time_since_heartbeat > timedelta(seconds=420):
                         dead_workers.append(w)
                 else:
                     # Se não há heartbeat, verificar se o worker está registrado mas inativo
                     # Usar birth_date como fallback
                     if hasattr(w, 'birth_date') and w.birth_date:
-                        time_since_birth = datetime.now() - w.birth_date
+                        time_since_birth = agora_utc_naive() - w.birth_date
                         if time_since_birth > timedelta(minutes=10):
                             dead_workers.append(w)
             except:

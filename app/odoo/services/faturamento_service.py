@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
+from app.utils.timezone import agora_utc_naive
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.faturamento_mapper import FaturamentoMapper
@@ -269,7 +270,7 @@ class FaturamentoService:
                 FaturamentoProduto.status_nf != 'Cancelado'  # Apenas não cancelados
             ).update({
                 'status_nf': 'Cancelado',
-                'updated_at': datetime.now(),
+                'updated_at': agora_utc_naive(),
                 'updated_by': 'Sistema - NF Cancelada no Odoo'
             })
             
@@ -283,7 +284,7 @@ class FaturamentoService:
             ).update({
                 'status_nf': 'CANCELADO',
                 'ativo': False,  # IMPORTANTE: Marcar como inativo para excluir do estoque
-                'atualizado_em': datetime.now(),
+                'atualizado_em': agora_utc_naive(),
                 'atualizado_por': 'Sistema - NF Cancelada no Odoo'
             })
             
@@ -1589,8 +1590,8 @@ class FaturamentoService:
                 'peso_total': self._calcular_peso_total(linha.get('quantity', 0), template.get('gross_weight', 0)),
                 
                 # Metadados
-                'created_at': datetime.now(),
-                'updated_at': datetime.now(),
+                'created_at': agora_utc_naive(),
+                'updated_at': agora_utc_naive(),
                 'created_by': 'Sistema Odoo REALMENTE Otimizado'
             }
             

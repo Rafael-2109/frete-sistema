@@ -26,7 +26,7 @@ import os
 import sys
 import traceback
 from contextlib import contextmanager
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def _atualizar_progresso_lancamento(batch_id: str, progresso: dict):
     try:
         redis_conn = _get_redis_connection()
         if redis_conn:
-            progresso['ultimo_update'] = datetime.now().isoformat()
+            progresso['ultimo_update'] = agora_utc_naive().isoformat()
             key = f'comprovante_lancamento_progresso:{batch_id}'
             redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
     except Exception as e:
@@ -161,7 +161,7 @@ def processar_lancamento_comprovantes_job(
         'sucesso': 0,
         'erros': 0,
         'ultimo_payment': None,
-        'iniciado_em': datetime.now().isoformat(),
+        'iniciado_em': agora_utc_naive().isoformat(),
         'concluido_em': None,
         'estatisticas': None,
         'detalhes': [],
@@ -204,7 +204,7 @@ def processar_lancamento_comprovantes_job(
 
             # Marcar como concluído
             progresso['status'] = 'concluido'
-            progresso['concluido_em'] = datetime.now().isoformat()
+            progresso['concluido_em'] = agora_utc_naive().isoformat()
             progresso['estatisticas'] = res.get('estatisticas')
             progresso['detalhes'] = res.get('detalhes', [])
 
@@ -214,7 +214,7 @@ def processar_lancamento_comprovantes_job(
 
         resultado['erro_geral'] = str(e)
         progresso['status'] = 'erro'
-        progresso['concluido_em'] = datetime.now().isoformat()
+        progresso['concluido_em'] = agora_utc_naive().isoformat()
         progresso['ultimo_payment'] = f"ERRO: {str(e)}"
 
     _atualizar_progresso_lancamento(batch_id, progresso)

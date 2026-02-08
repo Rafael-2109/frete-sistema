@@ -20,7 +20,7 @@ import json
 import logging
 import time
 import traceback
-from datetime import datetime, date
+from datetime import date
 from typing import Dict, List, Optional, Tuple, Any
 from flask import current_app
 
@@ -31,6 +31,7 @@ from app.fretes.models import (
     LancamentoFreteOdooAuditoria
 )
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 class LancamentoOdooService:
@@ -1728,7 +1729,7 @@ class LancamentoOdooService:
                 frete.odoo_dfe_id = dfe_id
                 frete.odoo_purchase_order_id = purchase_order_id
                 frete.odoo_invoice_id = invoice_id
-                frete.lancado_odoo_em = datetime.now()
+                frete.lancado_odoo_em = agora_utc_naive()
                 frete.lancado_odoo_por = self.usuario_nome
                 frete.status = 'LANCADO_ODOO'
 
@@ -1742,7 +1743,7 @@ class LancamentoOdooService:
                     # CTe → Frete
                     if not cte.frete_id:
                         cte.frete_id = frete_id
-                        cte.vinculado_em = datetime.now()
+                        cte.vinculado_em = agora_utc_naive()
                         cte.vinculado_por = self.usuario_nome
                         current_app.logger.info(f"🔗 Vinculando CTe → Frete: frete_id = {frete_id}")
 

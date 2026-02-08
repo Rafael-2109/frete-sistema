@@ -208,7 +208,7 @@ def correcao_datas_api_exportar():
             item.exportado_em = agora_utc_naive()
         db.session.commit()
 
-        filename = f"correcao_datas_nf_credito_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"correcao_datas_nf_credito_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             output,

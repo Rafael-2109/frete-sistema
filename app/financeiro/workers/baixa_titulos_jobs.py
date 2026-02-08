@@ -180,7 +180,7 @@ def _atualizar_progresso_baixa(job_id: str, progresso: dict):
     try:
         redis_conn = _get_redis_connection()
         if redis_conn:
-            progresso['ultimo_update'] = datetime.now().isoformat()
+            progresso['ultimo_update'] = agora_utc_naive().isoformat()
             key = f'baixa_progresso:{job_id}'
             redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
             logger.debug(f"[Baixa] Progresso atualizado: {progresso.get('item_atual', 'N/A')}")
@@ -279,7 +279,7 @@ def processar_itens_baixa_job(
     """
     from rq import get_current_job
 
-    inicio = datetime.now()
+    inicio = agora_utc_naive()
 
     # Obter job_id do job atual
     current_job = get_current_job()
@@ -310,7 +310,7 @@ def processar_itens_baixa_job(
         'itens_erro': 0,
         'itens_pulados': 0,
         'item_atual': 'Iniciando...',
-        'inicio': datetime.now().isoformat(),
+        'inicio': agora_utc_naive().isoformat(),
         'detalhes': []
     }
 
@@ -357,7 +357,7 @@ def processar_itens_baixa_job(
 
             # Processar cada item
             for idx, item in enumerate(itens):
-                item_inicio = datetime.now()
+                item_inicio = agora_utc_naive()
                 item_resultado = {
                     'item_id': item.id,
                     'nf': item.nf_excel,
@@ -418,12 +418,12 @@ def processar_itens_baixa_job(
                 db.session.commit()
 
                 # Tempo do item
-                item_resultado['tempo_segundos'] = (datetime.now() - item_inicio).total_seconds()
+                item_resultado['tempo_segundos'] = (agora_utc_naive() - item_inicio).total_seconds()
                 resultado['detalhes'].append(item_resultado)
                 progresso['detalhes'].append(item_resultado)
 
             # Finalizar
-            tempo_total = (datetime.now() - inicio).total_seconds()
+            tempo_total = (agora_utc_naive() - inicio).total_seconds()
             resultado['tempo_segundos'] = tempo_total
             resultado['success'] = resultado['itens_erro'] == 0
 
@@ -431,7 +431,7 @@ def processar_itens_baixa_job(
             progresso['status'] = 'concluido' if resultado['success'] else 'concluido_com_erros'
             progresso['itens_processados'] = len(itens)
             progresso['item_atual'] = 'Concluido!'
-            progresso['fim'] = datetime.now().isoformat()
+            progresso['fim'] = agora_utc_naive().isoformat()
             progresso['tempo_segundos'] = tempo_total
 
             if job_id:
@@ -447,7 +447,7 @@ def processar_itens_baixa_job(
             return resultado
 
     except Exception as e:
-        tempo_total = (datetime.now() - inicio).total_seconds()
+        tempo_total = (agora_utc_naive() - inicio).total_seconds()
         resultado['tempo_segundos'] = tempo_total
         resultado['error'] = str(e)
         resultado['success'] = False
@@ -459,7 +459,7 @@ def processar_itens_baixa_job(
         if job_id:
             progresso['status'] = 'erro'
             progresso['item_atual'] = f'Erro: {str(e)[:100]}'
-            progresso['fim'] = datetime.now().isoformat()
+            progresso['fim'] = agora_utc_naive().isoformat()
             _atualizar_progresso_baixa(job_id, progresso)
             # Liberar locks mesmo em caso de erro
             _liberar_lock_processamento(item_ids, job_id)
@@ -495,7 +495,7 @@ def processar_lote_baixa_job(
     """
     from rq import get_current_job
 
-    inicio = datetime.now()
+    inicio = agora_utc_naive()
 
     # Obter job_id do job atual
     current_job = get_current_job()
@@ -575,7 +575,7 @@ def processar_lote_baixa_job(
             lote.linhas_erro = resultado['itens_erro']
             db.session.commit()
 
-            tempo_total = (datetime.now() - inicio).total_seconds()
+            tempo_total = (agora_utc_naive() - inicio).total_seconds()
             resultado['tempo_segundos'] = tempo_total
 
             logger.info(
@@ -586,7 +586,7 @@ def processar_lote_baixa_job(
             return resultado
 
     except Exception as e:
-        tempo_total = (datetime.now() - inicio).total_seconds()
+        tempo_total = (agora_utc_naive() - inicio).total_seconds()
         resultado['tempo_segundos'] = tempo_total
         resultado['error'] = str(e)
         resultado['success'] = False
@@ -660,7 +660,7 @@ def get_job_status(job_id: str) -> Dict[str, Any]:
         if job.started_at and job.ended_at:
             result['duracao_segundos'] = (job.ended_at - job.started_at).total_seconds()
         elif job.started_at:
-            result['duracao_segundos'] = (datetime.now(job.started_at.tzinfo) - job.started_at).total_seconds()
+            result['duracao_segundos'] = (agora_utc_naive() - job.started_at).total_seconds()
 
         # Adicionar progresso do Redis se disponivel
         progresso = obter_progresso_baixa(job_id)

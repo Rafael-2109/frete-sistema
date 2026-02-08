@@ -797,7 +797,7 @@ class ImportadorTagPlusV2:
                         origem=dados_nf['origem'],
                         valor_total=dados_nf['valor_total'],
                         peso_bruto=dados_nf['peso_bruto'],
-                        criado_em=datetime.now()
+                        criado_em=agora_utc_naive()
                     )
                     db.session.add(relatorio)
                     logger.debug(f"Relatório criado para NF {numero_nf}")
@@ -983,7 +983,7 @@ class ImportadorTagPlusV2:
                 FaturamentoProduto.status_nf != 'Cancelado'
             ).update({
                 'status_nf': 'Cancelado',
-                'updated_at': datetime.now(),
+                'updated_at': agora_utc_naive(),
                 'updated_by': f'TagPlus - NF {descricao_status}'
             })
 
@@ -997,7 +997,7 @@ class ImportadorTagPlusV2:
             ).update({
                 'status_nf': 'CANCELADO',
                 'ativo': False,  # Marcar como inativo
-                'atualizado_em': datetime.now(),
+                'atualizado_em': agora_utc_naive(),
                 'atualizado_por': f'TagPlus - NF {descricao_status}'
             })
 

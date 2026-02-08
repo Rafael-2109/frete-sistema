@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from decimal import Decimal
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.separacao.models import Separacao
 from app.pedidos.models import Pedido
 from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
@@ -255,7 +256,7 @@ class ReconciliacaoSeparacaoNF:
                 if not sep.sincronizado_nf:
                     sep.sincronizado_nf = True
                     sep.numero_nf = numero_nf
-                    sep.data_sincronizacao = datetime.now()
+                    sep.data_sincronizacao = agora_utc_naive()
                     resultado['sincronizado'] = True
             else:
                 # Produto não está na NF - verificar se precisa zerar

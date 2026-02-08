@@ -25,9 +25,9 @@ import logging
 import os
 import traceback
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Any, Dict, List
 
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # Timeout para batch completo (60 minutos — OCR consome tempo)
@@ -70,7 +70,7 @@ def _atualizar_progresso(batch_id: str, progresso: dict):
     try:
         redis_conn = _get_redis_connection()
         if redis_conn:
-            progresso['ultimo_update'] = datetime.now().isoformat()
+            progresso['ultimo_update'] = agora_utc_naive().isoformat()
             key = f'comprovante_batch_progresso:{batch_id}'
             redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
     except Exception as e:
@@ -178,7 +178,7 @@ def processar_batch_comprovantes_job(
         'erros': 0,
         'arquivo_atual': None,
         'detalhes': [],
-        'iniciado_em': datetime.now().isoformat(),
+        'iniciado_em': agora_utc_naive().isoformat(),
         'concluido_em': None,
     }
     _atualizar_progresso(batch_id, progresso)
@@ -296,7 +296,7 @@ def processar_batch_comprovantes_job(
         # Finalizar
         resultado['success'] = True
         progresso['status'] = 'concluido'
-        progresso['concluido_em'] = datetime.now().isoformat()
+        progresso['concluido_em'] = agora_utc_naive().isoformat()
         progresso['arquivo_atual'] = None
 
     except Exception as e:
@@ -305,7 +305,7 @@ def processar_batch_comprovantes_job(
 
         resultado['erro_geral'] = str(e)
         progresso['status'] = 'erro'
-        progresso['concluido_em'] = datetime.now().isoformat()
+        progresso['concluido_em'] = agora_utc_naive().isoformat()
         progresso['arquivo_atual'] = f"ERRO: {str(e)}"
 
     _atualizar_progresso(batch_id, progresso)

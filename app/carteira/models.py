@@ -1,6 +1,6 @@
 
 from app import db
-from datetime import datetime, timezone
+from datetime import datetime
 from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_, Index, func
 import logging
@@ -651,7 +651,7 @@ class PreSeparacaoItem(db.Model):
     tipo_envio = db.Column(db.String(10), default='total')  # total, parcial
     
     # Auditoria
-    data_criacao = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    data_criacao = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100))
     
     # ✅ CONSTRAINT ÚNICA COMPOSTA - Sistema de contexto único
@@ -724,7 +724,7 @@ class PreSeparacaoItem(db.Model):
     def marcar_como_recomposto(self, usuario):
         """Marca item como recomposto após sincronização Odoo"""
         self.recomposto = True
-        self.data_recomposicao = datetime.now(timezone.utc)
+        self.data_recomposicao = agora_utc_naive()
         self.recomposto_por = usuario
         # CRÍTICO: NÃO mudar status se já é ENVIADO_SEPARACAO
         # Items que viraram Separacao devem manter esse status!
@@ -1181,7 +1181,7 @@ class PreSeparacaoItem(db.Model):
                 'quantidade_afetada': float(qtd_afetada) if qtd_afetada else 0,
                 'motivo': motivo,
                 'separacoes_afetadas': [s.separacao_lote_id for s in separacoes],
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'timestamp': agora_utc_naive().isoformat(),
                 'acao_requerida': 'Verificar impacto no processo físico imediatamente'
             }
             mensagem = f'🚨 URGENTE: {len(separacoes)} separação(ões) COTADA(s) afetada(s) por {motivo}'

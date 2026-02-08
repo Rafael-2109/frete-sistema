@@ -390,7 +390,7 @@ class ImportadorBaixasOdoo:
                 )
                 if partners:
                     pagamento.partner_cnpj = partners[0].get('cnpj_cpf')
-            except:
+            except Exception:
                 pass
 
         self._pagamentos_importados.add(odoo_id)
@@ -479,7 +479,7 @@ class ImportadorBaixasOdoo:
                 )
                 if partners:
                     documento.partner_cnpj = partners[0].get('cnpj_cpf')
-            except:
+            except Exception:
                 pass
 
         self._documentos_importados.add(odoo_id)
@@ -532,7 +532,7 @@ class ImportadorBaixasOdoo:
             if isinstance(valor, str):
                 return datetime.strptime(valor, '%Y-%m-%d').date()
             return valor
-        except:
+        except Exception:
             return None
 
     def _parse_datetime(self, valor) -> Optional[datetime]:
@@ -548,7 +548,7 @@ class ImportadorBaixasOdoo:
                     except ValueError:
                         continue
             return valor
-        except:
+        except Exception:
             return None
 
 
