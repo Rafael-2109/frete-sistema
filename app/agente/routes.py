@@ -722,6 +722,20 @@ def _stream_chat_response(
                 consecutive_empty = 0  # Reset contador
                 yield event
 
+                # FIX-7: Fechar SSE após evento 'done' — não esperar None indefinidamente.
+                # O done indica que o agente terminou. Aguarda brevemente por suggestions.
+                if isinstance(event, str) and 'event: done\n' in event:
+                    # Best-effort: espera até 3s por evento de suggestions
+                    try:
+                        remaining = event_queue.get(timeout=3)
+                        if remaining is not None:
+                            yield remaining
+                            event_count += 1
+                    except Empty:
+                        pass
+                    logger.info(f"[AGENTE] SSE fechado após done ({event_count} eventos)")
+                    break
+
             except Empty:
                 consecutive_empty += 1
 

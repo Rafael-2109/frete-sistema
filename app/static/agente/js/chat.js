@@ -916,6 +916,7 @@ function processSSEEvent(eventType, data, state) {
             case 'done':
                 hideTyping();
                 hideThinkingPanel();
+                isGenerating = false;  // FIX-6: Para feedbackTimer e sinaliza fim do while loop
                 if (data.session_id) sessionId = data.session_id;
                 updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
 

@@ -1453,6 +1453,12 @@ Nunca invente informações."""
                             metadata={'message_id': last_message_id or ''}
                         )
 
+                    # FIX-5: Sair do async for após ResultMessage.
+                    # Sem isso, o loop espera sdk_query() que nunca termina porque
+                    # _make_streaming_prompt() tem await Event().wait() bloqueante.
+                    # O break força __aclose__() no generator → cancela TaskGroup → mata CLI.
+                    break
+
             # ─── Fallback done (sem ResultMessage) ───
             if not done_emitted:
                 correction = await self._self_correct_response(full_text)
