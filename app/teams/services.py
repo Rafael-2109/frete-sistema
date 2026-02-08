@@ -407,17 +407,27 @@ def _obter_resposta_agente(
     # necessário para o SDK gerenciar o CLI subprocess.
     # new_event_loop() NÃO instala child watcher → "Command failed with exit code 1".
     # Mesmo padrão do web agent (routes.py:628).
+    #
+    # wait_for(240s) garante que a thread SEMPRE termina em tempo finito,
+    # mesmo se o SDK travar. Sem isso, uma thread non-daemon bloquearia
+    # o shutdown do worker indefinidamente.
+    MAX_TEAMS_RESPONSE_SECONDS = 240  # 4 min (Sonnet tipicamente 30-120s)
+
     try:
-        response = asyncio.run(
-            client.get_response(
-                prompt=prompt_completo,
-                user_name=usuario,
-                sdk_session_id=sdk_session_id,
-                user_id=user_id,
-                model=TEAMS_DEFAULT_MODEL,
-                can_use_tool=can_use_tool,
+        async def _get_response_with_timeout():
+            return await asyncio.wait_for(
+                client.get_response(
+                    prompt=prompt_completo,
+                    user_name=usuario,
+                    sdk_session_id=sdk_session_id,
+                    user_id=user_id,
+                    model=TEAMS_DEFAULT_MODEL,
+                    can_use_tool=can_use_tool,
+                ),
+                timeout=MAX_TEAMS_RESPONSE_SECONDS,
             )
-        )
+
+        response = asyncio.run(_get_response_with_timeout())
 
         resposta_texto = _extrair_texto_resposta(response)
         new_sdk_session_id = getattr(response, 'session_id', None)
@@ -564,7 +574,7 @@ def _sanitizar_texto(texto: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# PROCESSAMENTO ASSÍNCRONO (daemon threads)
+# PROCESSAMENTO ASSÍNCRONO (non-daemon threads)
 # ═══════════════════════════════════════════════════════════════
 
 def process_teams_task_async(
@@ -576,13 +586,18 @@ def process_teams_task_async(
     teams_user_id: Optional[int],
 ) -> None:
     """
-    Processa uma TeamsTask em daemon thread (background).
+    Processa uma TeamsTask em thread non-daemon (background).
+
+    Non-daemon garante que a thread sobrevive à reciclagem do worker
+    (max_requests) — Python espera threads non-daemon terminarem antes
+    de sair. O timeout de 240s em _obter_resposta_agente garante que
+    a thread sempre termina em tempo finito.
 
     Fix 3: Recebe app como parametro ao inves de criar novo via create_app().
     Isso reutiliza o app context do gunicorn worker e evita problemas com
     inicializacao de hooks/MCP em ambiente headless.
 
-    IMPORTANTE: Esta função roda no MESMO processo gunicorn (daemon thread).
+    IMPORTANTE: Esta função roda no MESMO processo gunicorn (thread).
     Isso permite que pending_questions.py (threading.Event) funcione
     para AskUserQuestion cross-thread.
 

@@ -144,6 +144,7 @@ workers = 4  # Aumentado para aproveitar melhor 2GB RAM
 worker_class = 'gthread'  # Mudado para gthread (melhor para I/O)
 threads = 2  # 2 threads por worker = 8 conexões simultâneas
 timeout = 300
+graceful_timeout = 300  # Tempo para threads non-daemon terminarem durante deploy/reciclagem
 max_requests = 1000
 max_requests_jitter = 100
 keepallive = 10
@@ -167,6 +168,24 @@ def post_fork(server, worker):
         print(f"✅ Tipos PostgreSQL registrados no worker {worker.pid}")
     except Exception as e:
         print(f"⚠️ Erro ao registrar tipos no worker {worker.pid}: {e}")
+
+def worker_exit(server, worker):
+    """Marca tasks running como interrupted quando worker sai (max_requests/graceful shutdown)."""
+    try:
+        from app import create_app, db
+        from app.teams.models import TeamsTask
+        app = create_app()
+        with app.app_context():
+            count = TeamsTask.query.filter(
+                TeamsTask.status.in_(['pending', 'processing']),
+            ).update({'status': 'timeout'}, synchronize_session=False)
+            if count > 0:
+                db.session.commit()
+                print(f"⚠️ Worker {worker.pid} exit: {count} tasks marcadas como timeout")
+            else:
+                db.session.rollback()
+    except Exception as e:
+        print(f"⚠️ Worker {worker.pid} exit cleanup falhou: {e}")
 EOF
 
 # Iniciar aplicação com configuração customizada

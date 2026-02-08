@@ -62,7 +62,7 @@ def bot_message():
 
     Em modo async (TEAMS_ASYNC_MODE=true):
     - Cria TeamsTask no banco
-    - Inicia daemon thread para processamento
+    - Inicia thread non-daemon para processamento (sobrevive reciclagem do worker)
     - Retorna imediatamente: {"task_id": "uuid", "status": "processing"}
     - Azure Function faz polling em /bot/status/{task_id}
 
@@ -121,7 +121,7 @@ def bot_message():
 
 def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
     """
-    Cria TeamsTask e inicia daemon thread para processamento.
+    Cria TeamsTask e inicia thread non-daemon para processamento.
 
     Retorna imediatamente com task_id para polling.
     """
@@ -167,17 +167,17 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
     db.session.commit()
 
     task_id = task.id
-    logger.info(f"[TEAMS-BOT] Task criada: {task_id[:8]}... — iniciando daemon thread")
+    logger.info(f"[TEAMS-BOT] Task criada: {task_id[:8]}... — iniciando thread")
 
     # Fix 3: Passar app real do gunicorn ao inves de criar novo via create_app()
     # Reutilizar o app context evita problemas com inicializacao de hooks/MCP
     app = current_app._get_current_object()
 
-    # Iniciar daemon thread para processamento
+    # Iniciar thread para processamento (non-daemon para sobreviver a reciclagem do worker)
     t = threading.Thread(
         target=process_teams_task_async,
         args=(app, task_id, mensagem, usuario, conversation_id, teams_user_id),
-        daemon=True,
+        daemon=False,
         name=f"teams-task-{task_id[:8]}",
     )
     t.start()
