@@ -8,6 +8,7 @@ from app.carteira.models import (
 from app.estoque.services.compatibility_layer import SaldoEstoque
 from sqlalchemy import func, inspect
 from datetime import datetime, date, timedelta
+from app.utils.timezone import agora_brasil
 import logging
 from app.separacao.models import Separacao
 from app.permissions.permissions import check_permission
@@ -490,7 +491,7 @@ def api_recalcular_estoques_item(item_id):
         # Recalcular estoques usando data de expedição dinâmica
         try:
             # Data de expedição específica do item (ou hoje+1 se não definida)
-            data_expedicao = item.expedicao or (datetime.now().date() + timedelta(days=1))
+            data_expedicao = item.expedicao or (agora_brasil().date() + timedelta(days=1))
             
             # SISTEMA DINÂMICO: Usar projeção completa para data específica
             resumo_estoque = SaldoEstoque.obter_resumo_produto(item.cod_produto, item.nome_produto)

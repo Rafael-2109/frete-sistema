@@ -14,7 +14,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
 import logging
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # Função exportar_pre_separacoes REMOVIDA - Obsoleta após migração para Separacao
@@ -114,7 +114,7 @@ def exportar_separacoes():
         
         output.seek(0)
         
-        filename = f'separacoes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename = f'separacoes_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -211,7 +211,7 @@ def exportar_carteira_simples():
         
         output.seek(0)
         
-        filename = f'carteira_pedidos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename = f'carteira_pedidos_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -501,7 +501,7 @@ def exportar_carteira_detalhada():
         
         output.seek(0)
         
-        filename = f'carteira_detalhada_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename = f'carteira_detalhada_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

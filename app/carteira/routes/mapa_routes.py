@@ -5,14 +5,13 @@ Data: 2025-08-14
 """
 
 import os
-from datetime import datetime
 from io import BytesIO
 from flask import Blueprint, render_template, request, jsonify, session, send_file, url_for
 from flask_login import login_required, current_user
 from app.carteira.services.mapa_service import MapaService
 import logging
 import pandas as pd
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # Criar blueprint
@@ -298,7 +297,7 @@ def exportar_mapa():
         export_data = {
             'pedidos': mapa_service.obter_pedidos_para_mapa(pedido_ids),
             'gerado_por': current_user.nome,
-            'data_geracao': datetime.now().strftime('%d/%m/%Y %H:%M')
+            'data_geracao': agora_utc_naive().strftime('%d/%m/%Y %H:%M')
         }
 
         if incluir_rota and len(pedido_ids) > 1:
@@ -407,7 +406,7 @@ def exportar_mapa_excel():
                     ordem_df.to_excel(writer, sheet_name='Ordem de Entrega', index=False)
 
         output.seek(0)
-        nome_arquivo = f"mapa_pedidos_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        nome_arquivo = f"mapa_pedidos_{agora_utc_naive().strftime('%Y%m%d_%H%M')}.xlsx"
 
         return send_file(
             output,

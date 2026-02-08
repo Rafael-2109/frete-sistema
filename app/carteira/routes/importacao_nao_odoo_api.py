@@ -6,10 +6,9 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
 import logging
-from datetime import datetime
 from app import db
 from app.carteira.services.importacao_nao_odoo import ImportadorPedidosNaoOdoo
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 importacao_nao_odoo_api = Blueprint('importacao_nao_odoo_api', __name__)
@@ -167,7 +166,7 @@ def upload_arquivo():
                             erros_data.append({
                                 'Arquivo': arquivo_detalhe['nome_arquivo'],
                                 'Erro': erro,
-                                'Data/Hora': datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                                'Data/Hora': agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')
                             })
 
                 if erros_data:

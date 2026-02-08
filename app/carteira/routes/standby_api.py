@@ -4,7 +4,6 @@ Rotas API para gerenciamento de Saldo Standby
 
 from flask import Blueprint, jsonify, request, render_template
 from flask_login import login_required, current_user
-from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import func
 import logging
@@ -142,7 +141,6 @@ def adicionar_observacao_standby():
     """Adiciona uma observação ao histórico do pedido em standby"""
     try:
         import json
-        from datetime import datetime
         
         data = request.get_json()
         num_pedido = data.get("num_pedido")
@@ -161,7 +159,7 @@ def adicionar_observacao_standby():
         
         # Criar nova entrada de observação
         nova_observacao = {
-            "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "data": agora_utc_naive().strftime("%d/%m/%Y %H:%M"),
             "usuario": current_user.nome if hasattr(current_user, "nome") else "Sistema",
             "texto": observacao
         }
