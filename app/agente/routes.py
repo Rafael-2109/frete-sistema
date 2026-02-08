@@ -79,7 +79,7 @@ MAX_STREAM_DURATION_SECONDS = 540
 # Reduzido de 90s para 60s — se CLI não emite nada em 60s, está travado
 SDK_INACTIVITY_TIMEOUT_SECONDS = 60
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('sistema_fretes')
 
 
 # =============================================================================

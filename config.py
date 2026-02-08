@@ -107,7 +107,7 @@ class Config:
             "connect_args": {
                 "sslmode": "prefer",  # Mudado de 'require' para 'prefer' (mais flexível)
                 "connect_timeout": 10,  # Timeout de conexão mais curto
-                "application_name": "frete_sistema",
+                "application_name": "sistema_fretes",
                 "keepalives": 1,  # Ativa keepalive
                 "keepalives_idle": 30,  # Envia keepalive a cada 30s
                 "keepalives_interval": 10,  # Intervalo entre keepalives

@@ -22,7 +22,7 @@ def setup_logging():
     console_handler.setLevel(logging.INFO)
     
     # Logger principal
-    logger = logging.getLogger('frete_sistema')
+    logger = logging.getLogger('sistema_fretes')
     logger.setLevel(logging.INFO)
     logger.addHandler(console_handler)
     

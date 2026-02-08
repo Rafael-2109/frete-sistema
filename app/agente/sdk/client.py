@@ -42,7 +42,7 @@ from claude_agent_sdk import (
 # Fallback para API direta (health check)
 import anthropic
 from datetime import datetime
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('sistema_fretes')
 
 
 # =====================================================================
@@ -1169,7 +1169,9 @@ Nunca invente informações."""
         # CRÍTICO: can_use_tool EXIGE streaming mode (AsyncIterable, não string)
         # FONTE: _internal/client.py:53-58
         # Portanto SEMPRE usamos AsyncIterable wrapper.
-        query_prompt = AgentClient._make_streaming_prompt(prompt, image_files)
+        # FIX-9: Event para sinalizar prompt generator após ResultMessage
+        streaming_done_event = asyncio.Event()
+        query_prompt = AgentClient._make_streaming_prompt(prompt, image_files, done_event=streaming_done_event)
 
         # ─── Emitir init sintético ───
         yield StreamEvent(
@@ -1453,11 +1455,12 @@ Nunca invente informações."""
                             metadata={'message_id': last_message_id or ''}
                         )
 
-                    # FIX-5: Sair do async for após ResultMessage.
-                    # Sem isso, o loop espera sdk_query() que nunca termina porque
-                    # _make_streaming_prompt() tem await Event().wait() bloqueante.
-                    # O break força __aclose__() no generator → cancela TaskGroup → mata CLI.
-                    break
+                    # FIX-9: Sinalizar prompt generator para terminar gracefully.
+                    # Cadeia: Event.set() → generator termina → stream_input() detecta fim
+                    # → chama end_input() → stdin fecha → CLI sai → receive_messages() termina
+                    # → process_query() retorna → async for sai naturalmente.
+                    # Substitui FIX-5 (break) que causava GeneratorExit + RuntimeError warnings.
+                    streaming_done_event.set()
 
             # ─── Fallback done (sem ResultMessage) ───
             if not done_emitted:
@@ -1644,7 +1647,11 @@ Nunca invente informações."""
                 )
 
     @staticmethod
-    async def _make_streaming_prompt(text: str, image_files: Optional[List[dict]] = None):
+    async def _make_streaming_prompt(
+        text: str,
+        image_files: Optional[List[dict]] = None,
+        done_event: Optional[asyncio.Event] = None,
+    ):
         """
         Converte prompt string em AsyncIterable para compatibilidade com can_use_tool.
 
@@ -1654,6 +1661,8 @@ Nunca invente informações."""
         Args:
             text: Texto do prompt
             image_files: Lista de imagens em formato Vision API
+            done_event: Event sinalizado quando ResultMessage é recebido.
+                        Permite terminar o generator gracefully sem GeneratorExit.
 
         Yields:
             Dict no formato esperado pelo SDK streaming mode
@@ -1672,8 +1681,18 @@ Nunca invente informações."""
         # Sem isso, stream_input() chama end_input() que fecha stdin do CLI.
         # Se houver _handle_control_request pendente (can_use_tool, hook, MCP),
         # o write falha com CLIConnectionError: ProcessTransport is not ready for writing.
-        # O TaskGroup cancellation em query.close() limpa isso automaticamente.
-        await asyncio.Event().wait()
+        #
+        # FIX-9: Usar done_event para terminar gracefully após ResultMessage.
+        # Cadeia: done_event.set() → generator termina → stream_input() detecta fim
+        # → chama end_input() → stdin fecha → CLI sai → receive_messages() termina
+        # → process_query() retorna → async for sai naturalmente. Zero GeneratorExit.
+        if done_event:
+            try:
+                await asyncio.wait_for(done_event.wait(), timeout=600)
+            except asyncio.TimeoutError:
+                logger.warning("[AGENT_SDK] _make_streaming_prompt timeout de segurança (10 min)")
+        else:
+            await asyncio.Event().wait()  # Fallback: comportamento antigo
 
     @staticmethod
     def _with_resume(options: 'ClaudeAgentOptions', sdk_session_id: str) -> 'ClaudeAgentOptions':
