@@ -3,8 +3,7 @@
 {% block title %}Lote {{ lote.id }} - Extrato - Financeiro{% endblock %}
 
 {% block extra_css %}
-{# Bootstrap overrides + Module CSS #}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-overrides.css') }}">
+{# Module CSS - bootstrap overrides handled by main.css layer system #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
 {% endblock %}
 

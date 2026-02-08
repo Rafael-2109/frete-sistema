@@ -11,7 +11,6 @@
  * 4. components - Reusable UI components (buttons, cards, etc.)
  * 5. modules   - Feature-specific styles (carteira, financeiro, etc.)
  * 6. utilities - Utility classes (spacing, visibility, etc.)
- * 7. overrides - Temporary migration overrides (remove when complete)
  *
  * IMPORTANT: The @layer statement MUST be the first rule.
  * All @import statements MUST come after @layer and before any other rules.
@@ -25,7 +24,7 @@
    Lower layers have lower specificity, higher layers can override without !important
    ═══════════════════════════════════════════════════════════════════════════ */
 
-@layer reset, tokens, base, components, modules, utilities, overrides;
+@layer reset, tokens, base, components, modules, utilities;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    FONTS (unlayered - must be available to all layers)
@@ -74,10 +73,6 @@
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
 @import url('./utilities/_legacy.css') layer(utilities);
-
-/* Legacy - Temporary overrides during migration (remove after Phase 7)
-   @import url('./legacy/_inline-overrides.css') layer(overrides);
-*/
 
 /* ═══════════════════════════════════════════════════════════════════════════
    END OF IMPORTS - No additional rules should be added to this file

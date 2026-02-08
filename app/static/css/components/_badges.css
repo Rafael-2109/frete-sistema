@@ -208,4 +208,93 @@
     --_badge-color: hsl(0 0% 60%);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     STATUS BADGES - Shared across 3+ modules
+     Uses the same custom property API as base variants.
+     Module-specific badges stay in their respective module CSS files.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* PENDENTE - Amber with dark text for contrast */
+  .badge-status-pendente,
+  .badge-pendente {
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* APROVADO / CONFERIDO - Green */
+  .badge-status-aprovado,
+  .badge-aprovado,
+  .badge-status-conferido,
+  .badge-conferido {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* REJEITADO / REPROVADO - Red */
+  .badge-status-rejeitado,
+  .badge-rejeitado,
+  .badge-status-reprovado,
+  .badge-reprovado {
+    --_badge-bg: var(--semantic-danger);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* PAGO / LANCADO - Amber accent */
+  .badge-status-pago,
+  .badge-pago,
+  .badge-status-lancado,
+  .badge-lancado {
+    --_badge-bg: var(--amber-55);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* CANCELADO - Gray */
+  .badge-status-cancelado,
+  .badge-cancelado {
+    --_badge-bg: hsl(0 0% 40%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* RASCUNHO - Subtle with border */
+  .badge-status-rascunho,
+  .badge-rascunho {
+    --_badge-bg: var(--bg-light);
+    --_badge-color: var(--text);
+    --_badge-border: var(--border);
+  }
+
+  /* STATUS BASE - Neutral */
+  .badge-status {
+    --_badge-bg: var(--bg-light);
+    --_badge-color: var(--text);
+    --_badge-border: var(--border);
+  }
+
+  /* STATUS ACCENT - Yellow highlight */
+  .badge-status-accent {
+    --_badge-bg: hsl(45 95% 55%);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     STATUS BADGES - LIGHT MODE ADJUSTMENTS
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  [data-bs-theme="light"] .badge-status-aprovado,
+  [data-bs-theme="light"] .badge-aprovado,
+  [data-bs-theme="light"] .badge-status-conferido,
+  [data-bs-theme="light"] .badge-conferido,
+  [data-theme="light"] .badge-status-aprovado,
+  [data-theme="light"] .badge-aprovado,
+  [data-theme="light"] .badge-status-conferido,
+  [data-theme="light"] .badge-conferido {
+    --_badge-bg: hsl(145 65% 35%);
+  }
+
+  [data-bs-theme="light"] .badge-status,
+  [data-theme="light"] .badge-status {
+    --_badge-bg: hsl(0 0% 92%);
+    --_badge-color: hsl(0 0% 20%);
+  }
+
 } /* End @layer components */

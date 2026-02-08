@@ -18,19 +18,8 @@
 .nivel-3 { --nivel: 3; }
 .nivel-4 { --nivel: 4; }
 
-/* Badges de tipo - Theme-aware */
-.tipo-badge-INTERMEDIARIO {
-    background-color: var(--mfg-purple, hsl(258 72% 66%)) !important;
-    color: white !important;
-}
-.tipo-badge-COMPONENTE {
-    background-color: var(--bs-info) !important;
-    color: white !important;
-}
-.tipo-badge-ACABADO {
-    background-color: var(--bs-success) !important;
-    color: white !important;
-}
+/* Badges de tipo: centralizados em modules/_manufatura.css
+   .tipo-badge-INTERMEDIARIO, .tipo-badge-COMPONENTE, .tipo-badge-ACABADO */
 
 /* Ajustes - Theme-aware */
 .ajuste-positivo {
@@ -138,11 +127,7 @@
     vertical-align: middle;
 }
 
-/* Badge de contagem */
-.badge-producoes {
-    font-size: 0.7rem;
-    vertical-align: middle;
-}
+/* Badge de contagem: centralizado em modules/_manufatura.css */
 </style>
 {% endblock %}
 

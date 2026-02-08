@@ -2,7 +2,7 @@
 name: raio-x-pedido
 description: Raio-X completo de um pedido, cruzando a barreira pre/pos-faturamento. Orquestra multiplas skills para montar visao unificada desde a carteira ate a entrega e frete. Use quando o usuario perguntar sobre status completo de pedido, previsao de entrega, o que falta entregar, pedidos em transito por cliente, ou custo de frete de um pedido.
 tools: Read, Bash, Glob, Grep
-model: sonnet
+model: opus-4-6
 skills: resolvendo-entidades, gerindo-expedicao, consultando-sql, monitorando-entregas, cotando-frete
 ---
 

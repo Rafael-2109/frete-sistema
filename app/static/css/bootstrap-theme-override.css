@@ -34,7 +34,7 @@
     --bs-table-color: hsl(0 0% 95%);
     --bs-table-border-color: hsl(0 0% 30%);
     --bs-table-striped-bg: hsl(0 0% 8%);
-    --bs-table-hover-bg: hsl(0 0% 12%);
+    --bs-table-hover-bg: var(--hover-bg);
 
     /* Input backgrounds */
     --bs-form-control-bg: hsl(0 0% 10%);
@@ -88,7 +88,7 @@
     --bs-table-color: hsl(0 0% 10%);
     --bs-table-border-color: hsl(0 0% 88%);
     --bs-table-striped-bg: hsl(0 0% 98%);
-    --bs-table-hover-bg: hsl(0 0% 96%);
+    --bs-table-hover-bg: var(--hover-bg);
 
     /* Input backgrounds */
     --bs-form-control-bg: hsl(0 0% 100%);
@@ -117,6 +117,16 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   TABLE HOVER — Desativa o mecanismo interno do Bootstrap (background-image)
+   para que apenas o nosso hover (background-color via --hover-bg) atue.
+   Precisa estar FORA de @layer para vencer o CDN do Bootstrap.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-hover > tbody > tr:hover > * {
+    --bs-table-bg-state: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BODY STYLING - Apply background
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -127,6 +137,9 @@ body {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BADGE OVERRIDES - Bootstrap usa color: #fff fixo que não adapta ao tema
+   Badges centralizados em components/_badges.css (layer system).
+   Aqui ficam APENAS overrides que precisam estar fora de layers para
+   vencer o Bootstrap CDN (que também está fora de layers).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Base badge - herda cor do texto do tema */
@@ -169,31 +182,6 @@ body {
 [data-bs-theme="light"] .badge.bg-dark,
 [data-theme="light"] .badge.bg-dark {
     background-color: hsl(0 0% 25%) !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   BADGE STATUS - Classes específicas do sistema que precisam adaptar ao tema
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Badge status base - usa cores do tema */
-.badge-status {
-    background-color: var(--bs-secondary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border: 1px solid var(--bs-border-color);
-}
-
-/* Badge status accent - destaque amarelo */
-.badge-status-accent {
-    background-color: hsl(45 95% 55%) !important;
-    color: hsl(0 0% 10%) !important;
-    border: none !important;
-}
-
-/* Light mode adjustments */
-[data-bs-theme="light"] .badge-status,
-[data-theme="light"] .badge-status {
-    background-color: hsl(0 0% 92%) !important;
-    color: hsl(0 0% 20%) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -5,14 +5,14 @@
 {% block extra_css %}
 <style>
     .filter-card {
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--border);
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--shadow);
     }
 
     .filter-card .card-header {
-        background: linear-gradient(135deg, #4472C4 0%, #2F5496 100%);
-        color: white;
+        background: var(--bg);
+        color: var(--text);
         border-radius: 8px 8px 0 0;
         padding: 0.75rem 1rem;
     }
@@ -22,27 +22,29 @@
     }
 
     .btn-gerar {
-        background: linear-gradient(135deg, #28a745 0%, #20803a 100%);
+        background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(145 65% 30%) 100%);
         border: none;
         padding: 0.75rem 2rem;
         font-size: 1rem;
         font-weight: 500;
+        color: hsl(0 0% 100%);
     }
 
     .btn-gerar:hover {
-        background: linear-gradient(135deg, #20803a 0%, #186a2e 100%);
+        background: linear-gradient(135deg, hsl(145 65% 30%) 0%, hsl(145 65% 25%) 100%);
+        color: hsl(0 0% 100%);
     }
 
     .info-box {
-        background-color: #e7f3ff;
-        border-left: 4px solid #4472C4;
+        background-color: hsla(220 80% 53% / 0.08);
+        border-left: 4px solid hsl(220 45% 52%);
         padding: 1rem;
         border-radius: 4px;
         margin-top: 1.5rem;
     }
 
     .info-box h6 {
-        color: #2F5496;
+        color: var(--text);
         margin-bottom: 0.5rem;
     }
 
@@ -62,7 +64,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.5);
+        background: hsla(0 0% 0% / 0.5);
         z-index: 9999;
         justify-content: center;
         align-items: center;
@@ -73,7 +75,7 @@
     }
 
     .loading-content {
-        background: white;
+        background: var(--bg-light);
         padding: 2rem 3rem;
         border-radius: 8px;
         text-align: center;
@@ -82,13 +84,13 @@
     .loading-content .spinner-border {
         width: 3rem;
         height: 3rem;
-        color: #4472C4;
+        color: var(--amber-55);
     }
 
     .loading-content p {
         margin-top: 1rem;
         margin-bottom: 0;
-        color: #333;
+        color: var(--text);
     }
 </style>
 {% endblock %}

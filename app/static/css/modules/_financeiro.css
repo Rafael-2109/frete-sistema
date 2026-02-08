@@ -998,4 +998,39 @@
       display: block;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BADGE RECONCILIADO - Purple/roxo for reconciliation status
+     Replaces inline style="background-color: #6f42c1" in financeiro templates
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .badge-reconciliado {
+      --_badge-bg: hsl(270 50% 50%);
+      --_badge-color: hsl(0 0% 100%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+  }
+
+  [data-bs-theme="light"] .badge-reconciliado,
+  [data-theme="light"] .badge-reconciliado {
+      --_badge-bg: hsl(270 50% 40%);
+  }
+
+  /* Reconciliado pendente - roxo claro com texto roxo */
+  .badge-reconciliado-pendente {
+      --_badge-bg: hsl(270 60% 92%);
+      --_badge-color: hsl(270 50% 40%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+  }
+
+  [data-bs-theme="dark"] .badge-reconciliado-pendente,
+  [data-theme="dark"] .badge-reconciliado-pendente {
+      --_badge-bg: hsl(270 30% 20%);
+      --_badge-color: hsl(270 60% 70%);
+  }
+
 } /* End @layer modules */

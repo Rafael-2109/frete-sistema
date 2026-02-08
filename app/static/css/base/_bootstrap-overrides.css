@@ -57,9 +57,9 @@ h1, h2, h3, h4, h5, h6,
     transition: background-color 0.15s ease;
 }
 
-/* Hover genérico só para linhas sem classe de status */
+/* Hover genérico — usa token amber (pallet/v2) */
 .table > tbody > tr:not(.table-success):not(.table-warning):not(.table-primary):not(.table-light):hover {
-    background-color: hsla(0 0% 50% / 0.05) !important;
+    background-color: var(--hover-bg) !important;
 }
 
 /* Striped */
@@ -128,7 +128,7 @@ tr.table-success > td, tr.table-primary > td, tr.table-warning > td, tr.table-li
     background-color: transparent !important;
 }
 .table-light:hover, tr.table-light:hover > td {
-    background-color: hsla(0 0% 50% / 0.05) !important;
+    background-color: var(--hover-bg) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -239,43 +239,7 @@ td[style*="background-color:#198754"] {
     color: hsl(0 0% 100%) !important;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   STATUS BADGES - Classes para usar em vez de inline styles
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.badge-status-pendente, .badge-pendente {
-    background-color: var(--amber-50) !important;
-    color: hsl(0 0% 10%) !important;
-}
-
-.badge-status-aprovado, .badge-aprovado,
-.badge-status-conferido, .badge-conferido {
-    background-color: var(--semantic-success) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-.badge-status-rejeitado, .badge-rejeitado,
-.badge-status-reprovado, .badge-reprovado {
-    background-color: var(--semantic-danger) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-.badge-status-pago, .badge-pago,
-.badge-status-lancado, .badge-lancado {
-    background-color: var(--amber-55) !important;
-    color: hsl(0 0% 10%) !important;
-}
-
-.badge-status-cancelado, .badge-cancelado {
-    background-color: hsl(0 0% 40%) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-.badge-status-rascunho, .badge-rascunho {
-    background-color: var(--bg-light) !important;
-    color: var(--text) !important;
-    border: 1px solid var(--border) !important;
-}
+/* Status badges centralizados em components/_badges.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DARK MODE FIXES
@@ -472,13 +436,8 @@ i.text-muted,
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   TABLE HOVER - Desativa o hover do Bootstrap para linhas com status
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.table-hover > tbody > tr:hover > * {
-    --bs-table-bg-state: transparent;
-}
+/* TABLE HOVER do Bootstrap: desativação movida para bootstrap-theme-override.css
+   (fora de @layer) para vencer o CDN */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OUTLINE BUTTONS - Cores corretas para botões outline
@@ -599,45 +558,6 @@ i.text-muted,
     color: inherit !important;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   BADGES DENTRO DE TABELAS - Cores independentes da linha
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Badge warning dentro de qualquer contexto de tabela */
-.table .badge.bg-warning,
-.table td .badge.bg-warning,
-.table-success .badge.bg-warning,
-.table-warning .badge.bg-warning,
-.table-primary .badge.bg-warning,
-.table-light .badge.bg-warning,
-tr .badge.bg-warning,
-td .badge.bg-warning {
-    background-color: hsl(45 100% 50%) !important;
-    color: hsl(0 0% 10%) !important;
-}
-
-/* Badge success dentro de tabela */
-.table .badge.bg-success,
-.table td .badge.bg-success,
-td .badge.bg-success {
-    background-color: var(--semantic-success) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-/* Badge danger dentro de tabela */
-.table .badge.bg-danger,
-.table td .badge.bg-danger,
-td .badge.bg-danger {
-    background-color: var(--semantic-danger) !important;
-    color: hsl(0 0% 100%) !important;
-}
-
-/* Badge secondary dentro de tabela */
-.table .badge.bg-secondary,
-.table td .badge.bg-secondary,
-td .badge.bg-secondary {
-    background-color: hsl(0 0% 40%) !important;
-    color: hsl(0 0% 100%) !important;
-}
+/* Badges em tabelas: cores gerenciadas pelo layer system em _badges.css */
 
 } /* End of @layer base */

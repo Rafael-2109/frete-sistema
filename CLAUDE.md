@@ -69,6 +69,28 @@ Documentos adicionais:
 
 ---
 
+## ARQUITETURA CSS
+
+**Sistema de layers** (`main.css`): `tokens → base → components → modules → utilities`
+- `bootstrap-theme-override.css` FORA de layers (sobrescreve Bootstrap CDN)
+
+### REGRAS CSS:
+1. **NUNCA adicionar `<style>` blocks em templates** — usar CSS de modulo (`modules/_nome.css`)
+2. **Badges compartilhados** (3+ modulos): `components/_badges.css` usando API `--_badge-bg/color/border`
+3. **Badges de modulo**: no CSS do modulo (`_fretes.css`, `_financeiro.css`, `_manufatura.css`)
+4. **Cores**: SEMPRE usar design tokens (`var(--text)`, `var(--bg-light)`, etc.) — NUNCA hex hardcoded
+5. **Dark mode**: tokens adaptam automaticamente. Se precisar ajuste: `[data-bs-theme="light"]` selector
+
+| Arquivo | Papel |
+|---------|-------|
+| `css/components/_badges.css` | Fonte unica para badges compartilhados |
+| `css/bootstrap-theme-override.css` | Ponte Bootstrap CDN → design tokens |
+| `css/tokens/_design-tokens.css` | Tokens de design (light/dark) |
+| `css/main.css` | Entry point do sistema de layers |
+| `css/modules/_*.css` | Estilos por modulo (fretes, financeiro, etc.) |
+
+---
+
 ## CAMINHOS DO SISTEMA
 
 | Modulo | Caminhos corretos |

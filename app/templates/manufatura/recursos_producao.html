@@ -16,15 +16,8 @@
     font-size: 0.85rem;
 }
 
-/* Badges - Theme-aware */
-.badge-disponivel {
-    background-color: var(--bs-success) !important;
-    color: white !important;
-}
-.badge-indisponivel {
-    background-color: var(--bs-secondary) !important;
-    color: white !important;
-}
+/* Badges: centralizados em modules/_manufatura.css
+   .badge-recurso-disponivel e .badge-recurso-indisponivel */
 
 /* Card stats - Theme-aware */
 .card-stats {
@@ -434,8 +427,8 @@ function renderizarTabela(dados) {
     let html = '';
     dados.forEach(r => {
         const badgeDisp = r.disponivel ?
-            '<span class="badge badge-disponivel">Disponível</span>' :
-            '<span class="badge badge-indisponivel">Indisponível</span>';
+            '<span class="badge badge-recurso-disponivel">Disponível</span>' :
+            '<span class="badge badge-recurso-indisponivel">Indisponível</span>';
 
         // Calcular capacidades TEÓRICAS (100%)
         const capSkuHoraTeorica = (r.capacidade_unidade_minuto * 60) / r.qtd_unidade_por_caixa;

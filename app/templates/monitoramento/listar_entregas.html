@@ -219,10 +219,10 @@ nav.navbar.navbar-light {
   background-color: var(--bg);
 }
 
-/* Dark mode: hover sobrescreve tudo */
+/* Dark mode: hover amber sutil — padrão pallet/v2 */
 [data-theme="dark"] .table-hover tbody tr:hover td,
 [data-bs-theme="dark"] .table-hover tbody tr:hover td {
-  background-color: hsla(0 0% 100% / 0.05);
+  background-color: var(--hover-bg);
 }
 
 /* Sticky columns - sombra e borda, mas herdam background da linha */
@@ -531,7 +531,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
 /* Melhorias nas colunas sticky da tabela */
 .sticky-col, .sticky-col-2, .sticky-col-3 {
   position: sticky;
-  background: var(--bg-light) !important;
+  /* background herdado das regras de tema (linhas 210-248) */
   box-shadow: 2px 0 5px hsla(0 0% 0% / 0.1);
   border-right: 1px solid var(--border) !important;
 }
@@ -554,11 +554,18 @@ nav.navbar .navbar-brand .badge.bg-primary {
   min-width: 200px;
 }
 
-/* Efeitos hover na tabela */
+/* Efeitos hover na tabela — amber sutil (padrão pallet/v2) */
 .table-hover tbody tr:hover {
-  background-color: hsla(0 0% 50% / 0.08) !important;
+  background-color: var(--hover-bg) !important;
   transform: scale(1.001);
   transition: all 0.2s ease;
+}
+
+/* Hover explícito para sticky columns (herdam do tr:hover) */
+.table-hover tbody tr:hover td.sticky-col,
+.table-hover tbody tr:hover td.sticky-col-2,
+.table-hover tbody tr:hover td.sticky-col-3 {
+  background-color: var(--hover-bg) !important;
 }
 
 /* Loading states */
@@ -621,13 +628,13 @@ nav.navbar .navbar-brand .badge.bg-primary {
   background: var(--bg-light) !important;
 }
 
-/* 📋 CABEÇALHO DA TABELA STICKY - herda visual do bootstrap-overrides */
+/* 📋 CABEÇALHO DA TABELA STICKY — padrão pallet/v2 */
 .table thead th {
   position: -webkit-sticky !important; /* Safari */
   position: sticky !important;
   top: 40px !important; /* Abaixo da paginação (~40px de altura) */
   z-index: 40 !important; /* Abaixo da paginação (50) mas acima do conteúdo */
-  /* Visual herdado do bootstrap-overrides: bg-dark, uppercase, font-size 0.75rem */
+  background: var(--bg) !important; /* Alinhado com pallet/v2 */
 }
 
 /* 📋 CORREÇÃO PARA COLUNAS STICKY DA TABELA */
@@ -635,16 +642,11 @@ nav.navbar .navbar-brand .badge.bg-primary {
 .table thead th.sticky-col-2,
 .table thead th.sticky-col-3 {
   z-index: 45 !important; /* Ligeiramente maior que headers normais (40) */
-  background: var(--bg-light) !important;
+  /* background herdado de .table thead th acima */
 }
 
-/* 📋 AJUSTE PARA CÉLULAS DO BODY COM STICKY COLUMNS */
-.table tbody td.sticky-col,
-.table tbody td.sticky-col-2,
-.table tbody td.sticky-col-3 {
-  background: var(--bg-light) !important;
-  /* z-index já definido nas classes acima (1015, 1014, 1013) */
-}
+/* 📋 CÉLULAS STICKY DO BODY — background herdado das regras de tema */
+/* z-index já definido nas classes .sticky-col/.sticky-col-2/.sticky-col-3 */
 
 /* 🎨 MELHORIAS NOS BOTÕES DE DATA */
 .btn-sm.btn-info,

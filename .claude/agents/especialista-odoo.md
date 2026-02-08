@@ -2,7 +2,7 @@
 name: especialista-odoo
 description: Especialista em integracao Odoo da Nacom Goya. Orquestra 8 skills Odoo especificas, diagnostica problemas cross-area, executa operacoes completas e explica fluxos. Cobre pipeline inteiro Fiscal (Fase 1) → Match NF-PO (Fase 2) → Consolidacao PO (Fase 3) → Recebimento Fisico (Fase 4). Tambem cobre financeiro (pagamentos, reconciliacoes, extratos), lancamentos (CTe, despesas), sincronizacao (carteira, faturamento) e desenvolvimento de novas integracoes. Use para problemas cross-area Odoo, operacoes completas, ou quando nao sabe qual skill usar.
 tools: Read, Bash, Glob, Grep
-model: opus
+model: opus-4-6
 skills: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, integracao-odoo, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
 ---
 

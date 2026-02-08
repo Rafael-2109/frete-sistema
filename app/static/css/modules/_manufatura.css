@@ -52,4 +52,54 @@
     --mfg-danger-vibrant: hsl(0 90% 71%);    /* #f87171 - negative adjustments */
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     RECURSOS PRODUCAO - Badges and layout
+     Migrated from manufatura/recursos_producao.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .badge-recurso-disponivel {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+  }
+
+  .badge-recurso-indisponivel {
+    --_badge-bg: hsl(0 0% 40%);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ANALISE PRODUCAO - Badges and layout
+     Migrated from manufatura/analise_producao/index.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .tipo-badge-INTERMEDIARIO {
+    --_badge-bg: var(--mfg-purple);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+  }
+
+  .tipo-badge-COMPONENTE {
+    --_badge-bg: hsl(0 0% 45%);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+  }
+
+  .tipo-badge-ACABADO {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+  }
+
+  .badge-producoes {
+    font-size: 0.7rem;
+    vertical-align: middle;
+  }
+
 } /* End @layer modules */

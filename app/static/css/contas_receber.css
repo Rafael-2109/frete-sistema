@@ -8,84 +8,15 @@
    Nao redefinir aqui - centralizacao em _variables.css */
 
 /* === CONTAINER PRINCIPAL === */
-body {
-    background: var(--bs-body-bg) !important;
-    color: var(--bs-body-color) !important;
-    font-family: var(--bs-font-sans-serif);
-}
+/* body: background e color definidos nos design tokens — não sobrescrever */
 
-/* === PROTEGER NAVBAR NO LIGHT MODE === */
-/* O navbar deve SEMPRE manter fundo escuro, independente do tema */
-[data-theme="light"] .navbar,
-[data-theme="light"] .navbar.navbar-dark,
-[data-theme="light"] .navbar.bg-dark,
-[data-theme="light"] .navbar.navbar-dark.bg-dark {
-    background-color: #212529 !important;
-    --bs-bg-opacity: 1 !important;
-}
-
-[data-theme="light"] .navbar .navbar-brand,
-[data-theme="light"] .navbar.navbar-dark .navbar-brand {
-    color: #ffffff !important;
-}
-
-[data-theme="light"] .navbar .nav-link,
-[data-theme="light"] .navbar.navbar-dark .nav-link {
-    color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme="light"] .navbar .nav-link:hover,
-[data-theme="light"] .navbar .nav-link:focus,
-[data-theme="light"] .navbar.navbar-dark .nav-link:hover,
-[data-theme="light"] .navbar.navbar-dark .nav-link:focus {
-    color: #ffffff !important;
-}
-
-[data-theme="light"] .navbar .dropdown-menu,
-[data-theme="light"] .navbar.navbar-dark .dropdown-menu {
-    background-color: #212529 !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-[data-theme="light"] .navbar .dropdown-item,
-[data-theme="light"] .navbar.navbar-dark .dropdown-item {
-    color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme="light"] .navbar .dropdown-item:hover,
-[data-theme="light"] .navbar .dropdown-item:focus,
-[data-theme="light"] .navbar.navbar-dark .dropdown-item:hover,
-[data-theme="light"] .navbar.navbar-dark .dropdown-item:focus {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
-}
-
-[data-theme="light"] .navbar .dropdown-header,
-[data-theme="light"] .navbar.navbar-dark .dropdown-header {
-    color: rgba(255, 255, 255, 0.6) !important;
-}
-
-[data-theme="light"] .navbar .dropdown-divider {
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* Container principal - EXCLUIR o container dentro do navbar */
-.container-fluid:not(.navbar .container-fluid) {
-    background: var(--bs-body-bg);
-    color: var(--bs-body-color);
-}
-
-/* Garantir que o container do navbar seja transparente */
-.navbar .container-fluid {
-    background: transparent !important;
-    color: inherit !important;
-}
+/* Navbar: controlado por base/_navbar.css — não sobrescrever aqui */
 
 /* === SOBRESCREVER BOOTSTRAP GLOBALMENTE === */
 .table {
-    --bs-table-color: var(--bs-body-color);
-    --bs-table-bg: var(--bs-secondary-bg);
-    --bs-table-border-color: var(--bs-border-color);
+    --bs-table-color: var(--text);
+    --bs-table-bg: var(--bg-light);
+    --bs-table-border-color: var(--border);
 }
 
 /* Garantir cores em todos os elementos da tabela */
@@ -101,17 +32,17 @@ body {
 .table-contas td strong,
 .table-contas td small,
 .table-contas td i {
-    color: var(--bs-body-color) !important;
+    color: var(--text) !important;
 }
 
 /* Classe cliente-col */
 .table-contas .cliente-col {
-    color: var(--bs-body-color) !important;
+    color: var(--text) !important;
 }
 
 /* Classe tipo-titulo */
 .table-contas .tipo-titulo {
-    color: var(--bs-muted-color) !important;
+    color: var(--text-muted) !important;
 }
 
 /* Exceções para badges que devem manter suas cores */
@@ -134,26 +65,26 @@ body {
     color: var(--bs-info) !important;
 }
 .table-contas .text-muted {
-    color: var(--bs-muted-color) !important;
+    color: var(--text-muted) !important;
 }
 .table-contas .text-secondary {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-muted) !important;
 }
 
 /* === ACCORDION CUSTOMIZADO === */
 .accordion-item {
-    background: var(--bs-secondary-bg);
-    border-color: var(--bs-border-color);
+    background: var(--bg-light);
+    border-color: var(--border);
 }
 
 .accordion-button {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
+    background: var(--bg-light);
+    color: var(--text);
 }
 
 .accordion-button:not(.collapsed) {
-    background: var(--bs-tertiary-bg);
-    color: var(--bs-primary);
+    background: var(--bg);
+    color: var(--amber-55);
 }
 
 .accordion-button::after {
@@ -169,8 +100,8 @@ body {
 }
 
 .accordion-body {
-    background: var(--bs-secondary-bg);
-    border-top-color: var(--bs-border-color);
+    background: var(--bg-light);
+    border-top-color: var(--border);
 }
 
 /* === BARRA DE ACOES E LEMBRETES === */
@@ -178,105 +109,106 @@ body {
     min-height: 38px;
 }
 
-/* === FILTROS === */
+/* === FILTROS — padrão pallet/v2 === */
 .filtros-container {
-    background: var(--bs-secondary-bg);
-    border: 1px solid var(--bs-border-color);
-    border-radius: 8px;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: 12px;
     padding: 1rem;
     margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.08);
 }
 
 /* Form controls */
 .form-control, .form-select {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-border-color);
-    color: var(--bs-body-color);
+    background: var(--bg);
+    border-color: var(--border);
+    color: var(--text);
 }
 
 .form-control:focus, .form-select:focus {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-primary);
-    color: var(--bs-body-color);
-    box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.15);
+    background: var(--bg);
+    border-color: var(--amber-55);
+    color: var(--text);
+    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .form-control::placeholder {
-    color: var(--bs-muted-color);
+    color: var(--text-muted);
 }
 
 .form-label {
-    color: var(--bs-secondary-color);
+    color: var(--text-muted);
 }
 
-/* Date inputs */
+/* Date inputs — adapta ao tema ativo */
 input[type="date"] {
-    color-scheme: dark;
+    color-scheme: light dark;
 }
 
-[data-theme="light"] input[type="date"] {
-    color-scheme: light;
-}
-
-/* === TABELA === */
+/* === TABELA — padrão pallet/v2 === */
 .table-contas {
     font-size: 0.8rem;
-    background: var(--bs-secondary-bg) !important;
-    --bs-table-bg: var(--bs-secondary-bg);
-    --bs-table-striped-bg: var(--bs-tertiary-bg);
-    --bs-table-hover-bg: var(--bs-btn-hover-bg);
-    --bs-table-border-color: var(--bs-border-color);
-    color: var(--bs-body-color) !important;
+    background: var(--bg-light) !important;
+    --bs-table-bg: var(--bg-light);
+    --bs-table-striped-bg: var(--bg);
+    --bs-table-hover-bg: var(--hover-bg);
+    --bs-table-border-color: var(--border);
+    color: var(--text) !important;
 }
 
 .table-contas th {
-    background: var(--bs-tertiary-bg) !important;
-    color: var(--bs-secondary-color) !important;
+    background: var(--bg) !important;
+    color: var(--text-muted) !important;
     font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 10;
-    border-color: var(--bs-border-color) !important;
+    border-color: var(--border) !important;
 }
 
 .table-contas th a {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-muted) !important;
     text-decoration: none;
 }
 
 .table-contas th a:hover {
-    color: var(--bs-primary) !important;
+    color: var(--amber-55) !important;
 }
 
 .table-contas td {
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
     vertical-align: middle;
     background: transparent;
 }
 
-/* Sobrescrever table-striped do Bootstrap */
+/* Sobrescrever table-striped do Bootstrap — pallet/v2 */
 .table-contas.table-striped > tbody > tr:nth-of-type(odd) > * {
-    background-color: var(--bs-tertiary-bg) !important;
-    --bs-table-accent-bg: var(--bs-tertiary-bg);
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg) !important;
+    --bs-table-accent-bg: var(--bg);
+    color: var(--text) !important;
 }
 
 .table-contas.table-striped > tbody > tr:nth-of-type(even) > * {
-    background-color: var(--bs-secondary-bg) !important;
-    --bs-table-accent-bg: var(--bs-secondary-bg);
-    color: var(--bs-body-color) !important;
+    background-color: var(--bg-light) !important;
+    --bs-table-accent-bg: var(--bg-light);
+    color: var(--text) !important;
 }
 
 .table-contas tbody tr {
     transition: background 0.15s ease;
 }
 
+/* Hover amber sutil — padrão pallet/v2 */
 .table-contas.table-hover > tbody > tr:hover > * {
-    background-color: var(--bs-btn-hover-bg) !important;
-    --bs-table-accent-bg: var(--bs-btn-hover-bg);
-    color: var(--bs-body-color) !important;
+    background-color: var(--hover-bg) !important;
+    --bs-table-accent-bg: var(--hover-bg);
+    color: var(--text) !important;
 }
 
 /* === BADGES DE EMPRESA === */
@@ -287,7 +219,7 @@ input[type="date"] {
 
 .badge-fb { background-color: var(--bs-success); }
 .badge-sc { background-color: var(--bs-info); }
-.badge-cd { background-color: #6f42c1; }
+.badge-cd { background-color: hsl(270 50% 50%); }
 
 .badge-status {
     font-size: 0.7rem;
@@ -341,12 +273,12 @@ input[type="date"] {
     background-color: rgba(245, 158, 11, 0.25);
 }
 .abat-zero {
-    color: var(--bs-muted-color);
+    color: var(--text-muted);
     background-color: transparent;
 }
 .abat-zero:hover {
-    color: var(--bs-secondary-color);
-    background-color: var(--bs-btn-hover-bg);
+    color: var(--text-muted);
+    background-color: var(--hover-bg);
 }
 
 /* === SALDO === */
@@ -361,8 +293,8 @@ input[type="date"] {
     font-weight: 600;
 }
 .saldo-zero {
-    color: var(--bs-muted-color);
-    background-color: var(--bs-btn-hover-bg);
+    color: var(--text-muted);
+    background-color: var(--hover-bg);
 }
 
 /* === CONFIRMACAO === */
@@ -412,13 +344,13 @@ input[type="date"] {
     filter: brightness(1.1);
 }
 .acao-vazia {
-    color: var(--bs-muted-color);
-    background-color: var(--bs-tertiary-bg);
-    border: 1px dashed var(--bs-border-color);
+    color: var(--text-muted);
+    background-color: var(--bg);
+    border: 1px dashed var(--border);
 }
 .acao-vazia:hover {
-    background-color: var(--bs-btn-hover-bg);
-    border-color: var(--bs-border-color-subtle);
+    background-color: var(--hover-bg);
+    border-color: var(--amber-55);
 }
 
 /* === COLUNAS === */
@@ -500,12 +432,12 @@ input[type="date"] {
     animation: pulse-alert 1.5s infinite;
 }
 .alerta-off {
-    color: var(--bs-muted-color);
+    color: var(--text-muted);
     background-color: transparent;
 }
 .alerta-off:hover {
-    color: var(--bs-secondary-color);
-    background-color: var(--bs-btn-hover-bg);
+    color: var(--text);
+    background-color: var(--hover-bg);
 }
 @keyframes pulse-alert {
     0%, 100% { opacity: 1; }
@@ -516,10 +448,10 @@ input[type="date"] {
 .obs-clicavel {
     cursor: pointer;
     text-decoration: underline dotted;
-    color: var(--bs-muted-color) !important;
+    color: var(--text-muted) !important;
 }
 .obs-clicavel:hover {
-    color: var(--bs-info) !important;
+    color: var(--amber-55) !important;
 }
 .obs-clicavel i {
     color: inherit !important;
@@ -531,7 +463,7 @@ input[type="date"] {
 /* === PREVISAO ENTREGA === */
 .previsao-agendado { color: var(--bs-warning); font-weight: 600; }
 .previsao-confirmado { color: var(--bs-info); font-weight: 600; }
-.previsao-prevista { color: var(--bs-muted-color); }
+.previsao-prevista { color: var(--text-muted); }
 
 /* === NF INFO ADICIONAL === */
 .nf-info-extra {
@@ -545,16 +477,16 @@ input[type="date"] {
 
 /* === LINK TITULO NF === */
 .titulo-nf-link {
-    color: var(--bs-body-color) !important;
+    color: var(--text) !important;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 .titulo-nf-link strong {
-    color: var(--bs-body-color) !important;
+    color: var(--text) !important;
 }
 .titulo-nf-link:hover {
-    color: var(--bs-primary);
+    color: var(--amber-55);
     text-decoration: underline;
 }
 .titulo-nf-link strong {
@@ -604,15 +536,15 @@ input[type="date"] {
 
 /* === MODAL STYLING === */
 .modal-content {
-    background: var(--bs-secondary-bg);
-    border: 1px solid var(--bs-border-color);
-    color: var(--bs-body-color);
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    color: var(--text);
 }
 
 /* Modal header - NÃO sobrescrever se tiver classe Bootstrap de cor */
 .modal-header:not(.bg-primary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info):not(.bg-secondary):not(.bg-dark):not(.bg-light) {
-    background: var(--bs-tertiary-bg);
-    border-bottom-color: var(--bs-border-color);
+    background: var(--bg);
+    border-bottom-color: var(--border);
 }
 
 /* Para modal headers com classes Bootstrap de cor - Usar cores do DESIGN SYSTEM */
@@ -660,12 +592,12 @@ input[type="date"] {
 }
 
 .modal-title {
-    color: var(--bs-body-color);
+    color: var(--text);
 }
 
 .modal-body {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
+    background: var(--bg-light);
+    color: var(--text);
 }
 
 /* Elementos de texto dentro do modal */
@@ -679,14 +611,14 @@ input[type="date"] {
     color: inherit;
 }
 
-/* Light mode: garantir cores corretas no modal */
+/* Light mode: garantir cores corretas no modal — usa design token */
 [data-theme="light"] .modal-body {
-    color: #212529;
+    color: var(--text);
 }
 
 .modal-footer {
-    background: var(--bs-tertiary-bg);
-    border-top-color: var(--bs-border-color);
+    background: var(--bg);
+    border-top-color: var(--border);
 }
 
 /* Botão close padrão (dark mode) */
@@ -702,57 +634,36 @@ input[type="date"] {
 
 /* Modal cards */
 .modal .card {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-border-color);
+    background: var(--bg);
+    border-color: var(--border);
 }
 
 /* Card header - NÃO sobrescrever se tiver classe Bootstrap de cor */
 .modal .card-header:not(.bg-light):not(.bg-primary):not(.bg-secondary):not(.bg-success):not(.bg-danger):not(.bg-warning):not(.bg-info) {
-    background: var(--bs-btn-hover-bg);
-    border-bottom-color: var(--bs-border-color);
-    color: var(--bs-body-color);
+    background: var(--bg);
+    border-bottom-color: var(--border);
+    color: var(--text);
 }
 
 /* Card header com bg-light - manter light e ajustar para o tema */
 .modal .card-header.bg-light {
-    background-color: var(--bs-tertiary-bg) !important;
-    border-bottom-color: var(--bs-border-color);
-    color: var(--bs-body-color);
-}
-
-/* Light mode: card-header bg-light deve ser realmente light */
-[data-theme="light"] .modal .card-header.bg-light {
-    background-color: #f8f9fa !important;
-    color: #212529;
+    background-color: var(--bg) !important;
+    border-bottom-color: var(--border);
+    color: var(--text);
 }
 
 .modal .table-secondary {
-    background: var(--bs-tertiary-bg) !important;
+    background: var(--bg) !important;
 }
 
 .modal .table-secondary th {
-    background: var(--bs-tertiary-bg) !important;
-    color: var(--bs-secondary-color);
-}
-
-/* Light mode: table-secondary deve manter aparência light */
-[data-theme="light"] .modal .table-secondary {
-    background: #f8f9fa !important;
-}
-
-[data-theme="light"] .modal .table-secondary th {
-    background: #f8f9fa !important;
-    color: #6c757d;
+    background: var(--bg) !important;
+    color: var(--text-muted);
 }
 
 .modal .table td {
-    border-color: var(--bs-border-color);
-    color: var(--bs-body-color);
-}
-
-/* Modal table no light mode */
-[data-theme="light"] .modal .table td {
-    color: #212529;
+    border-color: var(--border);
+    color: var(--text);
 }
 
 /* Modal backdrop */
@@ -776,8 +687,8 @@ input[type="date"] {
 }
 .btn-pendencia.btn-outline-secondary {
     opacity: 0.6;
-    color: var(--bs-muted-color);
-    border-color: var(--bs-border-color);
+    color: var(--text-muted);
+    border-color: var(--border);
 }
 .btn-pendencia.btn-outline-secondary:hover {
     opacity: 1;
@@ -793,59 +704,59 @@ input[type="date"] {
 /* === TIPO TITULO === */
 .tipo-titulo {
     font-size: 0.75rem;
-    color: var(--bs-muted-color);
+    color: var(--text-muted);
     cursor: default;
 }
 
-/* === PAGINACAO === */
+/* === PAGINACAO — padrão pallet/v2 === */
 .pagination .page-link {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-border-color);
-    color: var(--bs-secondary-color);
+    background: var(--bg);
+    border-color: var(--border);
+    color: var(--text-muted);
 }
 
 .pagination .page-link:hover {
-    background: var(--bs-btn-hover-bg);
-    color: var(--bs-body-color);
+    background: var(--hover-bg);
+    color: var(--text);
 }
 
 .pagination .page-item.active .page-link {
-    background: var(--bs-primary);
-    border-color: var(--bs-primary);
-    color: white;
+    background: var(--amber-55);
+    border-color: var(--amber-55);
+    color: hsl(0 0% 10%);
 }
 
 .pagination .page-item.disabled .page-link {
-    background: var(--bs-tertiary-bg);
-    color: var(--bs-muted-color);
+    background: var(--bg);
+    color: var(--text-muted);
 }
 
-/* === CARDS === */
+/* === CARDS — padrão pallet/v2 === */
 .card {
-    background: var(--bs-secondary-bg);
-    border-color: var(--bs-border-color);
+    background: var(--bg-light);
+    border-color: var(--border);
 }
 
 .card-header {
-    background: var(--bs-tertiary-bg);
-    border-bottom-color: var(--bs-border-color);
-    color: var(--bs-body-color);
+    background: var(--bg);
+    border-bottom-color: var(--border);
+    color: var(--text);
 }
 
 .card-body {
-    color: var(--bs-body-color);
+    color: var(--text);
 }
 
 /* === BOTOES CUSTOMIZADOS === */
 .btn-outline-secondary {
-    color: var(--bs-secondary-color);
-    border-color: var(--bs-border-color);
+    color: var(--text-muted);
+    border-color: var(--border);
 }
 
 .btn-outline-secondary:hover {
-    background: var(--bs-btn-hover-bg);
-    color: var(--bs-body-color);
-    border-color: var(--bs-border-color-subtle);
+    background: var(--hover-bg);
+    color: var(--text);
+    border-color: var(--amber-55);
 }
 
 .btn-outline-success {
@@ -860,53 +771,36 @@ input[type="date"] {
 
 /* === NAVTABS === */
 .nav-tabs {
-    border-bottom-color: var(--bs-border-color);
+    border-bottom-color: var(--border);
 }
 
 .nav-tabs .nav-link {
-    color: var(--bs-secondary-color);
+    color: var(--text-muted);
     border-color: transparent;
 }
 
 .nav-tabs .nav-link:hover {
-    border-color: var(--bs-border-color);
-    color: var(--bs-body-color);
+    border-color: var(--border);
+    color: var(--text);
 }
 
 .nav-tabs .nav-link.active {
-    background: var(--bs-secondary-bg);
-    border-color: var(--bs-border-color) var(--bs-border-color) var(--bs-secondary-bg);
-    color: var(--bs-body-color);
+    background: var(--bg-light);
+    border-color: var(--border) var(--border) var(--bg-light);
+    color: var(--text);
 }
 
-/* === TEXT UTILITIES === */
+/* === TEXT UTILITIES — design tokens === */
 .text-muted {
-    color: var(--bs-muted-color) !important;
-}
-
-.text-danger {
-    color: var(--bs-danger) !important;
-}
-
-.text-success {
-    color: var(--bs-success) !important;
-}
-
-.text-warning {
-    color: var(--bs-warning) !important;
-}
-
-.text-info {
-    color: var(--bs-info) !important;
-}
-
-.text-primary {
-    color: var(--bs-primary) !important;
+    color: var(--text-muted) !important;
 }
 
 .text-secondary {
-    color: var(--bs-secondary-color) !important;
+    color: var(--text-muted) !important;
 }
+
+/* text-danger, text-success, text-warning, text-info, text-primary:
+   já definidos nos design tokens — não sobrescrever aqui */
 
 /* === BADGE CLICAVEL === */
 .badge-clicavel {
@@ -926,15 +820,15 @@ input[type="date"] {
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-secondary-bg);
+    border: 1px solid var(--border);
+    background: var(--bg-light);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .theme-toggle:hover {
-    background: var(--bs-btn-hover-bg);
-    border-color: var(--bs-primary);
+    background: var(--hover-bg);
+    border-color: var(--amber-55);
 }
 
 .theme-toggle__icon {
@@ -943,12 +837,12 @@ input[type="date"] {
 
 .theme-toggle__icon--light {
     display: none;
-    color: var(--bs-warning);
+    color: var(--amber-50);
 }
 
 .theme-toggle__icon--dark {
     display: block;
-    color: var(--bs-secondary-color);
+    color: var(--text-muted);
 }
 
 [data-theme="light"] .theme-toggle__icon--light {
@@ -976,12 +870,12 @@ input[type="date"] {
 
 .btn-ext--ghost {
     background: transparent;
-    border: 1px solid var(--bs-border-color);
-    color: var(--bs-secondary-color);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
 }
 
 .btn-ext--ghost:hover {
-    background: var(--bs-btn-hover-bg);
-    border-color: var(--bs-primary);
-    color: var(--bs-body-color);
+    background: var(--hover-bg);
+    border-color: var(--amber-55);
+    color: var(--text);
 }

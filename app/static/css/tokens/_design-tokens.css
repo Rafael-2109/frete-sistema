@@ -34,6 +34,10 @@
     --amber-55: hsl(45 95% 55%);
     --amber-60: hsl(45 90% 60%);
 
+    /* Interação: hover e focus baseados no amber */
+    --hover-bg: hsla(45 100% 50% / 0.06);
+    --focus-ring: hsla(45 100% 50% / 0.15);
+
     /* ═══════════════════════════════════════════════════════════════════════
        SEMANTICAS: Apenas SUCCESS e DANGER
        ═══════════════════════════════════════════════════════════════════════ */
@@ -210,9 +214,7 @@ body {
     border-bottom: 2px solid var(--border) !important;
 }
 
-.table > tbody > tr:hover {
-    background: hsla(0 0% 50% / 0.05);
-}
+/* hover de tabela: definido em _tables.css e bootstrap-theme-override.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    COMPONENTES - DROPDOWNS

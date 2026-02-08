@@ -6,12 +6,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='comercial/css/lista_clientes_responsive.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='comercial/css/cards_mobile.css') }}">
 <style>
-    /* Badges */
-    .badge-info { background-color: var(--bs-info); color: white; }
-    .badge-success { background-color: var(--bs-success); color: white; }
-    .badge-secondary { background-color: var(--bs-secondary); color: white; }
-    .badge-warning { background-color: var(--bs-warning); color: var(--text); }
-    .badge-primary { background-color: var(--bs-primary); color: white; }
+    /* Badges: centralizados em components/_badges.css */
 
     /* Custom Table Styling */
     .table-custom {
@@ -86,7 +81,7 @@
     .dataTables_paginate .paginate_button.current {
         background-color: var(--bs-primary) !important;
         border-color: var(--bs-primary) !important;
-        color: white !important;
+        color: hsl(0 0% 10%) !important;
     }
 
     .dataTables_info {

@@ -3,8 +3,7 @@
 {% block title %}Lote {{ lote.id }} - Pagamentos - Financeiro{% endblock %}
 
 {% block extra_css %}
-{# Bootstrap overrides + Module CSS #}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-overrides.css') }}">
+{# Module CSS - bootstrap overrides handled by main.css layer system #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
 {% endblock %}
 
@@ -248,9 +247,7 @@
                                 {# Cross-reference: comprovante vinculado #}
                                 {% set comp_xref = comprovantes_por_stl.get(item.statement_line_id) if comprovantes_por_stl is defined else None %}
                                 {% if comp_xref %}
-                                <span class="badge bg-purple-soft" title="Comprovante #{{ comp_xref.id }} — {{ 'Reconciliado' if comp_xref.odoo_is_reconciled else 'Pendente' }}"
-                                      style="background-color: {% if comp_xref.odoo_is_reconciled %}#6f42c1{% else %}#e2d9f3{% endif %};
-                                             color: {% if comp_xref.odoo_is_reconciled %}#fff{% else %}#6f42c1{% endif %}">
+                                <span class="badge {{ 'badge-reconciliado' if comp_xref.odoo_is_reconciled else 'badge-reconciliado-pendente' }}" title="Comprovante #{{ comp_xref.id }} — {{ 'Reconciliado' if comp_xref.odoo_is_reconciled else 'Pendente' }}">
                                     <i class="fas fa-file-pdf me-1"></i>
                                     Comp #{{ comp_xref.id }}
                                     {% if comp_xref.odoo_is_reconciled %}<i class="fas fa-check ms-1"></i>{% endif %}

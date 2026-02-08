@@ -129,8 +129,15 @@
    BADGE VARIANTS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.badge.bg-info {
-    background-color: hsl(195, 70%, 50%) !important;
+/* Badge info com cor custom para margem (cyan) */
+.badge-margem-info {
+    background-color: hsl(195 70% 50%);
+    color: hsl(0 0% 100%);
+}
+
+[data-bs-theme="light"] .badge-margem-info,
+[data-theme="light"] .badge-margem-info {
+    background-color: hsl(195 70% 38%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

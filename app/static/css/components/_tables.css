@@ -212,20 +212,9 @@
     transition: background-color 0.15s ease;
 }
 
-/* Low-specificity hover using :where() - Phase 2 pattern */
+/* Low-specificity hover using :where() — amber sutil (pallet/v2) */
 .table > tbody > tr:where(:hover) {
-    background-color: var(--_table-hover-bg);
-}
-
-/* Theme-specific hover intensities */
-/* Dark mode: lighter overlay for visibility */
-[data-bs-theme="dark"] .table {
-    --_table-hover-bg: hsla(0 0% 100% / 0.05);
-}
-
-/* Light mode: darker overlay */
-[data-bs-theme="light"] .table {
-    --_table-hover-bg: hsla(0 0% 0% / 0.04);
+    background-color: var(--hover-bg);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
