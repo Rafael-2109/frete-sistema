@@ -711,6 +711,12 @@ def processar_ofx_e_vincular(
                 comprovante_pix.ofx_data = data_pix
                 comprovante_pix.ofx_arquivo_origem = nome_arquivo
 
+                # Enriquecer CNPJ: comprovante PIX tem CNPJ mascarado (ex: "**.722.252/0001-**"),
+                # mas o OFX NAME traz o CNPJ completo. Regex ja capturou:
+                # group(1)="00.722.252", group(2)="0001-24"
+                cnpj_completo = f"{cnpj_match.group(1)}/{cnpj_match.group(2)}"
+                comprovante_pix.beneficiario_cnpj_cpf = cnpj_completo
+
                 detalhe_pix['status_comprovante'] = 'vinculado'
                 detalhe_pix['mensagem'] = (
                     f'PIX vinculado: {comprovante_pix.beneficiario_razao_social} '
