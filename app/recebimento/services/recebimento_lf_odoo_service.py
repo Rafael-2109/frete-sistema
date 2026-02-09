@@ -2,6 +2,17 @@
 Service para processamento de Recebimento LF no Odoo (Worker RQ)
 ================================================================
 
+Arquitetura: Fire and Poll
+--------------------------
+Operacoes pesadas (passos 4, 7, 8, 12, 13, 16) usam padrao "fire and poll":
+  1. Dispara acao no Odoo com timeout curto (60s)
+  2. Se timeout, OK — acao continua no Odoo
+  3. Polla a cada 10s ate resultado aparecer (max 30min)
+  4. Se job crashar, retry retoma via fase_atual
+
+Isso elimina timeouts de socket em operacoes que demoram 2-5 minutos
+(gerar PO, confirmar, validar picking, criar/confirmar invoice).
+
 Responsabilidades (5 fases, 18 passos):
 FASE 1 - Preparacao DFe:
     1. Buscar DFe no Odoo
@@ -9,23 +20,23 @@ FASE 1 - Preparacao DFe:
     3. Atualizar data_entrada e tipo_pedido
 
 FASE 2 - Gerar e Configurar PO:
-    4. action_gerar_po_dfe (timeout=180s)
-    5. Buscar PO gerado
+    4. action_gerar_po_dfe [fire_and_poll]
+    5. Extrair PO do resultado
     6. Configurar PO (team, payment_term, picking_type)
-    7. Confirmar PO (button_confirm)
-    8. Aprovar PO (button_approve, se necessario)
+    7. Confirmar PO (button_confirm) [fire_and_poll]
+    8. Aprovar PO (button_approve, se necessario) [fire_and_poll]
 
 FASE 3 - Picking / Recebimento:
     9. Buscar picking gerado
     10. Preencher lotes (CFOP!=1902: manual, CFOP=1902: auto)
     11. Aprovar quality checks
-    12. Validar picking (button_validate)
+    12. Validar picking (button_validate) [fire_and_poll]
 
 FASE 4 - Fatura:
-    13. Criar invoice (action_create_invoice)
-    14. Buscar invoice gerada
+    13. Criar invoice (action_create_invoice) [fire_and_poll]
+    14. Confirmar invoice_id obtido
     15. Configurar invoice (situacao_nf, impostos)
-    16. Confirmar invoice (action_post)
+    16. Confirmar invoice (action_post) [fire_and_poll]
 
 FASE 5 - Finalizacao:
     17. Atualizar status local
@@ -62,9 +73,10 @@ class RecebimentoLfOdooService:
     PAYMENT_PROVIDER_ID = 30
     PAYMENT_TERM_A_VISTA = 2791
 
-    # Timeouts
-    TIMEOUT_MEDIO = 180     # 3 min — operacoes medias (action_assign, quality checks em batch)
-    TIMEOUT_PESADO = 300    # 5 min — operacoes pesadas (gerar PO, confirmar, invoice, validate)
+    # Fire and Poll — parametros
+    FIRE_TIMEOUT = 60       # Timeout curto para disparar acao (60s)
+    POLL_INTERVAL = 10      # Intervalo entre polls (10s)
+    MAX_POLL_TIME = 1800    # Tempo maximo de polling (30 min)
 
     def processar_recebimento(self, recebimento_id, usuario_nome=None):
         """
@@ -303,54 +315,52 @@ class RecebimentoLfOdooService:
         Returns:
             po_id do Purchase Order criado
         """
-        # Passo 4: Gerar PO (operacao pesada ~2min)
-        logger.info(f"  Passo 4/18: Gerando PO (timeout={self.TIMEOUT_PESADO}s)")
+        # Passo 4: Gerar PO via Fire and Poll (operacao pesada ~2-3min)
+        logger.info(f"  Passo 4/18: Gerando PO (fire_and_poll, fire_timeout={self.FIRE_TIMEOUT}s)")
         self._atualizar_progresso(recebimento, fase=2, etapa=4, msg='Gerando PO no Odoo (pode demorar)...')
 
-        try:
-            po_result = odoo.execute_kw(
+        def fire_gerar_po():
+            return odoo.execute_kw(
                 'l10n_br_ciel_it_account.dfe',
                 'action_gerar_po_dfe',
                 [[dfe_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.TIMEOUT_PESADO
+                timeout_override=self.FIRE_TIMEOUT
             )
-        except Exception as e:
-            if 'cannot marshal None' not in str(e):
-                raise
-            po_result = None
 
-        # Passo 5: Buscar PO gerado
-        logger.info(f"  Passo 5/18: Buscando PO gerado")
-        self._atualizar_progresso(recebimento, fase=2, etapa=5, msg='Localizando PO...')
-
-        po_id = None
-
-        # Tentar extrair do resultado
-        if po_result and isinstance(po_result, dict):
-            po_id = po_result.get('res_id')
-
-        # Buscar pelo DFe
-        if not po_id:
+        def poll_gerar_po():
+            # Verificar se PO apareceu no DFe (purchase_id many2one)
+            dfe_data = odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe', 'read',
+                [[dfe_id]],
+                {'fields': ['purchase_id']}
+            )
+            if dfe_data and dfe_data[0].get('purchase_id'):
+                return dfe_data[0]['purchase_id']  # [id, 'name']
+            # Buscar tambem por dfe_id no purchase.order
             po_search = odoo.execute_kw(
                 'purchase.order', 'search_read',
                 [[['dfe_id', '=', dfe_id]]],
                 {'fields': ['id', 'name', 'state'], 'limit': 1}
             )
             if po_search:
-                po_id = po_search[0]['id']
+                return po_search[0]
+            return None
 
-        # Buscar pelo purchase_id do DFe (many2one → [id, 'name'] ou False)
-        if not po_id:
-            dfe_data = odoo.execute_kw(
-                'l10n_br_ciel_it_account.dfe', 'read',
-                [[dfe_id]],
-                {'fields': ['purchase_id']}
-            )
-            if dfe_data:
-                purchase_ref = dfe_data[0].get('purchase_id')
-                if purchase_ref:
-                    po_id = purchase_ref[0]  # many2one: [id, 'name']
+        po_ref = self._fire_and_poll(odoo, recebimento, fire_gerar_po, poll_gerar_po, 'Gerar PO')
+
+        # Passo 5: Extrair po_id do resultado
+        logger.info(f"  Passo 5/18: Extraindo PO do resultado")
+        self._atualizar_progresso(recebimento, fase=2, etapa=5, msg='Localizando PO...')
+
+        po_id = None
+        if isinstance(po_ref, (list, tuple)):
+            # many2one: [id, 'name']
+            po_id = po_ref[0]
+        elif isinstance(po_ref, dict):
+            po_id = po_ref.get('res_id') or po_ref.get('id')
+        elif isinstance(po_ref, int):
+            po_id = po_ref
 
         if not po_id:
             raise ValueError("Purchase Order nao foi criado apos action_gerar_po_dfe")
@@ -378,22 +388,31 @@ class RecebimentoLfOdooService:
             'picking_type_id': self.PICKING_TYPE_FB,
         })
 
-        # Passo 7: Confirmar PO
-        logger.info(f"  Passo 7/18: Confirmando PO")
+        # Passo 7: Confirmar PO via Fire and Poll
+        logger.info(f"  Passo 7/18: Confirmando PO (fire_and_poll)")
         self._atualizar_progresso(recebimento, fase=2, etapa=7, msg=f'Confirmando {po_name}...')
 
-        try:
-            odoo.execute_kw(
+        def fire_confirmar_po():
+            return odoo.execute_kw(
                 'purchase.order', 'button_confirm',
                 [[po_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.TIMEOUT_PESADO
+                timeout_override=self.FIRE_TIMEOUT
             )
-        except Exception as e:
-            if 'cannot marshal None' not in str(e):
-                raise
 
-        # Passo 8: Aprovar PO (se necessario)
+        def poll_confirmar_po():
+            po = odoo.execute_kw(
+                'purchase.order', 'read',
+                [[po_id]],
+                {'fields': ['state']}
+            )
+            if po and po[0].get('state') != 'draft':
+                return po[0]['state']
+            return None
+
+        self._fire_and_poll(odoo, recebimento, fire_confirmar_po, poll_confirmar_po, 'Confirmar PO')
+
+        # Passo 8: Aprovar PO via Fire and Poll (se necessario)
         logger.info(f"  Passo 8/18: Verificando aprovacao PO")
         self._atualizar_progresso(recebimento, fase=2, etapa=8, msg='Aprovando PO...')
 
@@ -404,17 +423,29 @@ class RecebimentoLfOdooService:
         )
 
         if po_state and po_state[0].get('state') == 'to approve':
-            try:
-                odoo.execute_kw(
+            def fire_aprovar_po():
+                return odoo.execute_kw(
                     'purchase.order', 'button_approve',
                     [[po_id]],
-                    timeout_override=self.TIMEOUT_PESADO
+                    timeout_override=self.FIRE_TIMEOUT
                 )
+
+            def poll_aprovar_po():
+                po = odoo.execute_kw(
+                    'purchase.order', 'read',
+                    [[po_id]],
+                    {'fields': ['state']}
+                )
+                if po and po[0].get('state') != 'to approve':
+                    return po[0]['state']
+                return None
+
+            try:
+                self._fire_and_poll(odoo, recebimento, fire_aprovar_po, poll_aprovar_po, 'Aprovar PO')
                 logger.info(f"  PO {po_name} aprovado")
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
-                    logger.warning(f"  Erro ao aprovar PO {po_name}: {e}")
-                    # Nao levantar exception — continuar mesmo sem aprovacao
+                logger.warning(f"  Erro ao aprovar PO {po_name}: {e}")
+                # Nao levantar exception — continuar mesmo sem aprovacao
         elif po_state:
             logger.info(f"  PO {po_name}: state={po_state[0].get('state')}, aprovacao nao necessaria")
 
@@ -479,7 +510,7 @@ class RecebimentoLfOdooService:
                 odoo.execute_kw(
                     'stock.picking', 'action_assign',
                     [[picking_id]],
-                    timeout_override=self.TIMEOUT_MEDIO
+                    timeout_override=90  # action_assign nao e pesado, 90s suficiente
                 )
                 logger.info(f"  action_assign executado em {picking_name}")
             except Exception as e:
@@ -516,26 +547,29 @@ class RecebimentoLfOdooService:
         self._atualizar_progresso(recebimento, fase=3, etapa=11, msg='Aprovando quality checks...')
         self._aprovar_quality_checks(odoo, picking_id)
 
-        # Passo 12: Validar picking
-        logger.info(f"  Passo 12/18: Validando picking")
+        # Passo 12: Validar picking via Fire and Poll
+        logger.info(f"  Passo 12/18: Validando picking (fire_and_poll)")
         self._atualizar_progresso(recebimento, fase=3, etapa=12, msg='Validando picking...')
-        self._validar_picking(odoo, picking_id)
 
-        # Verificar resultado
-        picking_final = odoo.execute_kw(
-            'stock.picking', 'search_read',
-            [[['id', '=', picking_id]]],
-            {'fields': ['state'], 'limit': 1}
-        )
-
-        if picking_final and picking_final[0]['state'] == 'done':
-            logger.info(f"  Picking {picking_name} validado com sucesso (state=done)")
-        else:
-            state_final = picking_final[0]['state'] if picking_final else 'desconhecido'
-            raise ValueError(
-                f"Picking {picking_name} nao ficou 'done' apos button_validate "
-                f"(state={state_final})"
+        def fire_validar_picking():
+            return odoo.execute_kw(
+                'stock.picking', 'button_validate',
+                [[picking_id]],
+                timeout_override=self.FIRE_TIMEOUT
             )
+
+        def poll_validar_picking():
+            p = odoo.execute_kw(
+                'stock.picking', 'read',
+                [[picking_id]],
+                {'fields': ['state']}
+            )
+            if p and p[0].get('state') == 'done':
+                return 'done'
+            return None
+
+        self._fire_and_poll(odoo, recebimento, fire_validar_picking, poll_validar_picking, 'Validar Picking')
+        logger.info(f"  Picking {picking_name} validado com sucesso (state=done)")
 
         return picking_id
 
@@ -734,22 +768,6 @@ class RecebimentoLfOdooService:
                 logger.error(f"    Erro no quality check {check_id}: {e}")
                 raise
 
-    def _validar_picking(self, odoo, picking_id):
-        """
-        Chama button_validate no picking.
-        'cannot marshal None' e retorno normal do Odoo = sucesso.
-        """
-        try:
-            odoo.execute_kw(
-                'stock.picking', 'button_validate',
-                [[picking_id]],
-                timeout_override=self.TIMEOUT_PESADO  # 300s — validacao com QC pode demorar
-            )
-        except Exception as e:
-            if 'cannot marshal None' not in str(e):
-                raise
-            logger.debug(f"    button_validate retornou None (sucesso) para picking {picking_id}")
-
     # =================================================================
     # FASE 4: Fatura
     # =================================================================
@@ -761,42 +779,39 @@ class RecebimentoLfOdooService:
         Returns:
             invoice_id da fatura criada
         """
-        # Passo 13: Criar invoice
-        logger.info(f"  Passo 13/18: Criando invoice")
+        # Passo 13: Criar invoice via Fire and Poll
+        logger.info(f"  Passo 13/18: Criando invoice (fire_and_poll)")
         self._atualizar_progresso(recebimento, fase=4, etapa=13, msg='Criando fatura...')
 
-        try:
-            invoice_result = odoo.execute_kw(
+        def fire_criar_invoice():
+            return odoo.execute_kw(
                 'purchase.order', 'action_create_invoice',
                 [[po_id]],
-                timeout_override=self.TIMEOUT_PESADO  # 300s — invoice pode demorar
+                timeout_override=self.FIRE_TIMEOUT
             )
-        except Exception as e:
-            if 'cannot marshal None' not in str(e):
-                raise
-            invoice_result = None
 
-        # Passo 14: Buscar invoice gerada
-        logger.info(f"  Passo 14/18: Buscando invoice gerada")
-        self._atualizar_progresso(recebimento, fase=4, etapa=14, msg='Localizando fatura...')
-
-        invoice_id = None
-
-        # Tentar extrair do resultado
-        if invoice_result and isinstance(invoice_result, dict):
-            invoice_id = invoice_result.get('res_id')
-
-        # Buscar pelo PO (invoice_ids)
-        if not invoice_id:
-            po_updated = odoo.execute_kw(
+        def poll_criar_invoice():
+            po = odoo.execute_kw(
                 'purchase.order', 'read',
                 [[po_id]],
                 {'fields': ['invoice_ids']}
             )
-            if po_updated:
-                invoice_ids = po_updated[0].get('invoice_ids', [])
-                if invoice_ids:
-                    invoice_id = invoice_ids[-1]  # Ultima invoice
+            ids = po[0].get('invoice_ids', []) if po else []
+            if ids:
+                return ids[-1]  # Ultima invoice
+            return None
+
+        invoice_id = self._fire_and_poll(
+            odoo, recebimento, fire_criar_invoice, poll_criar_invoice, 'Criar Invoice'
+        )
+
+        # Passo 14: Confirmar invoice_id obtido
+        logger.info(f"  Passo 14/18: Confirmando invoice")
+        self._atualizar_progresso(recebimento, fase=4, etapa=14, msg='Localizando fatura...')
+
+        # Se poll retornou dict, extrair id
+        if isinstance(invoice_id, dict):
+            invoice_id = invoice_id.get('res_id') or invoice_id.get('id')
 
         if not invoice_id:
             raise ValueError(f"Invoice nao foi criada para PO {po_id}")
@@ -842,29 +857,32 @@ class RecebimentoLfOdooService:
         except Exception as e:
             logger.warning(f"  Recalculo impostos btn falhou (nao critico): {e}")
 
-        # Passo 16: Confirmar invoice
-        logger.info(f"  Passo 16/18: Confirmando invoice")
+        # Passo 16: Confirmar invoice via Fire and Poll
+        logger.info(f"  Passo 16/18: Confirmando invoice (fire_and_poll)")
         self._atualizar_progresso(recebimento, fase=4, etapa=16, msg=f'Confirmando {invoice_name}...')
 
-        try:
-            odoo.execute_kw(
+        def fire_confirmar_invoice():
+            return odoo.execute_kw(
                 'account.move', 'action_post',
                 [[invoice_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.TIMEOUT_PESADO
+                timeout_override=self.FIRE_TIMEOUT
             )
-        except Exception as e:
-            if 'cannot marshal None' not in str(e):
-                raise
 
-        # Verificar estado
-        invoice_final = odoo.execute_kw(
-            'account.move', 'read',
-            [[invoice_id]],
-            {'fields': ['state']}
+        def poll_confirmar_invoice():
+            inv = odoo.execute_kw(
+                'account.move', 'read',
+                [[invoice_id]],
+                {'fields': ['state']}
+            )
+            if inv and inv[0].get('state') == 'posted':
+                return 'posted'
+            return None
+
+        self._fire_and_poll(
+            odoo, recebimento, fire_confirmar_invoice, poll_confirmar_invoice, 'Confirmar Invoice'
         )
-        state_final = invoice_final[0]['state'] if invoice_final else 'desconhecido'
-        logger.info(f"  Invoice {invoice_name} confirmada (state={state_final})")
+        logger.info(f"  Invoice {invoice_name} confirmada (state=posted)")
 
         return invoice_id
 
@@ -997,6 +1015,131 @@ class RecebimentoLfOdooService:
     # =================================================================
     # Helpers
     # =================================================================
+
+    def _fire_and_poll(self, odoo, recebimento, fire_fn, poll_fn, step_name,
+                       fire_timeout=None, poll_interval=None, max_poll_time=None):
+        """
+        Padrao Fire and Poll: dispara acao no Odoo com timeout curto e polla ate resultado.
+
+        1. fire_fn() com timeout curto (60s) — se timeout, OK (acao continua no Odoo)
+        2. poll_fn() a cada poll_interval ate retornar truthy
+        3. Se max_poll_time excedido, raise TimeoutError
+
+        NOTA sobre reconexao: as closures fire_fn/poll_fn capturam `odoo` do escopo
+        da funcao chamadora. O OdooConnection tem Circuit Breaker com retry e
+        reconexao automatica (via _models=None). Erros de conexao durante poll
+        sao logados e o polling continua — a proxima chamada reconecta automaticamente.
+
+        Args:
+            odoo: Conexao Odoo (para referencia — closures capturam do escopo chamador)
+            recebimento: RecebimentoLf (para atualizar progresso)
+            fire_fn: callable que dispara a acao Odoo (pode dar timeout)
+            poll_fn: callable que retorna resultado ou None/False
+            step_name: nome do passo (para log)
+            fire_timeout: timeout do fire (default FIRE_TIMEOUT=60s)
+            poll_interval: intervalo entre polls (default POLL_INTERVAL=10s)
+            max_poll_time: tempo maximo de polling (default MAX_POLL_TIME=1800s)
+
+        Returns:
+            Resultado retornado por fire_fn (se nao deu timeout) ou poll_fn (se deu timeout)
+
+        Raises:
+            TimeoutError: se max_poll_time excedido sem resultado no poll
+            Exception: erros nao relacionados a timeout
+        """
+        fire_timeout = fire_timeout or self.FIRE_TIMEOUT
+        poll_interval = poll_interval or self.POLL_INTERVAL
+        max_poll_time = max_poll_time or self.MAX_POLL_TIME
+
+        # 1. FIRE — dispara acao com timeout curto
+        fire_result = None
+        needs_polling = False
+
+        try:
+            fire_result = fire_fn()
+            logger.info(f"  [{step_name}] Acao completou dentro do timeout ({fire_timeout}s)")
+        except Exception as e:
+            error_str = str(e)
+            # Timeout de socket = esperado, acao continua no Odoo
+            if 'Timeout' in error_str or 'timeout' in error_str or 'timed out' in error_str:
+                logger.info(
+                    f"  [{step_name}] Timeout ao disparar ({fire_timeout}s) — "
+                    f"esperado, iniciando polling..."
+                )
+                needs_polling = True
+            elif 'cannot marshal None' in error_str:
+                # Retorno None do Odoo = operacao bem sucedida
+                logger.info(f"  [{step_name}] Acao completou (retorno None)")
+                fire_result = None
+            else:
+                # Erro real — propagar
+                raise
+
+        # Se fire completou, verificar se resultado ja e valido
+        if not needs_polling:
+            # Tentar poll uma vez para confirmar (fire pode retornar None mas acao completou)
+            try:
+                poll_result = poll_fn()
+                if poll_result:
+                    return poll_result
+            except Exception:
+                pass
+            # Se poll nao retornou, ou fire_result e valido, retornar
+            if fire_result:
+                return fire_result
+
+        # 2. POLL — verificar resultado periodicamente
+        elapsed = 0
+        poll_count = 0
+        while elapsed < max_poll_time:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+            poll_count += 1
+
+            # Atualizar progresso para usuario ver que esta aguardando
+            self._atualizar_progresso(
+                recebimento,
+                fase=recebimento.fase_atual or 1,
+                etapa=recebimento.etapa_atual or 1,
+                msg=f'Aguardando {step_name}... {elapsed}s'
+            )
+
+            try:
+                poll_result = poll_fn()
+                if poll_result:
+                    logger.info(
+                        f"  [{step_name}] Poll #{poll_count} ({elapsed}s): resultado encontrado"
+                    )
+                    return poll_result
+                else:
+                    logger.debug(
+                        f"  [{step_name}] Poll #{poll_count} ({elapsed}s): aguardando..."
+                    )
+            except Exception as e:
+                error_str = str(e)
+                # Reconectar Odoo se sessao caiu durante polling
+                if ('Timeout' in error_str or 'timeout' in error_str or
+                        'timed out' in error_str or 'Connection' in error_str or
+                        'SSL' in error_str or 'socket' in error_str):
+                    logger.warning(
+                        f"  [{step_name}] Erro de conexao no poll #{poll_count}, "
+                        f"reconectando Odoo..."
+                    )
+                    # OdooConnection reconecta automaticamente via Circuit Breaker
+                    # na proxima chamada execute_kw (forca _models=None internamente).
+                    # Apenas logamos e continuamos — proximo poll tenta com reconexao.
+                    pass
+                else:
+                    # Erro nao relacionado a conexao — logar e continuar pollando
+                    logger.warning(
+                        f"  [{step_name}] Erro no poll #{poll_count}: {e}"
+                    )
+
+        # 3. Timeout de polling — erro
+        raise TimeoutError(
+            f"[{step_name}] Polling expirou apos {max_poll_time}s "
+            f"({poll_count} tentativas) sem resultado"
+        )
 
     def _atualizar_progresso(self, recebimento, fase, etapa, msg=''):
         """Atualiza progresso no banco e Redis."""
