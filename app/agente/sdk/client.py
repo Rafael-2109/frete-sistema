@@ -1604,6 +1604,11 @@ Nunca invente informações."""
                     metadata={'error_type': 'exception_group'}
                 )
 
+            # FIX: Liberar prompt generator para evitar wait(600s) após erro.
+            # Sem isso, _make_streaming_prompt fica preso no done_event.wait()
+            # e causa RuntimeError: Event loop is closed no cleanup.
+            streaming_done_event.set()
+
         except Exception as e:
             error_msg = str(e)
             error_type = type(e).__name__
@@ -1645,6 +1650,11 @@ Nunca invente informações."""
                     },
                     metadata={'error_type': error_type}
                 )
+
+            # FIX: Liberar prompt generator para evitar wait(600s) após erro.
+            # Sem isso, _make_streaming_prompt fica preso no done_event.wait()
+            # e causa RuntimeError: Event loop is closed no cleanup.
+            streaming_done_event.set()
 
     @staticmethod
     async def _make_streaming_prompt(
