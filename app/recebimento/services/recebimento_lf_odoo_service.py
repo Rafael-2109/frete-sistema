@@ -63,8 +63,8 @@ class RecebimentoLfOdooService:
     PAYMENT_TERM_A_VISTA = 2791
 
     # Timeouts
-    TIMEOUT_GERAR_PO = 180  # 3 minutos (operacao pesada)
-    TIMEOUT_PADRAO = 60
+    TIMEOUT_MEDIO = 180     # 3 min — operacoes medias (action_assign, quality checks em batch)
+    TIMEOUT_PESADO = 300    # 5 min — operacoes pesadas (gerar PO, confirmar, invoice, validate)
 
     def processar_recebimento(self, recebimento_id, usuario_nome=None):
         """
@@ -304,7 +304,7 @@ class RecebimentoLfOdooService:
             po_id do Purchase Order criado
         """
         # Passo 4: Gerar PO (operacao pesada ~2min)
-        logger.info(f"  Passo 4/18: Gerando PO (timeout={self.TIMEOUT_GERAR_PO}s)")
+        logger.info(f"  Passo 4/18: Gerando PO (timeout={self.TIMEOUT_PESADO}s)")
         self._atualizar_progresso(recebimento, fase=2, etapa=4, msg='Gerando PO no Odoo (pode demorar)...')
 
         try:
@@ -313,7 +313,7 @@ class RecebimentoLfOdooService:
                 'action_gerar_po_dfe',
                 [[dfe_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.TIMEOUT_GERAR_PO
+                timeout_override=self.TIMEOUT_PESADO
             )
         except Exception as e:
             if 'cannot marshal None' not in str(e):
@@ -386,7 +386,8 @@ class RecebimentoLfOdooService:
             odoo.execute_kw(
                 'purchase.order', 'button_confirm',
                 [[po_id]],
-                {'context': {'validate_analytic': True}}
+                {'context': {'validate_analytic': True}},
+                timeout_override=self.TIMEOUT_PESADO
             )
         except Exception as e:
             if 'cannot marshal None' not in str(e):
@@ -406,7 +407,8 @@ class RecebimentoLfOdooService:
             try:
                 odoo.execute_kw(
                     'purchase.order', 'button_approve',
-                    [[po_id]]
+                    [[po_id]],
+                    timeout_override=self.TIMEOUT_PESADO
                 )
                 logger.info(f"  PO {po_name} aprovado")
             except Exception as e:
@@ -434,9 +436,11 @@ class RecebimentoLfOdooService:
         self._atualizar_progresso(recebimento, fase=3, etapa=9, msg='Buscando picking...')
 
         # Pode demorar pois o Odoo precisa processar o "Receber Produtos"
-        # Tentar ate 3 vezes com espera
+        # Tentar ate 5 vezes com espera de 8s (total ~32s de espera)
         picking = None
-        for tentativa in range(3):
+        max_tentativas_picking = 5
+        espera_picking = 8
+        for tentativa in range(max_tentativas_picking):
             pickings = odoo.execute_kw(
                 'stock.picking', 'search_read',
                 [[
@@ -455,9 +459,9 @@ class RecebimentoLfOdooService:
                 picking = pickings[0]
                 break
 
-            if tentativa < 2:
-                logger.info(f"  Picking nao encontrado, tentativa {tentativa + 1}/3, aguardando 5s...")
-                time.sleep(5)
+            if tentativa < max_tentativas_picking - 1:
+                logger.info(f"  Picking nao encontrado, tentativa {tentativa + 1}/{max_tentativas_picking}, aguardando {espera_picking}s...")
+                time.sleep(espera_picking)
 
         if not picking:
             raise ValueError(f"Picking nao encontrado para PO {po_id}")
@@ -474,7 +478,8 @@ class RecebimentoLfOdooService:
             try:
                 odoo.execute_kw(
                     'stock.picking', 'action_assign',
-                    [[picking_id]]
+                    [[picking_id]],
+                    timeout_override=self.TIMEOUT_MEDIO
                 )
                 logger.info(f"  action_assign executado em {picking_name}")
             except Exception as e:
@@ -738,7 +743,7 @@ class RecebimentoLfOdooService:
             odoo.execute_kw(
                 'stock.picking', 'button_validate',
                 [[picking_id]],
-                timeout_override=self.TIMEOUT_GERAR_PO  # 180s — validacao com QC pode demorar
+                timeout_override=self.TIMEOUT_PESADO  # 300s — validacao com QC pode demorar
             )
         except Exception as e:
             if 'cannot marshal None' not in str(e):
@@ -764,7 +769,7 @@ class RecebimentoLfOdooService:
             invoice_result = odoo.execute_kw(
                 'purchase.order', 'action_create_invoice',
                 [[po_id]],
-                timeout_override=self.TIMEOUT_GERAR_PO  # 180s — invoice pode demorar
+                timeout_override=self.TIMEOUT_PESADO  # 300s — invoice pode demorar
             )
         except Exception as e:
             if 'cannot marshal None' not in str(e):
@@ -845,7 +850,8 @@ class RecebimentoLfOdooService:
             odoo.execute_kw(
                 'account.move', 'action_post',
                 [[invoice_id]],
-                {'context': {'validate_analytic': True}}
+                {'context': {'validate_analytic': True}},
+                timeout_override=self.TIMEOUT_PESADO
             )
         except Exception as e:
             if 'cannot marshal None' not in str(e):

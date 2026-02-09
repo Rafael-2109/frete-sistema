@@ -22,9 +22,14 @@
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h6 class="mb-0"><i class="fas fa-file-invoice me-2"></i>NFs da La Famiglia Disponiveis</h6>
-            <button class="btn btn-outline-primary btn-sm" onclick="buscarDfes()">
-                <i class="fas fa-sync-alt"></i> Atualizar
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="buscarDfes()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+                <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalSincronizar">
+                    <i class="fas fa-calendar-alt"></i> Sincronizar
+                </button>
+            </div>
         </div>
         <div class="card-body" id="containerDfes">
             <!-- Estado vazio -->
@@ -43,6 +48,38 @@
 
             <!-- Cards de DFes -->
             <div id="listaDfes" class="row g-3" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     MODAL: Sincronizar (busca por range de datas)
+     ===================================================== -->
+<div class="modal fade" id="modalSincronizar" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">
+                    <i class="fas fa-calendar-alt me-2 text-warning"></i>Sincronizar NFs
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="sincDataInicio" class="form-label small fw-bold">De</label>
+                    <input type="date" class="form-control form-control-sm" id="sincDataInicio">
+                </div>
+                <div class="mb-3">
+                    <label for="sincDataFim" class="form-label small fw-bold">Para</label>
+                    <input type="date" class="form-control form-control-sm" id="sincDataFim">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning btn-sm" id="btnSincronizar" onclick="buscarDfesRange()">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -136,81 +173,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<style>
-    .card-dfe {
-        cursor: pointer;
-        transition: all 0.2s ease;
-        border-left: 4px solid var(--bs-warning);
-    }
-    .card-dfe:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    }
-    .card-dfe.tem-po {
-        border-left-color: var(--bs-info);
-    }
-
-    .nf-destaque {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--bs-warning);
-    }
-
-    .produto-card {
-        border: 1px solid var(--bs-border-color);
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-    .produto-card.auto {
-        background-color: rgba(25, 135, 84, 0.05);
-        border-color: var(--bs-success);
-    }
-    .produto-card .produto-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.75rem;
-    }
-
-    .lote-row {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    .lote-row input {
-        font-size: 0.85rem;
-    }
-
-    .validacao-qtd {
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-    .validacao-qtd.ok { color: var(--bs-success); }
-    .validacao-qtd.erro { color: var(--bs-danger); }
-
-    .badge-auto {
-        background-color: var(--bs-success);
-        color: white;
-        font-size: 0.7rem;
-    }
-    .badge-manual {
-        background-color: var(--bs-warning);
-        color: var(--bs-dark);
-        font-size: 0.7rem;
-    }
-    .badge-nao-encontrado {
-        background-color: var(--bs-secondary);
-        color: white;
-        font-size: 0.7rem;
-    }
-
-    .status-badge {
-        font-size: 0.7rem;
-        padding: 0.2em 0.5em;
-    }
-</style>
+{# Estilos em css/modules/_recebimento.css — secao RECEBIMENTO LF #}
 {% endblock %}
 
 {% block scripts %}
@@ -358,7 +321,7 @@ function buscarDfes() {
     document.getElementById('listaDfes').style.display = 'none';
     document.getElementById('loadingDfes').style.display = 'block';
 
-    fetch('/recebimento/lf/dfes')
+    fetch('/recebimento/lf/dfes?minutos=60')
         .then(r => r.json())
         .then(data => {
             document.getElementById('loadingDfes').style.display = 'none';
@@ -372,8 +335,8 @@ function buscarDfes() {
             if (!data.dfes || data.dfes.length === 0) {
                 document.getElementById('estadoVazio').innerHTML = `
                     <i class="fas fa-inbox fa-3x mb-3"></i>
-                    <p>Nenhuma NF da La Famiglia disponivel para recebimento.</p>
-                    <small class="text-muted">Todas as NFs ja foram processadas ou nao ha NFs pendentes no Odoo.</small>
+                    <p>Nenhuma NF da La Famiglia nos ultimos 60 minutos.</p>
+                    <small class="text-muted">Use "Sincronizar" para buscar em um periodo maior.</small>
                 `;
                 document.getElementById('estadoVazio').style.display = 'block';
                 return;
@@ -869,9 +832,81 @@ function salvarRecebimentoLf() {
 }
 
 // =====================================================
+// SINCRONIZAR (busca por range de datas)
+// =====================================================
+function buscarDfesRange() {
+    const dataInicio = document.getElementById('sincDataInicio').value;
+    const dataFim = document.getElementById('sincDataFim').value;
+
+    if (!dataInicio || !dataFim) {
+        toastr.warning('Informe as datas de inicio e fim.');
+        return;
+    }
+
+    if (dataInicio > dataFim) {
+        toastr.warning('Data inicio deve ser anterior ou igual a data fim.');
+        return;
+    }
+
+    const btnSinc = document.getElementById('btnSincronizar');
+    btnSinc.disabled = true;
+    btnSinc.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+
+    document.getElementById('estadoVazio').style.display = 'none';
+    document.getElementById('listaDfes').style.display = 'none';
+    document.getElementById('loadingDfes').style.display = 'block';
+
+    // Fechar modal
+    const modalSinc = bootstrap.Modal.getInstance(document.getElementById('modalSincronizar'));
+    if (modalSinc) modalSinc.hide();
+
+    fetch(`/recebimento/lf/dfes?data_inicio=${dataInicio}&data_fim=${dataFim}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loadingDfes').style.display = 'none';
+            btnSinc.disabled = false;
+            btnSinc.innerHTML = '<i class="fas fa-search"></i> Buscar';
+
+            if (data.error) {
+                toastr.error(data.error);
+                document.getElementById('estadoVazio').style.display = 'block';
+                return;
+            }
+
+            if (!data.dfes || data.dfes.length === 0) {
+                document.getElementById('estadoVazio').innerHTML = `
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p>Nenhuma NF encontrada no periodo selecionado.</p>
+                    <small class="text-muted">${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}</small>
+                `;
+                document.getElementById('estadoVazio').style.display = 'block';
+                return;
+            }
+
+            toastr.success(`${data.dfes.length} NF(s) encontrada(s) no periodo.`);
+            renderDfes(data.dfes);
+        })
+        .catch(err => {
+            document.getElementById('loadingDfes').style.display = 'none';
+            document.getElementById('estadoVazio').style.display = 'block';
+            btnSinc.disabled = false;
+            btnSinc.innerHTML = '<i class="fas fa-search"></i> Buscar';
+            toastr.error('Erro ao sincronizar: ' + err.message);
+        });
+}
+
+// =====================================================
 // INIT
 // =====================================================
 document.addEventListener('DOMContentLoaded', function() {
+    // Defaults do modal Sincronizar: ultimos 7 dias
+    const hoje = new Date();
+    const seteDiasAtras = new Date(hoje);
+    seteDiasAtras.setDate(hoje.getDate() - 7);
+
+    document.getElementById('sincDataFim').value = hoje.toISOString().split('T')[0];
+    document.getElementById('sincDataInicio').value = seteDiasAtras.toISOString().split('T')[0];
+
     // Buscar DFes automaticamente ao carregar
     buscarDfes();
 });

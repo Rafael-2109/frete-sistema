@@ -56,14 +56,27 @@ def api_dfes():
     """
     API: Lista DFes da LF disponiveis para recebimento.
 
+    Query params:
+        minutos: Janela temporal em minutos (default 60)
+        data_inicio: Data inicio do range (YYYY-MM-DD). Se presente, ignora minutos.
+        data_fim: Data fim do range (YYYY-MM-DD). Se presente, ignora minutos.
+
     Retorna DFes emitidos pela La Famiglia (CNPJ 18467441000163)
     para Nacom Goya FB (company_id=1) que nao foram processados.
     """
     try:
         from app.recebimento.services.recebimento_lf_service import RecebimentoLfService
 
+        minutos = request.args.get('minutos', 60, type=int)
+        data_inicio = request.args.get('data_inicio', '').strip() or None
+        data_fim = request.args.get('data_fim', '').strip() or None
+
         service = RecebimentoLfService()
-        resultado = service.buscar_dfes_lf_disponiveis()
+        resultado = service.buscar_dfes_lf_disponiveis(
+            minutos=minutos,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        )
 
         return jsonify(resultado)
 

@@ -803,7 +803,7 @@ class MatchNfPoItem(db.Model):
     - sem_depara: Nao tem De-Para para o codigo do fornecedor
     - sem_po: Nao encontrou PO para o produto
     - preco_diverge: Preco da NF != Preco do PO (0% tolerancia)
-    - data_diverge: Data fora da tolerancia (±2 dias uteis)
+    - data_diverge: Data fora da tolerancia
     - qtd_diverge: QTD NF > QTD PO + 10%
     """
     __tablename__ = 'match_nf_po_item'

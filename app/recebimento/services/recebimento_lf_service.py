@@ -55,7 +55,7 @@ class RecebimentoLfService:
         'det_prod_vuncom', 'det_prod_vprod', 'product_id',
     ]
 
-    def buscar_dfes_lf_disponiveis(self):
+    def buscar_dfes_lf_disponiveis(self, minutos=60, data_inicio=None, data_fim=None):
         """
         Busca DFes no Odoo emitidos pela LA FAMIGLIA (LF) para NACOM GOYA (FB).
 
@@ -63,9 +63,15 @@ class RecebimentoLfService:
         - nfe_infnfe_emit_cnpj = CNPJ_LF
         - company_id = COMPANY_FB (FB recebe)
         - l10n_br_situacao_dfe != 'CANCELADA' e != 'INUTILIZADA'
+        - Janela temporal: data_inicio/data_fim OU ultimos N minutos
         - Nao ja processado localmente
 
         Aceita qualquer l10n_br_status (01-04), pois o sistema avanca automaticamente.
+
+        Args:
+            minutos: Janela temporal em minutos (default 60). Ignorado se data_inicio/data_fim.
+            data_inicio: Data inicio do range (string ISO YYYY-MM-DD). Opcional.
+            data_fim: Data fim do range (string ISO YYYY-MM-DD). Opcional.
 
         Returns:
             Dict com lista de DFes e total
@@ -79,6 +85,16 @@ class RecebimentoLfService:
                 ['company_id', '=', self.COMPANY_FB],
                 ['l10n_br_situacao_dfe', 'not in', ['CANCELADA', 'INUTILIZADA']],
             ]
+
+            # Filtro temporal: range de datas OU ultimos N minutos
+            if data_inicio and data_fim:
+                filtro.append(['nfe_infnfe_ide_dhemi', '>=', f'{data_inicio} 00:00:00'])
+                filtro.append(['nfe_infnfe_ide_dhemi', '<=', f'{data_fim} 23:59:59'])
+                logger.info(f"Buscando DFes LF no range {data_inicio} a {data_fim}")
+            else:
+                data_limite = (agora_utc_naive() - timedelta(minutes=minutos)).strftime('%Y-%m-%d %H:%M:%S')
+                filtro.append(['nfe_infnfe_ide_dhemi', '>=', data_limite])
+                logger.info(f"Buscando DFes LF dos ultimos {minutos} minutos (desde {data_limite})")
 
             dfes_odoo = odoo.execute_kw(
                 'l10n_br_ciel_it_account.dfe', 'search_read',

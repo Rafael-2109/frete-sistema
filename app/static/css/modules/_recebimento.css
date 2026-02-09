@@ -150,4 +150,101 @@
       border-left: 4px solid hsl(217 91% 60%);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     RECEBIMENTO LF - Cards de DFe, produtos, lotes e badges
+     Migrated from recebimento/recebimento_lf.html inline styles (09-02)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* DFe cards - selecao de NF */
+  .card-dfe {
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border-left: 4px solid var(--amber-50);
+  }
+
+  .card-dfe:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px hsla(0 0% 0% / 0.15);
+  }
+
+  .card-dfe.tem-po {
+      border-left-color: hsl(197 71% 52%);
+  }
+
+  .nf-destaque {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--amber-50);
+  }
+
+  /* Produto card - formulario de lotes */
+  .produto-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+  }
+
+  .produto-card.auto {
+      background-color: hsla(152 69% 31% / 0.05);
+      border-color: var(--semantic-success);
+  }
+
+  .produto-card .produto-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+  }
+
+  /* Lote row - inputs inline */
+  .lote-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+  }
+
+  .lote-row input {
+      font-size: 0.85rem;
+  }
+
+  /* Validacao quantidade soma */
+  .validacao-qtd {
+      font-size: 0.8rem;
+      font-weight: 600;
+  }
+
+  .validacao-qtd.ok {
+      color: var(--semantic-success);
+  }
+
+  .validacao-qtd.erro {
+      color: var(--semantic-danger);
+  }
+
+  /* Badges LF - auto/manual/nao encontrado */
+  .badge-auto {
+      background-color: var(--semantic-success);
+      color: white;
+      font-size: 0.7rem;
+  }
+
+  .badge-manual {
+      background-color: var(--amber-50);
+      color: var(--text);
+      font-size: 0.7rem;
+  }
+
+  .badge-nao-encontrado {
+      background-color: var(--text-muted);
+      color: white;
+      font-size: 0.7rem;
+  }
+
+  .status-badge {
+      font-size: 0.7rem;
+      padding: 0.2em 0.5em;
+  }
+
 } /* End @layer modules */
