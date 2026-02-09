@@ -11,6 +11,13 @@ Segue o padrao de PedidoComprasServiceOtimizado:
 Scheduler: APScheduler a cada 30 minutos
 Janela: 90 minutos (configuravel via JANELA_PICKINGS)
 Filtro: picking_type_code=incoming, purchase_id != False
+
+Estrategia de busca por state:
+- Pickings assigned: SEMPRE sincronizados (sem filtro de data).
+  Sao os que importam para Fase 4 (Recebimento Fisico) e podem
+  ficar semanas em assigned sem write_date recente.
+- Pickings done/cancel: sincronizados dentro da janela de tempo
+  (filtro create_date/write_date) para limitar volume.
 """
 
 import logging
@@ -304,17 +311,31 @@ class PickingRecebimentoSyncService:
     # =========================================================================
 
     def _buscar_pickings_por_periodo(self, data_de: str, data_ate: str) -> List[Dict]:
-        """Busca pickings de recebimento por periodo absoluto (De/Até)."""
+        """
+        Busca pickings de recebimento por periodo absoluto (De/Até).
+
+        Estrategia por state:
+        - assigned: TODOS (sem filtro de data) — sao os pendentes de recebimento
+        - done/cancel: apenas os criados/alterados dentro do periodo
+        """
         logger.info(f"🔍 Buscando pickings de recebimento no Odoo (periodo: {data_de} a {data_ate})...")
 
         # Adicionar hora para incluir o dia inteiro
         data_de_dt = f"{data_de} 00:00:00"
         data_ate_dt = f"{data_ate} 23:59:59"
 
+        # Domain em 2 partes:
+        # - Grupo 1 (OR): TODOS os assigned (sem filtro data)
+        # - Grupo 2 (OR): done/cancel com filtro create_date/write_date
         domain = [
             ['picking_type_code', '=', 'incoming'],
             ['purchase_id', '!=', False],
-            ['state', 'in', ['assigned', 'done', 'cancel']],
+            '|',
+            # Grupo 1: TODOS os assigned (sem filtro data)
+            ['state', '=', 'assigned'],
+            # Grupo 2: done/cancel com filtro data
+            '&',
+            ['state', 'in', ['done', 'cancel']],
             '|',
             '&',
             ['create_date', '>=', data_de_dt],
@@ -324,7 +345,7 @@ class PickingRecebimentoSyncService:
             ['write_date', '<=', data_ate_dt],
         ]
 
-        logger.info(f"   Filtro: create_date/write_date entre {data_de_dt} e {data_ate_dt}")
+        logger.info(f"   Filtro: assigned=TODOS | done/cancel entre {data_de_dt} e {data_ate_dt}")
 
         campos = [
             'id', 'name', 'state', 'picking_type_code',
@@ -361,18 +382,26 @@ class PickingRecebimentoSyncService:
             ]
             logger.info("   Primeira execucao: buscando TODOS os pickings assigned")
         else:
-            # Incremental: filtro por janela de tempo
+            # Incremental: assigned SEMPRE + done/cancel com janela de tempo
             data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
+            # Domain em 2 partes:
+            # - Grupo 1 (OR): TODOS os assigned (sem filtro data)
+            # - Grupo 2 (OR): done/cancel com filtro create_date/write_date
             domain = [
                 ['picking_type_code', '=', 'incoming'],
                 ['purchase_id', '!=', False],
-                ['state', 'in', ['assigned', 'done', 'cancel']],
+                '|',
+                # Grupo 1: TODOS os assigned (sem filtro data)
+                ['state', '=', 'assigned'],
+                # Grupo 2: done/cancel com filtro data
+                '&',
+                ['state', 'in', ['done', 'cancel']],
                 '|',
                 ['create_date', '>=', data_limite],
                 ['write_date', '>=', data_limite],
             ]
-            logger.info(f"   Filtro: write_date/create_date >= {data_limite}")
+            logger.info(f"   Filtro: assigned=TODOS | done/cancel >= {data_limite}")
 
         campos = [
             'id', 'name', 'state', 'picking_type_code',
@@ -389,7 +418,7 @@ class PickingRecebimentoSyncService:
             {
                 'fields': campos,
                 'order': 'write_date desc',
-                'limit': 200,
+                'limit': 500,
             }
         )
 

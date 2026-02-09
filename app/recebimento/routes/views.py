@@ -1843,7 +1843,9 @@ def validacoes_nf_po():
             db.or_(
                 ValidacaoNfPoDfe.po_consolidado_name.ilike(f"%{filtros['po_name']}%"),
                 ValidacaoNfPoDfe.odoo_po_vinculado_name.ilike(f"%{filtros['po_name']}%"),
-                ValidacaoNfPoDfe.odoo_po_fiscal_name.ilike(f"%{filtros['po_name']}%")
+                ValidacaoNfPoDfe.odoo_po_fiscal_name.ilike(f"%{filtros['po_name']}%"),
+                # Busca tambem nos POs de origem (dentro do JSON acao_executada)
+                db.cast(ValidacaoNfPoDfe.acao_executada, db.Text).ilike(f"%{filtros['po_name']}%")
             )
         )
 

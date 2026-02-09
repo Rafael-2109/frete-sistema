@@ -552,16 +552,17 @@
                         {% elif item.titulo_pagar_id %}
                         <div class="fin-comparacao-box">
                             <div class="text-center mb-2">
-                                {% if item.match_score >= 100 %}
-                                <span class="fin-score-badge fin-score-badge--100">{{ item.match_score }}%</span>
-                                {% elif item.match_score >= 90 %}
-                                <span class="fin-score-badge fin-score-badge--90">{{ item.match_score }}%</span>
-                                {% elif item.match_score >= 80 %}
-                                <span class="fin-score-badge fin-score-badge--80">{{ item.match_score }}%</span>
-                                {% elif item.match_score >= 70 %}
-                                <span class="fin-score-badge fin-score-badge--70">{{ item.match_score }}%</span>
+                                {% set score = item.match_score or 0 %}
+                                {% if score >= 100 %}
+                                <span class="fin-score-badge fin-score-badge--100">{{ score }}%</span>
+                                {% elif score >= 90 %}
+                                <span class="fin-score-badge fin-score-badge--90">{{ score }}%</span>
+                                {% elif score >= 80 %}
+                                <span class="fin-score-badge fin-score-badge--80">{{ score }}%</span>
+                                {% elif score >= 70 %}
+                                <span class="fin-score-badge fin-score-badge--70">{{ score }}%</span>
                                 {% else %}
-                                <span class="fin-score-badge fin-score-badge--low">{{ item.match_score or 0 }}%</span>
+                                <span class="fin-score-badge fin-score-badge--low">{{ score }}%</span>
                                 {% endif %}
                             </div>
 
