@@ -542,6 +542,30 @@ Nunca invente informações."""
             },
         }
 
+        # =================================================================
+        # Agents customizados (.claude/agents/*.md)
+        # Permite que sub-agents definidos localmente funcionem via SDK web.
+        # Sem isso, Task(subagent_type="raio-x-pedido") falha com
+        # "Agent type not found" porque setting_sources=[] impede
+        # o CLI de descobrir agents por conta propria.
+        # =================================================================
+        try:
+            from ..config.agent_loader import load_agent_definitions
+
+            agents_dir = os.path.join(project_cwd, ".claude", "agents")
+            if os.path.isdir(agents_dir):
+                agent_definitions = load_agent_definitions(agents_dir)
+                if agent_definitions:
+                    options_dict["agents"] = agent_definitions
+                    logger.info(
+                        f"[AGENT_CLIENT] {len(agent_definitions)} agents carregados: "
+                        f"{list(agent_definitions.keys())}"
+                    )
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] agent_loader nao disponivel — agents ignorados")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao carregar agents customizados: {e}")
+
         # Extended Thinking
         # TODO: Migrar para adaptive thinking (thinking: {type: "adaptive"})
         #   quando claude-agent-sdk suportar o campo nativamente.
