@@ -171,6 +171,8 @@ def divergencias():
     cnpj = request.args.get('cnpj', '')
     data_ini = request.args.get('data_ini', '')
     data_fim = request.args.get('data_fim', '')
+    nome_produto = request.args.get('nome_produto', '')
+    nome_fornecedor = request.args.get('nome_fornecedor', '')
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
@@ -186,6 +188,10 @@ def divergencias():
         query = query.filter(DivergenciaFiscal.criado_em >= data_ini)
     if data_fim:
         query = query.filter(DivergenciaFiscal.criado_em <= data_fim)
+    if nome_produto:
+        query = query.filter(DivergenciaFiscal.nome_produto.ilike(f'%{nome_produto}%'))
+    if nome_fornecedor:
+        query = query.filter(DivergenciaFiscal.razao_fornecedor.ilike(f'%{nome_fornecedor}%'))
 
     # Ordenar por DFE (agrupamento visual) e depois por data decrescente
     paginacao = query.order_by(
@@ -213,7 +219,9 @@ def divergencias():
             'status': status,
             'cnpj': cnpj,
             'data_ini': data_ini,
-            'data_fim': data_fim
+            'data_fim': data_fim,
+            'nome_produto': nome_produto,
+            'nome_fornecedor': nome_fornecedor
         },
         opcoes_status=[
             ('', 'Todos'),
@@ -239,6 +247,7 @@ def primeira_compra():
     status = request.args.get('status', '')
     cnpj = request.args.get('cnpj', '')
     produto = request.args.get('produto', '')
+    nome_fornecedor = request.args.get('nome_fornecedor', '')
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
@@ -257,6 +266,8 @@ def primeira_compra():
                 CadastroPrimeiraCompra.nome_produto.ilike(f'%{produto}%')
             )
         )
+    if nome_fornecedor:
+        query = query.filter(CadastroPrimeiraCompra.razao_fornecedor.ilike(f'%{nome_fornecedor}%'))
 
     # Ordenar por DFE (agrupamento visual) e depois por data decrescente
     paginacao = query.order_by(
@@ -288,7 +299,8 @@ def primeira_compra():
         filtros={
             'status': status,
             'cnpj': cnpj,
-            'produto': produto
+            'produto': produto,
+            'nome_fornecedor': nome_fornecedor
         },
         itens_json=itens_json
     )
@@ -308,6 +320,8 @@ def perfis_fiscais():
     # Parametros de filtro
     cod_produto = request.args.get('cod_produto', '')
     cnpj = request.args.get('cnpj', '')
+    nome_produto = request.args.get('nome_produto', '')
+    nome_fornecedor = request.args.get('nome_fornecedor', '')
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
@@ -331,6 +345,14 @@ def perfis_fiscais():
             query = query.filter(
                 PerfilFiscalProdutoFornecedor.cnpj_fornecedor.ilike(f'%{cnpj}%')
             )
+    if nome_produto:
+        query = query.filter(
+            PerfilFiscalProdutoFornecedor.nome_produto.ilike(f'%{nome_produto}%')
+        )
+    if nome_fornecedor:
+        query = query.filter(
+            PerfilFiscalProdutoFornecedor.razao_fornecedor.ilike(f'%{nome_fornecedor}%')
+        )
 
     # Ordenar por data decrescente e paginar
     paginacao = query.order_by(
@@ -360,7 +382,9 @@ def perfis_fiscais():
         stats=stats,
         filtros={
             'cod_produto': cod_produto,
-            'cnpj': cnpj
+            'cnpj': cnpj,
+            'nome_produto': nome_produto,
+            'nome_fornecedor': nome_fornecedor
         }
     )
 
@@ -1781,7 +1805,8 @@ def validacoes_nf_po():
         'cnpj': request.args.get('cnpj', ''),
         'numero_nf': request.args.get('numero_nf', ''),
         'nome_fornecedor': request.args.get('nome_fornecedor', ''),
-        'empresa': request.args.get('empresa', '')
+        'empresa': request.args.get('empresa', ''),
+        'po_name': request.args.get('po_name', '')
     }
 
     # Query base
@@ -1811,6 +1836,15 @@ def validacoes_nf_po():
         cnpj_limpo = ''.join(c for c in filtros['empresa'] if c.isdigit())
         query = query.filter(
             ValidacaoNfPoDfe.cnpj_empresa_compradora.ilike(f"%{cnpj_limpo}%")
+        )
+
+    if filtros['po_name']:
+        query = query.filter(
+            db.or_(
+                ValidacaoNfPoDfe.po_consolidado_name.ilike(f"%{filtros['po_name']}%"),
+                ValidacaoNfPoDfe.odoo_po_vinculado_name.ilike(f"%{filtros['po_name']}%"),
+                ValidacaoNfPoDfe.odoo_po_fiscal_name.ilike(f"%{filtros['po_name']}%")
+            )
         )
 
     # Ordenar
@@ -1847,6 +1881,20 @@ def validacoes_nf_po():
         for p in pickings:
             if p.odoo_purchase_order_id not in pickings_map:
                 pickings_map[p.odoo_purchase_order_id] = p
+
+    # Mapa: validacao_id -> [lista de POs de origem]
+    pos_origem_map = {}
+    for item in paginacao.items:
+        if item.acao_executada and isinstance(item.acao_executada, dict):
+            pos_ajustados = item.acao_executada.get('pos_originais_ajustados', [])
+            pos_unicos = {}
+            for pa in pos_ajustados:
+                po_id = pa.get('po_id')
+                po_name = pa.get('po_name')
+                if po_id and po_name and po_id not in pos_unicos:
+                    pos_unicos[po_id] = {'id': po_id, 'name': po_name}
+            if pos_unicos:
+                pos_origem_map[item.id] = list(pos_unicos.values())
 
     # Estatisticas
     stats = {
@@ -1891,7 +1939,8 @@ def validacoes_nf_po():
         status_opcoes=status_opcoes,
         empresas_opcoes=empresas_opcoes,
         recebimentos_map=recebimentos_map,
-        pickings_map=pickings_map
+        pickings_map=pickings_map,
+        pos_origem_map=pos_origem_map
     )
 
 
@@ -1949,10 +1998,14 @@ def preview_consolidacao(validacao_id):
                 'preco_po': float(match.preco_po) if match.preco_po else 0
             })
 
+    # Cenario detectado: exact_1po, split_1po, n_pos
+    cenario = preview.get('cenario', 'n_pos') if isinstance(preview, dict) else 'n_pos'
+
     return render_template(
         'recebimento/preview_consolidacao.html',
         validacao=validacao,
         matches=matches,
         preview=preview,
-        pos_envolvidos=list(pos_envolvidos.values())
+        pos_envolvidos=list(pos_envolvidos.values()),
+        cenario=cenario
     )

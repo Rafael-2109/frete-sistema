@@ -118,8 +118,13 @@
                     </div>
                 </div>
                 <div class="row g-2 mt-2">
-                    <!-- Linha 2: Botoes -->
-                    <div class="col-12 d-flex">
+                    <!-- Linha 2: PO + Botoes -->
+                    <div class="col-md-2">
+                        <label class="form-label">PO</label>
+                        <input type="text" name="po_name" class="form-control form-control-sm"
+                               value="{{ filtros.po_name }}" placeholder="Nome PO...">
+                    </div>
+                    <div class="col-md-10 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary btn-sm me-2">
                             <i class="fas fa-search"></i> Buscar
                         </button>
@@ -144,6 +149,7 @@
                             <th>Fornecedor</th>
                             <th class="text-end">Valor</th>
                             <th class="text-center">Itens</th>
+                            <th>PO Origem</th>
                             <th class="text-center">Status</th>
                             <th>PO Consolidado</th>
                             <th class="text-center" style="width: 150px;">Acoes</th>
@@ -181,6 +187,19 @@
                                 {% endif %}
                                 {% if item.itens_sem_po %}
                                 <br><small class="text-warning">{{ item.itens_sem_po }} s/PO</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set pos_origem = pos_origem_map.get(item.id, []) %}
+                                {% if pos_origem %}
+                                    {% for po in pos_origem %}
+                                    <a href="https://odoo.nacomgoya.com.br/web#id={{ po.id }}&model=purchase.order&view_type=form"
+                                       target="_blank" class="badge bg-secondary me-1 text-decoration-none">
+                                        {{ po.name }} <i class="fas fa-external-link-alt ms-1" style="font-size: 0.6rem;"></i>
+                                    </a>
+                                    {% endfor %}
+                                {% else %}
+                                <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -255,19 +274,24 @@
                             </td>
                             <td>
                                 {% if item.po_consolidado_name %}
-                                <a href="#" class="text-info fw-bold">{{ item.po_consolidado_name }}</a>
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ item.po_consolidado_id }}&model=purchase.order&view_type=form"
+                                   target="_blank" class="text-info fw-bold text-decoration-none">
+                                    {{ item.po_consolidado_name }} <i class="fas fa-external-link-alt ms-1" style="font-size: 0.6rem;"></i>
+                                </a>
                                 {% if item.consolidado_em %}
                                 <br><small class="text-muted">{{ item.consolidado_em|formatar_data_hora_brasil }}</small>
                                 {% endif %}
                                 {% elif item.status == 'finalizado_odoo' and item.odoo_po_vinculado_name %}
-                                <span class="text-dark fw-bold" title="PO vinculado no Odoo">
-                                    <i class="fas fa-link me-1"></i>{{ item.odoo_po_vinculado_name }}
-                                </span>
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ item.odoo_po_vinculado_id }}&model=purchase.order&view_type=form"
+                                   target="_blank" class="text-dark fw-bold text-decoration-none">
+                                    <i class="fas fa-link me-1"></i>{{ item.odoo_po_vinculado_name }} <i class="fas fa-external-link-alt ms-1" style="font-size: 0.6rem;"></i>
+                                </a>
                                 <br><small class="text-muted">Vinculado no Odoo</small>
                                 {% elif item.status == 'finalizado_odoo' and item.odoo_po_fiscal_name %}
-                                <span class="text-dark fw-bold" title="PO fiscal vinculado no Odoo">
-                                    <i class="fas fa-link me-1"></i>{{ item.odoo_po_fiscal_name }}
-                                </span>
+                                <a href="https://odoo.nacomgoya.com.br/web#id={{ item.odoo_po_fiscal_id }}&model=purchase.order&view_type=form"
+                                   target="_blank" class="text-dark fw-bold text-decoration-none">
+                                    <i class="fas fa-link me-1"></i>{{ item.odoo_po_fiscal_name }} <i class="fas fa-external-link-alt ms-1" style="font-size: 0.6rem;"></i>
+                                </a>
                                 <br><small class="text-muted">PO Fiscal (Odoo)</small>
                                 {% else %}
                                 <span class="text-muted">-</span>
@@ -311,7 +335,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
+                            <td colspan="9" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
                                 Nenhuma validacao encontrada
                             </td>
@@ -329,7 +353,7 @@
         <ul class="pagination justify-content-center">
             {% if paginacao.page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}">
+                <a class="page-link" href="?page={{ paginacao.page - 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}&po_name={{ filtros.po_name }}">
                     <i class="fas fa-chevron-left"></i>
                 </a>
             </li>
@@ -337,13 +361,13 @@
 
             {% for p in range(1, paginacao.pages + 1) %}
             <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}">{{ p }}</a>
+                <a class="page-link" href="?page={{ p }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}&po_name={{ filtros.po_name }}">{{ p }}</a>
             </li>
             {% endfor %}
 
             {% if paginacao.page < paginacao.pages %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}">
+                <a class="page-link" href="?page={{ paginacao.page + 1 }}&status={{ filtros.status }}&cnpj={{ filtros.cnpj }}&numero_nf={{ filtros.numero_nf }}&nome_fornecedor={{ filtros.nome_fornecedor }}&empresa={{ filtros.empresa }}&po_name={{ filtros.po_name }}">
                     <i class="fas fa-chevron-right"></i>
                 </a>
             </li>
@@ -383,6 +407,11 @@
                         <i class="fas fa-info-circle"></i>
                         Período máximo: 90 dias. Limite: 100 DFEs por execução.
                     </small>
+                </div>
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="fas fa-clock me-2"></i>
+                    <strong>Nota:</strong> Esta operação inclui sincronização completa de POs, alocações e pickings.
+                    Pode levar 2-3 minutos.
                 </div>
             </div>
             <div class="modal-footer">

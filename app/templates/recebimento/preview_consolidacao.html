@@ -50,6 +50,295 @@
     </div>
     {% else %}
 
+    {# ================================================================= #}
+    {# CENARIO A: exact_1po — Exact Match (NF vincula direto ao PO)      #}
+    {# ================================================================= #}
+    {% if cenario == 'exact_1po' %}
+
+    <div class="alert alert-success mb-4">
+        <h5><i class="fas fa-check-circle me-2"></i>Match Exato Detectado</h5>
+        <p class="mb-0">As quantidades da NF correspondem exatamente ao PO existente. A NF será vinculada diretamente ao PO sem necessidade de criar novos pedidos.</p>
+    </div>
+
+    <!-- Resumo Visual -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h5 class="text-success"><i class="fas fa-link"></i></h5>
+                    <h3 class="mb-0">Vinculação Direta</h3>
+                    <small class="text-muted">Nenhum PO criado</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="text-primary"><i class="fas fa-shopping-cart"></i></h5>
+                    <h3 class="mb-0">1</h3>
+                    <small class="text-muted">PO Existente</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="text-info"><i class="fas fa-list"></i></h5>
+                    <h3 class="mb-0">{{ preview.resumo.itens_no_conciliador }}</h3>
+                    <small class="text-muted">Itens Casados</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PO que será vinculado -->
+    <div class="card mb-4 border-success">
+        <div class="card-header bg-success text-white">
+            <h6 class="mb-0">
+                <i class="fas fa-link me-2"></i>
+                PO EXISTENTE (será vinculado à NF)
+                <span class="badge bg-light text-success ms-2">MATCH EXATO</span>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Produto</th>
+                            <th class="text-center">Qtd NF</th>
+                            <th class="text-end">Preço Unit.</th>
+                            <th class="text-end">Valor</th>
+                            <th>PO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if preview.po_conciliador and preview.po_conciliador.itens %}
+                        {% for item in preview.po_conciliador.itens %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.cod_produto }}</strong>
+                                <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
+                            </td>
+                            <td class="text-center">{{ item.qtd|int }} un</td>
+                            <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
+                            <td class="text-end">R$ {{ "%.2f"|format(item.valor) }}</td>
+                            <td><span class="badge bg-primary">{{ item.po_origem }}</span></td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-success">
+                            <td colspan="3"><strong>TOTAL</strong></td>
+                            <td class="text-end"><strong>R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td></td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerta Exact Match -->
+    <div class="alert alert-info">
+        <h5><i class="fas fa-info-circle me-2"></i>O que acontecerá</h5>
+        <ul class="mb-0">
+            <li>A NF será <strong>vinculada diretamente</strong> ao PO existente.</li>
+            <li><strong>Nenhum PO novo</strong> será criado.</li>
+            <li>As quantidades do PO <strong>não serão alteradas</strong>.</li>
+            <li>Esta é a operação mais simples e rápida.</li>
+        </ul>
+    </div>
+
+    {# ================================================================= #}
+    {# CENARIO B: split_1po — Split de 1 PO (ajustar + criar PO Saldo)  #}
+    {# ================================================================= #}
+    {% elif cenario == 'split_1po' %}
+
+    <div class="alert alert-info mb-4">
+        <h5><i class="fas fa-cut me-2"></i>Split de PO Detectado</h5>
+        <p class="mb-2">A NF consome apenas parte do PO. Esta operação irá:</p>
+        <ol class="mb-0">
+            <li><strong>Ajustar o PO original</strong> para casar com as quantidades da NF</li>
+            <li><strong>Criar um PO Saldo</strong> com a diferença restante (para futuras entregas)</li>
+            <li><strong>Vincular a NF</strong> ao PO original ajustado</li>
+        </ol>
+    </div>
+
+    <!-- Resumo Visual -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h5 class="text-primary"><i class="fas fa-edit"></i></h5>
+                    <h3 class="mb-0">PO Ajustado</h3>
+                    <small class="text-muted">Qtd reduzida para NF</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h5 class="text-warning"><i class="fas fa-plus-square"></i></h5>
+                    <h3 class="mb-0">PO Saldo</h3>
+                    <small class="text-muted">Será criado NOVO</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="text-info"><i class="fas fa-list"></i></h5>
+                    <h3 class="mb-0">{{ preview.resumo.itens_no_conciliador }}</h3>
+                    <small class="text-muted">Itens da NF</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PO Original (será ajustado) -->
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0">
+                <i class="fas fa-edit me-2"></i>
+                PO ORIGINAL (será ajustado para NF)
+                <span class="badge bg-light text-primary ms-2">AJUSTADO</span>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0" id="tabelaItensEditaveis">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Produto</th>
+                            <th class="text-center">Qtd NF</th>
+                            <th class="text-center">Qtd Alocada</th>
+                            <th class="text-end">Preco Unit.</th>
+                            <th class="text-end">Valor</th>
+                            <th>PO</th>
+                            <th class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if preview.po_conciliador and preview.po_conciliador.itens %}
+                        {% for item in preview.po_conciliador.itens %}
+                        <tr data-cod-produto="{{ item.cod_produto }}" data-po-origem="{{ item.po_origem }}">
+                            <td>
+                                <strong>{{ item.cod_produto }}</strong>
+                                <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
+                            </td>
+                            <td class="text-center">
+                                <span class="qtd-nf-ref" data-qtd-nf="{{ item.qtd_nf|default(item.qtd, true) }}">{{ (item.qtd_nf|default(item.qtd, true))|int }} un</span>
+                            </td>
+                            <td class="text-center">
+                                <input type="number"
+                                       class="form-control form-control-sm text-center qty-input"
+                                       data-cod-produto="{{ item.cod_produto }}"
+                                       data-po-origem="{{ item.po_origem }}"
+                                       data-preco="{{ item.preco }}"
+                                       value="{{ item.qtd|int }}"
+                                       min="0"
+                                       step="1"
+                                       max="{{ (item.qtd_max|default(item.qtd, true))|int }}"
+                                       style="width: 90px; display: inline-block;">
+                                <small class="text-muted d-block">max: {{ (item.qtd_max|default(item.qtd, true))|int }}</small>
+                            </td>
+                            <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
+                            <td class="text-end valor-linha">R$ {{ "%.2f"|format(item.valor) }}</td>
+                            <td><span class="badge bg-primary">{{ item.po_origem }}</span></td>
+                            <td class="text-center status-match">
+                                <i class="fas fa-check-circle text-success"></i>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-primary">
+                            <td colspan="4"><strong>TOTAL (NF)</strong></td>
+                            <td class="text-end"><strong id="totalValorSplit">R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de validacao de quantidades -->
+    <div id="alertaQtdSplit" class="alert alert-info d-none mb-4">
+        <i class="fas fa-info-circle me-2"></i>
+        <span id="msgQtdSplit"></span>
+    </div>
+
+    <!-- PO Saldo (será criado) -->
+    {% if preview.pos_originais %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="mb-0">
+                <i class="fas fa-plus-square me-2"></i>
+                PO SALDO (será criado com restante)
+                <span class="badge bg-light text-warning ms-2">NOVO</span>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>PO Original</th>
+                            <th>Produto</th>
+                            <th class="text-center">Qtd Original</th>
+                            <th class="text-center">Usado na NF</th>
+                            <th class="text-center">SALDO (novo PO)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for po in preview.pos_originais %}
+                        {% for item in po.itens %}
+                        <tr>
+                            {% if loop.first %}
+                            <td rowspan="{{ po.itens|length }}">
+                                <strong class="text-primary">{{ po.po_name }}</strong>
+                            </td>
+                            {% endif %}
+                            <td>
+                                <strong>{{ item.cod_produto }}</strong>
+                                <br><small class="text-muted">{{ (item.nome_produto or '')[:40] }}{% if (item.nome_produto or '')|length > 40 %}...{% endif %}</small>
+                            </td>
+                            <td class="text-center">{{ item.qtd_original|int }} un</td>
+                            <td class="text-center text-danger">-{{ item.qtd_usada|int }} un</td>
+                            <td class="text-center">
+                                {% if item.qtd_saldo > 0 %}
+                                <strong class="text-warning">{{ item.qtd_saldo|int }} un</strong>
+                                {% else %}
+                                <span class="text-muted">0 un</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Alerta Split -->
+    <div class="alert alert-warning">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>Atenção!</h5>
+        <ul class="mb-0">
+            <li>O PO original terá suas quantidades <strong>REDUZIDAS</strong> para casar com a NF.</li>
+            <li>Um <strong>NOVO PO Saldo</strong> será criado com a diferença restante.</li>
+            <li>A NF será vinculada ao PO original (ajustado).</li>
+            <li>Esta operação pode ser revertida se necessário.</li>
+        </ul>
+    </div>
+
+    {# ================================================================= #}
+    {# CENARIO C: n_pos — N POs (criar PO Conciliador) — LAYOUT ORIGINAL #}
+    {# ================================================================= #}
+    {% else %}
+
     <!-- Explicação da Operação -->
     <div class="alert alert-info mb-4">
         <h5><i class="fas fa-info-circle me-2"></i>Como funciona o SPLIT/Consolidação</h5>
@@ -106,39 +395,60 @@
         <div class="card-header bg-success text-white">
             <h6 class="mb-0">
                 <i class="fas fa-plus-square me-2"></i>
-                PO CONCILIADOR (será criado)
+                PO CONCILIADOR (sera criado)
                 <span class="badge bg-light text-success ms-2">NOVO</span>
             </h6>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-bordered table-hover mb-0">
+                <table class="table table-bordered table-hover mb-0" id="tabelaItensEditaveis">
                     <thead class="table-light">
                         <tr>
                             <th>Produto</th>
-                            <th class="text-center">Qtd</th>
-                            <th class="text-end">Preço Unit.</th>
+                            <th class="text-center">Qtd NF</th>
+                            <th class="text-center">Qtd Alocada</th>
+                            <th class="text-end">Preco Unit.</th>
                             <th class="text-end">Valor</th>
                             <th>Origem</th>
+                            <th class="text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if preview.po_conciliador and preview.po_conciliador.itens %}
                         {% for item in preview.po_conciliador.itens %}
-                        <tr>
+                        <tr data-cod-produto="{{ item.cod_produto }}" data-po-origem="{{ item.po_origem }}">
                             <td>
                                 <strong>{{ item.cod_produto }}</strong>
                                 <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
                             </td>
-                            <td class="text-center">{{ item.qtd|int }} un</td>
+                            <td class="text-center">
+                                <span class="qtd-nf-ref" data-qtd-nf="{{ item.qtd_nf|default(item.qtd, true) }}">{{ (item.qtd_nf|default(item.qtd, true))|int }} un</span>
+                            </td>
+                            <td class="text-center">
+                                <input type="number"
+                                       class="form-control form-control-sm text-center qty-input"
+                                       data-cod-produto="{{ item.cod_produto }}"
+                                       data-po-origem="{{ item.po_origem }}"
+                                       data-preco="{{ item.preco }}"
+                                       value="{{ item.qtd|int }}"
+                                       min="0"
+                                       step="1"
+                                       max="{{ (item.qtd_max|default(item.qtd, true))|int }}"
+                                       style="width: 90px; display: inline-block;">
+                                <small class="text-muted d-block">max: {{ (item.qtd_max|default(item.qtd, true))|int }}</small>
+                            </td>
                             <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
-                            <td class="text-end">R$ {{ "%.2f"|format(item.valor) }}</td>
+                            <td class="text-end valor-linha">R$ {{ "%.2f"|format(item.valor) }}</td>
                             <td><span class="badge bg-secondary">{{ item.po_origem }}</span></td>
+                            <td class="text-center status-match">
+                                <i class="fas fa-check-circle text-success"></i>
+                            </td>
                         </tr>
                         {% endfor %}
                         <tr class="table-success">
-                            <td colspan="3"><strong>TOTAL DO PO CONCILIADOR</strong></td>
-                            <td class="text-end"><strong>R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td colspan="4"><strong>TOTAL DO PO CONCILIADOR</strong></td>
+                            <td class="text-end"><strong id="totalValorNpos">R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td></td>
                             <td></td>
                         </tr>
                         {% endif %}
@@ -146,6 +456,12 @@
                 </table>
             </div>
         </div>
+    </div>
+
+    <!-- Indicador de validacao de quantidades -->
+    <div id="alertaQtdNpos" class="alert alert-info d-none mb-4">
+        <i class="fas fa-info-circle me-2"></i>
+        <span id="msgQtdNpos"></span>
     </div>
 
     <!-- POs Originais (ficarão com SALDO) -->
@@ -211,7 +527,21 @@
         </div>
     </div>
 
-    <!-- Lista de Ações -->
+    <!-- Alerta N POs -->
+    <div class="alert alert-warning">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>Atenção!</h5>
+        <ul class="mb-0">
+            <li>Ao confirmar, um <strong>NOVO PO Conciliador</strong> será criado no Odoo.</li>
+            <li>Os POs originais terão suas quantidades <strong>REDUZIDAS</strong> para o saldo restante.</li>
+            <li>A NF será vinculada ao PO Conciliador criado.</li>
+            <li>Esta operação pode ser parcialmente revertida se necessário.</li>
+        </ul>
+    </div>
+
+    {% endif %}
+
+    <!-- Lista de Ações (comum a todos cenários) -->
+    {% if preview.acoes %}
     <div class="card mb-4">
         <div class="card-header bg-dark text-white">
             <h6 class="mb-0"><i class="fas fa-list-ol me-2"></i>Ações que Serão Executadas no Odoo ({{ preview.acoes|length }} ações)</h6>
@@ -239,43 +569,199 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Alerta -->
-    <div class="alert alert-warning">
-        <h5><i class="fas fa-exclamation-triangle me-2"></i>Atenção!</h5>
-        <ul class="mb-0">
-            <li>Ao confirmar, um <strong>NOVO PO Conciliador</strong> será criado no Odoo.</li>
-            <li>Os POs originais terão suas quantidades <strong>REDUZIDAS</strong> para o saldo restante.</li>
-            <li>A NF será vinculada ao PO Conciliador criado.</li>
-            <li>Esta operação pode ser parcialmente revertida se necessário.</li>
-        </ul>
-    </div>
-
-    <!-- Botões de Ação -->
+    <!-- Botoes de Acao -->
     <div class="d-flex justify-content-end gap-3">
         <a href="{{ url_for('recebimento_views.validacoes_nf_po') }}" class="btn btn-lg btn-outline-secondary">
             <i class="fas fa-times me-2"></i>Cancelar
         </a>
-        <button type="button" class="btn btn-lg btn-success" onclick="confirmarConsolidacao()">
-            <i class="fas fa-check me-2"></i>Confirmar SPLIT/Consolidação
+        <button type="button" id="btnConfirmar" class="btn btn-lg btn-success" onclick="confirmarConsolidacao()">
+            <i class="fas fa-check me-2"></i>
+            {% if cenario == 'exact_1po' %}
+            Confirmar Vinculacao
+            {% elif cenario == 'split_1po' %}
+            Confirmar Split
+            {% else %}
+            Confirmar SPLIT/Consolidacao
+            {% endif %}
         </button>
     </div>
 
-    {% endif %}
+    {% endif %}{# fim do if preview.erro #}
 </div>
 
 {# Styles moved to app/static/css/modules/_recebimento.css #}
 
 <script>
+const CENARIO = '{{ cenario }}';
+
+// =========================================================================
+// COLETA DE QUANTIDADES EDITADAS
+// =========================================================================
+function coletarQuantidades() {
+    const quantidades = {};
+    document.querySelectorAll('.qty-input').forEach(input => {
+        const codProduto = input.dataset.codProduto;
+        const poOrigem = input.dataset.poOrigem;
+        const chave = codProduto + ':' + poOrigem;
+        quantidades[chave] = parseInt(input.value, 10) || 0;
+    });
+    return quantidades;
+}
+
+// =========================================================================
+// RECALCULAR TOTAIS E VALIDAR
+// =========================================================================
+function recalcularTotais() {
+    if (CENARIO === 'exact_1po') return; // Nao editavel
+
+    // Agrupar qtd alocada por cod_produto
+    const somasPorProduto = {};
+    const qtdNfPorProduto = {};
+    let valorTotal = 0;
+    let todasOk = true;
+
+    document.querySelectorAll('.qty-input').forEach(input => {
+        const codProduto = input.dataset.codProduto;
+        const preco = parseFloat(input.dataset.preco) || 0;
+        const qtd = parseInt(input.value, 10) || 0;
+        const max = parseInt(input.max, 10) || 0;
+
+        // Validar limites
+        if (qtd < 0 || qtd > max) {
+            input.classList.add('is-invalid');
+            todasOk = false;
+        } else {
+            input.classList.remove('is-invalid');
+        }
+
+        // Soma por produto
+        if (!somasPorProduto[codProduto]) somasPorProduto[codProduto] = 0;
+        somasPorProduto[codProduto] += qtd;
+
+        // Atualizar valor da linha
+        const valorLinha = qtd * preco;
+        valorTotal += valorLinha;
+        const tr = input.closest('tr');
+        const tdValor = tr.querySelector('.valor-linha');
+        if (tdValor) {
+            tdValor.textContent = 'R$ ' + valorLinha.toFixed(2);
+        }
+    });
+
+    // Coletar qtd_nf por produto
+    document.querySelectorAll('.qtd-nf-ref').forEach(span => {
+        const tr = span.closest('tr');
+        const codProduto = tr.dataset.codProduto;
+        const qtdNf = parseFloat(span.dataset.qtdNf) || 0;
+        // Usar a PRIMEIRA referencia encontrada (todas as linhas do mesmo produto tem o mesmo qtd_nf)
+        if (!qtdNfPorProduto[codProduto]) {
+            qtdNfPorProduto[codProduto] = qtdNf;
+        }
+    });
+
+    // Atualizar status match por produto (nos indicators de cada linha)
+    let algumDivergente = false;
+    document.querySelectorAll('#tabelaItensEditaveis tbody tr[data-cod-produto]').forEach(tr => {
+        const codProduto = tr.dataset.codProduto;
+        const statusTd = tr.querySelector('.status-match');
+        if (!statusTd) return;
+
+        const somaAtual = somasPorProduto[codProduto] || 0;
+        const qtdNf = qtdNfPorProduto[codProduto] || 0;
+
+        if (somaAtual === qtdNf) {
+            statusTd.innerHTML = '<i class="fas fa-check-circle text-success" title="Quantidade bate com NF"></i>';
+        } else {
+            statusTd.innerHTML = '<i class="fas fa-exclamation-triangle text-danger" title="Soma (' + somaAtual + ') diferente da NF (' + qtdNf + ')"></i>';
+            algumDivergente = true;
+        }
+    });
+
+    // Atualizar total
+    const totalEl = document.getElementById('totalValorSplit') || document.getElementById('totalValorNpos');
+    if (totalEl) {
+        totalEl.textContent = 'R$ ' + valorTotal.toFixed(2);
+    }
+
+    // Atualizar alerta e botao
+    const alertaId = CENARIO === 'split_1po' ? 'alertaQtdSplit' : 'alertaQtdNpos';
+    const msgId = CENARIO === 'split_1po' ? 'msgQtdSplit' : 'msgQtdNpos';
+    const alerta = document.getElementById(alertaId);
+    const msg = document.getElementById(msgId);
+    const btnConfirmar = document.getElementById('btnConfirmar');
+
+    if (algumDivergente || !todasOk) {
+        if (alerta) {
+            alerta.classList.remove('d-none', 'alert-success');
+            alerta.classList.add('alert-warning');
+        }
+        if (msg) {
+            let detalhes = [];
+            for (const [cod, soma] of Object.entries(somasPorProduto)) {
+                const esperado = qtdNfPorProduto[cod] || 0;
+                if (soma !== esperado) {
+                    detalhes.push(cod + ': alocado ' + soma + ' / NF ' + esperado);
+                }
+            }
+            msg.textContent = 'Quantidades divergentes: ' + detalhes.join('; ');
+        }
+        if (btnConfirmar) {
+            btnConfirmar.disabled = true;
+            btnConfirmar.title = 'Ajuste as quantidades para igualar a NF';
+        }
+    } else {
+        if (alerta) {
+            alerta.classList.remove('d-none', 'alert-warning');
+            alerta.classList.add('alert-success');
+        }
+        if (msg) {
+            msg.textContent = 'Todas as quantidades conferem com a NF.';
+        }
+        if (btnConfirmar) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.title = '';
+        }
+    }
+}
+
+// =========================================================================
+// CONFIRMAR CONSOLIDACAO
+// =========================================================================
 function confirmarConsolidacao() {
-    if (!confirm('CONFIRMAÇÃO FINAL\n\nVocê tem certeza que deseja executar o SPLIT/Consolidação?\n\n• Um NOVO PO Conciliador será criado\n• Os POs originais terão quantidades reduzidas\n• A NF será vinculada ao novo PO')) {
+    let mensagem = 'CONFIRMACAO FINAL\n\n';
+
+    if (CENARIO === 'exact_1po') {
+        mensagem += 'Vincular a NF diretamente ao PO existente?\n\n';
+        mensagem += '- Nenhum PO novo sera criado\n';
+        mensagem += '- A NF sera vinculada ao PO existente';
+    } else if (CENARIO === 'split_1po') {
+        mensagem += 'Executar o Split do PO?\n\n';
+        mensagem += '- O PO original sera ajustado para as quantidades informadas\n';
+        mensagem += '- Um novo PO Saldo sera criado com a diferenca\n';
+        mensagem += '- A NF sera vinculada ao PO original ajustado';
+    } else {
+        mensagem += 'Executar o SPLIT/Consolidacao?\n\n';
+        mensagem += '- Um NOVO PO Conciliador sera criado\n';
+        mensagem += '- Os POs originais terao quantidades reduzidas\n';
+        mensagem += '- A NF sera vinculada ao novo PO';
+    }
+
+    if (!confirm(mensagem)) {
         return;
     }
 
     // Mostrar loading
-    const btn = event.target;
+    const btn = document.getElementById('btnConfirmar');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+    // Montar body - incluir quantidades customizadas para split_1po e n_pos
+    const body = {};
+    if (CENARIO !== 'exact_1po') {
+        body.quantidades = coletarQuantidades();
+    }
 
     fetch('/api/recebimento/consolidar-pos/{{ validacao.id }}', {
         method: 'POST',
@@ -283,24 +769,48 @@ function confirmarConsolidacao() {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
         },
-        body: JSON.stringify({})
+        body: JSON.stringify(body)
     })
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
-            alert('SPLIT/Consolidação realizada com sucesso!\n\nPO Conciliador criado: ' + data.po_consolidado_name);
+            let msgSucesso = '';
+            if (CENARIO === 'exact_1po') {
+                msgSucesso = 'NF vinculada com sucesso ao PO ' + data.po_consolidado_name;
+            } else if (CENARIO === 'split_1po') {
+                msgSucesso = 'Split realizado com sucesso!\nPO ajustado: ' + data.po_consolidado_name;
+            } else {
+                msgSucesso = 'SPLIT/Consolidacao realizada com sucesso!\nPO Conciliador criado: ' + data.po_consolidado_name;
+            }
+            alert(msgSucesso);
             window.location.href = '{{ url_for("recebimento_views.validacoes_nf_po") }}';
         } else {
-            alert('Erro na operação: ' + (data.erro || 'Erro desconhecido'));
+            alert('Erro na operacao: ' + (data.erro || 'Erro desconhecido'));
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check me-2"></i>Confirmar SPLIT/Consolidação';
+            btn.innerHTML = '<i class="fas fa-check me-2"></i>Confirmar';
         }
     })
     .catch(err => {
         alert('Erro ao comunicar com o servidor: ' + err);
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check me-2"></i>Confirmar SPLIT/Consolidação';
+        btn.innerHTML = '<i class="fas fa-check me-2"></i>Confirmar';
     });
 }
+
+// =========================================================================
+// INICIALIZACAO
+// =========================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Bind evento de input nos campos editaveis
+    document.querySelectorAll('.qty-input').forEach(input => {
+        input.addEventListener('input', recalcularTotais);
+        input.addEventListener('change', recalcularTotais);
+    });
+
+    // Calcular estado inicial
+    if (CENARIO !== 'exact_1po') {
+        recalcularTotais();
+    }
+});
 </script>
 {% endblock %}

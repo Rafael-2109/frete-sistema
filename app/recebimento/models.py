@@ -707,6 +707,10 @@ class ValidacaoNfPoDfe(db.Model):
     # Formato: [{"id": 123, "name": "PO00456"}, {"id": 456, "name": "PO00789"}]
     po_ids_usados = db.Column(db.Text, nullable=True)
 
+    # Cenario de consolidacao usado (detectado automaticamente)
+    # Valores: 'exact_1po' (match exato 1 PO), 'split_1po' (1 PO com split), 'n_pos' (N POs consolidados)
+    cenario_consolidacao = db.Column(db.String(20), nullable=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     validado_em = db.Column(db.DateTime, nullable=True)

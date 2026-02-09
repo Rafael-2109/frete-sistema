@@ -1187,12 +1187,16 @@ def consolidar_pos(validacao_id):
             reverse=True
         )
 
+        # Extrair quantidades customizadas (Fase 4 - edicao de qtd)
+        quantidades_customizadas = data.get('quantidades')
+
         # Executar consolidacao
         service = OdooPoService()
         resultado = service.consolidar_pos(
             validacao_id=validacao_id,
             pos_para_consolidar=pos_para_consolidar,
-            usuario=current_user.nome if current_user else None
+            usuario=current_user.nome if current_user else None,
+            quantidades_customizadas=quantidades_customizadas
         )
 
         if resultado['sucesso']:
@@ -1514,7 +1518,8 @@ def executar_validacao_manual():
     """
     try:
         from app.recebimento.jobs.validacao_recebimento_job import executar_validacao_recebimento
-        from datetime import datetime as dt, timedelta
+        from datetime import datetime
+        from app.utils.timezone import agora_utc_naive
 
         data = request.get_json(silent=True) or {}
         data_de = data.get('data_de')  # Formato: YYYY-MM-DD
@@ -1522,8 +1527,8 @@ def executar_validacao_manual():
 
         if data_de and data_ate:
             # Converter datas absolutas para minutos_janela
-            dt_de = dt.strptime(data_de, '%Y-%m-%d')
-            agora = dt.utcnow()
+            dt_de = datetime.strptime(data_de, '%Y-%m-%d')
+            agora = agora_utc_naive()
 
             # Janela = diferenca entre agora e data_de (em minutos)
             minutos_janela = int((agora - dt_de).total_seconds() / 60)

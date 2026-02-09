@@ -130,6 +130,7 @@ function renderizarTabelaItensNf(itensNf, posCandidatos) {
         for (const po of posCandidatos) {
             const linhaMatch = po.linhas.find(l => l.match_item_nf === item.cod_produto_fornecedor);
             if (linhaMatch) {
+                const poUrl = po.po_id ? `https://odoo.nacomgoya.com.br/web#id=${po.po_id}&model=purchase.order&view_type=form` : '';
                 const div = linhaMatch.divergencias;
                 if (div) {
                     const qtdOk = div.qtd_ok;
@@ -137,18 +138,24 @@ function renderizarTabelaItensNf(itensNf, posCandidatos) {
                     const dataOk = div.data_ok !== false;
                     const todosOk = qtdOk && precoOk && dataOk;
                     if (todosOk) {
-                        poMatchBadges.push(`<span class="badge bg-success">${po.po_name}</span>`);
+                        poMatchBadges.push(poUrl
+                            ? `<a href="${poUrl}" target="_blank" class="text-decoration-none"><span class="badge bg-success">${po.po_name}</span></a>`
+                            : `<span class="badge bg-success">${po.po_name}</span>`);
                     } else {
                         // Match com divergencia - mostrar quais problemas
                         const problemas = [];
                         if (!qtdOk) problemas.push('Qtd');
                         if (!precoOk) problemas.push('Preco');
                         if (!dataOk) problemas.push('Data');
-                        poMatchBadges.push(`<span class="badge bg-warning text-dark" title="${problemas.join(', ')}">${po.po_name} <i class="fas fa-exclamation-circle"></i></span>`);
+                        poMatchBadges.push(poUrl
+                            ? `<a href="${poUrl}" target="_blank" class="text-decoration-none"><span class="badge bg-warning text-dark" title="${problemas.join(', ')}">${po.po_name} <i class="fas fa-exclamation-circle"></i></span></a>`
+                            : `<span class="badge bg-warning text-dark" title="${problemas.join(', ')}">${po.po_name} <i class="fas fa-exclamation-circle"></i></span>`);
                     }
                 } else {
                     // Sem dados de divergencia - badge neutro
-                    poMatchBadges.push(`<span class="badge bg-secondary">${po.po_name}</span>`);
+                    poMatchBadges.push(poUrl
+                        ? `<a href="${poUrl}" target="_blank" class="text-decoration-none"><span class="badge bg-secondary">${po.po_name}</span></a>`
+                        : `<span class="badge bg-secondary">${po.po_name}</span>`);
                 }
             }
         }
@@ -232,7 +239,10 @@ function renderizarPosCandidatos(posCandidatos, itensNf) {
                             data-bs-target="#collapsePo${idx}">
                         <div class="d-flex justify-content-between w-100 me-3">
                             <div>
-                                <strong>${po.po_name}</strong>
+                                ${po.po_id
+                                    ? `<a href="https://odoo.nacomgoya.com.br/web#id=${po.po_id}&model=purchase.order&view_type=form" target="_blank" class="text-decoration-none fw-bold">${po.po_name} <i class="fas fa-external-link-alt" style="font-size: 0.6rem;"></i></a>`
+                                    : `<strong>${po.po_name}</strong>`
+                                }
                                 ${matchBadge}
                             </div>
                             <div>

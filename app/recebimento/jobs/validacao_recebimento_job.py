@@ -20,14 +20,20 @@ Para reduzir tempo de execução de ~90s para ~5-15s:
 - Skip DFEs finalizados no Odoo
 - Reprocessa apenas quando algo REALMENTE mudou
 
-Fluxo:
+Fluxo (10 passos):
 1. Sync De-Para do Odoo (product.supplierinfo)
 2. Sync POs vinculados (DFEs sem PO -> verifica se Odoo agora tem)
-3. Buscar DFEs de compra com SKIP INTELIGENTE
-4. Para cada DFE que PRECISA processar:
+3. Corrigir status aprovados com PO faturado
+4. Sync Pedidos de Compra do Odoo
+5. Sync Alocacoes de Compra do Odoo
+6. Sync Requisicoes de Compra do Odoo
+7. Detectar mudancas em POs (marca DFEs para revalidacao)
+8. Buscar DFEs de compra com SKIP INTELIGENTE
+9. Para cada DFE que PRECISA processar:
    a) Executar validacao fiscal (Fase 1)
    b) Executar validacao NF x PO (Fase 2)
    c) Ambas devem aprovar para DFE ser liberado
+10. Sync Pickings de Recebimento do Odoo
 
 Referencia:
 - .claude/references/RECEBIMENTO_MATERIAIS.md
@@ -35,10 +41,8 @@ Referencia:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, List, Any
-
-from flask import current_app
 from app.utils.timezone import agora_utc_naive
 from app import db
 from app.recebimento.models import ValidacaoFiscalDfe, ValidacaoNfPoDfe
@@ -46,6 +50,11 @@ from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalSer
 from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService
 from app.recebimento.services.depara_service import DeparaService
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
+from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
+from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
+from app.recebimento.services.po_changes_detector_service import PoChangesDetectorService
+from app.recebimento.services.picking_recebimento_sync_service import PickingRecebimentoSyncService
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +82,11 @@ class ValidacaoRecebimentoJob:
         self.service_fiscal = ValidacaoFiscalService()
         self.service_nf_po = ValidacaoNfPoService()
         self.service_depara = DeparaService()
+        self.service_pedidos_compra = PedidoComprasServiceOtimizado()
+        self.service_alocacoes = AlocacaoComprasServiceOtimizado()
+        self.service_requisicoes = RequisicaoComprasService()
+        self.service_po_changes = PoChangesDetectorService()
+        self.service_pickings = PickingRecebimentoSyncService()
 
     def _get_odoo(self):
         """Obtem conexao Odoo lazy"""
@@ -99,8 +113,13 @@ class ValidacaoRecebimentoJob:
             'sync_depara': {},
             'sync_pos_vinculados': {},
             'correcao_status': {},
+            'sync_pedidos_compra': {},
+            'sync_alocacoes': {},
+            'sync_requisicoes': {},
+            'deteccao_mudancas_pos': {},
             'fase1_fiscal': {},
             'fase2_nf_po': {},
+            'sync_pickings': {},
             'dfes_processados': 0,
             'erro': None
         }
@@ -110,19 +129,35 @@ class ValidacaoRecebimentoJob:
             logger.info(f"Janela: {janela} minutos")
 
             # 1. SYNC DE-PARA (Odoo -> Sistema)
-            logger.info("[1/5] Sincronizando De-Para do Odoo...")
+            logger.info("[1/10] Sincronizando De-Para do Odoo...")
             resultado['sync_depara'] = self._sync_depara_odoo()
 
             # 2. SYNC POs VINCULADOS (DFEs sem PO -> verifica se Odoo agora tem)
-            logger.info("[2/5] Sincronizando POs vinculados do Odoo...")
+            logger.info("[2/10] Sincronizando POs vinculados do Odoo...")
             resultado['sync_pos_vinculados'] = self._sync_pos_vinculados()
 
-            # 2.5 CORRIGIR STATUS DE DFEs APROVADOS COM PO JÁ FATURADO
-            logger.info("[2.5/5] Corrigindo status de DFEs aprovados com PO faturado...")
+            # 3. CORRIGIR STATUS DE DFEs APROVADOS COM PO JÁ FATURADO
+            logger.info("[3/10] Corrigindo status de DFEs aprovados com PO faturado...")
             resultado['correcao_status'] = self._corrigir_status_aprovados_com_po_faturado()
 
-            # 3. BUSCAR DFEs PENDENTES
-            logger.info("[3/5] Buscando DFEs de compra pendentes...")
+            # 4. SYNC PEDIDOS DE COMPRA
+            logger.info("[4/10] Sincronizando Pedidos de Compra...")
+            resultado['sync_pedidos_compra'] = self._sync_pedidos_compra()
+
+            # 5. SYNC ALOCAÇÕES DE COMPRA
+            logger.info("[5/10] Sincronizando Alocações de Compra...")
+            resultado['sync_alocacoes'] = self._sync_alocacoes_compra()
+
+            # 6. SYNC REQUISIÇÕES DE COMPRA
+            logger.info("[6/10] Sincronizando Requisições de Compra...")
+            resultado['sync_requisicoes'] = self._sync_requisicoes_compra()
+
+            # 7. DETECTAR MUDANÇAS EM POs
+            logger.info("[7/10] Detectando mudanças em POs...")
+            resultado['deteccao_mudancas_pos'] = self._detectar_mudancas_pos()
+
+            # 8. BUSCAR DFEs PENDENTES
+            logger.info("[8/10] Buscando DFEs de compra pendentes...")
             dfes = self._buscar_dfes_pendentes(janela)
 
             if not dfes:
@@ -131,8 +166,8 @@ class ValidacaoRecebimentoJob:
 
             logger.info(f"Encontrados {len(dfes)} DFEs para processar")
 
-            # 4. PROCESSAR CADA DFE (Fase 1 + Fase 2)
-            logger.info("[4/5] Processando validacoes...")
+            # 9. PROCESSAR CADA DFE (Fase 1 + Fase 2)
+            logger.info("[9/10] Processando validacoes...")
 
             resultado['fase1_fiscal'] = {
                 'dfes_validados': 0,
@@ -183,6 +218,10 @@ class ValidacaoRecebimentoJob:
                     logger.error(f"Erro ao processar DFE {dfe.get('id')}: {e}")
                     resultado['fase1_fiscal']['dfes_erro'] += 1
                     resultado['fase2_nf_po']['dfes_erro'] += 1
+
+            # 10. SYNC PICKINGS DE RECEBIMENTO
+            logger.info("[10/10] Sincronizando Pickings de Recebimento...")
+            resultado['sync_pickings'] = self._sync_pickings_recebimento()
 
             logger.info("=== JOB DE VALIDACAO CONCLUIDO ===")
             logger.info(
@@ -510,6 +549,56 @@ class ValidacaoRecebimentoJob:
         except Exception as e:
             logger.error(f"Erro na correção de status: {e}")
             db.session.rollback()
+            return {'erro': str(e)}
+
+    def _sync_pedidos_compra(self) -> Dict[str, Any]:
+        """Sincroniza pedidos de compra do Odoo."""
+        try:
+            resultado = self.service_pedidos_compra.sincronizar_pedidos_incremental(minutos_janela=90)
+            logger.info(f"Sync Pedidos Compra: {resultado}")
+            return resultado if isinstance(resultado, dict) else {'resultado': str(resultado)}
+        except Exception as e:
+            logger.error(f"Erro no sync Pedidos Compra: {e}")
+            return {'erro': str(e)}
+
+    def _sync_alocacoes_compra(self) -> Dict[str, Any]:
+        """Sincroniza alocacoes de compra do Odoo."""
+        try:
+            resultado = self.service_alocacoes.sincronizar_alocacoes_incremental(minutos_janela=90)
+            logger.info(f"Sync Alocacoes Compra: {resultado}")
+            return resultado if isinstance(resultado, dict) else {'resultado': str(resultado)}
+        except Exception as e:
+            logger.error(f"Erro no sync Alocacoes Compra: {e}")
+            return {'erro': str(e)}
+
+    def _sync_requisicoes_compra(self) -> Dict[str, Any]:
+        """Sincroniza requisicoes de compra do Odoo."""
+        try:
+            resultado = self.service_requisicoes.sincronizar_requisicoes_incremental(minutos_janela=90)
+            logger.info(f"Sync Requisicoes Compra: {resultado}")
+            return resultado if isinstance(resultado, dict) else {'resultado': str(resultado)}
+        except Exception as e:
+            logger.error(f"Erro no sync Requisicoes Compra: {e}")
+            return {'erro': str(e)}
+
+    def _detectar_mudancas_pos(self) -> Dict[str, Any]:
+        """Detecta mudancas em POs e marca DFEs para revalidacao."""
+        try:
+            resultado = self.service_po_changes.detectar_e_marcar_revalidacoes(minutos_janela=90)
+            logger.info(f"Deteccao mudancas POs: {resultado}")
+            return resultado if isinstance(resultado, dict) else {'resultado': str(resultado)}
+        except Exception as e:
+            logger.error(f"Erro na deteccao de mudancas POs: {e}")
+            return {'erro': str(e)}
+
+    def _sync_pickings_recebimento(self) -> Dict[str, Any]:
+        """Sincroniza pickings de recebimento do Odoo."""
+        try:
+            resultado = self.service_pickings.sincronizar_pickings_incremental(minutos_janela=90)
+            logger.info(f"Sync Pickings Recebimento: {resultado}")
+            return resultado if isinstance(resultado, dict) else {'resultado': str(resultado)}
+        except Exception as e:
+            logger.error(f"Erro no sync Pickings Recebimento: {e}")
             return {'erro': str(e)}
 
     def _atualizar_pedido_compras_dfe(
