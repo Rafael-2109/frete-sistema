@@ -2127,10 +2127,15 @@ class ExtratoConciliacaoService:
         if not titulo_local:
             raise ValueError(f"Título ID {vinculo.titulo_receber_id or vinculo.titulo_pagar_id} não encontrado")
 
-        # Buscar título no Odoo
-        titulo_odoo = self._buscar_titulo_odoo_multicompany(
-            titulo_local.titulo_nf, titulo_local.parcela
-        )
+        # Buscar título no Odoo (despachar por tipo: pagar usa payable, receber usa multicompany)
+        if tipo == 'pagar':
+            titulo_odoo = self._buscar_titulo_odoo_payable(
+                titulo_local.titulo_nf, titulo_local.parcela
+            )
+        else:
+            titulo_odoo = self._buscar_titulo_odoo_multicompany(
+                titulo_local.titulo_nf, titulo_local.parcela
+            )
         if not titulo_odoo:
             raise ValueError(
                 f"Título NF {titulo_local.titulo_nf} P{titulo_local.parcela} "

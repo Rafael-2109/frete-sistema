@@ -1030,7 +1030,7 @@ def extrato_aprovar_item():
     item = ExtratoItem.query.get_or_404(item_id)
 
     # Verificar se tem título vinculado (1:1 via FK OU M:N via tabela associativa)
-    if aprovar and not item.titulo_receber_id and not item.tem_multiplos_titulos:
+    if aprovar and not item.titulo_receber_id and not item.titulo_pagar_id and not item.tem_multiplos_titulos:
         return jsonify({
             'success': False,
             'error': 'Item não possui título vinculado'
@@ -1068,7 +1068,7 @@ def extrato_aprovar_todos():
 
     aprovados = 0
     for item in itens:
-        if item.titulo_receber_id:  # FK correta para clientes
+        if item.titulo_receber_id or item.titulo_pagar_id:  # FK 1:1 (receber ou pagar)
             item.aprovado = True
             item.aprovado_em = agora_utc_naive()
             item.aprovado_por = current_user.nome if current_user else 'Sistema'
@@ -1412,7 +1412,7 @@ def extrato_aprovar_todos_multiplos():
 
     aprovados = 0
     for item in itens:
-        if item.titulo_receber_id:  # FK correta para clientes
+        if item.titulo_receber_id or item.titulo_pagar_id:  # FK 1:1 (receber ou pagar)
             item.aprovado = True
             item.aprovado_em = agora_utc_naive()
             item.aprovado_por = current_user.nome if current_user else 'Sistema'
