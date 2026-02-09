@@ -603,7 +603,7 @@ class PickingRecebimentoSyncService:
                 'odoo_partner_id': partner_id,
                 'odoo_partner_name': p['partner_id'][1] if p.get('partner_id') else None,
                 'odoo_partner_cnpj': cnpjs_cache.get(partner_id, '') if partner_id else '',
-                'origin': p.get('origin', ''),
+                'origin': (p.get('origin') or '')[:500],
                 'odoo_purchase_order_id': p['purchase_id'][0] if p.get('purchase_id') else None,
                 'odoo_purchase_order_name': p['purchase_id'][1] if p.get('purchase_id') else None,
                 'company_id': p['company_id'][0] if p.get('company_id') else 1,

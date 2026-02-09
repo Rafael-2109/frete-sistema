@@ -1254,7 +1254,7 @@ class PickingRecebimento(db.Model):
     odoo_partner_id = db.Column(db.Integer, nullable=True)
     odoo_partner_name = db.Column(db.String(255), nullable=True)
     odoo_partner_cnpj = db.Column(db.String(20), nullable=True)  # CNPJ do fornecedor (l10n_br_cnpj)
-    origin = db.Column(db.String(100), nullable=True)
+    origin = db.Column(db.String(500), nullable=True)
     odoo_purchase_order_id = db.Column(db.Integer, nullable=True)
     odoo_purchase_order_name = db.Column(db.String(50), nullable=True)
     company_id = db.Column(db.Integer, nullable=False)
