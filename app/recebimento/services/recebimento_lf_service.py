@@ -206,8 +206,11 @@ class RecebimentoLfService:
             )
 
             # 3. Separar por CFOP
-            linhas_manuais = []  # CFOP != 1902
-            linhas_auto = []     # CFOP = 1902
+            # CFOP 5902 (emissor) = 1902 (receptor): retorno de insumos/embalagens
+            # O DFe contem o CFOP do emissor (LF), por isso checamos 5902
+            CFOPS_RETORNO = ('5902', '1902')
+            linhas_manuais = []  # CFOP != 5902/1902 (produto acabado)
+            linhas_auto = []     # CFOP = 5902/1902 (insumos — lotes auto)
 
             for linha in linhas:
                 cfop = str(linha.get('det_prod_cfop', '')).strip()
@@ -225,25 +228,19 @@ class RecebimentoLfService:
                     'product_id': product_id,
                 }
 
-                if cfop == '1902':
+                if cfop in CFOPS_RETORNO:
                     linhas_auto.append(item)
                 else:
                     linhas_manuais.append(item)
 
-            # 4. Para linhas_auto (CFOP=1902): buscar lotes do faturamento da LF
+            # 4. Para linhas_auto (CFOP 5902/1902): lote = numero da NF
+            # Componentes/insumos nao tem lote proprio no picking da LF;
+            # convencao: usar numero da NF como identificador de lote
             numero_nf = dfe.get('nfe_infnfe_ide_nnf', '')
-            if linhas_auto and numero_nf:
-                lotes_lf = self._buscar_lotes_faturamento_lf(odoo, numero_nf)
-                for item in linhas_auto:
-                    pid = item.get('product_id')
-                    if pid and pid in lotes_lf:
-                        item['lote_nome'] = lotes_lf[pid].get('lote_nome', '')
-                        item['data_validade'] = lotes_lf[pid].get('data_validade')
-                        item['lote_origem'] = 'faturamento_lf'
-                    else:
-                        item['lote_nome'] = ''
-                        item['data_validade'] = None
-                        item['lote_origem'] = 'nao_encontrado'
+            for item in linhas_auto:
+                item['lote_nome'] = numero_nf
+                item['data_validade'] = None
+                item['lote_origem'] = 'numero_nf'
 
             # 5. Montar retorno
             info_dfe = {
@@ -484,7 +481,7 @@ class RecebimentoLfService:
                     odoo_product_id=lote_data['product_id'],
                     odoo_product_name=lote_data.get('product_name', ''),
                     odoo_dfe_line_id=lote_data.get('dfe_line_id'),
-                    cfop=lote_data.get('cfop', '1902'),
+                    cfop=lote_data.get('cfop', '5902'),
                     tipo='auto',
                     lote_nome=lote_data.get('lote_nome', ''),
                     quantidade=lote_data['quantidade'],

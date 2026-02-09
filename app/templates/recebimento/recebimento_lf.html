@@ -129,10 +129,10 @@
                 <!-- Conteudo do formulario -->
                 <div id="conteudoRecebimento" style="display: none;">
 
-                    <!-- Secao: Produtos CFOP != 1902 (preenchimento manual) -->
+                    <!-- Secao: Produtos acabados (preenchimento manual) -->
                     <div id="secaoManuais" style="display: none;">
                         <h6 class="mb-3 text-warning">
-                            <i class="fas fa-edit me-1"></i> Produtos Acabados (CFOP &ne; 1902)
+                            <i class="fas fa-edit me-1"></i> Produtos Acabados
                             <small class="text-muted ms-2">Preencher lote + quantidade manualmente</small>
                         </h6>
                         <div id="listaManuais">
@@ -140,12 +140,12 @@
                         </div>
                     </div>
 
-                    <!-- Secao: Produtos CFOP = 1902 (automaticos) -->
+                    <!-- Secao: Componentes/Insumos (lote = numero NF) -->
                     <div id="secaoAuto" style="display: none;">
                         <hr>
                         <h6 class="mb-3 text-success">
-                            <i class="fas fa-magic me-1"></i> Retorno Insumos/Embalagens (CFOP = 1902)
-                            <small class="text-muted ms-2">Lotes copiados automaticamente do faturamento LF</small>
+                            <i class="fas fa-magic me-1"></i> Retorno Insumos/Embalagens
+                            <small class="text-muted ms-2">Lote preenchido automaticamente com numero da NF</small>
                         </h6>
                         <div id="listaAuto">
                             <!-- Produtos auto inseridos via JS -->
@@ -550,11 +550,11 @@ function renderProdutosAuto(linhas) {
         let loteBadge = '';
         let loteDisplay = '';
 
-        if (loteOrigem === 'faturamento_lf' && loteNome) {
-            loteBadge = '<span class="badge badge-auto">Automatico - copiado da NF</span>';
+        if (loteNome) {
+            loteBadge = '<span class="badge badge-auto">Lote = NF</span>';
             loteDisplay = `<code class="text-success">${escapeHtml(loteNome)}</code>`;
         } else {
-            loteBadge = '<span class="badge badge-nao-encontrado">Lote nao encontrado</span>';
+            loteBadge = '<span class="badge badge-nao-encontrado">Sem lote</span>';
             loteDisplay = '<span class="text-muted small">Sera preenchido sem lote</span>';
         }
 
@@ -564,13 +564,13 @@ function renderProdutosAuto(linhas) {
 
         container.innerHTML += `
             <div class="produto-card auto" data-product-id="${item.product_id}"
-                 data-dfe-line-id="${item.dfe_line_id}" data-cfop="1902"
+                 data-dfe-line-id="${item.dfe_line_id}" data-cfop="${escapeHtml(item.cfop)}"
                  data-qtd-nf="${item.quantidade}" data-tipo="auto"
                  data-lote-nome="${loteNome}" data-data-validade="${item.data_validade || ''}">
                 <div class="produto-header">
                     <div>
                         <strong>${escapeHtml(item.nome_produto)}</strong>
-                        <span class="badge bg-secondary status-badge ms-2">CFOP 1902</span>
+                        <span class="badge bg-secondary status-badge ms-2">CFOP ${escapeHtml(item.cfop)}</span>
                         <div class="small text-muted">
                             Cod: ${escapeHtml(item.cod_produto) || '-'} |
                             Qtd NF: ${qtdFormatada} ${escapeHtml(item.unidade) || ''}
@@ -774,7 +774,7 @@ function salvarRecebimentoLf() {
                 product_id: productId,
                 product_name: productName,
                 dfe_line_id: dfeLineId,
-                cfop: '1902',
+                cfop: card.dataset.cfop,
                 lote_nome: loteNome,
                 quantidade: qtdNf,
                 data_validade: dataValidade,
