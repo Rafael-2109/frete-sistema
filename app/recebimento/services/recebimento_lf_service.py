@@ -25,6 +25,7 @@ from app.utils.timezone import agora_utc_naive
 from app.utils.database_retry import commit_with_retry
 from app.recebimento.models import RecebimentoLf, RecebimentoLfLote
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.dfe_utils import situacao_nf_valida
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class RecebimentoLfService:
     """Service para operacoes de Recebimento LF."""
 
     # IDs fixos (conforme IDS_FIXOS.md)
-    CNPJ_LF = '18467441000163'
+    CNPJ_LF = '18.467.441/0001-63'  # Formato Odoo (com pontuacao)
     COMPANY_FB = 1
     COMPANY_LF = 5
 
@@ -62,7 +63,7 @@ class RecebimentoLfService:
         Filtros:
         - nfe_infnfe_emit_cnpj = CNPJ_LF
         - company_id = COMPANY_FB (FB recebe)
-        - l10n_br_situacao_dfe != 'CANCELADA' e != 'INUTILIZADA'
+        - l10n_br_situacao_dfe != 'CANCELADA'/'INUTILIZADA' (filtro Python, nao Odoo)
         - Janela temporal: data_inicio/data_fim OU ultimos N minutos
         - Nao ja processado localmente
 
@@ -83,17 +84,24 @@ class RecebimentoLfService:
             filtro = [
                 ['nfe_infnfe_emit_cnpj', '=', self.CNPJ_LF],
                 ['company_id', '=', self.COMPANY_FB],
-                ['l10n_br_situacao_dfe', 'not in', ['CANCELADA', 'INUTILIZADA']],
+                # NAO filtrar l10n_br_situacao_dfe no domain Odoo:
+                # - Campo vazio em ~99% dos DFes (ref: dfe_utils.py:31)
+                # - Odoo 'not in' exclui registros NULL → zero resultados
+                # - Filtragem feita em Python abaixo via situacao_nf_valida()
             ]
 
             # Filtro temporal: range de datas OU ultimos N minutos
             if data_inicio and data_fim:
+                # Sincronizar: busca por data de emissao da NF (negocio)
                 filtro.append(['nfe_infnfe_ide_dhemi', '>=', f'{data_inicio} 00:00:00'])
                 filtro.append(['nfe_infnfe_ide_dhemi', '<=', f'{data_fim} 23:59:59'])
                 logger.info(f"Buscando DFes LF no range {data_inicio} a {data_fim}")
             else:
+                # Atualizar: busca por data de modificacao no Odoo (operacional)
+                # Usa write_date (nao nfe_infnfe_ide_dhemi) — padrao do codebase
+                # Ref: dfe_utils.py:189, validacao_fiscal_job.py:171
                 data_limite = (agora_utc_naive() - timedelta(minutes=minutos)).strftime('%Y-%m-%d %H:%M:%S')
-                filtro.append(['nfe_infnfe_ide_dhemi', '>=', data_limite])
+                filtro.append(['write_date', '>=', data_limite])
                 logger.info(f"Buscando DFes LF dos ultimos {minutos} minutos (desde {data_limite})")
 
             dfes_odoo = odoo.execute_kw(
@@ -105,6 +113,13 @@ class RecebimentoLfService:
                     'limit': 100,
                 }
             )
+
+            if not dfes_odoo:
+                return {'dfes': [], 'total': 0}
+
+            # Filtrar situacao invalida em Python (CANCELADA/INUTILIZADA)
+            # Ref: dfe_utils.py:39 — trata None/vazio como valido
+            dfes_odoo = [d for d in dfes_odoo if situacao_nf_valida(d.get('l10n_br_situacao_dfe'))]
 
             if not dfes_odoo:
                 return {'dfes': [], 'total': 0}

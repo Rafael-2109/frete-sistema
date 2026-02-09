@@ -106,10 +106,12 @@ class ConciliacaoSyncService:
         # Atualizar titulo_pagar_id se disponível e ainda não preenchido
         if lanc and not extrato_item.titulo_pagar_id and not extrato_item.titulo_receber_id:
             # Tentar vincular o título do lançamento
+            # NOTA: contas_a_pagar.parcela é varchar(10), lanc.parcela é integer
             from app.financeiro.models import ContasAPagar
+            parcela_str = str(lanc.parcela) if lanc.parcela is not None else None
             titulo_local = ContasAPagar.query.filter_by(
                 titulo_nf=lanc.nf_numero,
-                parcela=lanc.parcela,
+                parcela=parcela_str,
             ).first() if lanc.nf_numero else None
 
             if titulo_local:
