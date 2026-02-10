@@ -295,9 +295,14 @@ BEGIN
         ALTER TABLE cadastro_palletizacao ADD COLUMN produto_vendido BOOLEAN DEFAULT TRUE;
     END IF;
     
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name = 'cadastro_palletizacao' AND column_name = 'lead_time_mto') THEN
-        ALTER TABLE cadastro_palletizacao ADD COLUMN lead_time_mto INTEGER;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'cadastro_palletizacao' AND column_name = 'lead_time') THEN
+        ALTER TABLE cadastro_palletizacao ADD COLUMN lead_time INTEGER;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'cadastro_palletizacao' AND column_name = 'lote_minimo_compra') THEN
+        ALTER TABLE cadastro_palletizacao ADD COLUMN lote_minimo_compra INTEGER;
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
