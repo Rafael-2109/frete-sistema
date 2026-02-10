@@ -76,8 +76,9 @@ MAX_STREAM_DURATION_SECONDS = 540
 
 # FIX: Timeout de inatividade do SDK - se não receber eventos em X segundos, considera travado
 # Este é o timeout CURTO para detectar quando o SDK para de emitir eventos
-# Reduzido de 90s para 60s — se CLI não emite nada em 60s, está travado
-SDK_INACTIVITY_TIMEOUT_SECONDS = 60
+# Aumentado para 240s (4 min) — skills complexas (SQL analítico, API Odoo, cotação de frete)
+# podem demorar vários minutos sem emitir eventos enquanto processam
+SDK_INACTIVITY_TIMEOUT_SECONDS = 240
 
 logger = logging.getLogger('sistema_fretes')
 

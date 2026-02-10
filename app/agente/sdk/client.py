@@ -535,10 +535,10 @@ Nunca invente informações."""
             # Env vars passadas ao subprocess CLI do SDK
             # CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: timeout para hooks/MCP (default 60s).
             # Em ambiente cloud (Render), MCP tools podem demorar mais (API calls, DB queries).
-            # AskUserQuestion bloqueia até 55s. Aumentar para 120s previne stream closure prematura.
+            # Skills complexas (cotação, SQL analítico, Odoo) podem levar até 4 min.
             # FONTE: claude_agent_sdk/_internal/query.py:116
             "env": {
-                "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "120000",  # 120s em ms
+                "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "240000",  # 240s (4 min) em ms
             },
         }
 
