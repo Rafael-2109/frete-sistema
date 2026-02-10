@@ -596,3 +596,44 @@ def comprovante_lancamento_progresso(batch_id):
     except Exception as e:
         logger.error(f"Erro ao obter progresso lancamento: {e}", exc_info=True)
         return jsonify({'status': 'erro', 'erro': str(e)}), 500
+
+
+# =============================================================================
+# PESQUISA DE NFs DO FORNECEDOR
+# =============================================================================
+
+@financeiro_bp.route('/comprovantes/api/match/<int:comprovante_id>/pesquisar-nfs')
+@login_required
+def comprovante_pesquisar_nfs(comprovante_id):
+    """
+    Pesquisa NFs em aberto do fornecedor associado ao comprovante.
+    Permite buscar titulos que o parser automatico nao encontrou.
+
+    Query params:
+    - nf: filtrar por numero de NF (parcial ou exato)
+    - data_inicio: filtrar por vencimento >= (YYYY-MM-DD)
+    - data_fim: filtrar por vencimento <= (YYYY-MM-DD)
+    """
+    try:
+        from app.financeiro.services.comprovante_match_service import ComprovanteMatchService
+
+        nf = request.args.get('nf', '').strip() or None
+        data_inicio = request.args.get('data_inicio', '').strip() or None
+        data_fim = request.args.get('data_fim', '').strip() or None
+
+        service = ComprovanteMatchService()
+        resultado = service.pesquisar_nfs_fornecedor(
+            comprovante_id=comprovante_id,
+            nf=nf,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        )
+
+        if resultado.get('sucesso'):
+            return jsonify(resultado)
+        else:
+            return jsonify(resultado), 400
+
+    except Exception as e:
+        logger.error(f"Erro pesquisar NFs comp={comprovante_id}: {e}", exc_info=True)
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500

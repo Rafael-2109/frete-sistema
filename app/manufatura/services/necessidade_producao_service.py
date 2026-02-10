@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional
 from sqlalchemy import func, extract
 from app import db
 from app.manufatura.models import PrevisaoDemanda
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.estoque.models import UnificacaoCodigos
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
@@ -292,13 +292,20 @@ class NecessidadeProducaoService:
         """
         Calcula saldo pendente da carteira (independente do mês).
         SUM(qtd_saldo_produto_pedido) WHERE qtd_saldo_produto_pedido > 0.
+        Exclui pedidos em standby e inativos.
         """
         try:
+            pedidos_em_standby = db.session.query(SaldoStandby.num_pedido).filter(
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            ).distinct().subquery()
+
             resultado = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('total')
             ).filter(
+                CarteiraPrincipal.ativo == True,
                 CarteiraPrincipal.cod_produto.in_(codigos_relacionados),
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+                ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)
             ).scalar()
 
             return float(resultado or 0)
@@ -311,14 +318,21 @@ class NecessidadeProducaoService:
         """
         Calcula saldo da carteira SEM separação (Carteira s/ Data).
         Fórmula: SUM(CarteiraPrincipal.qtd_saldo_produto_pedido) - SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False)
+        Exclui pedidos em standby e inativos.
         """
         try:
-            # Total da carteira (apenas saldo positivo)
+            pedidos_em_standby = db.session.query(SaldoStandby.num_pedido).filter(
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            ).distinct().subquery()
+
+            # Total da carteira (apenas saldo positivo, excluindo standby e inativos)
             total_carteira = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('total')
             ).filter(
+                CarteiraPrincipal.ativo == True,
                 CarteiraPrincipal.cod_produto.in_(codigos_relacionados),
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+                ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)
             ).scalar()
 
             # Total separado (não sincronizado)

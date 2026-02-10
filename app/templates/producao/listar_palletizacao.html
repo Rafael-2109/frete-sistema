@@ -119,8 +119,32 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-12 d-flex justify-content-end">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label for="produto_comprado">Comprado:</label>
+                                <select class="form-control" id="produto_comprado" name="produto_comprado">
+                                    <option value="">Todos</option>
+                                    <option value="sim" {% if produto_comprado_filtro == 'sim' %}selected{% endif %}>Sim</option>
+                                    <option value="nao" {% if produto_comprado_filtro == 'nao' %}selected{% endif %}>Nao</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="produto_produzido">Produzido:</label>
+                                <select class="form-control" id="produto_produzido" name="produto_produzido">
+                                    <option value="">Todos</option>
+                                    <option value="sim" {% if produto_produzido_filtro == 'sim' %}selected{% endif %}>Sim</option>
+                                    <option value="nao" {% if produto_produzido_filtro == 'nao' %}selected{% endif %}>Nao</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="produto_vendido">Vendido:</label>
+                                <select class="form-control" id="produto_vendido" name="produto_vendido">
+                                    <option value="">Todos</option>
+                                    <option value="sim" {% if produto_vendido_filtro == 'sim' %}selected{% endif %}>Sim</option>
+                                    <option value="nao" {% if produto_vendido_filtro == 'nao' %}selected{% endif %}>Nao</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
                                 <button type="submit" class="btn btn-primary me-2">
                                     <i class="fas fa-search"></i> Filtrar
                                 </button>
@@ -166,6 +190,7 @@
                                         <th class="text-center">Vend.</th>
                                         <th>Disparo</th>
                                         <th>Lead Time</th>
+                                        <th>Lote Min.</th>
                                         <th class="text-center">Ações</th>
                                     </tr>
                                 </thead>
@@ -250,8 +275,15 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-center">
-                                            {% if item.lead_time_mto %}
-                                                <span class="badge bg-info">{{ item.lead_time_mto }} dias</span>
+                                            {% if item.lead_time %}
+                                                <span class="badge bg-info">{{ item.lead_time }} dias</span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item.lote_minimo_compra %}
+                                                <span class="badge bg-secondary">{{ item.lote_minimo_compra|numero_br(0) }}</span>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
@@ -276,7 +308,8 @@
                                                         data-produzido="{{ 'true' if item.produto_produzido else 'false' }}"
                                                         data-vendido="{{ 'true' if item.produto_vendido else 'false' }}"
                                                         data-disparo="{{ item.disparo_producao or '' }}"
-                                                        data-leadtime="{{ item.lead_time_mto or '' }}"
+                                                        data-leadtime="{{ item.lead_time or '' }}"
+                                                        data-loteminimo="{{ item.lote_minimo_compra or '' }}"
                                                         data-custo="{{ item.custo_produto or '' }}"
                                                         title="Editar">
                                                     <i class="fas fa-edit"></i>
@@ -455,12 +488,16 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Lead Time MTO (dias):</label>
+                            <label class="form-label">Lead Time (dias):</label>
                             <input type="number" class="form-control" id="edit-leadtime">
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-12">
+                        <div class="col-md-6">
+                            <label class="form-label">Lote Minimo Compra:</label>
+                            <input type="number" class="form-control" id="edit-loteminimo" min="0">
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label">Custo do Produto (R$):</label>
                             <input type="number" step="0.0001" class="form-control" id="edit-custo">
                         </div>
@@ -502,6 +539,18 @@ document.getElementById('peso_bruto').addEventListener('change', function() {
     document.getElementById('filtrosForm').submit();
 });
 
+document.getElementById('produto_comprado').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+document.getElementById('produto_produzido').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
+document.getElementById('produto_vendido').addEventListener('change', function() {
+    document.getElementById('filtrosForm').submit();
+});
+
 // ============================================
 // CONTROLE DO MODAL DE EDIÇÃO
 // ============================================
@@ -528,6 +577,7 @@ document.querySelectorAll('.btn-editar').forEach(btn => {
         document.getElementById('edit-vendido').checked = (this.dataset.vendido === 'true');
         document.getElementById('edit-disparo').value = this.dataset.disparo;
         document.getElementById('edit-leadtime').value = this.dataset.leadtime;
+        document.getElementById('edit-loteminimo').value = this.dataset.loteminimo;
         document.getElementById('edit-custo').value = this.dataset.custo;
 
         // Abrir modal
@@ -556,7 +606,8 @@ document.getElementById('btn-salvar-edicao').addEventListener('click', function(
         produto_produzido: document.getElementById('edit-produzido').checked,
         produto_vendido: document.getElementById('edit-vendido').checked,
         disparo_producao: document.getElementById('edit-disparo').value || null,
-        lead_time_mto: parseInt(document.getElementById('edit-leadtime').value) || null,
+        lead_time: parseInt(document.getElementById('edit-leadtime').value) || null,
+        lote_minimo_compra: parseInt(document.getElementById('edit-loteminimo').value) || null,
         custo_produto: parseFloat(document.getElementById('edit-custo').value) || null
     };
 

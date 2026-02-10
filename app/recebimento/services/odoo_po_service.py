@@ -791,12 +791,12 @@ class OdooPoService:
                     if not aloc.odoo_po_line_id:
                         continue
 
-                    qtd_alocada = float(aloc.qtd_alocada or 0)
+                    qtd_alocada = Decimal(str(aloc.qtd_alocada or 0))
 
                     # Verificar se ha quantidade customizada (Fase 4)
                     chave_custom = f"{match.cod_produto_interno}:{aloc.odoo_po_name}"
                     if quantidades_customizadas and chave_custom in quantidades_customizadas:
-                        qtd_para_usar = float(quantidades_customizadas[chave_custom])
+                        qtd_para_usar = Decimal(str(quantidades_customizadas[chave_custom]))
                         logger.info(
                             f"Split 1PO: usando qtd customizada para {chave_custom}: "
                             f"{qtd_para_usar} (original alocacao: {qtd_alocada})"
@@ -814,8 +814,8 @@ class OdooPoService:
                     if not linha_original:
                         continue
 
-                    qtd_original = float(linha_original[0].get('product_qty', 0) or 0)
-                    qtd_recebida = float(linha_original[0].get('qty_received', 0) or 0)
+                    qtd_original = Decimal(str(linha_original[0].get('product_qty', 0) or 0))
+                    qtd_recebida = Decimal(str(linha_original[0].get('qty_received', 0) or 0))
 
                     # Validar qtd customizada no backend
                     qtd_max = qtd_original - qtd_recebida
@@ -854,20 +854,20 @@ class OdooPoService:
                         'po_name': po_name,
                         'linha_id': aloc.odoo_po_line_id,
                         'produto': match.cod_produto_interno,
-                        'qtd_original': qtd_original,
-                        'qtd_ajustada': qtd_para_usar,
-                        'qtd_saldo': saldo if saldo > 0 else 0
+                        'qtd_original': float(qtd_original),
+                        'qtd_ajustada': float(qtd_para_usar),
+                        'qtd_saldo': float(saldo) if saldo > 0 else 0
                     })
 
             elif match.odoo_po_line_id:
                 # Fallback sem alocacoes
-                qtd_nf = float(match.qtd_nf or 0)
-                qtd_po = float(match.qtd_po or 0)
+                qtd_nf = Decimal(str(match.qtd_nf or 0))
+                qtd_po = Decimal(str(match.qtd_po or 0))
 
                 # Verificar se ha quantidade customizada (Fase 4)
                 chave_custom_fb = f"{match.cod_produto_interno}:{match.odoo_po_name}"
                 if quantidades_customizadas and chave_custom_fb in quantidades_customizadas:
-                    qtd_para_usar_fb = float(quantidades_customizadas[chave_custom_fb])
+                    qtd_para_usar_fb = Decimal(str(quantidades_customizadas[chave_custom_fb]))
                     logger.info(
                         f"Split 1PO fallback: usando qtd customizada para {chave_custom_fb}: "
                         f"{qtd_para_usar_fb} (original NF: {qtd_nf})"
@@ -877,7 +877,7 @@ class OdooPoService:
 
                 # Validar no backend
                 if qtd_para_usar_fb < 0:
-                    qtd_para_usar_fb = 0
+                    qtd_para_usar_fb = Decimal('0')
                 if qtd_para_usar_fb > qtd_po:
                     qtd_para_usar_fb = qtd_po
 
@@ -905,9 +905,9 @@ class OdooPoService:
                     'po_name': po_name,
                     'linha_id': match.odoo_po_line_id,
                     'produto': match.cod_produto_interno,
-                    'qtd_original': qtd_po,
-                    'qtd_ajustada': qtd_para_usar_fb,
-                    'qtd_saldo': saldo if saldo > 0 else 0
+                    'qtd_original': float(qtd_po),
+                    'qtd_ajustada': float(qtd_para_usar_fb),
+                    'qtd_saldo': float(saldo) if saldo > 0 else 0
                 })
 
         # Vincular NF ao PO original (ajustado)
@@ -1092,7 +1092,7 @@ class OdooPoService:
                         odoo,
                         po_conciliador_id,
                         product_id,
-                        float(qtd_para_conciliador),
+                        qtd_para_conciliador,
                         preco,
                         aloc.odoo_po_line_id
                     )
@@ -1117,7 +1117,7 @@ class OdooPoService:
                     linhas_processadas[aloc.odoo_po_line_id] = consumo_total
 
                     saldo_apos_alocacao = qtd_po_original - qtd_recebida - consumo_total
-                    nova_qtd = float(saldo_apos_alocacao) if saldo_apos_alocacao > 0 else 0
+                    nova_qtd = saldo_apos_alocacao if saldo_apos_alocacao > 0 else Decimal('0')
 
                     self._ajustar_quantidade_linha(
                         odoo, aloc.odoo_po_line_id, nova_qtd
@@ -1129,7 +1129,7 @@ class OdooPoService:
                         'linha_id': aloc.odoo_po_line_id,
                         'produto': match.cod_produto_interno,
                         'qtd_consumida': float(qtd_para_conciliador),
-                        'qtd_saldo': nova_qtd
+                        'qtd_saldo': float(nova_qtd)
                     })
 
                     if nova_qtd > 0:
@@ -1176,7 +1176,7 @@ class OdooPoService:
                     odoo,
                     po_conciliador_id,
                     product_id,
-                    float(qtd_para_usar),
+                    qtd_para_usar,
                     preco_nf,
                     match.odoo_po_line_id
                 )
@@ -1191,7 +1191,7 @@ class OdooPoService:
                     })
 
                 saldo = qtd_po - qtd_para_usar
-                nova_qtd_original = float(saldo) if saldo > 0 else 0
+                nova_qtd_original = saldo if saldo > 0 else Decimal('0')
 
                 self._ajustar_quantidade_linha(
                     odoo, match.odoo_po_line_id, nova_qtd_original
@@ -1203,7 +1203,7 @@ class OdooPoService:
                     'linha_id': match.odoo_po_line_id,
                     'produto': match.cod_produto_interno,
                     'qtd_original': float(qtd_po),
-                    'qtd_saldo': nova_qtd_original
+                    'qtd_saldo': float(nova_qtd_original)
                 })
 
                 if nova_qtd_original > 0:
@@ -1357,7 +1357,7 @@ class OdooPoService:
         odoo,
         po_original_id: int,
         linha_original_id: int,
-        quantidade_saldo: float
+        quantidade_saldo
     ) -> Optional[Dict[str, Any]]:
         """
         Cria um novo PO com o saldo restante.
@@ -1423,7 +1423,7 @@ class OdooPoService:
                 'order_id': novo_po_id,
                 'product_id': linha_data['product_id'][0] if linha_data.get('product_id') else False,
                 'name': linha_data.get('name', 'Saldo'),
-                'product_qty': quantidade_saldo,
+                'product_qty': float(quantidade_saldo),
                 'price_unit': linha_data.get('price_unit', 0),
                 'product_uom': linha_data['product_uom'][0] if linha_data.get('product_uom') else False,
                 'date_planned': linha_data.get('date_planned') or po_data.get('date_planned'),
@@ -1557,8 +1557,8 @@ class OdooPoService:
         odoo,
         po_conciliador_id: int,
         produto_id: int,
-        quantidade: float,
-        preco_unitario: float,
+        quantidade,
+        preco_unitario,
         linha_referencia_id: int
     ) -> Optional[int]:
         """
@@ -1590,8 +1590,8 @@ class OdooPoService:
                     'default': {
                         'order_id': po_conciliador_id,
                         'product_id': produto_id,
-                        'product_qty': quantidade,
-                        'price_unit': preco_unitario,
+                        'product_qty': float(quantidade),
+                        'price_unit': float(preco_unitario),
                     }
                 }
             )
@@ -1612,7 +1612,7 @@ class OdooPoService:
         self,
         odoo,
         linha_id: int,
-        nova_quantidade: float
+        nova_quantidade
     ) -> bool:
         """
         Ajusta a quantidade de uma linha de PO.
@@ -1620,7 +1620,7 @@ class OdooPoService:
         Args:
             odoo: Conexao Odoo
             linha_id: ID da linha
-            nova_quantidade: Nova quantidade
+            nova_quantidade: Nova quantidade (Decimal ou float)
 
         Returns:
             True se ajustou com sucesso
@@ -1628,8 +1628,8 @@ class OdooPoService:
         try:
             odoo.write(
                 'purchase.order.line',
-                linha_id,
-                {'product_qty': nova_quantidade}
+                [linha_id],
+                {'product_qty': float(nova_quantidade)}
             )
 
             logger.debug(f"Linha {linha_id} ajustada para {nova_quantidade}")

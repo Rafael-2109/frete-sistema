@@ -11,6 +11,7 @@ from app.manufatura.routes.analise_producao_routes import register_analise_produ
 from app.manufatura.routes.pedidos_compras_routes import pedidos_compras_bp
 from app.manufatura.routes.projecao_estoque_routes import projecao_estoque_bp
 from app.manufatura.routes.macro_projecao_routes import macro_projecao_bp
+from app.manufatura.routes.sugestao_compras_routes import sugestao_compras_bp
 
 
 def register_routes(bp):
@@ -29,3 +30,4 @@ def register_blueprints(app):
     app.register_blueprint(pedidos_compras_bp)
     app.register_blueprint(projecao_estoque_bp)
     app.register_blueprint(macro_projecao_bp)
+    app.register_blueprint(sugestao_compras_bp)

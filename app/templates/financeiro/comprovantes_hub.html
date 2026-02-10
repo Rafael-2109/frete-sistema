@@ -604,6 +604,48 @@
                         <div>Nenhum candidato encontrado no Odoo.</div>
                     </div>
 
+                    <!-- Pesquisar NFs do fornecedor -->
+                    <div class="card mt-3 mb-2" id="card-pesquisar-nfs">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center"
+                             role="button" data-bs-toggle="collapse" data-bs-target="#collapse-pesquisar-nfs"
+                             aria-expanded="false" aria-controls="collapse-pesquisar-nfs">
+                            <strong class="small"><i class="fas fa-search"></i> Pesquisar NFs do fornecedor</strong>
+                            <i class="fas fa-chevron-down small" id="pesquisar-nfs-chevron"></i>
+                        </div>
+                        <div class="collapse" id="collapse-pesquisar-nfs">
+                            <div class="card-body py-2">
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label small mb-0">NF</label>
+                                        <input type="text" id="pesquisa-nf" class="form-control form-control-sm" placeholder="Ex: 16874">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small mb-0">Venc. de</label>
+                                        <input type="date" id="pesquisa-data-inicio" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small mb-0">Venc. ate</label>
+                                        <input type="date" id="pesquisa-data-fim" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" id="btn-pesquisar-nfs" class="btn btn-sm btn-outline-info w-100"
+                                                onclick="pesquisarNfsFornecedor()">
+                                            <i class="fas fa-search"></i> Buscar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="pesquisa-nfs-loading" style="display: none;" class="text-center py-2">
+                                    <i class="fas fa-spinner fa-spin"></i> Buscando no Odoo...
+                                </div>
+                                <div id="pesquisa-nfs-erro" style="display: none;" class="alert alert-warning small py-1 mb-1"></div>
+                                <div id="pesquisa-nfs-resultado" style="display: none;"></div>
+                                <div id="pesquisa-nfs-vazio" style="display: none;" class="text-center py-2 text-muted small">
+                                    Nenhuma fatura encontrada com os filtros informados.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Vinculacao manual -->
                     <hr>
                     <div class="card">
@@ -2011,6 +2053,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('modal-sem-candidatos').style.display = 'none';
         document.getElementById('multi-nf-bar').style.display = 'none';
 
+        // Resetar painel de pesquisa NFs
+        document.getElementById('pesquisa-nf').value = '';
+        document.getElementById('pesquisa-data-inicio').value = '';
+        document.getElementById('pesquisa-data-fim').value = '';
+        document.getElementById('pesquisa-nfs-loading').style.display = 'none';
+        document.getElementById('pesquisa-nfs-resultado').style.display = 'none';
+        document.getElementById('pesquisa-nfs-resultado').innerHTML = '';
+        document.getElementById('pesquisa-nfs-vazio').style.display = 'none';
+        document.getElementById('pesquisa-nfs-erro').style.display = 'none';
+        const collapseEl = document.getElementById('collapse-pesquisar-nfs');
+        if (collapseEl.classList.contains('show')) {
+            bootstrap.Collapse.getOrCreateInstance(collapseEl).hide();
+        }
+
         // Limpar info anterior
         document.getElementById('modal-benef').textContent = '...';
         document.getElementById('modal-cnpj').textContent = '...';
@@ -2067,10 +2123,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (let idx = 0; idx < candidatos.length; idx++) {
             const cand = candidatos[idx];
-            const scoreClass = cand.score >= 85 ? 'score-alto-border' :
-                               cand.score >= 60 ? 'score-medio-border' : 'score-baixo-border';
-            const scoreBg = cand.score >= 85 ? 'score-alto' :
-                            cand.score >= 60 ? 'score-medio' : 'score-baixo';
+
+            // Score ou badge PESQUISA
+            let scoreClass, scoreHtml;
+            if (cand.fonte === 'PESQUISA') {
+                scoreClass = 'score-alto-border';
+                scoreHtml = '<span class="badge bg-info fs-6">PESQ</span>';
+            } else {
+                scoreClass = cand.score >= 85 ? 'score-alto-border' :
+                                   cand.score >= 60 ? 'score-medio-border' : 'score-baixo-border';
+                const scoreBg = cand.score >= 85 ? 'score-alto' :
+                                cand.score >= 60 ? 'score-medio' : 'score-baixo';
+                scoreHtml = `<span class="badge ${scoreBg} fs-6">${cand.score}%</span>`;
+            }
             const financeira = cand.beneficiario_e_financeira
                 ? '<span class="badge bg-warning text-dark ms-2">Financeira</span>' : '';
 
@@ -2104,7 +2169,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                    title="Selecionar para Multi-NF">
                         </div>
                         <div class="col-auto text-center" style="width: 55px;">
-                            <span class="badge ${scoreBg} fs-6">${cand.score}%</span>
+                            ${scoreHtml}
                         </div>
                         <div class="col-md-3">
                             <strong>${cand.odoo_partner_name || '-'}</strong>${financeira}
@@ -2296,6 +2361,191 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (err) {
             alert('Erro: ' + err.message);
+        }
+    };
+
+    // --- Pesquisar NFs do Fornecedor ---
+    window.pesquisarNfsFornecedor = async function() {
+        if (!comprovanteAtualId) return;
+
+        const nf = document.getElementById('pesquisa-nf').value.trim();
+        const dataInicio = document.getElementById('pesquisa-data-inicio').value;
+        const dataFim = document.getElementById('pesquisa-data-fim').value;
+
+        const loadingEl = document.getElementById('pesquisa-nfs-loading');
+        const resultadoEl = document.getElementById('pesquisa-nfs-resultado');
+        const vazioEl = document.getElementById('pesquisa-nfs-vazio');
+        const erroEl = document.getElementById('pesquisa-nfs-erro');
+
+        loadingEl.style.display = 'block';
+        resultadoEl.style.display = 'none';
+        resultadoEl.innerHTML = '';
+        vazioEl.style.display = 'none';
+        erroEl.style.display = 'none';
+
+        const params = new URLSearchParams();
+        if (nf) params.set('nf', nf);
+        if (dataInicio) params.set('data_inicio', dataInicio);
+        if (dataFim) params.set('data_fim', dataFim);
+
+        try {
+            const resp = await fetch(
+                `/financeiro/comprovantes/api/match/${comprovanteAtualId}/pesquisar-nfs?${params}`
+            );
+            const data = await resp.json();
+            loadingEl.style.display = 'none';
+
+            if (!data.sucesso) {
+                erroEl.textContent = data.erro || 'Erro desconhecido';
+                erroEl.style.display = 'block';
+                return;
+            }
+
+            if (!data.faturas || data.faturas.length === 0) {
+                vazioEl.style.display = 'block';
+                return;
+            }
+
+            // IDs dos candidatos já presentes
+            const idsExistentes = new Set(
+                candidatosAtuais.map(c => c.odoo_move_line_id)
+            );
+
+            let html = `<div class="small text-muted mb-1">
+                <strong>${data.fornecedor}</strong> — ${data.total} titulo(s) em aberto
+            </div>`;
+            html += '<div class="table-responsive"><table class="table table-sm table-hover small mb-0">';
+            html += `<thead><tr>
+                <th>NF</th><th>Parc.</th><th>Valor</th><th>Residual</th>
+                <th>Venc.</th><th>Move</th><th style="width:70px"></th>
+            </tr></thead><tbody>`;
+
+            for (let i = 0; i < data.faturas.length; i++) {
+                const f = data.faturas[i];
+                const jaAdicionado = idsExistentes.has(f.odoo_move_line_id);
+                const valorFmt = f.odoo_valor_original != null
+                    ? 'R$ ' + f.odoo_valor_original.toLocaleString('pt-BR', {minimumFractionDigits: 2})
+                    : '-';
+                const residualFmt = f.odoo_valor_residual != null
+                    ? 'R$ ' + f.odoo_valor_residual.toLocaleString('pt-BR', {minimumFractionDigits: 2})
+                    : '-';
+
+                // Separar move name
+                const moveRaw = f.odoo_move_name || '-';
+                const moveShort = moveRaw.length > 30 ? moveRaw.substring(0, 30) + '...' : moveRaw;
+
+                html += `<tr class="${jaAdicionado ? 'text-muted' : ''}">
+                    <td><strong>${f.nf_numero || '-'}</strong></td>
+                    <td>${f.parcela || '-'}</td>
+                    <td>${valorFmt}</td>
+                    <td>${residualFmt}</td>
+                    <td>${f.odoo_vencimento_fmt || '-'}</td>
+                    <td title="${moveRaw}"><small>${moveShort}</small></td>
+                    <td>`;
+
+                if (jaAdicionado) {
+                    html += '<span class="badge bg-secondary">ja adicionado</span>';
+                } else {
+                    html += `<button class="btn btn-sm btn-outline-success py-0 px-1 btn-adicionar-pesquisa"
+                                data-pesq-idx="${i}"
+                                onclick="adicionarNfAoCandidatos(${i})"
+                                title="Adicionar aos candidatos">
+                                <i class="fas fa-plus"></i>
+                            </button>`;
+                }
+
+                html += '</td></tr>';
+            }
+
+            html += '</tbody></table></div>';
+            html += `<div class="text-end mt-1">
+                <button class="btn btn-sm btn-outline-success" onclick="adicionarTodasNfsPesquisa()">
+                    <i class="fas fa-plus-circle"></i> Adicionar todos
+                </button>
+            </div>`;
+
+            resultadoEl.innerHTML = html;
+            resultadoEl.style.display = 'block';
+
+            // Armazenar resultados para referência
+            window._pesquisaResultados = data.faturas;
+
+        } catch (err) {
+            loadingEl.style.display = 'none';
+            erroEl.textContent = 'Erro de conexao: ' + err.message;
+            erroEl.style.display = 'block';
+        }
+    };
+
+    window.adicionarNfAoCandidatos = function(pesqIdx) {
+        const faturas = window._pesquisaResultados;
+        if (!faturas || !faturas[pesqIdx]) return;
+
+        const fatura = {...faturas[pesqIdx]};
+
+        // Verificar se já existe
+        const jaExiste = candidatosAtuais.some(
+            c => c.odoo_move_line_id === fatura.odoo_move_line_id
+        );
+        if (jaExiste) return;
+
+        // Definir score=100 para compatibilidade com confirmar-direto
+        fatura.score = 100;
+        fatura.fonte = 'PESQUISA';
+        fatura.criterios = ['PESQUISA MANUAL'];
+        fatura.diferenca_valor = null;
+        fatura.odoo_valor_recalculado = null;
+
+        candidatosAtuais.push(fatura);
+        renderizarCandidatos(candidatosAtuais);
+
+        // Atualizar tabela de pesquisa (marcar como já adicionado)
+        const btn = document.querySelector(`.btn-adicionar-pesquisa[data-pesq-idx="${pesqIdx}"]`);
+        if (btn) {
+            const td = btn.parentElement;
+            td.innerHTML = '<span class="badge bg-secondary">ja adicionado</span>';
+            btn.closest('tr').classList.add('text-muted');
+        }
+
+        // Garantir que lista de candidatos está visível
+        document.getElementById('modal-candidatos-lista').style.display = 'block';
+        document.getElementById('modal-sem-candidatos').style.display = 'none';
+    };
+
+    window.adicionarTodasNfsPesquisa = function() {
+        const faturas = window._pesquisaResultados;
+        if (!faturas) return;
+
+        const idsExistentes = new Set(
+            candidatosAtuais.map(c => c.odoo_move_line_id)
+        );
+
+        let adicionados = 0;
+        for (let i = 0; i < faturas.length; i++) {
+            if (idsExistentes.has(faturas[i].odoo_move_line_id)) continue;
+
+            const fatura = {...faturas[i]};
+            fatura.score = 100;
+            fatura.fonte = 'PESQUISA';
+            fatura.criterios = ['PESQUISA MANUAL'];
+            fatura.diferenca_valor = null;
+            fatura.odoo_valor_recalculado = null;
+
+            candidatosAtuais.push(fatura);
+            adicionados++;
+        }
+
+        if (adicionados > 0) {
+            renderizarCandidatos(candidatosAtuais);
+            document.getElementById('modal-candidatos-lista').style.display = 'block';
+            document.getElementById('modal-sem-candidatos').style.display = 'none';
+
+            // Atualizar todos os botões na tabela de pesquisa
+            document.querySelectorAll('.btn-adicionar-pesquisa').forEach(btn => {
+                const td = btn.parentElement;
+                td.innerHTML = '<span class="badge bg-secondary">ja adicionado</span>';
+                btn.closest('tr').classList.add('text-muted');
+            });
         }
     };
 

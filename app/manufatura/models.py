@@ -181,9 +181,9 @@ class PedidoCompras(db.Model):
     data_pedido_entrega = db.Column(db.Date)
     cod_produto = db.Column(db.String(50), nullable=False, index=True)
     nome_produto = db.Column(db.String(255))
-    qtd_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False)
-    qtd_recebida = db.Column(db.Numeric(15, 3), default=0)  # ✅ NOVO: qty_received do Odoo
-    preco_produto_pedido = db.Column(db.Numeric(15, 4))
+    qtd_produto_pedido = db.Column(db.Numeric(18, 6), nullable=False)
+    qtd_recebida = db.Column(db.Numeric(18, 6), default=0)  # qty_received do Odoo
+    preco_produto_pedido = db.Column(db.Numeric(18, 8))
     icms_produto_pedido = db.Column(db.Numeric(15, 2))
     pis_produto_pedido = db.Column(db.Numeric(15, 2))
     cofins_produto_pedido = db.Column(db.Numeric(15, 2))
@@ -260,7 +260,7 @@ class ListaMateriais(db.Model):
     nome_produto_produzido = db.Column(db.String(255))
     cod_produto_componente = db.Column(db.String(50), nullable=False, index=True)
     nome_produto_componente = db.Column(db.String(255))
-    qtd_utilizada = db.Column(db.Numeric(15, 6), nullable=False)
+    qtd_utilizada = db.Column(db.Numeric(18, 6), nullable=False)
     status = db.Column(db.String(10), default='ativo', index=True)
     versao = db.Column(db.String(100), default='v1')
 
@@ -319,11 +319,11 @@ class ListaMateriaisHistorico(db.Model):
     versao = db.Column(db.String(100))
 
     # Valores ANTES da alteração (null para CRIAR)
-    qtd_utilizada_antes = db.Column(db.Numeric(15, 6), nullable=True)
+    qtd_utilizada_antes = db.Column(db.Numeric(18, 6), nullable=True)
     status_antes = db.Column(db.String(10), nullable=True)
 
     # Valores DEPOIS da alteração
-    qtd_utilizada_depois = db.Column(db.Numeric(15, 6), nullable=True)
+    qtd_utilizada_depois = db.Column(db.Numeric(18, 6), nullable=True)
     status_depois = db.Column(db.String(10), nullable=True)
 
     # Metadados da alteração
@@ -503,9 +503,9 @@ class HistoricoPedidoCompras(db.Model):
     nome_produto = db.Column(db.String(255))
 
     # Quantidades e valores
-    qtd_produto_pedido = db.Column(db.Numeric(15, 3), nullable=False)
-    qtd_recebida = db.Column(db.Numeric(15, 3), default=0)
-    preco_produto_pedido = db.Column(db.Numeric(15, 4))
+    qtd_produto_pedido = db.Column(db.Numeric(18, 6), nullable=False)
+    qtd_recebida = db.Column(db.Numeric(18, 6), default=0)
+    preco_produto_pedido = db.Column(db.Numeric(18, 8))
     icms_produto_pedido = db.Column(db.Numeric(15, 2))
     pis_produto_pedido = db.Column(db.Numeric(15, 2))
     cofins_produto_pedido = db.Column(db.Numeric(15, 2))

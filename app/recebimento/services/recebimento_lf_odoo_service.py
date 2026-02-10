@@ -58,6 +58,7 @@ import logging
 import os
 import time
 from datetime import date
+from decimal import Decimal
 
 from redis import Redis
 
@@ -78,7 +79,7 @@ class RecebimentoLfOdooService:
     COMPANY_LF = 5
     PICKING_TYPE_FB = 1
     TEAM_ID = 119
-    PAYMENT_PROVIDER_ID = 30
+    PAYMENT_PROVIDER_ID = 92  # Transferencia Bancaria FB (company_id=1)
     PAYMENT_TERM_A_VISTA = 2791
 
     # Fire and Poll — parametros
@@ -788,7 +789,7 @@ class RecebimentoLfOdooService:
         self._write_and_verify(
             odoo, 'purchase.order', [po_id], values,
             'Configurar PO',
-            critical_fields=['team_id', 'payment_term_id', 'picking_type_id', 'company_id']
+            critical_fields=['team_id', 'payment_term_id', 'picking_type_id', 'company_id', 'payment_provider_id']
         )
 
         self._checkpoint(etapa=6, msg='PO configurado')
@@ -1178,26 +1179,57 @@ class RecebimentoLfOdooService:
             critical_fields=['l10n_br_situacao_nf']
         )
 
-        # Recalcular impostos (OPCIONAL — nao falhar se der erro)
+        # Recalcular impostos — pre-calculo (opcional)
         try:
             odoo.execute_kw(
                 'account.move',
                 'onchange_l10n_br_calcular_imposto',
                 [[invoice_id]]
             )
-            logger.info(f"  Impostos recalculados na invoice {invoice_id}")
+            logger.info(f"  Impostos recalculados (onchange) na invoice {invoice_id}")
         except Exception as e:
-            logger.warning(f"  Recalculo de impostos falhou (nao critico): {e}")
+            logger.warning(f"  Recalculo onchange falhou (nao critico): {e}")
 
-        # Segundo recalculo (btn)
-        try:
-            odoo.execute_kw(
+        # Ler write_date ANTES para detectar conclusao no poll
+        inv_pre = odoo.execute_kw(
+            'account.move', 'read', [[invoice_id]],
+            {'fields': ['write_date']}
+        )
+        write_date_antes = inv_pre[0]['write_date'] if inv_pre else None
+
+        # Atualizar Impostos (btn) — OBRIGATORIO, ~2 min, usar fire_and_poll
+        logger.info(f"  Atualizar Impostos (fire_and_poll, ~2min)...")
+
+        def fire_impostos():
+            return odoo.execute_kw(
                 'account.move',
                 'onchange_l10n_br_calcular_imposto_btn',
-                [[invoice_id]]
+                [[invoice_id]],
+                timeout_override=self.FIRE_TIMEOUT
             )
-        except Exception as e:
-            logger.warning(f"  Recalculo impostos btn falhou (nao critico): {e}")
+
+        def poll_impostos():
+            inv = odoo.execute_kw(
+                'account.move', 'read', [[invoice_id]],
+                {'fields': ['write_date']}
+            )
+            if inv and inv[0]['write_date'] != write_date_antes:
+                return True  # Invoice foi modificada — impostos recalculados
+            return None
+
+        self._fire_and_poll(odoo, fire_impostos, poll_impostos, 'Atualizar Impostos')
+        logger.info(f"  Atualizar Impostos concluido na invoice {invoice_id}")
+
+        # Verificar total apos recalculo (log informativo)
+        inv_check = odoo.execute_kw(
+            'account.move', 'read',
+            [[invoice_id]],
+            {'fields': ['amount_total', 'amount_untaxed']}
+        )
+        if inv_check:
+            total = inv_check[0].get('amount_total', 0)
+            untaxed = inv_check[0].get('amount_untaxed', 0)
+            logger.info(f"  Invoice {invoice_id}: total={total}, base={untaxed}")
 
         self._checkpoint(etapa=15, msg='Invoice configurada')
 
@@ -1363,17 +1395,17 @@ class RecebimentoLfOdooService:
                 )
 
                 # Ajustar quantidade: usar demand do move se diferenca < 0.01
-                qty = float(lote.quantidade)
+                qty = lote.quantidade  # Decimal do DB (Numeric)
                 if (move_demand is not None
                         and len(lotes_produto) == 1
-                        and abs(qty - move_demand) < 0.01):
-                    qty = move_demand
+                        and abs(float(qty) - move_demand) < 0.01):
+                    qty = Decimal(str(move_demand))
 
                 if i == 0 and existing_lines:
                     # Primeira entrada: atualizar line existente
                     line = existing_lines[0]
                     write_data = {
-                        'quantity': qty,
+                        'quantity': float(qty),
                     }
                     write_data.update(lot_data)
 
@@ -1399,7 +1431,7 @@ class RecebimentoLfOdooService:
                         'picking_id': picking_id,
                         'product_id': product_id,
                         'product_uom_id': ref_line['product_uom_id'][0] if ref_line['product_uom_id'] else None,
-                        'quantity': qty,
+                        'quantity': float(qty),
                         'location_id': ref_line['location_id'][0] if ref_line['location_id'] else None,
                         'location_dest_id': ref_line['location_dest_id'][0] if ref_line['location_dest_id'] else None,
                     }

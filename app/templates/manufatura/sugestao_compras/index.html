@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+
+{% block title %}Sugestao de Compras{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ 'manufatura/sugestao_compras/css/sugestao.css'|asset_url }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <h2><i class="fas fa-shopping-cart"></i> Sugestao de Compras (MRP Simplificado)</h2>
+            <p class="text-muted">Horizonte 60 dias &mdash; Demanda via BOM x Programacao vs Estoque + Em Transito</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card sc-card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Tipo Materia-Prima</label>
+                    <select id="filtro-tipo-mp" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Categoria</label>
+                    <select id="filtro-categoria" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Urgencia</label>
+                    <select id="filtro-urgencia" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        <option value="critico">Critico</option>
+                        <option value="alerta">Alerta</option>
+                        <option value="ok">OK</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Buscar</label>
+                    <input type="text" id="filtro-busca" class="form-control form-control-sm" placeholder="Codigo ou nome do produto...">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label form-label-sm mb-1">&nbsp;</label>
+                    <label class="form-check form-check-inline d-block">
+                        <input type="checkbox" id="filtro-apenas-necessidade" class="form-check-input" checked>
+                        <span class="form-check-label small">So necessidade</span>
+                    </label>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary btn-sm w-100" id="btn-calcular" onclick="calcularSugestoes()">
+                        <i class="fas fa-calculator"></i> Calcular
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div id="resumo-cards" class="row g-2 mb-3 d-none">
+        <div class="col-md-3">
+            <div class="card sc-card">
+                <div class="card-body py-2 text-center">
+                    <div class="sc-stat-label">Total Componentes</div>
+                    <div class="sc-stat-value" id="stat-total">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card sc-card">
+                <div class="card-body py-2 text-center">
+                    <div class="sc-stat-label">Com Necessidade</div>
+                    <div class="sc-stat-value sc-text-alerta" id="stat-necessidade">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card sc-card">
+                <div class="card-body py-2 text-center">
+                    <div class="sc-stat-label">Criticos</div>
+                    <div class="sc-stat-value sc-text-critico" id="stat-criticos">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card sc-card">
+                <div class="card-body py-2 text-center">
+                    <div class="sc-stat-label">Tempo Calculo</div>
+                    <div class="sc-stat-value" id="stat-tempo">0s</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">Calculando sugestoes de compra...</p>
+    </div>
+
+    <!-- Tabela de resultados -->
+    <div id="resultado-container" class="d-none">
+        <div class="card sc-card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover mb-0 sc-table">
+                        <thead>
+                            <tr>
+                                <th class="sc-col-sticky" data-sort="cod_produto">Componente <i class="fas fa-sort"></i></th>
+                                <th class="text-end" data-sort="estoque_atual">Estoque <i class="fas fa-sort"></i></th>
+                                <th class="text-end" data-sort="demanda_60d">Demanda 60d <i class="fas fa-sort"></i></th>
+                                <th class="text-end" data-sort="em_transito">Em Transito <i class="fas fa-sort"></i></th>
+                                <th class="text-end" data-sort="necessidade_liquida">Necessidade <i class="fas fa-sort"></i></th>
+                                <th class="text-end" data-sort="lote_minimo">Lote Min. <i class="fas fa-sort"></i></th>
+                                <th class="text-end" data-sort="qtd_sugerida">Qtd Sugerida <i class="fas fa-sort"></i></th>
+                                <th class="text-center" data-sort="lead_time">Lead Time <i class="fas fa-sort"></i></th>
+                                <th class="text-center" data-sort="data_pedir">Pedir Ate <i class="fas fa-sort"></i></th>
+                                <th class="text-center" data-sort="urgencia">Urgencia <i class="fas fa-sort"></i></th>
+                                <th class="text-center">Tipo MP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="mt-2 text-muted small" id="info-filtro"></div>
+    </div>
+</div>
+
+<script src="{{ 'manufatura/sugestao_compras/js/sugestao.js'|asset_url }}"></script>
+{% endblock %}

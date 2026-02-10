@@ -160,7 +160,7 @@ def register_necessidade_producao_routes(bp):
         """Lista separações (sincronizado_nf=False) de um produto"""
         try:
             from app.separacao.models import Separacao
-            from app.carteira.models import CarteiraPrincipal
+            from app.carteira.models import CarteiraPrincipal, SaldoStandby
             from sqlalchemy import func
             from collections import defaultdict
 
@@ -182,12 +182,18 @@ def register_necessidade_producao_routes(bp):
             estoque_service = ServicoEstoqueSimples()
             estoque_atual = estoque_service.calcular_estoque_atual(cod_produto)
 
-            # Calcular total sem separação (apenas saldo positivo)
+            # Calcular total sem separação (excluindo standby e inativos)
+            pedidos_em_standby = db.session.query(SaldoStandby.num_pedido).filter(
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            ).distinct().subquery()
+
             total_carteira_raw = db.session.query(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
             ).filter(
+                CarteiraPrincipal.ativo == True,
                 CarteiraPrincipal.cod_produto == cod_produto,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ Filtrar apenas saldo positivo
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+                ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)
             ).scalar()
 
             total_carteira = float(total_carteira_raw) if total_carteira_raw is not None else 0.0

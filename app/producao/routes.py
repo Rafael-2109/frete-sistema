@@ -192,7 +192,10 @@ def listar_palletizacao():
     nome_produto = request.args.get('nome_produto', '')
     palletizacao_filtro = request.args.get('palletizacao', '')
     peso_bruto_filtro = request.args.get('peso_bruto', '')
-    
+    produto_comprado_filtro = request.args.get('produto_comprado', '')
+    produto_produzido_filtro = request.args.get('produto_produzido', '')
+    produto_vendido_filtro = request.args.get('produto_vendido', '')
+
     # Paginação
     try:
         page = int(request.args.get('page', '1'))
@@ -229,7 +232,14 @@ def listar_palletizacao():
                     query = query.filter(CadastroPalletizacao.peso_bruto == peso_val)
                 except Exception as e:
                     pass
-            
+
+            if produto_comprado_filtro:
+                query = query.filter(CadastroPalletizacao.produto_comprado == (produto_comprado_filtro == 'sim'))
+            if produto_produzido_filtro:
+                query = query.filter(CadastroPalletizacao.produto_produzido == (produto_produzido_filtro == 'sim'))
+            if produto_vendido_filtro:
+                query = query.filter(CadastroPalletizacao.produto_vendido == (produto_vendido_filtro == 'sim'))
+
             # Ordenação e paginação
             pagination = query.order_by(CadastroPalletizacao.cod_produto).paginate(
                 page=page, per_page=per_page, error_out=False
@@ -265,6 +275,9 @@ def listar_palletizacao():
                          nome_produto=nome_produto,
                          palletizacao_filtro=palletizacao_filtro,
                          peso_bruto_filtro=peso_bruto_filtro,
+                         produto_comprado_filtro=produto_comprado_filtro,
+                         produto_produzido_filtro=produto_produzido_filtro,
+                         produto_vendido_filtro=produto_vendido_filtro,
                          codigos_produtos=codigos_produtos,
                          nomes_produtos=nomes_produtos,
                          fatores_palletizacao=fatores_palletizacao,
@@ -375,7 +388,11 @@ def processar_importacao_palletizacao():
                 produto_produzido = str(row.get('PRODUTO_PRODUZIDO', 'NAO')).strip().upper() == 'SIM' if pd.notna(row.get('PRODUTO_PRODUZIDO')) else False
                 produto_vendido = str(row.get('PRODUTO_VENDIDO', 'SIM')).strip().upper() == 'SIM' if pd.notna(row.get('PRODUTO_VENDIDO')) else True
                 disparo_producao = str(row.get('DISPARO_PRODUCAO', '')).strip() if pd.notna(row.get('DISPARO_PRODUCAO')) else None
-                lead_time_mto = int(row.get('LEAD_TIME_MTO', 0) or 0) if pd.notna(row.get('LEAD_TIME_MTO')) else None
+                lead_time = int(row.get('LEAD_TIME', 0) or 0) if pd.notna(row.get('LEAD_TIME')) else None
+                # Backward compat: aceitar LEAD_TIME_MTO se LEAD_TIME nao existir
+                if lead_time is None and pd.notna(row.get('LEAD_TIME_MTO')):
+                    lead_time = int(row.get('LEAD_TIME_MTO', 0) or 0)
+                lote_minimo_compra = int(row.get('LOTE_MINIMO_COMPRA', 0) or 0) if pd.notna(row.get('LOTE_MINIMO_COMPRA')) else None
                 custo_produto = float(row.get('CUSTO_PRODUTO', 0) or 0) if pd.notna(row.get('CUSTO_PRODUTO')) else None
 
                 if palletizacao_existente:
@@ -391,12 +408,13 @@ def processar_importacao_palletizacao():
                     palletizacao_existente.tipo_materia_prima = tipo_materia_prima
                     palletizacao_existente.tipo_embalagem = tipo_embalagem
                     palletizacao_existente.linha_producao = linha_producao
-                    # 🔧 CORRIGIDO: Atualizar campos de produção
+                    # Atualizar campos de produção
                     palletizacao_existente.produto_comprado = produto_comprado
                     palletizacao_existente.produto_produzido = produto_produzido
                     palletizacao_existente.produto_vendido = produto_vendido
                     palletizacao_existente.disparo_producao = disparo_producao
-                    palletizacao_existente.lead_time_mto = lead_time_mto
+                    palletizacao_existente.lead_time = lead_time
+                    palletizacao_existente.lote_minimo_compra = lote_minimo_compra
                     palletizacao_existente.custo_produto = custo_produto
                     palletizacao_existente.updated_by = current_user.nome
                     palletizacao_existente.ativo = True  # Reativar se estava inativo
@@ -421,7 +439,8 @@ def processar_importacao_palletizacao():
                     nova_palletizacao.produto_produzido = produto_produzido
                     nova_palletizacao.produto_vendido = produto_vendido
                     nova_palletizacao.disparo_producao = disparo_producao
-                    nova_palletizacao.lead_time_mto = lead_time_mto
+                    nova_palletizacao.lead_time = lead_time
+                    nova_palletizacao.lote_minimo_compra = lote_minimo_compra
                     nova_palletizacao.custo_produto = custo_produto
                     nova_palletizacao.created_by = current_user.nome
                     nova_palletizacao.ativo = True
@@ -1127,7 +1146,8 @@ def editar_palletizacao_api(id):
         produto.produto_produzido = dados.get('produto_produzido', False)
         produto.produto_vendido = dados.get('produto_vendido', False)
         produto.disparo_producao = dados.get('disparo_producao')
-        produto.lead_time_mto = dados.get('lead_time_mto')
+        produto.lead_time = dados.get('lead_time')
+        produto.lote_minimo_compra = dados.get('lote_minimo_compra')
         produto.custo_produto = dados.get('custo_produto')
         produto.updated_by = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
 
@@ -1187,7 +1207,8 @@ def exportar_dados_palletizacao():
                 'PRODUTO_PRODUZIDO': 'SIM' if p.produto_produzido else 'NAO',
                 'PRODUTO_VENDIDO': 'SIM' if p.produto_vendido else 'NAO',
                 'DISPARO_PRODUCAO': p.disparo_producao or '',
-                'LEAD_TIME_MTO': p.lead_time_mto or '',
+                'LEAD_TIME': p.lead_time or '',
+                'LOTE_MINIMO_COMPRA': p.lote_minimo_compra or '',
                 'CUSTO_PRODUTO': p.custo_produto or ''
             })
         

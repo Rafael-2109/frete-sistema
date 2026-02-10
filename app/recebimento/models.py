@@ -832,16 +832,16 @@ class MatchNfPoItem(db.Model):
     fator_conversao = db.Column(db.Numeric(10, 4), nullable=True)
 
     # Valores da NF (apos conversao)
-    qtd_nf = db.Column(db.Numeric(15, 3), nullable=True)
-    preco_nf = db.Column(db.Numeric(15, 4), nullable=True)
+    qtd_nf = db.Column(db.Numeric(18, 6), nullable=True)
+    preco_nf = db.Column(db.Numeric(18, 8), nullable=True)
     data_nf = db.Column(db.Date, nullable=True)
 
     # PO Match encontrado
     odoo_po_id = db.Column(db.Integer, nullable=True)
     odoo_po_name = db.Column(db.String(50), nullable=True)
     odoo_po_line_id = db.Column(db.Integer, nullable=True)
-    qtd_po = db.Column(db.Numeric(15, 3), nullable=True)
-    preco_po = db.Column(db.Numeric(15, 4), nullable=True)
+    qtd_po = db.Column(db.Numeric(18, 6), nullable=True)
+    preco_po = db.Column(db.Numeric(18, 8), nullable=True)
     data_po = db.Column(db.Date, nullable=True)
 
     # Status do match
@@ -910,10 +910,10 @@ class MatchAlocacao(db.Model):
     odoo_po_line_id = db.Column(db.Integer, nullable=False, index=True)
 
     # Quantidade alocada desta linha de PO
-    qtd_alocada = db.Column(db.Numeric(15, 3), nullable=False)
+    qtd_alocada = db.Column(db.Numeric(18, 6), nullable=False)
 
     # Preco e data do PO (para auditoria)
-    preco_po = db.Column(db.Numeric(15, 4), nullable=True)
+    preco_po = db.Column(db.Numeric(18, 8), nullable=True)
     data_po = db.Column(db.Date, nullable=True)
 
     # Ordem de alocacao (1 = primeiro PO usado, ordem por data ASC)
@@ -1145,7 +1145,7 @@ class RecebimentoLote(db.Model):
 
     # Lote
     lote_nome = db.Column(db.String(100), nullable=False)
-    quantidade = db.Column(db.Numeric(15, 3), nullable=False)
+    quantidade = db.Column(db.Numeric(18, 6), nullable=False)
     data_validade = db.Column(db.Date, nullable=True)
 
     # Tracking
@@ -1589,7 +1589,7 @@ class RecebimentoLfLote(db.Model):
 
     # Lote e quantidade
     lote_nome = db.Column(db.String(100), nullable=True)
-    quantidade = db.Column(db.Numeric(15, 3), nullable=False)
+    quantidade = db.Column(db.Numeric(18, 6), nullable=False)
     data_validade = db.Column(db.Date, nullable=True)
 
     # Tracking do produto (lot/serial/none)

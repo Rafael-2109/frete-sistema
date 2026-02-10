@@ -120,7 +120,7 @@ def api_projetar_consolidado():
     """
     try:
         service = ServicoProjecaoEstoque()
-        resultado = service.projetar_componentes_consolidado()
+        resultado = service.projetar_componentes_consolidado_v2()
 
         return jsonify(resultado)
 

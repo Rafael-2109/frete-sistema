@@ -92,7 +92,8 @@ class CadastroPalletizacao(db.Model):
     produto_comprado = db.Column(db.Boolean, nullable=False, default=False)
     produto_produzido = db.Column(db.Boolean, nullable=False, default=False)
     produto_vendido = db.Column(db.Boolean, nullable=False, default=True)
-    lead_time_mto = db.Column(db.Integer, nullable=True)
+    lead_time = db.Column(db.Integer, nullable=True)  # Lead time de compra em dias
+    lote_minimo_compra = db.Column(db.Integer, nullable=True)  # Lote minimo de compra (unidades)
     disparo_producao = db.Column(db.String(3), nullable=True)
     custo_produto = db.Column(db.Numeric(15, 4), nullable=True)
 

@@ -1712,3 +1712,145 @@ class ComprovanteMatchService:
             beneficiario_e_financeira=e_financeira,
             status='PENDENTE',
         )
+
+    # =========================================================================
+    # PESQUISA MANUAL DE NFs DO FORNECEDOR
+    # =========================================================================
+
+    def pesquisar_nfs_fornecedor(
+        self, comprovante_id: int, nf: str = None,
+        data_inicio: str = None, data_fim: str = None,
+    ) -> Dict:
+        """
+        Pesquisa NFs em aberto do fornecedor associado ao comprovante.
+        Permite ao usuario buscar titulos que o parser automatico nao encontrou.
+
+        Reutiliza _detectar_company_ids, _validar_beneficiario e
+        _buscar_faturas_por_partner (com cache).
+
+        Args:
+            comprovante_id: ID do comprovante
+            nf: Filtro opcional por numero de NF (parcial ou exato)
+            data_inicio: Filtro opcional vencimento >= (YYYY-MM-DD)
+            data_fim: Filtro opcional vencimento <= (YYYY-MM-DD)
+
+        Returns:
+            Dict com fornecedor + lista de faturas formatadas como candidatos
+        """
+        comp = ComprovantePagamentoBoleto.query.get(comprovante_id)
+        if not comp:
+            return {'sucesso': False, 'erro': f'Comprovante {comprovante_id} nao encontrado'}
+
+        # 1. Detectar empresas pelo pagador
+        pagador_cnpj = comp.pagador_cnpj_cpf
+        company_ids = self._detectar_company_ids(pagador_cnpj)
+        if not company_ids:
+            return {
+                'sucesso': False,
+                'erro': f'CNPJ pagador {pagador_cnpj} nao reconhecido como empresa do grupo',
+            }
+
+        # 2. Validar beneficiario
+        benef_cnpj = comp.beneficiario_cnpj_cpf
+        benef_info = self._validar_beneficiario(benef_cnpj, company_ids)
+
+        if benef_info.get('e_financeira'):
+            return {
+                'sucesso': False,
+                'erro': (
+                    f'Beneficiario {benef_cnpj} classificado como financeira. '
+                    f'Pesquisa cross-empresa nao suportada neste modo. '
+                    f'Use Vinculacao Manual com NF + Parcela + Empresa.'
+                ),
+            }
+
+        partner_id = benef_info.get('partner_id')
+        if not partner_id:
+            return {
+                'sucesso': False,
+                'erro': f'Fornecedor com CNPJ {benef_cnpj} nao encontrado no Odoo',
+            }
+
+        partner_name = benef_info.get('partner_name', '')
+
+        # 3. Buscar faturas em aberto (reutiliza cache)
+        faturas = self._buscar_faturas_por_partner(partner_id, company_ids)
+
+        # 4. Aplicar filtros opcionais
+        resultados = []
+        for fatura in faturas:
+            nf_valor = str(fatura.get('x_studio_nf_e') or '')
+            vencimento_str = fatura.get('date_maturity') or ''
+
+            # Filtro por NF (parcial, case-insensitive)
+            if nf and nf.strip():
+                if nf.strip().lower() not in nf_valor.lower():
+                    continue
+
+            # Filtro por data de vencimento
+            if data_inicio and vencimento_str and vencimento_str < data_inicio:
+                continue
+            if data_fim and vencimento_str and vencimento_str > data_fim:
+                continue
+
+            # Formatar como candidato (compativel com renderizarCandidatos)
+            move_id_data = fatura.get('move_id')
+            move_id = move_id_data[0] if isinstance(move_id_data, (list, tuple)) else move_id_data
+            move_name = ''
+            if isinstance(move_id_data, (list, tuple)) and len(move_id_data) > 1:
+                move_name = move_id_data[1]
+
+            partner_id_val = fatura.get('partner_id')
+            p_name = (
+                partner_id_val[1]
+                if isinstance(partner_id_val, (list, tuple)) and len(partner_id_val) > 1
+                else partner_name
+            )
+
+            company_id_val = fatura.get('company_id')
+            c_id = company_id_val[0] if isinstance(company_id_val, (list, tuple)) else company_id_val
+
+            vencimento = None
+            if vencimento_str:
+                try:
+                    vencimento = datetime.strptime(vencimento_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    pass
+
+            valor_original = abs(float(fatura.get('credit', 0)))
+            valor_residual = abs(float(fatura.get('amount_residual', 0)))
+
+            resultados.append({
+                'odoo_move_line_id': fatura['id'],
+                'odoo_move_id': move_id,
+                'odoo_move_name': move_name,
+                'odoo_partner_id': partner_id,
+                'odoo_partner_name': p_name,
+                'odoo_company_id': c_id,
+                'nf_numero': nf_valor,
+                'parcela': fatura.get('l10n_br_cobranca_parcela'),
+                'odoo_valor_original': valor_original,
+                'odoo_valor_residual': valor_residual,
+                'odoo_vencimento': vencimento.isoformat() if vencimento else None,
+                'odoo_vencimento_fmt': vencimento.strftime('%d/%m/%Y') if vencimento else None,
+                'score': None,
+                'criterios': [],
+                'diferenca_valor': None,
+                'beneficiario_e_financeira': False,
+                'fonte': 'PESQUISA',
+            })
+
+        # Ordenar por vencimento ASC
+        resultados.sort(key=lambda x: x.get('odoo_vencimento') or '9999-99-99')
+
+        logger.info(
+            f"Pesquisa NFs fornecedor: comp={comprovante_id} partner={partner_id} "
+            f"filtro_nf={nf} periodo={data_inicio}~{data_fim} -> {len(resultados)} resultados"
+        )
+
+        return {
+            'sucesso': True,
+            'fornecedor': partner_name,
+            'faturas': resultados,
+            'total': len(resultados),
+        }

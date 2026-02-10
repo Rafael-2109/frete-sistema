@@ -1,0 +1,187 @@
+/**
+ * sugestao.css - Sugestao de Compras Module
+ *
+ * Token mapping:
+ * - var(--bg-light) for card backgrounds
+ * - var(--bg) for table headers
+ * - var(--text) for primary text
+ * - var(--text-muted) for secondary text
+ * - var(--border) for borders
+ * - var(--hover-bg) for row hover
+ */
+
+/* Cards */
+.sc-card {
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+}
+
+/* Stats */
+.sc-stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+}
+
+.sc-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.sc-text-critico { color: hsl(0 72% 51%); }
+.sc-text-alerta { color: hsl(38 92% 50%); }
+.sc-text-ok { color: hsl(142 71% 45%); }
+
+/* Table */
+.sc-table {
+    font-size: 0.8rem;
+}
+
+.sc-table thead th {
+    background: var(--bg);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.sc-table thead th:hover {
+    color: var(--text);
+}
+
+.sc-table thead th .fa-sort,
+.sc-table thead th .fa-sort-up,
+.sc-table thead th .fa-sort-down {
+    font-size: 0.6rem;
+    opacity: 0.5;
+    margin-left: 2px;
+}
+
+.sc-table thead th.sort-active .fa-sort-up,
+.sc-table thead th.sort-active .fa-sort-down {
+    opacity: 1;
+}
+
+.sc-table tbody tr:hover {
+    background: var(--hover-bg);
+}
+
+.sc-col-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 220px;
+    max-width: 280px;
+}
+
+.sc-table thead .sc-col-sticky {
+    z-index: 3;
+}
+
+.sc-table tbody .sc-col-sticky {
+    background: inherit;
+}
+
+/* Badges de urgencia */
+.sc-badge {
+    display: inline-block;
+    padding: 0.15em 0.5em;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.sc-badge-critico {
+    background: hsla(0, 72%, 51%, 0.15);
+    color: hsl(0, 72%, 51%);
+    border: 1px solid hsla(0, 72%, 51%, 0.3);
+}
+
+.sc-badge-alerta {
+    background: hsla(38, 92%, 50%, 0.15);
+    color: hsl(38, 72%, 40%);
+    border: 1px solid hsla(38, 92%, 50%, 0.3);
+}
+
+.sc-badge-ok {
+    background: hsla(142, 71%, 45%, 0.12);
+    color: hsl(142, 71%, 35%);
+    border: 1px solid hsla(142, 71%, 45%, 0.25);
+}
+
+/* Badge tipo materia-prima */
+.sc-badge-mp {
+    background: hsla(220, 60%, 50%, 0.1);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+}
+
+/* Valores com destaque */
+.sc-valor-positivo {
+    color: hsl(0, 72%, 51%);
+    font-weight: 600;
+}
+
+.sc-valor-negativo {
+    color: hsl(142, 71%, 45%);
+}
+
+.sc-qtd-sugerida {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.sc-data-atrasada {
+    color: hsl(0, 72%, 51%);
+    font-weight: 600;
+}
+
+/* Produto nome overflow */
+.sc-produto-nome {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+.sc-produto-cod {
+    font-weight: 600;
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+/* Em transito tooltip */
+.sc-em-transito {
+    cursor: help;
+    border-bottom: 1px dotted var(--text-muted);
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="dark"] .sc-badge-alerta {
+    color: hsl(38, 92%, 60%);
+}
+
+[data-bs-theme="dark"] .sc-text-critico { color: hsl(0 72% 60%); }
+[data-bs-theme="dark"] .sc-text-alerta { color: hsl(38 92% 60%); }
+
+[data-bs-theme="dark"] .sc-valor-positivo {
+    color: hsl(0, 72%, 60%);
+}
+
+[data-bs-theme="dark"] .sc-data-atrasada {
+    color: hsl(0, 72%, 60%);
+}

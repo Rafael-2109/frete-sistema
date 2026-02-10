@@ -10,11 +10,13 @@ Autor: Sistema de Fretes
 Data: 01/11/2025
 """
 
+import logging
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 from collections import defaultdict
 from typing import Dict, List, Any
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app import db
 from app.manufatura.models import (
@@ -25,7 +27,9 @@ from app.manufatura.models import (
 )
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-from app.estoque.models import UnificacaoCodigos
+from app.estoque.models import UnificacaoCodigos, MovimentacaoEstoque
+
+logger = logging.getLogger(__name__)
 
 
 class ServicoProjecaoEstoque:
@@ -146,6 +150,538 @@ class ServicoProjecaoEstoque:
         return {
             'sucesso': True,
             'data_calculo': date.today().isoformat(),
+            'total_componentes': len(componentes),
+            'componentes': componentes
+        }
+
+    def projetar_componentes_consolidado_v2(self) -> Dict[str, Any]:
+        """
+        Projeção consolidada de componentes v2 — batch queries (~7 queries grandes).
+
+        Elimina o problema N+1 do v1 (1000+ queries) carregando tudo em memória
+        e processando via dicionários. Mesmo formato de retorno do v1.
+        """
+        t0 = time.time()
+
+        hoje = date.today()
+        data_inicio = hoje
+        data_fim = hoje + timedelta(days=60)
+
+        # =====================================================================
+        # 1. Pre-carregar TODAS as BOMs ativas (1 query)
+        # =====================================================================
+        todas_boms = ListaMateriais.query.filter_by(status='ativo').all()
+        bom_por_componente = defaultdict(list)  # componente → [boms]
+        bom_por_produzido = defaultdict(list)   # produzido → [boms]
+        for bom in todas_boms:
+            bom_por_componente[bom.cod_produto_componente].append(bom)
+            bom_por_produzido[bom.cod_produto_produzido].append(bom)
+
+        logger.info(f"v2: BOMs carregadas: {len(todas_boms)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 2. Pre-carregar TODOS os estoques via SUM agrupado (1 query)
+        # =====================================================================
+        estoques_raw = db.session.query(
+            MovimentacaoEstoque.cod_produto,
+            func.sum(MovimentacaoEstoque.qtd_movimentacao)
+        ).filter(
+            MovimentacaoEstoque.ativo == True
+        ).group_by(MovimentacaoEstoque.cod_produto).all()
+        estoque_map = {cod: float(qtd or 0) for cod, qtd in estoques_raw}
+
+        logger.info(f"v2: Estoques carregados: {len(estoque_map)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 3. Pre-carregar TODAS as programações futuras 60 dias (1 query)
+        # =====================================================================
+        programacoes = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.data_programacao.between(data_inicio, data_fim)
+        ).all()
+        programacoes_por_produto = defaultdict(list)
+        for prog in programacoes:
+            programacoes_por_produto[prog.cod_produto].append(prog)
+
+        # Programações para consumo_programacao (365 dias, mais amplo)
+        data_fim_365 = hoje + timedelta(days=365)
+        programacoes_365 = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.data_programacao.between(data_inicio, data_fim_365)
+        ).all()
+        programacoes_365_por_produto = defaultdict(list)
+        for prog in programacoes_365:
+            programacoes_365_por_produto[prog.cod_produto].append(prog)
+
+        logger.info(f"v2: Programações carregadas: {len(programacoes)}/60d, {len(programacoes_365)}/365d ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 4. Pre-carregar TODAS as requisições com SUM(alocações) (1 query)
+        # =====================================================================
+        requisicoes_com_alocacoes = db.session.query(
+            RequisicaoCompras,
+            func.coalesce(func.sum(RequisicaoCompraAlocacao.qtd_alocada), 0).label('total_alocado')
+        ).outerjoin(
+            RequisicaoCompraAlocacao,
+            RequisicaoCompraAlocacao.requisicao_compra_id == RequisicaoCompras.id
+        ).filter(
+            RequisicaoCompras.importado_odoo == True,
+            or_(
+                RequisicaoCompras.status.is_(None),
+                ~RequisicaoCompras.status.in_(['Cancelada', 'Rejeitada', 'Concluída'])
+            ),
+            or_(
+                RequisicaoCompras.status_requisicao.is_(None),
+                ~RequisicaoCompras.status_requisicao.in_(['rejected', 'cancel', 'done'])
+            )
+        ).group_by(RequisicaoCompras.id).all()
+
+        # Agrupar requisições por cod_produto
+        requisicoes_por_produto = defaultdict(list)
+        for req, total_alocado in requisicoes_com_alocacoes:
+            requisicoes_por_produto[req.cod_produto].append((req, Decimal(str(total_alocado))))
+
+        logger.info(f"v2: Requisições carregadas: {len(requisicoes_com_alocacoes)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 5. Pre-carregar TODOS os pedidos de compra abertos (1 query)
+        # =====================================================================
+        pedidos_abertos = PedidoCompras.query.filter(
+            PedidoCompras.importado_odoo == True,
+            PedidoCompras.status_odoo.notin_(['cancel', 'done'])
+        ).all()
+        pedidos_por_produto = defaultdict(list)
+        for ped in pedidos_abertos:
+            pedidos_por_produto[ped.cod_produto].append(ped)
+
+        logger.info(f"v2: Pedidos carregados: {len(pedidos_abertos)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 6. Pre-carregar carteira (saldo por produto) (1 query)
+        # =====================================================================
+        from app.carteira.models import CarteiraPrincipal
+        saldos_carteira_raw = db.session.query(
+            CarteiraPrincipal.cod_produto,
+            func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido)
+        ).filter(
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).group_by(CarteiraPrincipal.cod_produto).all()
+        carteira_map = {cod: float(qtd or 0) for cod, qtd in saldos_carteira_raw}
+
+        logger.info(f"v2: Carteira carregada: {len(carteira_map)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 7. Pre-carregar mapa de intermediários
+        # =====================================================================
+        produtos_produzidos_set = {p.cod_produto for p in CadastroPalletizacao.query.filter_by(
+            produto_produzido=True, ativo=True
+        ).all()}
+        usados_como_componente = {b.cod_produto_componente for b in todas_boms}
+        tem_bom_propria = {b.cod_produto_produzido for b in todas_boms}
+        intermediarios = produtos_produzidos_set & usados_como_componente & tem_bom_propria
+
+        # Pre-carregar set de produtos vendidos
+        produtos_vendidos_set = {p.cod_produto for p in CadastroPalletizacao.query.filter_by(
+            produto_vendido=True, ativo=True
+        ).all()}
+
+        logger.info(f"v2: Intermediários: {len(intermediarios)}, Vendidos: {len(produtos_vendidos_set)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # 8. Pre-carregar produtos comprados e mapa de unificação (1 query + batch)
+        # =====================================================================
+        produtos_comprados = CadastroPalletizacao.query.filter_by(
+            produto_comprado=True,
+            ativo=True
+        ).order_by(CadastroPalletizacao.cod_produto).all()
+
+        todos_cod_produtos = [p.cod_produto for p in produtos_comprados]
+        mapa_unificacao = UnificacaoCodigos.get_todos_codigos_relacionados_batch(todos_cod_produtos)
+
+        logger.info(f"v2: Produtos comprados: {len(produtos_comprados)}, Unificações: {len(mapa_unificacao)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # Pre-carregar unificações dos produtos PAI (para consumo_carteira)
+        # =====================================================================
+        # Coletar todos os cod_produto_produzido que aparecem como pais de componentes comprados
+        todos_cod_pais = set()
+        for cod in todos_cod_produtos:
+            codigos_unificados = mapa_unificacao.get(cod, [cod])
+            for cod_unif in codigos_unificados:
+                for bom in bom_por_componente.get(cod_unif, []):
+                    todos_cod_pais.add(bom.cod_produto_produzido)
+
+        mapa_unificacao_pais = UnificacaoCodigos.get_todos_codigos_relacionados_batch(list(todos_cod_pais))
+
+        logger.info(f"v2: Unificações pais: {len(mapa_unificacao_pais)} ({time.time()-t0:.2f}s)")
+
+        # =====================================================================
+        # Pre-carregar estoques dos produtos PAI (para consumo_carteira)
+        # Reutilizamos estoque_map — ele já tem todos os produtos
+        # =====================================================================
+
+        # =====================================================================
+        # Funções auxiliares em memória (ZERO queries)
+        # =====================================================================
+
+        def _estoque_unificado(cod_produto: str) -> float:
+            """Calcula estoque somando todos os códigos unificados — SEM query"""
+            codigos = mapa_unificacao.get(cod_produto, [cod_produto])
+            return sum(estoque_map.get(c, 0.0) for c in codigos)
+
+        def _estoque_unificado_pai(cod_produto: str) -> float:
+            """Calcula estoque de produto PAI somando códigos unificados — SEM query"""
+            codigos = mapa_unificacao_pais.get(cod_produto, [cod_produto])
+            return sum(estoque_map.get(c, 0.0) for c in codigos)
+
+        def _carteira_unificada(cod_produto: str, mapa_unif: dict) -> float:
+            """Soma carteira para todos os códigos unificados — SEM query"""
+            codigos = mapa_unif.get(cod_produto, [cod_produto])
+            return sum(carteira_map.get(c, 0.0) for c in codigos)
+
+        def _buscar_programacoes_upstream_mem(
+            cod_produto: str,
+            prog_map: dict,
+            fator: float = 1.0,
+            visitados: set = None
+        ) -> List[tuple]:
+            """
+            Busca programações upstream recursivamente via dicionários em memória.
+            Retorna: [(ProgramacaoProducao, fator_conversao_total), ...]
+            """
+            if visitados is None:
+                visitados = set()
+            if cod_produto in visitados:
+                return []
+            visitados.add(cod_produto)
+
+            resultado = []
+
+            # Verificar programações diretas
+            progs_diretas = prog_map.get(cod_produto, [])
+            if progs_diretas:
+                for prog in progs_diretas:
+                    resultado.append((prog, fator))
+                return resultado
+
+            # Se é intermediário, subir na hierarquia
+            if cod_produto in intermediarios:
+                boms_upstream = bom_por_componente.get(cod_produto, [])
+                for bom in boms_upstream:
+                    fator_acumulado = fator * float(bom.qtd_utilizada)
+                    progs_up = _buscar_programacoes_upstream_mem(
+                        bom.cod_produto_produzido,
+                        prog_map,
+                        fator_acumulado,
+                        visitados.copy()
+                    )
+                    resultado.extend(progs_up)
+
+            return resultado
+
+        def _calcular_consumo_carteira_mem(cod_produto: str) -> float:
+            """Calcula consumo para carteira — SEM queries"""
+            codigos_unificados = mapa_unificacao.get(cod_produto, [cod_produto])
+            consumo_total = 0.0
+
+            # PARTE 1: Consumo via BOM
+            for cod_unif in codigos_unificados:
+                for bom in bom_por_componente.get(cod_unif, []):
+                    cod_pai = bom.cod_produto_produzido
+                    qtd_utilizada = float(bom.qtd_utilizada)
+
+                    codigos_pai = mapa_unificacao_pais.get(cod_pai, [cod_pai])
+                    saldo_carteira_pai = sum(carteira_map.get(c, 0.0) for c in codigos_pai)
+                    estoque_pa = _estoque_unificado_pai(cod_pai)
+
+                    necessidade = saldo_carteira_pai - estoque_pa
+                    if necessidade > 0:
+                        consumo_total += necessidade * qtd_utilizada
+
+            # PARTE 2: Consumo próprio (se produto vendido)
+            if cod_produto in produtos_vendidos_set:
+                saldo_proprio = _carteira_unificada(cod_produto, mapa_unificacao)
+                consumo_total += saldo_proprio
+
+            return consumo_total
+
+        def _calcular_consumo_programacao_mem(cod_produto: str) -> float:
+            """Calcula consumo via programação de produção — SEM queries"""
+            codigos_unificados = mapa_unificacao.get(cod_produto, [cod_produto])
+            consumo_total = 0.0
+
+            for cod_unif in codigos_unificados:
+                for bom in bom_por_componente.get(cod_unif, []):
+                    cod_pai = bom.cod_produto_produzido
+                    qtd_utilizada_base = float(bom.qtd_utilizada)
+
+                    progs = _buscar_programacoes_upstream_mem(
+                        cod_pai,
+                        programacoes_365_por_produto,
+                        qtd_utilizada_base
+                    )
+
+                    for prog, fator_conversao in progs:
+                        consumo_total += float(prog.qtd_programada) * fator_conversao
+
+            return consumo_total
+
+        def _calcular_detalhes_mesclados_mem(cod_produto: str) -> Dict[str, Any]:
+            """Calcula detalhes mesclados (requisições + pedidos) — SEM queries"""
+            detalhes_mesclados = []
+            qtd_atrasados = 0.0
+            qtd_requisicoes_no_prazo = 0.0
+            qtd_pedidos_no_prazo = 0.0
+            pedidos_ja_processados = set()
+
+            # PARTE 1: Requisições com saldo não alocado
+            for req, total_alocado in requisicoes_por_produto.get(cod_produto, []):
+                saldo_req = req.qtd_produto_requisicao - total_alocado
+
+                if saldo_req > 0:
+                    # Buscar pedidos vinculados via alocações pré-carregadas
+                    # Usar relationship se disponível, senão pedidos_por_produto
+                    alocacoes = getattr(req, 'alocacoes', None)
+                    if alocacoes:
+                        for alocacao in alocacoes:
+                            if alocacao.pedido and alocacao.pedido.id not in pedidos_ja_processados:
+                                pedido = alocacao.pedido
+                                saldo_pedido = pedido.qtd_produto_pedido - (pedido.qtd_recebida or Decimal('0'))
+
+                                if saldo_pedido > 0:
+                                    data_chegada = pedido.data_pedido_previsao or req.data_necessidade
+                                    atrasado = data_chegada < hoje if data_chegada else False
+
+                                    item = {
+                                        'tipo': 'PEDIDO',
+                                        'tipo_origem': 'REQUISICAO',
+                                        'num_requisicao': req.num_requisicao,
+                                        'num_pedido': pedido.num_pedido,
+                                        'fornecedor': pedido.raz_social,
+                                        'saldo': round(float(saldo_pedido), 2),
+                                        'data_chegada': data_chegada.isoformat() if data_chegada else None,
+                                        'status_pedido': pedido.status_odoo,
+                                        'status_requisicao': req.status,
+                                        'atrasado': atrasado
+                                    }
+                                    detalhes_mesclados.append(item)
+                                    pedidos_ja_processados.add(pedido.id)
+
+                                    if atrasado:
+                                        qtd_atrasados += item['saldo']
+                                    else:
+                                        qtd_pedidos_no_prazo += item['saldo']
+
+                    # Requisição pura (saldo não alocado)
+                    if float(saldo_req) > 0:
+                        data_chegada = req.data_necessidade
+                        atrasado = data_chegada < hoje if data_chegada else False
+
+                        item = {
+                            'tipo': 'REQUISICAO',
+                            'tipo_origem': 'REQUISICAO',
+                            'num_requisicao': req.num_requisicao,
+                            'num_pedido': None,
+                            'fornecedor': None,
+                            'saldo': round(float(saldo_req), 2),
+                            'data_chegada': data_chegada.isoformat() if data_chegada else None,
+                            'status_pedido': None,
+                            'status_requisicao': req.status,
+                            'atrasado': atrasado
+                        }
+                        detalhes_mesclados.append(item)
+
+                        if atrasado:
+                            qtd_atrasados += item['saldo']
+                        else:
+                            qtd_requisicoes_no_prazo += item['saldo']
+
+            # PARTE 2: Pedidos que NÃO vieram de requisições
+            for pedido in pedidos_por_produto.get(cod_produto, []):
+                if pedido.id in pedidos_ja_processados:
+                    continue
+
+                saldo_pedido = pedido.qtd_produto_pedido - (pedido.qtd_recebida or Decimal('0'))
+                if saldo_pedido > 0:
+                    data_chegada = pedido.data_pedido_previsao
+                    atrasado = data_chegada < hoje if data_chegada else False
+
+                    item = {
+                        'tipo': 'PEDIDO',
+                        'tipo_origem': 'DIRETO',
+                        'num_requisicao': None,
+                        'num_pedido': pedido.num_pedido,
+                        'fornecedor': pedido.raz_social,
+                        'saldo': round(float(saldo_pedido), 2),
+                        'data_chegada': data_chegada.isoformat() if data_chegada else None,
+                        'status_pedido': pedido.status_odoo,
+                        'status_requisicao': None,
+                        'atrasado': atrasado
+                    }
+                    detalhes_mesclados.append(item)
+
+                    if atrasado:
+                        qtd_atrasados += item['saldo']
+                    else:
+                        qtd_pedidos_no_prazo += item['saldo']
+
+            detalhes_mesclados.sort(key=lambda x: x['data_chegada'] or '9999-12-31')
+
+            return {
+                'detalhes_mesclados': detalhes_mesclados,
+                'qtd_atrasados': round(qtd_atrasados, 2),
+                'qtd_requisicoes_no_prazo': round(qtd_requisicoes_no_prazo, 2),
+                'qtd_pedidos_no_prazo': round(qtd_pedidos_no_prazo, 2)
+            }
+
+        def _calcular_entradas_mem(cod_produto: str) -> List[Dict]:
+            """Calcula entradas (pedidos + requisições) para timeline — SEM queries"""
+            entradas = []
+            codigos_unificados = mapa_unificacao.get(cod_produto, [cod_produto])
+
+            # Pedidos com data_previsao no período
+            for cod_unif in codigos_unificados:
+                for pedido in pedidos_por_produto.get(cod_unif, []):
+                    if not pedido.data_pedido_previsao:
+                        continue
+                    if not (data_inicio <= pedido.data_pedido_previsao <= data_fim):
+                        continue
+
+                    saldo_pedido = pedido.qtd_produto_pedido - (pedido.qtd_recebida or Decimal('0'))
+                    if saldo_pedido > 0:
+                        entradas.append({
+                            'data': pedido.data_pedido_previsao,
+                            'quantidade': float(saldo_pedido),
+                            'tipo': 'PEDIDO'
+                        })
+
+            # Requisições com data_necessidade no período e status válido
+            for cod_unif in codigos_unificados:
+                for req, total_alocado in requisicoes_por_produto.get(cod_unif, []):
+                    if not req.data_necessidade:
+                        continue
+                    if not (data_inicio <= req.data_necessidade <= data_fim):
+                        continue
+                    # Filtro de status mais restritivo para entradas (como no v1)
+                    if req.status not in ('Aprovada', 'Aguardando Aprovação', None):
+                        continue
+                    if req.status_requisicao == 'rejected':
+                        continue
+
+                    saldo = req.qtd_produto_requisicao - total_alocado
+                    if saldo > 0:
+                        entradas.append({
+                            'data': req.data_necessidade,
+                            'quantidade': float(saldo),
+                            'tipo': 'SALDO_REQUISICAO'
+                        })
+
+            return sorted(entradas, key=lambda x: x['data'])
+
+        def _calcular_saidas_mem(cod_produto: str) -> List[Dict]:
+            """Calcula saídas via BOM × programações para timeline — SEM queries"""
+            saidas = []
+            codigos_unificados = mapa_unificacao.get(cod_produto, [cod_produto])
+
+            for cod_unif in codigos_unificados:
+                for bom in bom_por_componente.get(cod_unif, []):
+                    cod_pai = bom.cod_produto_produzido
+                    qtd_utilizada_base = float(bom.qtd_utilizada)
+
+                    progs = _buscar_programacoes_upstream_mem(
+                        cod_pai,
+                        programacoes_por_produto,
+                        qtd_utilizada_base
+                    )
+
+                    for prog, fator_conversao in progs:
+                        qtd_necessaria = float(prog.qtd_programada) * fator_conversao
+                        if qtd_necessaria > 0:
+                            saidas.append({
+                                'data': prog.data_programacao,
+                                'quantidade': qtd_necessaria
+                            })
+
+            return sorted(saidas, key=lambda x: x['data'])
+
+        def _gerar_timeline_mem(estoque_inicial: float, entradas: List[Dict], saidas: List[Dict]) -> List[float]:
+            """Gera array de 61 posições (D0-D60) — SEM queries"""
+            entradas_por_data = defaultdict(float)
+            for e in entradas:
+                entradas_por_data[e['data']] += e['quantidade']
+
+            saidas_por_data = defaultdict(float)
+            for s in saidas:
+                saidas_por_data[s['data']] += s['quantidade']
+
+            timeline = []
+            estoque_atual = estoque_inicial
+            data_atual = hoje
+
+            for _ in range(61):
+                entrada_dia = entradas_por_data.get(data_atual, 0)
+                saida_dia = saidas_por_data.get(data_atual, 0)
+                estoque_atual = estoque_atual + entrada_dia - saida_dia
+                timeline.append(round(estoque_atual, 2))
+                data_atual += timedelta(days=1)
+
+            return timeline
+
+        # =====================================================================
+        # LOOP PRINCIPAL — ZERO queries individuais
+        # =====================================================================
+        componentes = []
+
+        for produto in produtos_comprados:
+            cod_produto = produto.cod_produto
+
+            # 1. Estoque atual (via mapa em memória)
+            estoque_atual = _estoque_unificado(cod_produto)
+
+            # 2. Consumo para carteira (via BOMs + carteira em memória)
+            consumo_carteira = _calcular_consumo_carteira_mem(cod_produto)
+
+            # 3. Saldo carteira
+            saldo_carteira = estoque_atual - consumo_carteira
+
+            # 4. Consumo via programação de produção
+            consumo_programacao = _calcular_consumo_programacao_mem(cod_produto)
+
+            # 5. Saldo programação
+            saldo_programacao = estoque_atual - consumo_programacao
+
+            # 6. Detalhes mesclados (requisições + pedidos)
+            detalhes = _calcular_detalhes_mesclados_mem(cod_produto)
+
+            # 7. Timeline D0-D60
+            entradas = _calcular_entradas_mem(cod_produto)
+            saidas = _calcular_saidas_mem(cod_produto)
+            timeline = _gerar_timeline_mem(estoque_atual, entradas, saidas)
+
+            componentes.append({
+                'cod_produto': cod_produto,
+                'nome_produto': produto.nome_produto,
+                'estoque_atual': round(estoque_atual, 2),
+                'consumo_carteira': round(consumo_carteira, 2),
+                'saldo_carteira': round(saldo_carteira, 2),
+                'consumo_programacao': round(consumo_programacao, 2),
+                'saldo_programacao': round(saldo_programacao, 2),
+                'qtd_requisicoes': detalhes['qtd_requisicoes_no_prazo'],
+                'qtd_pedidos': detalhes['qtd_pedidos_no_prazo'],
+                'qtd_atrasados': detalhes['qtd_atrasados'],
+                'detalhes_mesclados': detalhes['detalhes_mesclados'],
+                'timeline': timeline,
+                'tipo_embalagem': produto.tipo_embalagem,
+                'tipo_materia_prima': produto.tipo_materia_prima,
+                'categoria_produto': produto.categoria_produto,
+                'lead_time': getattr(produto, 'lead_time', None) or getattr(produto, 'lead_time_mto', None),
+                'lote_minimo_compra': getattr(produto, 'lote_minimo_compra', None),
+            })
+
+        elapsed = time.time() - t0
+        logger.info(f"projetar_componentes_consolidado_v2: {elapsed:.2f}s ({len(componentes)} componentes)")
+
+        return {
+            'sucesso': True,
+            'data_calculo': hoje.isoformat(),
             'total_componentes': len(componentes),
             'componentes': componentes
         }
