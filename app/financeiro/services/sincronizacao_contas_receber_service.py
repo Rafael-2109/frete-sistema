@@ -15,6 +15,7 @@ from typing import Dict, Optional
 from app.utils.timezone import agora_utc_naive
 
 from app import db
+from app.financeiro.parcela_utils import parcela_to_str
 from app.financeiro.services.contas_receber_service import ContasReceberService
 from app.financeiro.models import (
     ContasAReceber, ContasAReceberSnapshot, LiberacaoAntecipacao,
@@ -219,7 +220,7 @@ class SincronizacaoContasReceberService:
         empresa_nome = row.get('company_id_nome', '')
         empresa = self._mapear_empresa(empresa_nome)
         titulo_nf = str(int(row.get('x_studio_nf_e', 0)))
-        parcela = str(row.get('l10n_br_cobranca_parcela', '1') or '1')
+        parcela = parcela_to_str(row.get('l10n_br_cobranca_parcela')) or '1'
 
         if not titulo_nf or titulo_nf == '0':
             return

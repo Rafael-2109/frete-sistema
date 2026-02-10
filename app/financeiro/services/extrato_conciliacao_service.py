@@ -42,6 +42,7 @@ from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import (
     ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
 )
+from app.financeiro.parcela_utils import parcela_to_odoo
 from app.financeiro.services.baixa_titulos_service import (
     BaixaTitulosService,
     JOURNAL_GRAFENO_ID,
@@ -819,11 +820,7 @@ class ExtratoConciliacaoService:
         Returns:
             Dict com dados do título ou None
         """
-        parcela_limpa = str(parcela).upper().replace('P', '').strip() if parcela else None
-        try:
-            parcela_int = int(parcela_limpa) if parcela_limpa else None
-        except (ValueError, TypeError):
-            parcela_int = None
+        parcela_int = parcela_to_odoo(parcela)
 
         logger.info(f"  Buscando título payable: NF={nf}, parcela={parcela_int}")
 
@@ -1050,12 +1047,9 @@ class ExtratoConciliacaoService:
         NOTA: NÃO filtramos por reconciled nem amount_residual.
         O Odoo cuida automaticamente se pode ou não reconciliar.
         """
-        # Limpar parcela - remover "P" se existir e converter para int
-        parcela_limpa = str(parcela).upper().replace('P', '').strip() if parcela else None
-        try:
-            parcela_int = int(parcela_limpa) if parcela_limpa else None
-        except (ValueError, TypeError):
-            parcela_int = None
+        # Converter parcela para int (trata "P3", None, etc.)
+        parcela_int = parcela_to_odoo(parcela)
+        if parcela is not None and parcela_int is None:
             logger.warning(f"Parcela inválida: '{parcela}' -> não será filtrada")
 
         logger.info(
@@ -1418,12 +1412,9 @@ class ExtratoConciliacaoService:
         Returns:
             Dict com dados do título ou None
         """
-        # Limpar parcela
-        parcela_limpa = str(parcela).upper().replace('P', '').strip() if parcela else None
-        try:
-            parcela_int = int(parcela_limpa) if parcela_limpa else None
-        except (ValueError, TypeError):
-            parcela_int = None
+        # Converter parcela para int (trata "P3", None, etc.)
+        parcela_int = parcela_to_odoo(parcela)
+        if parcela is not None and parcela_int is None:
             logger.warning(f"Parcela inválida: '{parcela}' -> não será filtrada")
 
         logger.info(f"  Buscando título multi-company: NF={nf}, parcela={parcela_int}")

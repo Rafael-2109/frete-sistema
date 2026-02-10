@@ -21,6 +21,7 @@ from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional
 
 from app import db
+from app.financeiro.parcela_utils import parcela_to_str
 from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import ContasAPagar
 from app.odoo.utils.connection import get_odoo_connection
@@ -320,7 +321,7 @@ class SincronizacaoContasAPagarService:
 
         # NF e parcela
         titulo_nf = str(row.get('x_studio_nf_e') or '').strip()
-        parcela = str(row.get('l10n_br_cobranca_parcela') or '1')
+        parcela = parcela_to_str(row.get('l10n_br_cobranca_parcela')) or '1'
 
         if not titulo_nf:
             self.estatisticas['ignorados'] += 1

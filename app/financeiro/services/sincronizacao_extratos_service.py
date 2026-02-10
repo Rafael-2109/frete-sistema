@@ -26,6 +26,7 @@ from app.financeiro.models import (
     ContasAReceber,
     CnabRetornoItem
 )
+from app.financeiro.parcela_utils import parcela_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +264,7 @@ class SincronizacaoExtratosService:
         """
         extrato.titulo_receber_id = titulo.id
         extrato.titulo_nf = titulo.titulo_nf
-        extrato.titulo_parcela = titulo.parcela
+        extrato.titulo_parcela = titulo.parcela_int
         extrato.titulo_valor = titulo.valor_titulo
         extrato.titulo_cliente = titulo.raz_social_red or titulo.raz_social
         extrato.titulo_cnpj = titulo.cnpj
@@ -1039,7 +1040,7 @@ class SincronizacaoExtratosService:
                                 extrato.titulo_receber_id = cnab.conta_a_receber_id
                                 if titulo:
                                     extrato.titulo_nf = titulo.titulo_nf
-                                    extrato.titulo_parcela = titulo.parcela
+                                    extrato.titulo_parcela = titulo.parcela_int
                                     extrato.titulo_valor = float(titulo.valor_titulo) if titulo.valor_titulo else None
                                     extrato.titulo_cliente = titulo.raz_social_red or titulo.raz_social
                                     extrato.titulo_cnpj = titulo.cnpj

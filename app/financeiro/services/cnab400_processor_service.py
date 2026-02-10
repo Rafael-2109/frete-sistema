@@ -35,6 +35,7 @@ from app.financeiro.models import (
     ExtratoLote
 )
 from app.faturamento.models import FaturamentoProduto
+from app.financeiro.parcela_utils import parcela_to_int
 from app.financeiro.services.cnab400_parser_service import Cnab400ParserService
 
 
@@ -867,7 +868,7 @@ class Cnab400ProcessorService:
                     if titulo:
                         extrato.titulo_receber_id = titulo.id
                         extrato.titulo_nf = titulo.titulo_nf
-                        extrato.titulo_parcela = int(titulo.parcela) if titulo.parcela else None
+                        extrato.titulo_parcela = parcela_to_int(titulo.parcela)
                         extrato.titulo_valor = float(titulo.valor_titulo) if titulo.valor_titulo else None
                         extrato.titulo_vencimento = titulo.vencimento
                         extrato.titulo_cliente = titulo.raz_social
@@ -1051,7 +1052,7 @@ class Cnab400ProcessorService:
             if not extrato.titulo_receber_id:
                 extrato.titulo_receber_id = titulo.id
                 extrato.titulo_nf = titulo.titulo_nf
-                extrato.titulo_parcela = int(titulo.parcela) if titulo.parcela else None
+                extrato.titulo_parcela = parcela_to_int(titulo.parcela)
                 extrato.titulo_valor = float(titulo.valor_titulo) if titulo.valor_titulo else None
                 extrato.titulo_vencimento = titulo.vencimento
                 extrato.titulo_cliente = titulo.raz_social_red or titulo.raz_social
@@ -1215,7 +1216,7 @@ class Cnab400ProcessorService:
                     if not extrato.titulo_receber_id and item.conta_a_receber_id:
                         extrato.titulo_receber_id = item.conta_a_receber_id
                         extrato.titulo_nf = titulo.titulo_nf if titulo else None
-                        extrato.titulo_parcela = titulo.parcela if titulo else None
+                        extrato.titulo_parcela = parcela_to_int(titulo.parcela) if titulo else None
                         extrato.titulo_valor = float(titulo.valor_titulo) if titulo and titulo.valor_titulo else None
                         extrato.titulo_cliente = titulo.raz_social_red or titulo.raz_social if titulo else None
                         extrato.titulo_cnpj = titulo.cnpj if titulo else None
@@ -1255,7 +1256,7 @@ class Cnab400ProcessorService:
                         if not extrato.titulo_nf and titulo:
                             extrato.titulo_nf = titulo.titulo_nf
                         if not extrato.titulo_parcela and titulo:
-                            extrato.titulo_parcela = titulo.parcela
+                            extrato.titulo_parcela = parcela_to_int(titulo.parcela)
 
                         # Se não tem credit_line_id, tentar buscar no Odoo
                         if not extrato.credit_line_id and extrato.move_id:

@@ -7,6 +7,8 @@ ComprovantePagamentoBoleto: Comprovantes extraídos de PDFs do Sicoob.
 LancamentoComprovante: Resultado do match entre comprovante e fatura Odoo.
 """
 
+from typing import Optional
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 
@@ -247,6 +249,12 @@ class LancamentoComprovante(db.Model):
             f'| score={self.match_score} '
             f'| status={self.status}>'
         )
+
+    @property
+    def parcela_str(self) -> Optional[str]:
+        """Parcela como string, para buscar em contas_a_pagar."""
+        from app.financeiro.parcela_utils import parcela_to_str
+        return parcela_to_str(self.parcela)
 
     def to_dict(self):
         """Serializa para dicionário (uso em APIs JSON)."""

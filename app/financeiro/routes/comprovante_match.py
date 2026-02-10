@@ -27,6 +27,7 @@ from flask_login import login_required, current_user
 
 from app.financeiro.routes import financeiro_bp
 from app.financeiro.models_comprovante import LancamentoComprovante
+from app.financeiro.parcela_utils import parcela_to_odoo
 
 logger = logging.getLogger(__name__)
 
@@ -469,7 +470,7 @@ def comprovante_match_vincular_manual(comprovante_id):
         resultado = service.vincular_manual(
             comprovante_id=comprovante_id,
             nf=str(nf),
-            parcela=int(parcela),
+            parcela=parcela_to_odoo(parcela),
             company_id=int(company_id),
             usuario=usuario,
         )

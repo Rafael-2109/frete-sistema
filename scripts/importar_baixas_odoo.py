@@ -41,6 +41,7 @@ from app.financeiro.models import (
     ContasAReceberDocumento,
     ContasAReceberLinhaCredito
 )
+from app.financeiro.parcela_utils import parcela_to_odoo
 from app.utils.timezone import agora_utc_naive, agora_brasil
 
 # Configurar logging
@@ -125,7 +126,7 @@ class ImportadorBaixasOdoo:
             'account.move.line',
             [
                 ['x_studio_nf_e', '=', conta.titulo_nf],
-                ['l10n_br_cobranca_parcela', '=', int(conta.parcela) if conta.parcela.isdigit() else 0],
+                ['l10n_br_cobranca_parcela', '=', parcela_to_odoo(conta.parcela) or 0],
                 ['account_type', '=', 'asset_receivable'],
                 ['parent_state', '=', 'posted']
             ],

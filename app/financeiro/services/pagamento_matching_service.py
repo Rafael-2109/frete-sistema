@@ -43,6 +43,7 @@ from typing import Dict, List, Optional, Tuple, Set
 
 from app import db
 from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAPagar
+from app.financeiro.parcela_utils import parcela_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -486,7 +487,7 @@ class PagamentoMatchingService:
         """
         item.titulo_pagar_id = match['titulo_id']  # FK correta para ContasAPagar
         item.titulo_nf = match['titulo_nf']
-        item.titulo_parcela = match['parcela']
+        item.titulo_parcela = parcela_to_int(match['parcela'])
         item.titulo_valor = match['valor']
         item.titulo_cliente = match['fornecedor']  # Para pagamentos, é o fornecedor
         item.titulo_cnpj = match.get('cnpj')
@@ -513,7 +514,7 @@ class PagamentoMatchingService:
 
         item.titulo_pagar_id = titulo.id  # FK correta para ContasAPagar
         item.titulo_nf = titulo.titulo_nf
-        item.titulo_parcela = titulo.parcela
+        item.titulo_parcela = titulo.parcela_int
         item.titulo_valor = titulo.valor_residual
         item.titulo_cliente = titulo.raz_social_red or titulo.raz_social
         item.titulo_cnpj = titulo.cnpj

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from app import db
 from datetime import datetime, date, timedelta
 from app.utils.timezone import agora_utc_naive
@@ -550,6 +552,12 @@ class ContasAReceber(db.Model):
             'nf_cancelada': self.nf_cancelada,
             'total_abatimentos': sum(ab.valor or 0 for ab in self.abatimentos.all())
         }
+
+    @property
+    def parcela_int(self) -> Optional[int]:
+        """Parcela como int, para Odoo API e campos cache INTEGER."""
+        from app.financeiro.parcela_utils import parcela_to_int
+        return parcela_to_int(self.parcela)
 
 
 class ContasAReceberAbatimento(db.Model):
@@ -1494,6 +1502,12 @@ class ExtratoItem(db.Model):
         return float(self.valor or 0) - self.valor_alocado_total
 
     @property
+    def titulo_parcela_str(self) -> Optional[str]:
+        """Titulo parcela como string, para buscar em contas_a_receber/pagar."""
+        from app.financeiro.parcela_utils import parcela_to_str
+        return parcela_to_str(self.titulo_parcela)
+
+    @property
     def tem_multiplos_titulos(self) -> bool:
         """
         Retorna True se há títulos vinculados via M:N.
@@ -1669,6 +1683,12 @@ class ExtratoItemTitulo(db.Model):
         """Retorna 'receber' ou 'pagar'."""
         return 'receber' if self.titulo_receber_id else 'pagar'
 
+    @property
+    def titulo_parcela_str(self) -> Optional[str]:
+        """Titulo parcela como string, para buscar em contas_a_receber/pagar."""
+        from app.financeiro.parcela_utils import parcela_to_str
+        return parcela_to_str(self.titulo_parcela)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -1708,11 +1728,12 @@ class ExtratoItemTitulo(db.Model):
                    Passar o título diretamente é útil quando a FK foi definida
                    mas a relação ainda não foi carregada (lazy loading).
         """
+        from app.financeiro.parcela_utils import parcela_to_int
         if titulo is None:
             titulo = self.titulo
         if titulo:
             self.titulo_nf = titulo.titulo_nf
-            self.titulo_parcela = titulo.parcela
+            self.titulo_parcela = parcela_to_int(titulo.parcela)
             self.titulo_vencimento = titulo.vencimento
             self.titulo_cliente = getattr(titulo, 'raz_social_red', None) or titulo.raz_social
             self.titulo_cnpj = titulo.cnpj
@@ -1988,6 +2009,12 @@ class BaixaPagamentoItem(db.Model):
     def __repr__(self):
         return f'<BaixaPagamentoItem {self.id} - {self.nome_beneficiario} R${self.valor:.2f} ({self.status})>'
 
+    @property
+    def titulo_parcela_str(self) -> Optional[str]:
+        """Titulo parcela como string, para buscar em contas_a_pagar."""
+        from app.financeiro.parcela_utils import parcela_to_str
+        return parcela_to_str(self.titulo_parcela)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -2242,6 +2269,12 @@ class ContasAPagar(db.Model):
             # Auditoria
             'ultima_sincronizacao': self.ultima_sincronizacao.isoformat() if self.ultima_sincronizacao else None,
         }
+
+    @property
+    def parcela_int(self) -> Optional[int]:
+        """Parcela como int, para Odoo API e campos cache INTEGER."""
+        from app.financeiro.parcela_utils import parcela_to_int
+        return parcela_to_int(self.parcela)
 
 
 # =============================================================================

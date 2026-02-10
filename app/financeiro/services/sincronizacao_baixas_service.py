@@ -28,6 +28,7 @@ from typing import Dict, List, Optional
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import ContasAReceber, ContasAReceberReconciliacao
+from app.financeiro.parcela_utils import parcela_to_odoo
 from app.financeiro.services.vinculacao_abatimentos_service import VinculacaoAbatimentosService
 
 logger = logging.getLogger(__name__)
@@ -249,7 +250,7 @@ class SincronizacaoBaixasService:
             'account.move.line',
             [
                 ['x_studio_nf_e', '=', titulo.titulo_nf],
-                ['l10n_br_cobranca_parcela', '=', int(titulo.parcela) if titulo.parcela.isdigit() else 0],
+                ['l10n_br_cobranca_parcela', '=', parcela_to_odoo(titulo.parcela) or 0],
                 ['account_type', '=', 'asset_receivable'],
                 ['parent_state', '=', 'posted']
             ],

@@ -22,6 +22,7 @@ import logging
 from typing import Optional
 
 from app import db
+from app.financeiro.parcela_utils import parcela_to_str
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ class ConciliacaoSyncService:
             # Tentar vincular o título do lançamento
             # NOTA: contas_a_pagar.parcela é varchar(10), lanc.parcela é integer
             from app.financeiro.models import ContasAPagar
-            parcela_str = str(lanc.parcela) if lanc.parcela is not None else None
+            parcela_str = parcela_to_str(lanc.parcela)
             titulo_local = ContasAPagar.query.filter_by(
                 titulo_nf=lanc.nf_numero,
                 parcela=parcela_str,
