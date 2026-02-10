@@ -19,7 +19,7 @@
 | Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](negocio/RECEBIMENTO_MATERIAIS.md) |
 | Historico de decisoes | [negocio/historia_organizada.md](negocio/historia_organizada.md) |
 | **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
-| **Infraestrutura Render** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
+| **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
 
 ---
 
