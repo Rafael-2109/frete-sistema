@@ -277,7 +277,18 @@ def bot_answer():
         if not task:
             return jsonify({"error": "Task nao encontrada"}), 404
 
-        if task.status != 'awaiting_user_input':
+        # Bug Teams #2: Idempotencia — tratar submissao duplicada graciosamente.
+        # Race condition: submit_answer() seta Event → wait_for_answer() faz pop() →
+        # segunda submissao nao encontra PQ → 410. Fix: verificar status da task.
+        if task.status == 'processing':
+            # Submissao anterior ja transitou para processing — duplicata
+            logger.info(
+                f"[TEAMS-BOT] Submissao duplicada (task ja processing): "
+                f"task={task_id[:8]}..."
+            )
+            return jsonify({"status": "ok"})
+
+        if task.status not in ('awaiting_user_input',):
             return jsonify({
                 "error": f"Task nao esta aguardando resposta (status={task.status})"
             }), 400
@@ -302,13 +313,21 @@ def bot_answer():
             )
             return jsonify({"status": "ok"})
         else:
-            logger.warning(
-                f"[TEAMS-BOT] submit_answer falhou: nenhuma pergunta pendente "
-                f"para session={session_id[:8]}..."
+            # Bug Teams #2: PQ ja foi consumida por wait_for_answer() (race condition).
+            # A resposta FOI processada — o submit_answer() da primeira submissao
+            # setou o Event e wait_for_answer() fez pop(). Tratar como sucesso.
+            logger.info(
+                f"[TEAMS-BOT] Race condition: PQ ja consumida, tratando como sucesso. "
+                f"task={task_id[:8]}... session={session_id[:8]}..."
             )
-            return jsonify({
-                "error": "Pergunta ja expirou ou foi respondida anteriormente"
-            }), 410
+            # Transitar para processing se ainda estiver em awaiting_user_input
+            if task.status == 'awaiting_user_input':
+                task.status = 'processing'
+                task.pending_questions = None
+                task.pending_question_session_id = None
+                db.session.commit()
+
+            return jsonify({"status": "ok"})
 
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao processar resposta: {e}", exc_info=True)

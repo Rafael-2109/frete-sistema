@@ -59,6 +59,11 @@ class AgentSession(db.Model):
     # Dados extras em JSONB - HISTÓRICO COMPLETO (FEAT-030)
     data = db.Column(db.JSON, default=dict)
 
+    # Transcript JSONL do SDK para restore após reciclagem do worker (Bug Teams #1)
+    # TEXT separado do JSONB `data` para evitar overhead de reescrita JSONB.
+    # PostgreSQL TEXT suporta até 1GB — suficiente para sessões longas.
+    sdk_session_transcript = db.Column(db.Text, nullable=True)
+
     # P0-2: Sumarização Estruturada de Sessões
     summary = db.Column(db.JSON, nullable=True)  # Resumo estruturado (JSONB)
     summary_updated_at = db.Column(db.DateTime, nullable=True)  # Quando foi gerado
@@ -264,6 +269,32 @@ class AgentSession(db.Model):
 
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(self, 'data')
+
+    # =========================================================================
+    # MÉTODOS DE PERSISTÊNCIA DE TRANSCRIPT (Bug Teams #1)
+    # =========================================================================
+
+    def save_transcript(self, transcript: str) -> None:
+        """
+        Salva transcript JSONL do SDK no banco.
+
+        Chamado após cada resposta do SDK para permitir restore
+        caso o worker Render recicle e perca o arquivo do disco.
+
+        Args:
+            transcript: Conteúdo completo do JSONL como string
+        """
+        self.sdk_session_transcript = transcript
+        self.updated_at = agora_utc_naive()
+
+    def get_transcript(self) -> Optional[str]:
+        """
+        Retorna transcript JSONL salvo no banco.
+
+        Returns:
+            Conteúdo do JSONL ou None se nunca salvo
+        """
+        return self.sdk_session_transcript
 
     def get_messages_for_context(self) -> List[Dict[str, Any]]:
         """

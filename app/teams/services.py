@@ -223,6 +223,7 @@ def processar_mensagem_bot(
             sdk_session_id=sdk_session_id,
             user_id=teams_user_id,
             can_use_tool=agent_can_use_tool,
+            session=session,
         )
 
         # Salvar mensagens e atualizar sdk_session_id
@@ -374,6 +375,7 @@ def _obter_resposta_agente(
     sdk_session_id: str = None,
     user_id: int = None,
     can_use_tool=None,
+    session=None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Obtem resposta do Agente Claude SDK.
@@ -384,6 +386,7 @@ def _obter_resposta_agente(
         sdk_session_id: ID da sessao SDK para resume (opcional)
         user_id: ID real do usuario na tabela usuarios (para memorias)
         can_use_tool: Callback de permissão (para AskUserQuestion no Teams)
+        session: AgentSession para backup/restore de transcript (Bug Teams #1)
 
     Returns:
         Tuple[resposta_texto, new_sdk_session_id]
@@ -394,6 +397,21 @@ def _obter_resposta_agente(
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter client: {e}")
         return None, None
+
+    # Bug Teams #1: Restaurar transcript do DB se arquivo JSONL nao existe no disco
+    if sdk_session_id and session:
+        try:
+            transcript = session.get_transcript()
+            if transcript:
+                from app.agente.sdk.session_persistence import restore_session_transcript
+                restored = restore_session_transcript(sdk_session_id, transcript)
+                if restored:
+                    logger.info(
+                        f"[TEAMS-BOT] Session transcript restaurado do DB: "
+                        f"{sdk_session_id[:12]}... ({len(transcript)} bytes)"
+                    )
+        except Exception as e:
+            logger.warning(f"[TEAMS-BOT] Erro ao restaurar transcript: {e}")
 
     # Contexto especial para Teams: data atual + instruções anti-verbosidade
     contexto_teams = _get_teams_context()
@@ -431,6 +449,20 @@ def _obter_resposta_agente(
 
         resposta_texto = _extrair_texto_resposta(response)
         new_sdk_session_id = getattr(response, 'session_id', None)
+
+        # Bug Teams #1: Backup transcript JSONL do disco para o DB
+        if new_sdk_session_id and session:
+            try:
+                from app.agente.sdk.session_persistence import backup_session_transcript
+                transcript = backup_session_transcript(new_sdk_session_id)
+                if transcript:
+                    session.save_transcript(transcript)
+                    logger.info(
+                        f"[TEAMS-BOT] Session transcript salvo no DB: "
+                        f"{new_sdk_session_id[:12]}... ({len(transcript)} bytes)"
+                    )
+            except Exception as e:
+                logger.warning(f"[TEAMS-BOT] Erro ao salvar transcript: {e}")
 
         return resposta_texto, new_sdk_session_id
 
@@ -661,6 +693,7 @@ def process_teams_task_async(
                         sdk_session_id=sdk_session_id,
                         user_id=teams_user_id,
                         can_use_tool=agent_can_use_tool,
+                        session=session,
                     )
                     if resposta_texto:
                         break

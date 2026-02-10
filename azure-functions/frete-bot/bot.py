@@ -882,12 +882,28 @@ class FreteBot(ActivityHandler):
                     )
 
             except Exception as e:
-                logger.error(
-                    f"[BOT] Erro ao enviar resposta: {e}", exc_info=True
-                )
-                await turn_context.send_activity(
-                    f"Erro ao enviar resposta: {str(e)[:200]}"
-                )
+                err_str = str(e)
+                # Bug Teams #2: Handle gracioso de 410 (resposta ja processada).
+                # Com fix server-side, 410 quase nunca acontece, mas defesa em profundidade.
+                if '410' in err_str and ('expirou' in err_str or 'respondida' in err_str):
+                    logger.info(
+                        f"[BOT] 410 tratado como sucesso (resposta ja processada): "
+                        f"task={task_id[:8]}..."
+                    )
+                    await turn_context.send_activity(
+                        "Resposta recebida! Processando..."
+                    )
+                    # Continua polling para resultado final
+                    await _poll_and_respond(
+                        turn_context, task_id, user_name, http_session=http_session
+                    )
+                else:
+                    logger.error(
+                        f"[BOT] Erro ao enviar resposta: {e}", exc_info=True
+                    )
+                    await turn_context.send_activity(
+                        f"Erro ao enviar resposta: {err_str[:200]}"
+                    )
 
         elif action == "ask_user_cancel" and task_id:
             # Cancelar — enviar resposta vazia para desbloquear agente
