@@ -27,7 +27,7 @@
     },
     {
       "name": "qtd_utilizada",
-      "type": "numeric(15,6)",
+      "type": "numeric(18,6)",
       "nullable": false
     },
     {
@@ -81,14 +81,6 @@
   ],
   "indices": [
     {
-      "name": "idx_lista_materiais_status_data",
-      "columns": [
-        "status",
-        "criado_em"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_lista_materiais_status",
       "columns": [
         "status"
@@ -106,6 +98,14 @@
       "name": "ix_lista_materiais_cod_produto_produzido",
       "columns": [
         "cod_produto_produzido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_lista_materiais_status_data",
+      "columns": [
+        "status",
+        "criado_em"
       ],
       "unique": false
     }

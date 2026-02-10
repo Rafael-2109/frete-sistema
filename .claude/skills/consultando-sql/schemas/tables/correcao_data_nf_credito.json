@@ -93,9 +93,9 @@
   ],
   "indices": [
     {
-      "name": "idx_correcao_data_emissao",
+      "name": "ix_correcao_data_nf_credito_status",
       "columns": [
-        "data_emissao"
+        "status"
       ],
       "unique": false
     },
@@ -107,16 +107,16 @@
       "unique": false
     },
     {
-      "name": "ix_correcao_data_nf_credito_status",
+      "name": "ix_correcao_data_nf_credito_odoo_move_id",
       "columns": [
-        "status"
+        "odoo_move_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_correcao_data_nf_credito_odoo_move_id",
+      "name": "idx_correcao_data_emissao",
       "columns": [
-        "odoo_move_id"
+        "data_emissao"
       ],
       "unique": false
     }

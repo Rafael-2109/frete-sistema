@@ -91,11 +91,11 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_integracoes_lote_id",
+      "name": "ix_portal_integracoes_protocolo",
       "columns": [
-        "lote_id"
+        "protocolo"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_portal_integracoes_status",
@@ -119,11 +119,11 @@
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_protocolo",
+      "name": "ix_portal_integracoes_lote_id",
       "columns": [
-        "protocolo"
+        "lote_id"
       ],
-      "unique": true
+      "unique": false
     }
   ]
 }

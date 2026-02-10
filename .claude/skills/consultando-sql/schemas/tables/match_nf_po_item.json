@@ -45,11 +45,11 @@
     },
     {
       "name": "qtd_nf",
-      "type": "numeric(15,3)"
+      "type": "numeric(18,6)"
     },
     {
       "name": "preco_nf",
-      "type": "numeric(15,4)"
+      "type": "numeric(18,8)"
     },
     {
       "name": "data_nf",
@@ -69,11 +69,11 @@
     },
     {
       "name": "qtd_po",
-      "type": "numeric(15,3)"
+      "type": "numeric(18,6)"
     },
     {
       "name": "preco_po",
-      "type": "numeric(15,4)"
+      "type": "numeric(18,8)"
     },
     {
       "name": "data_po",

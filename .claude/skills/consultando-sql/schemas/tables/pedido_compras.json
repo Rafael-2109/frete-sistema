@@ -70,18 +70,18 @@
     },
     {
       "name": "qtd_produto_pedido",
-      "type": "numeric(15,3)",
+      "type": "numeric(18,6)",
       "nullable": false
     },
     {
       "name": "qtd_recebida",
-      "type": "numeric(15,3)",
+      "type": "numeric(18,6)",
       "description": "qty_received do Odoo",
       "default": 0
     },
     {
       "name": "preco_produto_pedido",
-      "type": "numeric(15,4)"
+      "type": "numeric(18,8)"
     },
     {
       "name": "icms_produto_pedido",
@@ -190,16 +190,9 @@
   ],
   "indices": [
     {
-      "name": "idx_pedido_chave_acesso",
+      "name": "ix_pedido_compras_num_requisicao",
       "columns": [
-        "nf_chave_acesso"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_dfe_id",
-      "columns": [
-        "dfe_id"
+        "num_requisicao"
       ],
       "unique": false
     },
@@ -225,20 +218,6 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pedido_compras_nf_chave_acesso",
       "columns": [
         "nf_chave_acesso"
@@ -254,9 +233,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_status_odoo",
+      "name": "ix_pedido_compras_cod_produto",
       "columns": [
-        "status_odoo"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -268,9 +247,16 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_num_requisicao",
+      "name": "ix_pedido_compras_status_odoo",
       "columns": [
-        "num_requisicao"
+        "status_odoo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
       ],
       "unique": false
     },
@@ -278,6 +264,20 @@
       "name": "ix_pedido_compras_tipo_pedido",
       "columns": [
         "tipo_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_dfe_id",
+      "columns": [
+        "dfe_id"
       ],
       "unique": false
     }

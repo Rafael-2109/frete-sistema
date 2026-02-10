@@ -4,7 +4,7 @@ Campos adicionados:
 - produto_comprado (BOOLEAN)
 - produto_produzido (BOOLEAN)
 - produto_vendido (BOOLEAN)
-- lead_time_mto (INTEGER)
+- lead_time (INTEGER)
 - disparo_producao (VARCHAR(3))
 - custo_produto (NUMERIC(15, 4))
 
@@ -34,7 +34,7 @@ DDL_STATEMENTS = [
         ADD COLUMN IF NOT EXISTS produto_comprado BOOLEAN NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS produto_produzido BOOLEAN NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS produto_vendido BOOLEAN NOT NULL DEFAULT TRUE,
-        ADD COLUMN IF NOT EXISTS lead_time_mto INTEGER,
+        ADD COLUMN IF NOT EXISTS lead_time INTEGER,
         ADD COLUMN IF NOT EXISTS disparo_producao VARCHAR(3),
         ADD COLUMN IF NOT EXISTS custo_produto NUMERIC(15, 4);
 
@@ -47,7 +47,7 @@ DDL_STATEMENTS = [
         COMMENT ON COLUMN cadastro_palletizacao.produto_comprado IS 'Indica se o produto é comprado de terceiros';
         COMMENT ON COLUMN cadastro_palletizacao.produto_produzido IS 'Indica se o produto é fabricado internamente';
         COMMENT ON COLUMN cadastro_palletizacao.produto_vendido IS 'Indica se o produto está disponível para venda';
-        COMMENT ON COLUMN cadastro_palletizacao.lead_time_mto IS 'Lead time MTO (Make to Order) em dias';
+        COMMENT ON COLUMN cadastro_palletizacao.lead_time IS 'Lead time MTO (Make to Order) em dias';
         COMMENT ON COLUMN cadastro_palletizacao.disparo_producao IS 'Código de disparo de produção';
         COMMENT ON COLUMN cadastro_palletizacao.custo_produto IS 'Custo unitário do produto';
         """
@@ -70,7 +70,7 @@ def main() -> None:
         print("  • produto_comprado (BOOLEAN, default: FALSE)")
         print("  • produto_produzido (BOOLEAN, default: FALSE)")
         print("  • produto_vendido (BOOLEAN, default: TRUE)")
-        print("  • lead_time_mto (INTEGER, nullable)")
+        print("  • lead_time (INTEGER, nullable)")
         print("  • disparo_producao (VARCHAR(3), nullable)")
         print("  • custo_produto (NUMERIC(15, 4), nullable)")
 

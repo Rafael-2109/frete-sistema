@@ -115,7 +115,7 @@ def consultar_produto_completo(termo: str) -> dict:
                     tipo_embalagem, tipo_materia_prima, categoria_produto,
                     subcategoria, altura_cm, largura_cm, comprimento_cm,
                     produto_vendido, produto_comprado, produto_produzido,
-                    lead_time_mto, linha_producao
+                    lead_time, lote_minimo_compra, linha_producao
                 FROM cadastro_palletizacao
                 WHERE cod_produto = :cod AND ativo = true
             """

@@ -135,9 +135,9 @@
   ],
   "indices": [
     {
-      "name": "ix_extrato_item_titulo_extrato_item_id",
+      "name": "idx_extrato_titulo_status",
       "columns": [
-        "extrato_item_id"
+        "status"
       ],
       "unique": false
     },
@@ -163,16 +163,16 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_titulo_receber",
+      "name": "ix_extrato_item_titulo_status",
       "columns": [
-        "titulo_receber_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_extrato_item_titulo_status",
+      "name": "idx_extrato_titulo_receber",
       "columns": [
-        "status"
+        "titulo_receber_id"
       ],
       "unique": false
     },
@@ -184,9 +184,9 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_titulo_status",
+      "name": "ix_extrato_item_titulo_extrato_item_id",
       "columns": [
-        "status"
+        "extrato_item_id"
       ],
       "unique": false
     }

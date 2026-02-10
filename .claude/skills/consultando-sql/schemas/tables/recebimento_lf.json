@@ -113,6 +113,10 @@
       "type": "timestamp"
     },
     {
+      "name": "ultimo_checkpoint_em",
+      "type": "timestamp"
+    },
+    {
       "name": "usuario",
       "type": "varchar(100)"
     }

@@ -349,7 +349,9 @@ def obter_dados():
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
             ).filter(
                 CarteiraPrincipal.ativo == True,
-                CarteiraPrincipal.cod_produto.in_(list(todos_codigos_expandidos))
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+                CarteiraPrincipal.cod_produto.in_(list(todos_codigos_expandidos)),
+                ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)
             ).group_by(
                 CarteiraPrincipal.cod_produto
             ).all()
@@ -389,22 +391,11 @@ def obter_dados():
         # Criar mapa de separações
         sep_map = {(s.num_pedido, s.cod_produto): float(s.qtd_separada or 0) for s in separacoes}
 
-        # 🚀 OTIMIZAÇÃO: Calcular estoque em BATCH para produtos únicos
-        # 🔧 CORREÇÃO: Coletar TODOS os produtos (não só os com qtd_saldo > 0)
-        # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal
+        # Coletar produtos únicos para cálculo de estoque em batch
         produtos_unicos = {}
         for item in items:
             if item.cod_produto not in produtos_unicos:
-                produtos_unicos[item.cod_produto] = {
-                    'qtd_total_carteira': 0,
-                    'expedicao': None  # Removido de CarteiraPrincipal - dados de expedição estão em Separacao
-                }
-
-            qtd_separada = sep_map.get((item.num_pedido, item.cod_produto), 0)
-            qtd_saldo = float(item.qtd_saldo_produto_pedido or 0) - qtd_separada
-
-            if qtd_saldo > 0:
-                produtos_unicos[item.cod_produto]['qtd_total_carteira'] += qtd_saldo
+                produtos_unicos[item.cod_produto] = True
 
         # 🚀 OTIMIZAÇÃO CRÍTICA: Calcular estoque em BATCH (2 queries em vez de N*2)
         # Front-end fará o cálculo dinâmico de projeção

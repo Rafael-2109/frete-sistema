@@ -68,13 +68,6 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sendas_produto_depara_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_portal_sendas_produto_depara_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
@@ -85,6 +78,13 @@
       "name": "ix_portal_sendas_produto_depara_codigo_nosso",
       "columns": [
         "codigo_nosso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_produto_depara_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     },

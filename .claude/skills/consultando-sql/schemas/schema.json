@@ -173,7 +173,8 @@
         {"name": "linha_producao", "type": "varchar(50)", "description": "Linha de producao"},
         {"name": "produto_comprado", "type": "boolean", "description": "Produto comprado (revenda)"},
         {"name": "produto_produzido", "type": "boolean", "description": "Produto fabricado"},
-        {"name": "lead_time_mto", "type": "integer", "description": "Lead time MTO em dias"},
+        {"name": "lead_time", "type": "integer", "description": "Lead time de compra em dias"},
+        {"name": "lote_minimo_compra", "type": "integer", "description": "Lote minimo de compra (unidades)"},
         {"name": "custo_produto", "type": "numeric(15,4)", "description": "Custo unitario em R$"},
         {"name": "ativo", "type": "boolean", "description": "True = ativo"}
       ]

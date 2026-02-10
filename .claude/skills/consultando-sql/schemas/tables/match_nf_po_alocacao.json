@@ -29,12 +29,12 @@
     },
     {
       "name": "qtd_alocada",
-      "type": "numeric(15,3)",
+      "type": "numeric(18,6)",
       "nullable": false
     },
     {
       "name": "preco_po",
-      "type": "numeric(15,4)"
+      "type": "numeric(18,8)"
     },
     {
       "name": "data_po",
