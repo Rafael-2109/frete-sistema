@@ -29,6 +29,7 @@ from app.recebimento.models import (
     PickingRecebimentoQualityCheck,
 )
 from app.odoo.utils.connection import get_odoo_connection
+from app.recebimento.services.picking_recebimento_sync_service import STATES_PENDENTES
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class RecebimentoFisicoService:
                 func.max(PickingRecebimento.write_date).label('max_write_date')
             ).filter(
                 PickingRecebimento.company_id == company_id,
-                PickingRecebimento.state == 'assigned',
+                PickingRecebimento.state.in_(STATES_PENDENTES),
             ).group_by(
                 PickingRecebimento.odoo_purchase_order_id
             ).subquery()
@@ -89,7 +90,7 @@ class RecebimentoFisicoService:
                 )
             ).filter(
                 PickingRecebimento.company_id == company_id,
-                PickingRecebimento.state == 'assigned',
+                PickingRecebimento.state.in_(STATES_PENDENTES),
             )
 
             # Aplicar filtros opcionais
@@ -175,6 +176,7 @@ class RecebimentoFisicoService:
                     'purchase_order_id': p.odoo_purchase_order_id,
                     'purchase_order_name': p.odoo_purchase_order_name or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if p.scheduled_date else None,
+                    'state': p.state,  # assigned/waiting/confirmed
                     'qtd_produtos': qtd_produtos,
                     'status_local': status_local,
                 })

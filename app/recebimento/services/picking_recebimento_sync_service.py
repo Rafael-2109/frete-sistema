@@ -13,9 +13,12 @@ Janela: 90 minutos (configuravel via JANELA_PICKINGS)
 Filtro: picking_type_code=incoming, purchase_id != False
 
 Estrategia de busca por state:
-- Pickings assigned: SEMPRE sincronizados (sem filtro de data).
+- Pickings assigned/waiting/confirmed: SEMPRE sincronizados (sem filtro de data).
   Sao os que importam para Fase 4 (Recebimento Fisico) e podem
-  ficar semanas em assigned sem write_date recente.
+  ficar semanas sem write_date recente.
+  - assigned: PO vinculado ao DFe, itens pre-preenchidos (pronto para receber)
+  - confirmed: Picking criado, aguardando disponibilidade de estoque
+  - waiting: Aguardando outra operacao (ex: transferencia entre armazens)
 - Pickings done/cancel: sincronizados dentro da janela de tempo
   (filtro create_date/write_date) para limitar volume.
 """
@@ -35,6 +38,12 @@ from app.recebimento.models import (
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
+
+# States de pickings "em aberto" (pendentes de recebimento fisico)
+# - assigned: PO vinculado ao DFe, itens pre-preenchidos (pronto para receber)
+# - confirmed: Picking criado, aguardando disponibilidade de estoque
+# - waiting: Aguardando outra operacao (ex: transferencia entre armazens)
+STATES_PENDENTES = ['assigned', 'waiting', 'confirmed']
 
 
 class PickingRecebimentoSyncService:
@@ -325,14 +334,14 @@ class PickingRecebimentoSyncService:
         data_ate_dt = f"{data_ate} 23:59:59"
 
         # Domain em 2 partes:
-        # - Grupo 1 (OR): TODOS os assigned (sem filtro data)
+        # - Grupo 1 (OR): TODOS os pendentes assigned/waiting/confirmed (sem filtro data)
         # - Grupo 2 (OR): done/cancel com filtro create_date/write_date
         domain = [
             ['picking_type_code', '=', 'incoming'],
             ['purchase_id', '!=', False],
             '|',
-            # Grupo 1: TODOS os assigned (sem filtro data)
-            ['state', '=', 'assigned'],
+            # Grupo 1: TODOS os pendentes (sem filtro data)
+            ['state', 'in', STATES_PENDENTES],
             # Grupo 2: done/cancel com filtro data
             '&',
             ['state', 'in', ['done', 'cancel']],
@@ -345,7 +354,7 @@ class PickingRecebimentoSyncService:
             ['write_date', '<=', data_ate_dt],
         ]
 
-        logger.info(f"   Filtro: assigned=TODOS | done/cancel entre {data_de_dt} e {data_ate_dt}")
+        logger.info(f"   Filtro: {STATES_PENDENTES}=TODOS | done/cancel entre {data_de_dt} e {data_ate_dt}")
 
         campos = [
             'id', 'name', 'state', 'picking_type_code',
@@ -374,26 +383,26 @@ class PickingRecebimentoSyncService:
         logger.info("🔍 Buscando pickings de recebimento no Odoo...")
 
         if primeira_execucao:
-            # Primeira execucao: busca TODOS os assigned (sem filtro data)
+            # Primeira execucao: busca TODOS os pendentes (sem filtro data)
             domain = [
                 ['picking_type_code', '=', 'incoming'],
                 ['purchase_id', '!=', False],
-                ['state', '=', 'assigned'],
+                ['state', 'in', STATES_PENDENTES],
             ]
-            logger.info("   Primeira execucao: buscando TODOS os pickings assigned")
+            logger.info(f"   Primeira execucao: buscando TODOS os pickings {STATES_PENDENTES}")
         else:
-            # Incremental: assigned SEMPRE + done/cancel com janela de tempo
+            # Incremental: pendentes SEMPRE + done/cancel com janela de tempo
             data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
             # Domain em 2 partes:
-            # - Grupo 1 (OR): TODOS os assigned (sem filtro data)
+            # - Grupo 1 (OR): TODOS os pendentes assigned/waiting/confirmed (sem filtro data)
             # - Grupo 2 (OR): done/cancel com filtro create_date/write_date
             domain = [
                 ['picking_type_code', '=', 'incoming'],
                 ['purchase_id', '!=', False],
                 '|',
-                # Grupo 1: TODOS os assigned (sem filtro data)
-                ['state', '=', 'assigned'],
+                # Grupo 1: TODOS os pendentes (sem filtro data)
+                ['state', 'in', STATES_PENDENTES],
                 # Grupo 2: done/cancel com filtro data
                 '&',
                 ['state', 'in', ['done', 'cancel']],
@@ -401,7 +410,7 @@ class PickingRecebimentoSyncService:
                 ['create_date', '>=', data_limite],
                 ['write_date', '>=', data_limite],
             ]
-            logger.info(f"   Filtro: assigned=TODOS | done/cancel >= {data_limite}")
+            logger.info(f"   Filtro: {STATES_PENDENTES}=TODOS | done/cancel >= {data_limite}")
 
         campos = [
             'id', 'name', 'state', 'picking_type_code',

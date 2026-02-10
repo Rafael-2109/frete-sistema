@@ -1518,6 +1518,7 @@ class RecebimentoLf(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     processado_em = db.Column(db.DateTime, nullable=True)
+    ultimo_checkpoint_em = db.Column(db.DateTime, nullable=True)
     usuario = db.Column(db.String(100), nullable=True)
 
     # Relacionamentos
@@ -1554,6 +1555,7 @@ class RecebimentoLf(db.Model):
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
             'processado_em': self.processado_em.isoformat() if self.processado_em else None,
+            'ultimo_checkpoint_em': self.ultimo_checkpoint_em.isoformat() if self.ultimo_checkpoint_em else None,
             'usuario': self.usuario,
         }
 
