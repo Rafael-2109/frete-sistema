@@ -47,6 +47,11 @@
     --mfg-success-light: hsl(145 35% 59%);  /* #75b798 - production category light */
     --mfg-warning-light: hsl(45 97% 56%);   /* #fbbf24 - purchasing category light */
 
+    /* Stats card gradient start colors (replacing --bs-* in module CSS) */
+    --mfg-primary: hsl(211 100% 50%);        /* primary gradient start */
+    --mfg-info: hsl(188 78% 50%);             /* info gradient start */
+    --mfg-success: hsl(152 69% 31%);          /* success gradient start */
+
     /* Dark mode vibrant feedback colors */
     --mfg-success-vibrant: hsl(145 72% 58%); /* #4ade80 - positive adjustments */
     --mfg-danger-vibrant: hsl(0 90% 71%);    /* #f87171 - negative adjustments */
@@ -100,6 +105,81 @@
   .badge-producoes {
     font-size: 0.7rem;
     vertical-align: middle;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     HISTORICO PEDIDOS - Cards, table and filter styles
+     Migrated from manufatura/historico_pedidos.html inline styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Stats cards */
+  .historico-stats-card {
+    color: hsl(0 0% 100%);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .historico-stats-card h4 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: bold;
+    color: hsl(0 0% 100%);
+  }
+  .historico-stats-card p {
+    margin: 5px 0 0 0;
+    opacity: 0.9;
+    color: hsl(0 0% 100%);
+  }
+
+  /* Stats card gradient variants */
+  .historico-stats-card-primary {
+    background: linear-gradient(135deg, var(--mfg-primary) 0%, var(--mfg-purple) 100%);
+  }
+  .historico-stats-card-pink {
+    background: linear-gradient(135deg, var(--mfg-pink) 0%, var(--mfg-rose) 100%);
+  }
+  .historico-stats-card-cyan {
+    background: linear-gradient(135deg, var(--mfg-info) 0%, var(--mfg-cyan) 100%);
+  }
+  .historico-stats-card-green {
+    background: linear-gradient(135deg, var(--mfg-success) 0%, var(--mfg-teal) 100%);
+  }
+
+  /* Card header */
+  .historico-card-header {
+    background-color: var(--bg);
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Table header */
+  .historico-thead {
+    background-color: var(--bg);
+  }
+  .historico-thead th {
+    background-color: var(--bg);
+    color: var(--text);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.3px;
+  }
+
+  /* Table cells */
+  .historico-table td,
+  .historico-table th {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  /* Sync button */
+  .historico-sync-btn {
+    position: relative;
+  }
+  .historico-sync-btn .spinner-border {
+    width: 1rem;
+    height: 1rem;
   }
 
 } /* End @layer modules */

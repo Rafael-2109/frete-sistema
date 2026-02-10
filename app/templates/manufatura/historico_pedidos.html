@@ -1,77 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Histórico de Pedidos - Manufatura/PCP{% endblock %}
-
-{% block extra_css %}
-<style>
-/* ==========================================================================
-   HISTORICO PEDIDOS - Theme-aware Styles
-   ========================================================================== */
-
-/* Stats cards - Theme-aware com gradientes preservados */
-.stats-card {
-    color: white;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 20px;
-}
-.stats-card h4 {
-    margin: 0;
-    font-size: 2rem;
-    font-weight: bold;
-    color: white;
-}
-.stats-card p {
-    margin: 5px 0 0 0;
-    opacity: 0.9;
-    color: white;
-}
-
-/* Stats card variants */
-.stats-card-primary {
-    background: linear-gradient(135deg, var(--bs-primary) 0%, var(--mfg-purple, hsl(258 72% 66%)) 100%);
-}
-.stats-card-pink {
-    background: linear-gradient(135deg, var(--mfg-pink, hsl(330 81% 60%)) 0%, var(--mfg-rose, hsl(351 94% 60%)) 100%);
-}
-.stats-card-cyan {
-    background: linear-gradient(135deg, var(--bs-info) 0%, var(--mfg-cyan, hsl(188 91% 43%)) 100%);
-}
-.stats-card-green {
-    background: linear-gradient(135deg, var(--bs-success) 0%, var(--mfg-teal, hsl(168 76% 40%)) 100%);
-}
-
-.table-sm td, .table-sm th {
-    padding: 0.5rem;
-    font-size: 0.875rem;
-}
-.sync-btn {
-    position: relative;
-}
-.sync-btn .spinner-border {
-    width: 1rem;
-    height: 1rem;
-}
-
-/* Card header theme-aware */
-.card-header-theme {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-bottom: 1px solid var(--bs-border-color) !important;
-}
-
-/* Table thead theme-aware */
-.table-thead-theme {
-    background-color: var(--bs-tertiary-bg) !important;
-}
-.table-thead-theme th {
-    background-color: var(--bs-tertiary-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-bottom: 2px solid var(--bs-border-color) !important;
-    font-weight: 600;
-}
-</style>
-{% endblock %}
+{% block title %}Historico de Pedidos - Manufatura/PCP{% endblock %}
 
 {% block content %}
 <!-- Token CSRF -->
@@ -83,60 +12,61 @@
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{{ url_for('manufatura.index') }}">Manufatura</a></li>
-                    <li class="breadcrumb-item active">Histórico de Pedidos</li>
+                    <li class="breadcrumb-item active">Historico de Pedidos</li>
                 </ol>
             </nav>
             <h1 class="h3 mb-3">
                 <i class="fas fa-history me-2"></i>
-                Histórico de Pedidos (Odoo)
+                Historico de Pedidos
             </h1>
         </div>
     </div>
 
-    <!-- Estatísticas -->
+    <!-- Estatisticas -->
     <div class="row mb-4" id="estatisticas-container">
         <div class="col-md-3">
-            <div class="stats-card stats-card-primary">
+            <div class="historico-stats-card historico-stats-card-primary">
                 <h4 id="stat-registros">-</h4>
                 <p>Total de Registros</p>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="stats-card stats-card-pink">
+            <div class="historico-stats-card historico-stats-card-pink">
                 <h4 id="stat-pedidos">-</h4>
-                <p>Pedidos Únicos</p>
+                <p>Pedidos Unicos</p>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="stats-card stats-card-cyan">
+            <div class="historico-stats-card historico-stats-card-cyan">
                 <h4 id="stat-produtos">-</h4>
-                <p>Produtos Únicos</p>
+                <p>Produtos Unicos</p>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="stats-card stats-card-green">
+            <div class="historico-stats-card historico-stats-card-green">
                 <h4 id="stat-valor">-</h4>
                 <p>Valor Total</p>
             </div>
         </div>
     </div>
 
-    <!-- Filtros e Ações -->
+    <!-- Filtros e Acoes -->
     <div class="card shadow mb-4">
-        <div class="card-header card-header-theme py-3">
+        <div class="card-header historico-card-header py-3">
             <h6 class="m-0 fw-bold">
-                <i class="fas fa-filter me-2"></i>Filtros e Sincronização
+                <i class="fas fa-filter me-2"></i>Filtros e Sincronizacao
             </h6>
         </div>
         <div class="card-body">
-            <div class="row">
+            <!-- Row 1: Datas + Grupo + Cliente + CNPJ -->
+            <div class="row mb-2">
                 <div class="col-md-2">
-                    <label>Data Início</label>
+                    <label>Data Inicio</label>
                     <input type="date" class="form-control" id="filtro-data-inicio">
                 </div>
                 <div class="col-md-2">
                     <label>Data Fim</label>
-                    <input type="date" class="form-control" id="filtro-data-fim" value="{{ hoje }}">
+                    <input type="date" class="form-control" id="filtro-data-fim">
                 </div>
                 <div class="col-md-2">
                     <label>Grupo</label>
@@ -144,20 +74,35 @@
                         <option value="">Todos</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label>Cliente</label>
+                    <input type="text" class="form-control" id="filtro-cliente" placeholder="Nome do cliente">
+                </div>
+                <div class="col-md-3">
+                    <label>CNPJ</label>
+                    <input type="text" class="form-control" id="filtro-cnpj" placeholder="00.000.000/0000-00">
+                </div>
+            </div>
+            <!-- Row 2: Produto + Acoes -->
+            <div class="row">
                 <div class="col-md-2">
-                    <label>Código Produto</label>
+                    <label>Codigo Produto</label>
                     <input type="text" class="form-control" id="filtro-cod-produto" placeholder="Ex: 12345">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label>Nome Produto</label>
+                    <input type="text" class="form-control" id="filtro-nome-produto" placeholder="Nome do produto">
+                </div>
+                <div class="col-md-7">
                     <label>&nbsp;</label>
-                    <div>
+                    <div class="text-end">
                         <button class="btn btn-primary" onclick="carregarHistorico()">
                             <i class="fas fa-search"></i> Buscar
                         </button>
                         <button class="btn btn-success" onclick="exportarExcel()">
                             <i class="fas fa-download"></i> Exportar Excel
                         </button>
-                        <button class="btn btn-warning sync-btn" onclick="sincronizarOdoo()">
+                        <button class="btn btn-warning historico-sync-btn" onclick="sincronizarOdoo()">
                             <i class="fas fa-sync"></i> Sincronizar Odoo
                         </button>
                     </div>
@@ -168,25 +113,25 @@
 
     <!-- Tabela de Dados -->
     <div class="card shadow">
-        <div class="card-header card-header-theme py-3">
+        <div class="card-header historico-card-header py-3">
             <h6 class="m-0 fw-bold">
-                <i class="fas fa-table me-2"></i>Registros do Histórico
+                <i class="fas fa-table me-2"></i>Registros do Historico
             </h6>
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered table-hover table-sm" id="tabela-historico">
-                    <thead class="table-thead-theme">
+                <table class="table table-bordered table-hover historico-table" id="tabela-historico">
+                    <thead class="historico-thead">
                         <tr>
                             <th>Pedido</th>
                             <th>Data</th>
                             <th>Cliente</th>
                             <th>Grupo</th>
                             <th>Cidade/UF</th>
-                            <th>Código Produto</th>
+                            <th>Codigo Produto</th>
                             <th>Nome Produto</th>
-                            <th class="text-right">Quantidade</th>
-                            <th class="text-right">Valor</th>
+                            <th class="text-end">Quantidade</th>
+                            <th class="text-end">Valor</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-historico">
@@ -200,18 +145,18 @@
                 </table>
             </div>
 
-            <!-- Paginação -->
+            <!-- Paginacao -->
             <div class="row mt-3">
                 <div class="col-md-6">
                     <p id="info-paginacao" class="text-muted">-</p>
                 </div>
-                <div class="col-md-6 text-right">
+                <div class="col-md-6 text-end">
                     <button class="btn btn-sm btn-secondary" onclick="mudarPagina(-1)">
                         <i class="fas fa-chevron-left"></i> Anterior
                     </button>
-                    <span id="pagina-atual" class="mx-2">Página 1</span>
+                    <span id="pagina-atual" class="mx-2">Pagina 1</span>
                     <button class="btn btn-sm btn-secondary" onclick="mudarPagina(1)">
-                        Próxima <i class="fas fa-chevron-right"></i>
+                        Proxima <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
             </div>
@@ -220,13 +165,26 @@
 </div>
 
 <script>
-// Configuração global
+// Configuracao global
 var paginaAtual = 1;
 var totalPaginas = 1;
 
-// Inicialização
+// Coleta todos os filtros ativos
+function coletarFiltros() {
+    return {
+        data_inicio: $('#filtro-data-inicio').val(),
+        data_fim: $('#filtro-data-fim').val(),
+        grupo: $('#filtro-grupo').val(),
+        cliente: $('#filtro-cliente').val(),
+        cnpj: $('#filtro-cnpj').val(),
+        cod_produto: $('#filtro-cod-produto').val(),
+        nome_produto: $('#filtro-nome-produto').val()
+    };
+}
+
+// Inicializacao
 $(document).ready(function() {
-    // Define data padrão (30 dias atrás até hoje)
+    // Define data padrao (30 dias atras ate hoje)
     var hoje = new Date();
     var umMesAtras = new Date();
     umMesAtras.setMonth(umMesAtras.getMonth() - 1);
@@ -237,11 +195,18 @@ $(document).ready(function() {
     // Carrega grupos
     carregarGrupos();
 
-    // Carrega estatísticas iniciais
+    // Carrega estatisticas iniciais
     carregarEstatisticas();
 
-    // Carrega histórico
+    // Carrega historico
     carregarHistorico();
+
+    // Enter nos filtros texto dispara busca
+    $('#filtro-cliente, #filtro-cnpj, #filtro-cod-produto, #filtro-nome-produto').keypress(function(e) {
+        if (e.which === 13) {
+            carregarHistorico();
+        }
+    });
 });
 
 // Carrega grupos empresariais
@@ -259,17 +224,11 @@ function carregarGrupos() {
     });
 }
 
-// Carrega estatísticas
+// Carrega estatisticas
 function carregarEstatisticas() {
-    var dataInicio = $('#filtro-data-inicio').val();
-    var dataFim = $('#filtro-data-fim').val();
-    var grupo = $('#filtro-grupo').val();
+    var filtros = coletarFiltros();
 
-    $.get('/manufatura/api/historico-pedidos/estatisticas', {
-        data_inicio: dataInicio,
-        data_fim: dataFim,
-        grupo: grupo
-    })
+    $.get('/manufatura/api/historico-pedidos/estatisticas', filtros)
     .done(function(stats) {
         $('#stat-registros').text(stats.total_registros.toLocaleString('pt-BR'));
         $('#stat-pedidos').text(stats.total_pedidos.toLocaleString('pt-BR'));
@@ -277,31 +236,23 @@ function carregarEstatisticas() {
         $('#stat-valor').text('R$ ' + stats.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2}));
     })
     .fail(function() {
-        alert('Erro ao carregar estatísticas');
+        console.error('Erro ao carregar estatisticas');
     });
 }
 
-// Carrega histórico
+// Carrega historico
 function carregarHistorico(pagina) {
     pagina = pagina || 1;
 
-    var dataInicio = $('#filtro-data-inicio').val();
-    var dataFim = $('#filtro-data-fim').val();
-    var grupo = $('#filtro-grupo').val();
-    var codProduto = $('#filtro-cod-produto').val();
+    var filtros = coletarFiltros();
+    filtros.page = pagina;
+    filtros.per_page = 50;
 
     $('#tbody-historico').html(
         '<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>Carregando...</td></tr>'
     );
 
-    $.get('/manufatura/api/historico-pedidos/listar', {
-        data_inicio: dataInicio,
-        data_fim: dataFim,
-        grupo: grupo,
-        cod_produto: codProduto,
-        page: pagina,
-        per_page: 50
-    })
+    $.get('/manufatura/api/historico-pedidos/listar', filtros)
     .done(function(response) {
         var $tbody = $('#tbody-historico');
         $tbody.empty();
@@ -314,24 +265,24 @@ function carregarHistorico(pagina) {
         response.registros.forEach(function(r) {
             var $tr = $('<tr>');
             $tr.append('<td>' + r.num_pedido + '</td>');
-            $tr.append('<td>' + r.data_pedido + '</td>');
-            $tr.append('<td><small>' + r.raz_social_red + '</small></td>');
-            $tr.append('<td><span class="badge bg-info">' + r.nome_grupo + '</span></td>');
+            $tr.append('<td>' + (r.data_pedido || '-') + '</td>');
+            $tr.append('<td><small>' + (r.raz_social_red || '-') + '</small></td>');
+            $tr.append('<td><span class="badge bg-info">' + (r.nome_grupo || '-') + '</span></td>');
             $tr.append('<td>' + (r.nome_cidade || '-') + '/' + (r.cod_uf || '-') + '</td>');
             $tr.append('<td><strong>' + r.cod_produto + '</strong></td>');
             $tr.append('<td><small>' + (r.nome_produto || '-') + '</small></td>');
-            $tr.append('<td class="text-right">' + r.qtd_produto_pedido.toLocaleString('pt-BR', {minimumFractionDigits: 3}) + '</td>');
-            $tr.append('<td class="text-right">R$ ' + r.valor_produto_pedido.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>');
+            $tr.append('<td class="text-end">' + r.qtd_produto_pedido.toLocaleString('pt-BR', {minimumFractionDigits: 3}) + '</td>');
+            $tr.append('<td class="text-end">R$ ' + r.valor_produto_pedido.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>');
             $tbody.append($tr);
         });
 
-        // Atualiza paginação
+        // Atualiza paginacao
         paginaAtual = response.page;
         totalPaginas = response.total_pages;
-        $('#pagina-atual').text('Página ' + paginaAtual + ' de ' + totalPaginas);
+        $('#pagina-atual').text('Pagina ' + paginaAtual + ' de ' + totalPaginas);
         $('#info-paginacao').text('Mostrando ' + response.registros.length + ' de ' + response.total + ' registros');
 
-        // Atualiza estatísticas
+        // Atualiza estatisticas
         carregarEstatisticas();
     })
     .fail(function() {
@@ -339,7 +290,7 @@ function carregarHistorico(pagina) {
     });
 }
 
-// Muda página
+// Muda pagina
 function mudarPagina(direcao) {
     var novaPagina = paginaAtual + direcao;
     if (novaPagina < 1 || novaPagina > totalPaginas) return;
@@ -348,21 +299,15 @@ function mudarPagina(direcao) {
 
 // Exporta para Excel
 function exportarExcel() {
-    var dataInicio = $('#filtro-data-inicio').val();
-    var dataFim = $('#filtro-data-fim').val();
-    var grupo = $('#filtro-grupo').val();
+    var filtros = coletarFiltros();
 
-    if (!dataFim) {
+    if (!filtros.data_fim) {
         alert('Selecione uma data fim para exportar');
         return;
     }
 
-    var url = '/manufatura/api/historico-pedidos/exportar-excel?' +
-              'data_inicio=' + (dataInicio || '') +
-              '&data_fim=' + dataFim +
-              '&grupo=' + encodeURIComponent(grupo);
-
-    window.location.href = url;
+    var params = $.param(filtros);
+    window.location.href = '/manufatura/api/historico-pedidos/exportar-excel?' + params;
 }
 
 // Sincroniza com Odoo
@@ -375,11 +320,11 @@ function sincronizarOdoo() {
         return;
     }
 
-    if (!confirm('Sincronizar histórico de pedidos do Odoo?\n\nPeríodo: ' + (dataInicio || 'início') + ' até ' + dataFim)) {
+    if (!confirm('Sincronizar historico de pedidos do Odoo?\n\nPeriodo: ' + (dataInicio || 'inicio') + ' ate ' + dataFim)) {
         return;
     }
 
-    var $btn = $('.sync-btn');
+    var $btn = $('.historico-sync-btn');
     $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Sincronizando...');
 
     $.ajax({
