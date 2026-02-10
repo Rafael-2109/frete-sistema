@@ -629,6 +629,31 @@ class BaixaTitulosService:
         if titulos:
             return titulos[0]
 
+        # Fallback: parcela=0 (NFs com parcela unica nao numerada no Odoo)
+        # A sincronizacao converte parcela 0→1 localmente, mas o Odoo mantem 0.
+        if parcela == 1:
+            logger.warning(f"Titulo NF {nf} P1 nao encontrado, tentando parcela=0 (parcela unica)")
+            titulos = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['x_studio_nf_e', '=', nf],
+                    ['l10n_br_cobranca_parcela', '=', 0],
+                    ['account_type', '=', 'asset_receivable'],
+                    ['parent_state', '=', 'posted'],
+                    ['date_maturity', '!=', '2000-01-01'],
+                    ['move_id.move_type', '=', 'out_invoice']
+                ],
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5
+            )
+            if titulos:
+                for t in titulos:
+                    company = t.get('company_id')
+                    if company and isinstance(company, (list, tuple)):
+                        if 'FB' in company[1]:
+                            return t
+                return titulos[0]
+
         return None
 
     def _corrigir_titulo_ano_2000(self, nf: str) -> bool:

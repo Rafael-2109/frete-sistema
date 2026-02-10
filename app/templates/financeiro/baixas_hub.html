@@ -432,9 +432,16 @@
                             <td>
                                 {{ item.journal_excel }}
                                 {% if item.journal_odoo_id %}
-                                <i class="fas fa-check-circle" style="color: var(--fin-accent-success);" title="Journal valido"></i>
+                                <i class="fas fa-check-circle" style="color: var(--fin-accent-success);" title="Journal valido (ID {{ item.journal_odoo_id }})"></i>
                                 {% else %}
                                 <i class="fas fa-times-circle" style="color: var(--fin-accent-danger);" title="Journal nao encontrado"></i>
+                                {% if item.status in ('INVALIDO', 'ERRO') %}
+                                <button class="fin-btn fin-btn--ghost fin-btn--sm" style="padding: 1px 5px; margin-left: 2px;"
+                                        onclick="abrirEditJournal({{ item.id }}, '{{ item.nf_excel }}', {{ item.parcela_excel }}, '{{ item.journal_excel|e }}')"
+                                        title="Corrigir journal">
+                                    <i class="fas fa-pen" style="font-size: 0.7rem; color: var(--fin-accent-warning);"></i>
+                                </button>
+                                {% endif %}
                                 {% endif %}
                             </td>
                             <td class="mono">{{ item.data_excel|formatar_data_segura or '-' }}</td>
@@ -442,7 +449,7 @@
                                 <input type="checkbox" class="fin-checkbox"
                                        id="ativo{{ item.id }}"
                                        {% if item.ativo %}checked{% endif %}
-                                       {% if item.status in ['SUCESSO', 'PROCESSANDO', 'INVALIDO'] %}disabled{% endif %}
+                                       {% if item.status in ['SUCESSO', 'PROCESSANDO'] or (item.status == 'INVALIDO' and not item.journal_odoo_id) %}disabled{% endif %}
                                        onchange="toggleAtivo({{ item.id }}, this.checked)">
                             </td>
                             <td>
@@ -607,6 +614,68 @@
         </div>
     </div>
 </div>
+<!-- Modal Editar Journal -->
+<div class="modal fade" id="modalEditarJournal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--fin-bg-secondary); color: var(--fin-text-primary); border: 1px solid var(--fin-border);">
+            <div class="modal-header" style="border-color: var(--fin-border);">
+                <h5 class="modal-title" style="color: var(--fin-accent-warning);">
+                    <i class="fas fa-pen"></i>
+                    Corrigir Journal
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--fin-text-secondary);">NF / Parcela</label>
+                    <input type="text" class="form-control" id="editJournalInfo" readonly
+                           style="background: var(--fin-bg-tertiary); color: var(--fin-text-primary); border-color: var(--fin-border);">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--fin-text-secondary);">Journal atual (incorreto)</label>
+                    <input type="text" class="form-control" id="editJournalAtual" readonly
+                           style="background: var(--fin-bg-tertiary); color: var(--fin-text-muted); border-color: var(--fin-border);">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--fin-text-secondary);">Novo Journal</label>
+                    <select class="form-select" id="editJournalSelect"
+                            style="background: var(--fin-bg-tertiary); color: var(--fin-text-primary); border-color: var(--fin-border);">
+                        <option value="">-- Selecione o journal correto --</option>
+                        {% for j in journals_disponiveis %}
+                        {% if j.freq > 0 %}
+                        <option value="{{ j.name }}">{{ j.name }} ({{ j.code }}) - {{ 'Banco' if j.type == 'bank' else 'Caixa' }}</option>
+                        {% endif %}
+                        {% endfor %}
+                        <optgroup label="Journals menos usados">
+                        {% for j in journals_disponiveis %}
+                        {% if j.freq == 0 %}
+                        <option value="{{ j.name }}">{{ j.name }} ({{ j.code }})</option>
+                        {% endif %}
+                        {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" class="fin-checkbox" id="editJournalRevalidar" checked>
+                        <span style="color: var(--fin-text-secondary);">Revalidar para processamento (status &rarr; VALIDO)</span>
+                    </label>
+                </div>
+                <div class="fin-alert fin-alert--info" style="font-size: 0.8rem;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Ao revalidar, o item sera ativado e podera ser processado no Odoo.</span>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-color: var(--fin-border);">
+                <button type="button" class="fin-btn fin-btn--ghost" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="fin-btn fin-btn--primary" onclick="salvarEditJournal()">
+                    <i class="fas fa-save"></i> Salvar Journal
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if current_user.perfil == 'administrador' %}
 <!-- Modal Admin Edit -->
 <div class="modal fade" id="modalAdminEdit" tabindex="-1">
@@ -859,8 +928,16 @@ function uploadFile(file) {
         resultado.style.display = 'block';
 
         if (data.success) {
-            resultado.innerHTML = `<div class="fin-alert fin-alert--success"><i class="fas fa-check-circle"></i>
-                <span><strong>Importacao concluida!</strong> ${data.linhas_validas} validas, ${data.linhas_invalidas} invalidas.</span></div>`;
+            let msg = `<strong>Importacao concluida!</strong> ${data.linhas_validas} validas, ${data.linhas_invalidas} invalidas.`;
+            let alertType = 'success';
+            let alertIcon = 'check-circle';
+            if (data.duplicidades > 0) {
+                msg += `<br><i class="fas fa-exclamation-triangle"></i> <strong>${data.duplicidades} itens bloqueados por duplicidade</strong> (importados como inativos).`;
+                alertType = 'warning';
+                alertIcon = 'exclamation-triangle';
+            }
+            resultado.innerHTML = `<div class="fin-alert fin-alert--${alertType}"><i class="fas fa-${alertIcon}"></i>
+                <span>${msg}</span></div>`;
             toastr.success('Arquivo importado!');
             setTimeout(() => location.reload(), 2000);
         } else {
@@ -1003,6 +1080,53 @@ function salvarEditAdmin() {
             }
         } else {
             toastr.error(data.error || 'Erro ao salvar');
+        }
+    })
+    .catch(err => {
+        toastr.error('Erro de conexao');
+        console.error(err);
+    });
+}
+
+// ================================================================
+// EDITAR JOURNAL
+// ================================================================
+let editJournalItemId = null;
+
+function abrirEditJournal(itemId, nf, parcela, journalAtual) {
+    editJournalItemId = itemId;
+    document.getElementById('editJournalInfo').value = `NF ${nf} - Parcela ${parcela}`;
+    document.getElementById('editJournalAtual').value = journalAtual || '(vazio)';
+    document.getElementById('editJournalSelect').value = '';
+    document.getElementById('editJournalRevalidar').checked = true;
+    const modal = new bootstrap.Modal(document.getElementById('modalEditarJournal'));
+    modal.show();
+}
+
+function salvarEditJournal() {
+    if (!editJournalItemId) return;
+
+    const journalNome = document.getElementById('editJournalSelect').value;
+    const revalidar = document.getElementById('editJournalRevalidar').checked;
+
+    if (!journalNome) {
+        toastr.warning('Selecione um journal');
+        return;
+    }
+
+    fetch(`/financeiro/contas-receber/baixas/item/${editJournalItemId}/editar-journal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ journal_nome: journalNome, revalidar: revalidar })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(`Journal corrigido: ${data.alteracoes.journal_anterior} → ${data.journal_nome}`);
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarJournal')).hide();
+            setTimeout(() => location.reload(), 500);
+        } else {
+            toastr.error(data.error || 'Erro ao salvar journal');
         }
     })
     .catch(err => {

@@ -38,12 +38,12 @@
     },
     {
       "name": "quantity",
-      "type": "numeric(15,3)",
+      "type": "numeric(18,6)",
       "default": 0
     },
     {
       "name": "reserved_uom_qty",
-      "type": "numeric(15,3)",
+      "type": "numeric(18,6)",
       "default": 0
     },
     {

@@ -7,8 +7,9 @@ Funcionalidades:
 - Hub de baixas (listagem, filtros, selecao)
 - Download do template Excel com journals
 - Upload e validacao do Excel
-- Deteccao de duplicidades (warning, nao bloqueia)
+- Deteccao de duplicidades (trava: importa como inativo)
 - Ativar/inativar itens (individual ou em lote)
+- Edicao de journal para itens INVALIDO/ERRO
 - Processamento das baixas no Odoo
 - Auditoria completa
 
@@ -213,18 +214,26 @@ def verificar_duplicidade_no_arquivo(itens_novos: list) -> dict:
     return duplicados #type: ignore
 
 
-def verificar_duplicidade_banco(nf: str, parcela: int, valor: float) -> bool:
+def verificar_duplicidade_banco(nf: str, parcela: int) -> dict:
     """
-    Verifica se existe item identico ja processado com sucesso no banco.
+    Verifica se existe item identico no banco (qualquer status ativo).
+    Retorna dict com info do existente ou None.
     """
     existente = BaixaTituloItem.query.filter(
         BaixaTituloItem.nf_excel == nf,
         BaixaTituloItem.parcela_excel == parcela,
-        BaixaTituloItem.valor_excel == valor,
-        BaixaTituloItem.status == 'SUCESSO'
+        BaixaTituloItem.ativo == True,
+        BaixaTituloItem.status.in_(['VALIDO', 'PENDENTE', 'PROCESSANDO', 'SUCESSO'])
     ).first()
 
-    return existente is not None
+    if existente:
+        return {
+            'id': existente.id,
+            'status': existente.status,
+            'lote_id': existente.lote_id,
+            'journal': existente.journal_excel
+        }
+    return None  # type: ignore
 
 
 # =============================================================================
@@ -302,7 +311,8 @@ def baixas_hub():
         filtro_lote=filtro_lote,
         filtro_status=filtro_status,
         filtro_ativo=filtro_ativo,
-        filtro_nf=filtro_nf
+        filtro_nf=filtro_nf,
+        journals_disponiveis=JOURNALS_DISPONIVEIS
     )
 
 
@@ -548,14 +558,22 @@ def baixas_upload():
             status = 'VALIDO' if not erros else 'INVALIDO'
             mensagem = '; '.join(erros) if erros else None
 
-            # Verificar duplicidade
-            is_duplicado = idx in duplicados_arquivo or verificar_duplicidade_banco(nf, parcela, valor)
-            if is_duplicado:
+            # Verificar duplicidade no banco (qualquer status ativo)
+            dup_info = verificar_duplicidade_banco(nf, parcela)
+            is_dup_arquivo = idx in duplicados_arquivo
+
+            if dup_info:
                 duplicidades_total += 1
-                if mensagem:
-                    mensagem += '; Possivel duplicidade'
-                else:
-                    mensagem = 'Possivel duplicidade'
+                msg_dup = f'Duplicidade: NF {nf} P{parcela} ja existe (ID {dup_info["id"]}, status {dup_info["status"]})'
+                mensagem = f'{mensagem}; {msg_dup}' if mensagem else msg_dup
+                # TRAVA: importar como inativo
+                item_ativo = False
+            elif is_dup_arquivo:
+                duplicidades_total += 1
+                mensagem = f'{mensagem}; Duplicidade no arquivo' if mensagem else 'Duplicidade no arquivo'
+                item_ativo = False
+            else:
+                item_ativo = (status == 'VALIDO')
 
             if status == 'VALIDO':
                 linhas_validas += 1
@@ -577,7 +595,7 @@ def baixas_upload():
                 devolucao_excel=devolucao,
                 journal_odoo_id=journal_info['id'] if journal_info else None,
                 journal_odoo_code=journal_info['code'] if journal_info else None,
-                ativo=status == 'VALIDO',
+                ativo=item_ativo,
                 status=status,
                 mensagem=mensagem
             )
@@ -633,10 +651,11 @@ def baixas_toggle_item(item_id):
             }), 400
 
         # Verificar se item invalido pode ser ativado
-        if item.status == 'INVALIDO':
+        # Permitir se o journal ja foi corrigido (journal_odoo_id preenchido)
+        if item.status == 'INVALIDO' and not item.journal_odoo_id:
             return jsonify({
                 'success': False,
-                'error': 'Item invalido nao pode ser ativado'
+                'error': 'Item com journal invalido. Corrija o journal antes de ativar.'
             }), 400
 
         # Obter novo valor do JSON ou inverter
@@ -679,7 +698,10 @@ def baixas_ativar_lote():
         atualizados = 0
         for item_id in ids:
             item = db.session.get(BaixaTituloItem,item_id) if item_id else None
-            if item and item.status not in ['SUCESSO', 'PROCESSANDO', 'INVALIDO']:
+            if item and item.status not in ['SUCESSO', 'PROCESSANDO']:
+                # Bloquear INVALIDO sem journal resolvido
+                if item.status == 'INVALIDO' and not item.journal_odoo_id:
+                    continue
                 item.ativo = ativo
                 atualizados += 1
 
@@ -964,6 +986,95 @@ def baixas_job_resultado(job_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# EDITAR JOURNAL - CORRIGIR JOURNAL DE ITENS INVALIDO/ERRO
+# =============================================================================
+
+@financeiro_bp.route('/contas-receber/baixas/item/<int:item_id>/editar-journal', methods=['POST'])
+@login_required
+def baixas_editar_journal(item_id):
+    """
+    Permite editar o journal de um item INVALIDO ou ERRO.
+
+    - Resolve o novo journal pelo nome
+    - Opcionalmente revalida o item (status -> VALIDO, ativo -> True)
+    - Limpa mensagem de journal invalido
+    """
+    try:
+        item = BaixaTituloItem.query.get_or_404(item_id)
+
+        # Permitir apenas para itens INVALIDO ou ERRO
+        if item.status not in ('INVALIDO', 'ERRO'):
+            return jsonify({
+                'success': False,
+                'error': f'Apenas itens INVALIDO ou ERRO podem ter journal editado (atual: {item.status})'
+            }), 400
+
+        data = request.get_json()
+        journal_nome = data.get('journal_nome', '').strip()
+        revalidar = data.get('revalidar', True)
+
+        if not journal_nome:
+            return jsonify({
+                'success': False,
+                'error': 'Nome do journal e obrigatorio'
+            }), 400
+
+        # Resolver journal
+        journal_info = resolver_journal(journal_nome)
+        if not journal_info:
+            return jsonify({
+                'success': False,
+                'error': f'Journal "{journal_nome}" nao encontrado'
+            }), 400
+
+        # Registrar valores anteriores para auditoria
+        journal_anterior = item.journal_excel
+        status_anterior = item.status
+
+        # Atualizar journal
+        item.journal_excel = journal_info['name']
+        item.journal_odoo_id = journal_info['id']
+        item.journal_odoo_code = journal_info['code']
+
+        # Limpar mensagem de journal invalido da mensagem existente
+        if item.mensagem:
+            partes = [p.strip() for p in item.mensagem.split(';')]
+            partes_limpas = [
+                p for p in partes
+                if 'journal' not in p.lower() or 'obrigatorio' not in p.lower()
+            ]
+            item.mensagem = '; '.join(partes_limpas) if partes_limpas else None
+
+        # Revalidar se solicitado e journal resolvido
+        if revalidar:
+            item.status = 'VALIDO'
+            item.ativo = True
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'item_id': item.id,
+            'journal_nome': journal_info['name'],
+            'journal_odoo_id': journal_info['id'],
+            'journal_odoo_code': journal_info['code'],
+            'status': item.status,
+            'ativo': item.ativo,
+            'alteracoes': {
+                'journal_anterior': journal_anterior,
+                'journal_novo': journal_info['name'],
+                'status_anterior': status_anterior,
+                'status_novo': item.status,
+                'editado_por': current_user.nome if current_user else 'Sistema'
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # =============================================================================

@@ -29,7 +29,7 @@
     },
     {
       "name": "product_uom_qty",
-      "type": "numeric(15,3)"
+      "type": "numeric(18,6)"
     },
     {
       "name": "product_uom",

@@ -3,16 +3,20 @@ Reset E2E: Reverter NF 12794 (RecebimentoLf id=1) e reprocessar.
 
 Contexto:
     NF 12794 foi a primeira NF processada pelo fluxo automatizado de Recebimento LF.
-    Apos a migration de precisao de precos (Numeric(15,4) -> Numeric(18,8)),
-    precisamos reprocessar para validar que o fluxo E2E preserva precos completos.
+    Apos a migration de precisao de quantidades (Numeric(15,3) -> Numeric(18,6)),
+    precisamos reprocessar para validar que o fluxo E2E preserva quantidades completas.
 
-IDs fixos:
+    Os dados locais em recebimento_lf_lote.quantidade ainda carregam truncamento
+    da era Numeric(15,3) (ex: 0.928000 em vez de 0.9284). Este script faz refresh
+    das quantidades a partir do DFe Odoo (fonte de verdade) antes de resetar.
+
+IDs fixos (apos ultimo processamento):
     - RecebimentoLf: id=1
-    - PO Odoo: 35782 (C2614995)
-    - Picking Odoo: 302074 (FB/IN/11525)
-    - Invoice Odoo: 495837
+    - PO Odoo: 35804 (C2615012)
+    - Picking Odoo: 302139 (FB/IN/11530)
+    - Invoice Odoo: 496258
     - DFe Odoo: 37390
-    - Lotes locais: 17 registros (move_line IDs 217488624-217488640)
+    - Lotes locais: 17 registros (move_line IDs 217488968-217488984)
 
 Fases:
     1. Ler estado Odoo (read-only)
@@ -20,8 +24,9 @@ Fases:
     3. Reverter Picking
     4. Cancelar PO
     5. Desvincular DFe
-    6. Reset local DB
-    7. Re-enfileirar job RQ
+    6. Refresh quantidades dos lotes locais via DFe Odoo
+    7. Reset local DB
+    8. Re-processar direto (sem worker RQ)
 
 Uso:
     source .venv/bin/activate
@@ -30,6 +35,7 @@ Uso:
 
 import sys
 import os
+from decimal import Decimal
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -41,13 +47,13 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-# IDs fixos da NF 12794
+# IDs fixos da NF 12794 (apos ultimo processamento)
 RECEBIMENTO_LF_ID = 1
-ODOO_PO_ID = 35782
-ODOO_PICKING_ID = 302074
-ODOO_INVOICE_ID = 495837
+ODOO_PO_ID = 35804
+ODOO_PICKING_ID = 302139
+ODOO_INVOICE_ID = 496258
 ODOO_DFE_ID = 37390
-MOVE_LINE_IDS = list(range(217488624, 217488641))  # 217488624 a 217488640 (17 lotes)
+MOVE_LINE_IDS = list(range(217488968, 217488985))  # 217488968 a 217488984 (17 lotes)
 
 
 def fase_1_ler_estado_odoo(conn):
@@ -337,10 +343,77 @@ def fase_5_desvincular_dfe(conn):
     return not purchase_id
 
 
-def fase_6_reset_local(app):
-    """FASE 6: Reset do banco local."""
+def fase_6_refresh_quantidades_dfe(app, conn):
+    """FASE 6: Refresh quantidades dos 17 lotes locais a partir do DFe Odoo."""
     print("\n" + "=" * 60)
-    print("FASE 6: Reset local (DB)")
+    print("FASE 6: Refresh quantidades dos lotes (DFe -> local)")
+    print("=" * 60)
+
+    # Ler DFe lines do Odoo (fonte de verdade das quantidades NF-e)
+    print(f"  Lendo DFe lines do Odoo (dfe_id={ODOO_DFE_ID})...")
+    try:
+        dfe_lines = conn.execute_kw(
+            'l10n_br_ciel_it_account.dfe.line', 'search_read',
+            [[['dfe_id', '=', ODOO_DFE_ID]]],
+            {'fields': ['id', 'det_prod_qcom', 'det_prod_cprod', 'det_prod_xprod']}
+        )
+        print(f"  Encontradas {len(dfe_lines)} DFe lines no Odoo")
+    except Exception as e:
+        print(f"  ERRO ao ler DFe lines: {e}")
+        return False
+
+    if not dfe_lines:
+        print("  AVISO: Nenhuma DFe line encontrada! Pulando refresh.")
+        return False
+
+    # Indexar por ID para lookup rapido
+    dfe_lines_by_id = {line['id']: line for line in dfe_lines}
+
+    with app.app_context():
+        rec = db.session.get(RecebimentoLf, RECEBIMENTO_LF_ID)
+        if not rec:
+            print(f"  RecebimentoLf id={RECEBIMENTO_LF_ID} NAO ENCONTRADO!")
+            return False
+
+        lotes = rec.lotes.all()
+        print(f"  Encontrados {len(lotes)} lotes locais")
+
+        atualizados = 0
+        sem_match = 0
+        inalterados = 0
+
+        for lote in lotes:
+            if lote.odoo_dfe_line_id and lote.odoo_dfe_line_id in dfe_lines_by_id:
+                dfe_line = dfe_lines_by_id[lote.odoo_dfe_line_id]
+                old_qty = lote.quantidade
+                new_qty = Decimal(str(dfe_line['det_prod_qcom']))
+
+                if old_qty != new_qty:
+                    lote.quantidade = new_qty
+                    print(f"    Lote {lote.id} ({lote.lote_nome}): {old_qty} -> {new_qty}"
+                          f"  [{dfe_line.get('det_prod_xprod', '?')[:30]}]")
+                    atualizados += 1
+                else:
+                    inalterados += 1
+            else:
+                print(f"    Lote {lote.id} ({lote.lote_nome}): SEM MATCH no DFe "
+                      f"(odoo_dfe_line_id={lote.odoo_dfe_line_id})")
+                sem_match += 1
+
+        db.session.commit()
+
+        print(f"\n  Resumo:")
+        print(f"    Atualizados: {atualizados}")
+        print(f"    Inalterados: {inalterados}")
+        print(f"    Sem match:   {sem_match}")
+
+        return True
+
+
+def fase_7_reset_local(app):
+    """FASE 7: Reset do banco local."""
+    print("\n" + "=" * 60)
+    print("FASE 7: Reset local (DB)")
     print("=" * 60)
 
     with app.app_context():
@@ -369,9 +442,9 @@ def fase_6_reset_local(app):
 
         print("  RecebimentoLf resetado.")
 
-        # Reset lotes
+        # Reset lotes (manter quantidades atualizadas na fase 6)
         lotes = rec.lotes.all()
-        print(f"  Resetando {len(lotes)} lotes...")
+        print(f"  Resetando {len(lotes)} lotes (mantendo quantidades frescas)...")
         for lote in lotes:
             lote.processado = False
             lote.odoo_lot_id = None
@@ -383,10 +456,10 @@ def fase_6_reset_local(app):
         return True
 
 
-def fase_7_enfileirar_job(app):
-    """FASE 7: Re-enfileirar job RQ."""
+def fase_8_processar_direto(app):
+    """FASE 8: Re-processar direto (sem worker RQ)."""
     print("\n" + "=" * 60)
-    print("FASE 7: Re-enfileirar job RQ")
+    print("FASE 8: Processamento direto (sem worker RQ)")
     print("=" * 60)
 
     with app.app_context():
@@ -399,47 +472,99 @@ def fase_7_enfileirar_job(app):
             print(f"  Status inesperado: {rec.status} (esperado: pendente)")
             return False
 
+        print(f"  Iniciando processamento do RecebimentoLf id={rec.id}...")
+        print(f"  DFe: {rec.odoo_dfe_id}, NF: {rec.numero_nf}")
+
         try:
-            from app.recebimento.workers.recebimento_lf_jobs import processar_recebimento_lf_job
-            from app.portal.workers import enqueue_job
-            from rq import Retry
+            from app.recebimento.services.recebimento_lf_odoo_service import RecebimentoLfOdooService
 
-            retry_config = Retry(max=3, interval=[30, 120, 480])
+            service = RecebimentoLfOdooService()
+            resultado = service.processar_recebimento(rec.id, 'reset-e2e-quantidades')
 
-            job = enqueue_job(
-                processar_recebimento_lf_job,
-                rec.id,
-                'reset-e2e-precos',
-                queue_name='recebimento',
-                timeout='30m',
-                retry=retry_config,
-            )
-            rec.job_id = job.id
-            db.session.commit()
-            print(f"  Job enfileirado: {job.id}")
-            print(f"  Fila: recebimento")
-            print(f"  Timeout: 30m")
-            print(f"  Retry: max=3, intervals=[30s, 120s, 480s]")
-            return True
+            print(f"\n  Resultado: {resultado}")
+
+            # Recarregar para verificar estado final
+            db.session.refresh(rec)
+            print(f"  Estado final: status={rec.status}, etapa={rec.etapa_atual}")
+            print(f"  PO: {rec.odoo_po_name} (id={rec.odoo_po_id})")
+            print(f"  Picking: {rec.odoo_picking_name} (id={rec.odoo_picking_id})")
+            print(f"  Invoice: {rec.odoo_invoice_name} (id={rec.odoo_invoice_id})")
+
+            return rec.status == 'processado'
         except Exception as e:
-            print(f"  ERRO ao enfileirar: {e}")
-            logger.exception("Erro ao enfileirar job")
+            print(f"  ERRO ao processar: {e}")
+            logger.exception("Erro no processamento direto")
             return False
+
+
+def verificar_quantidades(app, conn):
+    """Verificacao pos-processamento: compara quantidades locais vs Odoo."""
+    print("\n" + "=" * 60)
+    print("VERIFICACAO: Quantidades locais vs Odoo")
+    print("=" * 60)
+
+    with app.app_context():
+        rec = db.session.get(RecebimentoLf, RECEBIMENTO_LF_ID)
+        if not rec or rec.status != 'processado':
+            print(f"  RecebimentoLf nao processado. Pulando verificacao.")
+            return
+
+        lotes = rec.lotes.all()
+        lotes_com_ml = [l for l in lotes if l.odoo_move_line_id]
+
+        if not lotes_com_ml:
+            print("  Nenhum lote com move_line_id. Pulando.")
+            return
+
+        # Ler move lines do Odoo
+        ml_ids = [l.odoo_move_line_id for l in lotes_com_ml]
+        try:
+            odoo_mls = conn.execute_kw(
+                'stock.move.line', 'read', [ml_ids],
+                {'fields': ['id', 'quantity']}
+            )
+            odoo_ml_by_id = {ml['id']: ml for ml in odoo_mls}
+        except Exception as e:
+            print(f"  ERRO ao ler move lines do Odoo: {e}")
+            return
+
+        divergencias = 0
+        for lote in lotes_com_ml:
+            odoo_ml = odoo_ml_by_id.get(lote.odoo_move_line_id)
+            if not odoo_ml:
+                print(f"    Lote {lote.id}: move_line {lote.odoo_move_line_id} NAO ENCONTRADO no Odoo")
+                divergencias += 1
+                continue
+
+            local_qty = float(lote.quantidade) if lote.quantidade else 0
+            odoo_qty = float(odoo_ml['quantity']) if odoo_ml.get('quantity') else 0
+
+            if abs(local_qty - odoo_qty) > 0.0001:
+                print(f"    DIVERGENCIA Lote {lote.id} ({lote.lote_nome}):"
+                      f" local={local_qty} vs odoo={odoo_qty}")
+                divergencias += 1
+
+        if divergencias == 0:
+            print(f"  TODAS as {len(lotes_com_ml)} quantidades conferem!")
+        else:
+            print(f"\n  {divergencias} divergencia(s) encontrada(s) de {len(lotes_com_ml)} lotes")
 
 
 def main():
     print("=" * 60)
     print("RESET E2E: NF 12794 (RecebimentoLf id=1)")
+    print("  Versao: v2 — Refresh quantidades + processamento direto")
     print("=" * 60)
     print()
     print("Este script vai:")
     print("  1. Ler estado Odoo (read-only)")
-    print("  2. Cancelar Invoice 495837")
-    print("  3. Reverter Picking 302074")
-    print("  4. Cancelar PO 35782")
+    print("  2. Cancelar Invoice 496258")
+    print("  3. Reverter Picking 302139")
+    print("  4. Cancelar PO 35804")
     print("  5. Desvincular DFe 37390")
-    print("  6. Resetar banco local")
-    print("  7. Re-enfileirar job RQ para reprocessamento")
+    print("  6. Refresh quantidades dos lotes (DFe -> local)")
+    print("  7. Resetar banco local")
+    print("  8. Re-processar direto (sem worker RQ)")
     print()
 
     app = create_app()
@@ -481,30 +606,43 @@ def main():
         if not ok:
             print("\n  AVISO: DFe nao desvinculado. Etapa 2 e idempotente.")
 
-    # FASE 6: Reset local (contexto separado para commit limpo)
-    ok = fase_6_reset_local(app)
+    # FASE 6: Refresh quantidades (contexto separado, mas precisa conn)
+    with app.app_context():
+        conn = get_odoo_connection()
+        conn.authenticate()
+        ok = fase_6_refresh_quantidades_dfe(app, conn)
+        if not ok:
+            print("\n  AVISO: Refresh de quantidades falhou. Quantidades podem estar truncadas.")
+
+    # FASE 7: Reset local (contexto separado para commit limpo)
+    ok = fase_7_reset_local(app)
     if not ok:
         print("\n  ERRO CRITICO: Reset local falhou!")
         sys.exit(1)
 
-    # FASE 7: Enfileirar job
-    ok = fase_7_enfileirar_job(app)
+    # FASE 8: Processar direto
+    ok = fase_8_processar_direto(app)
     if not ok:
-        print("\n  ERRO: Job nao enfileirado. Verificar Redis e worker.")
-        print("  Voce pode enfileirar manualmente via tela de status.")
+        print("\n  ERRO: Processamento direto falhou!")
+        print("  Verifique os logs acima para identificar o problema.")
+        print("  Voce pode tentar via tela de status: /recebimento/lf/status")
         sys.exit(1)
 
+    # Verificacao pos-processamento
+    with app.app_context():
+        conn = get_odoo_connection()
+        conn.authenticate()
+        verificar_quantidades(app, conn)
+
     print("\n" + "=" * 60)
-    print("RESET COMPLETO!")
+    print("RESET + REPROCESSAMENTO COMPLETO!")
     print("=" * 60)
     print()
-    print("Proximos passos:")
-    print("  1. Verificar que o worker RQ esta rodando (fila 'recebimento')")
-    print("  2. Monitorar via tela de status: /recebimento/lf/status")
-    print("  3. Apos processamento, verificar:")
-    print("     - status=processado, etapa_atual=18")
-    print("     - Precos no PO Odoo com precisao completa")
-    print("     - Sem erros de tipo Decimal/float nos logs")
+    print("Verificacoes manuais recomendadas:")
+    print("  1. Quantidades locais corretas (ex: 0.9284, nao 0.928000)")
+    print("  2. Precos mantidos com 8 casas decimais")
+    print("  3. information_schema: 0 colunas numeric(15,3) em picking_recebimento_*")
+    print("  4. Status final: processado, etapa_atual=18")
 
 
 if __name__ == '__main__':
