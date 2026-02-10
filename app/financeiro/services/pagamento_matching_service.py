@@ -94,6 +94,9 @@ class PagamentoMatchingService:
         logger.info(f"EXECUTANDO MATCHING PAGAMENTOS - Lote {lote_id}")
         logger.info(f"=" * 60)
 
+        # Pré-sync: sincronizar comprovantes LANCADOS antes de processar matching
+        self._pre_sync_comprovantes(lote_id)
+
         # Limpar cache de CNPJs vinculados
         self._cnpjs_vinculados.clear()
 
@@ -547,6 +550,68 @@ class PagamentoMatchingService:
         item.mensagem = 'Título vinculado manualmente'
 
         db.session.commit()
+
+    def _pre_sync_comprovantes(self, lote_id: int) -> None:
+        """
+        Pré-sync: sincroniza comprovantes LANCADOS antes do matching.
+
+        Itens com statement_line_id que possuem comprovante LANCADO devem
+        ser marcados como CONCILIADO via ConciliacaoSyncService, evitando
+        que apareçam como SEM_MATCH ou MULTIPLOS no matching.
+        """
+        from app.financeiro.models_comprovante import (
+            ComprovantePagamentoBoleto,
+            LancamentoComprovante,
+        )
+        from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
+
+        # Buscar itens PENDENTE do lote que têm statement_line_id
+        itens_com_stl = ExtratoItem.query.filter(
+            ExtratoItem.lote_id == lote_id,
+            ExtratoItem.status_match == 'PENDENTE',
+            ExtratoItem.statement_line_id.isnot(None),
+        ).all()
+
+        if not itens_com_stl:
+            return
+
+        logger.info(f"[Pré-sync] {len(itens_com_stl)} itens com statement_line_id para verificar")
+
+        sync_service = ConciliacaoSyncService()
+        sincronizados = 0
+
+        for item in itens_com_stl:
+            # Buscar comprovante correspondente
+            comp = ComprovantePagamentoBoleto.query.filter_by(
+                odoo_statement_line_id=item.statement_line_id
+            ).first()
+
+            if not comp:
+                continue
+
+            # Verificar se tem lançamento LANCADO
+            lanc_lancado = LancamentoComprovante.query.filter_by(
+                comprovante_id=comp.id,
+                status='LANCADO',
+            ).first()
+
+            if not lanc_lancado:
+                continue
+
+            # Sincronizar via ConciliacaoSyncService (reutiliza lógica existente)
+            try:
+                resultado = sync_service.sync_comprovante_para_extrato(comp.id)
+                if resultado and resultado.get('action') == 'synced':
+                    sincronizados += 1
+                    logger.info(
+                        f"[Pré-sync] Comprovante #{comp.id} → Item {item.id} sincronizado"
+                    )
+            except Exception as e:
+                logger.warning(f"[Pré-sync] Erro ao sincronizar comprovante #{comp.id}: {e}")
+
+        if sincronizados:
+            db.session.commit()
+            logger.info(f"[Pré-sync] {sincronizados} itens sincronizados como CONCILIADO")
 
     def _normalizar_cnpj(self, cnpj: str) -> str:
         """

@@ -996,7 +996,8 @@ def extrato_desvincular_titulo():
 
     # Limpar dados do título
     titulo_antigo = item.titulo_nf
-    item.titulo_receber_id = None  # FK correta para clientes
+    item.titulo_receber_id = None  # FK para clientes (recebimentos)
+    item.titulo_pagar_id = None    # FK para fornecedores (pagamentos)
     item.titulo_nf = None
     item.titulo_parcela = None
     item.titulo_valor = None
@@ -1016,6 +1017,62 @@ def extrato_desvincular_titulo():
     return jsonify({
         'success': True,
         'message': f'Título {titulo_antigo} desvinculado do item {item_id}'
+    })
+
+
+@financeiro_bp.route('/extrato/api/desconciliar-item', methods=['POST'])
+@login_required
+def extrato_desconciliar_item():
+    """
+    Reverte um item CONCILIADO localmente para APROVADO.
+
+    Permitido APENAS para itens sem payment_id (marcação local).
+    Se o item tem payment_id, significa que um pagamento foi criado no Odoo
+    e a reversão não pode ser feita automaticamente.
+    """
+    data = request.get_json()
+    item_id = data.get('item_id')
+
+    if not item_id:
+        return jsonify({'success': False, 'error': 'item_id é obrigatório'}), 400
+
+    item = ExtratoItem.query.get_or_404(item_id)
+
+    if item.status != 'CONCILIADO':
+        return jsonify({
+            'success': False,
+            'error': f'Item não está CONCILIADO (status atual: {item.status})'
+        }), 400
+
+    if item.payment_id:
+        return jsonify({
+            'success': False,
+            'error': (
+                f'Item tem payment no Odoo (ID {item.payment_id}). '
+                'Não é possível reverter automaticamente — '
+                'reverta o pagamento no Odoo antes.'
+            )
+        }), 400
+
+    # Resetar campos de conciliação
+    item.status = 'APROVADO'
+    item.processado_em = None
+    item.mensagem = None
+    item.partial_reconcile_id = None
+    item.full_reconcile_id = None
+    item.snapshot_antes = None
+    item.snapshot_depois = None
+    item.titulo_saldo_antes = None
+    item.titulo_saldo_depois = None
+
+    # Manter: titulo_pagar_id, titulo_nf, titulo_parcela (vínculo), aprovado=True
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Item {item_id} revertido para APROVADO',
+        'item': item.to_dict()
     })
 
 

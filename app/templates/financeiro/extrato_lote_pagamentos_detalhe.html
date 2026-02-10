@@ -795,9 +795,16 @@
                                 </div>
 
                                 {% if item.status == 'CONCILIADO' %}
-                                <div class="mt-2 pt-2 border-top small text-info">
-                                    <i class="fas fa-check-circle me-1"></i>
-                                    Conciliado {{ item.processado_em|formatar_data_hora_brasil }}
+                                <div class="mt-2 pt-2 border-top small text-info d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Conciliado {{ item.processado_em|formatar_data_hora_brasil }}
+                                    </span>
+                                    {% if not item.payment_id %}
+                                    <button class="btn btn-sm btn-outline-warning" onclick="desconciliarItem({{ item.id }})" title="Reverter conciliação local">
+                                        <i class="fas fa-undo"></i> Reverter
+                                    </button>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                             </div>
@@ -1056,6 +1063,26 @@ function desvincularTitulo(itemId) {
             location.reload();
         } else {
             toastr.error(data.error || 'Erro ao desvincular');
+        }
+    });
+}
+
+// === FUNÇÃO PARA DESCONCILIAR ITEM (reverter marcação local) ===
+function desconciliarItem(itemId) {
+    if (!confirm('Reverter a conciliação deste item?\n\nO item voltará para APROVADO e poderá ser re-conciliado.')) return;
+
+    fetch('/financeiro/extrato/api/desconciliar-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success('Conciliação revertida — item voltou para APROVADO');
+            location.reload();
+        } else {
+            toastr.error(data.error || 'Erro ao reverter conciliação');
         }
     });
 }

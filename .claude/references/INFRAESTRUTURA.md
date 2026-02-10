@@ -71,7 +71,10 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 
 ---
 
-## ODOO
+## Odoo ERP
 
-### ERP
-- odoo.nacomgoya.com.br
+| Recurso | Valor |
+|---------|-------|
+| URL | odoo.nacomgoya.com.br |
+| Conexao | `app/odoo/utils/connection.py` → `get_odoo_connection()` |
+| Companies | FB(1), SC(3), CD(4), LF(5) — detalhes em `odoo/IDS_FIXOS.md` |

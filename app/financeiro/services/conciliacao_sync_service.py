@@ -118,6 +118,21 @@ class ConciliacaoSyncService:
                 extrato_item.titulo_pagar_id = titulo_local.id
                 extrato_item.titulo_nf = lanc.nf_numero
                 extrato_item.titulo_parcela = lanc.parcela
+                # Preencher campos cache para exibição no template
+                extrato_item.titulo_valor = titulo_local.valor_residual
+                extrato_item.titulo_vencimento = titulo_local.vencimento
+                extrato_item.titulo_cliente = titulo_local.raz_social_red or titulo_local.raz_social
+                extrato_item.titulo_cnpj = titulo_local.cnpj
+
+        # Backfill: preencher cache para itens que já têm FK mas cache vazio
+        if extrato_item.titulo_pagar_id and not extrato_item.titulo_valor:
+            from app.financeiro.models import ContasAPagar
+            titulo_existente = db.session.get(ContasAPagar, extrato_item.titulo_pagar_id)
+            if titulo_existente:
+                extrato_item.titulo_valor = titulo_existente.valor_residual
+                extrato_item.titulo_vencimento = titulo_existente.vencimento
+                extrato_item.titulo_cliente = titulo_existente.raz_social_red or titulo_existente.raz_social
+                extrato_item.titulo_cnpj = titulo_existente.cnpj
 
         # Atualizar estatísticas do lote (se existir)
         self._atualizar_estatisticas_lote(extrato_item.lote_id)

@@ -37,6 +37,7 @@ References contem APENAS regras de negocio, NAO campos.
 
 **ANTES de usar CarteiraPrincipal/Separacao**: LER `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`
 **ANTES de usar Embarque/Faturamento/etc.**: LER `.claude/references/modelos/REGRAS_MODELOS.md`
+**ANTES de trabalhar com Odoo (API, PO, NF, picking)**: LER `.claude/references/ROUTING_SKILLS.md`
 
 Gotchas rapidos:
 - CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo`)
@@ -64,7 +65,6 @@ Gotchas rapidos:
 
 Documentos adicionais:
 - Card de Separacao: `CARD_SEPARACAO.md` (raiz)
-- API TagPlus: `app/integracoes/tagplus/DOCUMENTACAO_API_TAGPLUS.md`
 - Sistema de Devolucoes: `app/devolucao/README.md`
 
 ---
