@@ -672,7 +672,7 @@ class ServicoProjecaoEstoque:
                 'tipo_embalagem': produto.tipo_embalagem,
                 'tipo_materia_prima': produto.tipo_materia_prima,
                 'categoria_produto': produto.categoria_produto,
-                'lead_time': getattr(produto, 'lead_time', None) or getattr(produto, 'lead_time_mto', None),
+                'lead_time': getattr(produto, 'lead_time', None),
                 'lote_minimo_compra': getattr(produto, 'lote_minimo_compra', None),
             })
 

@@ -511,12 +511,12 @@ Nunca invente informações."""
             # CWD: Diretório de trabalho para Skills
             "cwd": project_cwd,
 
-            # Setting Sources: Em headless (servidor), NÃO carregar settings files
-            # para evitar que enabledPlugins (pyright-lsp, etc.) causem hang no
-            # CLI subprocess tentando instalar/inicializar plugins sem Node.js.
-            # Todas as configs necessárias já são passadas explicitamente nos options
-            # (permission_mode, allowed_tools, disallowed_tools, can_use_tool, etc.).
-            "setting_sources": [] if permission_mode == "acceptEdits" else ["user", "project"],
+            # Setting Sources: Em headless (servidor), carregar apenas "project" para
+            # habilitar descoberta de skills (.claude/skills/*/SKILL.md), CLAUDE.md,
+            # hooks e permissions do projeto. NÃO carregar "user" para evitar que
+            # enabledPlugins pessoais (pyright-lsp, etc.) causem hang no servidor.
+            # Ref: https://platform.claude.com/docs/en/agent-sdk/skills
+            "setting_sources": ["project"] if permission_mode == "acceptEdits" else ["user", "project"],
 
             # Tools permitidas — lê de settings.py (fonte única de verdade)
             "allowed_tools": list(self.settings.tools_enabled),
