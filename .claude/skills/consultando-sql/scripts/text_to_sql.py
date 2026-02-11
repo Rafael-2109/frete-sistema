@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 # =====================================================================
 
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-5-20250929"
 
 # Paths dos schemas
 SCHEMAS_DIR = os.path.join(os.path.dirname(__file__), '..', 'schemas')
@@ -71,6 +72,87 @@ FORBIDDEN_FUNCTIONS = {
     'set_config', 'current_setting',
     'query_to_xml', 'table_to_xml',
 }
+
+
+# =====================================================================
+# API RETRY HELPER
+# =====================================================================
+
+def _call_api_with_retry(
+    client, model: str, max_tokens: int, messages: list,
+    max_retries: int = 3, fallback_model: str = None
+):
+    """
+    Chama client.messages.create() com retry, backoff exponencial e fallback de modelo.
+
+    Erros 5xx (InternalServerError) sao transientes — retry com backoff e o padrao
+    recomendado pela Anthropic. Erros 4xx (auth, rate limit, etc.) NAO sao retried.
+
+    Se todas as tentativas com o modelo primario falharem E fallback_model for fornecido,
+    faz UMA tentativa com o modelo de fallback antes de desistir.
+
+    Args:
+        client: anthropic.Anthropic instance
+        model: ID do modelo primario (ex: HAIKU_MODEL)
+        max_tokens: Limite de tokens na resposta
+        messages: Lista de mensagens para a API
+        max_retries: Numero maximo de tentativas com modelo primario (default: 3)
+        fallback_model: ID do modelo de fallback (ex: SONNET_MODEL). None = sem fallback.
+
+    Returns:
+        Response da API Anthropic
+
+    Raises:
+        anthropic.InternalServerError: Se todas as tentativas (incluindo fallback) falharem
+        Outros erros da API: Repassados sem retry (4xx, etc.)
+    """
+    from anthropic import InternalServerError
+
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=messages
+            )
+        except InternalServerError as e:
+            last_error = e
+            request_id = getattr(e, 'request_id', 'N/A')
+            if attempt < max_retries:
+                wait_seconds = 2 ** (attempt - 1)  # 1s, 2s, 4s
+                logger.warning(
+                    f"[TEXT_TO_SQL] API 500 (tentativa {attempt}/{max_retries}, "
+                    f"request_id={request_id}). Retry em {wait_seconds}s..."
+                )
+                time.sleep(wait_seconds)
+            else:
+                logger.error(
+                    f"[TEXT_TO_SQL] API 500 persistente apos {max_retries} tentativas "
+                    f"(request_id={request_id}): {e}"
+                )
+
+    # Fallback: tentar com modelo alternativo (ex: Sonnet quando Haiku esta fora)
+    if fallback_model:
+        logger.warning(
+            f"[TEXT_TO_SQL] Fallback: tentando com {fallback_model} "
+            f"(modelo primario {model} indisponivel)"
+        )
+        try:
+            return client.messages.create(
+                model=fallback_model,
+                max_tokens=max_tokens,
+                messages=messages
+            )
+        except InternalServerError as e:
+            request_id = getattr(e, 'request_id', 'N/A')
+            logger.error(
+                f"[TEXT_TO_SQL] Fallback {fallback_model} tambem falhou "
+                f"(request_id={request_id}): {e}"
+            )
+            last_error = e
+
+    raise last_error
 
 
 # =====================================================================
@@ -483,10 +565,10 @@ PERGUNTA: {question}
 
 SQL:"""
 
-        response = client.messages.create(
-            model=HAIKU_MODEL,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}]
+        response = _call_api_with_retry(
+            client, HAIKU_MODEL, 500,
+            messages=[{"role": "user", "content": prompt}],
+            fallback_model=SONNET_MODEL
         )
 
         sql = response.content[0].text.strip()
@@ -583,10 +665,10 @@ OU se precisar corrigir:
 
 JSON:"""
 
-        response = client.messages.create(
-            model=HAIKU_MODEL,
-            max_tokens=800,
-            messages=[{"role": "user", "content": prompt}]
+        response = _call_api_with_retry(
+            client, HAIKU_MODEL, 800,
+            messages=[{"role": "user", "content": prompt}],
+            fallback_model=SONNET_MODEL
         )
 
         result_text = response.content[0].text.strip()
@@ -871,8 +953,17 @@ class TextToSQLPipeline:
             logger.error(f"[TEXT_TO_SQL] Erro: {e}")
 
         except Exception as e:
-            result["aviso"] = f"Erro inesperado: {str(e)}"
-            logger.error(f"[TEXT_TO_SQL] Erro inesperado: {e}", exc_info=True)
+            # Mensagem mais descritiva para erro 500 persistente da API
+            from anthropic import InternalServerError
+            if isinstance(e, InternalServerError):
+                result["aviso"] = (
+                    "API Anthropic indisponivel temporariamente. "
+                    "Tente novamente em alguns segundos."
+                )
+                logger.error(f"[TEXT_TO_SQL] API 500 final: {e}")
+            else:
+                result["aviso"] = f"Erro inesperado: {str(e)}"
+                logger.error(f"[TEXT_TO_SQL] Erro inesperado: {e}", exc_info=True)
 
         result["tempo_total_ms"] = int((time.time() - start_time) * 1000)
         return result

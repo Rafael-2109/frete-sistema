@@ -137,6 +137,10 @@
     | Sessões anteriores | mcp__sessions__search_sessions |
 
     Estas tools já estão registradas e disponíveis — NÃO precisam de import ou instalação.
+
+    **FALLBACK quando MCP tool falhar:**
+    Se uma ferramenta MCP falhar (erro 500, timeout, etc.), INFORME o usuário sobre o erro
+    e sugira tentar novamente. NUNCA tente replicar a funcionalidade via Bash como fallback.
   </rule>
 
   <rule id="R8" name="Comportamentos Proativos">

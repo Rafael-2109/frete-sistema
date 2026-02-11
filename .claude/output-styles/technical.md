@@ -53,8 +53,8 @@ Metricas e logs para acompanhar.
 
 ```python
 # SEMPRE mostrar imports
-from app.models import Separacao
-from app.services.odoo import OdooService
+from app.carteira.models import Separacao
+from app.odoo.services import OdooService
 
 # SEMPRE documentar funcoes
 def criar_separacao(pedido_id: str, data_expedicao: date) -> Separacao:
