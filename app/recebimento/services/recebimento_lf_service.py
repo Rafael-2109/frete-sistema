@@ -19,6 +19,7 @@ Contexto:
 
 import logging
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from app import db
 from app.utils.timezone import agora_utc_naive
@@ -221,10 +222,10 @@ class RecebimentoLfService:
                     'cfop': cfop,
                     'cod_produto': linha.get('det_prod_cprod', ''),
                     'nome_produto': linha.get('det_prod_xprod', ''),
-                    'quantidade': float(linha.get('det_prod_qcom', 0) or 0),
+                    'quantidade': Decimal(str(linha.get('det_prod_qcom', 0) or 0)),
                     'unidade': linha.get('det_prod_ucom', ''),
-                    'valor_unitario': float(linha.get('det_prod_vuncom', 0) or 0),
-                    'valor_total': float(linha.get('det_prod_vprod', 0) or 0),
+                    'valor_unitario': Decimal(str(linha.get('det_prod_vuncom', 0) or 0)),
+                    'valor_total': Decimal(str(linha.get('det_prod_vprod', 0) or 0)),
                     'product_id': product_id,
                 }
 

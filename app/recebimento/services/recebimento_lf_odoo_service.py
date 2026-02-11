@@ -755,7 +755,7 @@ class RecebimentoLfOdooService:
         self._checkpoint(etapa=5, odoo_po_name=po_name, msg=f'PO {po_name} encontrado')
 
     def _step_06_configurar_po(self, odoo):
-        """Etapa 6: Configurar PO (team, payment_term, picking_type, company)."""
+        """Etapa 6: Configurar PO (team, payment_term, picking_type, company) + corrigir precos."""
         rec = self._get_recebimento()
         if rec.etapa_atual >= 6:
             return
@@ -764,35 +764,102 @@ class RecebimentoLfOdooService:
         logger.info(f"  Etapa 6/18: Configurando PO {po_id}")
         self._atualizar_redis(rec.id, 2, 6, rec.total_etapas, f'Configurando PO...')
 
-        # Idempotencia: verificar se ja configurado
+        # Idempotencia: verificar se team ja configurado
         po_data = odoo.execute_kw(
             'purchase.order', 'read',
             [[po_id]],
             {'fields': ['team_id', 'payment_term_id', 'picking_type_id', 'company_id']}
         )
+        team_configured = False
         if po_data:
             po = po_data[0]
             team_id = po['team_id'][0] if isinstance(po.get('team_id'), (list, tuple)) else po.get('team_id')
-            if team_id == self.TEAM_ID:
-                logger.info(f"  PO {po_id}: ja configurado (team_id={team_id})")
-                self._checkpoint(etapa=6, msg='PO ja configurado')
-                return
+            team_configured = (team_id == self.TEAM_ID)
 
-        values = {
-            'team_id': self.TEAM_ID,
-            'payment_provider_id': self.PAYMENT_PROVIDER_ID,
-            'payment_term_id': self.PAYMENT_TERM_A_VISTA,
-            'company_id': self.COMPANY_FB,
-            'picking_type_id': self.PICKING_TYPE_FB,
-        }
+        # Configurar team/payment_term se necessario
+        if not team_configured:
+            values = {
+                'team_id': self.TEAM_ID,
+                'payment_provider_id': self.PAYMENT_PROVIDER_ID,
+                'payment_term_id': self.PAYMENT_TERM_A_VISTA,
+                'company_id': self.COMPANY_FB,
+                'picking_type_id': self.PICKING_TYPE_FB,
+            }
 
-        self._write_and_verify(
-            odoo, 'purchase.order', [po_id], values,
-            'Configurar PO',
-            critical_fields=['team_id', 'payment_term_id', 'picking_type_id', 'company_id', 'payment_provider_id']
-        )
+            self._write_and_verify(
+                odoo, 'purchase.order', [po_id], values,
+                'Configurar PO',
+                critical_fields=['team_id', 'payment_term_id', 'picking_type_id', 'company_id', 'payment_provider_id']
+            )
+        else:
+            logger.info(f"  PO {po_id}: team ja configurado (team_id={self.TEAM_ID})")
+
+        # Corrigir precos das PO lines a partir do DFe (fonte de verdade)
+        self._corrigir_precos_po_dfe(odoo, po_id, rec.odoo_dfe_id)
 
         self._checkpoint(etapa=6, msg='PO configurado')
+
+    def _corrigir_precos_po_dfe(self, odoo, po_id, dfe_id):
+        """
+        Corrige price_unit das PO lines para bater com vUnCom do DFe.
+
+        O action_gerar_po_dfe do Odoo redistribui arredondamentos internamente,
+        gerando price_unit divergente do vUnCom da NF-e em algumas linhas.
+        Este metodo corrige para que PO lines (e consequentemente stock.move)
+        reflitam o preco unitario real da NF-e.
+
+        Args:
+            odoo: Conexao Odoo ativa
+            po_id: ID do purchase.order
+            dfe_id: ID do DFe (fonte de verdade dos precos)
+        """
+        if not dfe_id:
+            logger.warning("  _corrigir_precos_po_dfe: dfe_id ausente, pulando")
+            return
+
+        # 1. Ler DFe lines (fonte de verdade)
+        dfe_lines = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe.line', 'search_read',
+            [[['dfe_id', '=', dfe_id]]],
+            {'fields': ['id', 'product_id', 'det_prod_vuncom']}
+        )
+
+        # Indexar por product_id
+        dfe_price_by_pid = {}
+        for dl in dfe_lines:
+            if dl.get('product_id') and dl.get('det_prod_vuncom'):
+                pid = dl['product_id'][0] if isinstance(dl['product_id'], (list, tuple)) else dl['product_id']
+                dfe_price_by_pid[pid] = float(dl['det_prod_vuncom'])
+
+        if not dfe_price_by_pid:
+            logger.info("  Precos DFe: nenhum preco encontrado nas DFe lines")
+            return
+
+        # 2. Ler PO lines
+        po_lines = odoo.execute_kw(
+            'purchase.order.line', 'search_read',
+            [[['order_id', '=', po_id]]],
+            {'fields': ['id', 'product_id', 'price_unit']}
+        )
+
+        # 3. Corrigir divergencias
+        corrigidos = 0
+        for pl in po_lines:
+            pid = pl['product_id'][0] if isinstance(pl.get('product_id'), (list, tuple)) else None
+            if pid and pid in dfe_price_by_pid:
+                dfe_price = dfe_price_by_pid[pid]
+                po_price = pl.get('price_unit', 0)
+                if abs(dfe_price - po_price) > 0.0001:
+                    odoo.write('purchase.order.line', pl['id'], {'price_unit': dfe_price})
+                    logger.info(
+                        f"    PO line {pl['id']}: price_unit {po_price} -> {dfe_price}"
+                    )
+                    corrigidos += 1
+
+        if corrigidos:
+            logger.info(f"  Precos corrigidos: {corrigidos} PO lines")
+        else:
+            logger.info(f"  Precos ja corretos (0 divergencias)")
 
     def _step_07_confirmar_po(self, odoo):
         """Etapa 7: Confirmar PO (button_confirm) via fire_and_poll."""

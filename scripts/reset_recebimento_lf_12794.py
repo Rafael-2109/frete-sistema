@@ -3,30 +3,26 @@ Reset E2E: Reverter NF 12794 (RecebimentoLf id=1) e reprocessar.
 
 Contexto:
     NF 12794 foi a primeira NF processada pelo fluxo automatizado de Recebimento LF.
-    Apos a migration de precisao de quantidades (Numeric(15,3) -> Numeric(18,6)),
-    precisamos reprocessar para validar que o fluxo E2E preserva quantidades completas.
+    v3: Inclui correcao de precos PO lines (price_unit) a partir do DFe (vUnCom).
+    Move line IDs sao descobertos dinamicamente do picking (nao hardcoded).
 
-    Os dados locais em recebimento_lf_lote.quantidade ainda carregam truncamento
-    da era Numeric(15,3) (ex: 0.928000 em vez de 0.9284). Este script faz refresh
-    das quantidades a partir do DFe Odoo (fonte de verdade) antes de resetar.
-
-IDs fixos (apos ultimo processamento):
+IDs fixos (apos 2o processamento):
     - RecebimentoLf: id=1
-    - PO Odoo: 35804 (C2615012)
-    - Picking Odoo: 302139 (FB/IN/11530)
-    - Invoice Odoo: 496258
+    - PO Odoo: 35814 (C2615022)
+    - Picking Odoo: 302163
+    - Invoice Odoo: 496309
     - DFe Odoo: 37390
-    - Lotes locais: 17 registros (move_line IDs 217488968-217488984)
+    - Lotes locais: 17 registros (move_line IDs descobertos dinamicamente)
 
 Fases:
-    1. Ler estado Odoo (read-only)
+    1. Ler estado Odoo (read-only) + descobrir move_line_ids
     2. Cancelar Invoice
     3. Reverter Picking
     4. Cancelar PO
     5. Desvincular DFe
     6. Refresh quantidades dos lotes locais via DFe Odoo
     7. Reset local DB
-    8. Re-processar direto (sem worker RQ)
+    8. Re-processar direto (sem worker RQ) — agora com correcao de precos na etapa 6
 
 Uso:
     source .venv/bin/activate
@@ -47,13 +43,13 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-# IDs fixos da NF 12794 (apos ultimo processamento)
+# IDs fixos da NF 12794 (apos ultimo processamento — v3 com correcao de precos)
 RECEBIMENTO_LF_ID = 1
-ODOO_PO_ID = 35804
-ODOO_PICKING_ID = 302139
-ODOO_INVOICE_ID = 496258
+ODOO_PO_ID = 35814       # C2615022 (gerado no 2o processamento)
+ODOO_PICKING_ID = 302163  # FB/IN/... (gerado no 2o processamento)
+ODOO_INVOICE_ID = 496309  # Invoice do 2o processamento
 ODOO_DFE_ID = 37390
-MOVE_LINE_IDS = list(range(217488968, 217488985))  # 217488968 a 217488984 (17 lotes)
+MOVE_LINE_IDS = None  # Sera descoberto dinamicamente na fase 1
 
 
 def fase_1_ler_estado_odoo(conn):
@@ -132,18 +128,24 @@ def fase_1_ler_estado_odoo(conn):
     except Exception as e:
         print(f"\n  DFe {ODOO_DFE_ID}: ERRO ao ler - {e}")
 
-    # Move Lines (amostra)
+    # Descobrir Move Lines dinamicamente a partir do picking
+    global MOVE_LINE_IDS
     try:
         move_lines = conn.execute_kw(
-            'stock.move.line', 'read', [MOVE_LINE_IDS[:3]],
+            'stock.move.line', 'search_read',
+            [[['picking_id', '=', ODOO_PICKING_ID]]],
             {'fields': ['id', 'product_id', 'quantity', 'lot_id', 'state']}
         )
-        print(f"\n  Move Lines (amostra 3 de {len(MOVE_LINE_IDS)}):")
-        for ml in move_lines:
+        MOVE_LINE_IDS = [ml['id'] for ml in move_lines]
+        print(f"\n  Move Lines ({len(MOVE_LINE_IDS)} encontradas no picking {ODOO_PICKING_ID}):")
+        for ml in move_lines[:3]:
             print(f"    ID={ml['id']}: product={ml.get('product_id')}, "
                   f"qty={ml.get('quantity')}, lot={ml.get('lot_id')}, state={ml.get('state')}")
+        if len(move_lines) > 3:
+            print(f"    ... e mais {len(move_lines) - 3} lines")
     except Exception as e:
         print(f"\n  Move Lines: ERRO ao ler - {e}")
+        MOVE_LINE_IDS = []
 
 
 def fase_2_cancelar_invoice(conn):
@@ -232,23 +234,26 @@ def fase_3_reverter_picking(conn):
         print(f"  action_cancel FALHOU: {e}")
 
     # Tentativa 2: unlink dos move_lines
-    print("\n  Tentativa 2: unlink dos move_lines...")
-    try:
-        conn.execute_kw('stock.move.line', 'unlink', [MOVE_LINE_IDS])
-        print(f"  unlink de {len(MOVE_LINE_IDS)} move_lines OK")
-        return True
-    except Exception as e:
-        print(f"  unlink FALHOU: {e}")
+    if MOVE_LINE_IDS:
+        print(f"\n  Tentativa 2: unlink dos {len(MOVE_LINE_IDS)} move_lines...")
+        try:
+            conn.execute_kw('stock.move.line', 'unlink', [MOVE_LINE_IDS])
+            print(f"  unlink de {len(MOVE_LINE_IDS)} move_lines OK")
+            return True
+        except Exception as e:
+            print(f"  unlink FALHOU: {e}")
 
-    # Tentativa 3: zerar quantity em cada move_line
-    print("\n  Tentativa 3: zerar quantity nos move_lines...")
-    try:
-        for ml_id in MOVE_LINE_IDS:
-            conn.execute_kw('stock.move.line', 'write', [[ml_id], {'quantity': 0}])
-        print(f"  Zeradas {len(MOVE_LINE_IDS)} move_lines")
-        return True
-    except Exception as e:
-        print(f"  Zerar quantity FALHOU: {e}")
+        # Tentativa 3: zerar quantity em cada move_line
+        print(f"\n  Tentativa 3: zerar quantity nos {len(MOVE_LINE_IDS)} move_lines...")
+        try:
+            for ml_id in MOVE_LINE_IDS:
+                conn.execute_kw('stock.move.line', 'write', [[ml_id], {'quantity': 0}])
+            print(f"  Zeradas {len(MOVE_LINE_IDS)} move_lines")
+            return True
+        except Exception as e:
+            print(f"  Zerar quantity FALHOU: {e}")
+    else:
+        print("\n  Move lines nao encontradas (MOVE_LINE_IDS vazio). Pulando tentativas 2 e 3.")
 
     # Tentativa 4: forcar state do picking
     print("\n  Tentativa 4: write state='cancel' no picking...")
@@ -483,8 +488,8 @@ def fase_8_processar_direto(app):
 
             print(f"\n  Resultado: {resultado}")
 
-            # Recarregar para verificar estado final
-            db.session.refresh(rec)
+            # Recarregar para verificar estado final (re-fetch previne DetachedInstanceError)
+            rec = db.session.get(RecebimentoLf, RECEBIMENTO_LF_ID)
             print(f"  Estado final: status={rec.status}, etapa={rec.etapa_atual}")
             print(f"  PO: {rec.odoo_po_name} (id={rec.odoo_po_id})")
             print(f"  Picking: {rec.odoo_picking_name} (id={rec.odoo_picking_id})")
@@ -553,18 +558,18 @@ def verificar_quantidades(app, conn):
 def main():
     print("=" * 60)
     print("RESET E2E: NF 12794 (RecebimentoLf id=1)")
-    print("  Versao: v2 — Refresh quantidades + processamento direto")
+    print("  Versao: v3 — Correcao precos PO + move_lines dinamicas")
     print("=" * 60)
     print()
     print("Este script vai:")
-    print("  1. Ler estado Odoo (read-only)")
-    print("  2. Cancelar Invoice 496258")
-    print("  3. Reverter Picking 302139")
-    print("  4. Cancelar PO 35804")
-    print("  5. Desvincular DFe 37390")
-    print("  6. Refresh quantidades dos lotes (DFe -> local)")
-    print("  7. Resetar banco local")
-    print("  8. Re-processar direto (sem worker RQ)")
+    print(f"  1. Ler estado Odoo (read-only)")
+    print(f"  2. Cancelar Invoice {ODOO_INVOICE_ID}")
+    print(f"  3. Reverter Picking {ODOO_PICKING_ID}")
+    print(f"  4. Cancelar PO {ODOO_PO_ID}")
+    print(f"  5. Desvincular DFe {ODOO_DFE_ID}")
+    print(f"  6. Refresh quantidades dos lotes (DFe -> local)")
+    print(f"  7. Resetar banco local")
+    print(f"  8. Re-processar direto (sem worker RQ)")
     print()
 
     app = create_app()

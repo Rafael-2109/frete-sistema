@@ -103,11 +103,36 @@ else:
 
 | Comportamento | Contexto | Solucao |
 |---------------|----------|---------|
+| Integer `0` buscado com `=` não encontra | Odoo armazena int 0 como `False` no PG | Usar `'in', [0, False]` |
 | `button_validate` retorna `None` | stock.picking | **SUCESSO!** `if 'cannot marshal None' in str(e): pass` |
 | PO criado com operacao fiscal ERRADA | Tomador FB mas PO vai para CD | Mapeamento de-para `OPERACAO_DE_PARA[op_atual][company_destino]` |
 | Impostos ZERADOS apos write no header | account.move | Re-buscar valor do DFe; chamar `onchange_l10n_br_calcular_imposto` |
 | Lote duplicado | stock.lot | Verificar existencia antes de `lot_name`, usar `lot_id` se existir |
 | Quality checks pendentes | button_validate falha | Processar TODOS checks (`do_pass`/`do_fail`/`do_measure`) ANTES |
+
+### Integer 0 vs False no ORM Odoo
+
+O Odoo armazena campos Integer com valor `0` como `False` no PostgreSQL.
+Buscar com `['campo', '=', 0]` **não encontra** esses registros.
+
+```python
+# ERRADO: não encontra registros com parcela=0 (armazenados como False)
+titulos = odoo.search_read('account.move.line',
+    [['l10n_br_cobranca_parcela', '=', 0]], ...)
+
+# CORRETO: buscar tanto 0 quanto False
+titulos = odoo.search_read('account.move.line',
+    [['l10n_br_cobranca_parcela', 'in', [0, False]]], ...)
+
+# CORRETO com variável condicional (quando parcela vem de input):
+parcela_odoo = parcela_to_odoo(titulo.parcela)
+if parcela_odoo:
+    filtro = ['l10n_br_cobranca_parcela', '=', parcela_odoo]
+else:
+    filtro = ['l10n_br_cobranca_parcela', 'in', [0, False]]
+```
+
+**Campos afetados conhecidos:** `l10n_br_cobranca_parcela` (account.move.line)
 
 ### Tratamento button_validate
 

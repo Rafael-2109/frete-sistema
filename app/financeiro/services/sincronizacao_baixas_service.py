@@ -246,11 +246,19 @@ class SincronizacaoBaixasService:
         empresa_map = {1: 'FB', 2: 'SC', 3: 'CD'}
         empresa_sufixo = empresa_map.get(titulo.empresa, '')
 
+        # Gotcha ORM Odoo: integer 0 é armazenado como False no PostgreSQL.
+        # Busca com '=' 0 não encontra — precisa usar 'in' [0, False].
+        parcela_odoo = parcela_to_odoo(titulo.parcela)
+        if parcela_odoo:
+            filtro_parcela = ['l10n_br_cobranca_parcela', '=', parcela_odoo]
+        else:
+            filtro_parcela = ['l10n_br_cobranca_parcela', 'in', [0, False]]
+
         linhas = self.connection.search_read(
             'account.move.line',
             [
                 ['x_studio_nf_e', '=', titulo.titulo_nf],
-                ['l10n_br_cobranca_parcela', '=', parcela_to_odoo(titulo.parcela) or 0],
+                filtro_parcela,
                 ['account_type', '=', 'asset_receivable'],
                 ['parent_state', '=', 'posted']
             ],

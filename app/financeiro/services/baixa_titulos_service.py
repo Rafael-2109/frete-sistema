@@ -637,7 +637,8 @@ class BaixaTitulosService:
                 'account.move.line',
                 [
                     ['x_studio_nf_e', '=', nf],
-                    ['l10n_br_cobranca_parcela', '=', 0],
+                    # Gotcha ORM Odoo: integer 0 é armazenado como False no PostgreSQL
+                    ['l10n_br_cobranca_parcela', 'in', [0, False]],
                     ['account_type', '=', 'asset_receivable'],
                     ['parent_state', '=', 'posted'],
                     ['date_maturity', '!=', '2000-01-01'],
