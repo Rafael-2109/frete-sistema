@@ -10,11 +10,24 @@
 1. **AMBIENTE VIRTUAL**: `source .venv/bin/activate` quando executar scripts Python
 2. **NUNCA criar tela sem acesso via UI** — TODA tela DEVE ter link no menu (`app/templates/base.html`) ou em tela relacionada
 3. **NUNCA mantenha lixo** — codigo substituido DEVE ser removido
+4. **DADOS DE PRODUCAO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
 
 ### ANTES DE PROPOR NOVOS ARQUIVOS:
 1. **LER** o INDICE DE REFERENCIAS abaixo
 2. **VERIFICAR** se conteudo ja existe — se SIM, NAO criar novo
 3. **MOSTRAR** o que cada arquivo existente contem antes de criar novo
+
+**Se nao souber onde encontrar uma informacao**: LER `.claude/references/INDEX.md`
+
+---
+
+## MIGRATIONS
+
+**SEMPRE gerar DOIS artefatos** para DDL (ALTER/CREATE/DROP):
+1. `scripts/migrations/NOME.py` — Python com `create_app()` + verificacao before/after
+2. `scripts/migrations/NOME.sql` — SQL idempotente para Render Shell (`IF NOT EXISTS`)
+
+Excecao: data fixes (UPDATE/INSERT sem DDL) podem ser apenas Python.
 
 ---
 
@@ -37,7 +50,7 @@ References contem APENAS regras de negocio, NAO campos.
 
 **ANTES de usar CarteiraPrincipal/Separacao**: LER `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`
 **ANTES de usar Embarque/Faturamento/etc.**: LER `.claude/references/modelos/REGRAS_MODELOS.md`
-**ANTES de trabalhar com Odoo (API, PO, NF, picking)**: LER `.claude/references/ROUTING_SKILLS.md`
+**ANTES de executar qualquer skill ou operacao Odoo**: LER `.claude/references/ROUTING_SKILLS.md`
 
 Gotchas rapidos:
 - CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo`)
