@@ -833,6 +833,9 @@ class ExtratoConciliacaoService:
 
         if parcela_int:
             domain.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+        elif parcela_int == 0:
+            # Gotcha ORM Odoo: integer 0 é armazenado como False no PostgreSQL
+            domain.append(['l10n_br_cobranca_parcela', 'in', [0, False]])
 
         titulos = self.connection.search_read(
             'account.move.line',
@@ -840,6 +843,22 @@ class ExtratoConciliacaoService:
             fields=CAMPOS_SNAPSHOT_TITULO,
             limit=5,
         )
+
+        # Gotcha ORM Odoo: parcela única (0/False) mapeada como 1 localmente
+        if not titulos and parcela_int == 1:
+            logger.info(f"  Parcela 1 não encontrada, tentando [0, False] (parcela única)")
+            domain_p0 = [
+                ['x_studio_nf_e', '=', str(nf)],
+                ['account_type', '=', 'liability_payable'],
+                ['parent_state', '=', 'posted'],
+                ['l10n_br_cobranca_parcela', 'in', [0, False]],
+            ]
+            titulos = self.connection.search_read(
+                'account.move.line',
+                domain_p0,
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5,
+            )
 
         if titulos:
             logger.info(f"  Encontrado(s) {len(titulos)} título(s) payable")
@@ -858,6 +877,8 @@ class ExtratoConciliacaoService:
 
         if parcela_int:
             domain_fallback.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+        elif parcela_int == 0:
+            domain_fallback.append(['l10n_br_cobranca_parcela', 'in', [0, False]])
 
         titulos = self.connection.search_read(
             'account.move.line',
@@ -865,6 +886,22 @@ class ExtratoConciliacaoService:
             fields=CAMPOS_SNAPSHOT_TITULO,
             limit=5,
         )
+
+        # Retry com parcela 0/False (fallback move_id.name)
+        if not titulos and parcela_int == 1:
+            logger.info(f"  Retry fallback com [0, False] (parcela única)")
+            domain_fb_p0 = [
+                ['move_id.name', 'ilike', str(nf)],
+                ['account_type', '=', 'liability_payable'],
+                ['parent_state', '=', 'posted'],
+                ['l10n_br_cobranca_parcela', 'in', [0, False]],
+            ]
+            titulos = self.connection.search_read(
+                'account.move.line',
+                domain_fb_p0,
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5,
+            )
 
         if titulos:
             logger.info(f"  Encontrado(s) {len(titulos)} título(s) payable via move_id.name")
@@ -1066,6 +1103,9 @@ class ExtratoConciliacaoService:
 
         if parcela_int:
             domain.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+        elif parcela_int == 0:
+            # Gotcha ORM Odoo: integer 0 é armazenado como False no PostgreSQL
+            domain.append(['l10n_br_cobranca_parcela', 'in', [0, False]])
 
         # CRÍTICO: Filtrar pela mesma empresa do extrato para evitar erro de multi-company
         if company_id_extrato:
@@ -1077,6 +1117,24 @@ class ExtratoConciliacaoService:
             fields=CAMPOS_SNAPSHOT_TITULO,
             limit=5
         )
+
+        # Gotcha ORM Odoo: parcela única (0/False) mapeada como 1 localmente
+        if not titulos and parcela_int == 1:
+            logger.info(f"  Parcela 1 não encontrada, tentando [0, False] (parcela única)")
+            domain_p0 = [
+                ['x_studio_nf_e', '=', str(nf)],
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted'],
+                ['l10n_br_cobranca_parcela', 'in', [0, False]],
+            ]
+            if company_id_extrato:
+                domain_p0.append(['company_id', '=', company_id_extrato])
+            titulos = self.connection.search_read(
+                'account.move.line',
+                domain_p0,
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5
+            )
 
         if titulos:
             logger.info(f"  Encontrado(s) {len(titulos)} título(s)")
@@ -1091,6 +1149,8 @@ class ExtratoConciliacaoService:
 
         if parcela_int:
             domain_fallback.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+        elif parcela_int == 0:
+            domain_fallback.append(['l10n_br_cobranca_parcela', 'in', [0, False]])
 
         # CRÍTICO: Também filtrar pelo company_id no fallback
         if company_id_extrato:
@@ -1103,12 +1163,30 @@ class ExtratoConciliacaoService:
             limit=5
         )
 
+        # Retry com parcela 0/False (fallback move_id.name)
+        if not titulos and parcela_int == 1:
+            logger.info(f"  Retry fallback com [0, False] (parcela única)")
+            domain_fb_p0 = [
+                ['move_id.name', 'ilike', str(nf)],
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted'],
+                ['l10n_br_cobranca_parcela', 'in', [0, False]],
+            ]
+            if company_id_extrato:
+                domain_fb_p0.append(['company_id', '=', company_id_extrato])
+            titulos = self.connection.search_read(
+                'account.move.line',
+                domain_fb_p0,
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5
+            )
+
         if titulos:
             logger.info(f"  Encontrado(s) {len(titulos)} título(s) via move_id.name")
             return self._selecionar_titulo_empresa(titulos)
 
         # 3. Log diagnóstico: buscar só por NF para mostrar parcelas disponíveis (sem filtro empresa)
-        if parcela_int:
+        if parcela_int is not None:
             domain_diag = [
                 ['x_studio_nf_e', '=', str(nf)],
                 ['account_type', '=', 'asset_receivable'],
@@ -1428,6 +1506,9 @@ class ExtratoConciliacaoService:
 
         if parcela_int:
             domain.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+        elif parcela_int == 0:
+            # Gotcha ORM Odoo: integer 0 é armazenado como False no PostgreSQL
+            domain.append(['l10n_br_cobranca_parcela', 'in', [0, False]])
 
         titulos = self.connection.search_read(
             'account.move.line',
@@ -1435,6 +1516,22 @@ class ExtratoConciliacaoService:
             fields=CAMPOS_SNAPSHOT_TITULO,
             limit=5
         )
+
+        # Gotcha ORM Odoo: parcela única (0/False) mapeada como 1 localmente
+        if not titulos and parcela_int == 1:
+            logger.info(f"  Parcela 1 não encontrada, tentando [0, False] (parcela única)")
+            domain_p0 = [
+                ['x_studio_nf_e', '=', str(nf)],
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted'],
+                ['l10n_br_cobranca_parcela', 'in', [0, False]],
+            ]
+            titulos = self.connection.search_read(
+                'account.move.line',
+                domain_p0,
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5
+            )
 
         if titulos:
             logger.info(f"  Encontrado(s) {len(titulos)} título(s)")
@@ -1450,6 +1547,8 @@ class ExtratoConciliacaoService:
 
         if parcela_int:
             domain_fallback.append(['l10n_br_cobranca_parcela', '=', parcela_int])
+        elif parcela_int == 0:
+            domain_fallback.append(['l10n_br_cobranca_parcela', 'in', [0, False]])
 
         titulos = self.connection.search_read(
             'account.move.line',
@@ -1458,12 +1557,28 @@ class ExtratoConciliacaoService:
             limit=5
         )
 
+        # Retry com parcela 0/False (fallback move_id.name)
+        if not titulos and parcela_int == 1:
+            logger.info(f"  Retry fallback multi-company com [0, False] (parcela única)")
+            domain_fb_p0 = [
+                ['move_id.name', 'ilike', str(nf)],
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted'],
+                ['l10n_br_cobranca_parcela', 'in', [0, False]],
+            ]
+            titulos = self.connection.search_read(
+                'account.move.line',
+                domain_fb_p0,
+                fields=CAMPOS_SNAPSHOT_TITULO,
+                limit=5
+            )
+
         if titulos:
             logger.info(f"  Encontrado(s) {len(titulos)} título(s) via move_id.name")
             return self._selecionar_titulo_com_payment(titulos)
 
         # 3. Log diagnóstico
-        if parcela_int:
+        if parcela_int is not None:
             domain_diag = [
                 ['x_studio_nf_e', '=', str(nf)],
                 ['account_type', '=', 'asset_receivable'],
@@ -2140,11 +2255,18 @@ class ExtratoConciliacaoService:
         logger.info(f"    Título Odoo: ID={titulo_odoo_id}, Empresa={titulo_company_id}")
 
         # Verificar se título já foi baixado
-        matched_credit_ids = titulo_odoo.get('matched_credit_ids', [])
-        l10n_br_paga = titulo_odoo.get('l10n_br_paga', False)
-        saldo_titulo = titulo_odoo.get('amount_residual', 0)
+        # Para payable: matched usa debit_ids, saldo é negativo → abs()
+        # Para receivable: matched usa credit_ids, saldo é positivo
+        if tipo == 'pagar':
+            matched_ids = titulo_odoo.get('matched_debit_ids', [])
+            saldo_titulo = abs(float(titulo_odoo.get('amount_residual', 0)))
+        else:
+            matched_ids = titulo_odoo.get('matched_credit_ids', [])
+            saldo_titulo = float(titulo_odoo.get('amount_residual', 0))
 
-        # Salvar saldo antes
+        l10n_br_paga = titulo_odoo.get('l10n_br_paga', False)
+
+        # Salvar saldo antes (sempre positivo para ambos os tipos)
         vinculo.titulo_saldo_antes = saldo_titulo
 
         # Valor a processar é o valor_alocado do vínculo
@@ -2154,7 +2276,7 @@ class ExtratoConciliacaoService:
         # =========================================================================
         # CENÁRIO 1: Título já pago (tem payment vinculado)
         # =========================================================================
-        if matched_credit_ids and (saldo_titulo <= 0 or l10n_br_paga):
+        if matched_ids and (saldo_titulo <= 0.01 or l10n_br_paga):
             logger.info(f"    Título já quitado - marcando como conciliado")
             vinculo.titulo_saldo_depois = 0
             return {
@@ -2170,7 +2292,7 @@ class ExtratoConciliacaoService:
         # =========================================================================
         # CORREÇÃO 14 (22/01/2026): Separar juros quando valor_alocado > saldo_titulo
         # Se cliente pagou mais que o saldo (juros), usar wizard com Write-Off
-        if saldo_titulo > 0:
+        if saldo_titulo > 0.01:
             # Calcular valores: principal (abate título) e juros (receita financeira)
             valor_principal = min(valor_alocado, saldo_titulo)
             valor_juros = valor_alocado - valor_principal if valor_alocado > saldo_titulo else 0
@@ -2187,54 +2309,96 @@ class ExtratoConciliacaoService:
             journal_id = item.lote.journal_id if item.lote and item.lote.journal_id else JOURNAL_GRAFENO_ID
 
             # Tolerância de 1 centavo para considerar juros
-            if valor_juros > 0.01:
+            if tipo == 'pagar':
                 # =====================================================================
-                # CASO COM JUROS: Usar wizard account.payment.register com Write-Off
+                # OUTBOUND (pagamento a fornecedor) — usa BaixaPagamentosService
+                # Ref: _conciliar_item_pagamento() linhas 614-692
                 # =====================================================================
-                # O wizard já faz: criar payment + postar + reconciliar título + contabilizar juros
-                logger.info(
-                    f"    Criando payment COM JUROS: Principal R$ {valor_principal:.2f} + "
-                    f"Juros R$ {valor_juros:.2f} = Total R$ {valor_alocado:.2f}"
-                )
+                baixa_pag = self._get_baixa_pagamentos_service()
 
-                payment_id, payment_name = self.baixa_service._criar_pagamento_com_writeoff_juros(
-                    titulo_id=titulo_odoo_id,
-                    partner_id=partner_id_num,
-                    valor_pagamento=valor_principal,
-                    valor_juros=valor_juros,
-                    journal_id=journal_id,
-                    ref=f"{move_name} (Extrato {item.id})",
-                    data=item.data_transacao or agora_utc_naive().date(),
-                    company_id=titulo_company_id
-                )
-                logger.info(f"    Payment com Write-Off criado: {payment_name} (ID {payment_id})")
+                if valor_juros > 0.01:
+                    logger.info(
+                        f"    Criando payment OUTBOUND COM JUROS: Principal R$ {valor_principal:.2f} + "
+                        f"Juros R$ {valor_juros:.2f} = Total R$ {valor_alocado:.2f}"
+                    )
+                    payment_id, payment_name = baixa_pag.criar_pagamento_outbound_com_writeoff(
+                        titulo_id=titulo_odoo_id,
+                        partner_id=partner_id_num,
+                        valor_titulo=valor_principal,
+                        valor_juros=valor_juros,
+                        journal_id=journal_id,
+                        ref=f"{move_name} (Extrato {item.id})",
+                        data=item.data_transacao or agora_utc_naive().date(),
+                        company_id=titulo_company_id
+                    )
+                    logger.info(f"    Payment OUTBOUND com Write-Off criado: {payment_name} (ID {payment_id})")
+                    # O wizard já postou e reconciliou
+                else:
+                    logger.info(f"    Criando payment OUTBOUND SEM juros: R$ {valor_principal:.2f}")
+                    payment_id, payment_name = baixa_pag.criar_pagamento_outbound(
+                        partner_id=partner_id_num,
+                        valor=valor_principal,
+                        journal_id=journal_id,
+                        ref=f"{move_name} (Extrato {item.id})",
+                        data=item.data_transacao or agora_utc_naive().date(),
+                        company_id=titulo_company_id
+                    )
+                    logger.info(f"    Payment OUTBOUND criado: {payment_name} (ID {payment_id})")
 
-                # O wizard já postou e reconciliou - não chamar _postar_pagamento nem _executar_reconcile
+                    # Postar payment
+                    baixa_pag.postar_pagamento(payment_id)
+                    logger.info(f"    Payment postado")
+
+                    # Buscar linha payable do payment e reconciliar com título
+                    linhas_payment = baixa_pag.buscar_linhas_payment(payment_id)
+                    debit_line_id = linhas_payment.get('debit_line_id')
+                    if debit_line_id:
+                        self._executar_reconcile(debit_line_id, titulo_odoo_id)
+                        logger.info(f"    Título reconciliado com payment OUTBOUND")
             else:
                 # =====================================================================
-                # CASO SEM JUROS: Fluxo original (criar payment simples)
+                # INBOUND (recebimento de cliente) — fluxo original
                 # =====================================================================
-                logger.info(f"    Criando payment SEM juros: R$ {valor_principal:.2f}")
+                if valor_juros > 0.01:
+                    # CASO COM JUROS: Usar wizard account.payment.register com Write-Off
+                    logger.info(
+                        f"    Criando payment COM JUROS: Principal R$ {valor_principal:.2f} + "
+                        f"Juros R$ {valor_juros:.2f} = Total R$ {valor_alocado:.2f}"
+                    )
+                    payment_id, payment_name = self.baixa_service._criar_pagamento_com_writeoff_juros(
+                        titulo_id=titulo_odoo_id,
+                        partner_id=partner_id_num,
+                        valor_pagamento=valor_principal,
+                        valor_juros=valor_juros,
+                        journal_id=journal_id,
+                        ref=f"{move_name} (Extrato {item.id})",
+                        data=item.data_transacao or agora_utc_naive().date(),
+                        company_id=titulo_company_id
+                    )
+                    logger.info(f"    Payment com Write-Off criado: {payment_name} (ID {payment_id})")
+                    # O wizard já postou e reconciliou
+                else:
+                    # CASO SEM JUROS: Fluxo original (criar payment simples)
+                    logger.info(f"    Criando payment SEM juros: R$ {valor_principal:.2f}")
+                    payment_id, payment_name = self.baixa_service._criar_pagamento(
+                        partner_id=partner_id_num,
+                        valor=valor_principal,
+                        journal_id=journal_id,
+                        ref=f"{move_name} (Extrato {item.id})",
+                        data=item.data_transacao or agora_utc_naive().date(),
+                        company_id=titulo_company_id
+                    )
+                    logger.info(f"    Payment criado: {payment_name} (ID {payment_id})")
 
-                payment_id, payment_name = self.baixa_service._criar_pagamento(
-                    partner_id=partner_id_num,
-                    valor=valor_principal,
-                    journal_id=journal_id,
-                    ref=f"{move_name} (Extrato {item.id})",
-                    data=item.data_transacao or agora_utc_naive().date(),
-                    company_id=titulo_company_id
-                )
-                logger.info(f"    Payment criado: {payment_name} (ID {payment_id})")
+                    # Postar payment (só para caso sem juros)
+                    self.baixa_service._postar_pagamento(payment_id)
+                    logger.info(f"    Payment postado")
 
-                # Postar payment (só para caso sem juros)
-                self.baixa_service._postar_pagamento(payment_id)
-                logger.info(f"    Payment postado")
-
-                # Buscar linha de crédito do payment e reconciliar com título (só para caso sem juros)
-                credit_line_id = self.baixa_service._buscar_linha_credito(payment_id)
-                if credit_line_id:
-                    self._executar_reconcile(credit_line_id, titulo_odoo_id)
-                    logger.info(f"    Título reconciliado com payment")
+                    # Buscar linha de crédito do payment e reconciliar com título
+                    credit_line_id_pay = self.baixa_service._buscar_linha_credito(payment_id)
+                    if credit_line_id_pay:
+                        self._executar_reconcile(credit_line_id_pay, titulo_odoo_id)
+                        logger.info(f"    Título reconciliado com payment")
 
             # Salvar IDs de referência
             vinculo.payment_id = payment_id
@@ -2242,7 +2406,11 @@ class ExtratoConciliacaoService:
 
             # Buscar saldo atualizado
             titulo_atualizado = self._buscar_titulo_por_id(titulo_odoo_id)
-            vinculo.titulo_saldo_depois = titulo_atualizado.get('amount_residual', 0) if titulo_atualizado else None
+            if titulo_atualizado:
+                saldo_depois_raw = titulo_atualizado.get('amount_residual', 0)
+                vinculo.titulo_saldo_depois = abs(float(saldo_depois_raw)) if tipo == 'pagar' else saldo_depois_raw
+            else:
+                vinculo.titulo_saldo_depois = None
 
             # Verificar full_reconcile
             if titulo_atualizado and titulo_atualizado.get('full_reconcile_id'):
