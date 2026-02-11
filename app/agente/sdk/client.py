@@ -404,14 +404,15 @@ Nunca invente informações."""
         prompt: str,
         user_name: str = "Usuário",
         model: Optional[str] = None,
-        thinking_enabled: bool = False,
+        effort_level: str = "off",
         plan_mode: bool = False,
         user_id: int = None,
         image_files: Optional[List[dict]] = None,
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
-        # LEGADO: aceitar pooled_client para compatibilidade (ignorado)
+        # LEGADO: aceitar pooled_client e thinking_enabled para compatibilidade
         pooled_client: Any = None,
+        thinking_enabled: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando query() + resume.
@@ -420,22 +421,27 @@ Nunca invente informações."""
             prompt: Mensagem do usuário
             user_name: Nome do usuário
             model: Modelo a usar (FEAT-001)
-            thinking_enabled: Ativar Extended Thinking (FEAT-002)
+            effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura (FEAT-010)
             user_id: ID do usuário (para Memory Tool)
             image_files: Lista de imagens em formato Vision API (FEAT-032)
             sdk_session_id: Session ID do SDK para resume (do DB)
             can_use_tool: Callback de permissão
             pooled_client: LEGADO — ignorado (mantido para compatibilidade)
+            thinking_enabled: LEGADO — backward compat (convertido para effort_level)
 
         Yields:
             StreamEvent com tipo e conteúdo
         """
+        # Backward compat: thinking_enabled → effort_level
+        if effort_level == "off" and thinking_enabled:
+            effort_level = "high"
+
         async for event in self._stream_response(
             prompt=prompt,
             user_name=user_name,
             model=model,
-            thinking_enabled=thinking_enabled,
+            effort_level=effort_level,
             plan_mode=plan_mode,
             user_id=user_id,
             image_files=image_files,
@@ -450,7 +456,7 @@ Nunca invente informações."""
         can_use_tool: Optional[Callable] = None,
         max_turns: int = 30,
         model: Optional[str] = None,
-        thinking_enabled: bool = False,
+        effort_level: str = "off",
         plan_mode: bool = False,
         user_id: int = None,
     ) -> 'ClaudeAgentOptions':
@@ -465,7 +471,7 @@ Nunca invente informações."""
             can_use_tool: Callback de permissão
             max_turns: Máximo de turnos
             model: Modelo a usar (sobrescreve settings.model)
-            thinking_enabled: Ativar Extended Thinking
+            effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura
             user_id: ID do usuário (para Memory Tool)
 
@@ -566,21 +572,17 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao carregar agents customizados: {e}")
 
-        # Extended Thinking
-        # TODO: Migrar para adaptive thinking (thinking: {type: "adaptive"})
-        #   quando claude-agent-sdk suportar o campo nativamente.
-        #   Opus 4.6 suporta adaptive thinking na API direta, mas o SDK
-        #   v0.1.26 só expõe max_thinking_tokens. budget_tokens é deprecated
-        #   no Opus 4.6, porém funcional como fallback.
-        if thinking_enabled:
-            current_model = str(options_dict.get("model", self.settings.model))
-            # Opus 4.6: max_output 128K, budget thinking proporcional (32K)
-            if "opus-4-6" in current_model or "opus_4_6" in current_model:
-                options_dict["max_thinking_tokens"] = 32000
-                logger.info("[AGENT_CLIENT] Extended Thinking ativado (Opus 4.6, max_thinking_tokens=32000)")
-            else:
-                options_dict["max_thinking_tokens"] = 20000
-                logger.info("[AGENT_CLIENT] Extended Thinking ativado (max_thinking_tokens=20000)")
+        # Adaptive Thinking via --effort flag
+        # O CLI v2.1.39+ aceita --effort <low|medium|high|max> e traduz para
+        # thinking: {type: "adaptive"} + output_config: {effort: ...} na API.
+        # extra_args é passado como flags CLI pelo subprocess_cli.py:291-298.
+        # Opus 4.6: suporta todos os níveis (low/medium/high/max)
+        # Sonnet 4.5/Haiku: suportam low/medium/high (max → fallback para high no CLI)
+        if effort_level and effort_level != "off":
+            if "extra_args" not in options_dict:
+                options_dict["extra_args"] = {}
+            options_dict["extra_args"]["effort"] = effort_level
+            logger.info(f"[AGENT_CLIENT] Effort level: {effort_level}")
 
         # Callback de permissão
         if can_use_tool:
@@ -1130,7 +1132,7 @@ Nunca invente informações."""
         prompt: str,
         user_name: str = "Usuário",
         model: Optional[str] = None,
-        thinking_enabled: bool = False,
+        effort_level: str = "off",
         plan_mode: bool = False,
         user_id: int = None,
         image_files: Optional[List[dict]] = None,
@@ -1150,7 +1152,7 @@ Nunca invente informações."""
             prompt: Mensagem do usuário
             user_name: Nome do usuário
             model: Modelo a usar
-            thinking_enabled: Ativar Extended Thinking
+            effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura
             user_id: ID do usuário (para Memory Tool)
             image_files: Lista de imagens em formato Vision API
@@ -1179,7 +1181,7 @@ Nunca invente informações."""
             user_name=user_name,
             user_id=user_id,
             model=model,
-            thinking_enabled=thinking_enabled,
+            effort_level=effort_level,
             plan_mode=plan_mode,
             can_use_tool=can_use_tool,
         )

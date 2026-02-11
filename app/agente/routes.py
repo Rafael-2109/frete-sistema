@@ -111,7 +111,7 @@ def api_chat():
         "message": "Tem pedido pendente pro Atacadão?",
         "session_id": "uuid-da-nossa-sessao",  // Nosso ID, não do SDK
         "model": "claude-sonnet-4-5-20250929",
-        "thinking_enabled": false,
+        "effort_level": "auto",
         "plan_mode": false,
         "files": []
     }
@@ -130,7 +130,12 @@ def api_chat():
         message = data['message'].strip()
         session_id = data.get('session_id')  # Nosso session_id (não do SDK)
         model = data.get('model')
-        thinking_enabled = data.get('thinking_enabled', False)
+        # Effort level com backward compat para clients antigos
+        effort_level = data.get('effort_level', None)
+        if effort_level is None:
+            # Backward compat: clients antigos enviam thinking_enabled
+            thinking_enabled = data.get('thinking_enabled', False)
+            effort_level = 'high' if thinking_enabled else 'off'
         plan_mode = data.get('plan_mode', False)
         files = data.get('files', [])
 
@@ -141,7 +146,7 @@ def api_chat():
         files_info = f" | Arquivos: {len(files)}" if files else ""
         logger.info(
             f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | "
-            f"Modelo: {model or 'default'} | Thinking: {thinking_enabled} | "
+            f"Modelo: {model or 'default'} | Effort: {effort_level} | "
             f"Plan: {plan_mode}{files_info}"
         )
 
@@ -189,7 +194,7 @@ def api_chat():
                 user_name=user_name,
                 session_id=session_id,
                 model=model,
-                thinking_enabled=thinking_enabled,
+                effort_level=effort_level,
                 plan_mode=plan_mode,
                 image_files=image_files,  # FEAT-032: Imagens para Vision API
             )),
@@ -229,9 +234,9 @@ async def _async_stream_sdk_client(
     user_name: str,
     can_use_tool,
     model: str,
-    thinking_enabled: bool,
-    plan_mode: bool,
-    image_files: list,
+    effort_level: str = "off",
+    plan_mode: bool = False,
+    image_files: list = None,
     app=None,
 ):
     """
@@ -297,7 +302,7 @@ async def _async_stream_sdk_client(
             prompt=enriched_prompt,
             user_name=user_name,
             model=model,
-            thinking_enabled=thinking_enabled,
+            effort_level=effort_level,
             plan_mode=plan_mode,
             user_id=user_id,
             image_files=image_files,
@@ -336,7 +341,7 @@ def _stream_chat_response(
     user_name: str,
     session_id: str = None,
     model: str = None,
-    thinking_enabled: bool = False,
+    effort_level: str = "off",
     plan_mode: bool = False,
     image_files: List[dict] = None,
 ) -> Generator[str, None, None]:
@@ -359,7 +364,7 @@ def _stream_chat_response(
         user_name: Nome do usuário
         session_id: Nosso session_id (não do SDK)
         model: Modelo a usar
-        thinking_enabled: Extended Thinking
+        effort_level: Nível de esforço (off/low/medium/high/max)
         plan_mode: Modo somente-leitura
         image_files: Lista de dicts com imagens em base64 para Vision API
 
@@ -562,7 +567,7 @@ def _stream_chat_response(
                 user_name=user_name,
                 can_use_tool=can_use_tool,
                 model=model,
-                thinking_enabled=thinking_enabled,
+                effort_level=effort_level,
                 plan_mode=plan_mode,
                 image_files=image_files,
                 app=app,

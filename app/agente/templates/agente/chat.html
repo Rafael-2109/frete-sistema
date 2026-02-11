@@ -47,17 +47,27 @@
                     </div>
                 </div>
 
-                <!-- FEAT-002: Toggle Thinking com Tooltip -->
+                <!-- Effort Level Selector (Adaptive Thinking) -->
                 <div class="header-control has-tooltip">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="thinking-toggle">
-                        <span class="toggle-slider"></span>
-                        <i class="fas fa-brain toggle-icon"></i>
-                    </label>
+                    <div class="effort-selector" id="effort-selector">
+                        <i class="fas fa-brain effort-icon"></i>
+                        <button type="button" class="effort-btn active" data-effort="auto" title="Ajusta ao modelo">Auto</button>
+                        <button type="button" class="effort-btn" data-effort="off" title="Sem pensamento">Off</button>
+                        <button type="button" class="effort-btn" data-effort="low" title="Pensamento mínimo">Low</button>
+                        <button type="button" class="effort-btn" data-effort="medium" title="Balanceado">Med</button>
+                        <button type="button" class="effort-btn" data-effort="high" title="Pensamento profundo">High</button>
+                        <button type="button" class="effort-btn" data-effort="max" title="Máximo (Opus only)">Max</button>
+                    </div>
                     <div class="control-tooltip">
-                        <strong><i class="fas fa-brain"></i> Pensamento Profundo</strong>
-                        <p>Quando ativado, o agente analisa mais antes de responder.</p>
-                        <small>Ideal para decisões complexas.</small>
+                        <strong><i class="fas fa-brain"></i> Nível de Esforço</strong>
+                        <ul>
+                            <li><b>Auto:</b> Ajusta ao modelo (Opus→high, Sonnet→med, Haiku→off)</li>
+                            <li><b>Off:</b> Resposta rápida</li>
+                            <li><b>Low:</b> Pensamento mínimo</li>
+                            <li><b>Med:</b> Balanceado</li>
+                            <li><b>High:</b> Análise profunda</li>
+                            <li><b>Max:</b> Sem restrições (Opus only)</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -378,7 +388,7 @@
 const STORAGE_KEYS = {
     theme: 'agent-theme',
     model: 'agent-model',
-    thinking: 'agent-thinking',
+    effort: 'agent-effort',
     planMode: 'agent-plan-mode'
 };
 
@@ -447,24 +457,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Restaurar Thinking Toggle ---
-    const thinkingToggle = document.getElementById('thinking-toggle');
-    const savedThinking = localStorage.getItem(STORAGE_KEYS.thinking);
-    if (thinkingToggle && savedThinking !== null) {
-        const isEnabled = savedThinking === 'true';
-        thinkingToggle.checked = isEnabled;
+    // --- Restaurar Effort Level ---
+    const effortSelector = document.getElementById('effort-selector');
+    const savedEffort = localStorage.getItem(STORAGE_KEYS.effort);
+    if (effortSelector && savedEffort) {
+        // Ativar botão salvo
+        const btns = effortSelector.querySelectorAll('.effort-btn');
+        btns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.effort === savedEffort);
+        });
         // Atualiza variável global do chat.js
-        if (typeof thinkingEnabled !== 'undefined') {
-            thinkingEnabled = isEnabled;
+        if (typeof effortLevel !== 'undefined') {
+            effortLevel = savedEffort;
         }
-        console.log('[PREFS] Thinking restaurado:', isEnabled);
+        console.log('[PREFS] Effort restaurado:', savedEffort);
     }
 
-    // Salvar thinking quando alterado
-    if (thinkingToggle) {
-        thinkingToggle.addEventListener('change', function() {
-            localStorage.setItem(STORAGE_KEYS.thinking, this.checked.toString());
-            console.log('[PREFS] Thinking salvo:', this.checked);
+    // Salvar effort quando alterado
+    if (effortSelector) {
+        effortSelector.querySelectorAll('.effort-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Desativar todos, ativar clicado
+                effortSelector.querySelectorAll('.effort-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                const level = this.dataset.effort;
+                localStorage.setItem(STORAGE_KEYS.effort, level);
+                // Atualizar variável global do chat.js
+                if (typeof effortLevel !== 'undefined') {
+                    effortLevel = level;
+                }
+                console.log('[PREFS] Effort salvo:', level);
+            });
         });
     }
 

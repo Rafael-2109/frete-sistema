@@ -25,8 +25,8 @@ let totalCost = 0;
 // FEAT-001: Modelo selecionado
 let currentModel = 'claude-sonnet-4-5-20250929';
 
-// FEAT-002: Thinking ativado
-let thinkingEnabled = false;
+// Effort Level (Adaptive Thinking): auto|off|low|medium|high|max
+let effortLevel = 'auto';
 
 // FEAT-010: Plan Mode ativado
 let planModeEnabled = false;
@@ -202,21 +202,38 @@ modelSelector.addEventListener('change', function() {
 });
 
 // ============================================
-// FEAT-002: TOGGLE DE THINKING
+// EFFORT LEVEL SELECTOR (Adaptive Thinking)
 // ============================================
-const thinkingToggle = document.getElementById('thinking-toggle');
-const thinkingLabelText = document.getElementById('thinking-label-text');
 
-thinkingToggle.addEventListener('change', function() {
-    thinkingEnabled = this.checked;
+/**
+ * Resolve effort level quando "auto" — baseado no modelo selecionado.
+ * Opus → high, Haiku → off, Sonnet/default → medium
+ */
+function resolveEffortLevel() {
+    if (effortLevel !== 'auto') return effortLevel;
+    if (currentModel.includes('opus')) return 'high';
+    if (currentModel.includes('haiku')) return 'off';
+    return 'medium'; // Sonnet = default
+}
 
-    // Atualiza texto do label
-    if (thinkingLabelText) {
-        thinkingLabelText.textContent = this.checked ? 'Pensamento ativo' : 'Pensamento rápido';
-    }
+// Event listeners para botões de effort (delegação no container)
+const effortSelector = document.getElementById('effort-selector');
+if (effortSelector) {
+    effortSelector.querySelectorAll('.effort-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            effortSelector.querySelectorAll('.effort-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            effortLevel = this.dataset.effort;
 
-    console.log('[AGENTE] Extended Thinking:', thinkingEnabled ? 'ATIVADO' : 'DESATIVADO');
-});
+            // Validação: "max" só para Opus
+            if (effortLevel === 'max' && !currentModel.includes('opus')) {
+                console.warn('[AGENTE] Effort "max" requer Opus. Usando "high" como fallback.');
+            }
+
+            console.log('[AGENTE] Effort level:', effortLevel, '→ resolve:', resolveEffortLevel());
+        });
+    });
+}
 
 // ============================================
 // FEAT-010: TOGGLE DE PLAN MODE
@@ -511,13 +528,16 @@ async function sendMessage(event) {
     // P1-1: Remove chips de sugestão anteriores
     document.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
 
-    // Mostra indicador e botão stop
-    // FEAT-002: Indica quando pensamento profundo está ativo
-    if (thinkingEnabled) {
-        showTyping('🧠 Pensando profundamente...');
-    } else {
-        showTyping('Processando...');
-    }
+    // Mostra indicador e botão stop — mensagem varia por effort level
+    const resolved = resolveEffortLevel();
+    const typingMessages = {
+        max:    '🧠 Pensamento máximo...',
+        high:   '🧠 Pensando profundamente...',
+        medium: '🔍 Analisando...',
+        low:    '⚡ Processando rápido...',
+        off:    'Processando...',
+    };
+    showTyping(typingMessages[resolved] || 'Processando...');
     showStopButton(); // FEAT-026
 
     // FEAT-028: Obtém arquivos anexados
@@ -534,7 +554,7 @@ async function sendMessage(event) {
                 message: message,
                 session_id: sessionId,
                 model: currentModel,              // FEAT-001: Modelo selecionado
-                thinking_enabled: thinkingEnabled, // FEAT-002: Thinking ativado
+                effort_level: resolveEffortLevel(), // Adaptive Thinking effort
                 plan_mode: planModeEnabled,       // FEAT-010: Plan Mode
                 files: files                      // FEAT-028: Arquivos anexados
             })
@@ -787,7 +807,7 @@ function processSSEEvent(eventType, data, state) {
 
             // FEAT-003: Evento de thinking
             case 'thinking':
-                if (thinkingEnabled && data.content) {
+                if (resolveEffortLevel() !== 'off' && data.content) {
                     showThinking(data.content);
                 }
                 break;
