@@ -1377,7 +1377,7 @@ def extrato_conciliar_item():
         }), 400
 
     # Verificar se tem título vinculado (1:1 via FK OU M:N via tabela associativa)
-    if not item.titulo_receber_id and not item.tem_multiplos_titulos:
+    if not item.titulo_receber_id and not item.titulo_pagar_id and not item.tem_multiplos_titulos:
         return jsonify({
             'success': False,
             'error': 'Item não possui título vinculado'

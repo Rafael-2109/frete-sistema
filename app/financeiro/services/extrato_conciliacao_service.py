@@ -973,11 +973,23 @@ class ExtratoConciliacaoService:
         self, item: ExtratoItem, titulo_odoo: Dict, matched_debit_ids: list
     ) -> Dict:
         """
-        Marca item de pagamento como conciliado quando título já está quitado.
+        Reconcilia o extrato com o payment existente quando o título payable já está quitado.
 
-        Similar a _marcar_conciliado_local() mas para títulos payable:
+        Este cenário acontece quando:
+        - O pagamento foi registrado no Odoo por outro meio (ex: baixa manual, CNAB)
+        - A linha do extrato não foi usada na conciliação original
+        - Precisamos fechar o ciclo: extrato ↔ payment
+
+        Espelho de _marcar_conciliado_local() (recebimentos) adaptado para pagamentos:
         - Usa matched_debit_ids (não matched_credit_ids)
-        - Busca linha CRÉDITO do payment na conta PENDENTES
+        - Busca linha CRÉDITO do payment em PENDENTES (não DÉBITO)
+        - Reconcilia CREDIT do payment ↔ DEBIT do extrato (invertido vs recebimentos)
+
+        Fluxo:
+        1. Buscar linha CREDIT não reconciliada do payment existente (PENDENTES)
+        2. Se encontrar: reconciliar com a linha do extrato (fecha o ciclo)
+        3. Se não encontrar: verificar se extrato já reconciliado no Odoo
+        4. Fallback: apenas marcar localmente
 
         Args:
             item: ExtratoItem do sistema local
@@ -985,28 +997,180 @@ class ExtratoConciliacaoService:
             matched_debit_ids: IDs dos partial_reconcile vinculados ao título
 
         Returns:
-            Dict com resultado
+            Dict com resultado da operação
         """
         titulo_odoo_id = titulo_odoo['id']
+        extrato_reconciliado = False
+        mensagem_resultado = ""
 
-        # Capturar snapshot
-        snapshot = {'titulo': titulo_odoo, 'matched_debit_ids': matched_debit_ids}
-        item.set_snapshot_antes(snapshot)
-        item.set_snapshot_depois(snapshot)
+        # Capturar snapshot ANTES
+        snapshot_antes = {
+            'titulo': titulo_odoo,
+            'matched_debit_ids': matched_debit_ids,
+            'extrato_credit_line_id': item.credit_line_id
+        }
+        item.set_snapshot_antes(snapshot_antes)
 
+        # =========================================================================
+        # TENTAR RECONCILIAR EXTRATO COM PAYMENT EXISTENTE
+        # =========================================================================
+        if matched_debit_ids and item.credit_line_id:
+            logger.info(
+                f"  Título payable já quitado - tentando reconciliar extrato "
+                f"com payment existente..."
+            )
+
+            # Buscar linha CREDIT não reconciliada do payment (PENDENTES)
+            payment_credit_line = self._buscar_linha_payment_pendentes_pagamento(
+                matched_debit_ids
+            )
+
+            if payment_credit_line:
+                payment_credit_line_id = payment_credit_line['id']
+                payment_account_id = payment_credit_line.get('account_id')
+                if isinstance(payment_account_id, (list, tuple)):
+                    payment_account_id = payment_account_id[0]
+
+                logger.info(
+                    f"  Encontrada linha CREDIT do payment: {payment_credit_line_id}, "
+                    f"conta={payment_account_id}"
+                )
+
+                try:
+                    # Trocar conta do extrato ANTES de reconciliar
+                    # Se payment usou conta PENDENTES → trocar padrão
+                    # Se payment usou conta bancária → trocar para conta bancária
+                    if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
+                        self._trocar_conta_extrato(item.move_id)
+                    else:
+                        self._trocar_conta_extrato_para(
+                            item.move_id, payment_account_id
+                        )
+
+                    # Buscar linha DEBIT do extrato (counterpart na TRANSITÓRIA/PENDENTES)
+                    baixa_pag_service = self._get_baixa_pagamentos_service()
+                    debit_line_extrato = baixa_pag_service.buscar_linha_debito_extrato(
+                        item.move_id
+                    )
+
+                    if not debit_line_extrato:
+                        raise ValueError(
+                            f"Linha DEBIT do extrato não encontrada "
+                            f"para move_id={item.move_id}"
+                        )
+
+                    logger.info(
+                        f"  Reconciliando: payment_credit={payment_credit_line_id} "
+                        f"<-> extrato_debit={debit_line_extrato}"
+                    )
+
+                    # Executar reconciliação no Odoo
+                    baixa_pag_service.reconciliar(
+                        payment_credit_line_id, debit_line_extrato
+                    )
+
+                    # Atualizar partner e rótulo do extrato
+                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                    self._atualizar_campos_extrato(item, p_id, p_name)
+
+                    # Buscar partial_reconcile criado
+                    item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
+                        payment_credit_line_id
+                    )
+
+                    extrato_reconciliado = True
+                    mensagem_resultado = (
+                        f"Extrato reconciliado com payment existente "
+                        f"(partial_reconcile={item.partial_reconcile_id}, "
+                        f"conta={payment_account_id})"
+                    )
+                    logger.info(f"  ✅ {mensagem_resultado}")
+
+                except Exception as e:
+                    logger.warning(
+                        f"  ⚠️ Falha ao reconciliar extrato com payment: {e}. "
+                        f"Marcando apenas localmente."
+                    )
+                    mensagem_resultado = (
+                        f"Título payable quitado - falha ao reconciliar extrato: {e}"
+                    )
+            else:
+                # Nenhuma linha disponível no payment para reconciliar
+                # Verificar se o extrato já foi reconciliado manualmente no Odoo
+                logger.info(
+                    f"  Sem linha disponível no payment. "
+                    f"Verificando se extrato já foi reconciliado no Odoo..."
+                )
+
+                linha_extrato = self._verificar_linha_extrato_reconciliada(
+                    item.credit_line_id
+                )
+                if linha_extrato and linha_extrato.get('reconciled'):
+                    logger.info(
+                        f"  ✅ Extrato já reconciliado no Odoo (manual). "
+                        f"Sincronizando..."
+                    )
+                    # Sincronizar full_reconcile_id do Odoo
+                    full_reconcile = linha_extrato.get('full_reconcile_id')
+                    if full_reconcile:
+                        if isinstance(full_reconcile, (list, tuple)):
+                            item.full_reconcile_id = full_reconcile[0]
+                        else:
+                            item.full_reconcile_id = full_reconcile
+
+                    # Sincronizar partial_reconcile_id
+                    matched_ids = (
+                        linha_extrato.get('matched_debit_ids', [])
+                        or linha_extrato.get('matched_credit_ids', [])
+                    )
+                    if matched_ids:
+                        item.partial_reconcile_id = matched_ids[-1]
+
+                    extrato_reconciliado = True
+                    mensagem_resultado = (
+                        "Extrato já reconciliado no Odoo (manual) - sincronizado"
+                    )
+                else:
+                    logger.info(
+                        f"  Sem linha disponível e extrato não reconciliado no Odoo. "
+                        f"Marcando apenas localmente."
+                    )
+                    mensagem_resultado = (
+                        "Título payable já quitado no Odoo - extrato não reconciliado "
+                        "(payment original não usou conta PENDENTES e "
+                        "extrato não reconciliado no Odoo)"
+                    )
+
+                    # Buscar partial_reconcile do payment para referência
+                    primeiro_partial_id = matched_debit_ids[0]
+                    item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
+                        primeiro_partial_id
+                    )
+        else:
+            mensagem_resultado = (
+                "Título payable já quitado no Odoo - marcado localmente"
+            )
+
+        # Capturar snapshot DEPOIS
+        snapshot_depois = {
+            'titulo': titulo_odoo,
+            'extrato_reconciliado': extrato_reconciliado,
+            'partial_reconcile_id': item.partial_reconcile_id
+        }
+        item.set_snapshot_depois(snapshot_depois)
+
+        # O título já está quitado, então saldo = 0
         item.titulo_saldo_antes = 0
         item.titulo_saldo_depois = 0
+
+        # Atualizar status
         item.status = 'CONCILIADO'
         item.processado_em = agora_utc_naive()
-        item.mensagem = "Título payable já quitado no Odoo — marcado localmente"
-
-        # Tentar extrair partial_reconcile
-        if matched_debit_ids:
-            item.partial_reconcile_id = matched_debit_ids[-1] if isinstance(matched_debit_ids, list) else matched_debit_ids
+        item.mensagem = mensagem_resultado
 
         logger.info(
-            f"  ✅ Pagamento marcado localmente: "
-            f"titulo_id={titulo_odoo_id}, já quitado"
+            f"  ✅ Concluído: partial_reconcile_id={item.partial_reconcile_id}, "
+            f"extrato_reconciliado={extrato_reconciliado}"
         )
 
         return {
@@ -1016,7 +1180,9 @@ class ExtratoConciliacaoService:
             'saldo_antes': 0,
             'saldo_depois': 0,
             'partial_reconcile_id': item.partial_reconcile_id,
-            'mensagem': 'Título payable já quitado no Odoo',
+            'sincronizado_do_odoo': True,
+            'extrato_reconciliado': extrato_reconciliado,
+            'mensagem': mensagem_resultado
         }
 
     def _buscar_linha_credito(self, move_id: int) -> Optional[int]:
@@ -1756,6 +1922,150 @@ class ExtratoConciliacaoService:
                 return linha
 
         logger.warning(f"  Nenhuma linha PENDENTES ou bancária disponível encontrada")
+        return None
+
+    def _buscar_linha_payment_pendentes_pagamento(
+        self, matched_debit_ids: List[int]
+    ) -> Optional[Dict]:
+        """
+        Busca a linha CREDIT do payment na conta PAGAMENTOS PENDENTES (26868) ou bancária.
+
+        Versão para pagamentos outbound (contas a pagar).
+        Quando um título payable é baixado, o payment cria duas linhas:
+        - Uma linha de DÉBITO na conta liability_payable (reconcilia com título)
+        - Uma linha de CRÉDITO na conta PENDENTES (aguarda reconciliação com extrato)
+
+        Quando o payment é criado manualmente no Odoo, a linha de CRÉDITO pode estar
+        na conta bancária diretamente (não na PENDENTES). O fallback cobre esse caso.
+
+        Args:
+            matched_debit_ids: Lista de IDs de partial_reconcile do título payable
+
+        Returns:
+            Dict com dados da linha (inclui 'account_id' para o caller saber a conta) ou None
+        """
+        if not matched_debit_ids:
+            return None
+
+        logger.info(
+            f"  Buscando linha CREDIT PENDENTES nos partial_reconciles: "
+            f"{matched_debit_ids}"
+        )
+
+        # Buscar os partial_reconciles
+        partials = self.connection.search_read(
+            'account.partial.reconcile',
+            [['id', 'in', matched_debit_ids]],
+            fields=['id', 'credit_move_id', 'debit_move_id', 'amount']
+        )
+
+        if not partials:
+            logger.warning(f"  Nenhum partial_reconcile encontrado")
+            return None
+
+        # Para cada partial, buscar a linha de débito (do payment → liability_payable)
+        for p in partials:
+            debit_move = p.get('debit_move_id')
+            if not debit_move:
+                continue
+
+            debit_line_id = (
+                debit_move[0] if isinstance(debit_move, (list, tuple)) else debit_move
+            )
+
+            # Buscar a linha de débito
+            debit_line = self.connection.search_read(
+                'account.move.line',
+                [['id', '=', debit_line_id]],
+                fields=['id', 'payment_id', 'move_id', 'account_id']
+            )
+
+            if not debit_line or not debit_line[0].get('payment_id'):
+                continue
+
+            # Tem payment vinculado - buscar o move do payment
+            payment_id = debit_line[0]['payment_id']
+            payment_id_num = (
+                payment_id[0] if isinstance(payment_id, (list, tuple)) else payment_id
+            )
+
+            payment = self.connection.search_read(
+                'account.payment',
+                [['id', '=', payment_id_num]],
+                fields=['id', 'name', 'move_id']
+            )
+
+            if not payment or not payment[0].get('move_id'):
+                continue
+
+            # Buscar move do payment
+            payment_move_id = payment[0]['move_id']
+            payment_move_id_num = (
+                payment_move_id[0]
+                if isinstance(payment_move_id, (list, tuple))
+                else payment_move_id
+            )
+
+            # PASSO 1: Buscar linha de CRÉDITO na conta PENDENTES (26868)
+            linhas_pendentes = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', payment_move_id_num],
+                    ['account_id', '=', CONTA_PAGAMENTOS_PENDENTES],
+                    ['credit', '>', 0],
+                    ['reconciled', '=', False]
+                ],
+                fields=[
+                    'id', 'name', 'credit', 'amount_residual',
+                    'account_id', 'company_id'
+                ]
+            )
+
+            if linhas_pendentes:
+                logger.info(
+                    f"  Encontrada linha CREDIT PENDENTES: "
+                    f"payment={payment[0]['name']}, "
+                    f"linha_id={linhas_pendentes[0]['id']}"
+                )
+                return linhas_pendentes[0]
+
+            # PASSO 2 (FALLBACK): Buscar linha de crédito em QUALQUER conta
+            # (exceto liability_payable e PENDENTES)
+            # Cobre payments manuais no Odoo que usam conta bancária diretamente
+            linhas_credit_fallback = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', payment_move_id_num],
+                    ['credit', '>', 0],
+                    ['reconciled', '=', False],
+                    ['account_id', '!=', CONTA_PAGAMENTOS_PENDENTES],
+                ],
+                fields=[
+                    'id', 'name', 'credit', 'amount_residual',
+                    'account_id', 'account_type', 'company_id'
+                ]
+            )
+
+            # Filtrar: excluir linhas na conta liability_payable (fornecedores)
+            for linha in linhas_credit_fallback:
+                account_type = linha.get('account_type')
+                if account_type == 'liability_payable':
+                    continue
+                account_id = linha.get('account_id')
+                account_display = (
+                    account_id[1] if isinstance(account_id, (list, tuple))
+                    else account_id
+                )
+                logger.info(
+                    f"  [FALLBACK] Encontrada linha de crédito em conta alternativa: "
+                    f"payment={payment[0]['name']}, linha_id={linha['id']}, "
+                    f"conta={account_display}"
+                )
+                return linha
+
+        logger.warning(
+            f"  Nenhuma linha CREDIT PENDENTES ou bancária disponível encontrada"
+        )
         return None
 
     def _buscar_partial_reconcile_linha(self, linha_id: int) -> Optional[int]:
