@@ -139,6 +139,8 @@ function renderizarTabela(componentes) {
             <td class="text-center col-embalagem">${comp.tipo_embalagem || '-'}</td>
             <td class="text-center col-mp">${comp.tipo_materia_prima || '-'}</td>
             <td class="text-center col-marca">${comp.categoria_produto || '-'}</td>
+            <td class="text-end col-leadtime">${comp.lead_time != null ? comp.lead_time : '-'}</td>
+            <td class="text-end col-lotemin">${comp.lote_minimo_compra != null ? formatarNumero(comp.lote_minimo_compra) : '-'}</td>
             <td class="text-end col-estoque ${classeValor(comp.estoque_atual)}">${formatarNumero(comp.estoque_atual)}</td>
             <td class="text-end col-consumo ${classeValor(comp.consumo_carteira)}">${formatarNumero(comp.consumo_carteira)}</td>
             <td class="text-end col-saldo ${classeValor(comp.saldo_carteira)}">${formatarNumero(comp.saldo_carteira)}</td>
@@ -200,6 +202,8 @@ function toggleColunas() {
         'embalagem': document.getElementById('col-embalagem').checked,
         'mp': document.getElementById('col-mp').checked,
         'marca': document.getElementById('col-marca').checked,
+        'leadtime': document.getElementById('col-leadtime').checked,
+        'lotemin': document.getElementById('col-lotemin').checked,
         'estoque': document.getElementById('col-estoque').checked,
         'consumo': document.getElementById('col-consumo').checked,
         'saldo': document.getElementById('col-saldo').checked,
@@ -252,11 +256,11 @@ function mudarTamanhoFonte(tamanho) {
 
     // Atualizar botões ativos (nova estrutura com btn-group)
     document.querySelectorAll('.barra-compacta .btn-group .btn[data-size]').forEach(btn => {
-        btn.classList.remove('active', 'btn-outline-primary');
-        btn.classList.add('btn-outline-secondary');
+        btn.classList.remove('active', 'btn-light');
+        btn.classList.add('btn-outline-light');
         if (btn.dataset.size === tamanho) {
-            btn.classList.add('active', 'btn-outline-primary');
-            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('active', 'btn-light');
+            btn.classList.remove('btn-outline-light');
         }
     });
 }
@@ -266,8 +270,21 @@ function mudarTamanhoFonte(tamanho) {
 // ============================================================
 
 function formatarNumero(valor) {
-    if (valor === 0) return '-';
-    return parseFloat(valor).toFixed(2).replace('.', ',');
+    if (valor === 0 || valor === null || valor === undefined) return '-';
+    const num = parseFloat(valor);
+    if (isNaN(num)) return '-';
+
+    // Decimais condicionais: 0 se inteiro, senão até 2 (sem zeros à direita)
+    let decimals = 0;
+    if (num % 1 !== 0) {
+        const dec = num.toFixed(2).split('.')[1].replace(/0+$/, '');
+        decimals = dec.length;
+    }
+
+    return num.toLocaleString('pt-BR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
 }
 
 function classeValor(valor) {
@@ -337,7 +354,7 @@ function abrirModalDetalhes(codProduto, nomeProduto) {
                 <td>${item.num_requisicao || '-'}</td>
                 <td>${item.num_pedido || '-'}</td>
                 <td><small>${item.fornecedor || '-'}</small></td>
-                <td class="text-end fw-bold">${item.saldo.toFixed(2).replace('.', ',')}</td>
+                <td class="text-end fw-bold">${formatarNumero(item.saldo)}</td>
                 <td>${item.data_chegada ? formatarData(item.data_chegada) : '-'}${item.atrasado ? ' <span class="badge bg-danger">ATRASADO</span>' : ''}</td>
                 <td><small>${item.status_pedido || item.status_requisicao || '-'}</small></td>
             `;

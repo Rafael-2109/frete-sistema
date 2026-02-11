@@ -139,6 +139,11 @@ thead .sticky-col-produto {
     text-align: right !important;
 }
 
+.col-leadtime, .col-lotemin {
+    min-width: 65px;
+    text-align: right !important;
+}
+
 /* Colunas de projeção (D0-D60) */
 .col-projecao {
     min-width: 60px;
@@ -157,6 +162,8 @@ thead .sticky-col-produto {
 .valor-negativo {
     color: var(--bs-danger, #dc3545);
     font-weight: 600;
+    background-color: hsla(0, 84%, 60%, 0.1);
+    border-radius: 2px;
 }
 
 .valor-zero {
@@ -172,6 +179,7 @@ thead .sticky-col-produto {
 [data-bs-theme="dark"] .valor-negativo,
 [data-theme="dark"] .valor-negativo {
     color: #f87171;
+    background-color: hsla(0, 84%, 60%, 0.15);
 }
 
 /* Botões de tamanho de fonte (na barra compacta) */
@@ -181,9 +189,10 @@ thead .sticky-col-produto {
 }
 
 .barra-compacta .btn-group .btn.active {
-    background: var(--bs-primary, #0d6efd);
-    color: white;
-    border-color: var(--bs-primary, #0d6efd);
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--bs-primary, #667eea);
+    border-color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
 }
 
 /* Botão XS */

@@ -47,15 +47,15 @@
         <!-- Direita: Tamanho fonte + Expandir + Voltar -->
         <div class="d-flex align-items-center gap-1">
             <div class="btn-group btn-group-sm" role="group">
-                <button class="btn btn-outline-secondary btn-xs" data-size="very-small" onclick="mudarTamanhoFonte('very-small')" title="Muito pequeno">XS</button>
-                <button class="btn btn-outline-secondary btn-xs" data-size="small" onclick="mudarTamanhoFonte('small')" title="Pequeno">S</button>
-                <button class="btn btn-outline-primary btn-xs active" data-size="medium" onclick="mudarTamanhoFonte('medium')" title="Médio">M</button>
-                <button class="btn btn-outline-secondary btn-xs" data-size="large" onclick="mudarTamanhoFonte('large')" title="Grande">L</button>
+                <button class="btn btn-outline-light btn-xs" data-size="very-small" onclick="mudarTamanhoFonte('very-small')" title="Muito pequeno">XS</button>
+                <button class="btn btn-outline-light btn-xs" data-size="small" onclick="mudarTamanhoFonte('small')" title="Pequeno">S</button>
+                <button class="btn btn-light btn-xs active" data-size="medium" onclick="mudarTamanhoFonte('medium')" title="Médio">M</button>
+                <button class="btn btn-outline-light btn-xs" data-size="large" onclick="mudarTamanhoFonte('large')" title="Grande">L</button>
             </div>
-            <button class="btn btn-sm btn-outline-secondary btn-compacto" type="button" data-bs-toggle="collapse" data-bs-target="#filtros-avancados" aria-expanded="false" aria-controls="filtros-avancados" id="btn-toggle-filtros">
+            <button class="btn btn-sm btn-outline-light btn-compacto" type="button" data-bs-toggle="collapse" data-bs-target="#filtros-avancados" aria-expanded="false" aria-controls="filtros-avancados" id="btn-toggle-filtros">
                 <i class="fas fa-sliders-h"></i>
             </button>
-            <a href="{{ url_for('manufatura.index') }}" class="btn btn-sm btn-outline-secondary btn-compacto" title="Voltar">
+            <a href="{{ url_for('manufatura.index') }}" class="btn btn-sm btn-outline-light btn-compacto" title="Voltar">
                 <i class="fas fa-arrow-left"></i>
             </a>
         </div>
@@ -78,6 +78,14 @@
                 <div class="form-check form-check-inline form-check-sm">
                     <input class="form-check-input col-toggle" type="checkbox" id="col-marca" value="marca" checked>
                     <label class="form-check-label" for="col-marca">Marca</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-leadtime" value="leadtime" checked>
+                    <label class="form-check-label" for="col-leadtime">LT</label>
+                </div>
+                <div class="form-check form-check-inline form-check-sm">
+                    <input class="form-check-input col-toggle" type="checkbox" id="col-lotemin" value="lotemin" checked>
+                    <label class="form-check-label" for="col-lotemin">Lote</label>
                 </div>
                 <div class="form-check form-check-inline form-check-sm">
                     <input class="form-check-input col-toggle" type="checkbox" id="col-estoque" value="estoque" checked>
@@ -150,6 +158,8 @@
                             <th class="text-center col-embalagem">Embalagem</th>
                             <th class="text-center col-mp">MP</th>
                             <th class="text-center col-marca">Marca</th>
+                            <th class="text-end col-leadtime">Lead<br>Time</th>
+                            <th class="text-end col-lotemin">Lote<br>Mín.</th>
                             <th class="text-end col-estoque">Estoque<br>Atual</th>
                             <th class="text-end col-consumo">Consumo<br>Carteira</th>
                             <th class="text-end col-saldo">Saldo<br>Carteira</th>
