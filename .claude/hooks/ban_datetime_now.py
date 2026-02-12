@@ -100,6 +100,7 @@ def check_text(text: str, file_path: str):
             "==================================================\n"
         )
         print(msg, file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

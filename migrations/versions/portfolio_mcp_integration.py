@@ -8,7 +8,7 @@ Create Date: 2025-07-28 00:18:00.000000
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 # revision identifiers
 revision = 'portfolio_mcp_integration'
@@ -27,8 +27,8 @@ def upgrade():
         sa.Column('config_type', sa.String(50), nullable=False),  # json, string, number, boolean
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=False, default=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -49,7 +49,7 @@ def upgrade():
         sa.Column('execution_time_ms', sa.Integer(), nullable=True),
         sa.Column('success', sa.Boolean(), nullable=False, default=True),
         sa.Column('error_message', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
         sa.PrimaryKeyConstraint('id'),
         sa.Index('idx_mcp_query_log_user_date', 'user_id', 'created_at'),
         sa.Index('idx_mcp_query_log_query_type', 'query_type'),
@@ -72,8 +72,8 @@ def upgrade():
         sa.Column('acknowledged_by', sa.String(100), nullable=True),
         sa.Column('acknowledged_at', sa.DateTime(), nullable=True),
         sa.Column('expires_at', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('insight_id', name='uq_mcp_portfolio_insights_id'),
         sa.Index('idx_mcp_insights_type_severity', 'insight_type', 'severity'),
@@ -98,7 +98,7 @@ def upgrade():
         sa.Column('is_active', sa.Boolean(), nullable=False, default=True),
         sa.Column('validated_accuracy', sa.Numeric(3, 2), nullable=True),
         sa.Column('validation_date', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
         sa.Column('expires_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('prediction_id', name='uq_mcp_portfolio_predictions_id'),
@@ -115,8 +115,8 @@ def upgrade():
         sa.Column('data_json', sa.JSON(), nullable=False),
         sa.Column('metadata_json', sa.JSON(), nullable=True),
         sa.Column('hit_count', sa.Integer(), nullable=False, default=0),
-        sa.Column('last_accessed', sa.DateTime(), nullable=False, default=datetime.utcnow),
-        sa.Column('created_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
+        sa.Column('last_accessed', sa.DateTime(), nullable=False, default=agora_utc_naive),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
         sa.Column('expires_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('cache_key', name='uq_mcp_portfolio_cache_key'),
@@ -133,8 +133,8 @@ def upgrade():
         sa.Column('preference_value', sa.Text(), nullable=True),
         sa.Column('preference_type', sa.String(50), nullable=False),  # dashboard, alerts, analysis
         sa.Column('is_active', sa.Boolean(), nullable=False, default=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, default=datetime.utcnow),
+        sa.Column('created_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, default=agora_utc_naive),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('user_id', 'preference_key', name='uq_mcp_user_preferences'),
         sa.Index('idx_mcp_user_prefs_user', 'user_id'),
@@ -213,7 +213,7 @@ def upgrade():
                 config_type=type_,
                 description=desc,
                 is_active=True,
-                created_at=datetime.utcnow()
+                created_at=agora_utc_naive()
             )
         )
 

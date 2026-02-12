@@ -18,12 +18,11 @@ Motos que ainda não foram vendidas/reservadas devem ter:
 """
 import sys
 import os
-from datetime import datetime
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import create_app, db
 from app.motochefe.models.produto import Moto
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import text
 
 
@@ -76,7 +75,7 @@ def corrigir_valores_padrao_motos():
             print(f'   Encontradas {len(motos_disponiveis_reservadas)} motos DISPONÍVEIS marcadas como reservadas')
             for moto in motos_disponiveis_reservadas:
                 moto.reservado = False
-                moto.atualizado_em = datetime.utcnow()
+                moto.atualizado_em = agora_utc_naive()
                 moto.atualizado_por = 'Script Correção Padrões'
                 total_corrigidas += 1
             print(f'   ✅ {len(motos_disponiveis_reservadas)} motos corrigidas')
@@ -95,7 +94,7 @@ def corrigir_valores_padrao_motos():
             print(f'   Encontradas {len(motos_reservadas_nao_marcadas)} motos RESERVADAS/VENDIDAS sem flag reservado')
             for moto in motos_reservadas_nao_marcadas:
                 moto.reservado = True
-                moto.atualizado_em = datetime.utcnow()
+                moto.atualizado_em = agora_utc_naive()
                 moto.atualizado_por = 'Script Correção Padrões'
                 total_corrigidas += 1
             print(f'   ✅ {len(motos_reservadas_nao_marcadas)} motos corrigidas')
@@ -123,7 +122,7 @@ def corrigir_valores_padrao_motos():
             if moto.status_pagamento_custo != status_correto:
                 print(f'   Moto {moto.numero_chassi}: {moto.status_pagamento_custo} → {status_correto}')
                 moto.status_pagamento_custo = status_correto
-                moto.atualizado_em = datetime.utcnow()
+                moto.atualizado_em = agora_utc_naive()
                 moto.atualizado_por = 'Script Correção Padrões'
                 inconsistencias_pagamento += 1
                 total_corrigidas += 1
@@ -147,7 +146,7 @@ def corrigir_valores_padrao_motos():
             for moto in motos_pendentes_com_empresa:
                 print(f'   Moto {moto.numero_chassi}: removendo empresa_pagadora_id={moto.empresa_pagadora_id}')
                 moto.empresa_pagadora_id = None
-                moto.atualizado_em = datetime.utcnow()
+                moto.atualizado_em = agora_utc_naive()
                 moto.atualizado_por = 'Script Correção Padrões'
                 total_corrigidas += 1
             print(f'   ✅ {len(motos_pendentes_com_empresa)} motos corrigidas')

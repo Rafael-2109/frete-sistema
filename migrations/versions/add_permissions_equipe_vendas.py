@@ -7,7 +7,7 @@ Create Date: 2025-01-27 16:54:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 # revision identifiers, used by Alembic.
 revision = 'add_permissions_equipe_vendas'
@@ -32,7 +32,7 @@ def upgrade():
         sa.Column('descricao', sa.String(255), nullable=True),
         sa.Column('nivel_hierarquico', sa.Integer(), default=0, nullable=False),
         sa.Column('ativo', sa.Boolean(), default=True, nullable=False),
-        sa.Column('criado_em', sa.DateTime(), default=datetime.utcnow, nullable=False),
+        sa.Column('criado_em', sa.DateTime(), default=agora_utc_naive, nullable=False),
         sa.Column('criado_por', sa.Integer(), sa.ForeignKey('usuarios.id'), nullable=True)
     )
     
@@ -46,7 +46,7 @@ def upgrade():
         sa.Column('cor', sa.String(7), default='#007bff', nullable=True),
         sa.Column('ativo', sa.Boolean(), default=True, nullable=False),
         sa.Column('ordem', sa.Integer(), default=0, nullable=False),
-        sa.Column('criado_em', sa.DateTime(), default=datetime.utcnow, nullable=False)
+        sa.Column('criado_em', sa.DateTime(), default=agora_utc_naive, nullable=False)
     )
     
     # Tabela funcao_modulo  
@@ -60,7 +60,7 @@ def upgrade():
         sa.Column('nivel_critico', sa.String(10), default='NORMAL', nullable=False),
         sa.Column('ativo', sa.Boolean(), default=True, nullable=False),
         sa.Column('ordem', sa.Integer(), default=0, nullable=False),
-        sa.Column('criado_em', sa.DateTime(), default=datetime.utcnow, nullable=False),
+        sa.Column('criado_em', sa.DateTime(), default=agora_utc_naive, nullable=False),
         sa.UniqueConstraint('modulo_id', 'nome', name='uq_funcao_modulo_nome')
     )
     
@@ -72,7 +72,7 @@ def upgrade():
         sa.Column('pode_visualizar', sa.Boolean(), default=False, nullable=False),
         sa.Column('pode_editar', sa.Boolean(), default=False, nullable=False),
         sa.Column('concedida_por', sa.Integer(), sa.ForeignKey('usuarios.id'), nullable=True),
-        sa.Column('concedida_em', sa.DateTime(), default=datetime.utcnow, nullable=False),
+        sa.Column('concedida_em', sa.DateTime(), default=agora_utc_naive, nullable=False),
         sa.Column('expira_em', sa.DateTime(), nullable=True),
         sa.Column('observacoes', sa.String(255), nullable=True),
         sa.Column('ativo', sa.Boolean(), default=True, nullable=False),
@@ -86,7 +86,7 @@ def upgrade():
         sa.Column('vendedor', sa.String(100), nullable=False),
         sa.Column('ativo', sa.Boolean(), default=True, nullable=False),
         sa.Column('adicionado_por', sa.Integer(), sa.ForeignKey('usuarios.id'), nullable=True),
-        sa.Column('adicionado_em', sa.DateTime(), default=datetime.utcnow, nullable=False),
+        sa.Column('adicionado_em', sa.DateTime(), default=agora_utc_naive, nullable=False),
         sa.Column('observacoes', sa.String(255), nullable=True),
         sa.UniqueConstraint('usuario_id', 'vendedor', name='uq_usuario_vendedor')
     )
@@ -98,7 +98,7 @@ def upgrade():
         sa.Column('equipe_vendas', sa.String(100), nullable=False),
         sa.Column('ativo', sa.Boolean(), default=True, nullable=False),
         sa.Column('adicionado_por', sa.Integer(), sa.ForeignKey('usuarios.id'), nullable=True),
-        sa.Column('adicionado_em', sa.DateTime(), default=datetime.utcnow, nullable=False),
+        sa.Column('adicionado_em', sa.DateTime(), default=agora_utc_naive, nullable=False),
         sa.Column('observacoes', sa.String(255), nullable=True),
         sa.UniqueConstraint('usuario_id', 'equipe_vendas', name='uq_usuario_equipe')
     )
@@ -115,7 +115,7 @@ def upgrade():
         sa.Column('dados_depois', sa.Text(), nullable=True),
         sa.Column('ip_origem', sa.String(45), nullable=True),
         sa.Column('user_agent', sa.String(500), nullable=True),
-        sa.Column('criado_em', sa.DateTime(), default=datetime.utcnow, nullable=False)
+        sa.Column('criado_em', sa.DateTime(), default=agora_utc_naive, nullable=False)
     )
     
     # 3. Criar índices para performance

@@ -24,12 +24,11 @@ import os
 import time
 import requests
 import re
-from datetime import datetime
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import create_app, db
 from app.motochefe.models import ClienteMoto, VendedorMoto
+from app.utils.timezone import agora_utc_naive
 
 
 def limpar_cnpj(cnpj):
@@ -217,7 +216,7 @@ def atualizar_crossdocking_clientes(modo='normal', delay_segundos=5):
                     print(f'   ℹ️  Mantido como CrossDocking=False')
 
                 # Marcar como atualizado
-                cliente.atualizado_em = datetime.utcnow()
+                cliente.atualizado_em = agora_utc_naive()
                 cliente.atualizado_por = 'Script Migração CrossDocking'
 
                 if crossdocking_anterior != cliente.crossdocking:
