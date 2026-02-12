@@ -1504,7 +1504,25 @@ class RecebimentoLf(db.Model):
     status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
     fase_atual = db.Column(db.Integer, default=0, nullable=False)
     etapa_atual = db.Column(db.Integer, default=0, nullable=False)
-    total_etapas = db.Column(db.Integer, default=18, nullable=False)
+    total_etapas = db.Column(db.Integer, default=26, nullable=False)
+
+    # === Transferencia FB -> CD (Fase 6) ===
+    # Picking de saida FB
+    odoo_transfer_out_picking_id = db.Column(db.Integer, nullable=True)
+    odoo_transfer_out_picking_name = db.Column(db.String(50), nullable=True)
+
+    # Invoice/NF-e de transferencia
+    odoo_transfer_invoice_id = db.Column(db.Integer, nullable=True)
+    odoo_transfer_invoice_name = db.Column(db.String(50), nullable=True)
+
+    # Picking de entrada CD
+    odoo_transfer_in_picking_id = db.Column(db.Integer, nullable=True)
+    odoo_transfer_in_picking_name = db.Column(db.String(50), nullable=True)
+
+    # Status da transferencia
+    # Valores: None | 'sem_transferencia' | 'pendente' | 'processando' | 'concluido' | 'erro'
+    transfer_status = db.Column(db.String(20), nullable=True)
+    transfer_erro_mensagem = db.Column(db.Text, nullable=True)
 
     # Erro e retentativas
     erro_mensagem = db.Column(db.Text, nullable=True)
@@ -1552,6 +1570,16 @@ class RecebimentoLf(db.Model):
             'erro_mensagem': self.erro_mensagem,
             'tentativas': self.tentativas,
             'job_id': self.job_id,
+            # Transferencia FB -> CD
+            'odoo_transfer_out_picking_id': self.odoo_transfer_out_picking_id,
+            'odoo_transfer_out_picking_name': self.odoo_transfer_out_picking_name,
+            'odoo_transfer_invoice_id': self.odoo_transfer_invoice_id,
+            'odoo_transfer_invoice_name': self.odoo_transfer_invoice_name,
+            'odoo_transfer_in_picking_id': self.odoo_transfer_in_picking_id,
+            'odoo_transfer_in_picking_name': self.odoo_transfer_in_picking_name,
+            'transfer_status': self.transfer_status,
+            'transfer_erro_mensagem': self.transfer_erro_mensagem,
+            # Auditoria
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
             'processado_em': self.processado_em.isoformat() if self.processado_em else None,
@@ -1599,6 +1627,9 @@ class RecebimentoLfLote(db.Model):
     odoo_lot_id = db.Column(db.Integer, nullable=True)
     odoo_move_line_id = db.Column(db.Integer, nullable=True)
 
+    # Lot ID na company 4 (CD) — lotes sao company-specific no Odoo
+    odoo_lot_id_cd = db.Column(db.Integer, nullable=True)
+
     # Status
     processado = db.Column(db.Boolean, default=False, nullable=False)
 
@@ -1623,5 +1654,7 @@ class RecebimentoLfLote(db.Model):
             'quantidade': float(self.quantidade) if self.quantidade else 0,
             'data_validade': self.data_validade.isoformat() if self.data_validade else None,
             'produto_tracking': self.produto_tracking,
+            'odoo_lot_id': self.odoo_lot_id,
+            'odoo_lot_id_cd': self.odoo_lot_id_cd,
             'processado': self.processado,
         }

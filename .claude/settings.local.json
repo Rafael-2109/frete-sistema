@@ -65,7 +65,9 @@
       "WebFetch(domain:docs.aiohttp.org)",
       "mcp__render__get_service",
       "Bash(for skill in /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/*/SKILL.md)",
-      "Bash(done)"
+      "Bash(done)",
+      "WebFetch(domain:render.com)",
+      "WebFetch(domain:www.crystaldba.ai)"
     ],
     "deny": []
   },

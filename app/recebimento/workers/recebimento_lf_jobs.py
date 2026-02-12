@@ -30,7 +30,7 @@ def _get_redis():
     return Redis.from_url(REDIS_URL)
 
 
-def _atualizar_progresso(recebimento_id, fase, etapa, total, mensagem=''):
+def _atualizar_progresso(recebimento_id, fase, etapa, total, mensagem='', **extra):
     """Atualiza progresso no Redis para consulta pela tela de status."""
     try:
         redis_conn = _get_redis()
@@ -42,6 +42,8 @@ def _atualizar_progresso(recebimento_id, fase, etapa, total, mensagem=''):
             'percentual': int((etapa / total) * 100) if total > 0 else 0,
             'mensagem': mensagem,
         }
+        # Campos extras (ex: transfer_status, status)
+        progresso.update(extra)
         redis_conn.setex(
             f'recebimento_lf_progresso:{recebimento_id}',
             PROGRESSO_TTL,
@@ -72,7 +74,7 @@ def _liberar_lock(dfe_id):
 
 def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
     """
-    Job RQ que processa um Recebimento LF no Odoo (5 fases, 18 passos).
+    Job RQ que processa um Recebimento LF no Odoo (6 fases, 26 passos).
 
     Este job e enfileirado ao salvar recebimento (fire-and-forget).
     O usuario nao espera — o resultado e consultado pela tela de status.
@@ -114,12 +116,22 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
             return {'status': 'lock', 'mensagem': 'DFe ja em processamento'}
 
         try:
-            _atualizar_progresso(recebimento_id, 0, 0, 18, 'Iniciando processamento...')
+            total = recebimento.total_etapas or 26
+            _atualizar_progresso(recebimento_id, 0, 0, total, 'Iniciando processamento...')
 
             service = RecebimentoLfOdooService()
             resultado = service.processar_recebimento(recebimento_id, usuario_nome)
 
-            _atualizar_progresso(recebimento_id, 5, 18, 18, 'Processado com sucesso!')
+            rec_final = RecebimentoLf.query.get(recebimento_id)
+            final_fase = rec_final.fase_atual if rec_final else 6
+            final_etapa = rec_final.etapa_atual if rec_final else total
+            final_transfer = rec_final.transfer_status if rec_final else None
+            _atualizar_progresso(
+                recebimento_id, final_fase, final_etapa, total,
+                'Processado com sucesso!',
+                transfer_status=final_transfer,
+                status='processado',
+            )
 
             logger.info(
                 f"[Job LF] Recebimento {recebimento_id} processado com sucesso "
@@ -130,7 +142,7 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
 
         except Exception as e:
             logger.error(f"[Job LF] Erro ao processar recebimento {recebimento_id}: {e}")
-            _atualizar_progresso(recebimento_id, 0, 0, 18, f'Erro: {str(e)[:100]}')
+            _atualizar_progresso(recebimento_id, 0, 0, total, f'Erro: {str(e)[:100]}')
             # Atualizar status no banco (pode ja ter sido feito pelo OdooService)
             try:
                 recebimento.status = 'erro'
@@ -142,3 +154,61 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
 
         finally:
             _liberar_lock(recebimento.odoo_dfe_id)
+
+
+def processar_transfer_fb_cd_job(recebimento_id):
+    """
+    Job RQ que processa APENAS a transferencia FB -> CD (etapas 19-26).
+
+    Usado para retry isolado quando o recebimento FB (etapas 1-18) ja concluiu
+    mas a transferencia falhou.
+
+    Args:
+        recebimento_id: ID do RecebimentoLf local
+
+    Returns:
+        Dict com resultado da transferencia
+    """
+    from app import create_app
+
+    app = create_app()
+    with app.app_context():
+        from app.recebimento.models import RecebimentoLf
+        from app.recebimento.services.recebimento_lf_odoo_service import RecebimentoLfOdooService
+
+        recebimento = RecebimentoLf.query.get(recebimento_id)
+        if not recebimento:
+            logger.error(f"[Job Transfer] Recebimento {recebimento_id} nao encontrado")
+            return {'status': 'erro', 'mensagem': 'Recebimento nao encontrado'}
+
+        total = recebimento.total_etapas or 26
+        _atualizar_progresso(
+            recebimento_id, 6, 19, total, 'Iniciando transferencia FB->CD...',
+            transfer_status='processando',
+        )
+
+        try:
+            service = RecebimentoLfOdooService()
+            resultado = service.processar_transfer_only(recebimento_id)
+
+            _atualizar_progresso(
+                recebimento_id, 6, 26, total, 'Transferencia concluida!',
+                transfer_status='concluido',
+                status='processado',
+            )
+
+            logger.info(
+                f"[Job Transfer] Recebimento {recebimento_id} transferencia concluida"
+            )
+            return resultado
+
+        except Exception as e:
+            logger.error(
+                f"[Job Transfer] Erro na transferencia {recebimento_id}: {e}"
+            )
+            _atualizar_progresso(
+                recebimento_id, 6, 0, total, f'Erro transfer: {str(e)[:100]}',
+                transfer_status='erro',
+                status='processado',
+            )
+            return {'status': 'erro', 'mensagem': str(e)[:500]}

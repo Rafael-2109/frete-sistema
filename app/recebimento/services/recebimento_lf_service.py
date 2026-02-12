@@ -506,7 +506,7 @@ class RecebimentoLfService:
                     recebimento.id,
                     usuario,
                     queue_name='recebimento',
-                    timeout='20m',
+                    timeout='45m',
                     retry=retry_config,
                 )
                 recebimento.job_id = job.id
@@ -602,7 +602,7 @@ class RecebimentoLfService:
                 recebimento.id,
                 recebimento.usuario,
                 queue_name='recebimento',
-                timeout='20m',
+                timeout='45m',
                 retry=retry_config,
             )
             recebimento.job_id = job.id
@@ -615,6 +615,73 @@ class RecebimentoLfService:
             raise
         except Exception as e:
             logger.error(f"Erro ao retry recebimento LF {recebimento_id}: {e}")
+            raise
+
+    def retry_transfer(self, recebimento_id):
+        """
+        Retry apenas da fase de transferencia FB -> CD (etapas 19-26).
+
+        Requisitos:
+        - Recebimento deve estar com status='processado' (FB OK)
+        - transfer_status deve ser 'erro'
+
+        Args:
+            recebimento_id: ID do RecebimentoLf
+
+        Returns:
+            RecebimentoLf re-enfileirado
+        """
+        try:
+            recebimento = RecebimentoLf.query.get(recebimento_id)
+            if not recebimento:
+                raise ValueError(f"Recebimento LF {recebimento_id} nao encontrado")
+
+            if recebimento.status != 'processado':
+                raise ValueError(
+                    f"Recebimento LF {recebimento_id} nao esta processado "
+                    f"(status={recebimento.status}). "
+                    "Retry transfer so e possivel apos FB concluir."
+                )
+
+            if recebimento.transfer_status not in ('erro', None, 'pendente'):
+                raise ValueError(
+                    f"Transfer status atual: {recebimento.transfer_status}. "
+                    "Retry so e possivel quando transfer_status='erro'."
+                )
+
+            # Reset transfer
+            recebimento.transfer_status = 'pendente'
+            recebimento.transfer_erro_mensagem = None
+            # Reset etapa para 18 (antes da fase 6)
+            if recebimento.etapa_atual >= 19:
+                recebimento.etapa_atual = 18
+            commit_with_retry(db.session)
+
+            from app.recebimento.workers.recebimento_lf_jobs import processar_transfer_fb_cd_job
+            from app.portal.workers import enqueue_job
+            from rq import Retry
+
+            retry_config = Retry(max=2, interval=[30, 120])
+
+            job = enqueue_job(
+                processar_transfer_fb_cd_job,
+                recebimento.id,
+                queue_name='recebimento',
+                timeout='45m',
+                retry=retry_config,
+            )
+            recebimento.job_id = job.id
+            commit_with_retry(db.session)
+
+            logger.info(
+                f"Retry transfer: Job RQ {job.id} para recebimento LF {recebimento.id}"
+            )
+            return recebimento
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao retry transfer {recebimento_id}: {e}")
             raise
 
     def _parse_data(self, data_str):

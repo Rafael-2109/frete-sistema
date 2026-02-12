@@ -249,8 +249,9 @@ def api_progresso(recebimento_id):
                 'etapa': recebimento.etapa_atual,
                 'total_etapas': recebimento.total_etapas,
                 'percentual': int((recebimento.etapa_atual / recebimento.total_etapas) * 100) if recebimento.total_etapas > 0 else 0,
-                'mensagem': recebimento.erro_mensagem or f'Fase {recebimento.fase_atual}/5',
+                'mensagem': recebimento.erro_mensagem or f'Fase {recebimento.fase_atual}/6',
                 'status': recebimento.status,
+                'transfer_status': recebimento.transfer_status,
             })
 
     except Exception as e:
@@ -279,4 +280,31 @@ def api_retry(recebimento_id):
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Erro ao retentar recebimento LF {recebimento_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@recebimento_lf_bp.route('/status/<int:recebimento_id>/retry-transfer', methods=['POST'])
+def api_retry_transfer(recebimento_id):
+    """
+    API: Retentar apenas a fase de transferencia FB -> CD.
+
+    Pre-requisito: recebimento com status='processado' e transfer_status='erro'.
+    """
+    try:
+        from app.recebimento.services.recebimento_lf_service import RecebimentoLfService
+
+        service = RecebimentoLfService()
+        recebimento = service.retry_transfer(recebimento_id)
+
+        return jsonify({
+            'success': True,
+            'recebimento_id': recebimento.id,
+            'transfer_status': recebimento.transfer_status,
+            'message': 'Transferencia FB->CD re-enfileirada para processamento.',
+        })
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Erro ao retry transfer {recebimento_id}: {e}")
         return jsonify({'error': str(e)}), 500
