@@ -327,40 +327,6 @@ class ControleCruzadoSeparacao(db.Model):
     def __repr__(self):
         return f'<ControleCruzado Lote:{self.separacao_lote_id} {self.num_pedido}-{self.cod_produto} Dif:{self.diferenca_detectada}>'
 
-class InconsistenciaFaturamento(db.Model):
-    """
-    Gestão de inconsistências entre faturamento e carteira
-    Para detectar e resolver NFs problemáticas
-    """
-    __tablename__ = 'inconsistencia_faturamento'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    tipo = db.Column(db.String(50), nullable=False, index=True)  # FATURAMENTO_EXCEDE_SALDO, FATURAMENTO_SEM_PEDIDO
-    
-    # 📋 DADOS DA INCONSISTÊNCIA
-    numero_nf = db.Column(db.String(20), nullable=False, index=True)
-    num_pedido = db.Column(db.String(50), nullable=True)
-    cod_produto = db.Column(db.String(50), nullable=False)
-    
-    # 📊 QUANTIDADES
-    qtd_faturada = db.Column(db.Numeric(15,3), nullable=False)
-    saldo_disponivel = db.Column(db.Numeric(15,3), nullable=True)
-    qtd_excesso = db.Column(db.Numeric(15,3), nullable=True)
-    
-    # 🎯 STATUS E RESOLUÇÃO
-    resolvida = db.Column(db.Boolean, default=False, index=True)
-    acao_tomada = db.Column(db.String(50), nullable=True)  # CANCELAR_NF, AJUSTE_MANUAL, etc
-    observacao_resolucao = db.Column(db.Text, nullable=True)
-    
-    # 🛡️ AUDITORIA
-    detectada_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
-    resolvida_em = db.Column(db.DateTime, nullable=True)
-    resolvida_por = db.Column(db.String(100), nullable=True)
-    
-    def __repr__(self):
-        return f'<Inconsistencia {self.tipo} NF:{self.numero_nf} Produto:{self.cod_produto}>'
-
-
 class TipoCarga(db.Model):
     """
     🎯 CONTROLE DE TIPO DE CARGA - SOLUÇÃO PARA CONFLITO DE REGRAS

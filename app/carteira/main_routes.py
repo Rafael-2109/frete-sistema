@@ -3,7 +3,7 @@ from flask_login import login_required
 from app import db
 from app.carteira.models import (
     CarteiraPrincipal, ControleCruzadoSeparacao,
-    InconsistenciaFaturamento, SaldoStandby
+    SaldoStandby
 )
 from app.estoque.services.compatibility_layer import SaldoEstoque
 from sqlalchemy import func, inspect
@@ -137,9 +137,6 @@ def index():
         inconsistencias_abertas = 0
         if inspector.has_table('controle_cruzado_separacao'):
             controles_pendentes = ControleCruzadoSeparacao.query.filter_by(resolvida=False).count()
-        if inspector.has_table('inconsistencia_faturamento'):
-            inconsistencias_abertas = InconsistenciaFaturamento.query.filter_by(resolvida=False).count()
-        
         # 📈 PEDIDOS COM EXPEDIÇÃO PRÓXIMA (7 dias)
         # NOTA: Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
         data_limite = date.today() + timedelta(days=7)

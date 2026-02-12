@@ -336,7 +336,6 @@ class ListaMateriaisHistorico(db.Model):
 
     __table_args__ = (
         db.Index('idx_historico_produto_data', 'cod_produto_produzido', 'alterado_em'),
-        db.Index('idx_historico_componente_data', 'cod_produto_componente', 'alterado_em'),
         db.Index('idx_historico_operacao_data', 'operacao', 'alterado_em'),
     )
 
@@ -528,10 +527,7 @@ class HistoricoPedidoCompras(db.Model):
     criado_em = db.Column(db.DateTime)
     atualizado_em = db.Column(db.DateTime)
 
-    __table_args__ = (
-        db.Index('idx_hist_ped_pedido_data', 'pedido_compra_id', 'alterado_em'),
-        db.Index('idx_hist_ped_num_data', 'num_pedido', 'alterado_em'),
-    )
+    __table_args__ = ()
 
     def to_dict(self):
         """Serializa para dict"""

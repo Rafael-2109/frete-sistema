@@ -15,7 +15,7 @@ from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImpor
 from app.estoque.models import MovimentacaoEstoque
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque, EmbarqueItem
-from app.carteira.models import FaturamentoParcialJustificativa, InconsistenciaFaturamento
+from app.carteira.models import FaturamentoParcialJustificativa
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class ProcessadorFaturamento:
     """
 
     def processar_nfs_importadas(
-        self, usuario: str = "Importação Odoo", limpar_inconsistencias: bool = True, nfs_especificas: List[str] = None
+        self, usuario: str = "Importação Odoo", nfs_especificas: List[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Processa NFs importadas seguindo lógica simplificada
@@ -37,7 +37,6 @@ class ProcessadorFaturamento:
 
         Args:
             usuario: Usuário responsável pelo processamento
-            limpar_inconsistencias: Se deve limpar inconsistências anteriores
             nfs_especificas: Lista de NFs específicas para processar (otimização)
                            Se None, busca NFs não processadas
 
@@ -61,19 +60,6 @@ class ProcessadorFaturamento:
         }
 
         try:
-            # 0. Limpar inconsistências anteriores se solicitado
-            if limpar_inconsistencias:
-                logger.info("🧹 Limpando inconsistências anteriores...")
-                try:
-                    # Limpar todas as inconsistências não resolvidas
-                    # Mantém as resolvidas como histórico
-                    deletadas = InconsistenciaFaturamento.query.filter_by(resolvida=False).delete()
-                    db.session.commit()
-                    logger.info(f"✅ {deletadas} inconsistências não resolvidas removidas antes do processamento")
-                except Exception as e:
-                    logger.warning(f"⚠️ Erro ao limpar inconsistências: {e}")
-                    db.session.rollback()
-
             # 1. Buscar NFs para processar
             if nfs_especificas:
                 # 🚀 OTIMIZAÇÃO: Processar apenas NFs específicas (novas ou atualizadas)
@@ -288,7 +274,6 @@ class ProcessadorFaturamento:
         # Usar o método já otimizado que pega TUDO que precisa
         resultado = self.processar_nfs_importadas(
             usuario="Sincronização Completa",
-            limpar_inconsistencias=True,
             nfs_especificas=None,  # None = busca automática de todas pendentes
         )
 
@@ -370,7 +355,6 @@ class ProcessadorFaturamento:
                 )
                 # Criar inconsistências para cada item divergente
                 for item_div in embarque_items_divergentes:
-                    self._gerar_inconsistencia_divergencia_embarque(nf, item_div, usuario, produtos_por_nf)
                     # Marcar erro de validação no EmbarqueItem
                     if not item_div.erro_validacao:
                         item_div.erro_validacao = (
@@ -665,9 +649,6 @@ class ProcessadorFaturamento:
         )
         logger.info(f"⚠️ FaturamentoProduto marcado como status_nf='SEM_LOTE' para NF {nf.numero_nf}")
 
-        # NOVO: Criar inconsistência NF_SEM_SEPARACAO
-        self._criar_inconsistencia_nf_sem_separacao(nf, produtos, usuario)
-
         for produto in produtos:
             # Pallet tem sync proprio (PalletSyncService) — pular para evitar duplicacao
             if produto.cod_produto == COD_PRODUTO_PALLET:
@@ -863,112 +844,6 @@ class ProcessadorFaturamento:
         except Exception as e:
             logger.error(f"❌ Erro ao atualizar EmbarqueItem do lote {lote_id} com NF {numero_nf}: {e}")
             return False
-
-    def _gerar_inconsistencia_divergencia_embarque(
-        self, nf: RelatorioFaturamentoImportado, embarque_item: EmbarqueItem, usuario: str, produtos_cache: dict = None
-    ):
-        """
-        Gera inconsistência para divergência NF x Embarque
-        IMPORTANTE: Uma linha por produto para facilitar análise
-        """
-        # 🚀 OTIMIZAÇÃO: Usar cache de produtos se disponível
-        if produtos_cache and nf.numero_nf in produtos_cache:
-            produtos = produtos_cache[nf.numero_nf]
-        else:
-            produtos = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
-        inconsistencias_criadas = 0
-
-        # Criar uma inconsistência por produto
-        for produto in produtos:
-            # Verificar se já existe inconsistência não resolvida para este produto
-            inc_existente = InconsistenciaFaturamento.query.filter_by(
-                numero_nf=nf.numero_nf, cod_produto=produto.cod_produto, tipo="DIVERGENCIA_NF_EMBARQUE", resolvida=False
-            ).first()
-
-            if inc_existente:
-                # Atualizar observação com informações mais recentes
-                inc_existente.observacao_resolucao = (
-                    f"NF {nf.numero_nf} produto {produto.cod_produto} com divergência: "
-                    f"Pedido NF: {nf.origem if hasattr(nf, 'origem') else 'N/A'}, "
-                    f"Pedido EmbarqueItem: {embarque_item.pedido}, "
-                    f"Embarque ID: {embarque_item.embarque_id}, "
-                    f"Lote: {embarque_item.separacao_lote_id}"
-                )
-                logger.debug(f"Inconsistência DIVERGENCIA_NF_EMBARQUE atualizada para produto {produto.cod_produto}")
-            else:
-                # Criar nova inconsistência
-                inc = InconsistenciaFaturamento()
-                inc.tipo = "DIVERGENCIA_NF_EMBARQUE"
-                inc.numero_nf = nf.numero_nf
-                inc.num_pedido = nf.origem if hasattr(nf, "origem") else None
-                inc.cod_produto = produto.cod_produto
-                inc.qtd_faturada = float(produto.qtd_produto_faturado)
-                inc.saldo_disponivel = None  # Não aplicável neste caso
-                inc.qtd_excesso = None  # Não aplicável
-                inc.resolvida = False
-                inc.acao_tomada = None  # Para usuário definir
-                inc.observacao_resolucao = (
-                    f"NF {nf.numero_nf} produto {produto.cod_produto} com divergência: "
-                    f"Pedido NF: {nf.origem if hasattr(nf, 'origem') else 'N/A'}, "
-                    f"Pedido EmbarqueItem: {embarque_item.pedido}, "
-                    f"Embarque ID: {embarque_item.embarque_id}, "
-                    f"Lote: {embarque_item.separacao_lote_id}"
-                )
-                # detectada_em tem default
-                inc.resolvida_em = None
-                inc.resolvida_por = None
-
-                db.session.add(inc)
-                inconsistencias_criadas += 1
-
-        if inconsistencias_criadas > 0:
-            logger.info(
-                f"⚠️ {inconsistencias_criadas} inconsistências DIVERGENCIA_NF_EMBARQUE criadas para NF {nf.numero_nf}"
-            )
-
-    def _criar_inconsistencia_nf_sem_separacao(self, nf: RelatorioFaturamentoImportado, produtos: list, usuario: str):
-        """
-        Cria inconsistência para NF sem separação
-        IMPORTANTE: Uma linha por produto para facilitar análise
-        """
-        inconsistencias_criadas = 0
-
-        # Criar uma inconsistência por produto
-        for produto in produtos:
-            # Verificar se já existe inconsistência não resolvida para este produto
-            inc_existente = InconsistenciaFaturamento.query.filter_by(
-                numero_nf=nf.numero_nf, cod_produto=produto.cod_produto, tipo="NF_SEM_SEPARACAO", resolvida=False
-            ).first()
-
-            if inc_existente:
-                logger.debug(f"Inconsistência já existe para NF {nf.numero_nf} produto {produto.cod_produto}")
-                continue
-
-            # Criar nova inconsistência
-            inc = InconsistenciaFaturamento()
-            inc.tipo = "NF_SEM_SEPARACAO"
-            inc.numero_nf = nf.numero_nf
-            inc.num_pedido = nf.origem if hasattr(nf, "origem") else None
-            inc.cod_produto = produto.cod_produto
-            inc.qtd_faturada = float(produto.qtd_produto_faturado)
-            inc.saldo_disponivel = None  # Não há separação
-            inc.qtd_excesso = None  # Não aplicável
-            inc.resolvida = False
-            inc.acao_tomada = None  # Para usuário definir
-            inc.observacao_resolucao = (
-                f"Produto {produto.cod_produto} - {produto.nome_produto[:50]}... "
-                f"faturado sem separação. Qtd: {produto.qtd_produto_faturado}. "
-                f"Verificar pedido {nf.origem if hasattr(nf, 'origem') else 'N/A'}"
-            )
-            # detectada_em tem default
-            inc.resolvida_em = None
-            inc.resolvida_por = None
-
-            db.session.add(inc)
-            inconsistencias_criadas += 1
-
-        if inconsistencias_criadas > 0:
-            logger.info(f"⚠️ {inconsistencias_criadas} inconsistências NF_SEM_SEPARACAO criadas para NF {nf.numero_nf}")
 
     def _atualizar_status_separacoes_faturadas(self) -> int:
         """

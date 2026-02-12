@@ -683,7 +683,6 @@ def create_app(config_name=None):
     from app.embarques.routes import embarques_bp
     from app.faturamento.routes import faturamento_bp
     from app.faturamento.api.atualizar_nf_api import atualizar_nf_bp
-    from app.faturamento.api.inconsistencias_api import inconsistencias_bp
     from app.localidades.routes import localidades_bp
     from app.main.routes import main_bp
     from app.monitoramento.routes import monitoramento_bp
@@ -742,8 +741,6 @@ def create_app(config_name=None):
     app.register_blueprint(embarques_bp)
     app.register_blueprint(faturamento_bp)
     app.register_blueprint(atualizar_nf_bp)
-    app.register_blueprint(inconsistencias_bp)
-
     # Importar e registrar blueprint de faturamentos parciais
     from app.carteira.api.faturamentos_parciais_api import faturamentos_parciais_bp
 
