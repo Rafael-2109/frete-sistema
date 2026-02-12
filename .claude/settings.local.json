@@ -67,7 +67,16 @@
       "Bash(for skill in /home/rafaelnascimento/projetos/frete_sistema/.claude/skills/*/SKILL.md)",
       "Bash(done)",
       "WebFetch(domain:render.com)",
-      "WebFetch(domain:www.crystaldba.ai)"
+      "WebFetch(domain:www.crystaldba.ai)",
+      "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/pallet/003_migrar_vale_pallet_para_documento.py /home/rafaelnascimento/projetos/frete_sistema/scripts/testar_correcao_timezone_cte.py /home/rafaelnascimento/projetos/frete_sistema/scripts/recebimento/002_corrigir_primeira_compra.py /home/rafaelnascimento/projetos/frete_sistema/scripts/recebimento/001_corrigir_razao_empresa_validacao_nf_po.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/backup_manager.py)",
+      "Bash(do echo \"=== $f ===\" grep -n \"sys.path.insert\\\\|from app.utils.timezone import\" \"$f\")",
+      "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/verify_backups.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/recovery_manager.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/restore_test.py /home/rafaelnascimento/projetos/frete_sistema/scripts/teste_importacao_odoo_compras.py /home/rafaelnascimento/projetos/frete_sistema/scripts/adicionar_auditoria_lista_materiais.py)",
+      "Bash(do echo '=== $f ===' grep -n \"sys.path.insert\\\\|from app.utils.timezone import\" $f)",
+      "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/corrigir_multiproduto_separacao.py /home/rafaelnascimento/projetos/frete_sistema/scripts/investigar_account_move_line_campos.py /home/rafaelnascimento/projetos/frete_sistema/scripts/analise_baixa_titulos/snapshot_titulo_recebimento.py /home/rafaelnascimento/projetos/frete_sistema/scripts/analise_baixa_titulos/consultar_extrato_odoo.py /home/rafaelnascimento/projetos/frete_sistema/scripts/analise_baixa_titulos/levantar_recebimentos_orfaos.py)",
+      "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/backfill_sincronizacao_extrato_comprovantes.py /home/rafaelnascimento/projetos/frete_sistema/scripts/reprocessar_ibscbs.py /home/rafaelnascimento/projetos/frete_sistema/scripts/testes/test_sincronizacao_contas_receber.py /home/rafaelnascimento/projetos/frete_sistema/scripts/documentar_tabelas_odoo_contas_receber.py /home/rafaelnascimento/projetos/frete_sistema/scripts/migracao_abatimentos_odoo.py)",
+      "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/backup_manager.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/verify_backups.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/recovery_manager.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/restore_test.py /home/rafaelnascimento/projetos/frete_sistema/scripts/corrigir_multiproduto_separacao.py)",
+      "Bash(do echo \"=== $f ===\" head -50 \"$f\")",
+      "Bash(echo:*)"
     ],
     "deny": []
   },

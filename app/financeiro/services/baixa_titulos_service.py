@@ -151,6 +151,7 @@ class BaixaTitulosService:
     def __init__(self, connection=None):
         self._connection = connection
         self._nfs_corrigidas_2000 = set()
+        self._nfs_corrigidas_2000_com_modificacao = set()
         self.estatisticas = {
             'processados': 0,
             'sucesso': 0,
@@ -188,6 +189,7 @@ class BaixaTitulosService:
 
         # Controle de NFs já corrigidas para o bug ano 2000 (evitar correções duplicadas no mesmo lote)
         self._nfs_corrigidas_2000 = set()
+        self._nfs_corrigidas_2000_com_modificacao = set()
 
         # Buscar itens ativos e validos
         itens = BaixaTituloItem.query.filter_by(
@@ -292,14 +294,33 @@ class BaixaTitulosService:
 
         logger.info(f"  Titulo encontrado: ID={item.titulo_odoo_id}, Company={company_id} ({company_name}), Saldo={item.saldo_antes}")
 
+        # =================================================================
+        # DETECÇÃO DE DESCONTO JÁ EMBUTIDO NO SALDO
+        # Quando NF NÃO tinha bug ano 2000, o desconto contratual já foi
+        # aplicado naturalmente pelo Odoo (embutido no saldo do título).
+        # Nesse caso, o desconto do Excel não deve ser lançado novamente.
+        # =================================================================
+        desconto_ja_embutido = False
+
+        if desconto_excel > 0 and item.nf_excel not in self._nfs_corrigidas_2000_com_modificacao:
+            # NF não teve correção ano 2000 → verificar se desconto está embutido
+            soma_sem_desconto = item.valor_excel + acordo_excel + devolucao_excel
+            if soma_sem_desconto <= item.saldo_antes + 0.01:
+                desconto_ja_embutido = True
+                logger.info(
+                    f"  [DESCONTO_EMBUTIDO] NF {item.nf_excel}: Desconto R$ {desconto_excel:.2f} "
+                    f"já embutido no saldo (sem bug ano 2000). Não será lançado."
+                )
+
         # NOTA: O Odoo permite usar journal de outra empresa!
         journal_id_final = item.journal_odoo_id
         logger.info(f"  Usando journal principal: {item.journal_excel} (ID={journal_id_final})")
 
         # =================================================================
         # VALIDACAO DE DUPLICIDADE - Desconto Concedido (unico por titulo)
+        # Pular se desconto já embutido (não será lançado)
         # =================================================================
-        if desconto_excel > 0:
+        if desconto_excel > 0 and not desconto_ja_embutido:
             desconto_existente = self._verificar_desconto_existente_odoo(item.nf_excel, item.parcela_excel)
             if desconto_existente:
                 raise ValueError(
@@ -310,13 +331,18 @@ class BaixaTitulosService:
         # VALIDACAO DE SALDO (SOMA de valores que consomem saldo)
         # - Principal + Desconto + Acordo + Devolucao devem respeitar saldo
         # - Juros NAO entra na soma (pode ser acima)
+        # - Se desconto já embutido, exclui da soma
         # =================================================================
-        soma_valores_saldo = item.valor_excel + desconto_excel + acordo_excel + devolucao_excel
+        if desconto_ja_embutido:
+            soma_valores_saldo = item.valor_excel + acordo_excel + devolucao_excel
+        else:
+            soma_valores_saldo = item.valor_excel + desconto_excel + acordo_excel + devolucao_excel
 
         if soma_valores_saldo > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
             raise ValueError(
                 f"Soma dos valores ({soma_valores_saldo:.2f}) maior que saldo ({item.saldo_antes:.2f}). "
-                f"Principal={item.valor_excel}, Desconto={desconto_excel}, Acordo={acordo_excel}, Devolucao={devolucao_excel}"
+                f"Principal={item.valor_excel}, Desconto={desconto_excel}{'[EMBUTIDO]' if desconto_ja_embutido else ''}, "
+                f"Acordo={acordo_excel}, Devolucao={devolucao_excel}"
             )
 
         # =================================================================
@@ -392,9 +418,9 @@ class BaixaTitulosService:
                 logger.info(f"  [1] Pagamento PRINCIPAL criado: {payment_name}")
 
         # =================================================================
-        # LANCAMENTO 2: DESCONTO CONCEDIDO (se > 0)
+        # LANCAMENTO 2: DESCONTO CONCEDIDO (se > 0 e NÃO embutido)
         # =================================================================
-        if desconto_excel > 0:
+        if desconto_excel > 0 and not desconto_ja_embutido:
             # VALIDACAO DE SALDO EM TEMPO REAL (rebuscar do Odoo)
             titulo_atual = self._buscar_titulo_por_id(item.titulo_odoo_id)
             if titulo_atual:
@@ -423,6 +449,12 @@ class BaixaTitulosService:
                 self._reconciliar(credit_line_id, item.titulo_odoo_id)
 
             logger.info(f"  [2] Pagamento DESCONTO criado: {payment_name}")
+
+        elif desconto_excel > 0 and desconto_ja_embutido:
+            logger.info(
+                f"  [2] DESCONTO R$ {desconto_excel:.2f} NÃO lançado "
+                f"(já embutido no saldo - sem bug ano 2000)"
+            )
 
         # =================================================================
         # LANCAMENTO 3: ACORDO COMERCIAL (se > 0)
@@ -534,6 +566,13 @@ class BaixaTitulosService:
         item.status = 'SUCESSO'
         item.processado_em = agora_utc_naive()
         item.validado_em = agora_utc_naive()
+
+        # Registrar mensagem se desconto foi embutido
+        if desconto_ja_embutido:
+            item.mensagem = (
+                f"[DESCONTO_EMBUTIDO: R$ {desconto_excel:.2f} não lançado - "
+                f"já embutido no saldo (sem bug ano 2000)]"
+            )
 
         # Log de conclusao
         pagamentos_criados = []
@@ -987,8 +1026,9 @@ class BaixaTitulosService:
                 except Exception:
                     pass
 
-            # Marcar como corrigida
+            # Marcar como corrigida (com modificação efetiva)
             self._nfs_corrigidas_2000.add(nf)
+            self._nfs_corrigidas_2000_com_modificacao.add(nf)
 
             logger.info(
                 f"[ANO_2000] NF {nf} corrigida com sucesso. "
