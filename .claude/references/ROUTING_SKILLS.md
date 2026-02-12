@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 08/02/2026
+**Ultima Atualizacao**: 12/02/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -17,6 +17,7 @@
 | COTACAO DE FRETE | "qual preco", "quanto custa frete", "tabelas para", "cotacao" | -> `cotando-frete` |
 | VISAO 360 PRODUTO | "resumo do produto", "producao vs programado", "visao completa do produto" | -> `visao-produto` |
 | EXPORTAR/IMPORTAR DADOS | Gerar Excel, CSV, processar planilha | -> `exportando-arquivos` / `lendo-arquivos` |
+| SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
 
 ---
 
@@ -74,7 +75,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (22 total)
+## Skills — Inventario Completo (23 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
@@ -91,4 +92,5 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
-`visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`, `memoria-usuario`
+`visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`, `memoria-usuario`,
+`diagnosticando-banco`
