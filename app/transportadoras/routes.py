@@ -327,7 +327,7 @@ def exportar_transportadoras():
         # Cria a resposta com o arquivo
         response = make_response(output.read())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=transportadoras_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=transportadoras_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
 
         return response
 

@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import create_app, db
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 from datetime import datetime, timedelta
 
 print("=" * 80)
@@ -36,7 +37,7 @@ with app.app_context():
     odoo = get_odoo_connection()
 
     # Buscar amostra real de pickings (últimos 7 dias)
-    data_inicio = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    data_inicio = (agora_utc_naive() - timedelta(days=7)).strftime('%Y-%m-%d')
 
     print(f"\n📅 Buscando pickings desde {data_inicio}...")
 

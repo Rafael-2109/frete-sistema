@@ -30,6 +30,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def extrair_numero_nf_da_chave(chave_nf):
@@ -317,7 +318,7 @@ def explorar_referencias_nf():
         with open(log_file, 'w', encoding='utf-8') as f:
             f.write("=" * 100 + "\n")
             f.write("EXPLORAÇÃO: RELACIONAMENTO DFe → REFERÊNCIAS DE NFs\n")
-            f.write(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+            f.write(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}\n")
             f.write("=" * 100 + "\n\n")
 
             f.write(f"CTe ID: {cte_id}\n")

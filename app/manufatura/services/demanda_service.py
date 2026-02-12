@@ -218,7 +218,7 @@ class DemandaService:
         """Obtém pedidos com expedição próxima que precisam produção"""
         
         from datetime import timedelta
-        data_limite = datetime.now().date() + timedelta(days=dias_limite)
+        data_limite = agora_utc_naive().date() + timedelta(days=dias_limite)
         
         # Pedidos em Separacao
         pedidos_separacao = db.session.query(
@@ -235,7 +235,7 @@ class DemandaService:
         ).filter(
             Pedido.status != 'FATURADO',
             Separacao.expedicao <= data_limite,
-            Separacao.expedicao >= datetime.now().date()
+            Separacao.expedicao >= agora_utc_naive().date()
         ).order_by(Separacao.expedicao).all()
         
         return [{
@@ -245,7 +245,7 @@ class DemandaService:
             'nome_produto': p.nome_produto,
             'qtd_saldo': float(p.qtd_saldo or 0),
             'expedicao': p.expedicao.strftime('%d/%m/%Y') if p.expedicao else None,
-            'dias_restantes': (p.expedicao - datetime.now().date()).days if p.expedicao else None,
+            'dias_restantes': (p.expedicao - agora_utc_naive().date()).days if p.expedicao else None,
             'cliente': f"{p.cnpj_cpf} - {p.raz_social_red}"
         } for p in pedidos_separacao]
     

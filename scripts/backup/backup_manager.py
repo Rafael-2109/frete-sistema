@@ -25,6 +25,7 @@ from cryptography.fernet import Fernet
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import setup_logger
+from app.utils.timezone import agora_utc_naive
 
 class BackupManager:
     """Comprehensive backup manager for MCP system"""
@@ -288,7 +289,7 @@ class BackupManager:
     def compress_file(self, file_path: Path):
         """Compress a file"""
         import gzip
-        
+
         compressed_path = file_path.with_suffix(file_path.suffix + '.gz')
         
         with open(file_path, 'rb') as f_in:
@@ -356,7 +357,7 @@ class BackupManager:
     def cleanup_old_backups(self):
         """Remove old backups based on retention policy"""
         retention_days = self.config.get("retention_days", 30)
-        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        cutoff_date = agora_utc_naive() - timedelta(days=retention_days)
         
         self.logger.info(f"Cleaning up backups older than {retention_days} days")
         
@@ -376,7 +377,7 @@ class BackupManager:
     
     def perform_backup(self, backup_type: str = "full") -> bool:
         """Perform complete backup"""
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = agora_utc_naive().strftime("%Y%m%d%H%M%S")
         backup_name = f"backup_{timestamp}_{backup_type}"
         backup_path = self.backup_dir / backup_name
         backup_path.mkdir(parents=True, exist_ok=True)

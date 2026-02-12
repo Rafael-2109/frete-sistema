@@ -162,7 +162,7 @@ class TagPlusIntegration:
             return False
 
         # Verifica se precisa renovar (5 min antes de expirar)
-        if self.expires_at and datetime.now() < (self.expires_at - timedelta(minutes=5)):
+        if self.expires_at and agora_utc_naive() < (self.expires_at - timedelta(minutes=5)):
             return True  # Token ainda válido
 
         print("\n🔄 Renovando token...")

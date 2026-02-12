@@ -7,7 +7,7 @@ from flask import jsonify
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Optional
 from app import db
-
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 def create_response(success: bool, message: str, data: Any = None, errors: Optional[List[str]] = None, 
@@ -29,7 +29,7 @@ def create_response(success: bool, message: str, data: Any = None, errors: Optio
     response = {
         'success': success,
         'message': message,
-        'timestamp': datetime.now().isoformat()
+        'timestamp': agora_utc_naive().isoformat()
     }
     
     if data is not None:
@@ -203,7 +203,7 @@ def log_operation(operation: str, user_id: Optional[int] = None, details: Option
     """
     try:
         log_entry = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': agora_utc_naive().isoformat(),
             'operation': operation,
             'user_id': user_id,
             'details': details or {}

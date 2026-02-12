@@ -4,6 +4,7 @@ Validadores para dados da API Odoo
 
 from datetime import datetime
 import re
+from app.utils.timezone import agora_utc_naive
 
 def validate_carteira_data(data):
     """
@@ -272,7 +273,7 @@ def validate_faturamento_data(data, tipo):
     if 'data_fatura' in validated_data:
         try:
             fatura_date = datetime.strptime(validated_data['data_fatura'], '%Y-%m-%d').date()
-            if fatura_date > datetime.now().date():
+            if fatura_date > agora_utc_naive().date():
                 raise ValueError("data_fatura não pode ser futura")
         except ValueError as e:
             if "data_fatura não pode ser futura" in str(e):

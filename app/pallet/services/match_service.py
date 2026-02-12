@@ -25,6 +25,7 @@ from app import db
 from app.pallet.models.nf_remessa import PalletNFRemessa
 from app.pallet.models.nf_solucao import PalletNFSolucao
 from app.pallet.services.nf_service import NFService
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +135,9 @@ class MatchService:
         from datetime import timedelta
 
         if not data_de:
-            data_de = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+            data_de = (agora_utc_naive() - timedelta(days=30)).strftime('%Y-%m-%d')
         if not data_ate:
-            data_ate = datetime.now().strftime('%Y-%m-%d')
+            data_ate = agora_utc_naive().strftime('%Y-%m-%d')
 
         logger.info(
             f"🔍 Buscando NFs de devolução de pallet no DFe "
@@ -306,9 +307,9 @@ class MatchService:
         from datetime import timedelta
 
         if not data_de:
-            data_de = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+            data_de = (agora_utc_naive() - timedelta(days=90)).strftime('%Y-%m-%d')
         if not data_ate:
-            data_ate = datetime.now().strftime('%Y-%m-%d')
+            data_ate = agora_utc_naive().strftime('%Y-%m-%d')
 
         logger.info(
             f"🔍 Buscando NFs de pallet CANCELADAS no Odoo "
@@ -452,9 +453,9 @@ class MatchService:
         from datetime import timedelta
 
         if not data_de:
-            data_de = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+            data_de = (agora_utc_naive() - timedelta(days=90)).strftime('%Y-%m-%d')
         if not data_ate:
-            data_ate = datetime.now().strftime('%Y-%m-%d')
+            data_ate = agora_utc_naive().strftime('%Y-%m-%d')
 
         logger.info(
             f"🔍 Buscando Notas de Crédito de pallet no Odoo "

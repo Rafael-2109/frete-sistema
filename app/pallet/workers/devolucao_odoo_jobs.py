@@ -19,6 +19,8 @@ from datetime import datetime
 from contextlib import contextmanager
 from typing import Dict, Any, List
 
+from app.utils.timezone import agora_utc_naive
+
 logger = logging.getLogger(__name__)
 
 
@@ -190,7 +192,7 @@ def processar_devolucao_odoo_job(
 
     finally:
         resultado['tempo_segundos'] = (
-            datetime.now() - inicio
+            agora_utc_naive() - inicio
         ).total_seconds()
 
     return resultado
@@ -287,7 +289,6 @@ def get_devolucao_job_status(job_id: str) -> Dict[str, Any]:
                 job.ended_at - job.started_at
             ).total_seconds()
         elif job.started_at:
-            from app.utils.timezone import agora_utc_naive
             now = agora_utc_naive()
             started = job.started_at
             if started.tzinfo is not None:

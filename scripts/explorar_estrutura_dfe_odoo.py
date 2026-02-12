@@ -23,6 +23,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def explorar_estrutura_dfe():
@@ -154,7 +155,7 @@ def explorar_estrutura_dfe():
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write("=" * 100 + "\n")
                 f.write("LISTA COMPLETA DE CAMPOS DO MODELO l10n_br_ciel_it_account.dfe\n")
-                f.write(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+                f.write(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}\n")
                 f.write("=" * 100 + "\n\n")
 
                 f.write(f"TOTAL DE CAMPOS: {len(campos_info)}\n\n")
@@ -243,7 +244,7 @@ def explorar_estrutura_dfe():
             f.write("=" * 100 + "\n")
             f.write("DADOS COMPLETOS DE UM CTe REAL DO ODOO\n")
             f.write(f"CTe ID: {cte_id}\n")
-            f.write(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+            f.write(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}\n")
             f.write("=" * 100 + "\n\n")
 
             # Ordenar campos alfabeticamente

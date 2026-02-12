@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pandas as pd
 from app import create_app
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def buscar_cnpjs_fornecedores(odoo, partner_ids: list) -> dict:
@@ -179,7 +180,7 @@ def exportar_depara():
             os.makedirs(exports_dir, exist_ok=True)
 
             # Nome do arquivo com timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
             arquivo = os.path.join(exports_dir, f'depara_fornecedores_{timestamp}.xlsx')
 
             # Criar DataFrames

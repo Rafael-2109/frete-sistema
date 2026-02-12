@@ -169,7 +169,7 @@ def criar_frete(ocorrencia_id: int):
             valor_cotado=valor_despesa,
             valor_negociado=Decimal(str(data['valor_negociado'])) if data.get('valor_negociado') else None,
             peso_kg=Decimal(str(data['peso_kg'])) if data.get('peso_kg') else None,
-            data_cotacao=datetime.now().date(),
+            data_cotacao=agora_utc_naive().date(),
             data_coleta_prevista=datetime.strptime(data['data_coleta_prevista'], '%Y-%m-%d').date() if data.get('data_coleta_prevista') else None,
             data_entrega_prevista=datetime.strptime(data['data_entrega_prevista'], '%Y-%m-%d').date() if data.get('data_entrega_prevista') else None,
             local_coleta=data.get('local_coleta'),
@@ -322,7 +322,7 @@ def atualizar_status_frete(frete_id: int):
             if data.get('data_entrega_realizada'):
                 frete.data_entrega_realizada = datetime.strptime(data['data_entrega_realizada'], '%Y-%m-%d').date()
             else:
-                frete.data_entrega_realizada = datetime.now().date()
+                frete.data_entrega_realizada = agora_utc_naive().date()
             # Atualizar ocorrencia
             if frete.ocorrencia:
                 frete.ocorrencia.localizacao_atual = 'CD'
@@ -552,7 +552,7 @@ def atualizar_status_descarte(descarte_id: int):
             if data.get('data_descarte'):
                 descarte.data_descarte = datetime.strptime(data['data_descarte'], '%Y-%m-%d').date()
             else:
-                descarte.data_descarte = datetime.now().date()
+                descarte.data_descarte = agora_utc_naive().date()
             # Atualizar localizacao da ocorrencia
             if descarte.ocorrencia:
                 descarte.ocorrencia.localizacao_atual = 'DESCARTADO'
@@ -618,7 +618,7 @@ def upload_documento_descarte(descarte_id: int, tipo: str):
         elif tipo == 'comprovante':
             descarte.comprovante_path = path
             descarte.comprovante_nome_arquivo = nome
-            descarte.data_descarte = datetime.now().date()
+            descarte.data_descarte = agora_utc_naive().date()
             descarte.status = 'DESCARTADO'
             if descarte.ocorrencia:
                 descarte.ocorrencia.localizacao_atual = 'DESCARTADO'

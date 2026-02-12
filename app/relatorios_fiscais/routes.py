@@ -12,6 +12,7 @@ from flask import render_template, request, send_file, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import logging
+from app.utils.timezone import agora_utc_naive
 
 from . import relatorios_fiscais_bp
 
@@ -27,7 +28,7 @@ def pagina_relatorio_ibscbs():
     Exibe formulário com filtros para geração do relatório.
     """
     # Datas padrão: últimos 30 dias
-    data_fim = datetime.now().date()
+    data_fim = agora_utc_naive().date()
     data_ini = data_fim - timedelta(days=30)
 
     return render_template(
@@ -173,7 +174,7 @@ def razao_geral():
     from app.relatorios_fiscais.services.razao_geral_service import EMPRESAS_RAZAO_GERAL
 
     # Datas padrão: último mês
-    data_fim = datetime.now().date()
+    data_fim = agora_utc_naive().date()
     data_ini = data_fim - timedelta(days=30)
 
     return render_template(

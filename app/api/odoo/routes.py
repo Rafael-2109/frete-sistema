@@ -16,6 +16,7 @@ from app.api.odoo.validators import validate_faturamento_data
 from app.api.odoo.auth import require_api_key, require_jwt_token
 from app.api.odoo.utils import process_bulk_operation, create_response
 from app.odoo.services.pedido_sync_service import PedidoSyncService
+from app.utils.timezone import agora_utc_naive
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -369,7 +370,7 @@ def sincronizar_pedido_especifico(num_pedido):
                 'num_pedido': num_pedido,
                 'detalhes': resultado.get('detalhes', {}),
                 'tempo_execucao': resultado.get('tempo_execucao', 0),
-                'timestamp': resultado.get('timestamp', datetime.now()).isoformat() if isinstance(resultado.get('timestamp'), datetime) else str(resultado.get('timestamp'))
+                'timestamp': resultado.get('timestamp', agora_utc_naive()).isoformat() if isinstance(resultado.get('timestamp'), datetime) else str(resultado.get('timestamp'))
             },
             status_code=status_code
         )
@@ -390,7 +391,7 @@ def test_connection():
         success=True,
         message="Conexão estabelecida com sucesso!",
         data={
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': agora_utc_naive().isoformat(),
             'version': '1.0.0',
             'endpoints': [
                 '/api/v1/odoo/carteira/bulk-update',

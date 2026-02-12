@@ -21,6 +21,7 @@ from app.fretes.models import ConhecimentoTransporte, Frete
 from app.odoo.services.cte_service import CteService
 from app.utils.auth_decorators import require_financeiro
 from app.utils.file_storage import get_file_storage
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -498,7 +499,6 @@ def desvincular_frete(cte_id):
     """Desvincula um CTe de um Frete"""
 
     cte = ConhecimentoTransporte.query.get_or_404(cte_id)
-    from app.utils.timezone import agora_utc_naive
     if not cte.frete_id:
         flash('CTe não está vinculado a nenhum frete', 'warning')
         return redirect(url_for('cte.detalhar_cte', cte_id=cte_id))

@@ -9,6 +9,7 @@ from datetime import datetime
 import random
 import hashlib
 from app import db
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ def gerar_lote_id():
         String com o ID do lote único
     """
     try:
-        agora = datetime.now()
+        agora = agora_utc_naive()
         data_str = agora.strftime('%Y%m%d')
         hora_str = agora.strftime('%H%M%S')
         random_str = str(random.randint(1, 999)).zfill(3)
@@ -53,7 +54,7 @@ def gerar_lote_id():
     except Exception as e:
         logger.error(f"Erro ao gerar lote ID: {e}")
         # Fallback com timestamp Unix (ainda único e ordenável)
-        timestamp = int(datetime.now().timestamp())
+        timestamp = int(agora_utc_naive().timestamp())
         return f"LOTE_{timestamp}"
 
 def calcular_hash_lote(lote_id):

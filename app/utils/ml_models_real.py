@@ -12,6 +12,7 @@ from app.fretes.models import Frete
 from app.monitoramento.models import EntregaMonitorada
 from app.transportadoras.models import Transportadora
 from app.faturamento.models import RelatorioFaturamentoImportado
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import and_, desc, func
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class FreteMLModelsReal:
     def get_fretes_recentes(self, dias=7) -> List[Dict[str, Any]]:
         """Busca fretes dos últimos dias do banco real"""
         try:
-            data_limite = datetime.now() - timedelta(days=dias)
+            data_limite = agora_utc_naive() - timedelta(days=dias)
             
             fretes = db.session.query(Frete).filter(
                 Frete.criado_em >= data_limite,
@@ -148,7 +149,7 @@ class FreteMLModelsReal:
         """Busca histórico real de atrasos para transportadora e UF"""
         try:
             # Buscar entregas monitoradas dos últimos 90 dias
-            data_limite = datetime.now() - timedelta(days=90)
+            data_limite = agora_utc_naive() - timedelta(days=90)
             
             query = db.session.query(EntregaMonitorada).join(
                 Frete, EntregaMonitorada.numero_embarque == Frete.embarque_id
@@ -230,7 +231,7 @@ class FreteMLModelsReal:
                         'uf_destino': frete['uf_destino'],
                         'transportadora': frete['transportadora'],
                         'dados_completos': frete,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': agora_utc_naive().isoformat()
                     })
             
             return anomalies
@@ -242,7 +243,7 @@ class FreteMLModelsReal:
     def optimize_costs_real(self, periodo_dias=30) -> Dict[str, Any]:
         """Otimização de custos baseada em dados reais"""
         try:
-            data_limite = datetime.now() - timedelta(days=periodo_dias)
+            data_limite = agora_utc_naive() - timedelta(days=periodo_dias)
             
             # Buscar fretes do período
             fretes = db.session.query(Frete).filter(
@@ -332,7 +333,7 @@ class FreteMLModelsReal:
                 'economia_estimada': f"R$ {valor_total * 0.15:.2f} (15% otimização)",
                 'transportadoras_analysis': transportadoras_stats,
                 'recommendations': recommendations,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:
@@ -351,7 +352,7 @@ class FreteMLModelsReal:
             dados = []
             for embarque in embarques_pendentes:
                 # Calcular dias desde criação
-                dias_criacao = (datetime.now() - embarque.criado_em).days if embarque.criado_em else 0
+                dias_criacao = (agora_utc_naive() - embarque.criado_em).days if embarque.criado_em else 0
                 
                 dados.append({
                     'numero_embarque': embarque.numero,

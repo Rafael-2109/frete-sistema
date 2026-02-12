@@ -353,7 +353,7 @@ def exportar_apagar_vinculos():
         output.seek(0)
 
         # Nome do arquivo com data e hora
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = agora_utc_naive().strftime("%Y%m%d_%H%M%S")
         filename = f"backup_vinculos_{timestamp}.xlsx"
 
         # Deletar os vínculos em lotes
@@ -443,7 +443,7 @@ def exportar_vinculos():
     workbook.save(output)
     output.seek(0)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = agora_utc_naive().strftime("%Y%m%d_%H%M%S")
     filename = f"backup_vinculos_{timestamp}.xlsx"
 
     return send_file(

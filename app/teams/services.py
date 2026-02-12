@@ -92,9 +92,9 @@ def _get_teams_context() -> str:
     Returns:
         str: Contexto formatado para prefixar a mensagem do usuário
     """
-    data_atual = datetime.now().strftime("%d/%m/%Y")
+    data_atual = agora_utc_naive().strftime("%d/%m/%Y")
     dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-    dia_semana = dias_semana[datetime.now().weekday()]
+    dia_semana = dias_semana[agora_utc_naive().weekday()]
 
     return f"""[CONTEXTO: Resposta via Microsoft Teams]
 

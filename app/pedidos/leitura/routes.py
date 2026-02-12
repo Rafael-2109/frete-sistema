@@ -18,6 +18,7 @@ import os
 import tempfile
 from datetime import datetime
 from decimal import Decimal
+from app.utils.timezone import agora_utc_naive
 
 from .processor import PedidoProcessor
 from app.utils.file_storage import get_file_storage
@@ -103,7 +104,7 @@ def upload():
         # Salva arquivo temporário para processamento
         filename = secure_filename(file.filename)
         temp_dir = tempfile.gettempdir()
-        temp_path = os.path.join(temp_dir, f"pedido_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}")
+        temp_path = os.path.join(temp_dir, f"pedido_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}_{filename}")
         file.save(temp_path)
 
         try:
@@ -130,7 +131,7 @@ def upload():
             s3_path = storage.save_file(
                 file,
                 folder='pedidos_redes',
-                filename=f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}",
+                filename=f"{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}_{filename}",
                 allowed_extensions=['pdf']
             )
 
@@ -269,7 +270,7 @@ def upload():
                 'itens_sem_depara': itens_sem_depara,
                 's3_path': s3_path,
                 'filename': filename,
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': agora_utc_naive().isoformat(),
                 'usuario': usuario
             }
 
@@ -1047,7 +1048,7 @@ def export(format, session_key):
 
         # Cria arquivo temporário para export
         temp_dir = tempfile.gettempdir()
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
 
         processor = PedidoProcessor()
 
@@ -1445,7 +1446,7 @@ def tabela_precos_exportar():
 
     output.seek(0)
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
     filename = f'tabela_precos_{timestamp}.xlsx'
 
     return send_file(
@@ -1694,7 +1695,7 @@ def regioes_exportar():
 
     output.seek(0)
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
     filename = f'regioes_uf_{timestamp}.xlsx'
 
     return send_file(
@@ -1873,7 +1874,7 @@ def api_fila_impostos():
                     'total_items': total_falhados
                 }
             },
-            'atualizado_em': datetime.now().isoformat()
+            'atualizado_em': agora_utc_naive().isoformat()
         })
 
     except Exception as e:

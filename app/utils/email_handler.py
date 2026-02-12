@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from flask import current_app
 from typing import Optional, Dict, Any
 from app.utils.file_storage import get_file_storage
+from app.utils.timezone import agora_utc_naive
 from email import policy
 from email.parser import BytesParser
 from dateutil import parser
@@ -198,7 +199,7 @@ class EmailHandler:
         """
         try:
             # Define pasta e nome do arquivo
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
             nome_seguro = secure_filename(arquivo_email.filename)
             nome_final = f"{timestamp}_{nome_seguro}"
 

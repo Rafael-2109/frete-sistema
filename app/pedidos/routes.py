@@ -56,7 +56,7 @@ def lista_pedidos():
     # Substitui ~26 queries individuais por ~4 queries consolidadas com cache de 45s
     from app.pedidos.services.counter_service import PedidosCounterService
 
-    hoje = datetime.now().date()
+    hoje = agora_utc_naive().date()
     dados_contadores = PedidosCounterService.obter_contadores()
 
     contadores_data = dados_contadores['contadores_data']

@@ -10,6 +10,7 @@ import base64
 from pathlib import Path
 from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ class GeradorPDFProtocoloAtacadao:
             # 8. Gerar PDF da página limpa
             logger.info("📸 Gerando PDF...")
 
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
             pdf_filename = f"protocolo_{protocolo}_{timestamp}.pdf"
             pdf_path = self.pdf_dir / pdf_filename
 

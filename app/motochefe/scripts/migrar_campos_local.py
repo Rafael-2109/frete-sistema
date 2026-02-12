@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app import create_app, db
 from sqlalchemy import text, inspect
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def verificar_coluna_existe(tabela, coluna):
@@ -227,7 +228,7 @@ def main():
     print("=" * 60)
     print("🔧 MIGRAÇÃO DE CAMPOS - SISTEMA MOTOCHEFE")
     print("=" * 60)
-    print(f"📅 Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"📅 Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print("=" * 60)
 
     app = create_app()

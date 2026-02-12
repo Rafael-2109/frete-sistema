@@ -26,6 +26,7 @@ from collections import defaultdict
 from app import db
 from app.manufatura.models import PedidoCompras, HistoricoPedidoCompras
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ class PedidoComprasServiceOtimizado:
         self.logger.info("🔍 Buscando pedidos de compra no Odoo...")
 
         # Calcular data limite baseado na janela
-        data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+        data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
         # ✅ IMPORTAR TODOS (incluindo cancelados) para sincronizar status
         # Filtro: (create_date OR write_date >= data_limite)
@@ -1070,7 +1071,7 @@ class PedidoComprasServiceOtimizado:
 
             # Buscar pedidos do sistema que foram modificados recentemente
             # (podem ter sido excluídos do Odoo)
-            data_limite = datetime.now() - timedelta(minutes=minutos_janela)
+            data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
 
             pedidos_sistema = PedidoCompras.query.filter(
                 PedidoCompras.importado_odoo == True,

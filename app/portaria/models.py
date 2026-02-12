@@ -113,7 +113,6 @@ class ControlePortaria(db.Model):
     
     def registrar_chegada(self):
         """Registra data e hora de chegada no timezone brasileiro"""
-        from app.utils.timezone import agora_utc_naive
         agora = agora_utc_naive()
         self.data_chegada = agora.date()
         self.hora_chegada = agora.time()
@@ -122,7 +121,6 @@ class ControlePortaria(db.Model):
         """Registra data e hora de entrada no timezone brasileiro"""
         if not self.pode_registrar_entrada:
             raise ValueError("Não é possível registrar entrada sem chegada")
-        from app.utils.timezone import agora_utc_naive
         agora = agora_utc_naive()
         self.data_entrada = agora.date()
         self.hora_entrada = agora.time()
@@ -131,7 +129,6 @@ class ControlePortaria(db.Model):
         """Registra data e hora de saída no timezone brasileiro"""
         if not self.pode_registrar_saida:
             raise ValueError("Não é possível registrar saída sem entrada")
-        from app.utils.timezone import agora_utc_naive
         agora = agora_utc_naive()
         self.data_saida = agora.date()
         self.hora_saida = agora.time()
@@ -139,7 +136,7 @@ class ControlePortaria(db.Model):
     @staticmethod
     def veiculos_do_dia():
         """Retorna veículos do dia ordenados: primeiro DENTRO, depois AGUARDANDO, por último SAIU"""
-        hoje = datetime.now().date()
+        hoje = agora_utc_naive().date()
         
         # Veículos que chegaram hoje
         registros = ControlePortaria.query.filter(

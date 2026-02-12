@@ -553,7 +553,7 @@ def exportar_produtos():
         output.seek(0)
         
         # Gerar nome do arquivo com timestamp
-        filename = f"produtos_depara_sendas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"produtos_depara_sendas_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
         return send_file(
             output,
@@ -583,7 +583,7 @@ def exportar_filiais():
         output.seek(0)
         
         # Gerar nome do arquivo com timestamp
-        filename = f"filiais_depara_sendas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"filiais_depara_sendas_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
         return send_file(
             output,

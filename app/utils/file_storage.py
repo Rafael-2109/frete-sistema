@@ -4,6 +4,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import current_app, url_for
 import mimetypes
+from app.utils.timezone import agora_utc_naive
 
 try:
     import boto3
@@ -75,7 +76,7 @@ class FileStorage:
         
         # Gera nome seguro
         if not filename:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+            timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S_')
             unique_id = str(uuid.uuid4())[:8]
             filename = f"{timestamp}{unique_id}_{secure_filename(file_name)}"
         else:

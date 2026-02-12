@@ -21,6 +21,7 @@ import sys
 import os
 from datetime import datetime
 from typing import Dict, Any
+from app.utils.timezone import agora_utc
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -133,7 +134,8 @@ def criar_picking(odoo, config: Dict, cliente_id: int, transportadora_id: int,
         'partner_id': cliente_id,
         'carrier_id': transportadora_id,
         'company_id': config['company_id'],
-        'scheduled_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        # Odoo espera UTC para scheduled_date
+        'scheduled_date': agora_utc().strftime('%Y-%m-%d %H:%M:%S'),
         'move_ids': [(0, 0, {
             'name': PRODUTO_PALLET['product_name'],
             'product_id': PRODUTO_PALLET['product_id'],

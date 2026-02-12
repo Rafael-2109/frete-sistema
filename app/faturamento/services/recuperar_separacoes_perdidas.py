@@ -49,7 +49,7 @@ class RecuperadorSeparacoesPerdidas:
         """
         logger.info("=" * 70)
         logger.info("🔧 INICIANDO RECUPERAÇÃO DE SEPARAÇÕES PERDIDAS")
-        logger.info(f"📅 Data/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"📅 Data/Hora: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info(f"🔄 Modo: {'SIMULAÇÃO' if modo_simulacao else 'PRODUÇÃO'}")
         logger.info("=" * 70)
         
@@ -298,7 +298,7 @@ class RecuperadorSeparacoesPerdidas:
         Gera um novo lote_id único para a separação recuperada
         """
         # Formato: REC_[PEDIDO]_[TIMESTAMP]_[UUID_CURTO]
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        timestamp = agora_utc_naive().strftime('%Y%m%d%H%M%S')
         uuid_curto = str(uuid.uuid4())[:8].upper()
         lote_id = f"REC_{num_pedido}_{timestamp}_{uuid_curto}"
         

@@ -338,7 +338,7 @@ def exportar_contatos():
     
     output.seek(0)
     
-    filename = f"contatos_agendamento_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"contatos_agendamento_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
     
     return send_file(
         output,

@@ -22,6 +22,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def diagnosticar_nfs_com_problema():
@@ -36,7 +37,7 @@ def diagnosticar_nfs_com_problema():
 
     print("=" * 120)
     print("DIAGNÓSTICO - NFs de Crédito com Data de Lançamento Incorreta")
-    print(f"Data de execução: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Data de execução: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 120)
 
     # 1. Buscar tracking_values de alteração do campo date em julho/2025
@@ -153,7 +154,7 @@ def diagnosticar_nfs_com_problema():
     output_file = os.path.join(os.path.dirname(__file__), 'diagnostico_resultado.json')
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump({
-            'data_execucao': datetime.now().isoformat(),
+            'data_execucao': agora_utc_naive().isoformat(),
             'total_problemas': len(correcoes),
             'precisam_correcao': len(precisam_correcao),
             'correcoes': correcoes

@@ -22,6 +22,7 @@ from app import db
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.services.carteira_service import CarteiraService
 from app.odoo.services.faturamento_service import FaturamentoService
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class ImportacaoFallbackService:
                 return {
                     'sucesso': False,
                     'mensagem': 'Número do pedido não pode ser vazio',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             num_pedido = num_pedido.strip().upper()
@@ -78,7 +79,7 @@ class ImportacaoFallbackService:
                 return {
                     'sucesso': False,
                     'mensagem': f'Pedido {num_pedido} não encontrado no Odoo',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             if pedido_odoo.get('cancelado'):
@@ -86,7 +87,7 @@ class ImportacaoFallbackService:
                     'sucesso': False,
                     'mensagem': f'Pedido {num_pedido} está cancelado no Odoo',
                     'dados_odoo': pedido_odoo,
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             # Importar usando CarteiraService
@@ -105,7 +106,7 @@ class ImportacaoFallbackService:
                     'dados_odoo': pedido_odoo,
                     'estatisticas': resultado.get('estatisticas', {}),
                     'tempo_execucao': round(tempo_total, 2),
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
             else:
                 return {
@@ -113,7 +114,7 @@ class ImportacaoFallbackService:
                     'mensagem': f'Erro ao importar pedido: {resultado.get("mensagem", "Erro desconhecido")}',
                     'erro': resultado.get('erro'),
                     'tempo_execucao': round(tempo_total, 2),
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
         except Exception as e:
@@ -125,7 +126,7 @@ class ImportacaoFallbackService:
                 'mensagem': f'Erro ao importar pedido: {str(e)}',
                 'erro': str(e),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
     def importar_pedidos_por_data(self, data_inicio: str, data_fim: str = None) -> Dict[str, Any]:
@@ -147,23 +148,23 @@ class ImportacaoFallbackService:
             # Validar datas
             try:
                 dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
-                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else datetime.now()
+                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else agora_utc_naive()
             except ValueError as e:
                 return {
                     'sucesso': False,
                     'mensagem': f'Formato de data inválido. Use YYYY-MM-DD. Erro: {str(e)}',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             # Buscar pedidos no Odoo no período
-            pedidos = self._buscar_pedidos_por_data(data_inicio, data_fim or datetime.now().strftime('%Y-%m-%d'))
+            pedidos = self._buscar_pedidos_por_data(data_inicio, data_fim or agora_utc_naive().strftime('%Y-%m-%d'))
 
             if not pedidos:
                 return {
                     'sucesso': True,
                     'mensagem': f'Nenhum pedido encontrado no período {data_inicio} a {data_fim}',
                     'total_encontrados': 0,
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             logger.info(f"✅ Encontrados {len(pedidos)} pedidos no período")
@@ -175,7 +176,7 @@ class ImportacaoFallbackService:
                 return {
                     'sucesso': False,
                     'mensagem': 'Nenhum pedido válido encontrado no período',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             # Importar usando CarteiraService
@@ -192,7 +193,7 @@ class ImportacaoFallbackService:
                 'total_encontrados': len(numeros_pedidos),
                 'estatisticas': resultado.get('estatisticas', {}),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
         except Exception as e:
@@ -204,7 +205,7 @@ class ImportacaoFallbackService:
                 'mensagem': f'Erro ao importar pedidos: {str(e)}',
                 'erro': str(e),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
     def _verificar_pedido_odoo(self, num_pedido: str) -> Optional[Dict]:
@@ -305,7 +306,7 @@ class ImportacaoFallbackService:
                 return {
                     'sucesso': False,
                     'mensagem': 'Número da NF não pode ser vazio',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             numero_nf = numero_nf.strip()
@@ -317,7 +318,7 @@ class ImportacaoFallbackService:
                 return {
                     'sucesso': False,
                     'mensagem': f'NF {numero_nf} não encontrada no Odoo',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             logger.info(f"✅ NF {numero_nf} encontrada no Odoo. Iniciando importação...")
@@ -333,7 +334,7 @@ class ImportacaoFallbackService:
                 'dados_nf': nf_odoo,
                 'itens_importados': resultado.get('itens_importados', 0),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
         except Exception as e:
@@ -345,7 +346,7 @@ class ImportacaoFallbackService:
                 'mensagem': f'Erro ao importar NF: {str(e)}',
                 'erro': str(e),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
     def importar_faturamento_por_periodo(self, data_inicio: str, data_fim: str = None) -> Dict[str, Any]:
@@ -367,23 +368,23 @@ class ImportacaoFallbackService:
             # Validar datas
             try:
                 dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
-                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else datetime.now()
+                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else agora_utc_naive()
             except ValueError as e:
                 return {
                     'sucesso': False,
                     'mensagem': f'Formato de data inválido. Use YYYY-MM-DD. Erro: {str(e)}',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             # Buscar NFs no período
-            nfs = self._buscar_nfs_por_periodo(data_inicio, data_fim or datetime.now().strftime('%Y-%m-%d'))
+            nfs = self._buscar_nfs_por_periodo(data_inicio, data_fim or agora_utc_naive().strftime('%Y-%m-%d'))
 
             if not nfs:
                 return {
                     'sucesso': True,
                     'mensagem': f'Nenhuma NF encontrada no período {data_inicio} a {data_fim}',
                     'total_encontradas': 0,
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             logger.info(f"✅ Encontradas {len(nfs)} NFs no período")
@@ -415,7 +416,7 @@ class ImportacaoFallbackService:
                 'total_erros': total_erros,
                 'nfs_processadas': nfs_processadas,
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
         except Exception as e:
@@ -427,7 +428,7 @@ class ImportacaoFallbackService:
                 'mensagem': f'Erro ao importar faturamento: {str(e)}',
                 'erro': str(e),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
     def _buscar_nf_odoo(self, numero_nf: str) -> Optional[Dict]:

@@ -24,6 +24,8 @@ import os
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from time import sleep
+from app.utils.timezone import agora_utc_naive
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -102,6 +104,7 @@ def inicializar_services():
         from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService  # ✅ Service de Extratos via Odoo
         from app.recebimento.services.picking_recebimento_sync_service import PickingRecebimentoSyncService  # ✅ Service de Pickings Recebimento (Fase 4)
 
+
         logger.info("🔧 Inicializando services FORA do contexto...")
         faturamento_service = FaturamentoService()
         carteira_service = CarteiraService()
@@ -138,7 +141,7 @@ def executar_sincronizacao():
     global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service
 
     logger.info("=" * 60)
-    logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 60)
     logger.info(f"⚙️ Configurações:")
     logger.info(f"   - Intervalo: {INTERVALO_MINUTOS} minutos")

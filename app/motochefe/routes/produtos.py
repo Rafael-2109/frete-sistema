@@ -13,6 +13,7 @@ from app.motochefe.routes import motochefe_bp
 from app.motochefe.routes.cadastros import requer_motochefe
 from app.motochefe.models import ModeloMoto, Moto
 from app.utils.valores_brasileiros import converter_valor_brasileiro
+from app.utils.timezone import agora_utc_naive
 
 
 def _ativar_motos_rejeitadas(nome_modelo, modelo_id):
@@ -162,7 +163,7 @@ def exportar_modelos():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'modelos_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/modelos/modelo')
@@ -177,7 +178,7 @@ def baixar_modelo_modelos():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_modelos_motos_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_modelos_motos_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/modelos/importar', methods=['POST'])
@@ -478,7 +479,7 @@ def exportar_motos():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'motos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'motos_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/motos/exportar-inativas')
@@ -517,7 +518,7 @@ def exportar_motos_inativas():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'motos_INATIVAS_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'motos_INATIVAS_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/motos/modelo')
@@ -532,7 +533,7 @@ def baixar_modelo_motos():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_motos_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_motos_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/motos/importar', methods=['POST'])
@@ -977,7 +978,7 @@ def reverter_avaria(chassi):
             raise Exception('Apenas motos avariadas ou devolvidas podem ser revertidas')
 
         # Registrar reversão na observação (tratar caso seja None)
-        log_msg = f"\n\nRevertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+        log_msg = f"\n\nRevertido para DISPONIVEL em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
         if moto.observacao:
             moto.observacao += log_msg
         else:
@@ -1140,7 +1141,7 @@ def imprimir_devolucao(documento_devolucao):
                          valor_total_formatado=f'{valor_total:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'),
                          data_devolucao=data_devolucao,
                          data_emissao=date.today().strftime('%d/%m/%Y'),
-                         hora_emissao=datetime.now().strftime('%H:%M:%S'))
+                         hora_emissao=agora_utc_naive().strftime('%H:%M:%S'))
 
 
 @motochefe_bp.route('/motos/<string:chassi>/voltar-avaria', methods=['POST'])
@@ -1155,7 +1156,7 @@ def voltar_avaria(chassi):
             raise Exception('Apenas motos devolvidas podem voltar para avaria')
 
         # Registrar na observação (tratar caso seja None)
-        log_msg = f"\n\nRetornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+        log_msg = f"\n\nRetornado para AVARIADO em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
         if moto.observacao:
             moto.observacao += log_msg
         else:
@@ -1202,9 +1203,9 @@ def reverter_avaria_lote():
 
                 # Registrar reversão
                 if moto.observacao:
-                    moto.observacao += f"\n\nRevertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+                    moto.observacao += f"\n\nRevertido para DISPONIVEL em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
                 else:
-                    moto.observacao = f"Revertido para DISPONIVEL em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+                    moto.observacao = f"Revertido para DISPONIVEL em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
 
                 moto.status = 'DISPONIVEL'
                 moto.atualizado_por = current_user.nome
@@ -1262,9 +1263,9 @@ def voltar_avaria_lote():
 
                 # Registrar na observação
                 if moto.observacao:
-                    moto.observacao += f"\n\nRetornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+                    moto.observacao += f"\n\nRetornado para AVARIADO em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
                 else:
-                    moto.observacao = f"Retornado para AVARIADO em {datetime.now().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
+                    moto.observacao = f"Retornado para AVARIADO em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')} por {current_user.nome}"
 
                 moto.status = 'AVARIADO'
                 moto.atualizado_por = current_user.nome

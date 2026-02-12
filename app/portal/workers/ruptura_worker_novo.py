@@ -7,6 +7,7 @@ from app import create_app, db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import ProgramacaoProducao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func
 from datetime import datetime
 import logging
@@ -50,7 +51,7 @@ def processar_lote_com_publicacao(pedidos, session_id, worker_id, lote_index):
                 # Adicionar metadados
                 resultado['worker_id'] = worker_id
                 resultado['lote_index'] = lote_index
-                resultado['processado_em'] = datetime.now().isoformat()
+                resultado['processado_em'] = agora_utc_naive().isoformat()
                 
                 # Acumular resultado
                 resultados_acumulados.append(resultado)
@@ -101,7 +102,7 @@ def processar_lote_com_publicacao(pedidos, session_id, worker_id, lote_index):
             json.dumps({
                 'worker_id': worker_id,
                 'total_processados': len(pedidos),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             })
         )
         
@@ -151,7 +152,7 @@ def analisar_pedido_individual(num_pedido):
                 func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
             ).filter(
                 ProgramacaoProducao.cod_produto.in_(produtos_unicos),
-                ProgramacaoProducao.data_programacao >= datetime.now().date()
+                ProgramacaoProducao.data_programacao >= agora_utc_naive().date()
             ).group_by(
                 ProgramacaoProducao.cod_produto,
                 ProgramacaoProducao.data_programacao
@@ -320,7 +321,7 @@ def publicar_atualizacao(session_id, worker_id, resultados, lote_index):
             'worker_id': worker_id,
             'lote_index': lote_index,
             'qtd_resultados': len(resultados),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         }
         
         # Publicar no canal da sessão

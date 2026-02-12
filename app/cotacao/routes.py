@@ -1715,7 +1715,7 @@ def fechar_frete_grupo():
             print(f"[DEBUG] ⚠️ AVISO: Pallets ({pallets_total}) maior que peso ({peso_total}), possível erro de cálculo")
         # ✅ NOVO: Verifica se já existe embarque recente (últimos 10 segundos) com os mesmos pedidos
         from datetime import timedelta
-        tempo_limite = datetime.now() - timedelta(seconds=10)
+        tempo_limite = agora_utc_naive() - timedelta(seconds=10)
         
         # Busca os números de pedidos
         numeros_pedidos = sorted([p.num_pedido for p in todos_pedidos])

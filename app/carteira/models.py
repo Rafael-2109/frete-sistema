@@ -541,7 +541,7 @@ class SaldoStandby(db.Model):
         if self.status_standby != 'ATIVO':
             return self.dias_em_standby
             
-        delta = datetime.now().date() - self.criado_em.date()
+        delta = agora_utc_naive().date() - self.criado_em.date()
         return delta.days
     
     @property
@@ -550,7 +550,7 @@ class SaldoStandby(db.Model):
         if self.status_standby != 'ATIVO':
             return False
             
-        hoje = datetime.now().date()
+        hoje = agora_utc_naive().date()
         return not self.proximo_alerta or hoje >= self.proximo_alerta 
 
 

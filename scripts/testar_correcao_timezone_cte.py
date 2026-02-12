@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import create_app
 from app.odoo.services.cte_service import CteService
+from app.utils.timezone import agora_utc_naive
 
 def testar_sincronizacao_cte():
     """Testa sincronização incremental de CTes com correção de timezone"""
@@ -33,7 +34,7 @@ def testar_sincronizacao_cte():
     with app.app_context():
         try:
             # Mostrar horários de referência
-            agora_local = datetime.now()
+            agora_local = agora_utc_naive()
             agora_utc = datetime.now(pytz.UTC)
             agora_brt = datetime.now(pytz.timezone('America/Sao_Paulo'))
 

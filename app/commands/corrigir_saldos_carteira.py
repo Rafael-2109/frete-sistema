@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import create_app, db
 from sqlalchemy import text
+from app.utils.timezone import agora_utc_naive
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +45,7 @@ def corrigir_todos_saldos_carteira():
         logger.info("=" * 80)
         logger.info("🔧 CORREÇÃO DE SALDOS DA CARTEIRA PRINCIPAL")
         logger.info("=" * 80)
-        logger.info(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Início: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
 
         # Query SQL otimizada para update em massa
         # Esta query atualiza TODOS os registros de uma vez
@@ -74,7 +75,7 @@ def corrigir_todos_saldos_carteira():
         logger.info("=" * 80)
         logger.info(f"✅ CORREÇÃO CONCLUÍDA COM SUCESSO!")
         logger.info(f"   Total de registros atualizados: {registros_atualizados:,}")
-        logger.info(f"Término: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Término: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("=" * 80)
 
         return registros_atualizados

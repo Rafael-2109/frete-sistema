@@ -45,7 +45,7 @@ from app.fretes.models import ConhecimentoTransporte, Frete
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.cte_xml_parser import extrair_info_complementar, CTeXMLParser
 from app.utils.file_storage import get_file_storage
-from app.utils.timezone import agora_utc
+from app.utils.timezone import agora_utc, agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -604,8 +604,7 @@ class CteService:
             cte_existente.cte_complementa_id = cte_complementa_id
             cte_existente.motivo_complemento = motivo_complemento
 
-            # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() para timestamps internos
-            cte_existente.atualizado_em = agora_utc()
+            cte_existente.atualizado_em = agora_utc_naive()
             cte_existente.atualizado_por = 'Sistema Odoo'
 
             # ✅ Calcular e gravar flag tomador_e_empresa
@@ -738,9 +737,8 @@ class CteService:
         cnpj_emitente = cte_data.get('nfe_infnfe_emit_cnpj', '')
         cnpj_limpo = cnpj_emitente.replace('.', '').replace('/', '').replace('-', '') if cnpj_emitente else 'sem_cnpj'
 
-        # Organizar em pastas por data
-        # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() para organização de pastas
-        data_hoje = agora_utc()
+        # Organizar em pastas por data (horario Brasil)
+        data_hoje = agora_utc_naive()
         pasta_base = f"ctes/{data_hoje.year}/{data_hoje.month:02d}/{cnpj_limpo}"
 
         # Chave de acesso para nome do arquivo
@@ -840,10 +838,9 @@ class CteService:
 
             cte.frete_id = frete_id
             cte.vinculado_manualmente = manual
-            # 🔧 CORREÇÃO TIMEZONE: Usar agora_utc() para timestamps internos
-            cte.vinculado_em = agora_utc()
+            cte.vinculado_em = agora_utc_naive()
             cte.vinculado_por = usuario or 'Sistema'
-            cte.atualizado_em = agora_utc()
+            cte.atualizado_em = agora_utc_naive()
 
             db.session.commit()
 

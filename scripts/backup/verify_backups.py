@@ -23,6 +23,7 @@ from cryptography.fernet import Fernet
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import setup_logger
+from app.utils.timezone import agora_utc_naive
 
 class BackupVerifier:
     """Comprehensive backup verification system"""
@@ -590,7 +591,7 @@ class BackupVerifier:
         report.append("=" * 80)
         report.append("MCP Backup Verification Report")
         report.append("=" * 80)
-        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append(f"Generated: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
         report.append(f"Total backups verified: {self.verification_results['backups_verified']}")
         report.append(f"Passed: {self.verification_results['backups_passed']}")
         report.append(f"Failed: {self.verification_results['backups_failed']}")

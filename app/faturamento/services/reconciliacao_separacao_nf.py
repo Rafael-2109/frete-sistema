@@ -59,7 +59,7 @@ class ReconciliacaoSeparacaoNF:
         
         try:
             # Data limite para análise
-            data_limite = datetime.now() - timedelta(days=dias_retroativos)
+            data_limite = agora_utc_naive() - timedelta(days=dias_retroativos)
             
             # 1. Buscar separações não sincronizadas ou com possível discrepância
             separacoes_para_verificar = cls._buscar_separacoes_para_reconciliar(data_limite)

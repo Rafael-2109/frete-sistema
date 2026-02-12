@@ -13,6 +13,7 @@ from app.comercial.services.agregacao_service import AgregacaoComercialService
 from app.comercial.decorators import comercial_required, admin_comercial_required, get_permissoes_cached
 from app.carteira.models import CarteiraPrincipal
 from app.faturamento.models import FaturamentoProduto
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import distinct, text, func
 import typing as t
 from typing import Optional
@@ -859,7 +860,7 @@ def exportar_clientes_excel():
             worksheet.column_dimensions[column_letter].width = adjusted_width
 
     output.seek(0)
-    filename = f"clientes_detalhado_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"clientes_detalhado_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     return send_file(
         output,

@@ -27,7 +27,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 
 from app import db
-from app.utils.timezone import agora_utc_naive
+from app.utils.timezone import agora_utc_naive, agora_utc
 from app.recebimento.models import ProdutoFornecedorDepara
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -951,7 +951,8 @@ class DeparaService:
             ]
 
             # Filtrar por write_date (apenas modificados recentemente)
-            data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
+            # CORREÇÃO TIMEZONE: Odoo write_date é UTC → usar agora_utc()
+            data_limite = agora_utc() - timedelta(minutes=minutos_janela)
             data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
             domain.append(('write_date', '>=', data_limite_str))
 

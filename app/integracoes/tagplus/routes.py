@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from datetime import datetime, timedelta, date
 from app.integracoes.tagplus.importador_v2 import ImportadorTagPlusV2
 from app.integracoes.tagplus.correcao_pedidos_service_v2 import CorrecaoPedidosServiceV2
+from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
@@ -98,12 +99,12 @@ def importar_nfs():
         if dados.get('data_inicio'):
             data_inicio = datetime.strptime(dados['data_inicio'], '%Y-%m-%d').date()
         else:
-            data_inicio = datetime.now().date() - timedelta(days=7)
+            data_inicio = agora_utc_naive().date() - timedelta(days=7)
         
         if dados.get('data_fim'):
             data_fim = datetime.strptime(dados['data_fim'], '%Y-%m-%d').date()
         else:
-            data_fim = datetime.now().date()
+            data_fim = agora_utc_naive().date()
         
         limite = dados.get('limite', 100)
         

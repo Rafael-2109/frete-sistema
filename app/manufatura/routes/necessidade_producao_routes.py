@@ -5,6 +5,7 @@ from flask import render_template, jsonify, request
 from flask_login import login_required, current_user
 from app import db
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def register_necessidade_producao_routes(bp):
@@ -22,8 +23,8 @@ def register_necessidade_producao_routes(bp):
         try:
             from app.manufatura.services.necessidade_producao_service import NecessidadeProducaoService
 
-            mes = request.args.get('mes', datetime.now().month, type=int)
-            ano = request.args.get('ano', datetime.now().year, type=int)
+            mes = request.args.get('mes', agora_utc_naive().month, type=int)
+            ano = request.args.get('ano', agora_utc_naive().year, type=int)
             cod_produto = request.args.get('cod_produto')
             linha_producao = request.args.get('linha_producao')
             marca = request.args.get('marca')

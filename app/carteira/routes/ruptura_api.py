@@ -11,6 +11,7 @@ from sqlalchemy import func, case
 import logging
 from datetime import datetime
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from app.utils.timezone import agora_utc_naive
 import time
 import json
 
@@ -98,7 +99,7 @@ def analisar_ruptura_pedido(num_pedido):
                 func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
             ).filter(
                 ProgramacaoProducao.cod_produto.in_(produtos_unicos),
-                ProgramacaoProducao.data_programacao >= datetime.now().date()
+                ProgramacaoProducao.data_programacao >= agora_utc_naive().date()
             ).group_by(
                 ProgramacaoProducao.cod_produto,
                 ProgramacaoProducao.data_programacao

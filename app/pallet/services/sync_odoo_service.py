@@ -91,7 +91,7 @@ class PalletSyncService:
             data_corte = data_de
             logger.info(f"🔄 Iniciando sincronizacao de remessas de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
         else:
-            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            data_corte = (agora_utc_naive() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
             logger.info(f"🔄 Iniciando sincronizacao de remessas de pallet (ultimos {dias_retroativos} dias)")
 
         t_inicio = time.time()
@@ -352,7 +352,7 @@ class PalletSyncService:
             data_corte = data_de
             logger.info(f"🔄 Iniciando sincronizacao de vendas de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
         else:
-            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            data_corte = (agora_utc_naive() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
             logger.info(f"🔄 Iniciando sincronizacao de vendas de pallet (ultimos {dias_retroativos} dias)")
 
         t_inicio = time.time()
@@ -574,7 +574,7 @@ class PalletSyncService:
             data_corte = data_de
             logger.info(f"🔄 Iniciando sincronizacao de devolucoes de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
         else:
-            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            data_corte = (agora_utc_naive() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
             logger.info(f"🔄 Iniciando sincronizacao de devolucoes de pallet (ultimos {dias_retroativos} dias)")
 
         t_inicio = time.time()
@@ -836,7 +836,7 @@ class PalletSyncService:
             data_corte = data_de
             logger.info(f"🔄 Iniciando sincronizacao de recusas de pallet (periodo: {data_de} a {data_ate or 'hoje'})")
         else:
-            data_corte = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            data_corte = (agora_utc_naive() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
             logger.info(f"🔄 Iniciando sincronizacao de recusas de pallet (ultimos {dias_retroativos} dias)")
 
         t_inicio = time.time()

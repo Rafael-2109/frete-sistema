@@ -11,6 +11,7 @@ from app.producao.models import ProgramacaoProducao
 from app.carteira.main_routes import carteira_bp
 from app.estoque.models import MovimentacaoEstoque
 from app.estoque.models import UnificacaoCodigos
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func, text
 from sqlalchemy.orm import load_only
 import logging
@@ -355,7 +356,7 @@ def analisar_ruptura_pedido_sem_cache(num_pedido):
             func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
         ).filter(
             ProgramacaoProducao.cod_produto.in_(list(todos_codigos)),  # Usar TODOS os códigos expandidos!
-            ProgramacaoProducao.data_programacao >= datetime.now().date()
+            ProgramacaoProducao.data_programacao >= agora_utc_naive().date()
         ).group_by(
             ProgramacaoProducao.cod_produto,
             ProgramacaoProducao.data_programacao

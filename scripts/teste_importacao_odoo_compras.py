@@ -22,6 +22,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 def formatar_json(data):
     """Formata JSON de forma legível"""
@@ -264,7 +265,7 @@ def salvar_documentacao(conn, fase1_data, fase2_data, fase3_data):
 
     doc = {
         "metadata": {
-            "data_execucao": datetime.now().isoformat(),
+            "data_execucao": agora_utc_naive().isoformat(),
             "odoo_url": "https://odoo.nacomgoya.com.br",
             "database": "odoo-17-ee-nacomgoya-prd",
         },
@@ -458,7 +459,7 @@ def main():
     print("\n" + "=" * 80)
     print("🧪 TESTE DE IMPORTAÇÃO ODOO - COMPRAS E ESTOQUE")
     print("=" * 80)
-    print(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print("=" * 80)
 
     # Testar conexão

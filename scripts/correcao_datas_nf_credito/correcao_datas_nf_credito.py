@@ -27,6 +27,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def carregar_diagnostico():
@@ -47,7 +48,7 @@ def criar_backup(odoo, correcoes):
     """
     backup_file = os.path.join(
         os.path.dirname(__file__),
-        f"backup_antes_correcao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        f"backup_antes_correcao_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.json"
     )
 
     move_ids = [c['id'] for c in correcoes]
@@ -67,7 +68,7 @@ def criar_backup(odoo, correcoes):
     )
 
     backup = {
-        'data_backup': datetime.now().isoformat(),
+        'data_backup': agora_utc_naive().isoformat(),
         'account_move': moves,
         'account_move_line': lines
     }
@@ -183,7 +184,7 @@ def executar_correcao(dry_run=True, limite=None):
 
     print("=" * 120)
     print("CORREÇÃO - NFs de Crédito com Data de Lançamento Incorreta")
-    print(f"Data de execução: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Data de execução: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Modo: {'DRY RUN (simulação)' if dry_run else 'EXECUÇÃO REAL'}")
     print("=" * 120)
 
@@ -243,11 +244,11 @@ def executar_correcao(dry_run=True, limite=None):
     # Salvar log
     log_file = os.path.join(
         os.path.dirname(__file__),
-        f"log_correcao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        f"log_correcao_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.json"
     )
     with open(log_file, 'w', encoding='utf-8') as f:
         json.dump({
-            'data_execucao': datetime.now().isoformat(),
+            'data_execucao': agora_utc_naive().isoformat(),
             'modo': 'dry_run' if dry_run else 'executado',
             'total': len(resultados),
             'sucesso': sucesso,

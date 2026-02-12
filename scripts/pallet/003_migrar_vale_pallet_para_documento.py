@@ -45,6 +45,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app import create_app, db
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import text
 
 
@@ -322,7 +323,7 @@ def migrar_registro(vale, dry_run=False, verbose=False):
         'aba_arquivo': vale.aba_arquivo,
         'vale_pallet_id': vale_id,
         'observacao': vale.observacao or f'Migrado de ValePallet #{vale_id}',
-        'criado_em': vale.criado_em or datetime.now(),
+        'criado_em': vale.criado_em or agora_utc_naive(),
         'criado_por': vale.criado_por or 'migracao_v2',
     })
 
@@ -410,7 +411,7 @@ def criar_solucao(vale, credito_id, tipo_solucao, quantidade):
             'nome_responsavel': vale.responsavel_resolucao,
             'vale_pallet_id': vale.id,
             'observacao': f'Migrado de ValePallet #{vale.id} (resolvido por venda)',
-            'criado_em': vale.resolvido_em or datetime.now(),
+            'criado_em': vale.resolvido_em or agora_utc_naive(),
             'criado_por': vale.resolvido_por or 'migracao_v2',
         })
 
@@ -458,7 +459,7 @@ def criar_solucao(vale, credito_id, tipo_solucao, quantidade):
             'nome_responsavel': vale.responsavel_resolucao or vale.nome_transportadora,
             'vale_pallet_id': vale.id,
             'observacao': f'Migrado de ValePallet #{vale.id} (resolvido por coleta)',
-            'criado_em': vale.resolvido_em or datetime.now(),
+            'criado_em': vale.resolvido_em or agora_utc_naive(),
             'criado_por': vale.resolvido_por or 'migracao_v2',
         })
 

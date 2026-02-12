@@ -27,6 +27,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 # Timeout para conexão com Odoo (10 minutos por lançamento)
@@ -86,7 +87,7 @@ def _atualizar_progresso_lote(fatura_id: int, progresso: dict):
     try:
         redis_conn = _get_redis_connection()
         if redis_conn:
-            progresso['ultimo_update'] = datetime.now().isoformat()
+            progresso['ultimo_update'] = agora_utc_naive().isoformat()
             key = f'lote_progresso:{fatura_id}'
             redis_conn.setex(key, 3600, json.dumps(progresso))  # Expira em 1 hora
             logger.debug(f"📊 [Lote] Progresso atualizado: {progresso.get('item_atual', 'N/A')}")
@@ -615,7 +616,7 @@ def lancar_lote_job(
                 'jobs_enfileirados': 0,
                 'item_atual': 'Enfileirando jobs...',
                 'jobs': [],
-                'inicio': datetime.now().isoformat()
+                'inicio': agora_utc_naive().isoformat()
             }
             _atualizar_progresso_lote(fatura_frete_id, progresso)
 
@@ -721,7 +722,7 @@ def lancar_lote_job(
             # 📊 Finalizar progresso
             progresso['status'] = 'enfileirado'
             progresso['item_atual'] = 'Todos os jobs enfileirados!'
-            progresso['fim'] = datetime.now().isoformat()
+            progresso['fim'] = agora_utc_naive().isoformat()
             progresso['tempo_total_segundos'] = tempo_total
             _atualizar_progresso_lote(fatura_frete_id, progresso)
 

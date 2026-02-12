@@ -13,6 +13,7 @@ from app import db
 from app.localidades.forms import CidadeForm
 from app.localidades.models import Cidade, CadastroRota, CadastroSubRota
 from app.permissions.decorators import check_permission as require_permission
+from app.utils.timezone import agora_utc_naive
 
 localidades_bp = Blueprint('localidades', __name__, url_prefix='/localidades')
 
@@ -121,7 +122,7 @@ def exportar_cidades():
     workbook.save(output)
     output.seek(0)
 
-    filename = f"export_cidades_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"export_cidades_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return send_file(output, download_name=filename, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
@@ -611,7 +612,7 @@ def exportar_dados_rotas():
         
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=rotas_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=rotas_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         
@@ -719,7 +720,7 @@ def exportar_dados_sub_rotas():
         
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=sub_rotas_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=sub_rotas_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         

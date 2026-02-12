@@ -47,6 +47,7 @@ from typing import Dict, List, Set
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def buscar_dfes_odoo(dfe_ids: List[int], conn) -> Dict[int, Dict]:
@@ -152,7 +153,7 @@ def main(dry_run: bool = False, skip_produto: bool = False, only_produto: bool =
         print("MIGRAÇÃO 002: Corrigir dados em cadastro_primeira_compra")
         print("=" * 70)
         print(f"Modo: {'DRY-RUN (simulação)' if dry_run else 'EXECUÇÃO REAL'}")
-        print(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+        print(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
         print(f"Opções: skip_produto={skip_produto}, only_produto={only_produto}")
         print("-" * 70)
 

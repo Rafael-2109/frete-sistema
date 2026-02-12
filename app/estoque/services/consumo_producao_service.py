@@ -22,6 +22,7 @@ from app.estoque.models import MovimentacaoEstoque
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.manufatura.models import ListaMateriais
 from app.producao.models import CadastroPalletizacao
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ServicoConsumoProducao:
         Gera ID único para operação de produção.
         Formato: PROD_YYYYMMDD_HHMMSS_XXXX
         """
-        agora = datetime.now()
+        agora = agora_utc_naive()
         random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
         return f"PROD_{agora.strftime('%Y%m%d_%H%M%S')}_{random_suffix}"
 

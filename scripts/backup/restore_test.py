@@ -22,6 +22,7 @@ import redis
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import setup_logger
+from app.utils.timezone import agora_utc_naive
 
 class RestoreTest:
     """Automated restore testing system"""
@@ -501,7 +502,7 @@ class RestoreTest:
         """Test complete system restoration"""
         self.logger.info(f"Starting full restore test for backup: {backup_name}")
         
-        test_name = f"restore_test_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        test_name = f"restore_test_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}"
         environment = self.create_test_environment(test_name)
         
         full_test_result = {
@@ -626,7 +627,7 @@ class RestoreTest:
         report.append(f"Success rate: {self.test_results['tests_passed'] / max(self.test_results['tests_run'], 1) * 100:.1f}%")
         
         # Save report
-        report_file = self.test_dir / f"drill_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.txt"
+        report_file = self.test_dir / f"drill_report_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}.txt"
         with open(report_file, 'w') as f:
             f.write("\n".join(report))
         

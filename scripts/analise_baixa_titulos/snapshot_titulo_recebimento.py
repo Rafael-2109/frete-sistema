@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import create_app
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 # ============================================================================
@@ -365,7 +366,7 @@ class SnapshotTituloRecebimento:
             'meta': {
                 'titulo_id': titulo_id,
                 'descricao': descricao,
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': agora_utc_naive().isoformat(),
                 'versao_script': '1.0.0'
             },
             'entidades': {}
@@ -526,7 +527,7 @@ class SnapshotTituloRecebimento:
     def _salvar_snapshot(self, snapshot: Dict, descricao: str):
         """Salva snapshot em arquivo JSON"""
         titulo_id = snapshot['meta']['titulo_id']
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
         descricao_safe = descricao.replace(' ', '_').replace('/', '-') if descricao else 'snapshot'
 
         filename = f"snapshot_titulo_{titulo_id}_{descricao_safe}_{timestamp}.json"
@@ -797,7 +798,7 @@ class SnapshotTituloRecebimento:
             resumo_path = os.path.join(output_dir, 'RESUMO_TABELAS_BAIXA.json')
             with open(resumo_path, 'w', encoding='utf-8') as f:
                 json.dump({
-                    'gerado_em': datetime.now().isoformat(),
+                    'gerado_em': agora_utc_naive().isoformat(),
                     'modelos': {
                         m: {
                             'total_campos': d.get('total_campos', 0),
@@ -924,7 +925,7 @@ def menu_interativo():
                         diferencas = snapshot.comparar_snapshots(snap_antes, snap_depois)
 
                         # Salvar diferenças
-                        diff_file = os.path.join(snapshots_dir, f"diferencas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                        diff_file = os.path.join(snapshots_dir, f"diferencas_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.json")
                         with open(diff_file, 'w', encoding='utf-8') as f:
                             json.dump(diferencas, f, indent=2, ensure_ascii=False, default=str)
                         print(f"\n💾 Diferenças salvas em: {diff_file}")

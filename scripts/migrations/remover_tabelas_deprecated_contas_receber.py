@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app import create_app, db
 from sqlalchemy import text
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def verificar_tabelas_existem():
@@ -188,7 +189,7 @@ def main():
     print("=" * 70)
     print("REMOÇÃO DE TABELAS DEPRECATED - CONTAS A RECEBER")
     print("=" * 70)
-    print(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Início: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
 
     app = create_app()
 
@@ -221,7 +222,7 @@ def main():
         print("\n" + "=" * 70)
         print("✅ REMOÇÃO CONCLUÍDA")
         print("=" * 70)
-        print(f"\nFim: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"\nFim: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
 
         print("\n⚠️  PRÓXIMOS PASSOS:")
         print("   1. Remova as classes do models.py:")

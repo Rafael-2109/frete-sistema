@@ -46,7 +46,7 @@ class Config:
         # Configurações otimizadas para Render.com
         SQLALCHEMY_ENGINE_OPTIONS["connect_args"] = {
             "client_encoding": "utf8",
-            "options": "-c client_encoding=utf8 -c timezone=UTC",
+            "options": "-c client_encoding=utf8 -c timezone=America/Sao_Paulo",
             "connect_timeout": 10,
             "command_timeout": 30,
             "application_name": "sistema_fretes",
@@ -115,7 +115,7 @@ class Config:
                 "client_encoding": "utf8",  # Encoding UTF-8 explícito
                 # Combina todas as opções em uma única string
                 # idle_in_transaction_session_timeout reduzido para 30s para evitar SSL timeout
-                "options": "-c client_encoding=UTF8 -c timezone=UTC -c statement_timeout=60000 -c idle_in_transaction_session_timeout=30000",
+                "options": "-c client_encoding=UTF8 -c timezone=America/Sao_Paulo -c statement_timeout=60000 -c idle_in_transaction_session_timeout=30000",
             },
         }
     else:

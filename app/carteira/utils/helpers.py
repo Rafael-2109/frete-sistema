@@ -5,6 +5,7 @@ Funções auxiliares da carteira
 # Removidos imports não utilizados após limpeza de funções duplicadas
 from datetime import datetime, timedelta
 import logging
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ def calcular_estoque_data_especifica(projecao_29_dias, data_target):
     Calcula estoque para uma data específica baseado na projeção
     """
     try:
-        data_hoje = datetime.now().date()
+        data_hoje = agora_utc_naive().date()
         diff_dias = (data_target - data_hoje).days
         
         # Se data é passado ou muito futuro, usar fallbacks
@@ -38,7 +39,7 @@ def encontrar_proxima_data_com_estoque(projecao_29_dias, qtd_necessaria):
     Encontra a próxima data com estoque suficiente para atender a quantidade
     """
     try:
-        data_hoje = datetime.now().date()
+        data_hoje = agora_utc_naive().date()
         qtd_necessaria = float(qtd_necessaria or 0)
         
         if qtd_necessaria <= 0:

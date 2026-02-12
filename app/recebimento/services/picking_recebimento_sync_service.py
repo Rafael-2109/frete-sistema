@@ -392,7 +392,7 @@ class PickingRecebimentoSyncService:
             logger.info(f"   Primeira execucao: buscando TODOS os pickings {STATES_PENDENTES}")
         else:
             # Incremental: pendentes SEMPRE + done/cancel com janela de tempo
-            data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+            data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
             # Domain em 2 partes:
             # - Grupo 1 (OR): TODOS os pendentes assigned/waiting/confirmed (sem filtro data)

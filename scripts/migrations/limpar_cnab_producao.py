@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import create_app, db
 from sqlalchemy import text
+from app.utils.timezone import agora_utc_naive
 
 
 def inventariar_dados():
@@ -257,7 +258,7 @@ Exemplos:
     with app.app_context():
         print("\n" + "="*60)
         print("LIMPEZA DE DADOS CNAB")
-        print(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Data: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*60)
 
         # Inventariar

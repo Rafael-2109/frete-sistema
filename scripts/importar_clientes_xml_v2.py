@@ -15,6 +15,7 @@ from datetime import datetime
 import re
 from app import create_app, db
 from app.carteira.models import CadastroCliente
+from app.utils.timezone import agora_utc_naive
 
 
 
@@ -72,7 +73,7 @@ def importar_clientes_xml(arquivo_xml):
     print(f"Importação de Clientes XML (Versão 2.0)")
     print(f"{'='*60}")
     print(f"Arquivo: {arquivo_xml}")
-    print(f"Início: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Início: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print(f"{'='*60}\n")
     
     # Verifica se o arquivo existe
@@ -282,7 +283,7 @@ def importar_clientes_xml(arquivo_xml):
     print(f"🏢 Filiais detectadas: {filiais_detectadas}")
     print(f"❌ Clientes com erro: {clientes_com_erro}")
     print(f"{'='*60}")
-    print(f"Término: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Término: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print(f"{'='*60}\n")
 
 

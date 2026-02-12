@@ -18,6 +18,7 @@ from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.utils.redis_cache import redis_cache
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class PedidosCounterService:
     @staticmethod
     def _calcular_tudo() -> Dict[str, Any]:
         """Calcula todos os contadores em queries otimizadas."""
-        hoje = datetime.now().date()
+        hoje = agora_utc_naive().date()
 
         # 1. Contadores de data (D+0 a D+3) - 1 query em vez de 8
         contadores_data = PedidosCounterService._calcular_contadores_data(hoje)

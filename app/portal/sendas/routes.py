@@ -10,6 +10,7 @@ from flask_login import login_required
 import requests
 from functools import wraps
 import logging
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 # Blueprint
@@ -100,7 +101,7 @@ def salvar_sessao():
         
         # Salvar sessão completa
         session_data = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': agora_utc_naive().isoformat(),
             'cookies': cookies,
             'tokens': tokens,
             'localStorage': local_storage,

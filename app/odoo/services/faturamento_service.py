@@ -695,7 +695,7 @@ class FaturamentoService:
             if not primeira_execucao:
                 from datetime import datetime, timedelta
                 minutos_verificacao = int(minutos_status * 1.1)  # margem segurança
-                data_limite = datetime.now() - timedelta(minutes=minutos_verificacao)
+                data_limite = agora_utc_naive() - timedelta(minutes=minutos_verificacao)
                 query = query.filter(FaturamentoProduto.created_at >= data_limite)
                 logger.info(
                     f"🔎 Verificando existentes desde {data_limite.strftime('%Y-%m-%d %H:%M')} "

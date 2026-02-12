@@ -1059,7 +1059,7 @@ def register_lista_materiais_routes(bp):
 
             response = make_response(output.getvalue())
             response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            response.headers['Content-Disposition'] = f'attachment; filename=lista_materiais_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            response.headers['Content-Disposition'] = f'attachment; filename=lista_materiais_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
 
             return response
 

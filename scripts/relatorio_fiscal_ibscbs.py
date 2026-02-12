@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pandas as pd
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def extrair_relatorio_fiscal_datas(data_ini, data_fim, tipos: list = None):
@@ -53,7 +54,7 @@ def extrair_relatorio_fiscal(dias_atras: int = 2, tipos: list = None):
         tipos: Lista de tipos de documento ['out_invoice', 'in_invoice', etc.]
     """
     # Calcular período
-    data_fim = datetime.now().date()
+    data_fim = agora_utc_naive().date()
     data_ini = data_fim - timedelta(days=dias_atras)
     return _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos)
 
@@ -687,7 +688,7 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
     # ========================================================================
     # GERAR ARQUIVO EXCEL
     # ========================================================================
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
 
     # Usar caminho absoluto baseado na raiz do projeto (não relativo ao cwd)
     project_root = Path(__file__).parent.parent

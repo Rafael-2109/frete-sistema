@@ -246,7 +246,7 @@ class PalletCredito(db.Model):
         """Calcula quantos dias faltam para o crédito vencer"""
         if self.data_vencimento:
             from datetime import datetime
-            hoje = datetime.now().date()
+            hoje = agora_utc_naive().date()
             delta = self.data_vencimento - hoje
             return delta.days
         return None

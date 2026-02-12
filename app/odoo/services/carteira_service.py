@@ -22,7 +22,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 
 from app import db
-from app.utils.timezone import agora_utc_naive
+from app.utils.timezone import agora_utc_naive, odoo_para_local
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.carteira_mapper import CarteiraMapper
 from app.custeio.models import CustoConsiderado
@@ -1122,13 +1122,26 @@ class CarteiraService:
         return dados_sanitizados
     
     def _format_date(self, data_str: Any) -> Optional[date]:
-        """Formata string de data para objeto date"""
+        """
+        Formata string de data para objeto date.
+        Datas com hora (datetime do Odoo) sao convertidas de UTC para Brasil
+        antes de extrair a data, para evitar que registros criados entre 21h-23:59 BRT
+        (que sao 00h-02:59 UTC do dia seguinte) fiquem com data errada.
+        """
         if not data_str:
             return None
         try:
             if isinstance(data_str, str):
-                # Tenta diferentes formatos
-                for formato in ['%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S']:
+                # Tenta formato datetime primeiro (Odoo retorna UTC)
+                if ' ' in data_str and ':' in data_str:
+                    try:
+                        dt_brasil = odoo_para_local(data_str)
+                        if dt_brasil:
+                            return dt_brasil.date()
+                    except Exception:
+                        pass
+                # Tenta formatos date-only (sem conversao de timezone)
+                for formato in ['%Y-%m-%d', '%d/%m/%Y']:
                     try:
                         return datetime.strptime(data_str, formato).date()
                     except ValueError:
@@ -1691,7 +1704,7 @@ class CarteiraService:
                 'total_alertas': len(alertas_criticos),
                 'separacoes_cotadas_afetadas': separacoes_cotadas_afetadas,
                 'alertas_novos': max(0, alertas_novos),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
             
         except ImportError:

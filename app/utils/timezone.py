@@ -1,13 +1,17 @@
 """
-Utilitários para gerenciamento de timezone brasileiro
+Utilitarios para gerenciamento de timezone brasileiro
 ====================================================
 
-CONVENÇÃO DO SISTEMA:
-- Armazenamento: Sempre UTC naive via agora_utc_naive()
-- Display: Sempre via filtros Jinja2 (formatar_data_segura, formatar_data_hora_brasil)
+CONVENCAO DO SISTEMA (atualizada 2026-02-12):
+- Armazenamento: Sempre BRASIL naive via agora_utc_naive() (retorna horario de Brasilia)
+- Display: Filtros Jinja2 (formatar_data_segura, formatar_data_hora_brasil) formatam direto (sem conversao)
 - Model defaults: default=agora_utc_naive, onupdate=agora_utc_naive
 - NUNCA usar datetime.utcnow() (deprecated Python 3.12+)
-- NUNCA usar agora_brasil() como default de model (causa bug de 3h com TIMESTAMP WITHOUT TIME ZONE)
+- Boundary Odoo: usar odoo_para_local() para converter UTC do Odoo → Brasil naive
+- Boundary Odoo (envio): usar agora_utc() para queries de write_date (Odoo armazena UTC)
+
+NOTA: agora_utc_naive() mantém o nome por compatibilidade (235+ usos).
+      Para código novo, usar o alias agora_brasil_naive().
 """
 
 import pytz
@@ -21,14 +25,16 @@ UTC_TZ = pytz.UTC
 
 def agora_utc_naive():
     """
-    Retorna datetime UTC naive (sem tzinfo).
-    Substituto padrão para datetime.utcnow() (deprecated Python 3.12+).
-    Compatível com TIMESTAMP WITHOUT TIME ZONE do PostgreSQL.
-
-    Para display, usar filtros Jinja2 (formatar_data_segura, formatar_data_hora_brasil)
-    que convertem automaticamente UTC -> Brasil.
+    Retorna datetime Brasil naive (sem tzinfo).
+    NOTA: Nome mantido por compatibilidade (235+ usos). Retorna horario de Brasilia.
+    Use agora_brasil_naive() para codigo novo.
+    Compativel com TIMESTAMP WITHOUT TIME ZONE do PostgreSQL.
     """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(BRASIL_TZ).replace(tzinfo=None)
+
+
+# Alias preferencial para codigo novo
+agora_brasil_naive = agora_utc_naive
 
 
 def agora_brasil():
@@ -85,11 +91,12 @@ def brasil_para_utc(dt_brasil):
 
 def formatar_data_hora_brasil(dt, formato="%d/%m/%Y %H:%M"):
     """
-    Formata datetime para exibição no padrão brasileiro
+    Formata datetime para exibicao no padrao brasileiro.
+    Datetime ja esta em horario Brasil (armazenado naive).
 
     Args:
-        dt: datetime (UTC ou timezone-aware)
-        formato: formato de saída
+        dt: datetime (ja em horario Brasil)
+        formato: formato de saida
 
     Returns:
         string formatada
@@ -98,20 +105,21 @@ def formatar_data_hora_brasil(dt, formato="%d/%m/%Y %H:%M"):
         return ""
 
     try:
-        # Converte para timezone brasileiro
-        dt_brasil = utc_para_brasil(dt)
-        return dt_brasil.strftime(formato)
+        if hasattr(dt, 'strftime'):
+            return dt.strftime(formato)
+        return ""
     except Exception:
         return ""
 
 
 def formatar_data_brasil(dt, formato="%d/%m/%Y"):
     """
-    Formata data para exibição no padrão brasileiro
+    Formata data para exibicao no padrao brasileiro.
+    Datetime ja esta em horario Brasil (armazenado naive).
 
     Args:
-        dt: date ou datetime
-        formato: formato de saída
+        dt: date ou datetime (ja em horario Brasil)
+        formato: formato de saida
 
     Returns:
         string formatada
@@ -120,34 +128,60 @@ def formatar_data_brasil(dt, formato="%d/%m/%Y"):
         return ""
 
     try:
-        # Se for datetime, converte para timezone brasileiro primeiro
-        if hasattr(dt, "hour"):  # É datetime
-            dt_brasil = utc_para_brasil(dt)
-            return dt_brasil.strftime(formato)
-        else:  # É date
+        if hasattr(dt, 'strftime'):
             return dt.strftime(formato)
+        return ""
     except Exception:
         return ""
 
 
 def agora_utc():
     """
-    Retorna datetime atual em UTC (para salvar no banco)
+    Retorna datetime atual em UTC (aware).
+    Usar APENAS para boundary Odoo (queries write_date, create_date).
+    NAO usar para armazenamento local — usar agora_utc_naive() em vez disso.
     """
     return datetime.now(UTC_TZ)
 
 
+def odoo_para_local(dt_str):
+    """
+    Converte datetime string UTC do Odoo para Brasil naive.
+    Usar na fronteira de recebimento de dados do Odoo.
+
+    Args:
+        dt_str: string no formato '%Y-%m-%d %H:%M:%S' ou datetime UTC
+
+    Returns:
+        datetime naive em horario Brasil, ou None
+    """
+    if not dt_str:
+        return None
+    try:
+        if isinstance(dt_str, str):
+            dt = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+        elif isinstance(dt_str, datetime):
+            dt = dt_str if dt_str.tzinfo is None else dt_str.replace(tzinfo=None)
+        else:
+            return None
+        # Odoo retorna UTC → converter para Brasil
+        dt_utc = UTC_TZ.localize(dt)
+        dt_brasil = dt_utc.astimezone(BRASIL_TZ)
+        return dt_brasil.replace(tzinfo=None)
+    except Exception:
+        return None
+
+
 def diferenca_horario_brasil():
     """
-    Retorna a diferença de horário entre UTC e Brasil
+    Retorna a diferenca de horario entre UTC e Brasil.
+    Nota: com armazenamento Brasil, essa diferenca sera ~0.
+    Mantida para compatibilidade.
     """
-    utc_now = agora_utc_naive()
-    agora_brasil_dt = agora_brasil()
+    utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+    brasil_now = agora_utc_naive()  # Agora retorna Brasil
 
-    # Converte para naive datetime para comparação
-    agora_brasil_naive = agora_brasil_dt.replace(tzinfo=None)
-
-    return agora_brasil_naive - utc_now
+    return brasil_now - utc_now
 
 
 def criar_datetime_brasil(ano, mes, dia, hora=0, minuto=0, segundo=0):

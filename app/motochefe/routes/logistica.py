@@ -14,6 +14,7 @@ from app.motochefe.models import (
     EmbarqueMoto, EmbarquePedido, PedidoVendaMoto,
     TransportadoraMoto
 )
+from app.utils.timezone import agora_utc_naive
 
 
 def gerar_numero_embarque():
@@ -136,7 +137,7 @@ def editar_embarque(id):
 
                 # Adicionar nova entrada
                 historico.append({
-                    'data': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'data': agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S'),
                     'de': embarque.status,
                     'para': novo_status,
                     'usuario': current_user.nome

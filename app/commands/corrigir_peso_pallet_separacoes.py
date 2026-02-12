@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app import create_app, db
 from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import or_, and_
 
 logging.basicConfig(
@@ -169,7 +170,7 @@ def main():
             logger.info("=" * 80)
             logger.info("🔧 CORREÇÃO DE PESO E PALLET DAS SEPARAÇÕES")
             logger.info("=" * 80)
-            logger.info(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Início: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
 
             # 1. Identificar separações problemáticas
             logger.info("\n📊 Fase 1: Identificando separações com problemas...")
@@ -195,7 +196,7 @@ def main():
             logger.info(f"   - Pesos corrigidos: {peso_corrigidos:,}")
             logger.info(f"   - Pallets corrigidos: {pallet_corrigidos:,}")
             logger.info(f"   - Total de correções: {peso_corrigidos + pallet_corrigidos:,}")
-            logger.info(f"\nTérmino: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"\nTérmino: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info("=" * 80)
 
             # 5. Verificação final

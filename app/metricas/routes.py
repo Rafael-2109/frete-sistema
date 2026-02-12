@@ -20,6 +20,7 @@ from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque
+from app.utils.timezone import agora_utc_naive
 
 metricas_bp = Blueprint('metricas', __name__, url_prefix='/metricas')
 
@@ -39,7 +40,7 @@ def dashboard_metricas():
     Consultas otimizadas com máximo de 3 queries SQL.
     """
     # Data atual para filtros
-    agora = datetime.now()
+    agora = agora_utc_naive()
     mes_atual = agora.month
     ano_atual = agora.year
 

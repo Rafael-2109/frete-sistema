@@ -7,6 +7,7 @@ from decimal import Decimal
 import pandas as pd
 from io import BytesIO
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.motochefe.routes import motochefe_bp
@@ -275,7 +276,7 @@ def exportar_despesas():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'despesas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'despesas_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/despesas/modelo')
@@ -290,7 +291,7 @@ def baixar_modelo_despesas():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_despesas_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_despesas_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/despesas/importar', methods=['POST'])

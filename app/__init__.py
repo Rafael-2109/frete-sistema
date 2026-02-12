@@ -169,11 +169,9 @@ def formatar_hora_brasil(data, formato="%H:%M"):
         if hasattr(data, "hour") and not hasattr(data, "year"):
             return data.strftime(formato)
 
-        # Se é um objeto datetime, usa a função de timezone
+        # Se é um objeto datetime, formata direto (já está em horário Brasil)
         elif hasattr(data, "year"):
-            from app.utils.timezone import formatar_data_hora_brasil
-
-            return formatar_data_hora_brasil(data, formato)
+            return data.strftime(formato)
 
         # Se é string, retorna como está
         elif isinstance(data, str):

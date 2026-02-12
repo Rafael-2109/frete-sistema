@@ -5,6 +5,7 @@ Centraliza a lógica de geração de protocolo para garantir consistência
 
 from datetime import datetime
 import logging
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,10 @@ def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = No
 
         # Obter timestamp (usar atual se não fornecido)
         if timestamp is None:
-            timestamp = datetime.now()
+            timestamp = agora_utc_naive()
 
         # Formatar data de hoje como ddmmyyyy
-        data_hoje = datetime.now().strftime('%d%m%Y')
+        data_hoje = agora_utc_naive().strftime('%d%m%Y')
 
         # Montar protocolo: AG_CNPJ_DataAgendamento_DataGeracao
         protocolo = f"AG_{cnpj_parte}_{data_formatada}_{data_hoje}"
@@ -76,7 +77,7 @@ def gerar_protocolo_sendas(cnpj: str, data_agendamento, timestamp: datetime = No
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         # Fallback para formato simplificado em caso de erro
-        return f"AG_ERR_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        return f"AG_ERR_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}"
 
 
 def extrair_dados_protocolo(protocolo: str) -> dict:

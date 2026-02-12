@@ -659,7 +659,7 @@ class ProcessadorFaturamento:
                 mov.nome_produto = produto.nome_produto
                 mov.tipo_movimentacao = "FATURAMENTO"
                 mov.local_movimentacao = "VENDA"
-                mov.data_movimentacao = datetime.now().date()
+                mov.data_movimentacao = agora_utc_naive().date()
                 mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
 
                 # NOVO: Campos estruturados
@@ -738,7 +738,7 @@ class ProcessadorFaturamento:
                 mov.nome_produto = produto.nome_produto
                 mov.tipo_movimentacao = "FATURAMENTO"
                 mov.local_movimentacao = "VENDA"
-                mov.data_movimentacao = datetime.now().date()
+                mov.data_movimentacao = agora_utc_naive().date()
                 mov.qtd_movimentacao = -abs(produto.qtd_produto_faturado)
 
                 # NOVO: Campos estruturados

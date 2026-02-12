@@ -23,6 +23,7 @@ from collections import defaultdict
 from app import db
 from app.manufatura.models import RequisicaoCompras, HistoricoRequisicaoCompras
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,7 @@ class RequisicaoComprasService:
 
         # Montar filtro de data
         # ✅ IMPORTAR TODOS (incluindo rejeitadas) para sincronizar status
-        data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+        data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
         filtro = [
             '|',
@@ -746,7 +747,7 @@ class RequisicaoComprasService:
             self.logger.info("🗑️  Detectando requisições excluídas do Odoo...")
 
             # Buscar requisições do sistema que foram modificadas recentemente
-            data_limite = datetime.now() - timedelta(minutes=minutos_janela)
+            data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
 
             requisicoes_sistema = RequisicaoCompras.query.filter(
                 RequisicaoCompras.importado_odoo == True,

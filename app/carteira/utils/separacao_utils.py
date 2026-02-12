@@ -8,6 +8,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
 from app.localidades.models import CadastroRota, CadastroSubRota
 from app.utils.text_utils import truncar_observacao
+from app.utils.timezone import agora_utc_naive
 import logging
 import re
 
@@ -151,8 +152,7 @@ def gerar_separacao_workspace_interno(num_pedido, lote_id, produtos, expedicao, 
     """
     try:
         from app.separacao.models import Separacao
-        from app.utils.timezone import agora_utc_naive
-        
+
         # Buscar informações dos produtos na carteira
         produtos_carteira = {}
         for produto in produtos:

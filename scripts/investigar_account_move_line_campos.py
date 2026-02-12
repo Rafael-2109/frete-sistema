@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import create_app
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 import json
 from datetime import datetime
 
@@ -198,7 +199,7 @@ def investigar_campos_account_move_line():
             resultado = {
                 "modelo": "account.move.line",
                 "total_campos": len(fields_metadata),
-                "data_analise": datetime.now().isoformat(),
+                "data_analise": agora_utc_naive().isoformat(),
                 "categorias": {
                     "campos_custom": len(campos_custom),
                     "campos_data": len(campos_data),

@@ -823,7 +823,7 @@ class ReversaoService:
                 mov = MovimentacaoEstoque(
                     cod_produto=item.cod_produto,
                     nome_produto=item.nome_produto,
-                    data_movimentacao=datetime.now().date(),
+                    data_movimentacao=agora_utc_naive().date(),
                     tipo_movimentacao='ENTRADA',        # E uma entrada de estoque
                     local_movimentacao='REVERSAO',      # Origem: reversao de NF
                     qtd_movimentacao=item.qtd_produto_faturado,  # Positivo (volta ao estoque)

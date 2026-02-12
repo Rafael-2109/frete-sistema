@@ -589,7 +589,7 @@ def finalizar_entrega(id):
 def resolver_pendencia(id):
     entrega = EntregaMonitorada.query.get_or_404(id)
     entrega.pendencia_financeira = False
-    entrega.resposta_financeiro = f"Resolvido por {current_user.nome} em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    entrega.resposta_financeiro = f"Resolvido por {current_user.nome} em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')}"
     db.session.commit()
     return redirect(url_for('monitoramento.listar_entregas', **request.args))
 
@@ -1878,16 +1878,8 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
         if entrega.data_faturamento:
             data_faturamento_formatada = entrega.data_faturamento.strftime('%d/%m/%Y')
         
-        # Formatar finalizado_em para fuso horário do Brasil
-        finalizado_em_brasil = None
-        if entrega.finalizado_em:
-            from app.utils.timezone import utc_para_brasil
-            try:
-                finalizado_em_brasil = utc_para_brasil(entrega.finalizado_em)
-            except Exception as e:
-                logger.error(f"Erro ao converter finalizado_em para fuso horário do Brasil: {e}")
-                # Fallback se não conseguir converter
-                finalizado_em_brasil = entrega.finalizado_em
+        # finalizado_em já está em horário Brasil (armazenado naive)
+        finalizado_em_brasil = entrega.finalizado_em if entrega.finalizado_em else None
         
         dados_principais.append({
             # 1ª coluna: Data de faturamento formatada

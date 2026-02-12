@@ -534,7 +534,7 @@ def exportar():
 
         # Nome do arquivo com data
         from datetime import datetime
-        filename = f"depara_atacadao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"depara_atacadao_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             output,

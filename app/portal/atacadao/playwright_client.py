@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 import logging
 from .config import ATACADAO_CONFIG
 from dotenv import load_dotenv
+from app.utils.timezone import agora_utc_naive
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -797,7 +798,7 @@ class AtacadaoPlaywrightClient:
             # Screenshot do botão antes de clicar
             if is_visible:
                 try:
-                    botao_salvar.screenshot(path=f"botao_salvar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+                    botao_salvar.screenshot(path=f"botao_salvar_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.png")
                     logger.info("   📸 Screenshot do botão salvo")
                 except Exception:
                     pass
@@ -1522,7 +1523,7 @@ class AtacadaoPlaywrightClient:
                 self.page.wait_for_timeout(500)
             
             # Screenshot antes de salvar
-            self.page.screenshot(path=f"agendamento_{datetime.now().strftime('%Y%m%d_%H%M%S')}_antes.png")
+            self.page.screenshot(path=f"agendamento_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}_antes.png")
             
             logger.info("🎯 Salvando formulário...")
             
@@ -1610,7 +1611,7 @@ class AtacadaoPlaywrightClient:
                 logger.warning("⚠️ Protocolo não capturado, verificando se agendamento foi criado...")
                 
                 # Screenshot detalhado para debug
-                screenshot_path = f"agendamento_debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                screenshot_path = f"agendamento_debug_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.png"
                 self.page.screenshot(path=screenshot_path, full_page=True)
                 logger.info(f"Screenshot salvo: {screenshot_path}")
                 
@@ -1693,7 +1694,7 @@ class AtacadaoPlaywrightClient:
         except Exception as e:
             logger.error(f"Erro ao criar agendamento: {e}")
             if self.page:
-                self.page.screenshot(path=f"erro_geral_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+                self.page.screenshot(path=f"erro_geral_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.png")
             return {
                 'success': False,
                 'message': f'Erro: {str(e)}'

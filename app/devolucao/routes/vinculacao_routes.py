@@ -16,6 +16,7 @@ from flask_login import login_required, current_user
 
 from app.devolucao.services import get_nfd_service
 from app.devolucao.models import NFDevolucao, NFDevolucaoNFReferenciada
+from app.utils.timezone import agora_utc_naive
 
 vinculacao_bp = Blueprint(
     'devolucao_vinculacao',
@@ -335,7 +336,6 @@ def api_adicionar_nf_referenciada(nfd_id: int):
             }), 400
 
         # Criar novo registro
-        from app.utils.timezone import agora_utc_naive
         from app import db
 
         ref = NFDevolucaoNFReferenciada(

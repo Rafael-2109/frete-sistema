@@ -10,6 +10,7 @@ from app.carteira.models import CadastroCliente
 from app.producao.models import CadastroPalletizacao
 from app.faturamento.models import FaturamentoProduto
 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+from app.utils.timezone import agora_utc_naive
 import logging
 import os
 
@@ -32,14 +33,14 @@ def converter_data(data_str):
     if not data_str:
         # Se não tem data, usa data atual
         logger.warning(f"Data vazia, usando data atual")
-        return datetime.now().date()
+        return agora_utc_naive().date()
     try:
         data_parte = str(data_str)[:10]
         return datetime.strptime(data_parte, '%d/%m/%Y').date()
     except Exception as e:
         # Se falha na conversão, usa data atual
         logger.warning(f"Erro ao converter data '{data_str}': {e}. Usando data atual.")
-        return datetime.now().date()
+        return agora_utc_naive().date()
 
 def converter_quantidade(qtd_str):
     """Converte string de quantidade para Decimal"""

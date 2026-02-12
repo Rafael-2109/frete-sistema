@@ -13,6 +13,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
+from app.utils.timezone import agora_utc_naive
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,7 +187,7 @@ def buscar_dfes_compra(
             domain.append(['l10n_br_status', '=', status])
 
         if minutos_janela:
-            data_corte = datetime.now() - timedelta(minutes=minutos_janela)
+            data_corte = agora_utc_naive() - timedelta(minutes=minutos_janela)
             domain.append(['write_date', '>=', data_corte.strftime('%Y-%m-%d %H:%M:%S')])
 
         if company_id:
@@ -271,7 +273,7 @@ def buscar_dfes_pendentes_validacao(
 
     try:
         # Montar domain de busca no Odoo
-        data_limite = datetime.now() - timedelta(minutes=minutos_janela)
+        data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
         data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
 
         domain = [

@@ -58,7 +58,7 @@ def converter_projecao_para_resumo(projecao):
             if data_disponivel:
                 try:
                     data_disp_obj = datetime.strptime(data_disponivel, '%Y-%m-%d')
-                    hoje = datetime.now()
+                    hoje = agora_utc_naive()
                     dias_disponivel = (data_disp_obj - hoje).days
                 except Exception as e:
                     dias_disponivel = None
@@ -94,7 +94,7 @@ def converter_projecao_para_resumo(projecao):
             codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(str(cod_produto))
             
             # Somar qtd_programada de todas as programações futuras do produto e códigos unificados
-            hoje = datetime.now().date()
+            hoje = agora_utc_naive().date()
             soma_producao = db.session.query(
                 func.sum(ProgramacaoProducao.qtd_programada)
             ).filter(
@@ -169,8 +169,8 @@ def index():
             total_movimentacoes = MovimentacaoEstoque.query.count()
             
             # Movimentações do mês atual
-            mes_atual = datetime.now().month
-            ano_atual = datetime.now().year
+            mes_atual = agora_utc_naive().month
+            ano_atual = agora_utc_naive().year
             
             entradas_mes = MovimentacaoEstoque.query.filter(
                 MovimentacaoEstoque.tipo_movimentacao.ilike('%entrada%'),
@@ -774,7 +774,7 @@ def editar_movimentacao(id):
     movimentacao = MovimentacaoEstoque.query.get_or_404(id)
 
     # Por segurança, só permitir edição de movimentações recentes (últimos 30 dias)
-    limite_edicao = datetime.now().date() - timedelta(days=30)
+    limite_edicao = agora_utc_naive().date() - timedelta(days=30)
 
     if movimentacao.data_movimentacao < limite_edicao:
         return jsonify({
@@ -833,7 +833,7 @@ def processar_edicao_movimentacao(id):
         movimentacao = MovimentacaoEstoque.query.get_or_404(id)
         
         # Verificar limite de edição
-        limite_edicao = datetime.now().date() - timedelta(days=30)
+        limite_edicao = agora_utc_naive().date() - timedelta(days=30)
         
         if movimentacao.data_movimentacao < limite_edicao:
             return jsonify({
@@ -1302,7 +1302,7 @@ def exportar_dados_unificacao():
         
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=unificacao_codigos_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=unificacao_codigos_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         
@@ -1692,7 +1692,7 @@ def baixar_modelo_movimentacoes():
         output.seek(0)
         
         response = make_response(output.read())
-        response.headers['Content-Disposition'] = f'attachment; filename=modelo_movimentacoes_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=modelo_movimentacoes_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         
         return response
@@ -1812,7 +1812,7 @@ def exportar_dados_movimentacoes():
 
             resumo_data = [
                 f'Total de movimentações: {len(dados)}',
-                f'Exportado em: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+                f'Exportado em: {agora_utc_naive().strftime("%Y-%m-%d %H:%M:%S")}',
                 f'Sistema de Fretes',
                 '',
                 'Filtros aplicados:',
@@ -1824,7 +1824,7 @@ def exportar_dados_movimentacoes():
         output.seek(0)
 
         response = make_response(output.read())
-        response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_estoque_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=movimentacoes_estoque_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
         return response
@@ -1932,7 +1932,7 @@ def api_pedidos_previstos_cardex(cod_produto):
         codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(str(cod_produto))
 
         # Buscar pedidos dos próximos 28 dias
-        hoje = datetime.now().date()
+        hoje = agora_utc_naive().date()
         data_limite = hoje + timedelta(days=28)
 
         # Buscar pedidos da Separacao que não foram sincronizados (projeção de saída)

@@ -869,10 +869,10 @@ class ImportadorTagPlusV2:
     def _parse_data(self, data_str):
         """Converte string para date"""
         if not data_str:
-            return datetime.now().date()
-        
+            return agora_utc_naive().date()
+
         data_str = str(data_str).split('T')[0].split(' ')[0]
-        
+
         for formato in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
             try:
                 return datetime.strptime(data_str, formato).date()
@@ -880,7 +880,7 @@ class ImportadorTagPlusV2:
                 logger.error(f"Erro ao converter data: {e}")
                 continue
 
-        return datetime.now().date()
+        return agora_utc_naive().date()
 
     def _verificar_e_processar_cancelamentos(self, data_inicio, data_fim):
         """

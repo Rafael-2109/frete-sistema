@@ -29,9 +29,8 @@ import json
 from typing import Dict, List, Set
 from collections import defaultdict
 from datetime import datetime
-from app.utils.timezone import agora_utc_naive
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
-
+from app.utils.timezone import agora_utc_naive
 
 # ==============================================================================
 # CONEXÃO ODOO

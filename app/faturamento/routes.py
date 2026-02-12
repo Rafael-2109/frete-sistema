@@ -693,7 +693,7 @@ def exportar_dados_faturamento():
         # Criar resposta
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=faturamento_produto_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=faturamento_produto_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         
@@ -849,7 +849,7 @@ def cancelar_nf_devolvida():
             mov.status_nf = 'CANCELADO'
             mov.atualizado_em = agora_utc_naive()
             mov.atualizado_por = f'Cancelamento Manual - {current_user.nome}'
-            mov.observacao = f'{mov.observacao or ""} | NF Devolvida - Cancelada manualmente em {datetime.now().strftime("%d/%m/%Y %H:%M")}'
+            mov.observacao = f'{mov.observacao or ""} | NF Devolvida - Cancelada manualmente em {agora_utc_naive().strftime("%d/%m/%Y %H:%M")}'
             movimentacoes_revertidas += 1
 
         # 3. Marcar RelatorioFaturamentoImportado como inativo também

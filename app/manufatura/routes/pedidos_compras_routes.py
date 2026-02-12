@@ -16,6 +16,7 @@ from app.manufatura.models import (
 from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
 from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
 from app.utils.file_storage import get_file_storage
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -427,7 +428,7 @@ def tela_sincronizacao_manual():
     Tela para sincronização manual de pedidos e alocações com filtro de datas
     """
     # Sugerir últimos 7 dias como padrão
-    data_fim_padrao = datetime.now()
+    data_fim_padrao = agora_utc_naive()
     data_inicio_padrao = data_fim_padrao - timedelta(days=7)
 
     return render_template(

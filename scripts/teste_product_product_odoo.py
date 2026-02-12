@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app.odoo.utils.connection import get_odoo_connection
 from app.producao.models import CadastroPalletizacao
+from app.utils.timezone import agora_utc_naive
 from app import create_app
 
 def formatar_json(data):
@@ -265,7 +266,7 @@ def main():
     print("\n" + "=" * 80)
     print("🧪 TESTE DE product.product - IDENTIFICAÇÃO DE PRODUTOS DE PRODUÇÃO")
     print("=" * 80)
-    print(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print("=" * 80)
 
     # Conectar ao Odoo
@@ -310,7 +311,7 @@ def main():
 
     resultado = {
         "metadata": {
-            "data_execucao": datetime.now().isoformat(),
+            "data_execucao": agora_utc_naive().isoformat(),
             "total_produtos_purchase_ok_odoo": total_purchase_ok,
             "total_produtos_comprados_local": total_local
         },

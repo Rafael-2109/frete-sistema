@@ -106,7 +106,7 @@ class ValePallet(db.Model):
     def dias_para_vencer(self):
         """Calcula quantos dias faltam para o vale vencer"""
         if self.data_validade:
-            hoje = datetime.now().date()
+            hoje = agora_utc_naive().date()
             delta = self.data_validade - hoje
             return delta.days
         return None

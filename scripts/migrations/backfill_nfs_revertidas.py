@@ -41,7 +41,7 @@ from sqlalchemy import text
 from app.faturamento.models import FaturamentoProduto
 from app.estoque.models import MovimentacaoEstoque
 from app.odoo.utils.connection import get_odoo_connection
-from app.utils.timezone import agora_brasil, agora_utc
+from app.utils.timezone import agora_brasil, agora_utc, agora_utc_naive
 
 # Configurar logging
 logging.basicConfig(
@@ -456,7 +456,7 @@ class BackfillReversoes:
                 if not self.dry_run:
                     fat = FaturamentoProduto(
                         numero_nf=numero_nf,
-                        data_fatura=data_nf or datetime.now().date(),
+                        data_fatura=data_nf or agora_utc_naive().date(),
                         cnpj_cliente=cnpj or '',
                         nome_cliente=nome or '',
                         cod_produto=cod_produto,
@@ -640,7 +640,7 @@ class BackfillReversoes:
                 mov_nova = MovimentacaoEstoque(
                     cod_produto=str(cod_produto),
                     nome_produto=nome_produto,
-                    data_movimentacao=data_nf or datetime.now().date(),
+                    data_movimentacao=data_nf or agora_utc_naive().date(),
                     tipo_movimentacao='SAIDA',
                     local_movimentacao='VENDA',
                     qtd_movimentacao=qtd,
@@ -668,7 +668,7 @@ class BackfillReversoes:
                 mov_ajuste = MovimentacaoEstoque(
                     cod_produto=str(cod_produto),
                     nome_produto=nome_produto,
-                    data_movimentacao=datetime.now().date(),
+                    data_movimentacao=agora_utc_naive().date(),
                     tipo_movimentacao='SAIDA',
                     local_movimentacao='AJUSTE',
                     qtd_movimentacao=qtd,
@@ -705,7 +705,7 @@ class BackfillReversoes:
         mov_reversao = MovimentacaoEstoque(
             cod_produto=str(cod_produto),
             nome_produto=nome_produto,
-            data_movimentacao=datetime.now().date(),
+            data_movimentacao=agora_utc_naive().date(),
             tipo_movimentacao='ENTRADA',
             local_movimentacao='REVERSAO',
             qtd_movimentacao=qtd,

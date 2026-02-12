@@ -15,6 +15,7 @@ import requests
 from xml.etree import ElementTree as ET
 from typing import Dict, Optional
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def extrair_uf_da_chave(chave: str) -> str:
@@ -201,7 +202,7 @@ def consultar_cte_receita_federal(chave_acesso: str) -> Dict:
             'codigo_status': codigo_status,
             'mensagem': mensagem,
             'autorizado': autorizado,
-            'consultado_em': datetime.now().isoformat()
+            'consultado_em': agora_utc_naive().isoformat()
         }
 
         # Extrair dados adicionais se autorizado

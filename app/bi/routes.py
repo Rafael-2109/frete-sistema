@@ -10,6 +10,7 @@ from app.bi.models import (
     BiPerformanceTransportadora, BiAnaliseRegional,
     BiIndicadorMensal
 )
+from app.utils.timezone import agora_utc_naive
 from app import db
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, desc, distinct
@@ -394,7 +395,7 @@ def api_status_etl():
         if ultimo:
             return jsonify({
                 'ultimo_processamento': ultimo.isoformat(),
-                'status': 'atualizado' if (datetime.now() - ultimo).days < 1 else 'desatualizado'
+                'status': 'atualizado' if (agora_utc_naive() - ultimo).days < 1 else 'desatualizado'
             })
         else:
             return jsonify({

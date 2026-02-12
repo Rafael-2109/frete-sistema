@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from functools import wraps
 import time
+from app.utils.timezone import agora_utc_naive
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -396,7 +397,7 @@ class OdooIntegration:
     def sync_orders_to_system(self, limit: Optional[int] = None, days_back: int = 30) -> Dict[str, Any]:
         """Sincronizar pedidos do Odoo para o sistema"""
         try:
-            date_from = datetime.now() - timedelta(days=days_back)
+            date_from = agora_utc_naive() - timedelta(days=days_back)
             orders = self.sales.get_orders(limit=limit, date_from=date_from)
             
             # Aqui você implementaria a lógica de sincronização

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 import logging
 import os
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class FreteMLModels:
                         'score': round(custo_por_kg, 2),
                         'descricao': f"Custo R$ {valor_frete:.2f} muito alto para peso {peso_total}kg",
                         'dados': item,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': agora_utc_naive().isoformat()
                     })
             
             return anomalies
@@ -122,7 +123,7 @@ class FreteMLModels:
                     {'tipo': 'consolidacao', 'descricao': 'Consolidar cargas para mesma regiao'},
                     {'tipo': 'negociacao', 'descricao': 'Renegociar com transportadoras'}
                 ],
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:

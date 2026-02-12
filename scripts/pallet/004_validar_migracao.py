@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import create_app, db
 from sqlalchemy import text
+from app.utils.timezone import agora_utc_naive
 
 
 # ============================================================================
@@ -792,7 +793,7 @@ def salvar_relatorio(resultados, output_file):
     with open(output_file, 'w') as f:
         f.write("=" * 70 + "\n")
         f.write("RELATÓRIO DE VALIDAÇÃO DE MIGRAÇÃO - PALLET V2\n")
-        f.write(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+        f.write(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}\n")
         f.write("=" * 70 + "\n\n")
 
         for r in resultados:
@@ -839,7 +840,7 @@ def main():
     print("\n" + "=" * 70)
     print("🔍 VALIDAÇÃO DE MIGRAÇÃO - PALLET V2")
     print("=" * 70)
-    print(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print(f"Verbose: {'Sim' if args.verbose else 'Não'}")
 
     app = create_app()

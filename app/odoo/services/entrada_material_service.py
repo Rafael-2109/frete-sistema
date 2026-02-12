@@ -102,7 +102,7 @@ class EntradaMaterialService:
 
         try:
             # 1. Buscar recebimentos do Odoo
-            data_inicio = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
+            data_inicio = (agora_utc_naive() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d')
 
             logger.info(f"📅 Buscando recebimentos desde {data_inicio}")
 
@@ -455,7 +455,7 @@ class EntradaMaterialService:
             cnpj_limpo = cnpj_fornecedor.replace('.', '').replace('/', '').replace('-', '') if cnpj_fornecedor else 'sem_cnpj'
 
             # Data para organizar em pastas
-            data_hoje = datetime.now()
+            data_hoje = agora_utc_naive()
             pasta_base = f"nfs_entrada/{data_hoje.year}/{data_hoje.month:02d}/{cnpj_limpo}"
 
             pdf_path = None
@@ -601,7 +601,7 @@ class EntradaMaterialService:
         if date_done_str:
             date_done = datetime.fromisoformat(date_done_str.replace('Z', '+00:00')).date()
         else:
-            date_done = datetime.now().date()
+            date_done = agora_utc_naive().date()
 
         # 5. Vincular com pedido local usando CACHE
         purchase_id_odoo = picking.get('purchase_id')

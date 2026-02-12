@@ -408,7 +408,7 @@ def exportar_abatimentos_excel():
         output.seek(0)
 
         # Nome do arquivo
-        nome_arquivo = f"abatimentos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        nome_arquivo = f"abatimentos_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return Response(
             output.getvalue(),

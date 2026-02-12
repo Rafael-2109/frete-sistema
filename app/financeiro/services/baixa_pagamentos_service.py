@@ -617,12 +617,120 @@ class BaixaPagamentosService:
                 raise
 
     # =========================================================================
-    # ATUALIZAÇÃO DE CAMPOS DO EXTRATO (PÓS-RECONCILIAÇÃO)
+    # SAFE WRITE HELPERS (draft → write → post)
+    # =========================================================================
+    # No Odoo 17+, bank statement lines criam journal entries "posted"
+    # automaticamente. O método write() tenta modificar o move subjacente,
+    # que está posted → Odoo bloqueia com Fault 2:
+    #   "Você não pode excluir um item de diário já lançado..."
+    # Solução: button_draft → write → action_post
+
+    def _safe_write_statement_line(self, statement_line_id: int, vals: dict) -> bool:
+        """
+        Write seguro em account.bank.statement.line: draft → write → post.
+
+        Args:
+            statement_line_id: ID da statement line
+            vals: Dicionário de valores a escrever
+
+        Returns:
+            True se escreveu com sucesso, False se falhou
+        """
+        move_id = None
+        try:
+            # 1. Buscar move_id da statement line
+            stmt = self.connection.search_read(
+                'account.bank.statement.line',
+                [['id', '=', statement_line_id]],
+                fields=['move_id'],
+                limit=1
+            )
+            if not stmt:
+                logger.warning(f"  Statement line {statement_line_id} não encontrada")
+                return False
+
+            move_id_raw = stmt[0]['move_id']
+            move_id = move_id_raw[0] if isinstance(move_id_raw, (list, tuple)) else move_id_raw
+
+            # 2. Setar move para draft
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[move_id]]
+            )
+
+            # 3. Fazer o write na statement line
+            self.connection.execute_kw(
+                'account.bank.statement.line', 'write',
+                [[statement_line_id], vals]
+            )
+
+            # 4. Re-postar o move
+            self.connection.execute_kw(
+                'account.move', 'action_post', [[move_id]]
+            )
+
+            return True
+        except Exception as e:
+            logger.warning(f"  Safe write stmt_line {statement_line_id} falhou: {e}")
+            # Tentar re-postar se ficou em draft
+            if move_id:
+                try:
+                    self.connection.execute_kw(
+                        'account.move', 'action_post', [[move_id]]
+                    )
+                except Exception:
+                    logger.warning(f"  Falha ao re-postar move {move_id} após erro")
+            return False
+
+    def _safe_write_move_line(self, move_id: int, line_id: int, vals: dict) -> bool:
+        """
+        Write seguro em account.move.line de entry posted: draft → write → post.
+
+        Args:
+            move_id: ID do account.move pai
+            line_id: ID da account.move.line a modificar
+            vals: Dicionário de valores a escrever
+
+        Returns:
+            True se escreveu com sucesso, False se falhou
+        """
+        try:
+            # 1. Setar move para draft
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[move_id]]
+            )
+
+            # 2. Fazer o write na move line
+            self.connection.execute_kw(
+                'account.move.line', 'write',
+                [[line_id], vals]
+            )
+
+            # 3. Re-postar o move
+            self.connection.execute_kw(
+                'account.move', 'action_post', [[move_id]]
+            )
+
+            return True
+        except Exception as e:
+            logger.warning(f"  Safe write move_line {line_id} (move={move_id}) falhou: {e}")
+            # Tentar re-postar se ficou em draft
+            try:
+                self.connection.execute_kw(
+                    'account.move', 'action_post', [[move_id]]
+                )
+            except Exception:
+                logger.warning(f"  Falha ao re-postar move {move_id} após erro")
+            return False
+
+    # =========================================================================
+    # ATUALIZAÇÃO DE CAMPOS DO EXTRATO (PRÉ-RECONCILIAÇÃO)
     # =========================================================================
 
     def atualizar_statement_line_partner(self, statement_line_id: int, partner_id: int) -> bool:
         """
         Atualiza o partner_id da account.bank.statement.line no Odoo.
+
+        Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
 
         Necessário porque o Odoo não mapeia automaticamente boletos
         (payment_ref genérico como "DÉB.TIT.COMPE").
@@ -634,21 +742,26 @@ class BaixaPagamentosService:
         Returns:
             True se atualizou, False se falhou
         """
-        try:
-            self.connection.execute_kw(
-                'account.bank.statement.line',
-                'write',
-                [[statement_line_id], {'partner_id': partner_id}]
+        ok = self._safe_write_statement_line(
+            statement_line_id, {'partner_id': partner_id}
+        )
+        if ok:
+            logger.info(
+                f"  Partner atualizado na statement_line {statement_line_id}: "
+                f"partner_id={partner_id}"
             )
-            logger.info(f"  Partner atualizado na statement_line {statement_line_id}: partner_id={partner_id}")
-            return True
-        except Exception as e:
-            logger.warning(f"  Falha ao atualizar partner da statement_line {statement_line_id}: {e}")
-            return False
+        else:
+            logger.warning(
+                f"  Falha ao atualizar partner da statement_line "
+                f"{statement_line_id}"
+            )
+        return ok
 
     def trocar_conta_move_line_extrato(self, move_id: int, conta_origem: int, conta_destino: int) -> bool:
         """
         Troca o account_id da move line do extrato.
+
+        Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
 
         Necessário porque o Odoo usa CONTA_TRANSITORIA (22199) por padrão,
         mas o correto para conciliação com payment é CONTA_PAGAMENTOS_PENDENTES (26868).
@@ -679,13 +792,12 @@ class BaixaPagamentosService:
                 return False
 
             line_id = linhas[0]['id']
-            self.connection.execute_kw(
-                'account.move.line',
-                'write',
-                [[line_id], {'account_id': conta_destino}]
+            ok = self._safe_write_move_line(
+                move_id, line_id, {'account_id': conta_destino}
             )
-            logger.info(f"  Conta atualizada: move_line {line_id}, {conta_origem} → {conta_destino}")
-            return True
+            if ok:
+                logger.info(f"  Conta atualizada: move_line {line_id}, {conta_origem} → {conta_destino}")
+            return ok
         except Exception as e:
             logger.warning(f"  Falha ao trocar conta do extrato move {move_id}: {e}")
             return False
@@ -693,6 +805,9 @@ class BaixaPagamentosService:
     def atualizar_rotulo_extrato(self, move_id: int, statement_line_id: int, rotulo: str) -> bool:
         """
         Atualiza o rótulo (name) nas move lines do extrato E payment_ref da statement line.
+
+        Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
+        Faz UMA única operação de draft/post para ambos os writes (statement line + move lines).
 
         Padrão correto: "Pagamento de fornecedor R$ {valor} - {fornecedor} - {data}"
 
@@ -705,28 +820,52 @@ class BaixaPagamentosService:
             True se atualizou, False se falhou
         """
         try:
-            # 1. Atualizar payment_ref da statement line
-            self.connection.execute_kw(
+            # 1. Buscar move_id da statement line (para confirmar)
+            stmt = self.connection.search_read(
                 'account.bank.statement.line',
-                'write',
-                [[statement_line_id], {'payment_ref': rotulo}]
+                [['id', '=', statement_line_id]],
+                fields=['move_id'],
+                limit=1
+            )
+            if not stmt:
+                logger.warning(f"  Statement line {statement_line_id} não encontrada")
+                return False
+
+            stmt_move_id = stmt[0]['move_id']
+            if isinstance(stmt_move_id, (list, tuple)):
+                stmt_move_id = stmt_move_id[0]
+
+            # 2. Setar move para draft
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[stmt_move_id]]
             )
 
-            # 2. Atualizar name das move lines do extrato
-            linhas = self.connection.search_read(
-                'account.move.line',
-                [['move_id', '=', move_id]],
-                fields=['id'],
-            )
-            if linhas:
-                line_ids = [l['id'] for l in linhas]
+            try:
+                # 3. Atualizar payment_ref da statement line
                 self.connection.execute_kw(
-                    'account.move.line',
-                    'write',
-                    [line_ids, {'name': rotulo}]
+                    'account.bank.statement.line', 'write',
+                    [[statement_line_id], {'payment_ref': rotulo}]
                 )
 
-            logger.info(f"  Rótulo atualizado: stmt={statement_line_id}, move={move_id}")
+                # 4. Atualizar name das move lines do extrato
+                linhas = self.connection.search_read(
+                    'account.move.line',
+                    [['move_id', '=', stmt_move_id]],
+                    fields=['id'],
+                )
+                if linhas:
+                    line_ids = [l['id'] for l in linhas]
+                    self.connection.execute_kw(
+                        'account.move.line', 'write',
+                        [line_ids, {'name': rotulo}]
+                    )
+            finally:
+                # 5. Re-postar o move (SEMPRE, mesmo se write falhou)
+                self.connection.execute_kw(
+                    'account.move', 'action_post', [[stmt_move_id]]
+                )
+
+            logger.info(f"  Rótulo atualizado: stmt={statement_line_id}, move={stmt_move_id}")
             return True
         except Exception as e:
             logger.warning(f"  Falha ao atualizar rótulo do extrato: {e}")

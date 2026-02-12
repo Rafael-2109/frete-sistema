@@ -14,6 +14,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app.faturamento.models import FaturamentoProduto
 from app.transportadoras.models import Transportadora
 from app.portaria.models import ControlePortaria
+from app.utils.timezone import agora_utc_naive
 
 class APIDataHelper:
     """Classe para acessar dados da API internamente"""
@@ -43,7 +44,7 @@ class APIDataHelper:
                 'success': True,
                 'data': resultado,
                 'total': len(resultado),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:
@@ -56,7 +57,7 @@ class APIDataHelper:
     def get_estatisticas_data(periodo_dias=30):
         """Retorna estatísticas do sistema (mesma lógica da API)"""
         try:
-            data_inicio = datetime.now() - timedelta(days=periodo_dias)
+            data_inicio = agora_utc_naive() - timedelta(days=periodo_dias)
             
             # Estatísticas básicas
             total_embarques = Embarque.query.count()
@@ -108,7 +109,7 @@ class APIDataHelper:
             return {
                 'success': True,
                 'data': resultado,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:
@@ -203,7 +204,7 @@ class APIDataHelper:
                     'percentual_faturado': round((pedidos_faturados/len(pedidos)*100), 1) if pedidos else 0
                 },
                 'data': resultado,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:
@@ -237,7 +238,7 @@ class APIDataHelper:
                 'success': True,
                 'data': resultado,
                 'total': len(resultado),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:
@@ -255,7 +256,7 @@ class APIDataHelper:
             # Verifica fretes pendentes há mais de 2 dias
             fretes_antigos = Frete.query.filter(
                 Frete.status_aprovacao == 'pendente',
-                Frete.data_criacao < datetime.now() - timedelta(days=2)
+                Frete.data_criacao < agora_utc_naive() - timedelta(days=2)
             ).count()
             
             if fretes_antigos > 0:
@@ -285,7 +286,7 @@ class APIDataHelper:
             embarques_sem_data = Embarque.query.filter(
                 Embarque.status == 'ativo',
                 Embarque.data_embarque.is_(None),
-                Embarque.criado_em < datetime.now() - timedelta(days=1)
+                Embarque.criado_em < agora_utc_naive() - timedelta(days=1)
             ).count()
             
             if embarques_sem_data > 0:
@@ -301,7 +302,7 @@ class APIDataHelper:
                 'success': True,
                 'data': alertas,
                 'total': len(alertas),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': agora_utc_naive().isoformat()
             }
             
         except Exception as e:

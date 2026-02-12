@@ -302,7 +302,7 @@ def api_exportar_faturamentos_parciais():
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name=f'faturamentos_parciais_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            download_name=f'faturamentos_parciais_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         )
         
     except Exception as e:

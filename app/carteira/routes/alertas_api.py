@@ -51,7 +51,7 @@ def api_verificar_alertas():
         return jsonify({
             'sucesso': True,
             'alertas': alertas,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
     except Exception as e:
         logger.error(f"Erro na API de alertas: {e}")

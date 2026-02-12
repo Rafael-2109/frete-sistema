@@ -35,6 +35,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app import create_app, db
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import text
 
 
@@ -282,7 +283,7 @@ def migrar_registro(mov, dry_run=False):
         'qtd_resolvida': quantidade - qtd_saldo,
         'movimentacao_estoque_id': mov_id,
         'observacao': mov.observacao or f'Migrado de MovimentacaoEstoque #{mov_id}',
-        'criado_em': mov.criado_em or datetime.now(),
+        'criado_em': mov.criado_em or agora_utc_naive(),
         'criado_por': mov.criado_por or 'migracao_v2',
     })
 
@@ -333,7 +334,7 @@ def migrar_registro(mov, dry_run=False):
         'status': status_credito,
         'movimentacao_estoque_id': mov_id,
         'observacao': nf_remessa_origem if nf_remessa_origem else None,
-        'criado_em': mov.criado_em or datetime.now(),
+        'criado_em': mov.criado_em or agora_utc_naive(),
         'criado_por': mov.criado_por or 'migracao_v2',
     })
 

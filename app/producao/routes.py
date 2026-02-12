@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.utils.auth_decorators import require_admin
+from app.utils.timezone import agora_utc_naive
 from datetime import datetime
 from sqlalchemy import inspect
 
@@ -783,7 +784,7 @@ def exportar_dados_programacao():
         
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=programacao_producao_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=programacao_producao_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         
@@ -1234,7 +1235,7 @@ def exportar_dados_palletizacao():
         
         response = make_response(output.getvalue())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=palletizacao_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=palletizacao_export_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         
         return response
         

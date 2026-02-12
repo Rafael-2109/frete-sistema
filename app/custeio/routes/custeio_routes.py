@@ -749,7 +749,7 @@ def register_custeio_routes(bp):
                     incoterm=incoterm,
                     cod_uf=cod_uf,
                     percentual_frete=percentual,
-                    vigencia_inicio=datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else datetime.now().date(),
+                    vigencia_inicio=datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else agora_utc_naive().date(),
                     vigencia_fim=datetime.strptime(vigencia_fim, '%Y-%m-%d').date() if vigencia_fim else None,
                     criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
                 )
@@ -1053,7 +1053,7 @@ def register_custeio_routes(bp):
                     # Vigência início
                     vigencia_inicio = row.get('Vigência Início')
                     if pd.isna(vigencia_inicio) or vigencia_inicio == '':
-                        vigencia_inicio = datetime.now().date()
+                        vigencia_inicio = agora_utc_naive().date()
                     elif isinstance(vigencia_inicio, str):
                         vigencia_inicio = datetime.strptime(vigencia_inicio, '%Y-%m-%d').date()
                     else:
@@ -2774,7 +2774,7 @@ def register_custeio_routes(bp):
                     produto_grupo=dados.get('produto_grupo'),
                     produto_cliente=dados.get('produto_cliente'),
                     comissao_percentual=comissao_percentual,
-                    vigencia_inicio=datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else datetime.now().date(),
+                    vigencia_inicio=datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else agora_utc_naive().date(),
                     vigencia_fim=datetime.strptime(vigencia_fim, '%Y-%m-%d').date() if vigencia_fim else None,
                     prioridade=dados.get('prioridade', 0),
                     descricao=dados.get('descricao'),
@@ -3034,7 +3034,7 @@ def register_custeio_routes(bp):
                         produto_grupo=str(row.get('Produto Grupo', '')).strip() if pd.notna(row.get('Produto Grupo')) else None,
                         produto_cliente=str(row.get('Produto Cliente', '')).strip() if pd.notna(row.get('Produto Cliente')) else None,
                         comissao_percentual=float(comissao),
-                        vigencia_inicio=datetime.now().date(),
+                        vigencia_inicio=agora_utc_naive().date(),
                         descricao=str(row.get('Descricao', '')).strip() if pd.notna(row.get('Descricao')) else 'Importado via Excel',
                         ativo=True,
                         criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'

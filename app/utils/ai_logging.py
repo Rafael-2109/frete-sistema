@@ -39,7 +39,7 @@ class AILogger:
             'ml_operations': 0,
             'cache_operations': 0,
             'api_calls': 0,
-            'start_time': datetime.now()
+            'start_time': agora_utc_naive()
         }
         
         # Logger principal
@@ -311,7 +311,7 @@ class AILogger:
     
     def get_metrics(self) -> Dict[str, Any]:
         """Retorna métricas de logging"""
-        uptime = datetime.now() - self.metrics['start_time']
+        uptime = agora_utc_naive() - self.metrics['start_time']
         
         return {
             **self.metrics,

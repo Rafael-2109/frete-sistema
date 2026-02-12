@@ -17,6 +17,7 @@ from datetime import datetime
 import logging
 from app.faturamento.models import FaturamentoProduto
 from sqlalchemy import and_
+from app.utils.timezone import agora_utc_naive
 
 
 logger = logging.getLogger(__name__)
@@ -115,9 +116,9 @@ def preparar_lote_sendas():
             if isinstance(cnpj_info, str):
                 cnpj = cnpj_info
                 # Se não tem datas, usar padrão (D+1 para agendamento, D+0 para expedição)
-                data_agendamento = datetime.now().date()
+                data_agendamento = agora_utc_naive().date()
                 data_agendamento = data_agendamento.replace(day=data_agendamento.day + 1)
-                data_expedicao = datetime.now().date()
+                data_expedicao = agora_utc_naive().date()
             else:
                 cnpj = cnpj_info.get('cnpj')
                 # ✅ PEGAR DATAS DO FRONTEND (programação em lote)
@@ -274,7 +275,7 @@ def cancelar_cnpj_lote():
             # Se não tem protocolo, buscar separações recentes sem protocolo confirmado
             # (criadas nos últimos 5 minutos para segurança)
             from datetime import timedelta
-            cinco_min_atras = datetime.now() - timedelta(minutes=5)
+            cinco_min_atras = agora_utc_naive() - timedelta(minutes=5)
 
             separacoes = Separacao.query.filter(
                 Separacao.cnpj_cpf == cnpj,
@@ -851,7 +852,7 @@ def baixar_exportacao(protocolo):
             return jsonify({'sucesso': False, 'erro': mensagem}), 400
 
         # Criar nome do arquivo
-        data_hora = datetime.now().strftime('%Y%m%d_%H%M%S')
+        data_hora = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
         nome_arquivo = f'agendamento_sendas_{protocolo}_{data_hora}.xlsx'
 
         # Enviar arquivo
@@ -886,7 +887,7 @@ def baixar_todas_exportacoes():
             return jsonify({'sucesso': False, 'erro': mensagem}), 400
 
         # Criar nome do arquivo
-        data_hora = datetime.now().strftime('%Y%m%d_%H%M%S')
+        data_hora = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
         nome_arquivo = f'agendamento_sendas_TODOS_{data_hora}.xlsx'
 
         # Enviar arquivo

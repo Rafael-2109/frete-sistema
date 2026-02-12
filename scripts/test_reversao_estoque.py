@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app import create_app, db
 from sqlalchemy import text
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def verificar_estrutura_faturamento():
@@ -250,7 +251,7 @@ def main():
         print("\n" + "=" * 60)
         print("TESTE DE VALIDAÇÃO - NOVA LÓGICA DE REVERSÃO")
         print("=" * 60)
-        print(f"Data/Hora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+        print(f"Data/Hora: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
 
         # Verificações
         ok1 = verificar_estrutura_faturamento()

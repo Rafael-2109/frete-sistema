@@ -18,9 +18,9 @@ import os
 import argparse
 import json
 from typing import Dict, Any
-from app.utils.timezone import agora_utc_naive
 from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+from app.utils.timezone import agora_utc_naive
 
 
 def get_odoo_connection():

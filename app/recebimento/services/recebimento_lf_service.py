@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from app import db
-from app.utils.timezone import agora_utc_naive
+from app.utils.timezone import agora_utc_naive, agora_utc
 from app.utils.database_retry import commit_with_retry
 from app.recebimento.models import RecebimentoLf, RecebimentoLfLote
 from app.odoo.utils.connection import get_odoo_connection
@@ -101,7 +101,8 @@ class RecebimentoLfService:
                 # Atualizar: busca por data de modificacao no Odoo (operacional)
                 # Usa write_date (nao nfe_infnfe_ide_dhemi) — padrao do codebase
                 # Ref: dfe_utils.py:189, validacao_fiscal_job.py:171
-                data_limite = (agora_utc_naive() - timedelta(minutes=minutos)).strftime('%Y-%m-%d %H:%M:%S')
+                # CORREÇÃO TIMEZONE: Odoo write_date é UTC → usar agora_utc()
+                data_limite = (agora_utc() - timedelta(minutes=minutos)).strftime('%Y-%m-%d %H:%M:%S')
                 filtro.append(['write_date', '>=', data_limite])
                 logger.info(f"Buscando DFes LF dos ultimos {minutos} minutos (desde {data_limite})")
 
@@ -332,7 +333,8 @@ class RecebimentoLfService:
 
                 if not pickings:
                     # Fallback: buscar pickings recentes (ultimos 30 dias)
-                    data_limite = (agora_utc_naive() - timedelta(days=30)).strftime('%Y-%m-%d')
+                    # CORREÇÃO TIMEZONE: Odoo date_done é UTC → usar agora_utc()
+                    data_limite = (agora_utc() - timedelta(days=30)).strftime('%Y-%m-%d')
                     pickings = odoo.execute_kw(
                         'stock.picking', 'search_read',
                         [[

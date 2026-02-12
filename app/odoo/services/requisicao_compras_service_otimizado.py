@@ -25,6 +25,7 @@ from collections import defaultdict
 from app import db
 from app.manufatura.models import RequisicaoCompras, HistoricoRequisicaoCompras
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ class RequisicaoComprasServiceOtimizado:
         filtro = [['state', '!=', 'rejected']]
 
         if not primeira_execucao:
-            data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+            data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
             filtro = [
                 '&',

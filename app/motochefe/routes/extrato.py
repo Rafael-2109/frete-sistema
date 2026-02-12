@@ -17,6 +17,7 @@ from app.motochefe.services.extrato_financeiro_service import (
     obter_movimentacoes_financeiras,
     calcular_saldo_acumulado
 )
+from app.utils.timezone import agora_utc_naive
 
 
 @motochefe_bp.route('/extrato-financeiro')
@@ -173,7 +174,7 @@ def exportar_extrato():
 
     output.seek(0)
 
-    filename = f'extrato_financeiro_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    filename = f'extrato_financeiro_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
 
     return send_file(
         output,

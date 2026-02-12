@@ -31,6 +31,7 @@ from botbuilder.core import (
     MessageFactory,
 )
 from botbuilder.schema import Activity, ActivityTypes
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def build_confirmation_card(task_id: str, descricao: str, usuario: str) -> dict:
     Usa Action.Submit que envia activity.value com dados do botao.
     Tratado em on_message_activity checando activity.value.
     """
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agora = agora_utc_naive().strftime("%d/%m/%Y %H:%M")
 
     return {
         "type": "AdaptiveCard",

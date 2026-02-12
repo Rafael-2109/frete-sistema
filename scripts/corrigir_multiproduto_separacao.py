@@ -23,6 +23,7 @@ from app import create_app, db
 from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 from app.carteira.utils.separacao_utils import calcular_peso_pallet_produto
+from app.utils.timezone import agora_utc_naive
 from datetime import datetime
 import logging
 
@@ -160,7 +161,7 @@ def corrigir_multiproduto():
                             uf_normalizada=mp.uf_normalizada,
                             codigo_ibge=mp.codigo_ibge,
                             cotacao_id=mp.cotacao_id,
-                            observ_ped_1=f'{mp.observ_ped_1} [Corrigido de MULTIPRODUTO em {datetime.now().strftime("%d/%m/%Y %H:%M")}]'
+                            observ_ped_1=f'{mp.observ_ped_1} [Corrigido de MULTIPRODUTO em {agora_utc_naive().strftime("%d/%m/%Y %H:%M")}]'
                         )
 
                         novos_registros.append(nova_separacao)

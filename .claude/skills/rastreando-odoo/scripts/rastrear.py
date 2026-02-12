@@ -17,7 +17,6 @@ import os
 import argparse
 import json
 from typing import Dict, Any, List, Optional
-from app.utils.timezone import agora_utc_naive
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
@@ -26,6 +25,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
 
 from normalizar import normalizar_entidade, get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 # ==============================================================================

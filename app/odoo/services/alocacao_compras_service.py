@@ -31,6 +31,7 @@ from app.manufatura.models import (
     PedidoCompras
 )
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,7 @@ class AlocacaoComprasServiceOtimizado:
         self.logger.info("🔍 Buscando alocações no Odoo...")
 
         # Calcular data limite baseado na janela
-        data_limite = (datetime.now() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+        data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
 
         # SEMPRE aplicar filtro (create_date OR write_date >= data_limite)
         filtro = [
@@ -558,7 +559,7 @@ class AlocacaoComprasServiceOtimizado:
             self.logger.info("🗑️  Detectando alocações excluídas do Odoo...")
 
             # Buscar alocações do sistema que foram modificadas recentemente
-            data_limite = datetime.now() - timedelta(minutes=minutos_janela)
+            data_limite = agora_utc_naive() - timedelta(minutes=minutos_janela)
 
             alocacoes_sistema = RequisicaoCompraAlocacao.query.filter(
                 RequisicaoCompraAlocacao.importado_odoo == True,

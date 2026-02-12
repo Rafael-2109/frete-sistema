@@ -17,6 +17,7 @@ from datetime import datetime
 
 from app.odoo.services.faturamento_service import FaturamentoService
 from app.odoo.services.carteira_service import CarteiraService
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +293,7 @@ class SincronizacaoIntegradaService:
                 'integro': len([p for p in problemas if p['nivel'] == 'ERRO']) == 0,
                 'total_problemas': len(problemas),
                 'problemas': problemas,
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
             
         except Exception as e:
@@ -360,7 +361,7 @@ class SincronizacaoIntegradaService:
             logger.info("🔍 Verificando status atual do sistema...")
             
             status = {
-                'timestamp': datetime.now(),
+                'timestamp': agora_utc_naive(),
                 'recomendacao': '',
                 'nivel_risco': 'BAIXO',
                 'pode_sincronizar': True,
@@ -414,7 +415,7 @@ class SincronizacaoIntegradaService:
         except Exception as e:
             logger.error(f"❌ Erro ao verificar status: {e}")
             return {
-                'timestamp': datetime.now(),
+                'timestamp': agora_utc_naive(),
                 'recomendacao': 'Erro na verificação - contate administrador',
                 'nivel_risco': 'ALTO',
                 'pode_sincronizar': False,

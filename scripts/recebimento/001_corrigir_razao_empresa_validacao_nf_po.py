@@ -32,6 +32,7 @@ import argparse
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def main(dry_run: bool = False):
@@ -53,7 +54,7 @@ def main(dry_run: bool = False):
         print("MIGRAÇÃO 001: Corrigir razao_empresa_compradora em validacao_nf_po_dfe")
         print("=" * 70)
         print(f"Modo: {'DRY-RUN (simulação)' if dry_run else 'EXECUÇÃO REAL'}")
-        print(f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+        print(f"Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
         print("-" * 70)
 
         # 1. Diagnóstico inicial

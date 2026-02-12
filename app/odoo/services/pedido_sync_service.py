@@ -22,6 +22,7 @@ from app.odoo.services.carteira_service import CarteiraService
 from app.odoo.services.ajuste_sincronizacao_service import AjusteSincronizacaoService
 from app.faturamento.models import FaturamentoProduto
 from sqlalchemy import func
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class PedidoSyncService:
                     'acao': 'NAO_PROCESSADO',
                     'mensagem': 'Conexão com Odoo não disponível',
                     'erro': 'Conexão indisponível',
-                    'timestamp': datetime.now()
+                    'timestamp': agora_utc_naive()
                 }
 
             # ETAPA 1: Buscar pedido no Odoo
@@ -98,7 +99,7 @@ class PedidoSyncService:
             # Adicionar tempo de execução
             tempo_total = (datetime.now() - inicio).total_seconds()
             resultado['tempo_execucao'] = round(tempo_total, 2)
-            resultado['timestamp'] = datetime.now()
+            resultado['timestamp'] = agora_utc_naive()
 
             logger.info(f"✅ Sincronização do pedido {num_pedido} concluída em {tempo_total:.2f}s - Ação: {resultado['acao']}")
 
@@ -114,7 +115,7 @@ class PedidoSyncService:
                 'mensagem': f'Erro ao sincronizar pedido: {str(e)}',
                 'erro': str(e),
                 'tempo_execucao': round(tempo_total, 2),
-                'timestamp': datetime.now()
+                'timestamp': agora_utc_naive()
             }
 
     def _buscar_pedido_odoo(self, num_pedido: str) -> Optional[Any]:

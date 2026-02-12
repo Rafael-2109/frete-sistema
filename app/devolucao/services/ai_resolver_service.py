@@ -26,6 +26,7 @@ import anthropic
 
 from app import db
 from app.devolucao.models import NFDevolucaoLinha, DeParaProdutoCliente
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -2006,8 +2007,6 @@ class AIResolverService:
     ):
         """Grava De-Para no banco."""
         try:
-            from app.utils.timezone import agora_utc_naive
-
             # Verificar se ja existe (inclui inativos para evitar violacao de constraint)
             existente = DeParaProdutoCliente.query.filter_by(
                 prefixo_cnpj=prefixo_cnpj[:8],

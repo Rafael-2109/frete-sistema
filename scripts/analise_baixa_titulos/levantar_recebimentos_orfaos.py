@@ -26,6 +26,7 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def buscar_pagamentos_conciliados_mesma_nf(conn, ref: str, partner_id: int, orfao_id: int) -> List[Dict]:
@@ -327,7 +328,7 @@ def levantar_recebimentos_orfaos(
 
     # Exportar XLSX
     if exportar_csv and orfaos:
-        arquivo = f"recebimentos_orfaos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        arquivo = f"recebimentos_orfaos_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
         caminho = os.path.join(os.path.dirname(__file__), arquivo)
 
         # Criar DataFrame com colunas ordenadas

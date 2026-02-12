@@ -39,7 +39,6 @@ def get_insights_data(
     """
     try:
         from ..models import AgentSession
-        from app.utils.timezone import agora_utc_naive
         since = agora_utc_naive() - timedelta(days=days)
 
         # Query base

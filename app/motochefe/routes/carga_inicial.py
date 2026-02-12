@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 import pandas as pd
 import os
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.motochefe.routes import motochefe_bp
@@ -522,7 +523,7 @@ def preview_historico():
         }
 
         # Salvar arquivo temporariamente para importação posterior
-        filename = secure_filename(f"historico_{current_user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
+        filename = secure_filename(f"historico_{current_user.id}_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}.xlsx")
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.seek(0)  # Reset file pointer
         file.save(filepath)

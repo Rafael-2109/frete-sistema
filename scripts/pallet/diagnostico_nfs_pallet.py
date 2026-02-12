@@ -21,6 +21,7 @@ from app.odoo.utils.connection import get_odoo_connection
 from app.pallet.models.nf_remessa import PalletNFRemessa
 from app.estoque.models import MovimentacaoEstoque
 from app.pallet.services.sync_odoo_service import CNPJS_INTERCOMPANY_PREFIXOS
+from app.utils.timezone import agora_utc_naive
 
 
 def diagnosticar():
@@ -29,7 +30,7 @@ def diagnosticar():
         odoo = get_odoo_connection()
         odoo.authenticate()
 
-        data_inicio = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+        data_inicio = (agora_utc_naive() - timedelta(days=180)).strftime('%Y-%m-%d')
         print(f"=== DIAGNOSTICO DE NFs DE PALLET (desde {data_inicio}) ===\n")
 
         # ---------------------------------------------------------------

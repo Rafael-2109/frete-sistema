@@ -12,6 +12,7 @@ import logging
 from .config import TENDA_CONFIG
 from .models import ProdutoDeParaEAN, LocalEntregaDeParaTenda
 from dotenv import load_dotenv
+from app.utils.timezone import agora_utc_naive
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -331,7 +332,7 @@ class TendaPlaywrightClient:
                 pass
             
             # Capturar screenshot para evidência
-            screenshot_path = f"agendamento_tenda_{protocolo or 'sem_protocolo'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            screenshot_path = f"agendamento_tenda_{protocolo or 'sem_protocolo'}_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.png"
             self.page.screenshot(path=screenshot_path)
             
             resultado = {
@@ -351,7 +352,7 @@ class TendaPlaywrightClient:
             
             # Capturar screenshot de erro
             try:
-                error_screenshot = f"erro_tenda_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                error_screenshot = f"erro_tenda_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.png"
                 self.page.screenshot(path=error_screenshot)
             except:
                 error_screenshot = None
@@ -423,7 +424,7 @@ def criar_agendamento_tenda(separacao_lote_id, headless=True):
         Dict com resultado do agendamento
     """
     from app.separacao.models import Separacao
-    
+
     cliente = TendaPlaywrightClient(headless=headless)
     
     try:

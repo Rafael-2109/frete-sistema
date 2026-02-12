@@ -23,6 +23,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import create_app, db
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import text
 from datetime import datetime
 
@@ -301,7 +302,7 @@ def main():
     """Executa a migração completa"""
     print("\n" + "=" * 60)
     print("MIGRAÇÃO: Sistema de Dupla Conferência - Abatimentos + Odoo")
-    print("Data:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print("Data:", agora_utc_naive().strftime("%Y-%m-%d %H:%M:%S"))
     print("=" * 60)
 
     app = create_app()

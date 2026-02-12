@@ -5,6 +5,7 @@ from app.utils.api_helper import APIDataHelper, get_dashboard_stats, get_system_
 import tempfile
 import pandas as pd
 from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.pedidos.models import Pedido
@@ -63,7 +64,7 @@ def relatorio_gerencial():
             'estatisticas': stats_data.get('data', {}) if stats_data.get('success') else {},
             'embarques_recentes': embarques_data.get('data', []) if embarques_data.get('success') else [],
             'fretes_pendentes': fretes_data.get('data', []) if fretes_data.get('success') else [],
-            'data_geracao': datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            'data_geracao': agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')
         }
         
         return render_template('main/relatorio_gerencial.html', **dados_relatorio)
@@ -144,7 +145,7 @@ def relatorio_gerencial_excel():
             resumo_data = [{
                 'Relatório': 'Relatório Gerencial',
                 'Período': f'Últimos {periodo} dias',
-                'Data_Geração': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                'Data_Geração': agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S'),
                 'Usuário': current_user.nome,
                 'Total_Abas': len([d for d in dados_excel.values() if d])
             }]
@@ -155,7 +156,7 @@ def relatorio_gerencial_excel():
         arquivo_temp.close()
         
         # Nome do arquivo para download
-        nome_arquivo = f"relatorio_gerencial_{periodo}dias_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        nome_arquivo = f"relatorio_gerencial_{periodo}dias_{agora_utc_naive().strftime('%Y%m%d_%H%M')}.xlsx"
         
         return send_file(
             arquivo_temp.name,
@@ -333,9 +334,9 @@ def api_estatisticas_internas():
             'success': True,
             'data': resultado,
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
-        
+
     except Exception as e:
         logger.error(f"❌ Erro ao coletar estatísticas: {str(e)}")
         logger.error(f"📍 Tipo do erro: {type(e)}")
@@ -383,7 +384,7 @@ def api_embarques_internos():
             'data': resultado,
             'total': len(resultado),
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:

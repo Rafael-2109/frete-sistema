@@ -89,8 +89,9 @@ def _format_timestamp(iso_str: str) -> str:
     """Formata timestamp ISO 8601 para DD/MM/YYYY HH:MM:SS."""
     try:
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        # Converter para UTC-3 (Brasilia)
-        dt_br = dt.astimezone(timezone(timedelta(hours=-3)))
+        # Converter para horario Brasil usando pytz (correto independente de DST)
+        from app.utils.timezone import utc_para_brasil
+        dt_br = utc_para_brasil(dt)
         return dt_br.strftime("%d/%m/%Y %H:%M:%S")
     except (ValueError, AttributeError):
         return iso_str

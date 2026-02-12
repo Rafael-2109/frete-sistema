@@ -20,6 +20,7 @@ from app.notificacoes import notificacoes_bp
 from app.notificacoes.models import AlertaNotificacao, WebhookConfig
 from app import db
 from app.utils.logging_config import logger
+from app.utils.timezone import agora_utc_naive
 
 
 @notificacoes_bp.route('/')
@@ -114,7 +115,6 @@ def marcar_como_lida(id):
 def marcar_todas_como_lidas():
     """Marca todas as notificacoes do usuario como lidas"""
     try:
-        from app.utils.timezone import agora_utc_naive
 
         notificacoes = AlertaNotificacao.query.filter(
             AlertaNotificacao.user_id == current_user.id,
@@ -402,7 +402,6 @@ def testar_webhook(id):
             dados={'teste': True, 'origem': 'manual'},
             criado_em=None,
         )
-        from app.utils.timezone import agora_utc_naive
         alerta_teste.criado_em = agora_utc_naive()
 
         # Enviar para o webhook

@@ -97,7 +97,7 @@ class PalletDocumento(db.Model):
     def dias_para_vencer(self):
         """Calcula quantos dias faltam para o documento vencer"""
         if self.data_validade:
-            hoje = datetime.now().date()
+            hoje = agora_utc_naive().date()
             delta = self.data_validade - hoje
             return delta.days
         return None
@@ -187,7 +187,7 @@ class PalletDocumento(db.Model):
         """
         from datetime import timedelta
 
-        hoje = datetime.now().date()
+        hoje = agora_utc_naive().date()
         limite = hoje + timedelta(days=dias)
 
         return cls.query.filter(

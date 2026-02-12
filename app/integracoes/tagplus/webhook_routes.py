@@ -185,7 +185,7 @@ def webhook_teste():
     return jsonify({
         'status': 'ok',
         'mensagem': 'Webhook TagPlus funcionando',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': agora_utc_naive().isoformat()
     }), 200
 
 def validar_assinatura(request):
@@ -447,9 +447,9 @@ def criar_item_faturamento_webhook(nfe_data, item_data, cliente):
             data_fatura = datetime.strptime(data_emissao[:10], '%Y-%m-%d').date()
         except Exception as e:
             print(f"Erro ao formatar data: {e}")
-            data_fatura = datetime.now().date()
+            data_fatura = agora_utc_naive().date()
     else:
-        data_fatura = datetime.now().date()
+        data_fatura = agora_utc_naive().date()
     
     # Extrai dados do produto (estrutura aninhada conforme API TagPlus)
     produto_info = item_data.get('produto', {}) or item_data.get('produto_servico', {})

@@ -19,6 +19,7 @@ import pytz
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 def verificar_timezone_ctes():
     """Verifica timezone dos CTes no Odoo"""
@@ -76,7 +77,7 @@ def verificar_timezone_ctes():
         print("=" * 80)
 
         # Obter horário atual em diferentes timezones
-        agora_local = datetime.now()
+        agora_local = agora_utc_naive()
         agora_utc = datetime.now(pytz.UTC)
         agora_brt = datetime.now(pytz.timezone('America/Sao_Paulo'))
 
@@ -142,8 +143,8 @@ def verificar_timezone_ctes():
         # Testar busca com janela de 90 minutos em diferentes timezones
         print("\n🔬 TESTANDO DIFERENTES INTERPRETAÇÕES DE TIMEZONE:\n")
 
-        # 1. Filtro usando datetime.now() (LOCAL/UTC dependendo do servidor)
-        data_local_90min = (datetime.now() - timedelta(minutes=90)).strftime('%Y-%m-%d %H:%M:%S')
+        # 1. Filtro usando agora_utc_naive() (LOCAL/UTC dependendo do servidor)
+        data_local_90min = (agora_utc_naive() - timedelta(minutes=90)).strftime('%Y-%m-%d %H:%M:%S')
         ctes_local = odoo.execute_kw(
             'l10n_br_ciel_it_account.dfe',
             'search',
@@ -214,7 +215,7 @@ def verificar_timezone_ctes():
         )
 
         if len(ctes_local if ctes_local else []) == max_results:
-            print("   Use datetime.now() para cálculos de janela incremental")
+            print("   Use agora_utc_naive() para cálculos de janela incremental")
         elif len(ctes_utc if ctes_utc else []) == max_results:
             print("   Use datetime.now(pytz.UTC) para cálculos de janela incremental")
         elif len(ctes_brt if ctes_brt else []) == max_results:

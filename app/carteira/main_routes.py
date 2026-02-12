@@ -8,7 +8,7 @@ from app.carteira.models import (
 from app.estoque.services.compatibility_layer import SaldoEstoque
 from sqlalchemy import func, inspect
 from datetime import datetime, date, timedelta
-from app.utils.timezone import agora_brasil
+from app.utils.timezone import agora_brasil, agora_utc_naive
 import logging
 from app.separacao.models import Separacao
 from app.permissions.permissions import check_permission
@@ -21,7 +21,7 @@ def _calcular_estoque_data_especifica(projecao_29_dias, data_target):
     Calcula estoque para uma data específica baseado na projeção
     """
     try:
-        data_hoje = datetime.now().date()
+        data_hoje = agora_utc_naive().date()
         diff_dias = (data_target - data_hoje).days
         
         # Se data é passado ou muito futuro, usar fallbacks
@@ -43,7 +43,7 @@ def _encontrar_proxima_data_com_estoque(projecao_29_dias, qtd_necessaria):
     Encontra a próxima data com estoque suficiente para atender a quantidade
     """
     try:
-        data_hoje = datetime.now().date()
+        data_hoje = agora_utc_naive().date()
         qtd_necessaria = float(qtd_necessaria or 0)
         
         if qtd_necessaria <= 0:

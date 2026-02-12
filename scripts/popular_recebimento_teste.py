@@ -12,6 +12,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from app.utils.timezone import agora_utc_naive
 from datetime import datetime, timedelta
 
 # Período de teste
@@ -28,7 +29,6 @@ def executar_teste():
     from app.recebimento.jobs.validacao_recebimento_job import ValidacaoRecebimentoJob
     from app.recebimento.services.depara_service import DeparaService
     from app.odoo.utils.connection import get_odoo_connection
-    from app.utils.timezone import agora_utc_naive
 
     app = create_app()
     with app.app_context():

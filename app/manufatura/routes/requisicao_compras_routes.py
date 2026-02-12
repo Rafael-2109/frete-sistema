@@ -8,6 +8,7 @@ import logging
 
 from app import db
 from app.manufatura.models import RequisicaoCompras, HistoricoRequisicaoCompras
+from app.utils.timezone import agora_utc_naive
 # NOTA: RequisicaoComprasService é importado de forma lazy na função que usa
 # para evitar import circular
 
@@ -214,7 +215,7 @@ def register_requisicao_compras_routes(bp):
         Tela para sincronização manual com filtro de datas
         """
         # Sugerir últimos 7 dias como padrão
-        data_fim_padrao = datetime.now()
+        data_fim_padrao = agora_utc_naive()
         data_inicio_padrao = data_fim_padrao - timedelta(days=7)
 
         return render_template(
@@ -432,7 +433,7 @@ def register_requisicao_compras_routes(bp):
             ).group_by(RequisicaoCompras.status).all()
 
             # Últimas 30 dias
-            data_limite = datetime.now() - timedelta(days=30)
+            data_limite = agora_utc_naive() - timedelta(days=30)
             ultimas_30_dias = RequisicaoCompras.query.filter(
                 RequisicaoCompras.data_requisicao_criacao >= data_limite.date()
             ).count()

@@ -375,7 +375,6 @@ def _stream_chat_response(
     from .config.permissions import can_use_tool
     from queue import Queue, Empty
     from threading import Thread
-    from app.utils.timezone import agora_utc_naive
     app = current_app._get_current_object()
     event_queue = Queue()
 

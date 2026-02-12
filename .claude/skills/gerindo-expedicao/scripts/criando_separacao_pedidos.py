@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importar modulo centralizado de resolucao de entidades
 from resolver_entidades import resolver_pedido, formatar_sugestao_pedido # type: ignore # noqa: E402
+from app.utils.timezone import agora_utc_naive # noqa: E402
 
 
 def decimal_default(obj):
@@ -578,7 +579,6 @@ def executar_separacao(simulacao: dict) -> dict:
     from app import db
     from app.separacao.models import Separacao
     from app.utils.lote_utils import gerar_lote_id
-    from app.utils.timezone import agora_utc_naive
     from datetime import datetime
     from flask_login import current_user
 

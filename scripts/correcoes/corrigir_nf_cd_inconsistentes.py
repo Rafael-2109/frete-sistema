@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app import create_app, db
+from app.utils.timezone import agora_utc_naive
 from datetime import datetime
 
 
@@ -33,7 +34,7 @@ def corrigir_nf_cd_inconsistentes(commit=False):
         from app.separacao.models import Separacao
 
         print("=" * 80)
-        print(f"CORREÇÃO DE INCONSISTÊNCIAS NF_CD - {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        print(f"CORREÇÃO DE INCONSISTÊNCIAS NF_CD - {agora_utc_naive().strftime('%d/%m/%Y %H:%M')}")
         print("=" * 80)
         print(f"Modo: {'COMMIT (ALTERAÇÕES SERÃO SALVAS)' if commit else 'DRY-RUN (apenas visualização)'}")
         print("=" * 80)

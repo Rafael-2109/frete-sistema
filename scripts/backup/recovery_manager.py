@@ -24,6 +24,7 @@ import boto3
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import setup_logger
+from app.utils.timezone import agora_utc_naive
 
 class RecoveryManager:
     """Comprehensive recovery manager for MCP system"""
@@ -179,7 +180,7 @@ class RecoveryManager:
         rollback_dir = self.restore_dir / "rollback" / component
         rollback_dir.mkdir(parents=True, exist_ok=True)
         
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = agora_utc_naive().strftime("%Y%m%d%H%M%S")
         rollback_point = {
             "timestamp": timestamp,
             "component": component,
@@ -562,7 +563,7 @@ class RecoveryManager:
     
     def perform_recovery(self, backup_name: str, components: Optional[List[str]] = None) -> bool:
         """Perform complete recovery from backup"""
-        self.recovery_state["started_at"] = datetime.now()
+        self.recovery_state["started_at"] = agora_utc_naive()
         self.recovery_state["backup_name"] = backup_name
         
         # Find backup
@@ -634,7 +635,7 @@ class RecoveryManager:
                 success = False
         
         # Save recovery state
-        state_file = self.restore_dir / f"recovery_state_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+        state_file = self.restore_dir / f"recovery_state_{agora_utc_naive().strftime('%Y%m%d%H%M%S')}.json"
         with open(state_file, 'w') as f:
             json.dump(self.recovery_state, f, indent=2, default=str)
         

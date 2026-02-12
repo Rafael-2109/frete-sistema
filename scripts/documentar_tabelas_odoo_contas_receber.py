@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import create_app
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 # Tabelas a documentar (ordem de dependência)
@@ -280,7 +281,7 @@ def main():
     print("="*80)
     print("DOCUMENTAÇÃO COMPLETA: TABELAS DO ODOO - CONTAS A RECEBER")
     print("="*80)
-    print(f"Iniciado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Iniciado em: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
 
     app = create_app()
 
@@ -300,7 +301,7 @@ def main():
         with open(output_path, 'w', encoding='utf-8') as f:
             # Cabeçalho do documento
             f.write("# DOCUMENTAÇÃO COMPLETA: TABELAS DO ODOO - CONTAS A RECEBER\n\n")
-            f.write(f"**Data de geração:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"**Data de geração:** {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write("## Objetivo\n")
             f.write("Documentar TODAS as tabelas do Odoo relacionadas ao Contas a Receber,\n")
             f.write("com TODOS os campos, tipos, descrições e valores de exemplo.\n\n")

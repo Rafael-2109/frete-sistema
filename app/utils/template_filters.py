@@ -1,6 +1,6 @@
 from flask import current_app
 from app.utils.file_storage import get_file_storage
-from app.utils.timezone import utc_para_brasil, formatar_data_hora_brasil, formatar_data_brasil
+from app.utils.timezone import formatar_data_hora_brasil, formatar_data_brasil
 from app.utils.valores_brasileiros import formatar_valor_brasileiro
 import locale
 import json

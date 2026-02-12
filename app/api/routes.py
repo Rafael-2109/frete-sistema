@@ -25,6 +25,7 @@ api_bp.register_blueprint(odoo_bp)
 
 # Registrar blueprint do relatório fiscal IBS/CBS
 from app.api.odoo.routes_relatorio_fiscal import relatorio_fiscal_bp
+from app.utils.timezone import agora_utc_naive
 api_bp.register_blueprint(relatorio_fiscal_bp)
 
 # ============================================================================
@@ -61,7 +62,7 @@ def api_consultar_embarques():
             'data': resultado,
             'total': len(resultado),
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:
@@ -100,7 +101,7 @@ def api_consultar_fretes():
             'data': resultado,
             'total': len(resultado),
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:
@@ -149,7 +150,7 @@ def api_consultar_monitoramento():
             'data': resultado,
             'total': len(resultado),
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:
@@ -249,7 +250,7 @@ def api_consultar_cliente_detalhado(cliente_nome):
             },
             'data': resultado,
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:
@@ -305,7 +306,7 @@ def api_exportar_relatorio_cliente(cliente_nome):
         arquivo_temp.close()
         
         # Nome do arquivo para download
-        nome_arquivo = f"relatorio_{cliente_nome.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        nome_arquivo = f"relatorio_{cliente_nome.replace(' ', '_')}_{agora_utc_naive().strftime('%Y%m%d_%H%M')}.xlsx"
         
         return send_file(
             arquivo_temp.name,
@@ -326,7 +327,7 @@ def api_estatisticas_sistema():
     """Estatísticas do sistema via API REST"""
     try:
         periodo_dias = int(request.args.get('periodo_dias', 30))
-        data_inicio = datetime.now() - timedelta(days=periodo_dias)
+        data_inicio = agora_utc_naive() - timedelta(days=periodo_dias)
         
         # Estatísticas básicas
         total_embarques = Embarque.query.count()
@@ -379,7 +380,7 @@ def api_estatisticas_sistema():
             'success': True,
             'data': resultado,
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:
@@ -418,7 +419,7 @@ def api_consultar_portaria():
             'data': resultado,
             'total': len(resultado),
             'usuario': current_user.nome,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': agora_utc_naive().isoformat()
         })
         
     except Exception as e:
@@ -439,7 +440,7 @@ def api_health():
         'status': 'healthy',
         'service': 'Sistema de Fretes API',
         'version': '1.0.0',
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': agora_utc_naive().isoformat(),
         'endpoints': [
             '/api/v1/embarques',
             '/api/v1/fretes', 

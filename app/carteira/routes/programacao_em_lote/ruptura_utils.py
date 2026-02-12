@@ -13,6 +13,7 @@ from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
 from app.estoque.models import MovimentacaoEstoque
 from app.producao.models import ProgramacaoProducao
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def analisar_ruptura_lote(cnpjs: List[str], data_agendamento: date) -> Dict[str,
             'produtos_criticos': [],
             'produtos_ok': [],
             'total_analisado': 0,
-            'data_analise': datetime.now().isoformat()
+            'data_analise': agora_utc_naive().isoformat()
         }
 
         # Buscar todos os produtos dos CNPJs

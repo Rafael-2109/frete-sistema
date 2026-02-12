@@ -421,7 +421,6 @@ def importar_perfil_fiscal_excel():
     """
     import pandas as pd
     from decimal import Decimal, InvalidOperation
-    from app.utils.timezone import agora_utc_naive
     import json
     import logging
 
@@ -1152,7 +1151,6 @@ def editar_perfil_fiscal(perfil_id):
     try:
         from app import db
         from decimal import Decimal, InvalidOperation
-        from app.utils.timezone import agora_utc_naive
         import json
         import logging
 

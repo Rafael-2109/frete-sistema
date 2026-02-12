@@ -7,6 +7,7 @@ from flask_login import login_required
 from app.portal import portal_bp
 from app import db
 from app.separacao.models import Separacao
+from app.utils.timezone import agora_utc_naive
 import json
 import uuid
 import logging
@@ -144,7 +145,7 @@ def verificar_todos_protocolos_pendentes():
             'processados': 0,
             'atualizados': 0,
             'status': 'pending',
-            'criado_em': datetime.now().isoformat(),
+            'criado_em': agora_utc_naive().isoformat(),
             'resultados': [],
             'alteracoes': []  # Lista detalhada de alterações
         }
@@ -290,7 +291,7 @@ def verificar_agendas_lote():
             'processados': 0,
             'atualizados': 0,
             'status': 'pending',
-            'criado_em': datetime.now().isoformat(),
+            'criado_em': agora_utc_naive().isoformat(),
             'resultados': [],
             'alteracoes': []
         }

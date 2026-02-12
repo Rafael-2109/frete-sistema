@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app import create_app, db
 from sqlalchemy import text
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 
 def adicionar_campos_equipe_vendas():
@@ -195,7 +196,7 @@ def main():
     print("=" * 80)
     print("🔧 MIGRAÇÃO: CONFIGURAÇÕES DE EQUIPE DE VENDAS - SISTEMA MOTOCHEFE")
     print("=" * 80)
-    print(f"📅 Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"📅 Data: {agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S')}")
     print("=" * 80)
     print("\n📝 ALTERAÇÕES:")
     print("   1. Adicionar campos de configuração em equipe_vendas_moto")

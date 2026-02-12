@@ -16,6 +16,7 @@ from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 import logging
 import math
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ def exportar_relatorios_producao():
                 'Linha': pallet_info.linha_producao if pallet_info else '',  # ✅ NOVA COLUNA
                 'MP': pallet_info.tipo_materia_prima if pallet_info else '',  # ✅ NOVA COLUNA
                 'Emb.': pallet_info.tipo_embalagem if pallet_info else '',  # ✅ NOVA COLUNA
-                'Última Atualização': datetime.now()  # Manter como datetime para formatação correta
+                'Última Atualização': agora_utc_naive()  # Manter como datetime para formatação correta
             })
         
         df_estoque = pd.DataFrame(dados_estoque)
@@ -780,7 +781,7 @@ def exportar_relatorios_producao():
 
         output.seek(0)
         
-        filename = f'relatorio_producao_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        filename = f'relatorio_producao_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 import tempfile
 import os
 import logging
-
+from app.utils.timezone import agora_utc_naive
 # Configurar logging
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def gerar_relatorio_ibscbs():
         if data_fim_str:
             data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
         else:
-            data_fim = datetime.now().date()
+            data_fim = agora_utc_naive().date()
 
         if data_ini_str:
             data_ini = datetime.strptime(data_ini_str, '%Y-%m-%d').date()

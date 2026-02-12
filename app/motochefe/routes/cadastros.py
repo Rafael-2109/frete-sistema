@@ -10,6 +10,7 @@ from io import BytesIO
 from datetime import datetime
 import requests
 import re
+from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.motochefe.routes import motochefe_bp
@@ -384,7 +385,7 @@ def exportar_equipes():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'equipes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'equipes_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/equipes/modelo')
@@ -399,7 +400,7 @@ def baixar_modelo_equipes():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_equipes_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_equipes_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/equipes/importar', methods=['POST'])
@@ -561,7 +562,7 @@ def exportar_vendedores():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'vendedores_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'vendedores_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/vendedores/modelo')
@@ -576,7 +577,7 @@ def baixar_modelo_vendedores():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_vendedores_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_vendedores_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/vendedores/importar', methods=['POST'])
@@ -754,7 +755,7 @@ def exportar_transportadoras():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'transportadoras_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'transportadoras_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/transportadoras/modelo')
@@ -769,7 +770,7 @@ def baixar_modelo_transportadoras():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_transportadoras_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_transportadoras_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/transportadoras/importar', methods=['POST'])
@@ -1073,7 +1074,7 @@ def exportar_clientes():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'clientes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'clientes_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @motochefe_bp.route('/clientes/modelo')
@@ -1088,7 +1089,7 @@ def baixar_modelo_clientes():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'modelo_importacao_clientes_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        download_name=f'modelo_importacao_clientes_{agora_utc_naive().strftime("%Y%m%d")}.xlsx'
     )
 
 @motochefe_bp.route('/clientes/importar', methods=['POST'])

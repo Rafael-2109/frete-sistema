@@ -14,6 +14,7 @@ from app.localidades.models import Cidade
 # float_or_none removido - usando converter_valor_brasileiro de valores_brasileiros
 from app.utils.ufs import UF_LIST
 from app.vinculos.models import CidadeAtendida
+from app.utils.timezone import agora_utc_naive
 
 tabelas_bp = Blueprint('tabelas', __name__, url_prefix='/tabelas')
 
@@ -1143,7 +1144,7 @@ def exportar_tabelas():
         output.seek(0)
 
         # Nome do arquivo com data/hora
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
         nome_arquivo = f"tabelas_frete_{timestamp}.xlsx"
 
         # Cria resposta para download

@@ -5,6 +5,7 @@ Lista NFs do TagPlus com datas corretas (busca detalhes de cada uma)
 
 import requests
 from datetime import datetime, timedelta
+from app.utils.timezone import agora_utc_naive
 
 token = "7pwodl5ybldjAqcgBTfNrrjV1MSGI3uI"
 headers = {
@@ -18,7 +19,7 @@ print("📋 LISTANDO NFS COM DATAS COMPLETAS")
 print("="*60)
 
 # Período
-data_fim = datetime.now().date()
+data_fim = agora_utc_naive().date()
 data_inicio = data_fim - timedelta(days=7)
 
 # Buscar lista de NFs

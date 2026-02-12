@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app, db
 from sqlalchemy import text
 from datetime import datetime
+from app.utils.timezone import agora_utc_naive
 
 def atualizar_status_faturado():
     """Atualiza status dos pedidos baseado na existência da NF em FaturamentoProduto"""
@@ -27,7 +28,7 @@ def atualizar_status_faturado():
     with app.app_context():
         print("\n" + "="*60)
         print("🔧 ATUALIZANDO STATUS DOS PEDIDOS")
-        print(f"📅 Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 Data: {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*60)
         
         try:

@@ -93,10 +93,10 @@ AUTH_PAGE_TEMPLATE = """
         <p>Buscar NFs por período:</p>
         <div style="margin: 10px 0;">
             <label>Data Inicial:</label>
-            <input type="date" id="dataInicio" value="{{ (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d') }}" style="padding: 5px; margin-right: 10px;">
+            <input type="date" id="dataInicio" value="{{ (agora_utc_naive() - timedelta(days=7)).strftime('%Y-%m-%d') }}" style="padding: 5px; margin-right: 10px;">
 
             <label>Data Final:</label>
-            <input type="date" id="dataFim" value="{{ datetime.now().strftime('%Y-%m-%d') }}" style="padding: 5px; margin-right: 10px;">
+            <input type="date" id="dataFim" value="{{ agora_utc_naive().strftime('%Y-%m-%d') }}" style="padding: 5px; margin-right: 10px;">
 
             <button class="btn btn-primary" onclick="listarNFs()">
                 🔍 Buscar NFs
@@ -769,12 +769,12 @@ def listar_nfs():
         if data_inicio_str:
             data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
         else:
-            data_inicio = datetime.now().date() - timedelta(days=7)
+            data_inicio = agora_utc_naive().date() - timedelta(days=7)
 
         if data_fim_str:
             data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
         else:
-            data_fim = datetime.now().date()
+            data_fim = agora_utc_naive().date()
 
         # Usa OAuth2 para buscar NFs
         oauth = TagPlusOAuth2V2(api_type='notas')
@@ -942,12 +942,12 @@ def importar_nfs():
         if data_inicio_str:
             data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
         else:
-            data_inicio = datetime.now().date() - timedelta(days=7)
+            data_inicio = agora_utc_naive().date() - timedelta(days=7)
 
         if data_fim_str:
             data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
         else:
-            data_fim = datetime.now().date()
+            data_fim = agora_utc_naive().date()
 
         # Importar NFs específicas selecionadas pelo usuário
         resultado = importador.importar_nfs(

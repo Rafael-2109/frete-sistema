@@ -1440,10 +1440,98 @@ class ExtratoConciliacaoService:
     # ATUALIZAÇÃO DE CAMPOS DO EXTRATO (PÓS-RECONCILIAÇÃO)
     # =========================================================================
 
+    def _safe_write_move_line(self, move_id: int, line_id: int, vals: dict) -> bool:
+        """
+        Write seguro em account.move.line de entry posted: draft → write → post.
+
+        No Odoo 17+, journal entries de bank statements são posted automaticamente.
+        Tentar write direto causa Fault 2. Solução: button_draft → write → action_post.
+
+        Args:
+            move_id: ID do account.move pai
+            line_id: ID da account.move.line a modificar
+            vals: Dicionário de valores a escrever
+
+        Returns:
+            True se escreveu com sucesso, False se falhou
+        """
+        try:
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[move_id]]
+            )
+            self.connection.execute_kw(
+                'account.move.line', 'write',
+                [[line_id], vals]
+            )
+            self.connection.execute_kw(
+                'account.move', 'action_post', [[move_id]]
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"  Safe write move_line {line_id} (move={move_id}) falhou: {e}")
+            try:
+                self.connection.execute_kw(
+                    'account.move', 'action_post', [[move_id]]
+                )
+            except Exception:
+                logger.warning(f"  Falha ao re-postar move {move_id} após erro")
+            return False
+
+    def _safe_write_statement_line(self, statement_line_id: int, vals: dict) -> bool:
+        """
+        Write seguro em account.bank.statement.line: draft → write → post.
+
+        No Odoo 17+, statement lines criam journal entries posted automaticamente.
+        Tentar write direto causa Fault 2. Solução: button_draft → write → action_post.
+
+        Args:
+            statement_line_id: ID da statement line
+            vals: Dicionário de valores a escrever
+
+        Returns:
+            True se escreveu com sucesso, False se falhou
+        """
+        move_id = None
+        try:
+            stmt = self.connection.search_read(
+                'account.bank.statement.line',
+                [['id', '=', statement_line_id]],
+                fields=['move_id'],
+                limit=1
+            )
+            if not stmt:
+                return False
+
+            move_id_raw = stmt[0]['move_id']
+            move_id = move_id_raw[0] if isinstance(move_id_raw, (list, tuple)) else move_id_raw
+
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[move_id]]
+            )
+            self.connection.execute_kw(
+                'account.bank.statement.line', 'write',
+                [[statement_line_id], vals]
+            )
+            self.connection.execute_kw(
+                'account.move', 'action_post', [[move_id]]
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"  Safe write stmt_line {statement_line_id} falhou: {e}")
+            if move_id:
+                try:
+                    self.connection.execute_kw(
+                        'account.move', 'action_post', [[move_id]]
+                    )
+                except Exception:
+                    logger.warning(f"  Falha ao re-postar move {move_id} após erro")
+            return False
+
     def _trocar_conta_extrato(self, move_id: int) -> bool:
         """
         Troca account_id da move line do extrato: TRANSITÓRIA → PENDENTES.
 
+        Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
         Deve ser chamado ANTES da reconciliação, pois após reconciliar
         pode não ser possível alterar a move line.
 
@@ -1468,16 +1556,17 @@ class ExtratoConciliacaoService:
             )
             if not linhas:
                 return False
-            self.connection.execute_kw(
-                'account.move.line',
-                'write',
-                [[linhas[0]['id']], {'account_id': CONTA_PAGAMENTOS_PENDENTES}]
+
+            line_id = linhas[0]['id']
+            ok = self._safe_write_move_line(
+                move_id, line_id, {'account_id': CONTA_PAGAMENTOS_PENDENTES}
             )
-            logger.info(
-                f"  Conta atualizada: move_line {linhas[0]['id']}, "
-                f"{CONTA_TRANSITORIA} → {CONTA_PAGAMENTOS_PENDENTES}"
-            )
-            return True
+            if ok:
+                logger.info(
+                    f"  Conta atualizada: move_line {line_id}, "
+                    f"{CONTA_TRANSITORIA} → {CONTA_PAGAMENTOS_PENDENTES}"
+                )
+            return ok
         except Exception as e:
             logger.warning(f"  Falha ao trocar conta do extrato move {move_id}: {e}")
             return False
@@ -1486,6 +1575,7 @@ class ExtratoConciliacaoService:
         """
         Troca account_id da move line do extrato para uma conta específica.
 
+        Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
         Versão flexível de _trocar_conta_extrato() para quando o payment não usou
         a conta PENDENTES (26868), mas sim uma conta bancária diretamente.
 
@@ -1532,16 +1622,16 @@ class ExtratoConciliacaoService:
                 logger.info(f"  Conta já é a destino ({conta_destino}), nada a trocar")
                 return True
 
-            self.connection.execute_kw(
-                'account.move.line',
-                'write',
-                [[linhas[0]['id']], {'account_id': conta_destino}]
+            line_id = linhas[0]['id']
+            ok = self._safe_write_move_line(
+                move_id, line_id, {'account_id': conta_destino}
             )
-            logger.info(
-                f"  Conta atualizada: move_line {linhas[0]['id']}, "
-                f"{conta_atual} → {conta_destino}"
-            )
-            return True
+            if ok:
+                logger.info(
+                    f"  Conta atualizada: move_line {line_id}, "
+                    f"{conta_atual} → {conta_destino}"
+                )
+            return ok
         except Exception as e:
             logger.warning(
                 f"  Falha ao trocar conta do extrato move {move_id} "
@@ -1553,7 +1643,10 @@ class ExtratoConciliacaoService:
         self, item: ExtratoItem, partner_id: int, partner_name: str
     ) -> None:
         """
-        Atualiza partner_id e rótulo do extrato no Odoo (PÓS reconciliação).
+        Atualiza partner_id e rótulo do extrato no Odoo.
+
+        Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
+        Faz UMA operação de draft/post para todos os writes (partner + rótulo).
 
         Corrige campos que o Odoo não preenche automaticamente para boletos:
         1. partner_id da statement line
@@ -1567,52 +1660,79 @@ class ExtratoConciliacaoService:
         if not item.statement_line_id or not item.move_id:
             return
 
-        # 1. Atualizar partner_id da statement line
+        # Buscar move_id da statement line
+        stmt = None
         try:
-            self.connection.execute_kw(
+            stmt = self.connection.search_read(
                 'account.bank.statement.line',
-                'write',
-                [[item.statement_line_id], {'partner_id': partner_id}]
-            )
-            logger.info(
-                f"  Partner atualizado: statement_line "
-                f"{item.statement_line_id} → partner_id={partner_id}"
+                [['id', '=', item.statement_line_id]],
+                fields=['move_id'],
+                limit=1
             )
         except Exception as e:
-            logger.warning(f"  Falha ao atualizar partner: {e}")
+            logger.warning(f"  Falha ao buscar statement line {item.statement_line_id}: {e}")
+            return
 
-        # 2. Atualizar rótulo
+        if not stmt:
+            return
+
+        stmt_move_id = stmt[0]['move_id']
+        if isinstance(stmt_move_id, (list, tuple)):
+            stmt_move_id = stmt_move_id[0]
+
         try:
-            from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
-            rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
-                valor=abs(float(item.valor)),
-                nome_fornecedor=partner_name or '',
-                data_pagamento=item.data_transacao,
-            )
-
-            # payment_ref da statement line
+            # 1. Setar move para draft (UMA vez para todos os writes)
             self.connection.execute_kw(
-                'account.bank.statement.line',
-                'write',
-                [[item.statement_line_id], {'payment_ref': rotulo}]
+                'account.move', 'button_draft', [[stmt_move_id]]
             )
 
-            # name das move lines do extrato
-            linhas = self.connection.search_read(
-                'account.move.line',
-                [['move_id', '=', item.move_id]],
-                fields=['id'],
-            )
-            if linhas:
-                line_ids = [l['id'] for l in linhas]
+            try:
+                # 2. Atualizar partner_id da statement line
                 self.connection.execute_kw(
-                    'account.move.line',
-                    'write',
-                    [line_ids, {'name': rotulo}]
+                    'account.bank.statement.line', 'write',
+                    [[item.statement_line_id], {'partner_id': partner_id}]
                 )
-            logger.info(f"  Rótulo atualizado: {rotulo[:60]}...")
+                logger.info(
+                    f"  Partner atualizado: statement_line "
+                    f"{item.statement_line_id} → partner_id={partner_id}"
+                )
+
+                # 3. Atualizar rótulo
+                from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+                rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+                    valor=abs(float(item.valor)),
+                    nome_fornecedor=partner_name or '',
+                    data_pagamento=item.data_transacao,
+                )
+
+                # payment_ref da statement line
+                self.connection.execute_kw(
+                    'account.bank.statement.line', 'write',
+                    [[item.statement_line_id], {'payment_ref': rotulo}]
+                )
+
+                # name das move lines do extrato
+                linhas = self.connection.search_read(
+                    'account.move.line',
+                    [['move_id', '=', stmt_move_id]],
+                    fields=['id'],
+                )
+                if linhas:
+                    line_ids = [l['id'] for l in linhas]
+                    self.connection.execute_kw(
+                        'account.move.line', 'write',
+                        [line_ids, {'name': rotulo}]
+                    )
+                logger.info(f"  Rótulo atualizado: {rotulo[:60]}...")
+
+            finally:
+                # 4. Re-postar o move (SEMPRE, mesmo se write falhou)
+                self.connection.execute_kw(
+                    'account.move', 'action_post', [[stmt_move_id]]
+                )
+
         except Exception as e:
-            logger.warning(f"  Falha ao atualizar rótulo: {e}")
+            logger.warning(f"  Falha ao atualizar campos do extrato: {e}")
 
     def _extrair_partner_dados(self, titulo_odoo: Dict) -> tuple:
         """

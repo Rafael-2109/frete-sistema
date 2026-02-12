@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app.odoo.utils.connection import get_odoo_connection
+from app.utils.timezone import agora_utc_naive
 
 
 def listar_journals_banco():
@@ -311,7 +312,7 @@ def exportar_recebimentos_pendentes(journal_code=None, output_file=None):
 
     # Preparar para exportação
     dados = {
-        'exportado_em': datetime.now().isoformat(),
+        'exportado_em': agora_utc_naive().isoformat(),
         'filtro': {
             'journal_code': journal_code,
             'is_reconciled': False,
@@ -322,7 +323,7 @@ def exportar_recebimentos_pendentes(journal_code=None, output_file=None):
     }
 
     if not output_file:
-        output_file = f"scripts/analise_baixa_titulos/snapshots/recebimentos_pendentes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        output_file = f"scripts/analise_baixa_titulos/snapshots/recebimentos_pendentes_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.json"
 
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(dados, f, indent=2, default=str, ensure_ascii=False)

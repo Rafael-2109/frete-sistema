@@ -34,9 +34,9 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from decimal import Decimal
-from app.utils.timezone import agora_utc_naive
 # Adicionar path do projeto
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+from app.utils.timezone import agora_utc_naive
 
 
 # ==============================================================================

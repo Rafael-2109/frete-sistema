@@ -52,6 +52,7 @@ from app.recebimento.services.depara_service import DeparaService # noqa: E402
 from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService # noqa: E402
 from app.recebimento.services.odoo_po_service import OdooPoService # noqa: E402
 from sqlalchemy import or_, case, func # noqa: E402
+from app.utils.timezone import agora_utc_naive # noqa: E402
 
 validacao_nf_po_bp = Blueprint('validacao_nf_po', __name__, url_prefix='/api/recebimento')
 
@@ -1519,7 +1520,6 @@ def executar_validacao_manual():
     try:
         from app.recebimento.jobs.validacao_recebimento_job import executar_validacao_recebimento
         from datetime import datetime
-        from app.utils.timezone import agora_utc_naive
 
         data = request.get_json(silent=True) or {}
         data_de = data.get('data_de')  # Formato: YYYY-MM-DD

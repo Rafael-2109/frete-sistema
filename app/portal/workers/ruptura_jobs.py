@@ -8,6 +8,7 @@ from app import create_app, db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import ProgramacaoProducao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func
 from datetime import datetime
 import logging
@@ -182,7 +183,7 @@ def analisar_pedido_worker(num_pedido):
                 func.sum(ProgramacaoProducao.qtd_programada).label('qtd_producao')
             ).filter(
                 ProgramacaoProducao.cod_produto.in_(produtos_unicos),
-                ProgramacaoProducao.data_programacao >= datetime.now().date()
+                ProgramacaoProducao.data_programacao >= agora_utc_naive().date()
             ).group_by(
                 ProgramacaoProducao.cod_produto,
                 ProgramacaoProducao.data_programacao
