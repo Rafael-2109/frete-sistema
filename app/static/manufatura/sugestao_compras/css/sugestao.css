@@ -185,3 +185,125 @@
 [data-bs-theme="dark"] .sc-data-atrasada {
     color: hsl(0, 72%, 60%);
 }
+
+/* ========================================
+   MODAIS - Estilos
+   ======================================== */
+
+/* Celula clicavel (link para modal) */
+.sc-link-modal {
+    cursor: pointer;
+    border-bottom: 1px dashed var(--text-muted);
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.sc-link-modal:hover {
+    color: hsl(220, 60%, 50%);
+    border-bottom-color: hsl(220, 60%, 50%);
+}
+
+/* Modal headers */
+.sc-modal-header-transito {
+    background: hsl(220, 60%, 45%);
+}
+
+.sc-modal-header-cardex {
+    background: hsl(142, 50%, 38%);
+}
+
+.sc-modal-header-sugestao {
+    background: hsl(38, 70%, 42%);
+}
+
+/* Titulo de secao dentro do modal */
+.sc-section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.8rem;
+}
+
+/* Linha com sugestao de compra (amber sutil) */
+.sc-row-sugestao {
+    background: hsla(38, 92%, 50%, 0.08) !important;
+}
+
+/* Linha com ruptura (vermelho sutil) */
+.sc-row-ruptura {
+    background: hsla(0, 72%, 51%, 0.08) !important;
+}
+
+/* Badge sugestao */
+.sc-badge-sugestao {
+    background: hsla(38, 92%, 50%, 0.15);
+    color: hsl(38, 72%, 40%);
+    border: 1px solid hsla(38, 92%, 50%, 0.3);
+}
+
+/* Badge atrasado */
+.sc-badge-atrasado {
+    background: hsla(0, 72%, 51%, 0.15);
+    color: hsl(0, 72%, 51%);
+    border: 1px solid hsla(0, 72%, 51%, 0.3);
+}
+
+/* Sugestao item no card */
+.sc-sugestao-item {
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: hsla(38, 92%, 50%, 0.06);
+    border: 1px solid hsla(38, 92%, 50%, 0.15);
+    font-size: 0.8rem;
+}
+
+/* Alerta vazio */
+.sc-alerta-vazio {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.85rem;
+}
+
+/* Dark mode modal adjustments */
+[data-bs-theme="dark"] .sc-modal-header-transito {
+    background: hsl(220, 50%, 35%);
+}
+
+[data-bs-theme="dark"] .sc-modal-header-cardex {
+    background: hsl(142, 40%, 30%);
+}
+
+[data-bs-theme="dark"] .sc-modal-header-sugestao {
+    background: hsl(38, 55%, 32%);
+}
+
+[data-bs-theme="dark"] .sc-link-modal:hover {
+    color: hsl(220, 70%, 65%);
+    border-bottom-color: hsl(220, 70%, 65%);
+}
+
+[data-bs-theme="dark"] .sc-badge-sugestao {
+    color: hsl(38, 92%, 60%);
+}
+
+[data-bs-theme="dark"] .sc-badge-atrasado {
+    color: hsl(0, 72%, 65%);
+}
+
+[data-bs-theme="dark"] .sc-row-sugestao {
+    background: hsla(38, 92%, 50%, 0.12) !important;
+}
+
+[data-bs-theme="dark"] .sc-row-ruptura {
+    background: hsla(0, 72%, 51%, 0.12) !important;
+}
+
+[data-bs-theme="dark"] .sc-sugestao-item {
+    background: hsla(38, 92%, 50%, 0.1);
+    border-color: hsla(38, 92%, 50%, 0.2);
+}

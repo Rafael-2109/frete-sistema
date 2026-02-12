@@ -131,7 +131,14 @@
         </div>
         <div class="mt-2 text-muted small" id="info-filtro"></div>
     </div>
+
+    {% include 'manufatura/sugestao_compras/modals/_modal-em-transito.html' %}
+    {% include 'manufatura/sugestao_compras/modals/_modal-cardex.html' %}
+    {% include 'manufatura/sugestao_compras/modals/_modal-sugestao-inteligente.html' %}
 </div>
 
 <script src="{{ 'manufatura/sugestao_compras/js/sugestao.js'|asset_url }}"></script>
+<script src="{{ 'manufatura/sugestao_compras/js/modal-em-transito.js'|asset_url }}"></script>
+<script src="{{ 'manufatura/sugestao_compras/js/modal-cardex.js'|asset_url }}"></script>
+<script src="{{ 'manufatura/sugestao_compras/js/modal-sugestao-inteligente.js'|asset_url }}"></script>
 {% endblock %}

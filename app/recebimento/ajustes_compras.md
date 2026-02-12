@@ -6,5 +6,5 @@
 **ALTERADO****TESTADO**6- Adicionar coluna de PO origem(N PO - 1 NF).
 **ALTERADO****TESTADO** 7- Priorizar integrar com o PO original sempre que possivel.
 **ALTERADO** 8- Reversão de integração - Voltar os pedidos ao original e desvincular a NF do PO + remover PO do DFe.
-9- Link para Odoo no picking com erro.
-10- Criar tela por data necessaria de compra
+**ALTERADO****TESTADO**9- Link para Odoo no picking com erro.
+**ALTERADO**10- Criar tela por data necessaria de compra

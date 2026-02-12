@@ -212,11 +212,11 @@ function renderizarTabela(dados) {
                 <span class="sc-produto-nome" title="${s.nome_produto || ''}">${s.nome_produto || ''}</span>
             </td>
             <td class="text-end">${formatarNumero(s.estoque_atual, 0)}</td>
-            <td class="text-end">${formatarNumero(s.demanda_60d, 0)}</td>
-            <td class="text-end"><span class="sc-em-transito" title="${emTransitoTitle}">${formatarNumero(s.em_transito, 0)}</span></td>
+            <td class="text-end"><span class="sc-link-modal" onclick="abrirModalCardex('${s.cod_produto}')" title="Ver cardex projetado">${formatarNumero(s.demanda_60d, 0)}</span></td>
+            <td class="text-end"><span class="sc-link-modal" onclick="abrirModalEmTransito('${s.cod_produto}')" title="${emTransitoTitle}">${formatarNumero(s.em_transito, 0)}</span></td>
             <td class="text-end ${necessidadeCls}">${formatarNumero(s.necessidade_liquida, 0)}</td>
             <td class="text-end">${s.lote_minimo > 1 ? formatarNumero(s.lote_minimo, 0) : '-'}</td>
-            <td class="text-end ${qtdSugeridaCls}">${s.qtd_sugerida > 0 ? formatarNumero(s.qtd_sugerida, 0) : '-'}</td>
+            <td class="text-end ${qtdSugeridaCls}">${s.qtd_sugerida > 0 ? '<span class="sc-link-modal" onclick="abrirModalSugestaoInteligente(\'' + s.cod_produto + '\')" title="Ver sugestao inteligente">' + formatarNumero(s.qtd_sugerida, 0) + '</span>' : '-'}</td>
             <td class="text-center">${s.lead_time > 0 ? s.lead_time + 'd' : '-'}</td>
             <td class="text-center ${dataPedirCls}">${formatarData(s.data_pedir)}</td>
             <td class="text-center">${urgBadge}</td>
