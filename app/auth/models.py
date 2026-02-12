@@ -156,7 +156,15 @@ class Usuario(db.Model, UserMixin):
         return UserEquipe.get_equipes_usuario(self.id)
     
     # ====== MÉTODOS DE COMPATIBILIDADE (mantém funcionamento antigo) ======
-    
+
+    def tem_permissao(self, modulo, funcao=None, submodulo=None):
+        """Verifica permissão usando sistema de perfis"""
+        return self._tem_permissao_legacy(modulo)
+
+    def pode_editar(self, modulo, funcao=None, submodulo=None):
+        """Verifica se pode editar usando sistema de perfis"""
+        return self._tem_permissao_legacy(modulo)
+
     def _tem_permissao_legacy(self, modulo):
         """Método de compatibilidade que usa o sistema antigo de perfis"""
         # Este método mantém a lógica antiga para garantir que nada quebre
