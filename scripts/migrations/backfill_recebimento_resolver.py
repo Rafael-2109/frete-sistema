@@ -17,6 +17,7 @@ import sys
 import os
 import argparse
 import logging
+import time
 
 # Setup path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -38,6 +39,10 @@ def main():
 
     app = create_app()
     with app.app_context():
+        from app.utils.database_retry import commit_with_retry
+        from app.utils.database_helpers import ensure_connection
+        from sqlalchemy.exc import OperationalError, DBAPIError
+
         # Buscar lotes de entrada com itens pendentes
         lotes_pendentes = db.session.query(ExtratoLote.id, ExtratoLote.statement_name).filter(
             ExtratoLote.tipo_transacao == 'entrada'
@@ -66,10 +71,12 @@ def main():
 
         resolver = RecebimentoResolverService()
 
-        for lote_id, statement_name in lotes_pendentes:
+        for idx, (lote_id, statement_name) in enumerate(lotes_pendentes, 1):
             logger.info(f"\n{'='*60}")
-            logger.info(f"Processando lote {lote_id}: {statement_name}")
+            logger.info(f"Processando lote {lote_id}: {statement_name} [{idx}/{len(lotes_pendentes)}]")
             logger.info(f"{'='*60}")
+
+            ensure_connection()
 
             try:
                 if args.dry_run:
@@ -90,6 +97,44 @@ def main():
 
                     logger.info(f"  Resultado: {stats['resolvidos']}/{stats['total']} resolvidos")
                     logger.info(f"  Métodos: {stats['metodos']}")
+
+                    commit_with_retry(db.session)
+
+            except (OperationalError, DBAPIError) as e:
+                error_msg = str(e).lower()
+                is_ssl = any(err in error_msg for err in [
+                    'ssl', 'decryption', 'bad record', 'eof detected',
+                    'connection reset', 'server closed'
+                ])
+
+                if is_ssl:
+                    logger.warning(f"  SSL drop no lote {lote_id}, tentando retry...")
+                    try:
+                        db.session.rollback()
+                        db.session.close()
+                        db.engine.dispose()
+                    except Exception:
+                        pass
+                    time.sleep(1)
+
+                    # Retry uma vez
+                    try:
+                        ensure_connection()
+                        stats = resolver.resolver_lote(lote_id)
+                        stats_global['total_itens'] += stats['total']
+                        stats_global['total_resolvidos'] += stats['resolvidos']
+
+                        for metodo, count in stats['metodos'].items():
+                            stats_global['metodos'][metodo] = stats_global['metodos'].get(metodo, 0) + count
+
+                        commit_with_retry(db.session)
+                        logger.info(f"  Retry do lote {lote_id} bem-sucedido")
+                    except Exception as retry_e:
+                        logger.error(f"  Erro no retry do lote {lote_id}: {retry_e}")
+                        stats_global['erros_lote'] += 1
+                else:
+                    logger.error(f"  ERRO no lote {lote_id}: {e}")
+                    stats_global['erros_lote'] += 1
 
             except Exception as e:
                 logger.error(f"  ERRO no lote {lote_id}: {e}")

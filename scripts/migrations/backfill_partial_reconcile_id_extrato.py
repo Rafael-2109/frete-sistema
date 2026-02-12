@@ -29,6 +29,7 @@ import sys
 import os
 import argparse
 import logging
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -37,6 +38,23 @@ logger = logging.getLogger(__name__)
 
 # Batch size para queries no Odoo
 BATCH_SIZE = 50
+
+
+def _odoo_search_read_with_retry(conn, model, domain, fields, max_retries=2):
+    """search_read com retry e re-autenticação."""
+    for attempt in range(max_retries):
+        try:
+            return conn.search_read(model, domain, fields=fields)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Erro Odoo (tentativa {attempt + 1}): {e}")
+                try:
+                    conn.authenticate()
+                except Exception:
+                    pass
+                time.sleep(1)
+            else:
+                raise
 
 
 def buscar_itens_sem_reconcile_id(tipo_transacao=None):
@@ -75,27 +93,31 @@ def sincronizar_batch(itens_batch, conn, dry_run=False):
     Sincroniza partial/full_reconcile_id para um batch de itens.
 
     Busca os credit_line_ids no Odoo em uma única query e
-    atualiza os itens localmente.
+    atualiza os itens localmente. Commit por batch para não perder progresso.
 
     Returns:
         Dict com contadores: sincronizados, nao_reconciliados, erros
     """
     from app import db
+    from app.utils.database_retry import commit_with_retry
+    from app.utils.database_helpers import ensure_connection
 
     stats = {'sincronizados': 0, 'nao_reconciliados': 0, 'erros': 0}
+
+    ensure_connection()
 
     credit_line_ids = [item.credit_line_id for item in itens_batch]
 
     try:
-        linhas = conn.search_read(
-            'account.move.line',
+        linhas = _odoo_search_read_with_retry(
+            conn, 'account.move.line',
             [['id', 'in', credit_line_ids]],
-            fields=[
+            [
                 'id', 'reconciled',
                 'matched_debit_ids', 'matched_credit_ids',
                 'full_reconcile_id'
             ]
-        )
+        ) or []
     except Exception as e:
         logger.error(f"  Erro ao buscar linhas no Odoo: {e}")
         stats['erros'] = len(itens_batch)
@@ -134,7 +156,7 @@ def sincronizar_batch(itens_batch, conn, dry_run=False):
         stats['sincronizados'] += 1
 
     if not dry_run:
-        db.session.flush()
+        commit_with_retry(db.session)
 
     return stats
 
@@ -161,8 +183,6 @@ def executar():
 
     app = create_app()
     with app.app_context():
-        from app import db
-
         print("=" * 70)
         print("BACKFILL: partial_reconcile_id de itens conciliados")
         print(f"Modo: {'DRY-RUN' if args.dry_run else 'EXECUCAO REAL'}")
@@ -193,7 +213,7 @@ def executar():
         print(f"Lotes afetados: {len(lotes)}")
         print()
 
-        # Processar em batches
+        # Processar em batches (commit por batch via sincronizar_batch)
         total_stats = {
             'sincronizados': 0,
             'nao_reconciliados': 0,
@@ -220,9 +240,6 @@ def executar():
                 f"nao_rec={stats['nao_reconciliados']}, "
                 f"erros={stats['erros']}"
             )
-
-        if not args.dry_run:
-            db.session.commit()
 
         # Resumo final
         print()
