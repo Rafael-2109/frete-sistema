@@ -7,14 +7,15 @@ Encontra títulos candidatos para conciliação com linhas de extrato de pagamen
 
 REGRAS DE MATCHING (score base 100%, descontos acumulativos):
 
-=== COM CNPJ NO EXTRATO (TED/PIX) ===
-| Critério                                | Desconto |
-|-----------------------------------------|----------|
-| Match PERFEITO (CNPJ + Valor + Venc)    |    0%    |
-| Match RAIZ CNPJ (8 dig) + Valor + Venc  |   -2%    |
-| CNPJ diferente                          |  -15%    |
-| Vencimento ANTERIOR ao pagamento        |   -5%    |
-| Vencimento POSTERIOR ao pagamento       |  -10%    |
+=== COM CNPJ NO EXTRATO (TED/PIX) — Busca Hierárquica ===
+| Tier | Filtro SQL                          | Score Base | Executa se       |
+|------|-------------------------------------|------------|------------------|
+| 1    | CNPJ exato (14 dig) + valor ±10%    | 100        | Sempre           |
+| 2    | CNPJ raiz (8 dig) + valor ±10%      |  98        | Tier 1 vazio     |
+| 3    | Somente valor ±5% + venc ±10 dias   |  75        | Tier 2 vazio     |
+
+Efeito: títulos de CNPJ diferente NUNCA aparecem quando há match por CNPJ.
+Tier 3 nunca auto-matcha (75 < 90).
 
 === TOLERÂNCIA DE VALOR ===
 | Diferença     | Desconto |
@@ -24,6 +25,18 @@ REGRAS DE MATCHING (score base 100%, descontos acumulativos):
 | até R$ 0,30   |   -6%    |
 | até R$ 0,50   |  -10%    |
 | acima disso   |  -25%    |
+
+=== PENALIDADE DE VENCIMENTO (com CNPJ) ===
+| Condição             | Desconto         | Score (CNPJ exato + valor exato) |
+|----------------------|------------------|----------------------------------|
+| Venc exato           |  0               | 100                              |
+| Atraso 1-3 dias      |  0 (tolerância)  | 100                              |
+| Atraso 4-10 dias     | -(dias - 3)      |  96–93                           |
+| Atraso 11+ dias      | -11 mín          |  89 (revisão manual)             |
+| Antecipado 1-5 dias  | -2               |  98                              |
+| Antecipado 6+ dias   | -2 - (dias-5)    |  90+                             |
+
+Regra chave: atraso > 10 dias SEMPRE vai para revisão manual (score max 89 < 90).
 
 === SEM CNPJ NO EXTRATO (Boletos) ===
 | Critério                                    | Desconto |
@@ -104,7 +117,7 @@ class PagamentoMatchingService:
         # Carregar CNPJs já vinculados em outros itens do lote
         itens_vinculados = ExtratoItem.query.filter(
             ExtratoItem.lote_id == lote_id,
-            ExtratoItem.titulo_id.isnot(None)
+            ExtratoItem.titulo_pagar_id.isnot(None)
         ).all()
         for item in itens_vinculados:
             if item.cnpj_pagador:
@@ -259,79 +272,110 @@ class PagamentoMatchingService:
     ) -> List[Dict]:
         """
         Busca títulos quando o CNPJ está disponível (TED/PIX).
+
+        Busca hierárquica em 3 tiers com early return:
+        - Tier 1: CNPJ exato (14 dig) + valor ±10% → score base 100
+        - Tier 2: CNPJ raiz (8 dig) + valor ±10% → score base 98
+        - Tier 3: Somente valor ±5% + venc ±10 dias → score base 75
+
+        Efeito: títulos de CNPJ diferente NUNCA aparecem quando há match por CNPJ.
         """
         cnpj_limpo = self._normalizar_cnpj(cnpj)
         raiz_cnpj = cnpj_limpo[:8] if len(cnpj_limpo) >= 8 else ''
 
-        # Buscar títulos não pagos com valor próximo
-        margem = valor * 0.10  # 10% de margem para busca inicial
-        valor_min = valor - max(margem, 1.0)
-        valor_max = valor + max(margem, 1.0)
+        # Margem de valor para tiers 1 e 2: ±10%
+        margem_10 = valor * 0.10
+        valor_min_10 = valor - max(margem_10, 1.0)
+        valor_max_10 = valor + max(margem_10, 1.0)
 
-        titulos = ContasAPagar.query.filter(
+        # Expressão SQL para normalizar CNPJ (remove não-dígitos)
+        cnpj_normalizado = db.func.regexp_replace(ContasAPagar.cnpj, r'\D', '', 'g')
+
+        # === TIER 1: CNPJ exato (14 dígitos) + valor ±10% ===
+        if len(cnpj_limpo) >= 14:
+            titulos = ContasAPagar.query.filter(
+                ContasAPagar.parcela_paga == False,
+                ContasAPagar.valor_residual.between(valor_min_10, valor_max_10),
+                cnpj_normalizado == cnpj_limpo
+            ).all()
+
+            if titulos:
+                logger.debug(f"Tier 1 (CNPJ exato): {len(titulos)} títulos para CNPJ {cnpj_limpo}")
+                return self._pontuar_titulos(titulos, valor, data_pagamento, 100, 'CNPJ_EXATO')
+
+        # === TIER 2: CNPJ raiz (8 dígitos) + valor ±10% ===
+        if raiz_cnpj:
+            titulos = ContasAPagar.query.filter(
+                ContasAPagar.parcela_paga == False,
+                ContasAPagar.valor_residual.between(valor_min_10, valor_max_10),
+                db.func.left(cnpj_normalizado, 8) == raiz_cnpj
+            ).all()
+
+            if titulos:
+                logger.debug(f"Tier 2 (CNPJ raiz): {len(titulos)} títulos para raiz {raiz_cnpj}")
+                return self._pontuar_titulos(titulos, valor, data_pagamento, 98, 'CNPJ_RAIZ')
+
+        # === TIER 3: Somente valor ±5% + vencimento ±10 dias (sem filtro CNPJ) ===
+        margem_5 = valor * 0.05
+        valor_min_5 = valor - max(margem_5, 0.50)
+        valor_max_5 = valor + max(margem_5, 0.50)
+
+        filtros = [
             ContasAPagar.parcela_paga == False,
-            ContasAPagar.valor_residual.between(valor_min, valor_max)
-        ).all()
+            ContasAPagar.valor_residual.between(valor_min_5, valor_max_5),
+        ]
 
+        if data_pagamento:
+            from datetime import timedelta
+            venc_min = data_pagamento - timedelta(days=10)
+            venc_max = data_pagamento + timedelta(days=10)
+            filtros.append(ContasAPagar.vencimento.between(venc_min, venc_max))
+
+        titulos = ContasAPagar.query.filter(*filtros).all()
+
+        if titulos:
+            logger.debug(f"Tier 3 (sem CNPJ): {len(titulos)} títulos por valor+vencimento")
+
+        return self._pontuar_titulos(titulos, valor, data_pagamento, 75, 'SEM_CNPJ')
+
+    def _pontuar_titulos(
+        self,
+        titulos: list,
+        valor: float,
+        data_pagamento: Optional[date],
+        score_base: int,
+        criterio_cnpj: str
+    ) -> List[Dict]:
+        """
+        Pontua uma lista de títulos com desconto de valor e vencimento.
+
+        Args:
+            titulos: Lista de ContasAPagar
+            valor: Valor do pagamento (absoluto)
+            data_pagamento: Data do pagamento no extrato
+            score_base: Score inicial (100 para CNPJ exato, 98 raiz, 75 sem)
+            criterio_cnpj: Label do tier ('CNPJ_EXATO', 'CNPJ_RAIZ', 'SEM_CNPJ')
+        """
         candidatos = []
-
         for titulo in titulos:
-            titulo_cnpj = self._normalizar_cnpj(titulo.cnpj) if titulo.cnpj else ''
-            titulo_raiz = titulo_cnpj[:8] if len(titulo_cnpj) >= 8 else ''
+            score = score_base
+            criterios = [criterio_cnpj]
 
-            # Calcular score
-            score = 100  # Score base
-            criterios = []
-
-            # === REGRA DE CNPJ ===
-            if titulo_cnpj == cnpj_limpo:
-                # Regra 4: CNPJ exato = 0%
-                criterios.append('CNPJ_EXATO')
-            elif raiz_cnpj and titulo_raiz == raiz_cnpj:
-                # Regra 5: CNPJ raiz = -2%
-                score -= 2
-                criterios.append('CNPJ_RAIZ')
-            else:
-                # Regra 6: CNPJ diferente = -15%
-                score -= 15
-                criterios.append('CNPJ_DIFERENTE')
-
-            # === REGRA DE VALOR ===
+            # === DESCONTO DE VALOR ===
             desconto_valor, criterio_valor = self._calcular_desconto_valor(valor, titulo.valor_residual or 0)
             score -= desconto_valor
             criterios.append(criterio_valor)
 
-            # === REGRA DE VENCIMENTO ===
-            if data_pagamento and titulo.vencimento:
-                if titulo.vencimento < data_pagamento:
-                    # Regra 7: Vencimento anterior = -5%
-                    score -= 5
-                    criterios.append('VENC_ANTERIOR')
-                elif titulo.vencimento > data_pagamento:
-                    # Regra 8: Vencimento posterior = -10%
-                    score -= 10
-                    criterios.append('VENC_POSTERIOR')
-                else:
-                    criterios.append('VENC_EXATO')
+            # === DESCONTO DE VENCIMENTO ===
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento_pagar(
+                data_pagamento, titulo.vencimento
+            )
+            score -= desconto_venc
+            criterios.append(criterio_venc)
 
-            # Score mínimo
             score = max(0, score)
 
-            candidatos.append({
-                'titulo_id': titulo.id,
-                'titulo_nf': titulo.titulo_nf,
-                'parcela': titulo.parcela,
-                'valor': titulo.valor_residual,
-                'valor_original': titulo.valor_original,
-                'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
-                'vencimento_date': titulo.vencimento,
-                'fornecedor': titulo.raz_social_red or titulo.raz_social,
-                'cnpj': titulo.cnpj,
-                'empresa': titulo.empresa,
-                'score': score,
-                'criterio': '+'.join(criterios),
-                'diferenca_valor': abs((titulo.valor_residual or 0) - valor)
-            })
+            candidatos.append(self._montar_candidato(titulo, valor, score, criterios))
 
         return candidatos
 
@@ -399,7 +443,7 @@ class PagamentoMatchingService:
             score -= desconto_valor
             criterios.append(criterio_valor)
 
-            # === REGRA DE VENCIMENTO ===
+            # === REGRA DE VENCIMENTO (boletos: penalidade fixa original) ===
             if titulo.vencimento:
                 if titulo.vencimento < data_pagamento:
                     score -= 5
@@ -446,22 +490,9 @@ class PagamentoMatchingService:
             # Score mínimo
             score = max(0, score)
 
-            candidatos.append({
-                'titulo_id': titulo.id,
-                'titulo_nf': titulo.titulo_nf,
-                'parcela': titulo.parcela,
-                'valor': titulo.valor_residual,
-                'valor_original': titulo.valor_original,
-                'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
-                'vencimento_date': titulo.vencimento,
-                'fornecedor': titulo.raz_social_red or titulo.raz_social,
-                'cnpj': titulo.cnpj,
-                'empresa': titulo.empresa,
-                'score': score,
-                'criterio': '+'.join(criterios),
-                'diferenca_valor': abs((titulo.valor_residual or 0) - valor),
-                'sem_cnpj': True
-            })
+            cand = self._montar_candidato(titulo, valor, score, criterios)
+            cand['sem_cnpj'] = True
+            candidatos.append(cand)
 
         return candidatos
 
@@ -491,6 +522,81 @@ class PagamentoMatchingService:
             return 10, f'VALOR_DIF_{diferenca:.2f}'
         else:
             return 25, f'VALOR_DIF_{diferenca:.2f}'
+
+    def _calcular_desconto_vencimento_pagar(
+        self,
+        data_pagamento: Optional[date],
+        vencimento: Optional[date]
+    ) -> Tuple[int, str]:
+        """
+        Calcula desconto graduado por diferença de vencimento (contas a pagar).
+
+        Regras:
+        - Vencimento exato: 0
+        - Atraso 1-3 dias: 0 (tolerância)
+        - Atraso 4-10 dias: -(dias - 3)  → 1 a 7
+        - Atraso 11+ dias: -11 mínimo → revisão manual (score max 89)
+        - Antecipado 1-5 dias: -2
+        - Antecipado 6+ dias: -2 base + -1/dia extra (max -10)
+
+        Returns:
+            Tuple (desconto, criterio)
+        """
+        if not data_pagamento or not vencimento:
+            return 0, 'VENC_SEM_DATA'
+
+        delta = (data_pagamento - vencimento).days  # positivo = atraso, negativo = antecipado
+
+        if delta == 0:
+            return 0, 'VENC_EXATO'
+        elif delta > 0:
+            # Título já estava vencido (atraso)
+            if delta <= 3:
+                # Tolerância: sem desconto
+                return 0, f'VENC_ATRASO_{delta}D_TOL'
+            elif delta <= 10:
+                desconto = delta - 3  # 4D→1, 7D→4, 10D→7
+                return desconto, f'VENC_ATRASO_{delta}D'
+            else:
+                # >10 dias: mínimo -11, garante revisão manual (score < 90)
+                desconto = max(11, delta - 3)
+                return desconto, f'VENC_ATRASO_{delta}D'
+        else:
+            # Pagamento antecipado
+            dias_antecipado = abs(delta)
+            if dias_antecipado <= 5:
+                return 2, f'VENC_ANTECIP_{dias_antecipado}D'
+            else:
+                dias_extra = dias_antecipado - 5
+                desconto = min(2 + dias_extra, 10)  # max -10
+                return desconto, f'VENC_ANTECIP_{dias_antecipado}D'
+
+    def _montar_candidato(
+        self,
+        titulo: ContasAPagar,
+        valor_pagamento: float,
+        score: int,
+        criterios: List[str]
+    ) -> Dict:
+        """
+        Monta dict de candidato a partir de um título.
+        Elimina duplicação entre _buscar_com_cnpj e _buscar_sem_cnpj.
+        """
+        return {
+            'titulo_id': titulo.id,
+            'titulo_nf': titulo.titulo_nf,
+            'parcela': titulo.parcela,
+            'valor': titulo.valor_residual,
+            'valor_original': titulo.valor_original,
+            'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+            'vencimento_date': titulo.vencimento,
+            'fornecedor': titulo.raz_social_red or titulo.raz_social,
+            'cnpj': titulo.cnpj,
+            'empresa': titulo.empresa,
+            'score': score,
+            'criterio': '+'.join(criterios),
+            'diferenca_valor': abs((titulo.valor_residual or 0) - valor_pagamento)
+        }
 
     def _vincular_titulo(self, item: ExtratoItem, match: Dict) -> None:
         """
@@ -540,18 +646,12 @@ class PagamentoMatchingService:
         if criterio_valor:
             criterios.append(criterio_valor)
 
-        # Aplicar desconto de vencimento (igual à busca de candidatos)
-        if item.data_transacao and titulo.vencimento:
-            if titulo.vencimento < item.data_transacao:
-                # Vencimento anterior = -5%
-                score -= 5
-                criterios.append('VENC_ANTERIOR')
-            elif titulo.vencimento > item.data_transacao:
-                # Vencimento posterior = -10%
-                score -= 10
-                criterios.append('VENC_POSTERIOR')
-            else:
-                criterios.append('VENC_EXATO')
+        # Aplicar desconto de vencimento graduado (igual à busca de candidatos)
+        desconto_venc, criterio_venc = self._calcular_desconto_vencimento_pagar(
+            item.data_transacao, titulo.vencimento
+        )
+        score -= desconto_venc
+        criterios.append(criterio_venc)
 
         # Score mínimo
         score = max(0, score)
@@ -639,30 +739,39 @@ class PagamentoMatchingService:
 # TABELA DE SCORES DE MATCHING PARA PAGAMENTOS
 # =============================================================================
 #
-# SCORE BASE: 100%
+# === COM CNPJ (TED/PIX) — Busca Hierárquica ===
 #
-# DESCONTOS POR CNPJ:
-#     0% - CNPJ_EXATO (CNPJ do extrato = CNPJ do título)
-#    -2% - CNPJ_RAIZ (primeiros 8 dígitos iguais)
-#   -15% - CNPJ_DIFERENTE
+# TIER 1: CNPJ exato (14 dig) + valor ±10% → score base 100
+# TIER 2: CNPJ raiz (8 dig) + valor ±10%  → score base 98 (se tier 1 vazio)
+# TIER 3: Valor ±5% + venc ±10 dias       → score base 75 (se tier 2 vazio)
 #
-# DESCONTOS POR VALOR:
-#     0% - VALOR_EXATO (diferença <= R$ 0,01)
-#    -3% - diferença até R$ 0,10
-#    -6% - diferença até R$ 0,30
-#   -10% - diferença até R$ 0,50
-#   -25% - diferença > R$ 0,50
+# Efeito: CNPJ diferente NUNCA aparece quando há match por CNPJ.
+# Tier 3 nunca auto-matcha (75 < 90).
 #
-# DESCONTOS POR VENCIMENTO:
-#     0% - VENC_EXATO (vencimento = data pagamento)
-#    -5% - VENC_ANTERIOR (título já estava vencido)
-#   -10% - VENC_POSTERIOR (pagamento antecipado)
+# DESCONTOS POR VALOR (acumulativos sobre score base):
+#     0 - VALOR_EXATO (diferença <= R$ 0,01)
+#    -3 - diferença até R$ 0,10
+#    -6 - diferença até R$ 0,30
+#   -10 - diferença até R$ 0,50
+#   -25 - diferença > R$ 0,50
 #
-# DESCONTOS PARA BOLETOS (sem CNPJ):
-#    -5% - UNICO_TITULO (apenas 1 título candidato)
-#    -7% - UNICO_FORNECEDOR (N títulos, mas mesmo fornecedor)
-#    -3% - FORNECEDOR_SOBROU (outros fornecedores já vinculados)
-#   -15% - MULTIPLOS_FORNECEDORES (vários fornecedores, sem vínculo claro)
+# DESCONTOS POR VENCIMENTO (com CNPJ — graduado):
+#     0 - VENC_EXATO (vencimento = data pagamento)
+#     0 - Atraso 1-3 dias (tolerância)
+#    -1…-7 - Atraso 4-10 dias (dias - 3)
+#   -11+ - Atraso >10 dias → SEMPRE revisão manual (score < 90)
+#    -2 - Antecipado 1-5 dias
+#    -2…-10 - Antecipado 6+ dias (-2 base + -1/dia extra)
+#
+# === SEM CNPJ (Boletos) — Penalidade fixa de vencimento ===
+#    -5 - VENC_ANTERIOR (título já estava vencido)
+#   -10 - VENC_POSTERIOR (pagamento antecipado)
+#
+# DESCONTOS ESPECIAIS BOLETOS:
+#    -5 - UNICO_TITULO (apenas 1 título candidato)
+#    -7 - UNICO_FORNECEDOR (N títulos, mas mesmo fornecedor)
+#    -3 - FORNECEDOR_SOBROU (outros fornecedores já vinculados)
+#   -15 - MULTIPLOS_FORNECEDORES (vários fornecedores, sem vínculo claro)
 #
 # SCORE MÍNIMO PARA AUTO-MATCH: 90 (configurável via SCORE_MINIMO_AUTO)
 #
