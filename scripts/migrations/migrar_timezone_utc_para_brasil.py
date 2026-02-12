@@ -17,13 +17,19 @@ EXECUÇÃO:
   python scripts/migrations/migrar_timezone_utc_para_brasil.py --force
 
 IDEMPOTÊNCIA:
-  Usa tabela _migration_log para registrar execução.
-  Não executa duas vezes a menos que --force seja passado.
+  Usa tabela _migration_tz_progress para rastrear cada tabela.coluna processada.
+  Se interrompida (ex: SSL drop), re-executar retoma de onde parou.
+  Usa _migration_log para registrar conclusão final.
+
+RESILIÊNCIA:
+  - Commit por tabela (não transação única) para evitar SSL timeout
+  - Retry automático com reconexão em caso de SSL drop
+  - Tracking granular: cada tabela.coluna registrada individualmente
 """
 import sys
 import os
 import argparse
-from datetime import datetime
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -50,52 +56,82 @@ COLUNAS_AUTO_TIMESTAMP = {
     'vigencia_inicio', 'ultima_utilizacao', 'valido_ate',
 }
 
-# Tabelas que NÃO devem ser migradas (dados de sistema externo ou já corretos)
+# Tabelas que NÃO devem ser migradas
 TABELAS_EXCLUIDAS = {
-    '_migration_log',       # Tabela de controle desta migration
-    'alembic_version',      # Controle de migrations Alembic
+    '_migration_log',           # Controle de migrations
+    '_migration_tz_progress',   # Progresso desta migration
+    'alembic_version',          # Controle de migrations Alembic
 }
 
 MIGRATION_NAME = 'migrar_timezone_utc_para_brasil_v1'
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # segundos
 
 
-def criar_tabela_migration_log(conn):
-    """Cria tabela de controle de migrations se não existir."""
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS _migration_log (
-            id SERIAL PRIMARY KEY,
-            migration_name VARCHAR(200) NOT NULL UNIQUE,
-            executado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            detalhes TEXT
-        )
-    """))
-    conn.commit()
+def criar_tabelas_controle(engine):
+    """Cria tabelas de controle se não existirem."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS _migration_log (
+                id SERIAL PRIMARY KEY,
+                migration_name VARCHAR(200) NOT NULL UNIQUE,
+                executado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                detalhes TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS _migration_tz_progress (
+                id SERIAL PRIMARY KEY,
+                tabela VARCHAR(200) NOT NULL,
+                coluna VARCHAR(200) NOT NULL,
+                registros_atualizados INTEGER NOT NULL DEFAULT 0,
+                processado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tabela, coluna)
+            )
+        """))
 
 
-def ja_executada(conn):
-    """Verifica se esta migration já foi executada."""
-    result = conn.execute(text(
-        "SELECT 1 FROM _migration_log WHERE migration_name = :name"
-    ), {'name': MIGRATION_NAME})
-    return result.fetchone() is not None
+def ja_executada(engine):
+    """Verifica se esta migration já foi finalizada."""
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT 1 FROM _migration_log WHERE migration_name = :name"
+        ), {'name': MIGRATION_NAME})
+        return result.fetchone() is not None
 
 
-def registrar_execucao(conn, detalhes):
-    """Registra que a migration foi executada."""
-    conn.execute(text(
-        "INSERT INTO _migration_log (migration_name, detalhes) VALUES (:name, :det)"
-    ), {'name': MIGRATION_NAME, 'det': detalhes})
-    conn.commit()
+def coluna_ja_processada(engine, tabela, coluna):
+    """Verifica se uma coluna específica já foi processada."""
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT 1 FROM _migration_tz_progress "
+            "WHERE tabela = :tab AND coluna = :col"
+        ), {'tab': tabela, 'col': coluna})
+        return result.fetchone() is not None
+
+
+def registrar_coluna_processada(engine, tabela, coluna, count):
+    """Registra que uma coluna foi processada com sucesso."""
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO _migration_tz_progress (tabela, coluna, registros_atualizados) "
+            "VALUES (:tab, :col, :cnt) "
+            "ON CONFLICT (tabela, coluna) DO NOTHING"
+        ), {'tab': tabela, 'col': coluna, 'cnt': count})
+
+
+def registrar_conclusao(engine, detalhes):
+    """Registra que a migration foi concluída."""
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO _migration_log (migration_name, detalhes) "
+            "VALUES (:name, :det) "
+            "ON CONFLICT (migration_name) DO NOTHING"
+        ), {'name': MIGRATION_NAME, 'det': detalhes})
 
 
 def descobrir_colunas_datetime(engine):
-    """
-    Usa SQLAlchemy inspect para descobrir TODAS as colunas TIMESTAMP
-    cujos nomes estão na lista de auto-gerados.
-
-    Returns:
-        dict: {table_name: [col_name, ...]}
-    """
+    """Descobre TODAS as colunas TIMESTAMP cujos nomes estão na lista."""
     inspector = sa_inspect(engine)
     resultado = {}
 
@@ -108,7 +144,6 @@ def descobrir_colunas_datetime(engine):
             col_name = col['name']
             col_type = str(col['type']).upper()
 
-            # Apenas colunas TIMESTAMP (não DATE)
             if 'TIMESTAMP' not in col_type and 'DATETIME' not in col_type:
                 continue
 
@@ -122,7 +157,7 @@ def descobrir_colunas_datetime(engine):
 
 
 def coletar_amostra(conn, table_name, colunas, limite=5):
-    """Coleta amostra de valores antes/depois para verificação."""
+    """Coleta amostra de valores para verificação."""
     col_list = ', '.join(colunas)
     try:
         result = conn.execute(text(
@@ -146,6 +181,58 @@ def contar_registros(conn, table_name, coluna):
         return 0
 
 
+def atualizar_tabela_com_retry(engine, table, cols):
+    """
+    Atualiza uma tabela com retry em caso de falha de conexão.
+    Cada tabela tem sua própria transação (commit por tabela).
+    Colunas já processadas são puladas.
+    """
+    resultados = []
+
+    for col in cols:
+        # Pular colunas já processadas (retomada)
+        if coluna_ja_processada(engine, table, col):
+            print(f"  ⏭️  {table}.{col}: já processada (retomada)")
+            continue
+
+        for tentativa in range(1, MAX_RETRIES + 1):
+            try:
+                with engine.begin() as conn:
+                    result = conn.execute(text(
+                        f"UPDATE {table} SET {col} = {col} - INTERVAL '3 hours' "
+                        f"WHERE {col} IS NOT NULL"
+                    ))
+                    count = result.rowcount
+
+                # Registrar progresso FORA da transação do UPDATE
+                registrar_coluna_processada(engine, table, col, count)
+
+                if count > 0:
+                    resultados.append((col, count))
+                    print(f"  ✅ {table}.{col}: {count} registros atualizados")
+                else:
+                    print(f"  ⬚ {table}.{col}: 0 registros (tabela vazia)")
+                break  # sucesso, próxima coluna
+
+            except Exception as e:
+                erro_str = str(e)
+                if tentativa < MAX_RETRIES and ('SSL' in erro_str or 'EOF' in erro_str
+                                                 or 'closed' in erro_str
+                                                 or 'recovery' in erro_str):
+                    print(f"  ⚠️  {table}.{col}: erro na tentativa {tentativa}/{MAX_RETRIES}: "
+                          f"{erro_str[:80]}")
+                    print(f"      Aguardando {RETRY_DELAY}s antes de reconectar...")
+                    time.sleep(RETRY_DELAY)
+                    # Forçar descarte de conexões stale
+                    engine.dispose()
+                else:
+                    print(f"  ❌ {table}.{col}: FALHA após {tentativa} tentativas: "
+                          f"{erro_str[:120]}")
+                    raise
+
+    return resultados
+
+
 def executar_migration(dry_run=False, force=False):
     """Executa a migration principal."""
     app = create_app()
@@ -153,14 +240,23 @@ def executar_migration(dry_run=False, force=False):
     with app.app_context():
         engine = db.engine
 
-        # === BLOCO 1: Verificação de idempotência ===
-        with engine.connect() as conn:
-            criar_tabela_migration_log(conn)
+        # === BLOCO 1: Criar tabelas de controle e verificar idempotência ===
+        criar_tabelas_controle(engine)
 
-            if not force and ja_executada(conn):
-                print(f"⚠️  Migration '{MIGRATION_NAME}' já foi executada.")
-                print("   Use --force para re-executar.")
-                return
+        if not force and ja_executada(engine):
+            print(f"⚠️  Migration '{MIGRATION_NAME}' já foi executada.")
+            print("   Use --force para re-executar.")
+            return
+
+        # Contar progresso existente (retomada)
+        with engine.connect() as conn:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM _migration_tz_progress"
+            ))
+            progresso_existente = result.scalar() or 0
+
+        if progresso_existente > 0 and not force:
+            print(f"📋 Retomando migration: {progresso_existente} colunas já processadas")
 
         # === BLOCO 2: Discovery ===
         colunas_por_tabela = descobrir_colunas_datetime(engine)
@@ -173,6 +269,8 @@ def executar_migration(dry_run=False, force=False):
         print(f"  Modo: {'DRY-RUN (nenhuma alteração será feita)' if dry_run else 'EXECUÇÃO REAL'}")
         print(f"  Tabelas afetadas: {total_tabelas}")
         print(f"  Colunas afetadas: {total_colunas}")
+        if progresso_existente > 0:
+            print(f"  Já processadas: {progresso_existente} (retomada)")
         print(f"{'='*70}\n")
 
         # === BLOCO 3: Amostra BEFORE ===
@@ -202,7 +300,6 @@ def executar_migration(dry_run=False, force=False):
             return
 
         # === BLOCO 4: Descobrir e desabilitar triggers problemáticos ===
-        # Alguns triggers referenciam updated_at mas a tabela usa atualizado_em
         print("\n🔍 Verificando triggers problemáticos...")
         triggers_desabilitados = []
 
@@ -228,25 +325,21 @@ def executar_migration(dry_run=False, force=False):
         if not triggers_desabilitados:
             print("  Nenhum trigger problemático encontrado.")
 
-        # === BLOCO 5: Execução com transação ===
-        print("\n🔄 Executando migration...")
+        # === BLOCO 5: Execução com commit POR TABELA ===
+        print("\n🔄 Executando migration (commit por tabela)...")
         registros_atualizados = 0
         detalhes_tabelas = []
+        tabelas_processadas = 0
 
-        with engine.begin() as conn:  # auto-commit no final
-            for table, cols in colunas_por_tabela.items():
-                for col in cols:
-                    result = conn.execute(text(
-                        f"UPDATE {table} SET {col} = {col} - INTERVAL '3 hours' "
-                        f"WHERE {col} IS NOT NULL"
-                    ))
-                    count = result.rowcount
-                    registros_atualizados += count
-                    if count > 0:
-                        detalhes_tabelas.append(f"{table}.{col}: {count}")
-                        print(f"  ✅ {table}.{col}: {count} registros atualizados")
-                    else:
-                        print(f"  ⬚ {table}.{col}: 0 registros (tabela vazia)")
+        for table, cols in colunas_por_tabela.items():
+            resultados = atualizar_tabela_com_retry(engine, table, cols)
+            for col, count in resultados:
+                registros_atualizados += count
+                detalhes_tabelas.append(f"{table}.{col}: {count}")
+
+            tabelas_processadas += 1
+            if tabelas_processadas % 50 == 0:
+                print(f"  --- Progresso: {tabelas_processadas}/{total_tabelas} tabelas ---")
 
         # === BLOCO 5b: Re-habilitar triggers ===
         if triggers_desabilitados:
@@ -270,17 +363,28 @@ def executar_migration(dry_run=False, force=False):
                     print(f"    BEFORE: {before}")
                     print(f"    AFTER:  {after}")
 
-        # === BLOCO 7: Registrar execução ===
+        # === BLOCO 7: Registrar conclusão ===
+        # Contar total real de registros processados
         with engine.connect() as conn:
-            detalhes_str = f"Tabelas: {total_tabelas}, Colunas: {total_colunas}, " \
-                          f"Registros: {registros_atualizados}\n" + \
-                          '\n'.join(detalhes_tabelas[:50])
-            registrar_execucao(conn, detalhes_str)
-            print(f"\n📝 Migration registrada em _migration_log como '{MIGRATION_NAME}'")
+            result = conn.execute(text(
+                "SELECT SUM(registros_atualizados) FROM _migration_tz_progress"
+            ))
+            total_real = result.scalar() or 0
+
+        detalhes_str = (
+            f"Tabelas: {total_tabelas}, Colunas: {total_colunas}, "
+            f"Registros: {total_real}\n" +
+            '\n'.join(detalhes_tabelas[:50])
+        )
+        registrar_conclusao(engine, detalhes_str)
+        print(f"\n📝 Migration registrada em _migration_log como '{MIGRATION_NAME}'")
+        print(f"   Total de registros processados: {total_real}")
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Migrar timestamps de UTC para Brasil (UTC-3)')
+    parser = argparse.ArgumentParser(
+        description='Migrar timestamps de UTC para Brasil (UTC-3)'
+    )
     parser.add_argument('--dry-run', action='store_true',
                         help='Apenas mostra o que seria alterado, sem executar')
     parser.add_argument('--force', action='store_true',
