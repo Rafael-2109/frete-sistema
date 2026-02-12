@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Hook PostToolUse: Lembrete de Migration Par (.py + .sql)
+Hook PostToolUse: Lembrete de Migration Par (.py + .sql) + Padrao de Conexao
 
-Detecta criacao/edicao de arquivos em scripts/migrations/ e avisa
-se o par correspondente (.py <-> .sql) nao existe.
+Detecta criacao/edicao de arquivos em scripts/migrations/ e:
+1. Avisa se o par correspondente (.py <-> .sql) nao existe
+2. Lembra do padrao CORRETO de conexao para migrations
 
 Nao bloqueia (exit 0 sempre). Apenas imprime aviso em stderr.
 """
@@ -11,6 +12,27 @@ Nao bloqueia (exit 0 sempre). Apenas imprime aviso em stderr.
 import json
 import os
 import sys
+
+
+PADRAO_CONEXAO = """
+  PADRAO OBRIGATORIO para scripts de migration:
+  -----------------------------------------------
+  USAR 3 blocos with SEPARADOS (NUNCA reusar conexao apos commit):
+
+    with db.engine.connect() as conn:   # BEFORE (read-only)
+        ...
+
+    with db.engine.begin() as conn:     # EXECUTE (auto-commit ao sair)
+        ...
+
+    with db.engine.connect() as conn:   # AFTER (conexao NOVA)
+        ...
+
+  NUNCA FAZER:
+    conn = db.session.connection()  # conexao FECHA apos commit
+    db.session.commit()             # conn morta a partir daqui
+    conn.execute(...)               # ResourceClosedError!
+"""
 
 
 def main():
@@ -34,7 +56,9 @@ def main():
             return
 
         base, ext = os.path.splitext(file_path)
+        mensagens = []
 
+        # Verificar par .py <-> .sql
         if ext == ".py":
             par = base + ".sql"
             tipo_faltante = "SQL"
@@ -46,16 +70,29 @@ def main():
 
         if not os.path.exists(par):
             nome_base = os.path.basename(base)
+            mensagens.append(
+                f"  PAR {tipo_faltante} NAO ENCONTRADO\n"
+                f"  Criado:   {os.path.basename(file_path)}\n"
+                f"  Faltando: {nome_base}{'.sql' if ext == '.py' else '.py'}\n"
+                f"  Regra: DDL requer DOIS artefatos (.py + .sql).\n"
+                f"  Excecao: data fixes (UPDATE/INSERT) podem ser so .py."
+            )
+
+        # Sempre lembrar padrao de conexao para .py
+        if ext == ".py":
+            mensagens.append(PADRAO_CONEXAO)
+
+        if mensagens:
             print(
                 "\n"
                 "================================================\n"
-                f"  MIGRATION: par {tipo_faltante} NAO encontrado\n"
-                "================================================\n"
-                f"  Criado:   {os.path.basename(file_path)}\n"
-                f"  Faltando: {nome_base}{'.sql' if ext == '.py' else '.py'}\n"
-                "\n"
-                "  Regra: DDL requer DOIS artefatos (.py + .sql).\n"
-                "  Excecao: data fixes (UPDATE/INSERT) podem ser so .py.\n"
+                "  MIGRATION: LEMBRETES\n"
+                "================================================",
+                file=sys.stderr,
+            )
+            for msg in mensagens:
+                print(msg, file=sys.stderr)
+            print(
                 "================================================\n",
                 file=sys.stderr,
             )

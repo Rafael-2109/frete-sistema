@@ -1033,4 +1033,110 @@
       --_badge-color: hsl(270 60% 70%);
   }
 
+  /* ── Badges de fonte de conciliação ── */
+  .badge-fonte-cnab {
+      --_badge-bg: hsl(270 50% 92%);
+      --_badge-color: hsl(270 50% 35%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+      font-size: 0.7rem;
+  }
+
+  .badge-fonte-odoo {
+      --_badge-bg: hsl(180 40% 90%);
+      --_badge-color: hsl(180 50% 30%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+      font-size: 0.7rem;
+  }
+
+  .badge-fonte-sync {
+      --_badge-bg: hsl(210 20% 90%);
+      --_badge-color: hsl(210 25% 35%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+      font-size: 0.7rem;
+  }
+
+  .badge-fonte-comprovante {
+      --_badge-bg: hsl(240 40% 92%);
+      --_badge-color: hsl(240 40% 35%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+      font-size: 0.7rem;
+  }
+
+  .badge-fonte-local {
+      --_badge-bg: hsl(30 60% 90%);
+      --_badge-color: hsl(30 60% 30%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+      font-size: 0.7rem;
+  }
+
+  .badge-fonte-manual {
+      --_badge-bg: hsl(145 30% 90%);
+      --_badge-color: hsl(145 40% 30%);
+      --_badge-border: transparent;
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+      font-size: 0.7rem;
+  }
+
+  /* Dark mode para badges de fonte */
+  [data-bs-theme="dark"] .badge-fonte-cnab,
+  [data-theme="dark"] .badge-fonte-cnab {
+      --_badge-bg: hsl(270 40% 25%);
+      --_badge-color: hsl(270 60% 85%);
+  }
+
+  [data-bs-theme="dark"] .badge-fonte-odoo,
+  [data-theme="dark"] .badge-fonte-odoo {
+      --_badge-bg: hsl(180 40% 25%);
+      --_badge-color: hsl(180 60% 85%);
+  }
+
+  [data-bs-theme="dark"] .badge-fonte-sync,
+  [data-theme="dark"] .badge-fonte-sync {
+      --_badge-bg: hsl(210 15% 30%);
+      --_badge-color: hsl(210 15% 80%);
+  }
+
+  [data-bs-theme="dark"] .badge-fonte-comprovante,
+  [data-theme="dark"] .badge-fonte-comprovante {
+      --_badge-bg: hsl(240 40% 30%);
+      --_badge-color: hsl(240 40% 85%);
+  }
+
+  [data-bs-theme="dark"] .badge-fonte-local,
+  [data-theme="dark"] .badge-fonte-local {
+      --_badge-bg: hsl(30 60% 25%);
+      --_badge-color: hsl(30 80% 85%);
+  }
+
+  [data-bs-theme="dark"] .badge-fonte-manual,
+  [data-theme="dark"] .badge-fonte-manual {
+      --_badge-bg: hsl(145 30% 25%);
+      --_badge-color: hsl(145 40% 80%);
+  }
+
+  /* Container para conciliado externo sem título vinculado */
+  .fin-titulo-candidato--conciliado-externo {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      background: var(--bg-light);
+  }
+
 } /* End @layer modules */

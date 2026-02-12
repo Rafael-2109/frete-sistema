@@ -232,6 +232,12 @@
                             <div>
                                 {% if item.status == 'CONCILIADO' %}
                                 <span class="badge bg-info">CONCILIADO</span>
+                                {% set fonte = item.fonte_conciliacao %}
+                                {% if fonte and fonte.codigo != 'manual' %}
+                                <span class="badge {{ fonte.classe_css }}" title="{{ item.mensagem }}">
+                                    <i class="fas {{ fonte.icone }} me-1"></i>{{ fonte.label }}
+                                </span>
+                                {% endif %}
                                 {% elif item.aprovado %}
                                 <span class="badge bg-primary">APROVADO</span>
                                 {% elif item.status_match == 'MATCH_ENCONTRADO' %}
@@ -799,6 +805,12 @@
                                     <span>
                                         <i class="fas fa-check-circle me-1"></i>
                                         Conciliado {{ item.processado_em|formatar_data_hora_brasil }}
+                                        {% set fonte = item.fonte_conciliacao %}
+                                        {% if fonte and fonte.codigo != 'manual' %}
+                                        <span class="badge {{ fonte.classe_css }} ms-1" title="{{ item.mensagem }}">
+                                            <i class="fas {{ fonte.icone }} me-1"></i>{{ fonte.label }}
+                                        </span>
+                                        {% endif %}
                                     </span>
                                     {% if not item.payment_id %}
                                     <button class="btn btn-sm btn-outline-warning" onclick="desconciliarItem({{ item.id }})" title="Reverter conciliação local">
@@ -806,7 +818,64 @@
                                     </button>
                                     {% endif %}
                                 </div>
+                                {% if item.mensagem and item.fonte_conciliacao and item.fonte_conciliacao.codigo != 'manual' %}
+                                <div class="small text-muted mt-1">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    {{ item.mensagem[:120] }}{% if item.mensagem|length > 120 %}...{% endif %}
+                                </div>
                                 {% endif %}
+                                {% endif %}
+                            </div>
+                            {% elif item.status == 'CONCILIADO' %}
+                            {# Conciliado por fonte externa sem título vinculado localmente #}
+                            <div class="fin-titulo-candidato fin-titulo-candidato--conciliado-externo">
+                                {% set fonte = item.fonte_conciliacao %}
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        {% if fonte %}
+                                        <span class="badge {{ fonte.classe_css }}">
+                                            <i class="fas {{ fonte.icone }} me-1"></i>{{ fonte.label }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% if item.titulo_valor %}
+                                    <div class="h5 mb-0 text-success font-mono fw-bold">
+                                        {{ item.titulo_valor|valor_br }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                {# Mostrar dados do título cacheados, se houver #}
+                                {% if item.titulo_nf %}
+                                <div class="small">
+                                    <div class="fin-info-line">
+                                        <i class="fas fa-file-invoice"></i>
+                                        <strong>NF {{ item.titulo_nf }}</strong>
+                                        {% if item.titulo_parcela %}
+                                        <span class="badge bg-secondary ms-1">P{{ item.titulo_parcela }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if item.titulo_cliente %}
+                                    <div class="fin-info-line">
+                                        <i class="fas fa-building"></i>
+                                        {{ item.titulo_cliente }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                {# Mensagem de detalhamento #}
+                                {% if item.mensagem %}
+                                <div class="mt-2 pt-2 border-top small text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    {{ item.mensagem }}
+                                </div>
+                                {% endif %}
+
+                                <div class="mt-1 small text-info">
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    Conciliado {{ item.processado_em|formatar_data_hora_brasil }}
+                                </div>
                             </div>
                             {% elif item.status_match == 'PENDENTE' %}
                             <div class="fin-titulo-empty">

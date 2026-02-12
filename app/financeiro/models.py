@@ -1547,6 +1547,32 @@ class ExtratoItem(db.Model):
         """
         return self.titulos_vinculados.count() > 0
 
+    @property
+    def fonte_conciliacao(self) -> Optional[dict]:
+        """Deriva a fonte de conciliação a partir do campo mensagem.
+
+        Retorna dict com {codigo, label, icone, classe_css} ou None se não conciliado.
+        """
+        if self.status != 'CONCILIADO' or not self.mensagem:
+            return None
+        msg = self.mensagem.lower()
+        if 'cnab' in msg or '[baixa_auto]' in msg:
+            return {'codigo': 'cnab', 'label': 'CNAB', 'icone': 'fa-file-import', 'classe_css': 'badge-fonte-cnab'}
+        if 'write_date' in msg:
+            return {'codigo': 'odoo', 'label': 'Odoo', 'icone': 'fa-cloud', 'classe_css': 'badge-fonte-odoo'}
+        if 'revalidação completa' in msg or 'revalidacao completa' in msg:
+            return {'codigo': 'revalidacao', 'label': 'Sync', 'icone': 'fa-sync', 'classe_css': 'badge-fonte-sync'}
+        if 'comprovante' in msg:
+            return {'codigo': 'comprovante', 'label': 'Comprovante', 'icone': 'fa-file-pdf', 'classe_css': 'badge-fonte-comprovante'}
+        if 'sincronização automática' in msg or 'sincronizado do odoo' in msg:
+            return {'codigo': 'sync', 'label': 'Sync', 'icone': 'fa-robot', 'classe_css': 'badge-fonte-sync'}
+        if 'extrato não reconciliado' in msg or 'extrato nao reconciliado' in msg:
+            return {'codigo': 'local', 'label': 'Local', 'icone': 'fa-exclamation-triangle', 'classe_css': 'badge-fonte-local'}
+        if 'retroativamente' in msg:
+            return {'codigo': 'retroativo', 'label': 'Retro', 'icone': 'fa-history', 'classe_css': 'badge-fonte-sync'}
+        # Default: conciliação manual via UI
+        return {'codigo': 'manual', 'label': 'Manual', 'icone': 'fa-user', 'classe_css': 'badge-fonte-manual'}
+
 
 class ExtratoItemTitulo(db.Model):
     """
