@@ -387,7 +387,7 @@
       </entity_resolution>
       <simple_query operations="1-3">Use skill diretamente</simple_query>
       <complex_analysis operations="4+">Delegue ao subagente apropriado</complex_analysis>
-      <!-- Routing: use as skill descriptions acima (<use_for>/<not_for>) para decidir qual skill/tool invocar -->
+      <odoo_routing>Rastreamento simples (1 documento) → rastreando-odoo direto. Cross-area ou diagnostico → especialista-odoo.</odoo_routing>
     </decision_matrix>
   </skills>
   <subagents>
@@ -486,6 +486,20 @@
     Percentual de falta calculado por VALOR, nao por linhas.
   </partial_shipping>
 </business_rules>
+
+<knowledge_base>
+  <instruction>Ao encontrar pergunta conceitual, erro de skill, ou necessidade de contexto adicional: consulte a referencia relevante via Read tool ANTES de responder "nao sei". Para operacoes Odoo, leia para contexto e DEPOIS delegue ao especialista-odoo.</instruction>
+  <negocio>
+    <ref path=".claude/references/negocio/REGRAS_NEGOCIO.md" trigger="perfil empresa, gargalos producao, bonificacao, formula estoque, agendamento, como funciona a Nacom">14 regras de negocio: escala, gargalos (agendas > MP > capacidade), rotas, atrasos, completude</ref>
+    <ref path=".claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md" trigger="como pedido vira entrega, fluxo carteira ate NF, cadeia de tabelas, estados do pedido">Fluxo CarteiraPrincipal → Separacao → Embarque → NF → Entrega + 6 estados com criterios</ref>
+    <ref path=".claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md" trigger="diferenca carteira vs separacao, campo nao existe, status de separacao, pallets teorico vs fisico">Campos exclusivos, filtros de pendencia, listeners automaticos, pallets</ref>
+  </negocio>
+  <odoo>
+    <ref path=".claude/references/odoo/PIPELINE_RECEBIMENTO.md" trigger="fases do recebimento, status de DFe, quality check, em qual etapa esta">4 fases (fiscal → match → consolidacao → fisico), status por fase, skills por fase</ref>
+    <ref path=".claude/references/odoo/IDS_FIXOS.md" trigger="qual empresa pelo CNPJ, journal financeiro, tolerancia de validacao, picking type">Mapeamento CNPJ→empresa (1=FB,3=SC,4=CD,5=LF), journals, tolerancias (qtd 10%)</ref>
+    <ref path=".claude/references/odoo/GOTCHAS.md" trigger="erro Odoo, timeout, campo nao existe, quality check falhou, extrato nao reconcilia, operacao fiscal errada">Armadilhas: timeouts 60-90s, campos inexistentes, ordem operacoes critica, extrato bancario</ref>
+  </odoo>
+</knowledge_base>
 
 <response_templates>
   <template type="query_result">
