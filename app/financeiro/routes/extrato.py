@@ -17,11 +17,14 @@ Autor: Sistema de Fretes
 Data: 2025-12-11
 """
 
+import logging
 from datetime import datetime, date
 from flask import render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 
 from app import db
+
+logger = logging.getLogger(__name__)
 from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar
@@ -327,10 +330,28 @@ def extrato_importar_statement(statement_id):
             tipo_transacao=tipo_transacao
         )
 
+        # Pipeline de resolução de favorecido/pagador
+        msg_resolver = ''
+        if lote.total_linhas > 0:
+            try:
+                if tipo_transacao == 'saida':
+                    from app.financeiro.services.favorecido_resolver_service import FavorecidoResolverService
+                    resolver = FavorecidoResolverService(connection=service._connection)
+                    stats = resolver.resolver_lote(lote.id)
+                    msg_resolver = f' Favorecidos resolvidos: {stats["resolvidos"]}/{stats["total"]}.'
+                elif tipo_transacao == 'entrada':
+                    from app.financeiro.services.recebimento_resolver_service import RecebimentoResolverService
+                    resolver = RecebimentoResolverService(connection=service._connection)
+                    stats = resolver.resolver_lote(lote.id)
+                    msg_resolver = f' Pagadores resolvidos: {stats["resolvidos"]}/{stats["total"]}.'
+            except Exception as e_resolver:
+                logger.warning(f"Erro ao resolver favorecidos/pagadores do lote {lote.id}: {e_resolver}")
+                msg_resolver = ' (Erro na resolução de favorecidos/pagadores)'
+
         tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else 'pagamentos'
         flash(
             f'Importação concluída: {lote.total_linhas} linhas de "{lote.statement_name}" ({tipo_label}). '
-            f'CNPJs identificados: {service.estatisticas["com_cnpj"]}',
+            f'CNPJs identificados: {service.estatisticas["com_cnpj"]}.{msg_resolver}',
             'success'
         )
 

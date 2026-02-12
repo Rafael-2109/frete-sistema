@@ -1308,6 +1308,22 @@ class ExtratoItem(db.Model):
     nome_pagador = db.Column(db.String(255), nullable=True)  # Nome do cliente
     cnpj_pagador = db.Column(db.String(20), nullable=True, index=True)  # CNPJ extraído
 
+    # =========================================================================
+    # DADOS DO PARCEIRO ODOO (capturados na importação)
+    # =========================================================================
+    odoo_partner_id = db.Column(db.Integer, nullable=True)       # res.partner ID
+    odoo_partner_name = db.Column(db.String(255), nullable=True)  # nome do parceiro no Odoo
+    odoo_partner_cnpj = db.Column(db.String(20), nullable=True)   # l10n_br_cnpj do res.partner
+
+    # =========================================================================
+    # FAVORECIDO RESOLVIDO (preenchido pelo pipeline)
+    # =========================================================================
+    favorecido_cnpj = db.Column(db.String(20), nullable=True)       # CNPJ final resolvido
+    favorecido_nome = db.Column(db.String(255), nullable=True)      # Nome final resolvido
+    favorecido_metodo = db.Column(db.String(30), nullable=True)     # ODOO_PARTNER|REGEX_CNPJ|REGEX_NOME|CPF_PARCIAL|NOME_FUZZY|CATEGORIA|NAO_RESOLVIDO
+    favorecido_confianca = db.Column(db.Integer, nullable=True)     # 0-100
+    categoria_pagamento = db.Column(db.String(30), nullable=True)   # PIX_ENVIADO|TED_ENVIADA|BOLETO_COMPE|IMPOSTO|TARIFA|...
+
     # Journal
     journal_id = db.Column(db.Integer, nullable=True)
     journal_code = db.Column(db.String(20), nullable=True)
@@ -1414,6 +1430,9 @@ class ExtratoItem(db.Model):
         Index('idx_extrato_item_status', 'status'),
         Index('idx_extrato_item_cnpj', 'cnpj_pagador'),
         Index('idx_extrato_item_statement_line', 'statement_line_id'),
+        Index('idx_extrato_item_favorecido_cnpj', 'favorecido_cnpj'),
+        Index('idx_extrato_item_categoria_pag', 'categoria_pagamento'),
+        Index('idx_extrato_item_odoo_partner', 'odoo_partner_id'),
     )
 
     def __repr__(self):
@@ -1436,6 +1455,16 @@ class ExtratoItem(db.Model):
             'nome_pagador': self.nome_pagador,
             'cnpj_pagador': self.cnpj_pagador,
             'journal_code': self.journal_code,
+            # Parceiro Odoo
+            'odoo_partner_id': self.odoo_partner_id,
+            'odoo_partner_name': self.odoo_partner_name,
+            'odoo_partner_cnpj': self.odoo_partner_cnpj,
+            # Favorecido resolvido
+            'favorecido_cnpj': self.favorecido_cnpj,
+            'favorecido_nome': self.favorecido_nome,
+            'favorecido_metodo': self.favorecido_metodo,
+            'favorecido_confianca': self.favorecido_confianca,
+            'categoria_pagamento': self.categoria_pagamento,
             # Matching
             'status_match': self.status_match,
             'titulo_receber_id': self.titulo_receber_id,

@@ -23,12 +23,14 @@ Data: 2025-12-11
 """
 
 import logging
+import re
 from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
 
 from app import db
 from app.financeiro.models import ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
 from app.financeiro.parcela_utils import parcela_to_int
+from app.financeiro.services.extrato_service import CATEGORIAS_SEM_TITULO_ENTRADA
 
 logger = logging.getLogger(__name__)
 
@@ -124,13 +126,22 @@ class ExtratoMatchingService:
         """
         Processa o matching de um item individual.
         """
+        # Filtrar categorias financeiras de entrada (banco, FIDC, transferência)
+        # Estas não têm título a receber correspondente
+        if item.categoria_pagamento and item.categoria_pagamento in CATEGORIAS_SEM_TITULO_ENTRADA:
+            item.status_match = 'SEM_MATCH'
+            item.mensagem = f'Categoria {item.categoria_pagamento} — operação financeira sem título'
+            self.estatisticas['sem_match'] += 1
+            return
+
         logger.info(f"Processando item {item.id}: R$ {item.valor} - CNPJ: {item.cnpj_pagador}")
 
-        # Buscar candidatos
+        # Buscar candidatos (passa nome_pagador para boost em PIX sem CNPJ)
         candidatos = self.buscar_titulos_candidatos(
             cnpj=item.cnpj_pagador,
             valor=item.valor,
-            data_pagamento=item.data_transacao
+            data_pagamento=item.data_transacao,
+            nome_pagador=item.nome_pagador
         )
 
         if not candidatos:
@@ -171,7 +182,8 @@ class ExtratoMatchingService:
         cnpj: Optional[str],
         valor: float,
         data_pagamento: Optional[date] = None,
-        incluir_agrupamentos: bool = True
+        incluir_agrupamentos: bool = True,
+        nome_pagador: Optional[str] = None
     ) -> List[Dict]:
         """
         Busca títulos candidatos para um recebimento.
@@ -179,7 +191,7 @@ class ExtratoMatchingService:
         Estratégia hierárquica:
         1. CNPJ exato - maior confiança
         2. CNPJ raiz (grupo empresarial) - quando matriz paga por filial
-        3. Apenas valor - quando não tem CNPJ
+        3. Apenas valor - quando não tem CNPJ (com boost por nome se disponível)
         4. Agrupamentos - múltiplos títulos que somam o valor (se habilitado)
 
         Args:
@@ -187,6 +199,7 @@ class ExtratoMatchingService:
             valor: Valor do recebimento
             data_pagamento: Data do pagamento
             incluir_agrupamentos: Se True, busca combinações de múltiplos títulos
+            nome_pagador: Nome do pagador para boost em busca por valor (PIX sem CNPJ)
 
         Returns:
             Lista de candidatos ordenada por score (desc)
@@ -206,7 +219,7 @@ class ExtratoMatchingService:
 
         # 3. Se ainda não encontrou, busca por valor (mais arriscado)
         if not candidatos and valor > 0:
-            candidatos = self._buscar_por_valor(valor, data_pagamento)
+            candidatos = self._buscar_por_valor(valor, data_pagamento, nome_pagador=nome_pagador)
 
         # 4. Verificar se há sugestão de agrupamento (múltiplos títulos)
         # Só sugere se não encontrou match único com score alto
@@ -242,6 +255,10 @@ class ExtratoMatchingService:
         """
         Busca títulos pelo CNPJ EXATO do cliente.
         Score mais alto pois é match perfeito de CNPJ.
+
+        Bug ano 2000: Títulos com vencimento 01/01/2000 são phantom (gerados por
+        desconto duplicado no Odoo). Em vez de ignorá-los, agrupa-os com seus
+        títulos irmãos (mesma NF) e apresenta o valor somado como candidato único.
         """
         cnpj_limpo = self._normalizar_cnpj(cnpj)
 
@@ -251,28 +268,108 @@ class ExtratoMatchingService:
             ContasAReceber.cnpj.isnot(None)
         ).all()
 
-        candidatos = []
+        # Separar títulos por NF para detectar phantom ano 2000
+        titulos_por_nf: Dict[str, Dict] = {}  # nf -> {'reais': [], 'phantom_2000': []}
+        titulos_sem_nf = []
 
         for titulo in titulos:
             titulo_cnpj = self._normalizar_cnpj(titulo.cnpj)
-
-            # Match exato de CNPJ
             if titulo_cnpj != cnpj_limpo:
                 continue
-
-            # Ignorar títulos com vencimento 01/01/2000 (bug desconto duplicado)
-            if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
-                continue
-
-            # Ignorar NFs canceladas
             if titulo.nf_cancelada:
                 continue
 
-            # Calcular score baseado no valor
-            score, criterio, diferenca = self._calcular_score_valor(valor, titulo.valor_titulo or 0)
+            nf = titulo.titulo_nf
+            if not nf:
+                if titulo.vencimento != DATA_VENCIMENTO_IGNORAR:
+                    titulos_sem_nf.append(titulo)
+                continue
 
-            # Aplicar desconto de vencimento
-            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(data_pagamento, titulo.vencimento)
+            if nf not in titulos_por_nf:
+                titulos_por_nf[nf] = {'reais': [], 'phantom_2000': []}
+
+            if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
+                titulos_por_nf[nf]['phantom_2000'].append(titulo)
+            else:
+                titulos_por_nf[nf]['reais'].append(titulo)
+
+        candidatos = []
+
+        for nf, grupo in titulos_por_nf.items():
+            if grupo['phantom_2000'] and grupo['reais']:
+                # NF com títulos phantom: agregar valor real + phantom
+                valor_agregado = sum(
+                    (t.valor_titulo or 0)
+                    for t in grupo['reais'] + grupo['phantom_2000']
+                )
+                # Usar o primeiro título real como referência
+                titulo_ref = grupo['reais'][0]
+                titulos_ids = [t.id for t in grupo['reais'] + grupo['phantom_2000']]
+
+                score, criterio, diferenca = self._calcular_score_valor(valor, valor_agregado)
+
+                desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                    data_pagamento, titulo_ref.vencimento
+                )
+                score = max(0, score - desconto_venc)
+                if criterio_venc:
+                    criterio = f'{criterio}+{criterio_venc}'
+
+                candidatos.append({
+                    'titulo_id': titulo_ref.id,
+                    'titulo_nf': nf,
+                    'parcela': titulo_ref.parcela,
+                    'valor': valor_agregado,
+                    'vencimento': titulo_ref.vencimento.strftime('%d/%m/%Y') if titulo_ref.vencimento else None,
+                    'vencimento_date': titulo_ref.vencimento,
+                    'cliente': titulo_ref.raz_social_red or titulo_ref.raz_social,
+                    'cnpj': titulo_ref.cnpj,
+                    'empresa': titulo_ref.empresa,
+                    'score': score,
+                    'criterio': criterio,
+                    'diferenca_valor': diferenca,
+                    # Flag para conciliação saber que precisa corrigir ano 2000
+                    'tem_desconto_2000': True,
+                    'titulos_agregados': titulos_ids,
+                })
+            elif grupo['phantom_2000'] and not grupo['reais']:
+                # Só phantom sem título real — ignorar (não deveria acontecer)
+                continue
+            else:
+                # NF normal (sem phantom) — cada título é um candidato separado
+                for titulo in grupo['reais']:
+                    score, criterio, diferenca = self._calcular_score_valor(
+                        valor, titulo.valor_titulo or 0
+                    )
+
+                    desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                        data_pagamento, titulo.vencimento
+                    )
+                    score = max(0, score - desconto_venc)
+                    if criterio_venc:
+                        criterio = f'{criterio}+{criterio_venc}'
+
+                    candidatos.append({
+                        'titulo_id': titulo.id,
+                        'titulo_nf': titulo.titulo_nf,
+                        'parcela': titulo.parcela,
+                        'valor': titulo.valor_titulo,
+                        'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                        'vencimento_date': titulo.vencimento,
+                        'cliente': titulo.raz_social_red or titulo.raz_social,
+                        'cnpj': titulo.cnpj,
+                        'empresa': titulo.empresa,
+                        'score': score,
+                        'criterio': criterio,
+                        'diferenca_valor': diferenca
+                    })
+
+        # Títulos sem NF (caso raro)
+        for titulo in titulos_sem_nf:
+            score, criterio, diferenca = self._calcular_score_valor(valor, titulo.valor_titulo or 0)
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                data_pagamento, titulo.vencimento
+            )
             score = max(0, score - desconto_venc)
             if criterio_venc:
                 criterio = f'{criterio}+{criterio_venc}'
@@ -299,16 +396,12 @@ class ExtratoMatchingService:
         Busca títulos pela RAIZ do CNPJ (primeiros 8 dígitos).
         Usado para grupos empresariais onde a matriz paga por filiais.
 
-        Exemplo:
-        - Pagador: 05.017.780/0001-04 (matriz)
-        - Título: 05.017.780/0023-01 (filial)
-        - Raiz comum: 05017780
+        Também agrega títulos phantom ano 2000 (mesma lógica de _buscar_por_cnpj_exato).
         """
         cnpj_limpo = self._normalizar_cnpj(cnpj)
         if len(cnpj_limpo) < 8:
             return []
 
-        # Extrair raiz do CNPJ (primeiros 8 dígitos)
         raiz_cnpj = cnpj_limpo[:8]
 
         # Buscar títulos não pagos
@@ -317,7 +410,9 @@ class ExtratoMatchingService:
             ContasAReceber.cnpj.isnot(None)
         ).all()
 
-        candidatos = []
+        # Separar por NF para agregar phantom ano 2000
+        titulos_por_nf: Dict[str, Dict] = {}
+        titulos_sem_nf = []
 
         for titulo in titulos:
             titulo_cnpj = self._normalizar_cnpj(titulo.cnpj)
@@ -327,45 +422,132 @@ class ExtratoMatchingService:
                 continue
 
             # Verificar se tem a mesma raiz
-            if len(titulo_cnpj) >= 8 and titulo_cnpj[:8] == raiz_cnpj:
-                # Ignorar títulos com vencimento 01/01/2000 (bug desconto duplicado)
-                if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
-                    continue
+            if not (len(titulo_cnpj) >= 8 and titulo_cnpj[:8] == raiz_cnpj):
+                continue
 
-                # Ignorar NFs canceladas
-                if titulo.nf_cancelada:
-                    continue
+            if titulo.nf_cancelada:
+                continue
 
-                # Calcular score baseado no valor
-                score, criterio, diferenca = self._calcular_score_valor_grupo(valor, titulo.valor_titulo or 0)
+            nf = titulo.titulo_nf
+            if not nf:
+                if titulo.vencimento != DATA_VENCIMENTO_IGNORAR:
+                    titulos_sem_nf.append(titulo)
+                continue
 
-                # Aplicar desconto de vencimento
-                desconto_venc, criterio_venc = self._calcular_desconto_vencimento(data_pagamento, titulo.vencimento)
+            if nf not in titulos_por_nf:
+                titulos_por_nf[nf] = {'reais': [], 'phantom_2000': []}
+
+            if titulo.vencimento == DATA_VENCIMENTO_IGNORAR:
+                titulos_por_nf[nf]['phantom_2000'].append(titulo)
+            else:
+                titulos_por_nf[nf]['reais'].append(titulo)
+
+        candidatos = []
+
+        for nf, grupo in titulos_por_nf.items():
+            if grupo['phantom_2000'] and grupo['reais']:
+                # Agregar valor real + phantom
+                valor_agregado = sum(
+                    (t.valor_titulo or 0)
+                    for t in grupo['reais'] + grupo['phantom_2000']
+                )
+                titulo_ref = grupo['reais'][0]
+                titulos_ids = [t.id for t in grupo['reais'] + grupo['phantom_2000']]
+
+                score, criterio, diferenca = self._calcular_score_valor_grupo(valor, valor_agregado)
+                desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                    data_pagamento, titulo_ref.vencimento
+                )
                 score = max(0, score - desconto_venc)
                 if criterio_venc:
                     criterio = f'{criterio}+{criterio_venc}'
 
                 candidatos.append({
-                    'titulo_id': titulo.id,
-                    'titulo_nf': titulo.titulo_nf,
-                    'parcela': titulo.parcela,
-                    'valor': titulo.valor_titulo,
-                    'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
-                    'vencimento_date': titulo.vencimento,
-                    'cliente': titulo.raz_social_red or titulo.raz_social,
-                    'cnpj': titulo.cnpj,
-                    'empresa': titulo.empresa,
+                    'titulo_id': titulo_ref.id,
+                    'titulo_nf': nf,
+                    'parcela': titulo_ref.parcela,
+                    'valor': valor_agregado,
+                    'vencimento': titulo_ref.vencimento.strftime('%d/%m/%Y') if titulo_ref.vencimento else None,
+                    'vencimento_date': titulo_ref.vencimento,
+                    'cliente': titulo_ref.raz_social_red or titulo_ref.raz_social,
+                    'cnpj': titulo_ref.cnpj,
+                    'empresa': titulo_ref.empresa,
                     'score': score,
                     'criterio': criterio,
-                    'diferenca_valor': diferenca
+                    'diferenca_valor': diferenca,
+                    'tem_desconto_2000': True,
+                    'titulos_agregados': titulos_ids,
                 })
+            elif grupo['phantom_2000'] and not grupo['reais']:
+                continue
+            else:
+                for titulo in grupo['reais']:
+                    score, criterio, diferenca = self._calcular_score_valor_grupo(
+                        valor, titulo.valor_titulo or 0
+                    )
+                    desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                        data_pagamento, titulo.vencimento
+                    )
+                    score = max(0, score - desconto_venc)
+                    if criterio_venc:
+                        criterio = f'{criterio}+{criterio_venc}'
+
+                    candidatos.append({
+                        'titulo_id': titulo.id,
+                        'titulo_nf': titulo.titulo_nf,
+                        'parcela': titulo.parcela,
+                        'valor': titulo.valor_titulo,
+                        'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                        'vencimento_date': titulo.vencimento,
+                        'cliente': titulo.raz_social_red or titulo.raz_social,
+                        'cnpj': titulo.cnpj,
+                        'empresa': titulo.empresa,
+                        'score': score,
+                        'criterio': criterio,
+                        'diferenca_valor': diferenca
+                    })
+
+        # Títulos sem NF
+        for titulo in titulos_sem_nf:
+            score, criterio, diferenca = self._calcular_score_valor_grupo(
+                valor, titulo.valor_titulo or 0
+            )
+            desconto_venc, criterio_venc = self._calcular_desconto_vencimento(
+                data_pagamento, titulo.vencimento
+            )
+            score = max(0, score - desconto_venc)
+            if criterio_venc:
+                criterio = f'{criterio}+{criterio_venc}'
+
+            candidatos.append({
+                'titulo_id': titulo.id,
+                'titulo_nf': titulo.titulo_nf,
+                'parcela': titulo.parcela,
+                'valor': titulo.valor_titulo,
+                'vencimento': titulo.vencimento.strftime('%d/%m/%Y') if titulo.vencimento else None,
+                'vencimento_date': titulo.vencimento,
+                'cliente': titulo.raz_social_red or titulo.raz_social,
+                'cnpj': titulo.cnpj,
+                'empresa': titulo.empresa,
+                'score': score,
+                'criterio': criterio,
+                'diferenca_valor': diferenca
+            })
 
         return candidatos
 
-    def _buscar_por_valor(self, valor: float, data_pagamento: Optional[date] = None) -> List[Dict]:
+    def _buscar_por_valor(
+        self,
+        valor: float,
+        data_pagamento: Optional[date] = None,
+        nome_pagador: Optional[str] = None
+    ) -> List[Dict]:
         """
         Busca títulos apenas pelo valor (quando CNPJ não disponível).
         Score mais baixo pois é menos confiável.
+
+        Se nome_pagador fornecido (ex: PIX pessoa física), faz boost de score
+        quando tokens do nome aparecem no raz_social_red do título.
         """
         # Margem de busca: ±5%
         margem = valor * 0.05
@@ -378,6 +560,12 @@ class ExtratoMatchingService:
             ContasAReceber.vencimento != DATA_VENCIMENTO_IGNORAR
         ).limit(20).all()
 
+        # Preparar tokens do nome do pagador para boost
+        tokens_pagador = []
+        if nome_pagador:
+            from app.financeiro.services._resolver_utils import tokenizar_nome
+            tokens_pagador = tokenizar_nome(nome_pagador)
+
         candidatos = []
 
         for titulo in titulos:
@@ -389,6 +577,20 @@ class ExtratoMatchingService:
             # Score base 70, reduzido pela diferença de valor
             score = max(50, 70 - int(diferenca / valor * 100))
             criterio = 'VALOR_APROXIMADO_SEM_CNPJ'
+
+            # Boost para PIX com nome: se tokens do nome_pagador aparecem no título
+            if tokens_pagador and titulo.raz_social_red:
+                raz_upper = (titulo.raz_social_red or '').upper()
+                tokens_match = sum(1 for t in tokens_pagador if t in raz_upper)
+                if tokens_match > 0 and tokens_match >= len(tokens_pagador) * 0.5:
+                    # Mais de 50% dos tokens batem — boost +10
+                    score = min(score + 10, 80)
+                    criterio = f'VALOR_SEM_CNPJ+NOME_PARCIAL({tokens_match}/{len(tokens_pagador)})'
+
+            # Boost para data exata de vencimento
+            if data_pagamento and titulo.vencimento and data_pagamento == titulo.vencimento:
+                score = min(score + 5, 85)
+                criterio = f'{criterio}+VENC_EXATO'
 
             # Aplicar desconto de vencimento
             desconto_venc, criterio_venc = self._calcular_desconto_vencimento(data_pagamento, titulo.vencimento)

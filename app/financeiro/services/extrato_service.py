@@ -28,10 +28,22 @@ logger = logging.getLogger(__name__)
 
 
 # Regex para extrair CNPJ do payment_ref
-# Formatos: 05.017.780/0001-04, 05017780000104
+# Formatos: 05.017.780/0001-04, 05017780000104, 02.785.118 0001-06
 REGEX_CNPJ = re.compile(r'(\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2})')
 
-# Tipos de transação conhecidos
+# CPF mascarado: ***.564.018-**
+REGEX_CPF_MASCARADO = re.compile(r'\*{3}\.(\d{3}\.\d{3})-\*{2}')
+
+# CPF mascarado TED: 058.***.***-05
+REGEX_CPF_MASCARADO_TED = re.compile(r'(\d{3})\.\*{3}\.\*{3}-(\d{2})')
+
+# Nome em formato FAV.: NOME: ...
+REGEX_FAV_NOME = re.compile(r'FAV\.:\s*(.+?)(?::\s*(?:TRANSF|DÉB|DEB|PIX)|\s+Transferencia)', re.IGNORECASE)
+
+# Pagamento - NOME - CNPJ14digits
+REGEX_PAGAMENTO_NOME = re.compile(r'Pagamento\s*-\s*(.+?)\s*-\s*(\d{14})')
+
+# Tipos de transação conhecidos (ENTRADA)
 TIPOS_TRANSACAO = {
     'TED Recebida': 'TED',
     'PIX Recebido': 'PIX',
@@ -39,6 +51,35 @@ TIPOS_TRANSACAO = {
     'DOC Recebido': 'DOC',
     'Transferência Recebida': 'TRANSFERENCIA',
     'Pagamento Recebido': 'PAGAMENTO',
+}
+
+# Tipos de transação de SAÍDA
+TIPOS_TRANSACAO_SAIDA = {
+    'TED Enviada': 'TED_ENVIADA',
+    'PIX Enviado': 'PIX_ENVIADO',
+    'PIX EMITIDO': 'PIX_EMITIDO',
+    'DEB.TIT.COMPE': 'BOLETO_COMPE',
+    'DÉB.TIT.COMPE': 'BOLETO_COMPE',
+    'DEB.TITULO COBRANCA': 'BOLETO_COBRANCA',
+    'TRANSF.REALIZADA': 'TRANSFERENCIA',
+    'PAGTO ELETRONICO TRIBUTO': 'IMPOSTO',
+}
+
+# Categorias que não possuem fornecedor específico (SAÍDA)
+CATEGORIAS_SEM_FORNECEDOR = {'IMPOSTO', 'TARIFA', 'JUROS', 'IOF', 'FOLHA'}
+
+# Padrões para classificação categórica de SAÍDA (Layer 5 do FavorecidoResolverService)
+PATTERNS_CATEGORIA = [
+    (re.compile(r'TARIFA\b|TAR\.', re.IGNORECASE), 'TARIFA'),
+    (re.compile(r'IOF\b', re.IGNORECASE), 'IOF'),
+    (re.compile(r'JUROS\b|CONTA GARANTIDA', re.IGNORECASE), 'JUROS'),
+    (re.compile(r'PAGTO ELETRONICO TRIBUTO|DARF|GPS|GNRE|SEFAZ|DARE', re.IGNORECASE), 'IMPOSTO'),
+    (re.compile(r'FOLHA\b|SALARIO|SALÁRIO', re.IGNORECASE), 'FOLHA'),
+]
+
+# Categorias de ENTRADA que não possuem título a receber correspondente
+CATEGORIAS_SEM_TITULO_ENTRADA = {
+    'ANTECIPACAO', 'CESSAO_CREDITO', 'TRANSFERENCIA_INTERNA', 'ESTORNO'
 }
 
 
@@ -263,6 +304,10 @@ class ExtratoService:
         if isinstance(data_transacao, str):
             data_transacao = datetime.strptime(data_transacao, '%Y-%m-%d').date()
 
+        # Extrair dados do parceiro Odoo (partner_id é many2one: [id, name] ou False)
+        odoo_partner_id = self._extrair_id(linha.get('partner_id'))
+        odoo_partner_name = self._extrair_nome(linha.get('partner_id')) or linha.get('partner_name') or None
+
         # Criar item
         item = ExtratoItem(
             lote_id=lote_id,
@@ -276,6 +321,8 @@ class ExtratoService:
             tipo_transacao=tipo_transacao,
             nome_pagador=nome_pagador,
             cnpj_pagador=cnpj_pagador,
+            odoo_partner_id=odoo_partner_id,
+            odoo_partner_name=odoo_partner_name,
             journal_id=self._extrair_id(linha.get('journal_id')),
             journal_code=journal_code,
             journal_name=journal_name,
@@ -290,10 +337,15 @@ class ExtratoService:
         """
         Extrai tipo de transação, nome do pagador e CNPJ do payment_ref.
 
-        Formatos comuns:
+        Formatos de ENTRADA:
         - ": TED Recebida - RIO BRANCO ALIMENTOS S A - 05.017.780/0001-04 - Banco: ..."
         - ": PIX Recebido - PREMIER DESPACHOS - 11.849.472/0001-30 - Agência: ..."
-        - ": Recebimento de boletos - CAMIL ALIMENTOS S.A. - 64.904.295/0028-23 - ..."
+
+        Formatos de SAÍDA:
+        - "FAV.: LA FAMIGLIA ALIMENTOS LTDA: TRANSF.REALIZADA PIX SICOOB"
+        - "Pagamento Pix ***.564.018-**: PIX EMITIDO OUTRA IF"
+        - "Pagamento Pix 02.785.118 0001-06: PIX EMITIDO OUTRA IF"
+        - "TED Enviada - FORNECEDOR - 12345678000199 - Banco: ..."
 
         Returns:
             Tuple (tipo_transacao, nome_pagador, cnpj_formatado)
@@ -305,39 +357,55 @@ class ExtratoService:
         nome_pagador = None
         cnpj_pagador = None
 
-        # Identificar tipo de transação
+        # Identificar tipo de transação (entrada)
         for padrao, tipo in TIPOS_TRANSACAO.items():
             if padrao in payment_ref:
                 tipo_transacao = tipo
                 break
 
+        # Se não encontrou tipo de entrada, tentar tipos de saída
+        if not tipo_transacao:
+            for padrao, tipo in TIPOS_TRANSACAO_SAIDA.items():
+                if padrao in payment_ref:
+                    tipo_transacao = tipo
+                    break
+
         # Extrair CNPJ
         match_cnpj = REGEX_CNPJ.search(payment_ref)
         if match_cnpj:
             cnpj_raw = match_cnpj.group(1)
-            # Normalizar CNPJ para formato XX.XXX.XXX/XXXX-XX
             cnpj_pagador = self._normalizar_cnpj(cnpj_raw)
 
         # Extrair nome do pagador
-        # Geralmente está entre o tipo de transação e o CNPJ
-        # Formato: "tipo - NOME - CNPJ - dados"
-        partes = payment_ref.split(' - ')
-        if len(partes) >= 2:
-            # O nome geralmente é a segunda parte (após o tipo)
-            for i, parte in enumerate(partes):
-                # Pular parte que contém o tipo de transação
-                has_tipo = any(t in parte for t in TIPOS_TRANSACAO.keys())
-                if has_tipo:
-                    continue
-                # Pular parte que contém CNPJ
-                if REGEX_CNPJ.search(parte):
+        # Tentar padrão FAV.: NOME: primeiro (transações de saída)
+        if not nome_pagador:
+            match_fav = REGEX_FAV_NOME.search(payment_ref)
+            if match_fav:
+                nome_pagador = match_fav.group(1).strip().rstrip(':')
+
+        # Tentar padrão "Pagamento - NOME - CNPJ"
+        if not nome_pagador:
+            match_pag = REGEX_PAGAMENTO_NOME.search(payment_ref)
+            if match_pag:
+                nome_pagador = match_pag.group(1).strip()
+                if not cnpj_pagador:
+                    cnpj_pagador = self._normalizar_cnpj(match_pag.group(2))
+
+        # Formato padrão de entrada: "tipo - NOME - CNPJ - dados"
+        if not nome_pagador:
+            partes = payment_ref.split(' - ')
+            if len(partes) >= 2:
+                for parte in partes:
+                    has_tipo = any(t in parte for t in TIPOS_TRANSACAO.keys())
+                    has_tipo_saida = any(t in parte for t in TIPOS_TRANSACAO_SAIDA.keys())
+                    if has_tipo or has_tipo_saida:
+                        continue
+                    if REGEX_CNPJ.search(parte):
+                        break
+                    if ':' in parte:
+                        continue
+                    nome_pagador = parte.strip()
                     break
-                # Pular partes com "Banco:", "Agência:", etc.
-                if ':' in parte:
-                    continue
-                # Provavelmente é o nome
-                nome_pagador = parte.strip()
-                break
 
         return tipo_transacao, nome_pagador, cnpj_pagador
 

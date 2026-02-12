@@ -119,11 +119,11 @@ class PagamentoMatchingService:
         logger.info(f"Itens a processar: {len(itens)}")
         logger.info(f"CNPJs já vinculados: {len(self._cnpjs_vinculados)}")
 
-        # Primeira passada: processar itens COM CNPJ (TED/PIX)
-        itens_com_cnpj = [i for i in itens if i.cnpj_pagador]
-        itens_sem_cnpj = [i for i in itens if not i.cnpj_pagador]
+        # Primeira passada: processar itens COM CNPJ (TED/PIX/Favorecido resolvido)
+        itens_com_cnpj = [i for i in itens if (i.favorecido_cnpj or i.cnpj_pagador)]
+        itens_sem_cnpj = [i for i in itens if not (i.favorecido_cnpj or i.cnpj_pagador)]
 
-        logger.info(f"  - Com CNPJ (TED/PIX): {len(itens_com_cnpj)}")
+        logger.info(f"  - Com CNPJ (TED/PIX/Favorecido): {len(itens_com_cnpj)}")
         logger.info(f"  - Sem CNPJ (Boleto): {len(itens_sem_cnpj)}")
 
         # Processar itens com CNPJ primeiro (maior confiança)
@@ -133,8 +133,9 @@ class PagamentoMatchingService:
                 self.estatisticas['processados'] += 1
 
                 # Adicionar CNPJ ao cache de vinculados
-                if item.titulo_pagar_id and item.cnpj_pagador:
-                    self._cnpjs_vinculados.add(self._normalizar_cnpj(item.cnpj_pagador))
+                cnpj_eff = item.favorecido_cnpj or item.cnpj_pagador
+                if item.titulo_pagar_id and cnpj_eff:
+                    self._cnpjs_vinculados.add(self._normalizar_cnpj(cnpj_eff))
 
             except Exception as e:
                 logger.error(f"Erro no item {item.id}: {e}")
@@ -163,14 +164,25 @@ class PagamentoMatchingService:
         """
         Processa o matching de um item individual.
         """
+        # Pular categorias sem fornecedor (IMPOSTO, TARIFA, JUROS, IOF, FOLHA)
+        from app.financeiro.services.extrato_service import CATEGORIAS_SEM_FORNECEDOR
+        if item.categoria_pagamento and item.categoria_pagamento in CATEGORIAS_SEM_FORNECEDOR:
+            item.status_match = 'SEM_MATCH'
+            item.mensagem = f'Categoria {item.categoria_pagamento} — sem fornecedor (resolução automática)'
+            self.estatisticas['sem_match'] += 1
+            return
+
         # Valor do pagamento é negativo no extrato, precisamos do valor absoluto
         valor = abs(item.valor) if item.valor else 0
 
-        logger.info(f"Processando item {item.id}: R$ {valor} - CNPJ: {item.cnpj_pagador} - Data: {item.data_transacao}")
+        # Usar favorecido_cnpj como CNPJ primário (fallback para cnpj_pagador)
+        cnpj = item.favorecido_cnpj or item.cnpj_pagador
+
+        logger.info(f"Processando item {item.id}: R$ {valor} - CNPJ: {cnpj} - Data: {item.data_transacao}")
 
         # Buscar candidatos
         candidatos = self.buscar_titulos_candidatos(
-            cnpj=item.cnpj_pagador,
+            cnpj=cnpj,
             valor=valor,
             data_pagamento=item.data_transacao
         )
