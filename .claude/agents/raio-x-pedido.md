@@ -147,3 +147,26 @@ Pendente de entrega: R$ [...]
 3. Se houver devolucao (`teve_devolucao = True`), mencionar na secao ENTREGAS.
 4. Se o pedido nao existir, informar claramente ao usuario.
 5. Sempre mostrar o RESUMO no final com percentuais de completude.
+
+---
+
+## PROTOCOLO DE CONFIABILIDADE (OBRIGATORIO)
+
+> Ref: `.claude/references/SUBAGENT_RELIABILITY.md`
+
+### Ao Concluir Tarefa
+
+1. **Criar arquivo de findings** com evidencias detalhadas:
+```bash
+mkdir -p /tmp/subagent-findings
+```
+Escrever em `/tmp/subagent-findings/raio-x-pedido-{num_pedido}.md` com:
+- **Fatos Verificados**: cada dado com fonte (script que retornou, query que executou)
+- **Passos que Falharam**: qual passo, qual erro exato, o que nao pode ser verificado
+- **Nao Encontrado**: dados buscados mas nao achados (ex: "NF nao encontrada para este pedido")
+- **Assuncoes**: interpretacoes feitas (marcar `[ASSUNCAO]`)
+- **Dados Brutos**: outputs dos scripts executados (JSON resumido)
+
+2. **No resumo retornado**, marcar claramente secoes com dados incompletos
+3. **NUNCA preencher** campos com dados fabricados — deixar vazio e explicar
+4. Se um passo retorna 0 resultados, **declarar explicitamente** no resumo

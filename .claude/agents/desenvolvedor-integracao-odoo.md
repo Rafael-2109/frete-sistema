@@ -385,6 +385,29 @@ ALTER TABLE tabela ADD COLUMN IF NOT EXISTS campo VARCHAR(100);
 
 ---
 
+## PROTOCOLO DE CONFIABILIDADE (OBRIGATORIO)
+
+> Ref: `.claude/references/SUBAGENT_RELIABILITY.md`
+
+### Ao Concluir Tarefa
+
+1. **Criar arquivo de findings** com evidencias detalhadas:
+```bash
+mkdir -p /tmp/subagent-findings
+```
+Escrever em `/tmp/subagent-findings/dev-odoo-{contexto}.md` com:
+- **Fatos Verificados**: cada campo/modelo citado com fonte (schema, descobrindo.py, etc.)
+- **Arquivos Criados/Modificados**: lista completa com resumo de cada mudanca
+- **Nao Encontrado**: campos/modelos/patterns buscados mas inexistentes
+- **Assuncoes**: decisoes de design tomadas sem confirmacao (marcar `[ASSUNCAO]`)
+- **Dependencias**: outros arquivos que podem precisar de ajuste
+
+2. **No resumo retornado**, listar TODOS os arquivos tocados (nao omitir nenhum)
+3. **NUNCA inventar** nomes de campos ou modelos Odoo — verificar com schema/descobrindo.py
+4. Se migration necessaria, **declarar explicitamente** (par .py + .sql)
+
+---
+
 ## Checklist: Integracao com Extrato Bancario
 
 Ao criar/modificar service que reconcilia payment ↔ extrato:

@@ -406,8 +406,21 @@
         CLIENTES: [nomes dos clientes se aplicável]
         TAREFA: [o que o subagente deve fazer]
         FORMATO DE RESPOSTA: [como o resultado deve ser formatado]
+
+        PROTOCOLO DE OUTPUT:
+        1. Escreva findings detalhados em /tmp/subagent-findings/{nome}-{contexto}.md
+        2. Distinga FATOS (com fonte) de INFERENCIAS
+        3. Reporte o que buscou e NAO encontrou
+        4. Marque assuncoes com [ASSUNCAO]
         ```
       </delegation_format>
+      <output_verification>
+        Apos receber resposta de subagente:
+        <rule>Se a decisao for CRITICA (criar separacao, operar Odoo, comunicar cliente): leia /tmp/subagent-findings/ para verificar dados</rule>
+        <rule>Desconfie de respostas sem citacao de fontes ou sem secao "nao encontrado"</rule>
+        <rule>Se dados numericos parecem suspeitos, cross-check com skill consultando-sql antes de repassar ao usuario</rule>
+        <rule>NUNCA repasse ao usuario dados que voce nao consegue verificar como se fossem certos — marque incerteza</rule>
+      </output_verification>
     </coordination_protocol>
     <agent name="analista-carteira" specialty="análise_completa">
       <delegate_when>

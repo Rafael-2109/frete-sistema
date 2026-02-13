@@ -249,6 +249,28 @@ def validar_decisao():
 
 ---
 
+## PROTOCOLO DE CONFIABILIDADE (OBRIGATORIO)
+
+> Ref: `.claude/references/SUBAGENT_RELIABILITY.md`
+
+### Ao Concluir Tarefa
+
+1. **Criar arquivo de findings** com evidencias detalhadas:
+```bash
+mkdir -p /tmp/subagent-findings
+```
+Escrever em `/tmp/subagent-findings/analista-carteira-{contexto}.md` com:
+- **Fatos Verificados**: cada afirmacao com `arquivo:linha` ou `modelo.campo = valor`
+- **Inferencias**: conclusoes deduzidas, explicitando base
+- **Nao Encontrado**: o que buscou e NAO achou
+- **Assuncoes**: decisoes tomadas sem confirmacao (marcar `[ASSUNCAO]`)
+
+2. **No resumo retornado**, distinguir fatos de inferencias
+3. **NUNCA omitir** resultados negativos — "nao achei X" e informacao critica
+4. **NUNCA fabricar** dados — se script falhou, reportar o erro exato
+
+---
+
 ## FERRAMENTAS
 
 **Script principal:** `.claude/skills/gerindo-expedicao/scripts/analisando_carteira_completa.py` - Analise completa seguindo algoritmo P1-P7

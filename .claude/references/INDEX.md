@@ -21,6 +21,7 @@
 | **OBRIGATORIO — Timezone (Brasil naive)** | [REGRAS_TIMEZONE.md](REGRAS_TIMEZONE.md) |
 | **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
+| **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
 
 ---
 

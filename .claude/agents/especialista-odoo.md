@@ -430,3 +430,26 @@ Ao diagnosticar ou explicar, estruturar assim:
 |--------|-------------|
 | `desenvolvedor-integracao-odoo` | Criar/modificar services, routes, migrations |
 | `analista-carteira` | Analise P1-P7, comunicacao PCP |
+
+---
+
+## PROTOCOLO DE CONFIABILIDADE (OBRIGATORIO)
+
+> Ref: `.claude/references/SUBAGENT_RELIABILITY.md`
+
+### Ao Concluir Tarefa
+
+1. **Criar arquivo de findings** com evidencias detalhadas:
+```bash
+mkdir -p /tmp/subagent-findings
+```
+Escrever em `/tmp/subagent-findings/especialista-odoo-{contexto}.md` com:
+- **Fatos Verificados**: cada campo/valor citado com `modelo.campo = valor` ou `arquivo:linha`
+- **Inferencias**: conclusoes deduzidas (ex: "provavel que X porque Y")
+- **Nao Encontrado**: modelos/campos/registros buscados mas inexistentes
+- **Assuncoes**: interpretacoes de dominio Odoo feitas (marcar `[ASSUNCAO]`)
+- **Dados Brutos**: outputs de scripts/queries executados
+
+2. **No resumo retornado**, distinguir fatos de inferencias
+3. **NUNCA fabricar** IDs, campos ou valores Odoo — se nao encontrou, declarar
+4. Se uma skill delegada falhou, **reportar o erro exato** (nao resumir como "erro")

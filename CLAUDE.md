@@ -1,6 +1,6 @@
 # Sistema de Fretes — Instrucoes de Projeto
 
-**Ultima Atualizacao**: 08/02/2026
+**Ultima Atualizacao**: 13/02/2026
 
 ---
 
@@ -76,6 +76,7 @@ Gotchas rapidos:
 | **Timezone (convencao Brasil naive)** | `.claude/references/REGRAS_TIMEZONE.md` |
 | **Routing de skills** | `.claude/references/ROUTING_SKILLS.md` |
 | **Infraestrutura Render** | `.claude/references/INFRAESTRUTURA.md` |
+| **Confiabilidade de subagentes** | `.claude/references/SUBAGENT_RELIABILITY.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:
@@ -135,6 +136,20 @@ Documentos adicionais:
 | `especialista-odoo` | Problema cross-area Odoo |
 | `raio-x-pedido` | Visao 360 do pedido |
 | `desenvolvedor-integracao-odoo` | Criar/modificar integracoes Odoo |
+
+### Confiabilidade de Output (OBRIGATORIO)
+
+> Ref completa: `.claude/references/SUBAGENT_RELIABILITY.md`
+
+Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao automatica.**
+
+**Ao spawnar subagente via Task tool**:
+1. Adicionar ao prompt: "Escreva findings detalhados em `/tmp/subagent-findings/`"
+2. Apos receber output: verificar `/tmp/subagent-findings/` para dados criticos
+3. Para pesquisa: preferir subagentes read-only (Explore, Plan)
+4. Para implementacao: REVISAR todos os arquivos tocados
+
+**Sinais de alerta**: output sem citacao de fontes, dados sem nuances, ausencia de "nao encontrado"
 
 ---
 
