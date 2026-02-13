@@ -204,69 +204,82 @@ def extrato_aprovar_itens():
 @financeiro_bp.route('/extrato/api/conciliar-itens', methods=['POST'])
 @login_required
 def extrato_conciliar_itens():
-    """Concilia multiplos itens aprovados por IDs (batch para a tela unificada)."""
+    """
+    Enfileira conciliacao de multiplos itens aprovados via Redis Queue.
+
+    Retorna job_id imediatamente. Frontend faz polling em
+    /extrato/api/conciliar-itens/status/<job_id> para acompanhar progresso.
+    """
+    from app.portal.workers import enqueue_job, get_redis_connection
+    from app.financeiro.workers.extrato_conciliacao_jobs import processar_conciliacao_extrato_job
+
     data = request.get_json()
     item_ids = data.get('item_ids', [])
 
     if not item_ids:
         return jsonify({'success': False, 'error': 'item_ids e obrigatorio'}), 400
 
+    # Verificar itens validos
+    itens = ExtratoItem.query.filter(
+        ExtratoItem.id.in_(item_ids),
+        ExtratoItem.aprovado == True,
+        ExtratoItem.status != 'CONCILIADO'
+    ).all()
+
+    if not itens:
+        return jsonify({'success': False, 'error': 'Nenhum item valido para conciliar'}), 400
+
+    item_ids_validos = [i.id for i in itens]
+
+    # Verificar lock (itens ja em processamento por outro job)
     try:
-        from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
+        redis_conn = get_redis_connection()
+        bloqueados = []
+        for iid in item_ids_validos:
+            if redis_conn.exists(f'extrato_conciliacao_lock:{iid}'):
+                bloqueados.append(iid)
+        if bloqueados:
+            return jsonify({
+                'success': False,
+                'error': f'{len(bloqueados)} item(ns) ja esta(o) sendo processado(s)',
+                'itens_bloqueados': bloqueados
+            }), 409
+    except Exception:
+        pass  # Se Redis falhar na verificacao, lock sera checado no job
 
-        service = ExtratoConciliacaoService()
-        total_conciliados = 0
-        total_erros = 0
-        erros_detalhe = []
+    usuario_nome = current_user.nome if current_user else 'Sistema'
 
-        itens = ExtratoItem.query.filter(
-            ExtratoItem.id.in_(item_ids),
-            ExtratoItem.aprovado == True,
-            ExtratoItem.status != 'CONCILIADO'
-        ).all()
+    job = enqueue_job(
+        processar_conciliacao_extrato_job,
+        item_ids_validos,
+        usuario_nome,
+        queue_name='default',
+        timeout='30m'
+    )
 
-        for item in itens:
-            try:
-                service.conciliar_item(item)
-                db.session.commit()
-                total_conciliados += 1
-            except Exception as e:
-                db.session.rollback()
-                item.status = 'ERRO'
-                item.mensagem = str(e)
-                db.session.commit()
-                total_erros += 1
-                erros_detalhe.append({'id': item.id, 'erro': str(e)})
+    return jsonify({
+        'success': True,
+        'job_id': job.id,
+        'total_itens': len(item_ids_validos),
+        'message': f'{len(item_ids_validos)} item(ns) enfileirado(s) para conciliacao'
+    })
 
-        # Atualizar estatisticas dos lotes afetados
-        lote_ids_afetados = set(item.lote_id for item in itens)
-        for lote_id in lote_ids_afetados:
-            lote = db.session.get(ExtratoLote, lote_id)
-            if lote:
-                from sqlalchemy import func
-                conciliados_count = db.session.query(func.count()).filter(
-                    ExtratoItem.lote_id == lote_id,
-                    ExtratoItem.status == 'CONCILIADO'
-                ).scalar()
-                lote.linhas_conciliadas = conciliados_count
-                if conciliados_count >= lote.total_linhas:
-                    lote.status = 'CONCLUIDO'
-                    lote.processado_em = agora_utc_naive()
-                    lote.processado_por = current_user.nome if current_user else 'Sistema'
-        db.session.commit()
 
-        return jsonify({
-            'success': True,
-            'conciliados': total_conciliados,
-            'erros': total_erros,
-            'erros_detalhe': erros_detalhe if erros_detalhe else None
-        })
+@financeiro_bp.route('/extrato/api/conciliar-itens/status/<job_id>')
+@login_required
+def extrato_conciliar_status(job_id):
+    """
+    Retorna status e progresso de um job de conciliacao.
+    Usado pelo frontend para polling a cada 2s.
+    """
+    from app.financeiro.workers.extrato_conciliacao_jobs import get_job_status, obter_progresso
 
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    status = get_job_status(job_id)
+    progresso = obter_progresso(job_id)
+    if progresso:
+        status['progresso'] = progresso
+
+    return jsonify({'success': True, **status})
 
 
 @financeiro_bp.route('/extrato/api/executar-matching-itens', methods=['POST'])

@@ -908,41 +908,47 @@ class SincronizacaoExtratosService:
             data_fim = date.today()
 
             for journal_code in journals:
-                try:
-                    logger.info(f"[IMPORT_EXTRATOS_AUTO] Processando journal: {journal_code}")
+                for tipo in ['entrada', 'saida']:
+                    chave_detalhe = f"{journal_code}_{tipo}"
+                    try:
+                        tipo_label = 'recebimentos' if tipo == 'entrada' else 'pagamentos'
+                        logger.info(f"[IMPORT_EXTRATOS_AUTO] Processando journal: {journal_code} ({tipo_label})")
 
-                    extrato_service = ExtratoService()
+                        extrato_service = ExtratoService()
 
-                    # Importar extrato usando o service existente
-                    lote = extrato_service.importar_extrato(
-                        journal_code=journal_code,
-                        data_inicio=data_inicio,
-                        data_fim=data_fim,
-                        limit=limite,
-                        criado_por='SCHEDULER_AUTO'
-                    )
+                        # Importar extrato usando o service existente
+                        lote = extrato_service.importar_extrato(
+                            journal_code=journal_code,
+                            data_inicio=data_inicio,
+                            data_fim=data_fim,
+                            limit=limite,
+                            criado_por='SCHEDULER_AUTO',
+                            tipo_transacao=tipo,
+                        )
 
-                    stats['journals_processados'] += 1
-                    stats['total_importados'] += extrato_service.estatisticas.get('importados', 0)
-                    stats['detalhes_por_journal'][journal_code] = {
-                        'lote_id': lote.id if lote else None,
-                        'importados': extrato_service.estatisticas.get('importados', 0),
-                        'com_cnpj': extrato_service.estatisticas.get('com_cnpj', 0),
-                        'sem_cnpj': extrato_service.estatisticas.get('sem_cnpj', 0),
-                        'erros': extrato_service.estatisticas.get('erros', 0)
-                    }
+                        stats['journals_processados'] += 1
+                        stats['total_importados'] += extrato_service.estatisticas.get('importados', 0)
+                        stats['detalhes_por_journal'][chave_detalhe] = {
+                            'lote_id': lote.id if lote else None,
+                            'tipo_transacao': tipo,
+                            'importados': extrato_service.estatisticas.get('importados', 0),
+                            'com_cnpj': extrato_service.estatisticas.get('com_cnpj', 0),
+                            'sem_cnpj': extrato_service.estatisticas.get('sem_cnpj', 0),
+                            'erros': extrato_service.estatisticas.get('erros', 0)
+                        }
 
-                    logger.info(
-                        f"[IMPORT_EXTRATOS_AUTO] Journal {journal_code}: "
-                        f"{extrato_service.estatisticas.get('importados', 0)} importados"
-                    )
+                        logger.info(
+                            f"[IMPORT_EXTRATOS_AUTO] Journal {journal_code} ({tipo_label}): "
+                            f"{extrato_service.estatisticas.get('importados', 0)} importados"
+                        )
 
-                except Exception as e:
-                    logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro no journal {journal_code}: {e}")
-                    stats['total_erros'] += 1
-                    stats['detalhes_por_journal'][journal_code] = {
-                        'erro': str(e)
-                    }
+                    except Exception as e:
+                        logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro no journal {journal_code} ({tipo}): {e}")
+                        stats['total_erros'] += 1
+                        stats['detalhes_por_journal'][chave_detalhe] = {
+                            'tipo_transacao': tipo,
+                            'erro': str(e)
+                        }
 
             db.session.commit()
 

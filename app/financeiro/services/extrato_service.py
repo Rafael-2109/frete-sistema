@@ -113,7 +113,8 @@ class ExtratoService:
         data_inicio: Optional[date] = None,
         data_fim: Optional[date] = None,
         limit: int = 500,
-        criado_por: str = 'Sistema'
+        criado_por: str = 'Sistema',
+        tipo_transacao: str = 'entrada'
     ) -> ExtratoLote:
         """
         Importa linhas de extrato não conciliadas do Odoo.
@@ -124,12 +125,16 @@ class ExtratoService:
             data_fim: Data final (opcional)
             limit: Limite de linhas a importar
             criado_por: Usuário que criou
+            tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
 
         Returns:
             ExtratoLote com os itens importados
         """
+        tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else (
+            'pagamentos' if tipo_transacao == 'saida' else 'transações'
+        )
         logger.info(f"=" * 60)
-        logger.info(f"IMPORTANDO EXTRATO - Journal: {journal_code}")
+        logger.info(f"IMPORTANDO EXTRATO - Journal: {journal_code} ({tipo_label})")
         logger.info(f"=" * 60)
 
         # Buscar journal
@@ -141,7 +146,7 @@ class ExtratoService:
         journal_name = journal['name']
 
         # Criar lote
-        nome_lote = f"Importação {journal_code} {agora_utc_naive().strftime('%Y-%m-%d %H:%M')}"
+        nome_lote = f"Importação {journal_code} ({tipo_label}) {agora_utc_naive().strftime('%Y-%m-%d %H:%M')}"
         lote = ExtratoLote(
             nome=nome_lote,
             journal_code=journal_code,
@@ -149,6 +154,7 @@ class ExtratoService:
             data_inicio=data_inicio,
             data_fim=data_fim,
             status='IMPORTADO',
+            tipo_transacao=tipo_transacao,
             criado_por=criado_por
         )
         db.session.add(lote)
@@ -159,7 +165,8 @@ class ExtratoService:
             journal_id=journal_id,
             data_inicio=data_inicio,
             data_fim=data_fim,
-            limit=limit
+            limit=limit,
+            tipo_transacao=tipo_transacao
         )
 
         logger.info(f"Linhas encontradas: {len(linhas)}")
@@ -225,15 +232,17 @@ class ExtratoService:
 
         Critérios:
         - journal_id específico
-        - is_reconciled = False
         - tipo_transacao: 'entrada' (amount > 0), 'saida' (amount < 0), 'ambos'
+
+        NOTA: Importa tanto linhas não-conciliadas quanto já-conciliadas no Odoo.
+        Linhas já conciliadas são marcadas CONCILIADO e vinculadas ao comprovante
+        automaticamente em _processar_linha().
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
         """
         domain = [
             ['journal_id', '=', journal_id],
-            ['is_reconciled', '=', False],
         ]
 
         # Filtro por tipo de transação
@@ -331,6 +340,15 @@ class ExtratoService:
         )
 
         db.session.add(item)
+
+        # Se a linha já está conciliada no Odoo, marcar CONCILIADO
+        # e tentar vincular ao ComprovantePagamentoBoleto correspondente
+        if linha.get('is_reconciled'):
+            item.status = 'CONCILIADO'
+            item.processado_em = agora_utc_naive()
+            item.mensagem = 'Importado já conciliado no Odoo'
+            self._vincular_comprovante_existente(item)
+
         return item
 
     def _extrair_dados_payment_ref(self, payment_ref: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -476,6 +494,80 @@ class ExtratoService:
                 resultado[move_id] = linha['id']
 
         return resultado
+
+    def _vincular_comprovante_existente(self, item: ExtratoItem) -> None:
+        """
+        Vincula ExtratoItem a ComprovantePagamentoBoleto existente via statement_line_id.
+
+        Quando um extrato é importado já conciliado no Odoo, busca o comprovante
+        local correspondente e preenche os campos de título (NF, parcela, valor,
+        vencimento, cliente, CNPJ) no ExtratoItem.
+
+        REGRA: NÃO-BLOQUEANTE — falha aqui NÃO impede a importação.
+        """
+        try:
+            from app.financeiro.models_comprovante import (
+                ComprovantePagamentoBoleto,
+                LancamentoComprovante,
+            )
+
+            comp = ComprovantePagamentoBoleto.query.filter_by(
+                odoo_statement_line_id=item.statement_line_id
+            ).first()
+
+            if not comp:
+                logger.debug(
+                    f"Nenhum comprovante com odoo_statement_line_id="
+                    f"{item.statement_line_id} para vincular"
+                )
+                return
+
+            item.mensagem = (
+                f'Importado já conciliado no Odoo — '
+                f'vinculado ao comprovante #{comp.id}'
+            )
+
+            # Buscar lançamento LANCADO para extrair dados do título
+            lanc = LancamentoComprovante.query.filter_by(
+                comprovante_id=comp.id,
+                status='LANCADO',
+            ).order_by(LancamentoComprovante.lancado_em.desc()).first()
+
+            if not lanc:
+                return
+
+            # Preencher campos de título a pagar
+            from app.financeiro.parcela_utils import parcela_to_str
+            from app.financeiro.models import ContasAPagar
+
+            if lanc.nf_numero:
+                parcela_str = parcela_to_str(lanc.parcela)
+                titulo_local = ContasAPagar.query.filter_by(
+                    titulo_nf=lanc.nf_numero,
+                    parcela=parcela_str,
+                ).first()
+
+                if titulo_local:
+                    item.titulo_pagar_id = titulo_local.id
+                    item.titulo_nf = lanc.nf_numero
+                    item.titulo_parcela = lanc.parcela
+                    item.titulo_valor = titulo_local.valor_residual
+                    item.titulo_vencimento = titulo_local.vencimento
+                    item.titulo_cliente = titulo_local.raz_social_red or titulo_local.raz_social
+                    item.titulo_cnpj = titulo_local.cnpj
+                    item.status_match = 'MATCH_ENCONTRADO'
+
+                    logger.info(
+                        f"ExtratoItem {item.statement_line_id}: vinculado ao "
+                        f"título NF {lanc.nf_numero}/{lanc.parcela} "
+                        f"via comprovante #{comp.id}"
+                    )
+
+        except Exception as e:
+            logger.warning(
+                f"Erro ao vincular comprovante para statement_line "
+                f"{item.statement_line_id}: {e}"
+            )
 
     def _extrair_id(self, valor) -> Optional[int]:
         """Extrai ID de um campo many2one do Odoo."""
@@ -846,14 +938,13 @@ class ExtratoService:
 
     def _buscar_linhas_statement(self, statement_id: int, tipo_transacao: str = 'entrada') -> List[Dict]:
         """
-        Busca linhas não conciliadas de um statement específico.
+        Busca linhas de um statement específico (conciliadas e não-conciliadas).
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
         """
         domain = [
             ['statement_id', '=', statement_id],
-            ['is_reconciled', '=', False],
         ]
 
         # Filtro por tipo de transação

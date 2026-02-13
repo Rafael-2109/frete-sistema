@@ -73,11 +73,19 @@ class ConciliacaoSyncService:
         ).first()
 
         if not extrato_item:
-            logger.debug(
+            logger.info(
                 f"[Sync] Nenhum ExtratoItem com statement_line_id="
-                f"{comp.odoo_statement_line_id} — skip"
+                f"{comp.odoo_statement_line_id} — tentando criar sob demanda"
             )
-            return None
+            extrato_item = self._criar_extrato_item_sob_demanda(
+                comp.odoo_statement_line_id, comp
+            )
+            if not extrato_item:
+                logger.warning(
+                    f"[Sync] Não foi possível criar ExtratoItem sob demanda "
+                    f"para statement_line_id={comp.odoo_statement_line_id}"
+                )
+                return None
 
         if extrato_item.status == 'CONCILIADO':
             logger.debug(
@@ -263,3 +271,159 @@ class ConciliacaoSyncService:
 
         lote.linhas_conciliadas = conciliados
         lote.linhas_erro = erros
+
+    def _criar_extrato_item_sob_demanda(self, statement_line_id: int, comprovante):
+        """
+        Cria ExtratoItem sob demanda quando o auto-import não importou a linha.
+
+        Busca dados da statement_line no Odoo, encontra ou cria um lote
+        "Sync sob demanda", e cria o ExtratoItem com status PENDENTE
+        (será marcado CONCILIADO pelo fluxo normal de sync_comprovante_para_extrato).
+
+        Isso resolve o cenário onde pagamentos (amount < 0) não eram importados
+        pelo scheduler automático (que importava apenas amount > 0 / entrada).
+
+        REGRA: NÃO-BLOQUEANTE — falha aqui NÃO impede o lançamento do comprovante.
+
+        Args:
+            statement_line_id: ID da statement line no Odoo
+            comprovante: ComprovantePagamentoBoleto associado
+
+        Returns:
+            ExtratoItem criado ou None se falhar
+        """
+        from datetime import datetime as dt
+        from app.financeiro.models import ExtratoLote, ExtratoItem
+
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+            conn = get_odoo_connection()
+            if not conn.authenticate():
+                logger.warning("[Sync] Falha ao autenticar Odoo para criar ExtratoItem sob demanda")
+                return None
+
+            # Buscar statement_line no Odoo
+            linhas = conn.search_read(
+                'account.bank.statement.line',
+                [['id', '=', statement_line_id]],
+                fields=[
+                    'id', 'date', 'payment_ref', 'amount',
+                    'journal_id', 'move_id', 'partner_id', 'partner_name',
+                    'is_reconciled',
+                ],
+                limit=1,
+            )
+
+            if not linhas:
+                logger.warning(f"[Sync] Statement line {statement_line_id} não encontrada no Odoo")
+                return None
+
+            linha = linhas[0]
+            amount = linha.get('amount', 0)
+            tipo_transacao = 'saida' if amount < 0 else 'entrada'
+
+            # Extrair journal
+            journal_raw = linha.get('journal_id')
+            journal_id = journal_raw[0] if isinstance(journal_raw, (list, tuple)) else journal_raw
+            journal_name = journal_raw[1] if isinstance(journal_raw, (list, tuple)) and len(journal_raw) > 1 else None
+
+            # Buscar journal_code
+            journal_code = None
+            if journal_id:
+                journals = conn.search_read(
+                    'account.journal',
+                    [['id', '=', journal_id]],
+                    fields=['code', 'name'],
+                    limit=1,
+                )
+                if journals:
+                    journal_code = journals[0]['code']
+                    journal_name = journals[0]['name']
+
+            # Converter data
+            data_transacao = linha.get('date')
+            if isinstance(data_transacao, str):
+                data_transacao = dt.strptime(data_transacao, '%Y-%m-%d').date()
+
+            # Encontrar ou criar lote "sync sob demanda"
+            mes_ano = agora_utc_naive().strftime('%Y-%m')
+            nome_lote = f"Sync sob demanda {journal_code or 'N/A'} ({tipo_transacao}) {mes_ano}"
+
+            lote = ExtratoLote.query.filter_by(nome=nome_lote).first()
+            if not lote:
+                lote = ExtratoLote(
+                    nome=nome_lote,
+                    journal_code=journal_code,
+                    journal_id=journal_id,
+                    tipo_transacao=tipo_transacao,
+                    status='IMPORTADO',
+                    criado_por='SYNC_SOB_DEMANDA',
+                )
+                db.session.add(lote)
+                db.session.flush()
+
+            # Extrair dados do payment_ref via ExtratoService
+            from app.financeiro.services.extrato_service import ExtratoService
+            extrato_svc = ExtratoService(connection=conn)
+            payment_ref = linha.get('payment_ref', '') or ''
+            tipo_trans, nome_pagador, cnpj_pagador = extrato_svc._extrair_dados_payment_ref(payment_ref)
+
+            # Extrair move_id
+            move_raw = linha.get('move_id')
+            move_id = move_raw[0] if isinstance(move_raw, (list, tuple)) else move_raw
+            move_name = move_raw[1] if isinstance(move_raw, (list, tuple)) and len(move_raw) > 1 else None
+
+            # Extrair partner
+            partner_raw = linha.get('partner_id')
+            odoo_partner_id = partner_raw[0] if isinstance(partner_raw, (list, tuple)) else None
+            odoo_partner_name = (
+                partner_raw[1]
+                if isinstance(partner_raw, (list, tuple)) and len(partner_raw) > 1
+                else linha.get('partner_name')
+            )
+
+            # Criar ExtratoItem como PENDENTE (sync normal marcará CONCILIADO)
+            item = ExtratoItem(
+                lote_id=lote.id,
+                statement_line_id=statement_line_id,
+                move_id=move_id,
+                move_name=move_name,
+                data_transacao=data_transacao,
+                valor=amount,
+                payment_ref=payment_ref,
+                tipo_transacao=tipo_trans,
+                nome_pagador=nome_pagador,
+                cnpj_pagador=cnpj_pagador,
+                odoo_partner_id=odoo_partner_id,
+                odoo_partner_name=odoo_partner_name,
+                journal_id=journal_id,
+                journal_code=journal_code,
+                journal_name=journal_name,
+                status_match='PENDENTE',
+                status='PENDENTE',  # Será marcado CONCILIADO pelo fluxo normal em sync_comprovante_para_extrato
+                mensagem=f'Criado sob demanda via comprovante #{comprovante.id}',
+            )
+            db.session.add(item)
+
+            # Atualizar estatísticas do lote (item começa PENDENTE, será atualizado
+            # para CONCILIADO pelo fluxo normal que chama _atualizar_estatisticas_lote)
+            lote.total_linhas = (lote.total_linhas or 0) + 1
+            lote.valor_total = (lote.valor_total or 0) + abs(amount)
+
+            db.session.flush()
+
+            logger.info(
+                f"[Sync] ExtratoItem {item.id} criado sob demanda "
+                f"(statement_line={statement_line_id}, valor={amount}, "
+                f"journal={journal_code})"
+            )
+
+            return item
+
+        except Exception as e:
+            logger.error(
+                f"[Sync] Erro ao criar ExtratoItem sob demanda para "
+                f"statement_line {statement_line_id}: {e}",
+                exc_info=True,
+            )
+            return None

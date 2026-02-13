@@ -344,6 +344,68 @@
         </div>
     </div>
 
+    {# === MODAL PROGRESSO CONCILIACAO === #}
+    <div class="modal fade" id="modalProgresso" tabindex="-1" aria-labelledby="modalProgressoLabel"
+         aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: var(--fin-bg-elevated); border: 1px solid var(--fin-border);">
+                <div class="modal-header" style="border-bottom: 1px solid var(--fin-border);">
+                    <h5 class="modal-title" id="modalProgressoLabel">
+                        <i class="fas fa-link me-2" style="color: var(--fin-accent-warning);"></i>
+                        Conciliando no Odoo
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <div id="progresso-status" class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span id="progresso-texto" class="small fw-bold">Aguardando inicio...</span>
+                            <span id="progresso-pct" class="small text-muted">0%</span>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div id="progresso-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-4 mb-3">
+                        <div class="text-center">
+                            <div id="progresso-sucesso" class="h4 mb-0 fw-bold" style="color: var(--fin-accent-success);">0</div>
+                            <div class="small text-muted">Sucesso</div>
+                        </div>
+                        <div class="text-center">
+                            <div id="progresso-erros" class="h4 mb-0 fw-bold" style="color: var(--fin-accent-danger);">0</div>
+                            <div class="small text-muted">Erros</div>
+                        </div>
+                        <div class="text-center">
+                            <div id="progresso-total" class="h4 mb-0 fw-bold">0</div>
+                            <div class="small text-muted">Total</div>
+                        </div>
+                        <div class="text-center">
+                            <div id="progresso-tempo" class="h4 mb-0 fw-bold" style="color: var(--fin-text-secondary);">-</div>
+                            <div class="small text-muted">Tempo</div>
+                        </div>
+                    </div>
+                    <div id="progresso-item-atual" class="small text-muted text-center mb-2" style="min-height: 1.5em;">
+                        <i class="fas fa-spinner fa-spin me-1"></i> Aguardando fila...
+                    </div>
+                    {# Alerta de bloqueio #}
+                    <div id="progresso-bloqueio" class="alert alert-warning py-2 mb-0" style="display: none;">
+                        <i class="fas fa-lock me-1"></i>
+                        <span id="progresso-bloqueio-texto"></span>
+                    </div>
+                    {# Resultado final #}
+                    <div id="progresso-resultado" class="alert py-2 mb-0" style="display: none;"></div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid var(--fin-border);">
+                    <button type="button" class="btn btn-secondary" id="btn-fechar-progresso"
+                            data-bs-dismiss="modal" disabled>
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# === MODAL CANDIDATOS === #}
     <div class="modal fade" id="modalCandidatos" tabindex="-1" aria-labelledby="modalCandidatosLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
@@ -448,6 +510,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const API_DESVINCULAR = '{{ url_for("financeiro.extrato_desvincular_titulo") }}';
     const API_APROVAR_ITENS = '{{ url_for("financeiro.extrato_aprovar_itens") }}';
     const API_CONCILIAR_ITENS = '{{ url_for("financeiro.extrato_conciliar_itens") }}';
+    const API_CONCILIAR_STATUS = '/financeiro/extrato/api/conciliar-itens/status/';
     const API_SELECIONAR = '{{ url_for("financeiro.extrato_selecionar_titulo") }}';
     const API_VINCULAR_MULTI = '{{ url_for("financeiro.extrato_vincular_multiplos") }}';
     const API_EXECUTAR_MATCHING = '{{ url_for("financeiro.extrato_executar_matching_itens") }}';
@@ -1184,28 +1247,217 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // =========================================================================
+    // CONCILIAR SELECIONADOS (Background Job + Polling)
+    // =========================================================================
+    let pollingTimer = null;
+    let pollingStartTime = null;
+
     window.conciliarSelecionados = async function() {
         if (selectedIds.size === 0) return;
         if (!confirm('Conciliar ' + selectedIds.size + ' item(ns) no Odoo?')) return;
+
         try {
+            // 1. Enqueue job
             const resp = await fetchRetry(API_CONCILIAR_ITENS, {
                 method: 'POST',
                 headers: getCsrfHeaders(),
                 body: JSON.stringify({ item_ids: Array.from(selectedIds) })
             });
             const data = await resp.json();
-            if (data.success) {
-                let msg = 'Conciliados: ' + data.conciliados;
-                if (data.erros > 0) msg += '\nErros: ' + data.erros;
-                alert(msg);
-                recarregarTabela();
-            } else {
-                alert('Erro: ' + (data.error || 'Falha'));
+
+            if (!data.success) {
+                if (resp.status === 409) {
+                    alert('Itens ja estao sendo processados por outro usuario.\n' + (data.error || ''));
+                } else {
+                    alert('Erro: ' + (data.error || 'Falha ao enfileirar'));
+                }
+                return;
             }
+
+            // 2. Mostrar modal de progresso
+            mostrarModalProgresso(data.total_itens);
+
+            // 3. Iniciar polling
+            pollingStartTime = Date.now();
+            pollingConciliacao(data.job_id, data.total_itens);
+
         } catch (err) {
             alert('Erro de conexao: ' + err.message);
         }
     };
+
+    function mostrarModalProgresso(totalItens) {
+        // Reset state
+        document.getElementById('progresso-texto').textContent = 'Aguardando inicio...';
+        document.getElementById('progresso-pct').textContent = '0%';
+        document.getElementById('progresso-bar').style.width = '0%';
+        document.getElementById('progresso-bar').className = 'progress-bar progress-bar-striped progress-bar-animated';
+        document.getElementById('progresso-sucesso').textContent = '0';
+        document.getElementById('progresso-erros').textContent = '0';
+        document.getElementById('progresso-total').textContent = totalItens;
+        document.getElementById('progresso-tempo').textContent = '-';
+        document.getElementById('progresso-item-atual').innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Aguardando fila...';
+        document.getElementById('progresso-bloqueio').style.display = 'none';
+        document.getElementById('progresso-resultado').style.display = 'none';
+        document.getElementById('btn-fechar-progresso').disabled = true;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalProgresso'));
+        modal.show();
+    }
+
+    function pollingConciliacao(jobId, totalItens) {
+        if (pollingTimer) clearInterval(pollingTimer);
+
+        pollingTimer = setInterval(async function() {
+            try {
+                const resp = await fetch(API_CONCILIAR_STATUS + jobId);
+                const data = await resp.json();
+
+                if (!data.success) return;
+
+                const status = data.status;
+                const progresso = data.progresso;
+
+                // Atualizar tempo decorrido
+                const elapsed = Math.round((Date.now() - pollingStartTime) / 1000);
+                document.getElementById('progresso-tempo').textContent = formatarTempo(elapsed);
+
+                if (progresso) {
+                    const processados = progresso.itens_processados || 0;
+                    const sucesso = progresso.itens_sucesso || 0;
+                    const erros = progresso.itens_erro || 0;
+                    const total = progresso.total_itens || totalItens;
+                    const pct = total > 0 ? Math.round((processados + sucesso + erros) / total * 100) : 0;
+                    // Usar sucesso+erros como processados reais (mais preciso que idx)
+                    const realProcessados = sucesso + erros;
+                    const realPct = total > 0 ? Math.round(realProcessados / total * 100) : 0;
+
+                    document.getElementById('progresso-bar').style.width = realPct + '%';
+                    document.getElementById('progresso-pct').textContent = realPct + '%';
+                    document.getElementById('progresso-sucesso').textContent = sucesso;
+                    document.getElementById('progresso-erros').textContent = erros;
+
+                    if (progresso.item_atual) {
+                        document.getElementById('progresso-texto').textContent = progresso.item_atual;
+                        if (progresso.status === 'processando') {
+                            document.getElementById('progresso-item-atual').innerHTML =
+                                '<i class="fas fa-cog fa-spin me-1"></i> ' + escHtml(progresso.item_atual);
+                        }
+                    }
+
+                    // Bloqueado
+                    if (progresso.status === 'bloqueado') {
+                        finalizarPolling('bloqueado', progresso);
+                        return;
+                    }
+
+                    // Concluido
+                    if (progresso.status === 'concluido' || progresso.status === 'concluido_com_erros') {
+                        finalizarPolling(progresso.status, progresso);
+                        return;
+                    }
+
+                    // Erro geral
+                    if (progresso.status === 'erro') {
+                        finalizarPolling('erro', progresso);
+                        return;
+                    }
+                }
+
+                // Job finished/failed (sem progresso disponivel)
+                if (status === 'finished') {
+                    finalizarPolling('concluido', data.result || {});
+                    return;
+                }
+                if (status === 'failed') {
+                    finalizarPolling('erro', { item_atual: data.error || 'Erro desconhecido' });
+                    return;
+                }
+
+            } catch (err) {
+                // Erro de rede no polling — continuar tentando
+                logger_debug('[Polling] Erro de rede: ' + err.message);
+            }
+        }, 2000);  // Poll a cada 2 segundos
+    }
+
+    function finalizarPolling(tipo, dados) {
+        if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+        }
+
+        const bar = document.getElementById('progresso-bar');
+        const btnFechar = document.getElementById('btn-fechar-progresso');
+        const resultado = document.getElementById('progresso-resultado');
+        const itemAtual = document.getElementById('progresso-item-atual');
+
+        bar.classList.remove('progress-bar-animated');
+        btnFechar.disabled = false;
+
+        if (tipo === 'concluido') {
+            bar.style.width = '100%';
+            document.getElementById('progresso-pct').textContent = '100%';
+            bar.className = 'progress-bar bg-success';
+            itemAtual.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> Concluido!';
+            resultado.className = 'alert alert-success py-2 mb-0';
+            resultado.innerHTML = '<i class="fas fa-check-circle me-1"></i> Todos os itens conciliados com sucesso.';
+            resultado.style.display = 'block';
+        } else if (tipo === 'concluido_com_erros') {
+            bar.style.width = '100%';
+            document.getElementById('progresso-pct').textContent = '100%';
+            bar.className = 'progress-bar bg-warning';
+            const sucesso = dados.itens_sucesso || dados.conciliados || 0;
+            const erros = dados.itens_erro || dados.erros_total || 0;
+            itemAtual.innerHTML = '<i class="fas fa-exclamation-triangle text-warning me-1"></i> Concluido com erros';
+            resultado.className = 'alert alert-warning py-2 mb-0';
+            resultado.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> ' +
+                sucesso + ' conciliado(s), ' + erros + ' erro(s). Verifique os itens com erro.';
+            resultado.style.display = 'block';
+        } else if (tipo === 'bloqueado') {
+            bar.className = 'progress-bar bg-secondary';
+            itemAtual.innerHTML = '<i class="fas fa-lock text-warning me-1"></i> Bloqueado';
+            const bloqueio = document.getElementById('progresso-bloqueio');
+            bloqueio.style.display = 'block';
+            document.getElementById('progresso-bloqueio-texto').textContent =
+                'Itens ja estao sendo processados por outro usuario. Tente novamente em alguns minutos.';
+        } else {
+            // Erro geral
+            bar.className = 'progress-bar bg-danger';
+            const msg = dados.item_atual || dados.error || 'Erro desconhecido';
+            itemAtual.innerHTML = '<i class="fas fa-times-circle text-danger me-1"></i> Erro';
+            resultado.className = 'alert alert-danger py-2 mb-0';
+            resultado.innerHTML = '<i class="fas fa-times-circle me-1"></i> ' + escHtml(msg);
+            resultado.style.display = 'block';
+        }
+
+        // Atualizar contadores finais do progresso
+        if (dados.itens_sucesso !== undefined) {
+            document.getElementById('progresso-sucesso').textContent = dados.itens_sucesso;
+        }
+        if (dados.itens_erro !== undefined) {
+            document.getElementById('progresso-erros').textContent = dados.itens_erro;
+        }
+
+        // Recarregar tabela ao fechar modal
+        const modalEl = document.getElementById('modalProgresso');
+        modalEl.addEventListener('hidden.bs.modal', function handler() {
+            modalEl.removeEventListener('hidden.bs.modal', handler);
+            recarregarTabela();
+        });
+    }
+
+    function formatarTempo(segundos) {
+        if (segundos < 60) return segundos + 's';
+        const min = Math.floor(segundos / 60);
+        const sec = segundos % 60;
+        return min + 'm' + (sec > 0 ? sec + 's' : '');
+    }
+
+    function logger_debug(msg) {
+        if (typeof console !== 'undefined') console.debug(msg);
+    }
 
     // =========================================================================
     // ACTION: EXECUTAR MATCHING
