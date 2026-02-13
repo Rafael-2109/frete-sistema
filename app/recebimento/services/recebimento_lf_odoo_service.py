@@ -95,7 +95,13 @@ logger = logging.getLogger(__name__)
 
 
 class RecebimentoLfOdooService:
-    """Processa Recebimento LF completo no Odoo (37 etapas com checkpoint)."""
+    """Processa Recebimento LF completo no Odoo (37 etapas com checkpoint).
+
+    Fases:
+        1-5: Recebimento FB (DFe, PO, Picking, Invoice, Finalizacao)
+        6: Transferencia FB -> CD (etapas 19-23)
+        7: Recebimento CD via DFe (etapas 24-37)
+    """
 
     # IDs fixos (conforme IDS_FIXOS.md)
     COMPANY_FB = 1
@@ -117,7 +123,7 @@ class RecebimentoLfOdooService:
     # Recebimento CD via DFe (Fase 7) — IDs fixos
     TEAM_ID_CD = 119               # Lançamento Frete (mesmo da FB)
     PAYMENT_TERM_CD = 2800         # Sem pagamento (CD)
-    PAYMENT_PROVIDER_ID_CD = None  # TODO: Preencher apos executar discovery_recebimento_cd.py
+    PAYMENT_PROVIDER_ID_CD = 30    # Transferencia Bancaria CD (company_id=4) — discovery 2026-02-13
 
     # CFOPs de retorno (nao transferir para CD)
     CFOPS_RETORNO = ('1902', '5902')
@@ -137,7 +143,7 @@ class RecebimentoLfOdooService:
 
     def processar_recebimento(self, recebimento_id, usuario_nome=None):  # noqa: ARG002
         """
-        Processa um Recebimento LF completo no Odoo (26 etapas com checkpoint).
+        Processa um Recebimento LF completo no Odoo (37 etapas com checkpoint).
 
         Suporta retomada: se etapa_atual > 0, pula etapas ja concluidas.
         Cada etapa re-busca o registro do banco (previne DetachedInstanceError).
@@ -205,7 +211,7 @@ class RecebimentoLfOdooService:
             )
 
             # =====================================================
-            # FASE 6: Transferencia FB -> CD (etapas 19-26)
+            # FASE 6+7: Transferencia FB->CD + Recebimento CD (etapas 19-37)
             # Independente: se falhar, recebimento FB ja esta OK
             # =====================================================
             try:
@@ -268,10 +274,10 @@ class RecebimentoLfOdooService:
 
     def processar_transfer_only(self, recebimento_id):
         """
-        Processa APENAS a fase de transferencia FB -> CD (etapas 19-26).
+        Processa APENAS a fase de transferencia FB -> CD + recebimento CD (etapas 19-37).
 
         Usado para retry isolado quando o recebimento FB (etapas 1-18) ja concluiu
-        mas a transferencia falhou.
+        mas a transferencia/recebimento CD falhou.
 
         Args:
             recebimento_id: ID do RecebimentoLf local
@@ -430,7 +436,7 @@ class RecebimentoLfOdooService:
         reconstruida e o checkpoint e reaplicado do zero (re-fetch + re-set + re-commit).
 
         Args:
-            etapa: Numero da etapa concluida (1-18)
+            etapa: Numero da etapa concluida (1-37)
             fase: Numero da fase (opcional, calculado automaticamente)
             msg: Mensagem de progresso para Redis
             **extra_fields: Campos extras para salvar (ex: odoo_po_id=123)
@@ -1657,7 +1663,7 @@ class RecebimentoLfOdooService:
         self._checkpoint(etapa=18, msg='Movimentacoes registradas')
 
     # =================================================================
-    # FASE 6: Transferencia FB -> CD (etapas 19-26)
+    # FASE 6: Transferencia FB -> CD (etapas 19-23)
     # =================================================================
 
     def _step_19_filtrar_produtos_acabados(self, odoo):
@@ -2879,6 +2885,9 @@ class RecebimentoLfOdooService:
         else:
             logger.info(f"  PO CD {po_id}: team ja configurado (team_id={self.TEAM_ID_CD})")
 
+        # Corrigir precos das PO lines a partir do DFe CD (mesma correcao do fluxo FB step 6)
+        self._corrigir_precos_po_dfe(odoo, po_id, rec.odoo_cd_dfe_id)
+
         self._checkpoint(
             etapa=28,
             odoo_cd_po_name=po_name,
@@ -3180,7 +3189,11 @@ class RecebimentoLfOdooService:
                         f"lot_cd={lot_id_cd or lote_info.lote_nome}"
                     )
 
-        commit_with_retry(db.session)
+            # Commit granular por produto — persiste odoo_lot_id_cd no DB local
+            # para rastreabilidade. Se crash no meio, _resolver_lote_cd e idempotente
+            # (busca por name+product_id+company_id no Odoo antes de criar).
+            commit_with_retry(db.session)
+
         self._checkpoint(etapa=32, msg='Lotes CD preenchidos')
 
     def _step_33_aprovar_qc_cd(self, odoo):
