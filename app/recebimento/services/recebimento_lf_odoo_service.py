@@ -21,34 +21,57 @@ Resiliencia:
   - Recovery: ao retomar, inspeciona Odoo para recuperar IDs nao salvos
   - Idempotencia: verifica estado no Odoo antes de executar operacoes destrutivas
 
-Responsabilidades (18 etapas):
-FASE 1 - Preparacao DFe:
+Responsabilidades (37 etapas):
+FASE 1 - Preparacao DFe (FB):
     1. Buscar DFe no Odoo
     2. Avancar status do DFe (se necessario)
     3. Atualizar data_entrada e tipo_pedido
 
-FASE 2 - Gerar e Configurar PO:
+FASE 2 - Gerar e Configurar PO (FB):
     4. action_gerar_po_dfe [fire_and_poll]
     5. Extrair PO do resultado
     6. Configurar PO (team, payment_term, picking_type)
     7. Confirmar PO (button_confirm) [fire_and_poll]
     8. Aprovar PO (button_approve, se necessario) [fire_and_poll]
 
-FASE 3 - Picking / Recebimento:
+FASE 3 - Picking / Recebimento (FB):
     9. Buscar picking gerado
     10. Preencher lotes (CFOP!=1902: manual, CFOP=1902: auto)
     11. Aprovar quality checks
     12. Validar picking (button_validate) [fire_and_poll]
 
-FASE 4 - Fatura:
+FASE 4 - Fatura (FB):
     13. Criar invoice (action_create_invoice) [fire_and_poll]
     14. Extrair invoice_id
     15. Configurar invoice (situacao_nf, impostos)
     16. Confirmar invoice (action_post) [fire_and_poll]
 
-FASE 5 - Finalizacao:
+FASE 5 - Finalizacao Recebimento FB:
     17. Atualizar status local
     18. Criar MovimentacaoEstoque
+
+FASE 6 - Transfer FB -> CD (etapas 19-23):
+    19. Filtrar lotes para transferencia
+    20. Criar picking saida FB
+    21. Criar invoice transferencia
+    22. Configurar e postar invoice transferencia
+    23. Transmitir NF-e transferencia (SEFAZ)
+
+FASE 7 - Recebimento CD via DFe (etapas 24-37):
+    24. Extrair XML/PDF/chave da invoice de transferencia
+    25. Upload DFe no CD + processar
+    26. Configurar DFe CD (data_entrada)
+    27. Gerar PO CD [fire_and_poll]
+    28. Configurar PO CD (team, payment, picking_type)
+    29. Confirmar PO CD [fire_and_poll]
+    30. Aprovar PO CD [fire_and_poll]
+    31. Buscar picking CD
+    32. Auto-preencher lotes no picking CD
+    33. Aprovar quality checks CD
+    34. Validar picking CD [fire_and_poll]
+    35. Criar invoice CD [fire_and_poll]
+    36. Configurar + postar invoice CD [fire_and_poll]
+    37. Finalizar recebimento CD
 
 IMPORTANTE: Este service e chamado pelo job RQ, NAO diretamente pela rota.
 """
@@ -72,7 +95,7 @@ logger = logging.getLogger(__name__)
 
 
 class RecebimentoLfOdooService:
-    """Processa Recebimento LF completo no Odoo (26 etapas com checkpoint)."""
+    """Processa Recebimento LF completo no Odoo (37 etapas com checkpoint)."""
 
     # IDs fixos (conforme IDS_FIXOS.md)
     COMPANY_FB = 1
@@ -90,6 +113,11 @@ class RecebimentoLfOdooService:
     LOCATION_FB_ESTOQUE = 8        # FB/Estoque
     LOCATION_CD_ESTOQUE = 32       # CD/Estoque
     LOCATION_CLIENTES = 5          # Parceiros/Clientes
+
+    # Recebimento CD via DFe (Fase 7) — IDs fixos
+    TEAM_ID_CD = 119               # Lançamento Frete (mesmo da FB)
+    PAYMENT_TERM_CD = 2800         # Sem pagamento (CD)
+    PAYMENT_PROVIDER_ID_CD = None  # TODO: Preencher apos executar discovery_recebimento_cd.py
 
     # CFOPs de retorno (nao transferir para CD)
     CFOPS_RETORNO = ('1902', '5902')
@@ -186,9 +214,21 @@ class RecebimentoLfOdooService:
                 self._step_21_preencher_e_validar_saida_fb(odoo)
                 self._step_22_liberar_faturamento(odoo)
                 self._step_23_transmitir_nfe_transferencia(odoo)
-                self._step_24_obter_ou_criar_picking_entrada_cd(odoo)
-                self._step_25_preencher_lotes_e_validar_cd(odoo)
-                self._step_26_finalizar_transferencia(odoo)
+                # Fase 7: Recebimento CD via DFe (etapas 24-37)
+                self._step_24_extrair_dados_nf_transfer(odoo)
+                self._step_25_upload_dfe_cd(odoo)
+                self._step_26_configurar_dfe_cd(odoo)
+                self._step_27_gerar_po_cd(odoo)
+                self._step_28_configurar_po_cd(odoo)
+                self._step_29_confirmar_po_cd(odoo)
+                self._step_30_aprovar_po_cd(odoo)
+                self._step_31_buscar_picking_cd(odoo)
+                self._step_32_preencher_lotes_cd(odoo)
+                self._step_33_aprovar_qc_cd(odoo)
+                self._step_34_validar_picking_cd(odoo)
+                self._step_35_criar_invoice_cd(odoo)
+                self._step_36_configurar_postar_invoice_cd(odoo)
+                self._step_37_finalizar_recebimento_cd(odoo)
             except Exception as e_transfer:
                 # Transferencia falhou, mas recebimento FB ja esta OK
                 logger.error(
@@ -275,9 +315,21 @@ class RecebimentoLfOdooService:
             self._step_21_preencher_e_validar_saida_fb(odoo)
             self._step_22_liberar_faturamento(odoo)
             self._step_23_transmitir_nfe_transferencia(odoo)
-            self._step_24_obter_ou_criar_picking_entrada_cd(odoo)
-            self._step_25_preencher_lotes_e_validar_cd(odoo)
-            self._step_26_finalizar_transferencia(odoo)
+            # Fase 7: Recebimento CD via DFe (etapas 24-37)
+            self._step_24_extrair_dados_nf_transfer(odoo)
+            self._step_25_upload_dfe_cd(odoo)
+            self._step_26_configurar_dfe_cd(odoo)
+            self._step_27_gerar_po_cd(odoo)
+            self._step_28_configurar_po_cd(odoo)
+            self._step_29_confirmar_po_cd(odoo)
+            self._step_30_aprovar_po_cd(odoo)
+            self._step_31_buscar_picking_cd(odoo)
+            self._step_32_preencher_lotes_cd(odoo)
+            self._step_33_aprovar_qc_cd(odoo)
+            self._step_34_validar_picking_cd(odoo)
+            self._step_35_criar_invoice_cd(odoo)
+            self._step_36_configurar_postar_invoice_cd(odoo)
+            self._step_37_finalizar_recebimento_cd(odoo)
 
             rec = self._get_recebimento()
             return {
@@ -399,8 +451,12 @@ class RecebimentoLfOdooService:
             computed_fase = 4  # Invoice FB
         elif etapa <= 18:
             computed_fase = 5  # Finalizacao FB
+        elif etapa <= 23:
+            computed_fase = 6  # Transfer FB -> CD (saida)
+        elif etapa <= 37:
+            computed_fase = 7  # Recebimento CD (entrada via DFe)
         else:
-            computed_fase = 6  # Transfer FB -> CD
+            computed_fase = 7
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -682,9 +738,72 @@ class RecebimentoLfOdooService:
             )
             if tip:
                 tip_state = tip[0].get('state')
-                if tip_state == 'done' and rec.etapa_atual < 25:
-                    logger.info(f"  [Recovery] Transfer in picking state=done, etapa->25")
-                    rec.etapa_atual = 25
+                if tip_state == 'done' and rec.etapa_atual < 23:
+                    logger.info(f"  [Recovery] Transfer in picking state=done, etapa->23")
+                    rec.etapa_atual = 23
+                    mudou = True
+
+        # === Recovery Fase 7: Recebimento CD via DFe ===
+        if rec.odoo_cd_dfe_id:
+            cd_dfe = odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe', 'read',
+                [[rec.odoo_cd_dfe_id]],
+                {'fields': ['l10n_br_status', 'purchase_id']}
+            )
+            if cd_dfe:
+                cd_dfe_status = cd_dfe[0].get('l10n_br_status')
+                cd_purchase = cd_dfe[0].get('purchase_id')
+                if cd_purchase and not rec.odoo_cd_po_id:
+                    po_id = cd_purchase[0] if isinstance(cd_purchase, (list, tuple)) else cd_purchase
+                    rec.odoo_cd_po_id = po_id
+                    po_data = odoo.execute_kw(
+                        'purchase.order', 'read', [[po_id]], {'fields': ['name']}
+                    )
+                    if po_data:
+                        rec.odoo_cd_po_name = po_data[0].get('name')
+                    logger.info(f"  [Recovery] CD PO encontrado: {rec.odoo_cd_po_name} (ID={po_id})")
+                    mudou = True
+                if cd_dfe_status in ('04', '05') and rec.etapa_atual < 27:
+                    logger.info(f"  [Recovery] CD DFe status={cd_dfe_status}, etapa->27")
+                    rec.etapa_atual = 27
+                    mudou = True
+
+        if rec.odoo_cd_po_id:
+            cd_po = odoo.execute_kw(
+                'purchase.order', 'read',
+                [[rec.odoo_cd_po_id]],
+                {'fields': ['state', 'invoice_ids']}
+            )
+            if cd_po:
+                cd_po_state = cd_po[0].get('state')
+                if cd_po_state in ('purchase', 'done') and rec.etapa_atual < 30:
+                    logger.info(f"  [Recovery] CD PO state={cd_po_state}, etapa->30")
+                    rec.etapa_atual = 30
+                    mudou = True
+                # Recuperar invoice do CD se nao temos localmente
+                cd_inv_ids = cd_po[0].get('invoice_ids', [])
+                if cd_inv_ids and not rec.odoo_cd_invoice_id:
+                    inv_id = cd_inv_ids[-1]
+                    rec.odoo_cd_invoice_id = inv_id
+                    inv_data = odoo.execute_kw(
+                        'account.move', 'read', [[inv_id]], {'fields': ['name', 'state']}
+                    )
+                    if inv_data:
+                        rec.odoo_cd_invoice_name = inv_data[0].get('name')
+                    logger.info(f"  [Recovery] CD Invoice: {rec.odoo_cd_invoice_name} (ID={inv_id})")
+                    mudou = True
+
+        if rec.odoo_cd_invoice_id:
+            cd_inv = odoo.execute_kw(
+                'account.move', 'read',
+                [[rec.odoo_cd_invoice_id]],
+                {'fields': ['state']}
+            )
+            if cd_inv:
+                cd_inv_state = cd_inv[0].get('state')
+                if cd_inv_state == 'posted' and rec.etapa_atual < 36:
+                    logger.info(f"  [Recovery] CD Invoice state=posted, etapa->36")
+                    rec.etapa_atual = 36
                     mudou = True
 
         if mudou:
@@ -1577,9 +1696,9 @@ class RecebimentoLfOdooService:
                 f"  Nenhum produto acabado para transferir "
                 f"(total lotes processados={len(lotes_acabados)}, CFOP retorno filtrados)"
             )
-            # Pular toda a fase 6
+            # Pular toda a fase 6+7
             self._checkpoint(
-                etapa=26, fase=6,
+                etapa=37, fase=7,
                 transfer_status='sem_transferencia',
                 msg='Sem produtos acabados para transferir'
             )
@@ -2362,202 +2481,765 @@ class RecebimentoLfOdooService:
             msg=f'NF-e transfer {inv_name} transmitida'
         )
 
-    def _step_24_obter_ou_criar_picking_entrada_cd(self, odoo):
-        """
-        Etapa 24: Obter ou criar picking de entrada no CD.
+    # =================================================================
+    # FASE 7: Recebimento CD via DFe (etapas 24-37)
+    # =================================================================
 
-        Cenario A: Modulo inter-company pode ter auto-criado picking no CD.
-        Cenario B: Criar picking manualmente se nao existir.
+    def _step_24_extrair_dados_nf_transfer(self, odoo):
+        """
+        Etapa 24: Extrair XML, PDF e chave da invoice de transferencia (criada na etapa 23).
+
+        Estes dados serao usados para dar entrada via DFe no CD.
         """
         rec = self._get_recebimento()
         if rec.etapa_atual >= 24:
             return
 
-        logger.info(f"  Etapa 24/{rec.total_etapas}: Obtendo/criando picking entrada CD")
+        invoice_id = rec.odoo_transfer_invoice_id
+        if not invoice_id:
+            raise ValueError("odoo_transfer_invoice_id ausente — etapa 23 nao executou")
+
+        logger.info(f"  Etapa 24/{rec.total_etapas}: Extraindo dados NF transfer {invoice_id}")
         self._atualizar_redis(
-            rec.id, 6, 24, rec.total_etapas, 'Criando entrada CD...'
+            rec.id, 7, 24, rec.total_etapas, 'Extraindo XML da transferencia...'
         )
 
-        # Idempotencia: buscar picking existente no CD
-        origin_ref = f'Transfer LF NF {rec.numero_nf}'
-        existing = odoo.execute_kw(
-            'stock.picking', 'search_read',
-            [[
-                ['company_id', '=', self.COMPANY_CD],
-                ['state', '!=', 'cancel'],
-                ['picking_type_code', '=', 'incoming'],
-                '|',
-                ['origin', 'ilike', origin_ref],
-                ['origin', 'ilike', rec.odoo_transfer_out_picking_name or 'IMPOSSIBLE'],
-            ]],
-            {'fields': ['id', 'name', 'state'], 'limit': 1, 'order': 'id desc'}
+        inv_data = odoo.execute_kw(
+            'account.move', 'read',
+            [[invoice_id]],
+            {'fields': [
+                'l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_chave_nf',
+                'name', 'state', 'l10n_br_situacao_nf',
+            ]}
         )
+        if not inv_data:
+            raise ValueError(f"Invoice transfer {invoice_id} nao encontrada")
 
-        if existing:
-            picking_id = existing[0]['id']
-            logger.info(
-                f"  Picking entrada CD ja existe: {existing[0]['name']} "
-                f"(ID={picking_id}, state={existing[0]['state']})"
+        inv = inv_data[0]
+        xml_b64 = inv.get('l10n_br_xml_dfe')
+        pdf_b64 = inv.get('l10n_br_pdf_dfe')
+        chave = inv.get('l10n_br_chave_nf')
+
+        if not chave or len(str(chave)) != 44:
+            raise ValueError(
+                f"Invoice transfer {invoice_id}: chave NF-e invalida "
+                f"(chave='{chave}'). NF-e pode nao ter sido transmitida."
             )
-            self._checkpoint(
-                etapa=24,
-                odoo_transfer_in_picking_id=picking_id,
-                msg=f"Picking CD {existing[0]['name']} encontrado"
+
+        if not xml_b64:
+            raise ValueError(
+                f"Invoice transfer {invoice_id}: XML (l10n_br_xml_dfe) vazio. "
+                f"NF-e pode nao ter sido transmitida."
             )
-            return
 
-        # Cenario B: Criar picking manualmente
-        lotes_transfer = self._get_transfer_lotes()
-        move_vals = []
-        for lote in lotes_transfer:
-            move_vals.append((0, 0, {
-                'name': lote.odoo_product_name or f'Product {lote.odoo_product_id}',
-                'product_id': lote.odoo_product_id,
-                'product_uom_qty': float(lote.quantidade),
-                'product_uom': self._get_product_uom(odoo, lote.odoo_product_id),
-                'location_id': self.LOCATION_CLIENTES,
-                'location_dest_id': self.LOCATION_CD_ESTOQUE,
-            }))
+        # Armazenar em variaveis de instancia (transit entre etapas, nao persiste em DB)
+        self._transfer_xml_b64 = xml_b64
+        self._transfer_pdf_b64 = pdf_b64
+        self._transfer_chave = str(chave)
 
-        if not move_vals:
-            raise ValueError("Nenhum move para criar no picking de entrada CD")
-
-        # Buscar partner da FB na company CD
-        partner_fb_cd = odoo.execute_kw(
-            'res.partner', 'search',
-            [[
-                ['l10n_br_cnpj', '=', '61724241000178'],
-                ['company_id', 'in', [self.COMPANY_CD, False]],
-            ]],
-            {'limit': 1}
-        )
-        partner_id = partner_fb_cd[0] if partner_fb_cd else self.PARTNER_CD_IN_FB
-
-        picking_vals = {
-            'picking_type_id': self.PICKING_TYPE_IN_CD,
-            'location_id': self.LOCATION_CLIENTES,
-            'location_dest_id': self.LOCATION_CD_ESTOQUE,
-            'partner_id': partner_id,
-            'company_id': self.COMPANY_CD,
-            'origin': origin_ref,
-            'scheduled_date': date.today().strftime('%Y-%m-%d %H:%M:%S'),
-            'move_ids': move_vals,
-        }
-
-        picking_id = odoo.create('stock.picking', picking_vals)
-        logger.info(f"  Picking entrada CD criado: ID={picking_id}")
-
-        self._checkpoint(
-            etapa=24,
-            odoo_transfer_in_picking_id=picking_id,
-            msg=f'Picking CD criado (ID={picking_id})'
+        logger.info(
+            f"  Invoice {inv.get('name')}: chave={chave}, "
+            f"XML={'OK' if xml_b64 else 'VAZIO'}, "
+            f"PDF={'OK' if pdf_b64 else 'VAZIO'}"
         )
 
-    def _step_25_preencher_lotes_e_validar_cd(self, odoo):
+        self._checkpoint(etapa=24, msg=f'XML/chave extraidos da NF transfer')
+
+    def _step_25_upload_dfe_cd(self, odoo):
         """
-        Etapa 25: Preencher lotes no CD e validar picking.
+        Etapa 25: Encontrar DFe no CD, upload XML/PDF, e processar.
 
-        1. action_confirm + action_assign
-        2. Para cada produto: buscar/criar stock.lot na company 4
-        3. Preencher move_lines com lote + quantidade
-        4. Aprovar quality checks
-        5. button_validate [fire_and_poll]
+        Fluxo:
+        1. Buscar DFe no CD por chave
+        2. Se nao encontrar, criar DFe manual via upload
+        3. Garantir XML/PDF preenchidos
+        4. action_processar_arquivo_manual
+        5. Poll ate status '04' (PO Vinculado) ou '03' (Confirmado)
         """
         rec = self._get_recebimento()
         if rec.etapa_atual >= 25:
             return
 
-        picking_id = rec.odoo_transfer_in_picking_id
-        if not picking_id:
-            raise ValueError("odoo_transfer_in_picking_id ausente — etapa 24 nao executou")
+        # Recuperar dados da etapa 24 (ou re-ler da invoice)
+        chave = getattr(self, '_transfer_chave', None)
+        xml_b64 = getattr(self, '_transfer_xml_b64', None)
+        pdf_b64 = getattr(self, '_transfer_pdf_b64', None)
 
-        logger.info(f"  Etapa 25/{rec.total_etapas}: Preenchendo lotes e validando CD")
+        if not chave or not xml_b64:
+            # Re-ler da invoice (resume apos crash)
+            inv_data = odoo.execute_kw(
+                'account.move', 'read',
+                [[rec.odoo_transfer_invoice_id]],
+                {'fields': ['l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_chave_nf']}
+            )
+            if inv_data:
+                chave = str(inv_data[0].get('l10n_br_chave_nf', ''))
+                xml_b64 = inv_data[0].get('l10n_br_xml_dfe')
+                pdf_b64 = inv_data[0].get('l10n_br_pdf_dfe')
+            if not chave or not xml_b64:
+                raise ValueError("Dados da NF transfer nao disponiveis (chave/XML)")
+
+        logger.info(f"  Etapa 25/{rec.total_etapas}: Upload DFe CD (chave={chave[:20]}...)")
         self._atualizar_redis(
-            rec.id, 6, 25, rec.total_etapas, 'Recebendo no CD...'
+            rec.id, 7, 25, rec.total_etapas, 'Processando DFe no CD...'
         )
 
-        # Verificar state
+        # 1. Buscar DFe existente no CD por chave
+        existing_dfe = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe', 'search_read',
+            [[
+                ['protnfe_infnfe_chnfe', '=', chave],
+                ['company_id', '=', self.COMPANY_CD],
+            ]],
+            {'fields': ['id', 'l10n_br_status', 'purchase_id'], 'limit': 1}
+        )
+
+        dfe_id = None
+        if existing_dfe:
+            dfe_id = existing_dfe[0]['id']
+            dfe_status = existing_dfe[0].get('l10n_br_status')
+            purchase = existing_dfe[0].get('purchase_id')
+            logger.info(
+                f"  DFe CD encontrado: ID={dfe_id}, status={dfe_status}, "
+                f"purchase={purchase}"
+            )
+            # Se ja tem PO vinculado, pular processamento
+            if purchase and dfe_status in ('04', '05'):
+                logger.info(f"  DFe CD ja processado com PO vinculado")
+                self._checkpoint(
+                    etapa=25,
+                    odoo_cd_dfe_id=dfe_id,
+                    msg=f'DFe CD {dfe_id} ja processado'
+                )
+                return
+
+        if not dfe_id:
+            # 2. Buscar DFe recente sem chave na company CD (pode ser upload pendente)
+            # Ou buscar pelo numero da NF
+            numero_nf = rec.numero_nf
+            if numero_nf:
+                dfe_by_nf = odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe', 'search_read',
+                    [[
+                        ['nfe_infnfe_ide_nnf', '=', numero_nf],
+                        ['company_id', '=', self.COMPANY_CD],
+                        ['l10n_br_status', 'in', ['01', '02', '03']],
+                    ]],
+                    {'fields': ['id', 'l10n_br_status'], 'limit': 1, 'order': 'id desc'}
+                )
+                if dfe_by_nf:
+                    dfe_id = dfe_by_nf[0]['id']
+                    logger.info(f"  DFe CD encontrado por NF {numero_nf}: ID={dfe_id}")
+
+        if not dfe_id:
+            # 3. Criar DFe via upload de XML
+            logger.info(f"  DFe CD nao encontrado, criando via upload XML...")
+            dfe_id = odoo.create('l10n_br_ciel_it_account.dfe', {
+                'company_id': self.COMPANY_CD,
+                'l10n_br_xml_dfe': xml_b64,
+            })
+            logger.info(f"  DFe CD criado: ID={dfe_id}")
+
+        # 4. Garantir XML preenchido
+        dfe_check = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe', 'read',
+            [[dfe_id]],
+            {'fields': ['l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_status']}
+        )
+        if dfe_check and not dfe_check[0].get('l10n_br_xml_dfe'):
+            odoo.write('l10n_br_ciel_it_account.dfe', [dfe_id], {
+                'l10n_br_xml_dfe': xml_b64,
+            })
+            logger.info(f"  XML uploaded para DFe CD {dfe_id}")
+
+        if pdf_b64 and dfe_check and not dfe_check[0].get('l10n_br_pdf_dfe'):
+            odoo.write('l10n_br_ciel_it_account.dfe', [dfe_id], {
+                'l10n_br_pdf_dfe': pdf_b64,
+            })
+            logger.info(f"  PDF uploaded para DFe CD {dfe_id}")
+
+        # 5. action_processar_arquivo_manual [fire_and_poll]
+        current_status = dfe_check[0].get('l10n_br_status') if dfe_check else '01'
+        if current_status not in ('04', '05'):
+            logger.info(f"  Chamando action_processar_arquivo_manual no DFe CD {dfe_id}...")
+
+            def fire_processar():
+                return odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe',
+                    'action_processar_arquivo_manual',
+                    [[dfe_id]],
+                    timeout_override=self.FIRE_TIMEOUT
+                )
+
+            def poll_processar():
+                d = odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe', 'read',
+                    [[dfe_id]],
+                    {'fields': ['l10n_br_status', 'purchase_id']}
+                )
+                if d and d[0].get('l10n_br_status') in ('03', '04', '05'):
+                    return d[0]
+                return None
+
+            self._fire_and_poll(
+                odoo, fire_processar, poll_processar,
+                'Processar DFe CD'
+            )
+
+        self._checkpoint(
+            etapa=25,
+            odoo_cd_dfe_id=dfe_id,
+            msg=f'DFe CD {dfe_id} processado'
+        )
+
+    def _step_26_configurar_dfe_cd(self, odoo):
+        """
+        Etapa 26: Configurar data_entrada no DFe CD.
+
+        Similar a etapa 3 do fluxo FB, mas para o CD.
+        Nao sobrescreve tipo_pedido se ja configurado pelo processamento XML.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 26:
+            return
+
+        dfe_id = rec.odoo_cd_dfe_id
+        if not dfe_id:
+            raise ValueError("odoo_cd_dfe_id ausente — etapa 25 nao executou")
+
+        logger.info(f"  Etapa 26/{rec.total_etapas}: Configurando DFe CD {dfe_id}")
+        self._atualizar_redis(
+            rec.id, 7, 26, rec.total_etapas, 'Configurando DFe CD...'
+        )
+
+        # Idempotencia: verificar se ja configurado
+        dfe_data = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe', 'read',
+            [[dfe_id]],
+            {'fields': ['l10n_br_data_entrada', 'l10n_br_tipo_pedido']}
+        )
+        if dfe_data:
+            data_entrada = dfe_data[0].get('l10n_br_data_entrada')
+            tipo_pedido = dfe_data[0].get('l10n_br_tipo_pedido')
+            if data_entrada:
+                logger.info(
+                    f"  DFe CD {dfe_id}: ja configurado "
+                    f"(data={data_entrada}, tipo={tipo_pedido})"
+                )
+                self._checkpoint(etapa=26, msg='DFe CD ja configurado')
+                return
+
+        hoje = date.today().strftime('%Y-%m-%d')
+        values = {'l10n_br_data_entrada': hoje}
+
+        # Setar tipo_pedido apenas se nao preenchido
+        if dfe_data and not dfe_data[0].get('l10n_br_tipo_pedido'):
+            values['l10n_br_tipo_pedido'] = 'serv-industrializacao'
+
+        self._write_and_verify(
+            odoo, 'l10n_br_ciel_it_account.dfe', [dfe_id], values,
+            'Configurar DFe CD'
+        )
+
+        logger.info(f"  DFe CD {dfe_id} configurado: data_entrada={hoje}")
+        self._checkpoint(etapa=26, msg='DFe CD configurado')
+
+    def _step_27_gerar_po_cd(self, odoo):
+        """
+        Etapa 27: Gerar PO a partir do DFe CD via action_gerar_po_dfe [fire_and_poll].
+
+        Mesmo padrao da etapa 4 do fluxo FB.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 27:
+            return
+
+        dfe_id = rec.odoo_cd_dfe_id
+        if not dfe_id:
+            raise ValueError("odoo_cd_dfe_id ausente — etapa 26 nao executou")
+
+        logger.info(
+            f"  Etapa 27/{rec.total_etapas}: Gerando PO CD "
+            f"(fire_and_poll, fire_timeout={self.FIRE_TIMEOUT}s)"
+        )
+        self._atualizar_redis(
+            rec.id, 7, 27, rec.total_etapas, 'Gerando PO no CD...'
+        )
+
+        # Idempotencia: verificar se DFe ja tem purchase_id
+        dfe_data = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe', 'read',
+            [[dfe_id]],
+            {'fields': ['purchase_id']}
+        )
+        if dfe_data and dfe_data[0].get('purchase_id'):
+            po_ref = dfe_data[0]['purchase_id']
+            po_id = po_ref[0] if isinstance(po_ref, (list, tuple)) else po_ref
+            logger.info(f"  DFe CD {dfe_id} ja tem PO (ID={po_id}), pulando geracao")
+            self._checkpoint(etapa=27, odoo_cd_po_id=po_id, msg='PO CD ja existia')
+            return
+
+        def fire_gerar_po():
+            return odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe',
+                'action_gerar_po_dfe',
+                [[dfe_id]],
+                {'context': {'validate_analytic': True}},
+                timeout_override=self.FIRE_TIMEOUT
+            )
+
+        def poll_gerar_po():
+            dfe_check = odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe', 'read',
+                [[dfe_id]],
+                {'fields': ['purchase_id']}
+            )
+            if dfe_check and dfe_check[0].get('purchase_id'):
+                return dfe_check[0]['purchase_id']
+            po_search = odoo.execute_kw(
+                'purchase.order', 'search_read',
+                [[
+                    ['dfe_id', '=', dfe_id],
+                    ['state', '!=', 'cancel'],
+                    ['company_id', '=', self.COMPANY_CD],
+                ]],
+                {'fields': ['id', 'name', 'state'], 'limit': 1, 'order': 'id desc'}
+            )
+            if po_search:
+                return po_search[0]
+            return None
+
+        po_ref = self._fire_and_poll(odoo, fire_gerar_po, poll_gerar_po, 'Gerar PO CD')
+
+        po_id = None
+        if isinstance(po_ref, (list, tuple)):
+            po_id = po_ref[0]
+        elif isinstance(po_ref, dict):
+            po_id = po_ref.get('res_id') or po_ref.get('id')
+        elif isinstance(po_ref, int):
+            po_id = po_ref
+
+        if not po_id:
+            raise ValueError("Purchase Order CD nao foi criado apos action_gerar_po_dfe")
+
+        self._checkpoint(etapa=27, odoo_cd_po_id=po_id, msg='PO CD gerado')
+
+    def _step_28_configurar_po_cd(self, odoo):
+        """
+        Etapa 28: Extrair e configurar PO do CD (team, payment, picking_type).
+
+        Combina etapas 5+6 do fluxo FB, adaptado para IDs do CD.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 28:
+            return
+
+        po_id = rec.odoo_cd_po_id
+        if not po_id:
+            raise ValueError("odoo_cd_po_id ausente — etapa 27 nao executou")
+
+        logger.info(f"  Etapa 28/{rec.total_etapas}: Configurando PO CD {po_id}")
+        self._atualizar_redis(
+            rec.id, 7, 28, rec.total_etapas, 'Configurando PO CD...'
+        )
+
+        # Extrair nome do PO
+        po_data = odoo.execute_kw(
+            'purchase.order', 'read',
+            [[po_id]],
+            {'fields': ['name', 'state', 'team_id', 'company_id']}
+        )
+        if not po_data:
+            raise ValueError(f"PO CD {po_id} nao encontrado no Odoo")
+
+        po_name = po_data[0]['name']
+
+        # Verificar se team ja configurado (idempotencia)
+        team_id = po_data[0].get('team_id')
+        if isinstance(team_id, (list, tuple)):
+            team_id = team_id[0]
+        team_configured = (team_id == self.TEAM_ID_CD)
+
+        if not team_configured:
+            values = {
+                'team_id': self.TEAM_ID_CD,
+                'payment_term_id': self.PAYMENT_TERM_CD,
+                'company_id': self.COMPANY_CD,
+                'picking_type_id': self.PICKING_TYPE_IN_CD,
+            }
+            # Adicionar payment_provider_id apenas se configurado
+            if self.PAYMENT_PROVIDER_ID_CD:
+                values['payment_provider_id'] = self.PAYMENT_PROVIDER_ID_CD
+
+            self._write_and_verify(
+                odoo, 'purchase.order', [po_id], values,
+                'Configurar PO CD',
+                critical_fields=['team_id', 'payment_term_id', 'picking_type_id', 'company_id']
+            )
+        else:
+            logger.info(f"  PO CD {po_id}: team ja configurado (team_id={self.TEAM_ID_CD})")
+
+        self._checkpoint(
+            etapa=28,
+            odoo_cd_po_name=po_name,
+            msg=f'PO CD {po_name} configurado'
+        )
+
+    def _step_29_confirmar_po_cd(self, odoo):
+        """
+        Etapa 29: Confirmar PO CD (button_confirm) via fire_and_poll.
+
+        Mesmo padrao da etapa 7 do fluxo FB.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 29:
+            return
+
+        po_id = rec.odoo_cd_po_id
+        logger.info(f"  Etapa 29/{rec.total_etapas}: Confirmando PO CD (fire_and_poll)")
+        self._atualizar_redis(
+            rec.id, 7, 29, rec.total_etapas, 'Confirmando PO CD...'
+        )
+
+        # Idempotencia: verificar state
+        po_data = odoo.execute_kw(
+            'purchase.order', 'read',
+            [[po_id]],
+            {'fields': ['state']}
+        )
+        if po_data and po_data[0].get('state') != 'draft':
+            logger.info(f"  PO CD {po_id}: state={po_data[0]['state']}, ja confirmado")
+            self._checkpoint(etapa=29, msg=f"PO CD state={po_data[0]['state']}")
+            return
+
+        def fire_confirmar():
+            return odoo.execute_kw(
+                'purchase.order', 'button_confirm',
+                [[po_id]],
+                {'context': {'validate_analytic': True}},
+                timeout_override=self.FIRE_TIMEOUT
+            )
+
+        def poll_confirmar():
+            po = odoo.execute_kw(
+                'purchase.order', 'read',
+                [[po_id]],
+                {'fields': ['state']}
+            )
+            if po and po[0].get('state') != 'draft':
+                return po[0]['state']
+            return None
+
+        self._fire_and_poll(odoo, fire_confirmar, poll_confirmar, 'Confirmar PO CD')
+        self._checkpoint(etapa=29, msg='PO CD confirmado')
+
+    def _step_30_aprovar_po_cd(self, odoo):
+        """
+        Etapa 30: Aprovar PO CD (button_approve) via fire_and_poll, se necessario.
+
+        Mesmo padrao da etapa 8 do fluxo FB.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 30:
+            return
+
+        po_id = rec.odoo_cd_po_id
+        logger.info(f"  Etapa 30/{rec.total_etapas}: Verificando aprovacao PO CD")
+        self._atualizar_redis(
+            rec.id, 7, 30, rec.total_etapas, 'Aprovando PO CD...'
+        )
+
+        po_data = odoo.execute_kw(
+            'purchase.order', 'read',
+            [[po_id]],
+            {'fields': ['state']}
+        )
+
+        if not po_data or po_data[0].get('state') != 'to approve':
+            state = po_data[0].get('state') if po_data else 'unknown'
+            logger.info(f"  PO CD {po_id}: state={state}, aprovacao nao necessaria")
+            self._checkpoint(etapa=30, msg=f'PO CD state={state}')
+            return
+
+        def fire_aprovar():
+            return odoo.execute_kw(
+                'purchase.order', 'button_approve',
+                [[po_id]],
+                timeout_override=self.FIRE_TIMEOUT
+            )
+
+        def poll_aprovar():
+            po = odoo.execute_kw(
+                'purchase.order', 'read',
+                [[po_id]],
+                {'fields': ['state']}
+            )
+            if po and po[0].get('state') != 'to approve':
+                return po[0]['state']
+            return None
+
+        try:
+            self._fire_and_poll(odoo, fire_aprovar, poll_aprovar, 'Aprovar PO CD')
+            logger.info(f"  PO CD {po_id} aprovado")
+        except Exception as e:
+            logger.warning(f"  Erro ao aprovar PO CD {po_id}: {e}")
+
+        self._checkpoint(etapa=30, msg='PO CD aprovado')
+
+    def _step_31_buscar_picking_cd(self, odoo):
+        """
+        Etapa 31: Buscar picking gerado pelo PO do CD.
+
+        Mesmo padrao da etapa 9 do fluxo FB.
+        Reutiliza campos odoo_transfer_in_picking_* (mesmo conceito: picking de entrada no CD).
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 31:
+            return
+
+        po_id = rec.odoo_cd_po_id
+        logger.info(f"  Etapa 31/{rec.total_etapas}: Buscando picking do PO CD {po_id}")
+        self._atualizar_redis(
+            rec.id, 7, 31, rec.total_etapas, 'Buscando picking CD...'
+        )
+
+        picking = None
+        max_tentativas = 5
+        espera = 8
+        for tentativa in range(max_tentativas):
+            pickings = odoo.execute_kw(
+                'stock.picking', 'search_read',
+                [[
+                    ['purchase_id', '=', po_id],
+                    ['picking_type_code', '=', 'incoming'],
+                    ['company_id', '=', self.COMPANY_CD],
+                ]],
+                {
+                    'fields': ['id', 'name', 'state'],
+                    'limit': 1,
+                    'order': 'id desc',
+                }
+            )
+            if pickings:
+                picking = pickings[0]
+                break
+            if tentativa < max_tentativas - 1:
+                logger.info(
+                    f"  Picking CD nao encontrado, tentativa {tentativa + 1}/{max_tentativas}, "
+                    f"aguardando {espera}s..."
+                )
+                time.sleep(espera)
+
+        if not picking:
+            raise ValueError(f"Picking nao encontrado para PO CD {po_id}")
+
+        picking_id = picking['id']
+        picking_name = picking['name']
+        logger.info(
+            f"  Picking CD encontrado: {picking_name} "
+            f"(ID={picking_id}, state={picking['state']})"
+        )
+
+        # Se nao assigned, tentar forcar
+        if picking['state'] not in ('assigned', 'done'):
+            try:
+                odoo.execute_kw(
+                    'stock.picking', 'action_assign',
+                    [[picking_id]],
+                    timeout_override=90
+                )
+                logger.info(f"  action_assign executado em {picking_name}")
+            except Exception as e:
+                if 'cannot marshal None' not in str(e):
+                    logger.warning(f"  action_assign falhou: {e}")
+
+        self._checkpoint(
+            etapa=31,
+            odoo_transfer_in_picking_id=picking_id,
+            odoo_transfer_in_picking_name=picking_name,
+            msg=f'Picking CD {picking_name} encontrado'
+        )
+
+    def _step_32_preencher_lotes_cd(self, odoo):
+        """
+        Etapa 32: Auto-preencher lotes no picking CD.
+
+        Dados de origem: RecebimentoLfLote com tipo='manual' e CFOP nao-retorno.
+        Reutiliza _resolver_lote_cd() para criar/buscar stock.lot na company CD.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 32:
+            return
+
+        picking_id = rec.odoo_transfer_in_picking_id
+        if not picking_id:
+            raise ValueError("odoo_transfer_in_picking_id ausente — etapa 31 nao executou")
+
+        logger.info(f"  Etapa 32/{rec.total_etapas}: Preenchendo lotes no picking CD")
+        self._atualizar_redis(
+            rec.id, 7, 32, rec.total_etapas, 'Preenchendo lotes CD...'
+        )
+
+        # Verificar state do picking
         picking_data = odoo.execute_kw(
             'stock.picking', 'read',
             [[picking_id]],
             {'fields': ['state', 'name']}
         )
-        if not picking_data:
-            raise ValueError(f"Transfer in picking {picking_id} nao encontrado")
-
-        picking_state = picking_data[0].get('state')
-        picking_name = picking_data[0].get('name', '')
-
-        if picking_state == 'done':
-            logger.info(f"  Picking CD {picking_name} ja validado (state=done)")
-            self._checkpoint(
-                etapa=25,
-                odoo_transfer_in_picking_name=picking_name,
-                msg=f'Picking CD {picking_name} ja done'
-            )
+        if picking_data and picking_data[0].get('state') == 'done':
+            logger.info(f"  Picking CD {picking_id} ja validado (state=done), pulando lotes")
+            self._checkpoint(etapa=32, msg='Picking CD ja done')
             return
 
-        # 1. Confirmar se draft
-        if picking_state == 'draft':
-            try:
-                odoo.execute_kw(
-                    'stock.picking', 'action_confirm', [[picking_id]],
-                    timeout_override=90
-                )
-            except Exception as e:
-                if 'cannot marshal None' not in str(e):
-                    logger.warning(f"  action_confirm CD falhou: {e}")
-
-        # 2. Reservar
-        try:
-            odoo.execute_kw(
-                'stock.picking', 'action_assign', [[picking_id]],
-                timeout_override=90
-            )
-        except Exception as e:
-            if 'cannot marshal None' not in str(e):
-                logger.warning(f"  action_assign CD falhou: {e}")
-
-        # 3. Preencher lotes nos move_lines
+        # Buscar move_lines do picking
         move_lines = odoo.execute_kw(
             'stock.move.line', 'search_read',
             [[['picking_id', '=', picking_id]]],
-            {'fields': ['id', 'product_id', 'quantity', 'lot_id', 'move_id']}
+            {
+                'fields': [
+                    'id', 'product_id', 'quantity', 'lot_id', 'move_id',
+                    'product_uom_id', 'location_id', 'location_dest_id',
+                ],
+            }
         )
 
+        # Buscar lotes de produto acabado para transferencia
         lotes_transfer = self._get_transfer_lotes()
+        if not lotes_transfer:
+            logger.info(f"  Nenhum lote de transferencia encontrado")
+            self._checkpoint(etapa=32, msg='Sem lotes para preencher')
+            return
+
+        # Agrupar lotes por product_id
         lotes_by_product = {}
         for lt in lotes_transfer:
             lotes_by_product.setdefault(lt.odoo_product_id, []).append(lt)
 
+        # Indexar move_lines por product_id
+        lines_by_product = {}
         for ml in move_lines:
             pid = ml['product_id'][0] if ml.get('product_id') else None
-            if not pid or pid not in lotes_by_product:
-                continue
+            if pid:
+                lines_by_product.setdefault(pid, []).append(ml)
 
-            lote_info = lotes_by_product[pid][0]
+        for product_id, lotes_produto in lotes_by_product.items():
+            existing_lines = lines_by_product.get(product_id, [])
 
-            # Buscar/criar stock.lot na company CD
-            lot_id_cd = self._resolver_lote_cd(odoo, lote_info)
+            for i, lote_info in enumerate(lotes_produto):
+                # Buscar/criar stock.lot na company CD
+                lot_id_cd = self._resolver_lote_cd(odoo, lote_info)
 
-            write_data = {'quantity': float(lote_info.quantidade)}
-            if lot_id_cd:
-                write_data['lot_id'] = lot_id_cd
-            elif lote_info.lote_nome:
-                write_data['lot_name'] = lote_info.lote_nome
+                write_data = {'quantity': float(lote_info.quantidade)}
+                if lot_id_cd:
+                    write_data['lot_id'] = lot_id_cd
+                elif lote_info.lote_nome:
+                    write_data['lot_name'] = lote_info.lote_nome
 
-            odoo.write('stock.move.line', ml['id'], write_data)
-            logger.debug(
-                f"    CD Move line {ml['id']}: qty={lote_info.quantidade}, "
-                f"lot_cd={lot_id_cd or lote_info.lote_nome}"
-            )
+                if i == 0 and existing_lines:
+                    # Primeira entrada: atualizar line existente
+                    line = existing_lines[0]
+                    odoo.write('stock.move.line', line['id'], write_data)
+                    logger.debug(
+                        f"    CD Move line {line['id']}: qty={lote_info.quantidade}, "
+                        f"lot_cd={lot_id_cd or lote_info.lote_nome}"
+                    )
+                else:
+                    # Entradas adicionais: criar nova line
+                    ref_line = existing_lines[0] if existing_lines else None
+                    if not ref_line:
+                        logger.warning(
+                            f"    Sem line de referencia para produto {product_id}, "
+                            f"pulando lote '{lote_info.lote_nome}'"
+                        )
+                        continue
+
+                    nova_line_data = {
+                        'move_id': ref_line['move_id'][0] if ref_line.get('move_id') else None,
+                        'picking_id': picking_id,
+                        'product_id': product_id,
+                        'product_uom_id': (
+                            ref_line['product_uom_id'][0]
+                            if ref_line.get('product_uom_id')
+                            else None
+                        ),
+                        'location_id': (
+                            ref_line['location_id'][0]
+                            if ref_line.get('location_id')
+                            else None
+                        ),
+                        'location_dest_id': (
+                            ref_line['location_dest_id'][0]
+                            if ref_line.get('location_dest_id')
+                            else None
+                        ),
+                    }
+                    nova_line_data.update(write_data)
+                    nova_line_id = odoo.create('stock.move.line', nova_line_data)
+                    logger.debug(
+                        f"    CD nova line {nova_line_id}: qty={lote_info.quantidade}, "
+                        f"lot_cd={lot_id_cd or lote_info.lote_nome}"
+                    )
 
         commit_with_retry(db.session)
+        self._checkpoint(etapa=32, msg='Lotes CD preenchidos')
 
-        # 4. Aprovar quality checks
+    def _step_33_aprovar_qc_cd(self, odoo):
+        """
+        Etapa 33: Aprovar quality checks do picking CD.
+
+        Mesmo padrao da etapa 11.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 33:
+            return
+
+        picking_id = rec.odoo_transfer_in_picking_id
+        logger.info(f"  Etapa 33/{rec.total_etapas}: Aprovando quality checks CD")
+        self._atualizar_redis(
+            rec.id, 7, 33, rec.total_etapas, 'Aprovando quality checks CD...'
+        )
+
+        # Verificar state do picking
+        picking_data = odoo.execute_kw(
+            'stock.picking', 'read',
+            [[picking_id]],
+            {'fields': ['state']}
+        )
+        if picking_data and picking_data[0].get('state') == 'done':
+            logger.info(f"  Picking CD {picking_id} ja done, pulando quality checks")
+            self._checkpoint(etapa=33, msg='Picking CD ja done')
+            return
+
         self._aprovar_quality_checks(odoo, picking_id)
+        self._checkpoint(etapa=33, msg='Quality checks CD aprovados')
 
-        # 5. Validar picking [fire_and_poll]
+    def _step_34_validar_picking_cd(self, odoo):
+        """
+        Etapa 34: Validar picking CD (button_validate) via fire_and_poll.
+
+        Mesmo padrao da etapa 12 do fluxo FB.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 34:
+            return
+
+        picking_id = rec.odoo_transfer_in_picking_id
+        logger.info(f"  Etapa 34/{rec.total_etapas}: Validando picking CD (fire_and_poll)")
+        self._atualizar_redis(
+            rec.id, 7, 34, rec.total_etapas, 'Validando picking CD...'
+        )
+
+        # Idempotencia
+        picking_data = odoo.execute_kw(
+            'stock.picking', 'read',
+            [[picking_id]],
+            {'fields': ['state']}
+        )
+        if picking_data and picking_data[0].get('state') == 'done':
+            logger.info(f"  Picking CD {picking_id}: ja validado (state=done)")
+            self._checkpoint(etapa=34, msg='Picking CD ja validado')
+            return
+
         def fire_validar():
             return odoo.execute_kw(
                 'stock.picking', 'button_validate',
@@ -2573,20 +3255,208 @@ class RecebimentoLfOdooService:
             p = odoo.execute_kw(
                 'stock.picking', 'read',
                 [[picking_id]],
-                {'fields': ['state', 'name']}
+                {'fields': ['state']}
             )
             if p and p[0].get('state') == 'done':
-                return p[0]
+                return 'done'
             return None
 
-        result = self._fire_and_poll(odoo, fire_validar, poll_validar, 'Validar Entrada CD')
-        final_name = result.get('name', picking_name) if isinstance(result, dict) else picking_name
-        logger.info(f"  Picking CD {final_name} validado (state=done)")
+        self._fire_and_poll(odoo, fire_validar, poll_validar, 'Validar Picking CD')
+        logger.info(f"  Picking CD {picking_id} validado (state=done)")
+        self._checkpoint(etapa=34, msg='Picking CD validado')
+
+    def _step_35_criar_invoice_cd(self, odoo):
+        """
+        Etapa 35: Criar invoice a partir do PO CD via fire_and_poll.
+
+        Mesmo padrao da etapa 13 do fluxo FB.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 35:
+            return
+
+        po_id = rec.odoo_cd_po_id
+        logger.info(f"  Etapa 35/{rec.total_etapas}: Criando invoice CD (fire_and_poll)")
+        self._atualizar_redis(
+            rec.id, 7, 35, rec.total_etapas, 'Criando fatura CD...'
+        )
+
+        # Idempotencia: verificar se PO ja tem invoice
+        po_data = odoo.execute_kw(
+            'purchase.order', 'read',
+            [[po_id]],
+            {'fields': ['invoice_ids']}
+        )
+        existing_ids = po_data[0].get('invoice_ids', []) if po_data else []
+        if existing_ids:
+            invoice_id = existing_ids[-1]
+            logger.info(f"  PO CD {po_id} ja tem invoice (ID={invoice_id})")
+            self._checkpoint(etapa=35, odoo_cd_invoice_id=invoice_id, msg='Invoice CD ja existia')
+            return
+
+        def fire_criar():
+            return odoo.execute_kw(
+                'purchase.order', 'action_create_invoice',
+                [[po_id]],
+                timeout_override=self.FIRE_TIMEOUT
+            )
+
+        def poll_criar():
+            po = odoo.execute_kw(
+                'purchase.order', 'read',
+                [[po_id]],
+                {'fields': ['invoice_ids']}
+            )
+            ids = po[0].get('invoice_ids', []) if po else []
+            if ids:
+                return ids[-1]
+            return None
+
+        invoice_id = self._fire_and_poll(odoo, fire_criar, poll_criar, 'Criar Invoice CD')
+
+        if isinstance(invoice_id, dict):
+            invoice_id = invoice_id.get('res_id') or invoice_id.get('id')
+
+        if not invoice_id:
+            raise ValueError(f"Invoice nao foi criada para PO CD {po_id}")
+
+        self._checkpoint(etapa=35, odoo_cd_invoice_id=invoice_id, msg='Invoice CD criada')
+
+    def _step_36_configurar_postar_invoice_cd(self, odoo):
+        """
+        Etapa 36: Configurar e postar invoice CD.
+
+        Combina etapas 14-16 do fluxo FB (extrair, configurar, postar).
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 36:
+            return
+
+        invoice_id = rec.odoo_cd_invoice_id
+        if not invoice_id:
+            raise ValueError("odoo_cd_invoice_id ausente — etapa 35 nao executou")
+
+        logger.info(
+            f"  Etapa 36/{rec.total_etapas}: Configurando e postando invoice CD {invoice_id}"
+        )
+        self._atualizar_redis(
+            rec.id, 7, 36, rec.total_etapas, 'Configurando fatura CD...'
+        )
+
+        # Ler estado atual
+        inv_data = odoo.execute_kw(
+            'account.move', 'read',
+            [[invoice_id]],
+            {'fields': ['name', 'state', 'l10n_br_situacao_nf']}
+        )
+        if not inv_data:
+            raise ValueError(f"Invoice CD {invoice_id} nao encontrada")
+
+        inv_name = inv_data[0].get('name', '')
+        inv_state = inv_data[0].get('state')
+        situacao_nf = inv_data[0].get('l10n_br_situacao_nf')
+
+        # Se ja postada, pular
+        if inv_state == 'posted':
+            logger.info(f"  Invoice CD {inv_name} ja postada")
+            self._checkpoint(
+                etapa=36,
+                odoo_cd_invoice_name=inv_name,
+                msg=f'Invoice CD {inv_name} ja postada'
+            )
+            return
+
+        # Configurar situacao_nf se draft
+        if inv_state == 'draft':
+            if situacao_nf != 'autorizado':
+                self._write_and_verify(
+                    odoo, 'account.move', [invoice_id],
+                    {'l10n_br_situacao_nf': 'autorizado'},
+                    'Configurar Invoice CD',
+                    critical_fields=['l10n_br_situacao_nf']
+                )
+
+            # Recalcular impostos (nao critico)
+            try:
+                odoo.execute_kw(
+                    'account.move',
+                    'onchange_l10n_br_calcular_imposto',
+                    [[invoice_id]]
+                )
+            except Exception as e:
+                logger.warning(f"  Recalculo impostos CD falhou (nao critico): {e}")
+
+            try:
+                odoo.execute_kw(
+                    'account.move',
+                    'onchange_l10n_br_calcular_imposto_btn',
+                    [[invoice_id]],
+                    timeout_override=self.FIRE_TIMEOUT
+                )
+            except Exception as e:
+                logger.warning(f"  Atualizacao impostos CD falhou (nao critico): {e}")
+
+            # action_post [fire_and_poll]
+            def fire_post():
+                return odoo.execute_kw(
+                    'account.move', 'action_post',
+                    [[invoice_id]],
+                    {'context': {'validate_analytic': True}},
+                    timeout_override=self.FIRE_TIMEOUT
+                )
+
+            def poll_post():
+                inv = odoo.execute_kw(
+                    'account.move', 'read',
+                    [[invoice_id]],
+                    {'fields': ['state', 'name']}
+                )
+                if inv and inv[0].get('state') == 'posted':
+                    return inv[0]
+                return None
+
+            result = self._fire_and_poll(odoo, fire_post, poll_post, 'Post Invoice CD')
+            inv_name = result.get('name', inv_name) if isinstance(result, dict) else inv_name
+            logger.info(f"  Invoice CD {inv_name} postada (state=posted)")
 
         self._checkpoint(
-            etapa=25,
-            odoo_transfer_in_picking_name=final_name,
-            msg=f'CD {final_name} validado'
+            etapa=36,
+            odoo_cd_invoice_name=inv_name,
+            msg=f'Invoice CD {inv_name} postada'
+        )
+
+    def _step_37_finalizar_recebimento_cd(self, _odoo):
+        """
+        Etapa 37: Finalizar recebimento CD.
+
+        Registra MovimentacaoEstoque e marca transfer_status='concluido'.
+        """
+        rec = self._get_recebimento()
+        if rec.etapa_atual >= 37:
+            return
+
+        logger.info(f"  Etapa 37/{rec.total_etapas}: Finalizando recebimento CD")
+        self._atualizar_redis(
+            rec.id, 7, 37, rec.total_etapas, 'Finalizando recebimento CD...'
+        )
+
+        # Criar MovimentacaoEstoque para a transferencia
+        try:
+            self._criar_movimentacoes_transferencia()
+        except Exception as e:
+            logger.warning(f"  Erro ao criar MovimentacaoEstoque transfer (nao critico): {e}")
+
+        self._checkpoint(
+            etapa=37,
+            transfer_status='concluido',
+            msg='Recebimento CD concluido'
+        )
+        logger.info(
+            f"  Recebimento CD concluido! "
+            f"DFe CD={rec.odoo_cd_dfe_id}, "
+            f"PO CD={rec.odoo_cd_po_name}, "
+            f"Picking CD={rec.odoo_transfer_in_picking_name}, "
+            f"Invoice CD={rec.odoo_cd_invoice_name}"
         )
 
     def _resolver_lote_cd(self, odoo, lote_info):
@@ -2645,40 +3515,6 @@ class RecebimentoLfOdooService:
         # Salvar no registro local
         lote_info.odoo_lot_id_cd = lot_id
         return lot_id
-
-    def _step_26_finalizar_transferencia(self, _odoo):
-        """
-        Etapa 26: Finalizar transferencia FB -> CD.
-
-        Registra MovimentacaoEstoque de saida (FB) e entrada (CD)
-        e marca transfer_status='concluido'.
-        """
-        rec = self._get_recebimento()
-        if rec.etapa_atual >= 26:
-            return
-
-        logger.info(f"  Etapa 26/{rec.total_etapas}: Finalizando transferencia")
-        self._atualizar_redis(
-            rec.id, 6, 26, rec.total_etapas, 'Finalizando transferencia...'
-        )
-
-        # Criar MovimentacaoEstoque para a transferencia
-        try:
-            self._criar_movimentacoes_transferencia()
-        except Exception as e:
-            logger.warning(f"  Erro ao criar MovimentacaoEstoque transfer (nao critico): {e}")
-
-        self._checkpoint(
-            etapa=26,
-            transfer_status='concluido',
-            msg='Transferencia FB->CD concluida'
-        )
-        logger.info(
-            f"  Transferencia FB->CD concluida! "
-            f"Out={rec.odoo_transfer_out_picking_name}, "
-            f"Invoice={rec.odoo_transfer_invoice_name}, "
-            f"In={rec.odoo_transfer_in_picking_name}"
-        )
 
     def _criar_movimentacoes_transferencia(self):
         """Cria MovimentacaoEstoque de saida FB e entrada CD para a transferencia."""

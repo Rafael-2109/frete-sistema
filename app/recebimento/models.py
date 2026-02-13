@@ -1504,7 +1504,7 @@ class RecebimentoLf(db.Model):
     status = db.Column(db.String(20), default='pendente', nullable=False, index=True)
     fase_atual = db.Column(db.Integer, default=0, nullable=False)
     etapa_atual = db.Column(db.Integer, default=0, nullable=False)
-    total_etapas = db.Column(db.Integer, default=26, nullable=False)
+    total_etapas = db.Column(db.Integer, default=37, nullable=False)
 
     # === Transferencia FB -> CD (Fase 6) ===
     # Picking de saida FB
@@ -1518,6 +1518,13 @@ class RecebimentoLf(db.Model):
     # Picking de entrada CD
     odoo_transfer_in_picking_id = db.Column(db.Integer, nullable=True)
     odoo_transfer_in_picking_name = db.Column(db.String(50), nullable=True)
+
+    # === Recebimento CD via DFe (Fase 7) ===
+    odoo_cd_dfe_id = db.Column(db.Integer, nullable=True)
+    odoo_cd_po_id = db.Column(db.Integer, nullable=True)
+    odoo_cd_po_name = db.Column(db.String(50), nullable=True)
+    odoo_cd_invoice_id = db.Column(db.Integer, nullable=True)
+    odoo_cd_invoice_name = db.Column(db.String(50), nullable=True)
 
     # Status da transferencia
     # Valores: None | 'sem_transferencia' | 'pendente' | 'processando' | 'concluido' | 'erro'
@@ -1579,6 +1586,12 @@ class RecebimentoLf(db.Model):
             'odoo_transfer_in_picking_name': self.odoo_transfer_in_picking_name,
             'transfer_status': self.transfer_status,
             'transfer_erro_mensagem': self.transfer_erro_mensagem,
+            # Recebimento CD via DFe (Fase 7)
+            'odoo_cd_dfe_id': self.odoo_cd_dfe_id,
+            'odoo_cd_po_id': self.odoo_cd_po_id,
+            'odoo_cd_po_name': self.odoo_cd_po_name,
+            'odoo_cd_invoice_id': self.odoo_cd_invoice_id,
+            'odoo_cd_invoice_name': self.odoo_cd_invoice_name,
             # Auditoria
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,
             'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
