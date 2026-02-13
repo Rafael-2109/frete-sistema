@@ -1,0 +1,1436 @@
+{% extends "base.html" %}
+
+{% block title %}Match de Itens - Extrato{% endblock %}
+
+{% block extra_css %}
+{# Module CSS - extrato design system #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid fin-container py-4">
+
+    {# === HEADER === #}
+    <div class="row">
+        <div class="col-12">
+            <header class="fin-header d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4 pb-3">
+                <div>
+                    <h1 class="fin-header__title h3 fw-bold mb-1">
+                        <i class="fas fa-exchange-alt me-2"></i>
+                        Extrato — Match de Itens
+                    </h1>
+                    <p class="fin-header__subtitle text-secondary mb-0" id="subtitle-stats">
+                        <i class="fas fa-spinner fa-spin me-1"></i> Carregando itens...
+                    </p>
+                </div>
+                <div class="fin-header__actions d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-primary" id="btn-executar-matching" onclick="executarMatching(false)">
+                        <i class="fas fa-magic me-1"></i>Executar Matching
+                    </button>
+                    <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+                        <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
+                        <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--dark"></i>
+                    </button>
+                    <a href="{{ url_for('financeiro.extrato_hub') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-layer-group me-1"></i>Hub Lotes
+                    </a>
+                </div>
+            </header>
+        </div>
+    </div>
+
+    {# === STATS CARDS === #}
+    <div class="row g-3 mb-4" id="stats-row">
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-total">
+                <div class="stat-value">-</div>
+                <div class="stat-label">Total</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-match" style="cursor:pointer" onclick="filtrarPorStatus('MATCH')">
+                <div class="stat-value" style="color: var(--fin-accent-success);">-</div>
+                <div class="stat-label">Match</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-multiplos" style="cursor:pointer" onclick="filtrarPorStatus('MULTIPLOS')">
+                <div class="stat-value" style="color: var(--fin-accent-warning);">-</div>
+                <div class="stat-label">Multiplos</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-sem-match" style="cursor:pointer" onclick="filtrarPorStatus('SEM_MATCH')">
+                <div class="stat-value" style="color: var(--fin-accent-danger);">-</div>
+                <div class="stat-label">Sem Match</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-pendentes" style="cursor:pointer" onclick="filtrarPorStatus('PENDENTE')">
+                <div class="stat-value" style="color: var(--fin-accent-pending);">-</div>
+                <div class="stat-label">Pendentes</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-aprovados" style="cursor:pointer" onclick="filtrarPorStatus('APROVADO')">
+                <div class="stat-value" style="color: var(--fin-accent-info);">-</div>
+                <div class="stat-label">Aprovados</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="extrato-stat-card" id="stat-conciliados" style="cursor:pointer" onclick="filtrarPorStatus('CONCILIADO')">
+                <div class="stat-value" style="color: hsl(180, 60%, 45%);">-</div>
+                <div class="stat-label">Conciliados</div>
+            </div>
+        </div>
+    </div>
+
+    {# === BULK ACTION BAR (hidden by default) === #}
+    <div id="bulk-bar" class="extrato-bulk-bar mb-3" style="display: none;">
+        <div class="d-flex align-items-center justify-content-between">
+            <span>
+                <i class="fas fa-check-square me-1"></i>
+                <strong id="bulk-count">0</strong> item(ns) selecionado(s)
+            </span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" onclick="executarMatching(false)">
+                    <i class="fas fa-magic me-1"></i> Matching
+                </button>
+                <button class="btn btn-sm btn-success" onclick="aprovarSelecionados()">
+                    <i class="fas fa-check me-1"></i> Aprovar
+                </button>
+                <button class="btn btn-sm btn-warning" onclick="conciliarSelecionados()">
+                    <i class="fas fa-link me-1"></i> Conciliar
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="limparSelecao()">
+                    <i class="fas fa-times me-1"></i> Limpar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# === TABLE CARD === #}
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center"
+             style="background: var(--fin-bg-tertiary); border-bottom: 1px solid var(--fin-border);">
+            <strong><i class="fas fa-table me-1"></i> Itens de Extrato</strong>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
+                        data-bs-target="#filtros-extrato" aria-expanded="false"
+                        aria-controls="filtros-extrato" id="btn-toggle-filtros">
+                    <i class="fas fa-filter"></i> Filtros
+                    <span class="badge bg-primary ms-1" id="badge-filtros-count" style="display:none;">0</span>
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="recarregarTabela()">
+                    <i class="fas fa-sync"></i>
+                </button>
+            </div>
+        </div>
+
+        {# --- FILTER BAR (collapsible) --- #}
+        <div class="collapse" id="filtros-extrato">
+            <div class="extrato-filter-bar">
+
+                {# === ROW 1: Tri-state Booleanos (Titulo Vinculado, Aprovado, Conciliado) === #}
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <span class="text-muted small fw-bold"><i class="fas fa-filter me-1"></i>Estado:</span>
+
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted">Titulo Vinculado:</span>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox"
+                                   id="f-titulo-vinculado" data-tristate="neutral" data-group="booleano"
+                                   data-campo="titulo_vinculado">
+                            <label class="form-check-label" for="f-titulo-vinculado">Sim/Nao</label>
+                        </div>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted">Aprovado:</span>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox"
+                                   id="f-aprovado-bool" data-tristate="neutral" data-group="booleano"
+                                   data-campo="aprovado">
+                            <label class="form-check-label" for="f-aprovado-bool">Sim/Nao</label>
+                        </div>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted">Conciliado:</span>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox"
+                                   id="f-conciliado-bool" data-tristate="neutral" data-group="booleano"
+                                   data-campo="conciliado">
+                            <label class="form-check-label" for="f-conciliado-bool">Sim/Nao</label>
+                        </div>
+                    </div>
+                </div>
+
+                {# === ROW 2: Tri-state Status Match === #}
+                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+                    <span class="text-muted small fw-bold"><i class="fas fa-crosshairs me-1"></i>Match:</span>
+
+                    <div class="d-flex align-items-center gap-1">
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-match" value="MATCH_ENCONTRADO" data-tristate="neutral" data-group="status_match">
+                            <label class="form-check-label" for="f-match">Match</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-vinculados" value="MULTIPLOS_VINCULADOS" data-tristate="neutral" data-group="status_match">
+                            <label class="form-check-label" for="f-vinculados">Vinculados</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-multiplos" value="MULTIPLOS_MATCHES" data-tristate="neutral" data-group="status_match">
+                            <label class="form-check-label" for="f-multiplos">Multiplos</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-sem-match" value="SEM_MATCH" data-tristate="neutral" data-group="status_match">
+                            <label class="form-check-label" for="f-sem-match">Sem Match</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-pendente" value="PENDENTE" data-tristate="neutral" data-group="status_match">
+                            <label class="form-check-label" for="f-pendente">Pendente</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-cnab" value="MATCH_CNAB_PENDENTE" data-tristate="neutral" data-group="status_match">
+                            <label class="form-check-label" for="f-cnab">CNAB</label>
+                        </div>
+                    </div>
+                </div>
+
+                {# === ROW 3: Filtros de Texto/Range/Selects === #}
+                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+                    {# Tipo Transacao #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-exchange-alt me-1"></i>Tipo:</span>
+                        <select class="form-select form-select-sm" id="f-tipo-lote" style="width: 110px;">
+                            <option value="">Todos</option>
+                            <option value="entrada">Entrada</option>
+                            <option value="saida">Saida</option>
+                        </select>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# Journal #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-university me-1"></i>Banco:</span>
+                        <select class="form-select form-select-sm" id="f-journal" style="width: 100px;">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# Data Range #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-calendar-alt me-1"></i>Data:</span>
+                        <input type="date" class="form-control form-control-sm" id="f-data-de" style="width: 135px;">
+                        <span class="small text-muted">a</span>
+                        <input type="date" class="form-control form-control-sm" id="f-data-ate" style="width: 135px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# CNPJ #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-id-card me-1"></i>CNPJ:</span>
+                        <input type="text" class="form-control form-control-sm filtro-texto" id="f-cnpj"
+                               placeholder="CNPJ ou prefixo" style="width: 160px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# Valor Range #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-dollar-sign me-1"></i>Valor:</span>
+                        <input type="number" class="form-control form-control-sm" id="f-valor-min"
+                               placeholder="Min" step="0.01" min="0" style="width: 100px;">
+                        <span class="small text-muted">a</span>
+                        <input type="number" class="form-control form-control-sm" id="f-valor-max"
+                               placeholder="Max" step="0.01" min="0" style="width: 100px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# Nome Pagador #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-user me-1"></i>Pagador:</span>
+                        <input type="text" class="form-control form-control-sm filtro-texto" id="f-pagador"
+                               placeholder="Nome parcial" style="width: 170px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# Extrato/Statement #}
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="small text-muted"><i class="fas fa-file-alt me-1"></i>Extrato:</span>
+                        <input type="text" class="form-control form-control-sm filtro-texto" id="f-extrato"
+                               placeholder="Nome do extrato" style="width: 170px;">
+                    </div>
+
+                    <span class="text-muted">|</span>
+
+                    {# Limpar #}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar-filtros"
+                            title="Limpar todos os filtros">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {# --- TABLE --- #}
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table id="tabela-itens" class="table table-striped table-hover mb-0" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 35px;">
+                                <input type="checkbox" id="check-todos" class="form-check-input" title="Selecionar todos visiveis">
+                            </th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                            <th>Pagador</th>
+                            <th class="text-end">Valor</th>
+                            <th>Extrato</th>
+                            <th>Pipeline</th>
+                            <th>Titulo Vinculado</th>
+                            <th>Score</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# === MODAL CANDIDATOS === #}
+    <div class="modal fade" id="modalCandidatos" tabindex="-1" aria-labelledby="modalCandidatosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content" style="background: var(--fin-bg-elevated); border: 1px solid var(--fin-border);">
+                <div class="modal-header" style="border-bottom: 1px solid var(--fin-border);">
+                    <h5 class="modal-title" id="modalCandidatosLabel">
+                        <i class="fas fa-search-dollar" style="color: var(--fin-accent-success);"></i> Candidatos de Match
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    {# Info do item #}
+                    <div class="card mb-3" style="background: var(--fin-bg-secondary); border: 1px solid var(--fin-border);">
+                        <div class="card-body py-2">
+                            <div class="row small">
+                                <div class="col-md-3">
+                                    <strong>Pagador:</strong> <span id="modal-pagador"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>CNPJ:</strong> <span id="modal-cnpj" class="font-monospace"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>Valor:</strong> <span id="modal-valor" class="fw-bold"></span>
+                                </div>
+                                <div class="col-md-2">
+                                    <strong>Data:</strong> <span id="modal-data"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Tipo:</strong> <span id="modal-tipo"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Loading #}
+                    <div id="modal-loading" class="text-center py-4">
+                        <div class="spinner-border" style="color: var(--fin-accent-success);" role="status"></div>
+                        <div class="mt-2" style="color: var(--fin-text-secondary);">Buscando candidatos...</div>
+                    </div>
+
+                    {# Multi-NF bar #}
+                    <div id="multi-nf-bar" class="alert alert-info py-2 mb-2" style="display: none;">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="fas fa-layer-group me-1"></i>
+                                <strong>Multi-NF:</strong>
+                                <span id="multi-nf-count">0</span> titulo(s)
+                                — Total: <strong id="multi-nf-soma">R$ 0,00</strong>
+                                / Extrato: <strong id="multi-nf-extrato">R$ 0,00</strong>
+                                <span id="multi-nf-diff" class="ms-2"></span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-success" id="btn-confirmar-multiplos"
+                                    onclick="confirmarMultiplos()" disabled>
+                                <i class="fas fa-check-double"></i> Confirmar
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Lista de candidatos #}
+                    <div id="modal-candidatos-lista" style="display: none;"></div>
+
+                    {# Sem candidatos #}
+                    <div id="modal-sem-candidatos" style="display: none;" class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x mb-3" style="color: var(--fin-text-muted);"></i>
+                        <div style="color: var(--fin-text-muted);">Nenhum candidato encontrado.</div>
+                    </div>
+
+                    {# Titulos ja vinculados (M:N) #}
+                    <div id="modal-vinculados" style="display: none;">
+                        <hr>
+                        <h6><i class="fas fa-link me-1"></i> Titulos Vinculados</h6>
+                        <div id="modal-vinculados-lista"></div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid var(--fin-border);">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // =========================================================================
+    // GLOBALS
+    // =========================================================================
+    let allData = [];
+    let dataTable = null;
+    let selectedIds = new Set();
+    let currentModalItemId = null;
+    let multiNfSelecionados = {};  // { tituloId: {valor_alocado, ...} }
+
+    const API_ITENS = '{{ url_for("financeiro.extrato_api_itens") }}';
+    const API_APROVAR_ITEM = '{{ url_for("financeiro.extrato_aprovar_item") }}';
+    const API_CONCILIAR_ITEM = '{{ url_for("financeiro.extrato_conciliar_item") }}';
+    const API_DESVINCULAR = '{{ url_for("financeiro.extrato_desvincular_titulo") }}';
+    const API_APROVAR_ITENS = '{{ url_for("financeiro.extrato_aprovar_itens") }}';
+    const API_CONCILIAR_ITENS = '{{ url_for("financeiro.extrato_conciliar_itens") }}';
+    const API_SELECIONAR = '{{ url_for("financeiro.extrato_selecionar_titulo") }}';
+    const API_VINCULAR_MULTI = '{{ url_for("financeiro.extrato_vincular_multiplos") }}';
+    const API_EXECUTAR_MATCHING = '{{ url_for("financeiro.extrato_executar_matching_itens") }}';
+
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+    function getCsrfHeaders() {
+        const csrf = document.querySelector('meta[name="csrf-token"]');
+        return csrf ? { 'X-CSRFToken': csrf.content, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+    }
+
+    function fmtMoeda(v) {
+        if (v == null || isNaN(v)) return '-';
+        return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function truncar(s, n) {
+        if (!s) return '';
+        return s.length > n ? s.substring(0, n) + '...' : s;
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    async function fetchRetry(url, opts, retries) {
+        retries = retries || 2;
+        for (let i = 0; i <= retries; i++) {
+            try {
+                const resp = await fetch(url, opts);
+                return resp;
+            } catch (err) {
+                if (i >= retries) throw err;
+                await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+            }
+        }
+    }
+
+    // =========================================================================
+    // LOAD DATA
+    // =========================================================================
+    carregarDados();
+
+    async function carregarDados() {
+        try {
+            const resp = await fetch(API_ITENS);
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar');
+
+            allData = data.itens;
+            atualizarStats(data.stats);
+            popularJournals(allData);
+            initDataTable(allData);
+        } catch (err) {
+            document.getElementById('subtitle-stats').innerHTML =
+                '<i class="fas fa-exclamation-triangle text-danger me-1"></i> Erro: ' + escHtml(err.message);
+        }
+    }
+
+    window.recarregarTabela = function() {
+        if (dataTable) { dataTable.destroy(); dataTable = null; }
+        selectedIds.clear();
+        atualizarBulkBar();
+        document.getElementById('subtitle-stats').innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Recarregando...';
+        carregarDados();
+    };
+
+    // =========================================================================
+    // STATS
+    // =========================================================================
+    function atualizarStats(s) {
+        document.getElementById('subtitle-stats').innerHTML =
+            s.total + ' itens | ' + s.pendentes + ' pendentes | ' +
+            s.aprovados + ' aprovados | ' + s.conciliados + ' conciliados';
+
+        setText('stat-total', s.total);
+        setText('stat-match', s.match_unico);
+        setText('stat-multiplos', s.multiplos);
+        setText('stat-sem-match', s.sem_match);
+        setText('stat-pendentes', s.pendentes);
+        setText('stat-aprovados', s.aprovados);
+        setText('stat-conciliados', s.conciliados);
+    }
+
+    function setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.querySelector('.stat-value').textContent = val;
+    }
+
+    // =========================================================================
+    // POPULATE JOURNAL SELECT
+    // =========================================================================
+    function popularJournals(dados) {
+        const journals = [...new Set(dados.map(d => d.journal_code).filter(Boolean))].sort();
+        const sel = document.getElementById('f-journal');
+        journals.forEach(j => {
+            const opt = document.createElement('option');
+            opt.value = j;
+            opt.textContent = j;
+            sel.appendChild(opt);
+        });
+    }
+
+    // =========================================================================
+    // DATATABLE
+    // =========================================================================
+    function initDataTable(dados) {
+        dataTable = $('#tabela-itens').DataTable({
+            data: dados,
+            pageLength: 50,
+            order: [[2, 'desc']],
+            deferRender: true,
+            language: {
+                search: 'Buscar:',
+                lengthMenu: '_MENU_ por pagina',
+                info: '_START_ a _END_ de _TOTAL_',
+                infoFiltered: '(filtrado de _MAX_)',
+                zeroRecords: 'Nenhum item encontrado',
+                paginate: { first: '<<', previous: '<', next: '>', last: '>>' }
+            },
+            columns: [
+                // 0: Checkbox
+                {
+                    data: null, orderable: false, searchable: false,
+                    className: 'text-center',
+                    render: function(data) {
+                        const checked = selectedIds.has(data.id) ? ' checked' : '';
+                        return '<input type="checkbox" class="form-check-input row-check" data-id="' + data.id + '"' + checked + '>';
+                    }
+                },
+                // 1: Tipo (com badge direcao REC/PAG)
+                {
+                    data: 'tipo_transacao',
+                    render: function(val, type, row) {
+                        const map = {
+                            'TED': 'bg-primary', 'PIX': 'bg-success', 'Boleto': 'bg-warning text-dark',
+                            'DEPOSITO': 'bg-info', 'DOC': 'bg-secondary'
+                        };
+                        const cls = map[val] || 'bg-secondary';
+                        const direcao = row.tipo_lote === 'entrada'
+                            ? '<span class="badge badge-direcao-rec">REC</span> '
+                            : '<span class="badge badge-direcao-pag">PAG</span> ';
+                        return direcao + '<span class="badge ' + cls + '">' + escHtml(val || '?') + '</span>';
+                    }
+                },
+                // 2: Data
+                {
+                    data: 'data_transacao',
+                    render: function(val, type, row) {
+                        if (type === 'sort') return row.data_transacao_iso || '';
+                        return '<strong>' + escHtml(val) + '</strong>';
+                    }
+                },
+                // 3: Pagador (multi-line)
+                {
+                    data: 'nome_pagador',
+                    render: function(val, type, row) {
+                        if (type !== 'display') return val || '';
+                        let html = '<div style="line-height: 1.3;">';
+                        html += '<strong>' + escHtml(truncar(val, 35)) + '</strong>';
+                        if (row.cnpj_pagador) {
+                            html += '<br><span class="font-monospace" style="font-size: 0.82em; color: var(--fin-text-secondary);">' + escHtml(row.cnpj_pagador) + '</span>';
+                        }
+                        if (row.payment_ref) {
+                            html += '<br><span style="font-size: 0.78em; color: var(--fin-text-muted);">' + escHtml(truncar(row.payment_ref, 50)) + '</span>';
+                        }
+                        html += '</div>';
+                        return html;
+                    }
+                },
+                // 4: Valor
+                {
+                    data: 'valor',
+                    className: 'text-end',
+                    render: function(val, type) {
+                        if (type === 'sort') return val || 0;
+                        const cor = val >= 0 ? 'var(--fin-accent-success)' : 'var(--fin-accent-danger)';
+                        return '<strong class="font-monospace" style="color: ' + cor + ';">' + fmtMoeda(val) + '</strong>';
+                    }
+                },
+                // 5: Extrato (multi-line)
+                {
+                    data: 'journal_code',
+                    render: function(val, type, row) {
+                        if (type !== 'display') return val + ' ' + (row.statement_name || '');
+                        let html = '<div style="line-height: 1.3;">';
+                        if (val) {
+                            const tipoCor = row.tipo_lote === 'entrada' ? 'bg-success' : 'bg-danger';
+                            html += '<span class="badge ' + tipoCor + '" style="font-size: 0.7em;">' + escHtml(val) + '</span>';
+                        }
+                        if (row.statement_name) {
+                            html += '<br><span style="font-size: 0.8em;">' + escHtml(truncar(row.statement_name, 30)) + '</span>';
+                        }
+                        html += '<br><a href="/financeiro/extrato/lote/' + row.lote_id + '" class="small" style="font-size: 0.75em; color: var(--fin-accent-info);">Lote #' + row.lote_id + '</a>';
+                        html += '</div>';
+                        return html;
+                    }
+                },
+                // 6: Pipeline (stacked badges)
+                {
+                    data: 'status_match',
+                    render: function(val, type, row) {
+                        if (type !== 'display') return val + ' ' + row.status;
+                        let html = '<div class="extrato-pipeline">';
+
+                        // Badge status_match
+                        const matchMap = {
+                            'MATCH_ENCONTRADO': ['bg-success', 'Match'],
+                            'MULTIPLOS_VINCULADOS': ['bg-success', 'Vinculado'],
+                            'MULTIPLOS_MATCHES': ['bg-warning text-dark', 'Multiplos'],
+                            'SEM_MATCH': ['bg-danger', 'Sem Match'],
+                            'PENDENTE': ['bg-secondary', 'Pendente'],
+                            'MATCH_CNAB_PENDENTE': ['bg-info', 'CNAB']
+                        };
+                        const m = matchMap[val] || ['bg-secondary', val || '?'];
+                        html += '<span class="badge ' + m[0] + '">' + m[1] + '</span>';
+
+                        // Badge aprovado
+                        if (row.aprovado) {
+                            html += '<span class="badge bg-primary">Aprovado</span>';
+                        }
+
+                        // Badge conciliado
+                        if (row.status === 'CONCILIADO') {
+                            html += '<span class="badge" style="background: hsl(180, 60%, 35%); color: white;">Conciliado</span>';
+                        } else if (row.status === 'ERRO') {
+                            html += '<span class="badge bg-danger">Erro</span>';
+                        }
+
+                        html += '</div>';
+                        return html;
+                    }
+                },
+                // 7: Titulo Vinculado (multi-line)
+                {
+                    data: 'titulo_nf',
+                    render: function(val, type, row) {
+                        if (type !== 'display') return val || '';
+                        if (!val && !row.tem_multiplos_titulos) {
+                            return '<span style="color: var(--fin-text-muted); font-size: 0.85em;">-</span>';
+                        }
+
+                        let html = '<div style="line-height: 1.3;">';
+                        if (row.tem_multiplos_titulos) {
+                            html += '<span class="badge bg-info" style="font-size: 0.72em;">' + row.qtd_titulos + ' titulo(s)</span>';
+                            if (row.valor_alocado_total != null) {
+                                html += '<br><span style="font-size: 0.82em;">' + fmtMoeda(row.valor_alocado_total) + '</span>';
+                            }
+                        } else {
+                            html += '<strong style="font-size: 0.88em;">NF ' + escHtml(val) + '</strong>';
+                            if (row.titulo_parcela) html += ' <span style="font-size: 0.78em;">P' + row.titulo_parcela + '</span>';
+                            if (row.titulo_cliente) {
+                                html += '<br><span style="font-size: 0.8em; color: var(--fin-text-secondary);">' + escHtml(truncar(row.titulo_cliente, 30)) + '</span>';
+                            }
+                            if (row.titulo_valor != null) {
+                                const diff = Math.abs(row.valor) - row.titulo_valor;
+                                const diffStr = Math.abs(diff) > 0.01 ? ' <span style="font-size: 0.75em; color: ' + (diff > 0 ? 'var(--fin-accent-warning)' : 'var(--fin-accent-danger)') + ';">(' + (diff > 0 ? '+' : '') + fmtMoeda(diff) + ')</span>' : '';
+                                html += '<br><span class="font-monospace" style="font-size: 0.82em;">' + fmtMoeda(row.titulo_valor) + '</span>' + diffStr;
+                            }
+                        }
+                        html += '</div>';
+                        return html;
+                    }
+                },
+                // 8: Score
+                {
+                    data: 'match_score',
+                    className: 'text-center',
+                    render: function(val) {
+                        if (val == null) return '';
+                        let cls = 'score-badge-low';
+                        if (val >= 90) cls = 'score-badge-high';
+                        else if (val >= 70) cls = 'score-badge-medium';
+                        return '<span class="badge ' + cls + '">' + val + '%</span>';
+                    }
+                },
+                // 9: Acoes
+                {
+                    data: null, orderable: false, searchable: false,
+                    render: function(data) {
+                        let html = '<div class="d-flex gap-1 flex-wrap">';
+                        // Candidatos (sempre visivel)
+                        html += '<button class="btn btn-sm btn-outline-success py-0 px-1" onclick="abrirCandidatos(' + data.id + ')" title="Candidatos"><i class="fas fa-search-dollar"></i></button>';
+
+                        // Aprovar (se tem titulo e nao aprovado)
+                        if (!data.aprovado && (data.titulo_receber_id || data.titulo_pagar_id || data.tem_multiplos_titulos)) {
+                            html += '<button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="aprovarItem(' + data.id + ')" title="Aprovar"><i class="fas fa-check"></i></button>';
+                        }
+
+                        // Conciliar (se aprovado e nao conciliado)
+                        if (data.aprovado && data.status !== 'CONCILIADO') {
+                            html += '<button class="btn btn-sm btn-outline-warning py-0 px-1" onclick="conciliarItem(' + data.id + ')" title="Conciliar"><i class="fas fa-link"></i></button>';
+                        }
+
+                        // Desvincular (se tem titulo e nao conciliado)
+                        if ((data.titulo_receber_id || data.titulo_pagar_id || data.tem_multiplos_titulos) && data.status !== 'CONCILIADO') {
+                            html += '<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="desvincularItem(' + data.id + ')" title="Desvincular"><i class="fas fa-unlink"></i></button>';
+                        }
+
+                        html += '</div>';
+                        return html;
+                    }
+                }
+            ],
+            drawCallback: function() {
+                // Re-bind checkbox events after each draw
+                document.querySelectorAll('.row-check').forEach(cb => {
+                    cb.removeEventListener('change', handleRowCheck);
+                    cb.addEventListener('change', handleRowCheck);
+                });
+            }
+        });
+
+        // Select-all checkbox
+        document.getElementById('check-todos').addEventListener('change', function() {
+            const checked = this.checked;
+            dataTable.rows({ search: 'applied' }).every(function() {
+                const data = this.data();
+                if (checked) selectedIds.add(data.id);
+                else selectedIds.delete(data.id);
+            });
+            dataTable.draw(false);
+            atualizarBulkBar();
+        });
+
+        setupFiltros();
+    }
+
+    // =========================================================================
+    // ROW CHECKBOX HANDLER
+    // =========================================================================
+    function handleRowCheck(e) {
+        const id = parseInt(e.target.dataset.id);
+        if (e.target.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        atualizarBulkBar();
+    }
+
+    // =========================================================================
+    // BULK BAR
+    // =========================================================================
+    function atualizarBulkBar() {
+        const bar = document.getElementById('bulk-bar');
+        const count = document.getElementById('bulk-count');
+        if (selectedIds.size > 0) {
+            bar.style.display = 'block';
+            count.textContent = selectedIds.size;
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    window.limparSelecao = function() {
+        selectedIds.clear();
+        atualizarBulkBar();
+        if (dataTable) dataTable.draw(false);
+        document.getElementById('check-todos').checked = false;
+    };
+
+    // =========================================================================
+    // FILTERS
+    // =========================================================================
+    function setupFiltros() {
+        // Tri-state checkboxes
+        document.querySelectorAll('.filtro-check').forEach(cb => {
+            cb.addEventListener('click', function(e) {
+                e.preventDefault();
+                const states = ['neutral', 'include', 'exclude'];
+                const current = this.dataset.tristate;
+                const idx = states.indexOf(current);
+                const next = states[(idx + 1) % 3];
+                this.dataset.tristate = next;
+                this.checked = (next === 'include');
+                this.indeterminate = (next === 'exclude');
+                // Atualizar label para filtros booleanos (Sim/Nao/Sim-Nao)
+                if (this.dataset.group === 'booleano') {
+                    const label = this.nextElementSibling;
+                    if (label) {
+                        const labelMap = { 'neutral': 'Sim/Nao', 'include': 'Sim', 'exclude': 'Nao' };
+                        label.textContent = labelMap[next];
+                    }
+                }
+                aplicarFiltros();
+            });
+        });
+
+        // Select filters
+        document.getElementById('f-tipo-lote').addEventListener('change', aplicarFiltros);
+        document.getElementById('f-journal').addEventListener('change', aplicarFiltros);
+
+        // Date range
+        document.getElementById('f-data-de').addEventListener('change', aplicarFiltros);
+        document.getElementById('f-data-ate').addEventListener('change', aplicarFiltros);
+
+        // Number range
+        document.getElementById('f-valor-min').addEventListener('input', debounce(aplicarFiltros, 400));
+        document.getElementById('f-valor-max').addEventListener('input', debounce(aplicarFiltros, 400));
+
+        // Text inputs (debounced)
+        document.querySelectorAll('.filtro-texto').forEach(input => {
+            input.addEventListener('input', debounce(aplicarFiltros, 300));
+        });
+
+        // Limpar
+        document.getElementById('btn-limpar-filtros').addEventListener('click', function() {
+            document.querySelectorAll('.filtro-check').forEach(cb => {
+                cb.dataset.tristate = 'neutral';
+                cb.checked = false;
+                cb.indeterminate = false;
+                // Resetar label de booleanos
+                if (cb.dataset.group === 'booleano') {
+                    const label = cb.nextElementSibling;
+                    if (label) label.textContent = 'Sim/Nao';
+                }
+            });
+            document.getElementById('f-tipo-lote').value = '';
+            document.getElementById('f-journal').value = '';
+            document.getElementById('f-data-de').value = '';
+            document.getElementById('f-data-ate').value = '';
+            document.getElementById('f-valor-min').value = '';
+            document.getElementById('f-valor-max').value = '';
+            document.querySelectorAll('.filtro-texto').forEach(i => i.value = '');
+            aplicarFiltros();
+        });
+
+        // Register custom search
+        $.fn.dataTable.ext.search.push(filtroCustom);
+    }
+
+    function filtroCustom(settings, data, dataIndex) {
+        if (!dataTable || settings.nTable.id !== 'tabela-itens') return true;
+        const row = dataTable.row(dataIndex).data();
+        if (!row) return true;
+
+        // Tri-state: status_match
+        const matchChecks = document.querySelectorAll('.filtro-check[data-group="status_match"]');
+        const includes = [];
+        const excludes = [];
+        matchChecks.forEach(cb => {
+            if (cb.dataset.tristate === 'include') includes.push(cb.value);
+            if (cb.dataset.tristate === 'exclude') excludes.push(cb.value);
+        });
+        if (includes.length > 0 && !includes.includes(row.status_match)) return false;
+        if (excludes.includes(row.status_match)) return false;
+
+        // Tri-state booleanos (Titulo Vinculado, Aprovado, Conciliado)
+        const boolFiltros = [
+            { id: 'f-titulo-vinculado', condicao: (r) => !!(r.titulo_receber_id || r.titulo_pagar_id || r.tem_multiplos_titulos) },
+            { id: 'f-aprovado-bool',    condicao: (r) => r.aprovado === true },
+            { id: 'f-conciliado-bool',  condicao: (r) => r.status === 'CONCILIADO' },
+        ];
+        for (const f of boolFiltros) {
+            const el = document.getElementById(f.id);
+            if (!el) continue;
+            const estado = el.dataset.tristate || 'neutral';
+            if (estado === 'neutral') continue;
+            const tem = f.condicao(row);
+            if (estado === 'include' && !tem) return false;
+            if (estado === 'exclude' && tem) return false;
+        }
+
+        // Tipo lote
+        const tipoLote = document.getElementById('f-tipo-lote').value;
+        if (tipoLote && row.tipo_lote !== tipoLote) return false;
+
+        // Journal
+        const journal = document.getElementById('f-journal').value;
+        if (journal && row.journal_code !== journal) return false;
+
+        // Date range
+        const dataDe = document.getElementById('f-data-de').value;
+        const dataAte = document.getElementById('f-data-ate').value;
+        if (dataDe && row.data_transacao_iso < dataDe) return false;
+        if (dataAte && row.data_transacao_iso > dataAte) return false;
+
+        // Valor range
+        const valMin = parseFloat(document.getElementById('f-valor-min').value);
+        const valMax = parseFloat(document.getElementById('f-valor-max').value);
+        const absVal = Math.abs(row.valor);
+        if (!isNaN(valMin) && absVal < valMin) return false;
+        if (!isNaN(valMax) && absVal > valMax) return false;
+
+        // CNPJ text
+        const cnpjFilter = (document.getElementById('f-cnpj').value || '').toLowerCase().replace(/\D/g, '');
+        if (cnpjFilter) {
+            const cnpjRow = (row.cnpj_pagador || '').replace(/\D/g, '');
+            if (!cnpjRow.includes(cnpjFilter)) return false;
+        }
+
+        // Pagador text
+        const pagadorFilter = (document.getElementById('f-pagador').value || '').toLowerCase();
+        if (pagadorFilter && !(row.nome_pagador || '').toLowerCase().includes(pagadorFilter)) return false;
+
+        // Extrato text
+        const extratoFilter = (document.getElementById('f-extrato').value || '').toLowerCase();
+        if (extratoFilter && !(row.statement_name || '').toLowerCase().includes(extratoFilter)) return false;
+
+        return true;
+    }
+
+    function aplicarFiltros() {
+        if (dataTable) dataTable.draw();
+        atualizarBadgeFiltros();
+    }
+
+    function atualizarBadgeFiltros() {
+        let count = 0;
+        document.querySelectorAll('.filtro-check').forEach(cb => {
+            if (cb.dataset.tristate !== 'neutral') count++;
+        });
+        if (document.getElementById('f-tipo-lote').value) count++;
+        if (document.getElementById('f-journal').value) count++;
+        if (document.getElementById('f-data-de').value) count++;
+        if (document.getElementById('f-data-ate').value) count++;
+        if (document.getElementById('f-valor-min').value) count++;
+        if (document.getElementById('f-valor-max').value) count++;
+        document.querySelectorAll('.filtro-texto').forEach(i => { if (i.value) count++; });
+
+        const badge = document.getElementById('badge-filtros-count');
+        if (count > 0) {
+            badge.style.display = 'inline';
+            badge.textContent = count;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function debounce(fn, ms) {
+        let timer;
+        return function() {
+            clearTimeout(timer);
+            timer = setTimeout(fn, ms);
+        };
+    }
+
+    // =========================================================================
+    // STAT CARD FILTER SHORTCUT
+    // =========================================================================
+    window.filtrarPorStatus = function(status) {
+        // Reset all tri-state
+        document.querySelectorAll('.filtro-check').forEach(cb => {
+            cb.dataset.tristate = 'neutral';
+            cb.checked = false;
+            cb.indeterminate = false;
+            if (cb.dataset.group === 'booleano') {
+                const label = cb.nextElementSibling;
+                if (label) label.textContent = 'Sim/Nao';
+            }
+        });
+
+        // Open filters panel
+        const filtros = document.getElementById('filtros-extrato');
+        if (!filtros.classList.contains('show')) {
+            new bootstrap.Collapse(filtros, { toggle: true });
+        }
+
+        if (status === 'MATCH') {
+            const el1 = document.getElementById('f-match');
+            const el2 = document.getElementById('f-vinculados');
+            if (el1) { el1.dataset.tristate = 'include'; el1.checked = true; }
+            if (el2) { el2.dataset.tristate = 'include'; el2.checked = true; }
+        } else if (status === 'MULTIPLOS') {
+            const el = document.getElementById('f-multiplos');
+            if (el) { el.dataset.tristate = 'include'; el.checked = true; }
+        } else if (status === 'SEM_MATCH') {
+            const el = document.getElementById('f-sem-match');
+            if (el) { el.dataset.tristate = 'include'; el.checked = true; }
+        } else if (status === 'PENDENTE') {
+            const el = document.getElementById('f-pendente');
+            if (el) { el.dataset.tristate = 'include'; el.checked = true; }
+        } else if (status === 'APROVADO') {
+            const el = document.getElementById('f-aprovado-bool');
+            if (el) {
+                el.dataset.tristate = 'include'; el.checked = true;
+                const lbl = el.nextElementSibling; if (lbl) lbl.textContent = 'Sim';
+            }
+        } else if (status === 'CONCILIADO') {
+            const el = document.getElementById('f-conciliado-bool');
+            if (el) {
+                el.dataset.tristate = 'include'; el.checked = true;
+                const lbl = el.nextElementSibling; if (lbl) lbl.textContent = 'Sim';
+            }
+        }
+
+        aplicarFiltros();
+    };
+
+    // =========================================================================
+    // ACTIONS: SINGLE ITEM
+    // =========================================================================
+    window.aprovarItem = async function(itemId) {
+        try {
+            const resp = await fetchRetry(API_APROVAR_ITEM, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ item_id: itemId, aprovar: true })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                atualizarItemLocal(itemId, { aprovado: true, status: 'APROVADO' });
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao aprovar'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    window.conciliarItem = async function(itemId) {
+        if (!confirm('Conciliar este item no Odoo?')) return;
+        try {
+            const resp = await fetchRetry(API_CONCILIAR_ITEM, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ item_id: itemId })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                atualizarItemLocal(itemId, { status: 'CONCILIADO' });
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao conciliar'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    window.desvincularItem = async function(itemId) {
+        if (!confirm('Desvincular titulo deste item?')) return;
+        try {
+            const resp = await fetchRetry(API_DESVINCULAR, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ item_id: itemId })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                atualizarItemLocal(itemId, {
+                    status_match: 'PENDENTE', aprovado: false, status: 'PENDENTE',
+                    titulo_nf: '', titulo_parcela: null, titulo_valor: null,
+                    titulo_cliente: '', titulo_cnpj: '', titulo_vencimento: '',
+                    titulo_receber_id: null, titulo_pagar_id: null,
+                    match_score: null, match_criterio: '',
+                    tem_multiplos_titulos: false, qtd_titulos: 0, valor_alocado_total: null
+                });
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao desvincular'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    function atualizarItemLocal(itemId, updates) {
+        // Update in allData
+        const item = allData.find(d => d.id === itemId);
+        if (item) Object.assign(item, updates);
+        // Redraw the specific row
+        if (dataTable) {
+            dataTable.rows().every(function() {
+                if (this.data().id === itemId) {
+                    Object.assign(this.data(), updates);
+                    this.invalidate().draw(false);
+                }
+            });
+        }
+    }
+
+    // =========================================================================
+    // ACTIONS: BULK
+    // =========================================================================
+    window.aprovarSelecionados = async function() {
+        if (selectedIds.size === 0) return;
+        if (!confirm('Aprovar ' + selectedIds.size + ' item(ns)?')) return;
+        try {
+            const resp = await fetchRetry(API_APROVAR_ITENS, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ item_ids: Array.from(selectedIds) })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                alert('Aprovados: ' + data.aprovados);
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.error || 'Falha'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    window.conciliarSelecionados = async function() {
+        if (selectedIds.size === 0) return;
+        if (!confirm('Conciliar ' + selectedIds.size + ' item(ns) no Odoo?')) return;
+        try {
+            const resp = await fetchRetry(API_CONCILIAR_ITENS, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ item_ids: Array.from(selectedIds) })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                let msg = 'Conciliados: ' + data.conciliados;
+                if (data.erros > 0) msg += '\nErros: ' + data.erros;
+                alert(msg);
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.error || 'Falha'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    // =========================================================================
+    // ACTION: EXECUTAR MATCHING
+    // =========================================================================
+    window.executarMatching = async function(todosPendentes) {
+        const temSelecao = selectedIds.size > 0;
+        let body;
+
+        if (temSelecao && !todosPendentes) {
+            // Matching apenas nos selecionados
+            if (!confirm('Executar matching para ' + selectedIds.size + ' item(ns) selecionado(s)?')) return;
+            body = { item_ids: Array.from(selectedIds) };
+        } else {
+            // Matching em todos os pendentes
+            if (!confirm('Executar matching em TODOS os itens pendentes? Isso pode demorar.')) return;
+            body = { todos_pendentes: true };
+        }
+
+        const btn = document.getElementById('btn-executar-matching');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processando...';
+
+        try {
+            const resp = await fetchRetry(API_EXECUTAR_MATCHING, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            if (data.success) {
+                const r = data.resultado || {};
+                let msg = 'Matching concluido!\n';
+                msg += 'Lotes processados: ' + (data.lotes_processados || 0) + '\n';
+                msg += 'Itens processados: ' + (r.processados || 0) + '\n';
+                msg += 'Com match: ' + (r.com_match || 0) + '\n';
+                msg += 'Multiplos: ' + (r.multiplos || 0) + '\n';
+                msg += 'Sem match: ' + (r.sem_match || 0);
+                if (data.erros && data.erros.length > 0) {
+                    msg += '\n\nErros em ' + data.erros.length + ' lote(s)';
+                }
+                alert(msg);
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.error || 'Falha'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    };
+
+    // =========================================================================
+    // MODAL CANDIDATOS
+    // =========================================================================
+    window.abrirCandidatos = async function(itemId) {
+        currentModalItemId = itemId;
+        multiNfSelecionados = {};
+
+        const item = allData.find(d => d.id === itemId);
+        if (!item) return;
+
+        // Preencher info
+        document.getElementById('modal-pagador').textContent = item.nome_pagador || '-';
+        document.getElementById('modal-cnpj').textContent = item.cnpj_pagador || '-';
+        document.getElementById('modal-valor').textContent = fmtMoeda(Math.abs(item.valor));
+        document.getElementById('modal-data').textContent = item.data_transacao || '-';
+        document.getElementById('modal-tipo').textContent = item.tipo_transacao || '-';
+
+        // Reset UI
+        document.getElementById('modal-loading').style.display = 'block';
+        document.getElementById('modal-candidatos-lista').style.display = 'none';
+        document.getElementById('modal-sem-candidatos').style.display = 'none';
+        document.getElementById('multi-nf-bar').style.display = 'none';
+        document.getElementById('modal-vinculados').style.display = 'none';
+        document.getElementById('multi-nf-extrato').textContent = fmtMoeda(Math.abs(item.valor));
+
+        // Abrir modal
+        const modal = new bootstrap.Modal(document.getElementById('modalCandidatos'));
+        modal.show();
+
+        // Determinar tipo (receber ou pagar)
+        const tipo = item.tipo_lote === 'saida' ? 'pagar' : 'receber';
+        const url = tipo === 'pagar'
+            ? '/financeiro/extrato/pagamentos/api/titulos-candidatos/' + itemId
+            : '/financeiro/extrato/api/titulos-candidatos/' + itemId;
+
+        try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+            document.getElementById('modal-loading').style.display = 'none';
+
+            if (data.success && data.candidatos && data.candidatos.length > 0) {
+                renderCandidatos(data.candidatos, item, tipo);
+                document.getElementById('modal-candidatos-lista').style.display = 'block';
+            } else {
+                document.getElementById('modal-sem-candidatos').style.display = 'block';
+            }
+        } catch (err) {
+            document.getElementById('modal-loading').innerHTML =
+                '<div class="text-danger"><i class="fas fa-exclamation-triangle"></i> Erro: ' + escHtml(err.message) + '</div>';
+        }
+
+        // Carregar titulos vinculados (M:N) se existirem
+        if (item.tem_multiplos_titulos) {
+            try {
+                const vResp = await fetch('/financeiro/extrato/api/titulos-vinculados/' + itemId);
+                const vData = await vResp.json();
+                if (vData.success && vData.titulos && vData.titulos.length > 0) {
+                    renderVinculados(vData);
+                }
+            } catch (e) { /* ignore */ }
+        }
+    };
+
+    function renderCandidatos(candidatos, item, tipo) {
+        const container = document.getElementById('modal-candidatos-lista');
+        let html = '';
+        const valorExtrato = Math.abs(item.valor);
+
+        candidatos.forEach(function(c, idx) {
+            const score = c.score || c.match_score || 0;
+            let scoreCls = 'score-badge-low';
+            if (score >= 90) scoreCls = 'score-badge-high';
+            else if (score >= 70) scoreCls = 'score-badge-medium';
+
+            const borderCls = score >= 90 ? 'var(--fin-accent-success)' : score >= 70 ? 'var(--fin-accent-info)' : 'var(--fin-accent-danger)';
+            const tituloId = c.id || c.titulo_id;
+            const nf = c.numero_nf || c.nf || '-';
+            const parcela = c.parcela || c.numero_parcela || 1;
+            const cliente = c.cliente || c.nome_cliente || c.razao_social || '-';
+            const valor = c.valor || c.saldo || c.valor_titulo || 0;
+            const venc = c.vencimento || c.data_vencimento || '-';
+            const criterio = c.criterio || c.match_criterio || '';
+            const diff = valorExtrato - valor;
+
+            html += '<div class="card mb-2" style="border-left: 4px solid ' + borderCls + '; background: var(--fin-bg-secondary);">';
+            html += '<div class="card-body py-2 px-3">';
+            html += '<div class="d-flex justify-content-between align-items-start">';
+            html += '<div style="flex: 1;">';
+            html += '<div class="d-flex align-items-center gap-2 mb-1">';
+            html += '<span class="badge ' + scoreCls + '">' + score + '%</span>';
+            html += '<strong>NF ' + escHtml(nf) + ' P' + parcela + '</strong>';
+            html += '<span class="small text-muted">' + escHtml(criterio) + '</span>';
+            html += '</div>';
+            html += '<div class="small">';
+            html += '<span style="color: var(--fin-text-secondary);">' + escHtml(truncar(cliente, 50)) + '</span>';
+            html += ' | <span class="font-monospace">' + fmtMoeda(valor) + '</span>';
+            html += ' | Venc: ' + escHtml(venc);
+            if (Math.abs(diff) > 0.01) {
+                const diffColor = diff > 0 ? 'var(--fin-accent-warning)' : 'var(--fin-accent-danger)';
+                html += ' | <span style="color: ' + diffColor + ';">Diff: ' + fmtMoeda(diff) + '</span>';
+            }
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="d-flex gap-1">';
+            // Checkbox para multi-NF
+            html += '<div class="form-check">';
+            html += '<input class="form-check-input cand-check" type="checkbox" data-titulo-id="' + tituloId + '" data-valor="' + valor + '" data-nf="' + escHtml(nf) + '" data-parcela="' + parcela + '" onchange="toggleCandidato(this)">';
+            html += '</div>';
+            // Botao selecionar unico
+            html += '<button class="btn btn-sm btn-success py-0 px-2" onclick="selecionarTitulo(' + item.id + ',' + tituloId + ',\'' + tipo + '\')" title="Vincular"><i class="fas fa-check"></i></button>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function renderVinculados(data) {
+        const container = document.getElementById('modal-vinculados-lista');
+        let html = '<div class="small mb-2">Total alocado: <strong>' + fmtMoeda(data.valor_total_alocado) + '</strong>';
+        html += ' / Extrato: <strong>' + fmtMoeda(data.valor_extrato) + '</strong>';
+        if (Math.abs(data.diferenca) > 0.01) {
+            html += ' | Diferenca: <span class="text-warning">' + fmtMoeda(data.diferenca) + '</span>';
+        }
+        html += '</div>';
+
+        data.titulos.forEach(function(t) {
+            html += '<div class="card mb-1" style="background: var(--fin-bg-secondary); border: 1px solid var(--fin-border);">';
+            html += '<div class="card-body py-1 px-2 small">';
+            html += '<strong>NF ' + escHtml(t.titulo_nf || '-') + '</strong>';
+            if (t.titulo_parcela) html += ' P' + t.titulo_parcela;
+            html += ' | ' + escHtml(t.titulo_cliente || '-');
+            html += ' | Alocado: <span class="font-monospace">' + fmtMoeda(t.valor_alocado) + '</span>';
+            if (t.match_score) html += ' | Score: ' + t.match_score + '%';
+            html += '</div></div>';
+        });
+
+        container.innerHTML = html;
+        document.getElementById('modal-vinculados').style.display = 'block';
+    }
+
+    // =========================================================================
+    // MODAL: MULTI-NF SELECTION
+    // =========================================================================
+    window.toggleCandidato = function(cb) {
+        const tituloId = parseInt(cb.dataset.tituloId);
+        const valor = parseFloat(cb.dataset.valor) || 0;
+        const nf = cb.dataset.nf;
+
+        if (cb.checked) {
+            multiNfSelecionados[tituloId] = { titulo_id: tituloId, valor_alocado: valor, nf: nf };
+        } else {
+            delete multiNfSelecionados[tituloId];
+        }
+
+        const selecionados = Object.values(multiNfSelecionados);
+        const bar = document.getElementById('multi-nf-bar');
+        const btn = document.getElementById('btn-confirmar-multiplos');
+
+        if (selecionados.length >= 2) {
+            bar.style.display = 'block';
+            document.getElementById('multi-nf-count').textContent = selecionados.length;
+            const soma = selecionados.reduce((s, t) => s + t.valor_alocado, 0);
+            document.getElementById('multi-nf-soma').textContent = fmtMoeda(soma);
+
+            const item = allData.find(d => d.id === currentModalItemId);
+            const valorExtrato = item ? Math.abs(item.valor) : 0;
+            const diff = valorExtrato - soma;
+            const diffEl = document.getElementById('multi-nf-diff');
+            if (Math.abs(diff) > 0.01) {
+                diffEl.innerHTML = '| Diff: <span style="color: ' + (diff > 0 ? 'var(--fin-accent-warning)' : 'var(--fin-accent-danger)') + ';">' + fmtMoeda(diff) + '</span>';
+            } else {
+                diffEl.innerHTML = '| <span style="color: var(--fin-accent-success);">Exato!</span>';
+            }
+
+            btn.disabled = false;
+        } else {
+            bar.style.display = 'none';
+            btn.disabled = true;
+        }
+    };
+
+    window.confirmarMultiplos = async function() {
+        const selecionados = Object.values(multiNfSelecionados);
+        if (selecionados.length < 2 || !currentModalItemId) return;
+
+        const item = allData.find(d => d.id === currentModalItemId);
+        const tipo = item && item.tipo_lote === 'saida' ? 'pagar' : 'receber';
+
+        const titulos = selecionados.map(t => ({
+            titulo_id: t.titulo_id,
+            valor_alocado: t.valor_alocado
+        }));
+
+        try {
+            const resp = await fetchRetry(API_VINCULAR_MULTI, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({
+                    item_id: currentModalItemId,
+                    titulos: titulos,
+                    tipo: tipo
+                })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao vincular'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    // =========================================================================
+    // SELECIONAR TITULO UNICO
+    // =========================================================================
+    window.selecionarTitulo = async function(itemId, tituloId, tipo) {
+        const url = tipo === 'pagar'
+            ? '/financeiro/extrato/pagamentos/api/selecionar-titulo'
+            : API_SELECIONAR;
+
+        try {
+            const resp = await fetchRetry(url, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ item_id: itemId, titulo_id: tituloId })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalCandidatos')).hide();
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.error || 'Falha ao vincular'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+});
+</script>
+{% endblock %}

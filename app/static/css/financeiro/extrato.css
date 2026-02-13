@@ -3621,3 +3621,162 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
 }
+
+
+/* =============================================================================
+   NOVA TELA: Match de Itens (lista corrida, DataTables)
+   ============================================================================= */
+
+/* DataTable sizing */
+#tabela-itens { font-size: 0.85em; }
+#tabela-itens td { vertical-align: middle; padding: 5px 8px; line-height: 1.3; }
+#tabela-itens thead th {
+    font-size: 0.8em;
+    padding: 8px;
+    white-space: nowrap;
+    background: var(--fin-bg-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--fin-border);
+}
+
+/* Pipeline badges empilhados */
+.extrato-pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+}
+.extrato-pipeline .badge {
+    font-size: 0.72em;
+    padding: 2px 6px;
+    white-space: nowrap;
+}
+
+/* Filter bar */
+.extrato-filter-bar {
+    background: var(--fin-bg-secondary);
+    border-bottom: 1px solid var(--fin-border);
+    padding: 10px 15px;
+    font-size: 0.85em;
+}
+.extrato-filter-bar .form-check-label { font-size: 0.9em; cursor: pointer; }
+.extrato-filter-bar .form-control-sm,
+.extrato-filter-bar .form-select-sm {
+    background: var(--fin-bg-tertiary);
+    border-color: var(--fin-border);
+    color: var(--fin-text-primary);
+}
+.extrato-filter-bar .form-control-sm:focus,
+.extrato-filter-bar .form-select-sm:focus {
+    border-color: var(--fin-border-focus);
+    box-shadow: 0 0 0 2px hsla(45, 90%, 50%, 0.15);
+}
+
+/* Tri-state checkboxes: include (verde) */
+.extrato-filter-bar .filtro-check[data-tristate="include"] + label {
+    color: var(--fin-accent-success);
+    font-weight: 600;
+}
+/* Tri-state checkboxes: exclude (vermelho, riscado) */
+.extrato-filter-bar .filtro-check[data-tristate="exclude"] + label {
+    text-decoration: line-through;
+    color: var(--fin-accent-danger);
+}
+
+/* Bulk action bar */
+.extrato-bulk-bar {
+    background: var(--fin-bg-info);
+    border: 1px solid var(--fin-accent-info);
+    border-radius: var(--fin-radius-md);
+    padding: 8px 16px;
+}
+
+/* Score badges */
+.score-badge-high { background-color: var(--fin-accent-success) !important; color: white; }
+.score-badge-medium { background-color: var(--fin-accent-info) !important; color: white; }
+.score-badge-low { background-color: var(--fin-accent-danger) !important; color: white; }
+
+/* Stats cards for items view */
+.extrato-stat-card {
+    background: var(--fin-bg-secondary);
+    border: 1px solid var(--fin-border);
+    border-radius: var(--fin-radius-md);
+    padding: 12px;
+    text-align: center;
+    transition: var(--fin-transition-fast);
+}
+.extrato-stat-card:hover {
+    border-color: var(--fin-accent-primary);
+    box-shadow: var(--fin-shadow-glow);
+}
+.extrato-stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: var(--fin-font-mono);
+}
+.extrato-stat-card .stat-label {
+    font-size: 0.75rem;
+    color: var(--fin-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* DataTables overrides for dark theme */
+#tabela-itens_wrapper .dataTables_filter input {
+    background: var(--fin-bg-tertiary);
+    border: 1px solid var(--fin-border);
+    color: var(--fin-text-primary);
+    border-radius: var(--fin-radius-sm);
+    padding: 4px 8px;
+}
+#tabela-itens_wrapper .dataTables_filter input:focus {
+    border-color: var(--fin-border-focus);
+    outline: none;
+}
+#tabela-itens_wrapper .dataTables_length select {
+    background: var(--fin-bg-tertiary);
+    border: 1px solid var(--fin-border);
+    color: var(--fin-text-primary);
+    border-radius: var(--fin-radius-sm);
+}
+#tabela-itens_wrapper .dataTables_info {
+    color: var(--fin-text-secondary);
+    font-size: 0.85em;
+}
+#tabela-itens_wrapper .dataTables_paginate .paginate_button {
+    color: var(--fin-text-secondary) !important;
+    border: 1px solid var(--fin-border) !important;
+    background: var(--fin-bg-secondary) !important;
+}
+#tabela-itens_wrapper .dataTables_paginate .paginate_button.current {
+    color: var(--fin-text-inverse) !important;
+    background: var(--fin-accent-primary) !important;
+    border-color: var(--fin-accent-primary) !important;
+}
+#tabela-itens_wrapper .dataTables_paginate .paginate_button:hover:not(.current) {
+    background: var(--fin-bg-hover) !important;
+    color: var(--fin-text-primary) !important;
+}
+
+/* Badge direcao REC/PAG na coluna Tipo */
+.badge-direcao-rec {
+    background: hsla(120, 50%, 50%, 0.15);
+    color: var(--fin-accent-success);
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.badge-direcao-pag {
+    background: hsla(0, 50%, 50%, 0.15);
+    color: var(--fin-accent-danger);
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* Tri-state booleano: reusa estilos globais de include/exclude ja definidos acima */
+
+/* Modal candidatos - score cards */
+#modalCandidatos .card { transition: var(--fin-transition-fast); }
+#modalCandidatos .card:hover { box-shadow: var(--fin-shadow-sm); }

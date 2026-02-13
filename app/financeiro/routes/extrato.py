@@ -247,6 +247,316 @@ def extrato_hub():
     )
 
 
+# =============================================================================
+# NOVA TELA UNIFICADA DE ITENS (lista corrida, DataTables + AJAX)
+# =============================================================================
+
+@financeiro_bp.route('/extrato/itens')
+@login_required
+def extrato_itens():
+    """
+    Nova tela unificada de itens de extrato em lista corrida.
+    Todos os itens de todos os lotes, com DataTables + filtros avancados.
+    Dados carregados via AJAX (GET /extrato/api/itens).
+    """
+    return render_template('financeiro/extrato_itens.html')
+
+
+@financeiro_bp.route('/extrato/api/itens')
+@login_required
+def extrato_api_itens():
+    """
+    API JSON para DataTables — todos os itens de extrato enriquecidos.
+
+    Retorna itens com dados do lote (journal, statement) e titulo vinculado.
+    Otimizado com subquery para evitar N+1 no count de titulos M:N.
+    """
+    from sqlalchemy import func, case
+    from app.financeiro.models import ExtratoItemTitulo
+
+    # Subquery: count de titulos M:N por item
+    titulos_sub = db.session.query(
+        ExtratoItemTitulo.extrato_item_id,
+        func.count(ExtratoItemTitulo.id).label('qtd_titulos'),
+        func.sum(ExtratoItemTitulo.valor_alocado).label('valor_alocado_total')
+    ).group_by(ExtratoItemTitulo.extrato_item_id).subquery()
+
+    # Query principal com JOIN lote + LEFT JOIN titulos count
+    rows = db.session.query(
+        ExtratoItem,
+        ExtratoLote.journal_code.label('lote_journal'),
+        ExtratoLote.statement_name.label('lote_statement'),
+        ExtratoLote.tipo_transacao.label('lote_tipo'),
+        titulos_sub.c.qtd_titulos,
+        titulos_sub.c.valor_alocado_total
+    ).join(
+        ExtratoLote, ExtratoItem.lote_id == ExtratoLote.id
+    ).outerjoin(
+        titulos_sub, ExtratoItem.id == titulos_sub.c.extrato_item_id
+    ).order_by(
+        ExtratoItem.data_transacao.desc(), ExtratoItem.id.desc()
+    ).all()
+
+    itens = []
+    for item, journal, statement, tipo_lote, qtd_tit, val_aloc in rows:
+        qtd = qtd_tit or 0
+        has_fk = bool(item.titulo_receber_id or item.titulo_pagar_id)
+
+        itens.append({
+            'id': item.id,
+            'data_transacao': item.data_transacao.strftime('%d/%m/%Y') if item.data_transacao else '',
+            'data_transacao_iso': item.data_transacao.isoformat() if item.data_transacao else '',
+            'valor': float(item.valor) if item.valor else 0,
+            'tipo_transacao': item.tipo_transacao or '',
+            'nome_pagador': item.nome_pagador or '',
+            'cnpj_pagador': item.cnpj_pagador or '',
+            'payment_ref': (item.payment_ref or '')[:120],
+            'status_match': item.status_match or 'PENDENTE',
+            'status': item.status or 'PENDENTE',
+            'aprovado': item.aprovado,
+            'match_score': item.match_score,
+            'match_criterio': item.match_criterio or '',
+            # Lote/Statement
+            'lote_id': item.lote_id,
+            'journal_code': journal or item.journal_code or '',
+            'statement_name': statement or '',
+            'tipo_lote': tipo_lote or 'entrada',
+            # Titulo vinculado (cache no item)
+            'titulo_nf': item.titulo_nf or '',
+            'titulo_parcela': item.titulo_parcela,
+            'titulo_valor': float(item.titulo_valor) if item.titulo_valor else None,
+            'titulo_cliente': item.titulo_cliente or '',
+            'titulo_cnpj': item.titulo_cnpj or '',
+            'titulo_vencimento': item.titulo_vencimento.strftime('%d/%m/%Y') if item.titulo_vencimento else '',
+            # M:N
+            'tem_multiplos_titulos': qtd > 0,
+            'qtd_titulos': qtd if qtd > 0 else (1 if has_fk else 0),
+            'valor_alocado_total': float(val_aloc) if val_aloc else None,
+            # IDs
+            'titulo_receber_id': item.titulo_receber_id,
+            'titulo_pagar_id': item.titulo_pagar_id,
+            'payment_id': item.payment_id,
+            'statement_line_id': item.statement_line_id,
+        })
+
+    # Stats agregados em single query
+    stats_q = db.session.query(
+        func.count().label('total'),
+        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('match_unico'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
+        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
+        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
+        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
+        func.sum(case((ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', 1), else_=0)).label('cnab'),
+        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
+    ).first()
+
+    stats = {
+        'total': stats_q.total or 0,
+        'match_unico': (stats_q.match_unico or 0) + (stats_q.vinculados or 0),
+        'multiplos': stats_q.multiplos or 0,
+        'sem_match': stats_q.sem_match or 0,
+        'pendentes': stats_q.pendentes or 0,
+        'cnab': stats_q.cnab or 0,
+        'aprovados': stats_q.aprovados or 0,
+        'conciliados': stats_q.conciliados or 0,
+    }
+
+    return jsonify({
+        'success': True,
+        'itens': itens,
+        'stats': stats
+    })
+
+
+@financeiro_bp.route('/extrato/api/aprovar-itens', methods=['POST'])
+@login_required
+def extrato_aprovar_itens():
+    """Aprova multiplos itens por IDs (batch para a tela unificada)."""
+    data = request.get_json()
+    item_ids = data.get('item_ids', [])
+
+    if not item_ids:
+        return jsonify({'success': False, 'error': 'item_ids e obrigatorio'}), 400
+
+    itens = ExtratoItem.query.filter(
+        ExtratoItem.id.in_(item_ids),
+        ExtratoItem.aprovado == False
+    ).all()
+
+    aprovados = 0
+    for item in itens:
+        # Verificar se tem titulo vinculado (1:1 via FK OU M:N via tabela associativa)
+        if item.titulo_receber_id or item.titulo_pagar_id or item.tem_multiplos_titulos:
+            item.aprovado = True
+            item.aprovado_em = agora_utc_naive()
+            item.aprovado_por = current_user.nome if current_user else 'Sistema'
+            item.status = 'APROVADO'
+            aprovados += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'aprovados': aprovados
+    })
+
+
+@financeiro_bp.route('/extrato/api/conciliar-itens', methods=['POST'])
+@login_required
+def extrato_conciliar_itens():
+    """Concilia multiplos itens aprovados por IDs (batch para a tela unificada)."""
+    data = request.get_json()
+    item_ids = data.get('item_ids', [])
+
+    if not item_ids:
+        return jsonify({'success': False, 'error': 'item_ids e obrigatorio'}), 400
+
+    try:
+        from app.financeiro.services.extrato_conciliacao_service import ExtratoConciliacaoService
+
+        service = ExtratoConciliacaoService()
+        total_conciliados = 0
+        total_erros = 0
+        erros_detalhe = []
+
+        itens = ExtratoItem.query.filter(
+            ExtratoItem.id.in_(item_ids),
+            ExtratoItem.aprovado == True,
+            ExtratoItem.status != 'CONCILIADO'
+        ).all()
+
+        for item in itens:
+            try:
+                service.conciliar_item(item)
+                db.session.commit()
+                total_conciliados += 1
+            except Exception as e:
+                db.session.rollback()
+                item.status = 'ERRO'
+                item.mensagem = str(e)
+                db.session.commit()
+                total_erros += 1
+                erros_detalhe.append({'id': item.id, 'erro': str(e)})
+
+        # Atualizar estatisticas dos lotes afetados
+        lote_ids_afetados = set(item.lote_id for item in itens)
+        for lote_id in lote_ids_afetados:
+            lote = db.session.get(ExtratoLote, lote_id)
+            if lote:
+                from sqlalchemy import func
+                conciliados_count = db.session.query(func.count()).filter(
+                    ExtratoItem.lote_id == lote_id,
+                    ExtratoItem.status == 'CONCILIADO'
+                ).scalar()
+                lote.linhas_conciliadas = conciliados_count
+                if conciliados_count >= lote.total_linhas:
+                    lote.status = 'CONCLUIDO'
+                    lote.processado_em = agora_utc_naive()
+                    lote.processado_por = current_user.nome if current_user else 'Sistema'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'conciliados': total_conciliados,
+            'erros': total_erros,
+            'erros_detalhe': erros_detalhe if erros_detalhe else None
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/extrato/api/executar-matching-itens', methods=['POST'])
+@login_required
+def extrato_executar_matching_itens():
+    """
+    Executa matching para itens pendentes da tela unificada.
+
+    Aceita:
+      - item_ids: lista de IDs especificos (selecionados pelo usuario)
+      - todos_pendentes: true → roda em TODOS os lotes com itens PENDENTE
+
+    Agrupa itens por lote e chama o service correto (recebimentos ou pagamentos).
+    """
+    data = request.get_json()
+    item_ids = data.get('item_ids', [])
+    todos_pendentes = data.get('todos_pendentes', False)
+
+    try:
+        from app.financeiro.services.extrato_matching_service import ExtratoMatchingService
+        from app.financeiro.services.pagamento_matching_service import PagamentoMatchingService
+        from sqlalchemy import func
+
+        if todos_pendentes:
+            # Descobrir lotes que tem itens PENDENTE
+            lotes_pendentes = db.session.query(
+                ExtratoItem.lote_id
+            ).filter(
+                ExtratoItem.status_match == 'PENDENTE'
+            ).distinct().all()
+            lote_ids = [r[0] for r in lotes_pendentes]
+        elif item_ids:
+            # Itens especificos — descobrir seus lotes
+            lote_ids = [r[0] for r in db.session.query(
+                ExtratoItem.lote_id
+            ).filter(
+                ExtratoItem.id.in_(item_ids),
+                ExtratoItem.status_match == 'PENDENTE'
+            ).distinct().all()]
+        else:
+            return jsonify({'success': False, 'error': 'Informe item_ids ou todos_pendentes=true'}), 400
+
+        if not lote_ids:
+            return jsonify({'success': True, 'processados': 0, 'mensagem': 'Nenhum item pendente encontrado'})
+
+        total_stats = {'processados': 0, 'com_match': 0, 'multiplos': 0, 'sem_match': 0}
+        erros_lotes = []
+
+        for lote_id in lote_ids:
+            lote = db.session.get(ExtratoLote, lote_id)
+            if not lote:
+                continue
+
+            try:
+                if lote.tipo_transacao == 'saida':
+                    service = PagamentoMatchingService()
+                else:
+                    service = ExtratoMatchingService()
+
+                resultado = service.executar_matching_lote(lote_id)
+
+                # Atualizar lote
+                lote.status = 'AGUARDANDO_APROVACAO'
+                lote.linhas_com_match = resultado.get('com_match', 0)
+                lote.linhas_sem_match = resultado.get('sem_match', 0)
+                db.session.commit()
+
+                # Acumular stats
+                for k in total_stats:
+                    total_stats[k] += resultado.get(k, 0)
+
+            except Exception as e:
+                erros_lotes.append({'lote_id': lote_id, 'erro': str(e)})
+
+        return jsonify({
+            'success': True,
+            'lotes_processados': len(lote_ids),
+            'resultado': total_stats,
+            'erros': erros_lotes if erros_lotes else None
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @financeiro_bp.route('/extrato/api/statements')
 @login_required
 def extrato_api_statements():
