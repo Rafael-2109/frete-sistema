@@ -119,6 +119,7 @@ class RecebimentoLfOdooService:
     LOCATION_FB_ESTOQUE = 8        # FB/Estoque
     LOCATION_CD_ESTOQUE = 32       # CD/Estoque
     LOCATION_CLIENTES = 5          # Parceiros/Clientes
+    CARRIER_ID_FB = 996             # NACOM GOYA (61.724.241/0001-78) — transportadora propria para transferencias
 
     # Recebimento CD via DFe (Fase 7) — IDs fixos
     TEAM_ID_CD = 119               # Lançamento Frete (mesmo da FB)
@@ -1893,6 +1894,7 @@ class RecebimentoLfOdooService:
             'scheduled_date': date.today().strftime('%Y-%m-%d %H:%M:%S'),
             'move_ids': move_vals,
             'incoterm': incoterm_cif_id,  # CIF — obrigatorio para liberar NF-e
+            'carrier_id': self.CARRIER_ID_FB,  # Transportadora propria — obrigatorio para liberar faturamento
         }
 
         picking_id = odoo.create('stock.picking', picking_vals)
@@ -2020,6 +2022,9 @@ class RecebimentoLfOdooService:
                 logger.warning(f"  action_assign falhou: {e}")
 
         # 3. Preencher lotes nos move_lines
+        # IMPORTANTE: O Odoo auto-cria move_lines via action_assign, potencialmente
+        # uma por lote/quant. Precisamos consolidar: preencher APENAS a primeira
+        # move_line de cada produto com o lote e quantidade corretos, e zerar as extras.
         move_lines = odoo.execute_kw(
             'stock.move.line', 'search_read',
             [[['picking_id', '=', picking_id]]],
@@ -2031,22 +2036,48 @@ class RecebimentoLfOdooService:
         for lt in lotes_transfer:
             lotes_by_product.setdefault(lt.odoo_product_id, []).append(lt)
 
+        # Agrupar move_lines por product_id
+        ml_by_product = {}
         for ml in move_lines:
             pid = ml['product_id'][0] if ml.get('product_id') else None
-            if not pid or pid not in lotes_by_product:
+            if pid:
+                ml_by_product.setdefault(pid, []).append(ml)
+
+        for pid, lotes_produto in lotes_by_product.items():
+            product_lines = ml_by_product.get(pid, [])
+            if not product_lines:
                 continue
 
-            lote_info = lotes_by_product[pid][0]  # Primeiro lote do produto
-            lot_id = lote_info.odoo_lot_id  # Lot ID na FB (ja criado na etapa 10)
+            lote_info = lotes_produto[0]
 
+            # Resolver lot_id: usar odoo_lot_id se disponivel, senao buscar no Odoo
+            lot_id = lote_info.odoo_lot_id
+            if not lot_id and lote_info.lote_nome:
+                lot_search = odoo.search('stock.lot', [
+                    ['name', '=', lote_info.lote_nome],
+                    ['product_id', '=', pid],
+                    ['company_id', '=', self.COMPANY_FB],
+                ])
+                if lot_search:
+                    lot_id = lot_search[0]
+                    lote_info.odoo_lot_id = lot_id
+                    logger.debug(f"    Lot ID resolvido via busca: {lot_id} ('{lote_info.lote_nome}')")
+
+            # Preencher primeira move_line com lote e quantidade total
+            first_line = product_lines[0]
             write_data = {'quantity': float(lote_info.quantidade)}
             if lot_id:
                 write_data['lot_id'] = lot_id
             elif lote_info.lote_nome:
                 write_data['lot_name'] = lote_info.lote_nome
 
-            odoo.write('stock.move.line', ml['id'], write_data)
-            logger.debug(f"    Move line {ml['id']}: qty={lote_info.quantidade}, lot={lot_id or lote_info.lote_nome}")
+            odoo.write('stock.move.line', first_line['id'], write_data)
+            logger.debug(f"    Move line {first_line['id']}: qty={lote_info.quantidade}, lot={lot_id or lote_info.lote_nome}")
+
+            # Zerar move_lines extras (evita duplicacao de quantidade)
+            for extra_line in product_lines[1:]:
+                odoo.write('stock.move.line', extra_line['id'], {'quantity': 0})
+                logger.debug(f"    Move line {extra_line['id']}: zerada (extra)")
 
         # 4. Aprovar quality checks
         self._aprovar_quality_checks(odoo, picking_id)
@@ -2514,7 +2545,7 @@ class RecebimentoLfOdooService:
             'account.move', 'read',
             [[invoice_id]],
             {'fields': [
-                'l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_chave_nf',
+                'l10n_br_xml_aut_nfe', 'l10n_br_pdf_aut_nfe', 'l10n_br_chave_nf',
                 'name', 'state', 'l10n_br_situacao_nf',
             ]}
         )
@@ -2522,8 +2553,8 @@ class RecebimentoLfOdooService:
             raise ValueError(f"Invoice transfer {invoice_id} nao encontrada")
 
         inv = inv_data[0]
-        xml_b64 = inv.get('l10n_br_xml_dfe')
-        pdf_b64 = inv.get('l10n_br_pdf_dfe')
+        xml_b64 = inv.get('l10n_br_xml_aut_nfe')
+        pdf_b64 = inv.get('l10n_br_pdf_aut_nfe')
         chave = inv.get('l10n_br_chave_nf')
 
         if not chave or len(str(chave)) != 44:
@@ -2534,7 +2565,7 @@ class RecebimentoLfOdooService:
 
         if not xml_b64:
             raise ValueError(
-                f"Invoice transfer {invoice_id}: XML (l10n_br_xml_dfe) vazio. "
+                f"Invoice transfer {invoice_id}: XML (l10n_br_xml_aut_nfe) vazio. "
                 f"NF-e pode nao ter sido transmitida."
             )
 
@@ -2576,12 +2607,12 @@ class RecebimentoLfOdooService:
             inv_data = odoo.execute_kw(
                 'account.move', 'read',
                 [[rec.odoo_transfer_invoice_id]],
-                {'fields': ['l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_chave_nf']}
+                {'fields': ['l10n_br_xml_aut_nfe', 'l10n_br_pdf_aut_nfe', 'l10n_br_chave_nf']}
             )
             if inv_data:
                 chave = str(inv_data[0].get('l10n_br_chave_nf', ''))
-                xml_b64 = inv_data[0].get('l10n_br_xml_dfe')
-                pdf_b64 = inv_data[0].get('l10n_br_pdf_dfe')
+                xml_b64 = inv_data[0].get('l10n_br_xml_aut_nfe')
+                pdf_b64 = inv_data[0].get('l10n_br_pdf_aut_nfe')
             if not chave or not xml_b64:
                 raise ValueError("Dados da NF transfer nao disponiveis (chave/XML)")
 
@@ -2692,6 +2723,23 @@ class RecebimentoLfOdooService:
                 'Processar DFe CD'
             )
 
+        # Corrigir company_id das DFe lines: action_processar_arquivo_manual
+        # herda a company do XML (FB), mas as lines devem pertencer ao CD
+        # para que action_create_invoice no PO CD nao falhe por incompatibilidade
+        dfe_lines = odoo.search(
+            'l10n_br_ciel_it_account.dfe.line',
+            [['dfe_id', '=', dfe_id], ['company_id', '!=', self.COMPANY_CD]]
+        )
+        if dfe_lines:
+            odoo.write(
+                'l10n_br_ciel_it_account.dfe.line', dfe_lines,
+                {'company_id': self.COMPANY_CD}
+            )
+            logger.info(
+                f"  Corrigido company_id de {len(dfe_lines)} DFe lines "
+                f"para CD (company_id={self.COMPANY_CD})"
+            )
+
         self._checkpoint(
             etapa=25,
             odoo_cd_dfe_id=dfe_id,
@@ -2727,7 +2775,7 @@ class RecebimentoLfOdooService:
         if dfe_data:
             data_entrada = dfe_data[0].get('l10n_br_data_entrada')
             tipo_pedido = dfe_data[0].get('l10n_br_tipo_pedido')
-            if data_entrada:
+            if data_entrada and tipo_pedido == 'transf-filial':
                 logger.info(
                     f"  DFe CD {dfe_id}: ja configurado "
                     f"(data={data_entrada}, tipo={tipo_pedido})"
@@ -2736,11 +2784,10 @@ class RecebimentoLfOdooService:
                 return
 
         hoje = date.today().strftime('%Y-%m-%d')
-        values = {'l10n_br_data_entrada': hoje}
-
-        # Setar tipo_pedido apenas se nao preenchido
-        if dfe_data and not dfe_data[0].get('l10n_br_tipo_pedido'):
-            values['l10n_br_tipo_pedido'] = 'serv-industrializacao'
+        values = {
+            'l10n_br_data_entrada': hoje,
+            'l10n_br_tipo_pedido': 'transf-filial',  # Transferencia entre Filiais (FB → CD)
+        }
 
         self._write_and_verify(
             odoo, 'l10n_br_ciel_it_account.dfe', [dfe_id], values,
@@ -2872,6 +2919,7 @@ class RecebimentoLfOdooService:
                 'payment_term_id': self.PAYMENT_TERM_CD,
                 'company_id': self.COMPANY_CD,
                 'picking_type_id': self.PICKING_TYPE_IN_CD,
+                'l10n_br_tipo_pedido': 'transf-filial',  # Transferencia entre Filiais (FB → CD)
             }
             # Adicionar payment_provider_id apenas se configurado
             if self.PAYMENT_PROVIDER_ID_CD:

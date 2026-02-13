@@ -259,9 +259,15 @@ class ExtratoConciliacaoService:
                 # Se payment usou conta PENDENTES → trocar TRANSITÓRIA→PENDENTES (padrão)
                 # Se payment usou conta bancária → trocar TRANSITÓRIA→conta bancária
                 if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
-                    self._trocar_conta_extrato(item.move_id)
+                    troca_ok = self._trocar_conta_extrato(item.move_id)
                 else:
-                    self._trocar_conta_extrato_para(item.move_id, payment_account_id)
+                    troca_ok = self._trocar_conta_extrato_para(item.move_id, payment_account_id)
+
+                if not troca_ok:
+                    logger.warning(
+                        f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id}). "
+                        f"Reconciliação pode falhar."
+                    )
 
                 # Executar reconciliação: linha payment <-> linha EXTRATO
                 logger.info(
@@ -346,7 +352,12 @@ class ExtratoConciliacaoService:
                 logger.info(f"  Mesma empresa - reconciliação direta")
 
                 # Trocar conta do extrato ANTES de reconciliar
-                self._trocar_conta_extrato(item.move_id)
+                troca_ok = self._trocar_conta_extrato(item.move_id)
+                if not troca_ok:
+                    logger.warning(
+                        f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id}). "
+                        f"Reconciliação direta pode falhar."
+                    )
 
                 logger.info(
                     f"  Reconciliando DIRETO: "
@@ -446,7 +457,12 @@ class ExtratoConciliacaoService:
                     payment_pendente_line_id = payment_pendente_line['id']
 
                     # Trocar conta do extrato ANTES de reconciliar
-                    self._trocar_conta_extrato(item.move_id)
+                    troca_ok = self._trocar_conta_extrato(item.move_id)
+                    if not troca_ok:
+                        logger.warning(
+                            f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id}). "
+                            f"Reconciliação extrato pode falhar."
+                        )
 
                     logger.info(
                         f"  Reconciliando extrato: "
@@ -1041,10 +1057,15 @@ class ExtratoConciliacaoService:
                     # Se payment usou conta PENDENTES → trocar padrão
                     # Se payment usou conta bancária → trocar para conta bancária
                     if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
-                        self._trocar_conta_extrato(item.move_id)
+                        troca_ok = self._trocar_conta_extrato(item.move_id)
                     else:
-                        self._trocar_conta_extrato_para(
+                        troca_ok = self._trocar_conta_extrato_para(
                             item.move_id, payment_account_id
+                        )
+
+                    if not troca_ok:
+                        logger.warning(
+                            f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id})"
                         )
 
                     # Buscar linha DEBIT do extrato (counterpart na TRANSITÓRIA/PENDENTES)
@@ -1544,17 +1565,21 @@ class ExtratoConciliacaoService:
         if not move_id:
             return False
         try:
+            # Buscar linha na TRANSITÓRIA (sem filtro debit/credit —
+            # recebíveis têm CREDIT, pagáveis têm DEBIT)
             linhas = self.connection.search_read(
                 'account.move.line',
                 [
                     ['move_id', '=', move_id],
                     ['account_id', '=', CONTA_TRANSITORIA],
-                    ['debit', '>', 0]
                 ],
-                fields=['id'],
+                fields=['id', 'debit', 'credit'],
                 limit=1
             )
             if not linhas:
+                logger.warning(
+                    f"  Linha TRANSITÓRIA não encontrada no move {move_id}"
+                )
                 return False
 
             line_id = linhas[0]['id']
@@ -1565,6 +1590,11 @@ class ExtratoConciliacaoService:
                 logger.info(
                     f"  Conta atualizada: move_line {line_id}, "
                     f"{CONTA_TRANSITORIA} → {CONTA_PAGAMENTOS_PENDENTES}"
+                )
+            else:
+                logger.warning(
+                    f"  Falha ao trocar conta da move_line {line_id} "
+                    f"(move {move_id}): safe_write retornou False"
                 )
             return ok
         except Exception as e:
@@ -1597,15 +1627,15 @@ class ExtratoConciliacaoService:
             return self._trocar_conta_extrato(move_id)
 
         try:
-            # Buscar linha de débito na conta TRANSITÓRIA ou PENDENTES
+            # Buscar linha na conta TRANSITÓRIA ou PENDENTES (sem filtro debit/credit —
+            # recebíveis têm CREDIT, pagáveis têm DEBIT)
             linhas = self.connection.search_read(
                 'account.move.line',
                 [
                     ['move_id', '=', move_id],
                     ['account_id', 'in', [CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES]],
-                    ['debit', '>', 0]
                 ],
-                fields=['id', 'account_id'],
+                fields=['id', 'account_id', 'debit', 'credit'],
                 limit=1
             )
             if not linhas:
@@ -2417,9 +2447,16 @@ class ExtratoConciliacaoService:
                     # Se payment usou conta PENDENTES → trocar padrão
                     # Se payment usou conta bancária → trocar para conta bancária
                     if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
-                        self._trocar_conta_extrato(item.move_id)
+                        troca_ok = self._trocar_conta_extrato(item.move_id)
                     else:
-                        self._trocar_conta_extrato_para(item.move_id, payment_account_id)
+                        troca_ok = self._trocar_conta_extrato_para(
+                            item.move_id, payment_account_id
+                        )
+
+                    if not troca_ok:
+                        logger.warning(
+                            f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id})"
+                        )
 
                     # Executar reconciliação no Odoo
                     self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
