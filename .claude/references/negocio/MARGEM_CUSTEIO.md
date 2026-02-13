@@ -8,13 +8,31 @@ Documentacao da composicao de margem bruta e tabelas de custeio.
 
 ```
 Margem Bruta = Preco Venda
-             - CustoConsiderado (custo do produto)
-             - CustoFrete (% frete sobre venda, por incoterm e UF)
-             - RegraComissao (comissao do vendedor)
-             - ParametroCusteio('CUSTO_OPERACAO') (custo operacional fixo %)
+             - CustoConsiderado * (1 + PERCENTUAL_PERDA)
              - ICMS
              - PIS
              - COFINS
+             - Desconto Concedido
+             - CustoFrete (% frete sobre venda, por incoterm e UF)
+             - CUSTO_FINANCEIRO_PERCENTUAL
+             - If RegraComissao (comissao do vendedor) else COMISSAO_PADRAO
+```
+## Formula da Margem Liquida
+
+```
+Margem Liquida  = Preco Venda 
+                - CustoConsiderado * (1 + PERCENTUAL_PERDA)
+                - ICMS
+                - PIS
+                - COFINS 
+                - Desconto Concedido
+                - CustoFrete (% frete sobre venda, por incoterm e UF)
+                - CUSTO_FINANCEIRO_PERCENTUAL
+                - If RegraComissao (comissao do vendedor) else COMISSAO_PADRAO
+
+                ### Adicionais para Margem Liquida ###
+                - CUSTO_OPERACAO_PERCENTUAL
+                - Custo_Producao * (1 + PERCENTUAL_PERDA)
 ```
 
 ### Campo pre-calculado
@@ -47,7 +65,7 @@ Margem Bruta = Preco Venda
 
 ### ParametroCusteio (tabela `parametro_custeio`)
 - Parametros globais de custeio
-- `chave` (unica) - Ex: 'CUSTO_OPERACAO', 'ICMS_SP', etc.
+- `chave` (unica) - Ex: 'CUSTO_OPERACAO_PERCENTUAL, 'PERCENTUAL_PERDA', 'CUSTO_FINANCEIRO_PERCENTUAL' e 'COMISSAO_PADRAO'.
 - `valor` - Valor numerico do parametro
 - `descricao` - Explicacao do parametro
 
