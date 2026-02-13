@@ -3033,7 +3033,7 @@ document.addEventListener('DOMContentLoaded', function() {
                            : extSts === 'ERRO' ? 'bg-danger' : 'bg-secondary';
                 html += row('Extrato Local',
                     '<span class="badge ' + extCls + '">Item #' + rowData.extrato_item_id + ' — ' + extSts + '</span>' +
-                    ' <a href="{{ url_for("financeiro.extrato_hub") }}?item=' + rowData.extrato_item_id +
+                    ' <a href="{{ url_for("financeiro.extrato_itens") }}?item=' + rowData.extrato_item_id +
                     '" class="small">Ver lote</a>'
                 );
             }

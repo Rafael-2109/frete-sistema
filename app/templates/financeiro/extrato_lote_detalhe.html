@@ -17,7 +17,7 @@
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb mb-2">
                             <li class="breadcrumb-item">
-                                <a href="{{ url_for('financeiro.extrato_hub') }}">Extrato</a>
+                                <a href="{{ url_for('financeiro.extrato_itens') }}">Extrato</a>
                             </li>
                             <li class="breadcrumb-item active">Lote {{ lote.id }}</li>
                         </ol>
@@ -67,7 +67,7 @@
                     </button>
                     {% endif %}
 
-                    <a href="{{ url_for('financeiro.extrato_hub') }}" class="btn btn-outline-secondary">
+                    <a href="{{ url_for('financeiro.extrato_itens') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>Voltar
                     </a>
                 </div>

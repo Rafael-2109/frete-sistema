@@ -14,7 +14,7 @@
     <header class="fin-header">
         <div>
             <nav class="fin-breadcrumb">
-                <a href="{{ url_for('financeiro.extrato_hub') }}" class="fin-breadcrumb__item">
+                <a href="{{ url_for('financeiro.extrato_itens') }}" class="fin-breadcrumb__item">
                     <i class="fas fa-university"></i> Extratos
                 </a>
                 <span class="fin-breadcrumb__separator">/</span>
@@ -56,7 +56,7 @@
             </button>
             {% endif %}
 
-            <a href="{{ url_for('financeiro.extrato_hub') }}" class="fin-btn fin-btn--ghost">
+            <a href="{{ url_for('financeiro.extrato_itens') }}" class="fin-btn fin-btn--ghost">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
         </div>
