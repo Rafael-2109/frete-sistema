@@ -1316,7 +1316,8 @@ function selecionarSugestaoModal(codigo, nome, qtdPorCaixa, qtdConvertida, peso,
         nome: nome,
         qtd_por_caixa: qtdPorCaixa,
         qtd_convertida: qtdConvertida,
-        peso: peso
+        peso: peso,
+        peso_bruto: peso  // Necessario para calcularQtdConvertida() que busca peso_bruto
     };
 
     document.querySelectorAll('#modal-sugestoes-lista .list-group-item').forEach(el => {
@@ -1468,6 +1469,7 @@ async function salvarProduto() {
                 `;
             }
 
+            recalcularTotalPeso();
             bootstrap.Modal.getInstance(document.getElementById('modal-produto')).hide();
         } else {
             alert('Erro: ' + (data.erro || 'Falha ao salvar'));
@@ -1687,6 +1689,8 @@ async function aplicarResolucoesSelecionadas() {
     resultado.classList.remove('d-none');
     footer.classList.remove('d-none');
 
+    recalcularTotalPeso();
+
     const resumo = document.getElementById('resolver-resumo');
     resumo.className = erros === 0 ? 'alert alert-success mb-3' : 'alert alert-warning mb-3';
     resumo.innerHTML = `
@@ -1700,6 +1704,24 @@ async function aplicarResolucoesSelecionadas() {
         cb.disabled = true;
     });
     atualizarContadorSelecionadas();
+}
+
+function recalcularTotalPeso() {
+    const totalPesoEl = document.getElementById('tfoot-total-peso');
+    if (!totalPesoEl) return;
+
+    let totalPeso = 0;
+    // Percorrer todas as linhas de produto da tabela NFD
+    document.querySelectorAll('[id^="prod-peso-"]').forEach(el => {
+        // Extrair numero do texto (ex: "12.50 kg" ou badge com "12.50 kg")
+        const texto = el.textContent.trim();
+        const match = texto.match(/([\d.,]+)\s*kg/i);
+        if (match) {
+            totalPeso += parseFloat(match[1].replace(',', '.')) || 0;
+        }
+    });
+
+    totalPesoEl.innerHTML = `<strong>${totalPeso.toFixed(2)} kg</strong>`;
 }
 
 function atualizarLinhaProdutoNaTabela(linhaId, codigo, descricao, qtdConvertida, peso) {

@@ -1142,6 +1142,7 @@ class AIResolverService:
                         resultado[cod_original] = {
                             'nosso_codigo': depara.codigo_nosso,
                             'descricao_nosso': depara.descricao_nosso,
+                            'fator_conversao': float(depara.fator_conversao or 1.0),
                             'grupo': 'atacadao',
                             'metodo': 'DEPARA_GRUPO'
                         }
@@ -1159,6 +1160,7 @@ class AIResolverService:
                     resultado[depara.codigo_sendas] = {
                         'nosso_codigo': depara.codigo_nosso,
                         'descricao_nosso': depara.descricao_nosso,
+                        'fator_conversao': float(depara.fator_conversao or 1.0),
                         'grupo': 'assai',
                         'metodo': 'DEPARA_GRUPO'
                     }
@@ -1181,6 +1183,7 @@ class AIResolverService:
                     resultado[depara.codigo_cliente] = {
                         'nosso_codigo': depara.nosso_codigo,
                         'descricao_nosso': depara.descricao_nosso,
+                        'fator_conversao': float(depara.fator_conversao or 1.0),
                         'unidade_medida_cliente': depara.unidade_medida_cliente,
                         'unidade_medida_nosso': depara.unidade_medida_nosso,
                         'metodo': 'DEPARA'

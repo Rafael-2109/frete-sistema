@@ -109,10 +109,11 @@ def api_resolver_produto():
                 pass
 
         # Calcular conversao para sugestao principal (busca nome no CadastroPalletizacao)
-        def calcular_conversao(codigo_interno, nome_fallback):
+        def calcular_conversao(codigo_interno, nome_fallback, depara_fator=None):
             from app.producao.models import CadastroPalletizacao
 
-            # Priorizar nome do CadastroPalletizacao
+            # Buscar produto no CadastroPalletizacao
+            produto = None
             nome_para_extracao = nome_fallback or ''
             try:
                 produto = CadastroPalletizacao.query.filter_by(
@@ -123,21 +124,48 @@ def api_resolver_produto():
             except Exception:
                 pass
 
-            qtd_por_caixa = service._extrair_qtd_caixa(nome_para_extracao)
+            # Determinar qtd_por_caixa: priorizar fator do De-Para, depois extrair do nome
+            qtd_por_caixa = None
+            if depara_fator and depara_fator > 1:
+                qtd_por_caixa = int(depara_fator)
+            else:
+                qtd_por_caixa = service._extrair_qtd_caixa(nome_para_extracao)
+
+            # Calcular conversao baseada no tipo de unidade
             qtd_convertida = None
-            if tipo_unidade == 'UNIDADE' and qtd_por_caixa and quantidade:
+            if tipo_unidade == 'CAIXA' and quantidade:
+                # Ja e caixa: conversao 1:1
+                qtd_convertida = round(float(quantidade), 3)
+            elif tipo_unidade == 'UNIDADE' and qtd_por_caixa and quantidade:
                 qtd_convertida = round(float(quantidade) / qtd_por_caixa, 3)
+            elif tipo_unidade == 'PESO' and produto and produto.peso_bruto and quantidade:
+                # Converter kg -> caixas via peso da caixa
+                peso_caixa = float(produto.peso_bruto)
+                if peso_caixa > 0:
+                    qtd_convertida = round(float(quantidade) / peso_caixa, 3)
+
+            # Calcular peso
+            peso_calculado = None
+            if produto and produto.peso_bruto:
+                qtd_para_peso = qtd_convertida if qtd_convertida else float(quantidade or 0)
+                peso_calculado = round(qtd_para_peso * float(produto.peso_bruto), 2)
+
             return {
                 'qtd_por_caixa': qtd_por_caixa,
-                'qtd_convertida_caixas': qtd_convertida
+                'qtd_convertida_caixas': qtd_convertida,
+                'peso_calculado': peso_calculado
             }
+
+        # Propagar fator do De-Para se metodo for DEPARA ou DEPARA_GRUPO
+        depara_fator = fator_conversao if resultado.metodo_resolucao in ('DEPARA', 'DEPARA_GRUPO') else None
 
         # Preparar resposta da sugestao principal
         sugestao_principal_response = None
         if resultado.sugestao_principal:
             conv = calcular_conversao(
                 resultado.sugestao_principal.codigo_interno,
-                resultado.sugestao_principal.nome_interno
+                resultado.sugestao_principal.nome_interno,
+                depara_fator=depara_fator
             )
             sugestao_principal_response = {
                 'codigo': resultado.sugestao_principal.codigo_interno,
@@ -145,7 +173,8 @@ def api_resolver_produto():
                 'confianca': resultado.sugestao_principal.confianca,
                 'justificativa': resultado.sugestao_principal.justificativa,
                 'qtd_por_caixa': conv['qtd_por_caixa'],
-                'qtd_convertida_caixas': conv['qtd_convertida_caixas']
+                'qtd_convertida_caixas': conv['qtd_convertida_caixas'],
+                'peso_calculado': conv['peso_calculado']
             }
 
         # Preparar outras sugestoes com conversao
@@ -158,7 +187,8 @@ def api_resolver_produto():
                 'confianca': s.confianca,
                 'justificativa': s.justificativa,
                 'qtd_por_caixa': conv['qtd_por_caixa'],
-                'qtd_convertida_caixas': conv['qtd_convertida_caixas']
+                'qtd_convertida_caixas': conv['qtd_convertida_caixas'],
+                'peso_calculado': conv['peso_calculado']
             })
 
         return jsonify({

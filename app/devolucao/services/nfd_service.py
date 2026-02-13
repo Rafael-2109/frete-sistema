@@ -443,8 +443,9 @@ class NFDService:
             nfs_criadas = self._processar_nfs_referenciadas(nfd_existente.id, xml_base64)
             estatisticas['nfs_referenciadas'] = nfs_criadas
 
-            # Extrair e salvar linhas de produto
-            linhas_criadas = self._processar_linhas_produto(nfd_existente.id, xml_base64)
+            # Extrair e salvar linhas de produto (com auto-resolucao via De-Para)
+            prefixo_cnpj = nfd_existente.prefixo_cnpj_emitente
+            linhas_criadas = self._processar_linhas_produto(nfd_existente.id, xml_base64, prefixo_cnpj=prefixo_cnpj)
             estatisticas['linhas_criadas'] = linhas_criadas
 
             # Detectar se é NFD de pallet/vasilhame (após processar linhas)
@@ -782,13 +783,15 @@ class NFDService:
             logger.error(f"   ❌ Erro ao processar NFs referenciadas: {e}")
             return 0
 
-    def _processar_linhas_produto(self, nfd_id: int, xml_base64: str) -> int:
+    def _processar_linhas_produto(self, nfd_id: int, xml_base64: str, prefixo_cnpj: str = None) -> int:
         """
-        Extrai linhas de produto do XML e cria NFDevolucaoLinha
+        Extrai linhas de produto do XML e cria NFDevolucaoLinha.
+        Se prefixo_cnpj for fornecido, tenta aplicar De-Para automaticamente.
 
         Args:
             nfd_id: ID da NFDevolucao
             xml_base64: XML em base64
+            prefixo_cnpj: Prefixo CNPJ (8 digitos) para busca De-Para
 
         Returns:
             Quantidade de linhas criadas
@@ -804,7 +807,26 @@ class NFDService:
             # Extrair itens
             itens = extrair_itens_nfd(xml_content)
 
+            # =========================================================
+            # Buscar De-Para em lote para todos os codigos de produto
+            # =========================================================
+            depara_map = {}
+            if prefixo_cnpj and itens:
+                try:
+                    from app.devolucao.services import get_ai_resolver
+                    ai_service = get_ai_resolver()
+                    codigos_clientes = [
+                        str(item.get('codigo_produto', '')).strip()
+                        for item in itens
+                        if item.get('codigo_produto')
+                    ]
+                    if codigos_clientes:
+                        depara_map = ai_service._buscar_depara_lote(codigos_clientes, prefixo_cnpj)
+                except Exception as e:
+                    logger.warning(f"   ⚠️ Erro ao buscar De-Para em lote: {e}")
+
             count = 0
+            auto_resolvidas = 0
             for item in itens:
                 # Verificar se já existe linha com mesmo numero_item
                 numero_item = item.get('numero_item')
@@ -834,15 +856,108 @@ class NFDService:
                     criado_em=agora_utc_naive(),
                 )
 
+                # =========================================================
+                # Tentar auto-resolver via De-Para
+                # =========================================================
+                codigo_cliente = str(item.get('codigo_produto', '')).strip()
+                depara = depara_map.get(codigo_cliente)
+
+                if depara and depara.get('nosso_codigo'):
+                    unidade_str = (item.get('unidade_medida') or '').strip().upper()
+                    tipo_unidade = self._classificar_unidade(unidade_str)
+
+                    # Proteção: só aplicar conversão automática se tipo é reconhecido
+                    if tipo_unidade != 'OUTRO':
+                        linha.codigo_produto_interno = depara['nosso_codigo']
+                        linha.descricao_produto_interno = depara.get('descricao_nosso', '')
+                        linha.produto_resolvido = True
+                        linha.metodo_resolucao = depara.get('metodo', 'DEPARA')
+
+                        # Calcular conversão baseada no tipo de unidade
+                        fator = float(depara.get('fator_conversao', 1.0))
+                        quantidade = float(item.get('quantidade', 0)) if item.get('quantidade') else None
+
+                        if tipo_unidade == 'CAIXA' and quantidade:
+                            # Já é caixa: 1:1
+                            linha.qtd_por_caixa = 1
+                            linha.quantidade_convertida = quantidade
+                        elif tipo_unidade == 'UNIDADE' and fator > 0 and quantidade:
+                            linha.qtd_por_caixa = int(fator)
+                            linha.quantidade_convertida = round(quantidade / fator, 3)
+                        elif tipo_unidade == 'PESO' and quantidade:
+                            # Converter kg -> caixas via peso da caixa do cadastro
+                            try:
+                                from app.producao.models import CadastroPalletizacao
+                                produto = CadastroPalletizacao.query.filter_by(
+                                    cod_produto=depara['nosso_codigo']
+                                ).first()
+                                if produto and produto.peso_bruto and float(produto.peso_bruto) > 0:
+                                    peso_caixa = float(produto.peso_bruto)
+                                    linha.quantidade_convertida = round(quantidade / peso_caixa, 3)
+                            except Exception:
+                                pass
+
+                        # Calcular peso via CadastroPalletizacao
+                        try:
+                            from app.producao.models import CadastroPalletizacao
+                            produto = CadastroPalletizacao.query.filter_by(
+                                cod_produto=depara['nosso_codigo']
+                            ).first()
+                            if produto and produto.peso_bruto:
+                                qtd_para_peso = float(linha.quantidade_convertida) if linha.quantidade_convertida else float(quantidade or 0)
+                                linha.peso_bruto = Decimal(str(round(qtd_para_peso * float(produto.peso_bruto), 2)))
+                        except Exception:
+                            pass
+
+                        auto_resolvidas += 1
+
                 db.session.add(linha)
                 count += 1
 
+            if auto_resolvidas > 0:
+                logger.info(f"   ✅ {auto_resolvidas}/{count} linhas auto-resolvidas via De-Para")
             logger.info(f"   📦 {count} linhas de produto criadas")
             return count
 
         except Exception as e:
             logger.error(f"   ❌ Erro ao processar linhas de produto: {e}")
             return 0
+
+    @staticmethod
+    def _classificar_unidade(unidade_str: str) -> str:
+        """
+        Classifica unidade de medida em CAIXA, UNIDADE, PESO ou OUTRO.
+        Usa regras deterministicas baseadas na analise de 1892 linhas de NFD.
+
+        Args:
+            unidade_str: Unidade em uppercase (ja stripped)
+
+        Returns:
+            'CAIXA', 'UNIDADE', 'PESO' ou 'OUTRO'
+        """
+        if not unidade_str:
+            return 'OUTRO'
+
+        # CAIXA (verificar primeiro - mais especifico)
+        if any(u in unidade_str for u in ['CX', 'CAIXA', 'BOX', 'FD', 'FARDO', 'PCT', 'PACOTE', 'TAMBOR']):
+            return 'CAIXA'
+
+        # UNIDADE
+        if any(u in unidade_str for u in ['UN', 'UNI', 'PC', 'PECA', 'PÇ', 'BD', 'BALDE', 'BLD',
+                                            'SC', 'SACO', 'PT', 'POTE', 'BL', 'BA', 'SH', 'SACHE']):
+            return 'UNIDADE'
+
+        # PESO
+        if any(u in unidade_str for u in ['KG', 'GR', 'GRAM', 'QUILO', 'TON']):
+            return 'PESO'
+
+        # Casos especiais
+        if unidade_str == 'U':
+            return 'UNIDADE'
+        if unidade_str == 'G':
+            return 'PESO'
+
+        return 'OUTRO'
 
     def _detectar_nfd_pallet(self, nfd_id: int) -> bool:
         """
