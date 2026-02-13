@@ -142,9 +142,9 @@ body {
    vencer o Bootstrap CDN (que também está fora de layers).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Base badge - herda cor do texto do tema */
+/* Base badge - usa custom property API do layer system, fallback para inherit */
 .badge {
-    color: inherit;
+    color: var(--_badge-color, inherit);
 }
 
 /* Badges com fundo colorido - texto escuro para contraste */

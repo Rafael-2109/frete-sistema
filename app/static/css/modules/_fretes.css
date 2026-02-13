@@ -33,90 +33,55 @@
       border-radius: 0.375rem;
   }
 
-  /* Status: PENDENTE - Amarelo with dark text for contrast (WCAG 4.5:1) */
-  .badge-status-pendente {
-      background-color: var(--bs-warning);
-      color: hsl(0 0% 10%);
-  }
-
-  /* Status: EM_TRATATIVA - Darker gray for contrast (WCAG 4.5:1) */
+  /* Status: EM_TRATATIVA - Fretes-only (nao existe em _badges.css) */
   .badge-status-tratativa {
-      background-color: hsl(0 0% 35%);
-      color: hsl(0 0% 100%);
+      --_badge-bg: hsl(0 0% 35%);
+      --_badge-color: hsl(0 0% 100%);
   }
 
-  /* Status: APROVADO - Verde with white text */
-  .badge-status-aprovado {
-      background-color: var(--bs-success);
-      color: white;
-  }
-
-  /* Status: REJEITADO - Vermelho with white text */
-  .badge-status-rejeitado {
-      background-color: var(--bs-danger);
-      color: white;
-  }
-
-  /* Status: PAGO - Primario with dark text */
-  .badge-status-pago {
-      background-color: var(--bs-primary);
-      color: hsl(216 63% 9%);
-  }
-
-  /* Status: LANCADO - Theme-aware */
+  /* Status: LANCADO - Design sutil diferente do _badges.css (neutro vs amber) */
   .badge-status-lancado {
-      background-color: var(--bs-tertiary-bg);
-      color: var(--bs-body-color);
-      border: 1px solid var(--bs-border-color);
-  }
-
-  /* Status: CANCELADO - Secundario with white text */
-  .badge-status-cancelado {
-      background-color: var(--bs-secondary);
-      color: white;
+      --_badge-bg: var(--bg-light);
+      --_badge-color: var(--text);
+      --_badge-border: var(--border);
   }
 
   /* Valor badges */
   .badge-valor-positivo {
-      background-color: var(--bs-danger);
-      color: white;
+      --_badge-bg: var(--semantic-danger);
+      --_badge-color: hsl(0 0% 100%);
   }
 
   .badge-valor-negativo {
-      background-color: var(--bs-success);
-      color: white;
+      --_badge-bg: var(--semantic-success);
+      --_badge-color: hsl(0 0% 100%);
   }
 
   .badge-valor-info {
-      background-color: var(--bs-info);
-      color: white;
+      --_badge-bg: hsl(0 0% 40%);
+      --_badge-color: hsl(0 0% 100%);
   }
 
   /* Movimento badges */
   .badge-movimento-entrada {
-      background-color: var(--bs-success);
-      color: white;
+      --_badge-bg: var(--semantic-success);
+      --_badge-color: hsl(0 0% 100%);
   }
 
   .badge-movimento-saida {
-      background-color: var(--bs-danger);
-      color: white;
+      --_badge-bg: var(--semantic-danger);
+      --_badge-color: hsl(0 0% 100%);
   }
 
   /* Odoo status badges */
   .badge-odoo-ok {
-      background-color: var(--bs-success);
-      color: white;
+      --_badge-bg: var(--semantic-success);
+      --_badge-color: hsl(0 0% 100%);
   }
 
   .badge-odoo-pendente {
-      background-color: var(--bs-warning);
-      color: white;
-  }
-
-  /* Em dark mode, warning e mais claro entao texto escuro */
-  [data-bs-theme="dark"] .badge-odoo-pendente {
-      color: hsl(210 11% 15%);
+      --_badge-bg: var(--amber-50);
+      --_badge-color: hsl(0 0% 10%);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
@@ -179,29 +144,28 @@
       color: var(--bs-body-color);
   }
 
-  /* Badge valor calculado - theme-aware */
+  /* Badge valor calculado - theme-aware (custom property API) */
   .badge-valor-calculado {
-      background-color: hsla(217 91% 60% / 0.15);
-      color: var(--bs-primary);
-      border: 1px solid hsla(217 91% 60% / 0.3);
+      --_badge-bg: hsla(217 91% 60% / 0.15);
+      --_badge-color: var(--amber-55);
+      --_badge-border: hsla(217 91% 60% / 0.3);
+  }
+
+  [data-bs-theme="light"] .badge-valor-calculado {
+      --_badge-bg: hsla(217 91% 60% / 0.1);
+      --_badge-color: var(--amber-28);
   }
 
   /* Badge valor destaque */
   .badge-valor-destaque {
-      background-color: hsla(145 65% 40% / 0.15);
-      color: var(--bs-success);
-      border: 1px solid hsla(145 65% 40% / 0.3);
-  }
-
-  /* Light mode badges - usar variaveis do tema */
-  [data-bs-theme="light"] .badge-valor-calculado {
-      background-color: hsla(217 91% 60% / 0.1);
-      color: var(--bs-primary);
+      --_badge-bg: hsla(145 65% 40% / 0.15);
+      --_badge-color: var(--semantic-success);
+      --_badge-border: hsla(145 65% 40% / 0.3);
   }
 
   [data-bs-theme="light"] .badge-valor-destaque {
-      background-color: hsla(145 65% 40% / 0.1);
-      color: var(--bs-success);
+      --_badge-bg: hsla(145 65% 40% / 0.1);
+      --_badge-color: hsl(145 70% 28%);
   }
 
   /* Table active theme-aware */

@@ -223,22 +223,22 @@
       color: var(--semantic-danger);
   }
 
-  /* Badges LF - auto/manual/nao encontrado */
+  /* Badges LF - auto/manual/nao encontrado (custom property API) */
   .badge-auto {
-      background-color: var(--semantic-success);
-      color: white;
+      --_badge-bg: var(--semantic-success);
+      --_badge-color: hsl(0 0% 100%);
       font-size: 0.7rem;
   }
 
   .badge-manual {
-      background-color: var(--amber-50);
-      color: var(--text);
+      --_badge-bg: var(--amber-50);
+      --_badge-color: hsl(0 0% 10%);
       font-size: 0.7rem;
   }
 
   .badge-nao-encontrado {
-      background-color: var(--text-muted);
-      color: white;
+      --_badge-bg: hsl(0 0% 35%);
+      --_badge-color: hsl(0 0% 100%);
       font-size: 0.7rem;
   }
 

@@ -493,6 +493,9 @@
     <ref path=".claude/references/negocio/REGRAS_NEGOCIO.md" trigger="perfil empresa, gargalos producao, bonificacao, formula estoque, agendamento, como funciona a Nacom">14 regras de negocio: escala, gargalos (agendas > MP > capacidade), rotas, atrasos, completude</ref>
     <ref path=".claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md" trigger="como pedido vira entrega, fluxo carteira ate NF, cadeia de tabelas, estados do pedido">Fluxo CarteiraPrincipal → Separacao → Embarque → NF → Entrega + 6 estados com criterios</ref>
     <ref path=".claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md" trigger="diferenca carteira vs separacao, campo nao existe, status de separacao, pallets teorico vs fisico">Campos exclusivos, filtros de pendencia, listeners automaticos, pallets</ref>
+    <ref path=".claude/references/modelos/REGRAS_MODELOS.md" trigger="embarque, faturamento, devolucao, pre-separacao, status NF, regras de modelo secundario">Regras Embarque, Faturamento, Devolucao. PreSeparacaoItem=DEPRECATED (usar Separacao status=PREVISAO)</ref>
+    <ref path=".claude/references/negocio/FRETE_REAL_VS_TEORICO.md" trigger="diferenca frete cotado vs CTE, valor pago, divergencia frete, frete real, frete considerado">4 valores de frete (cotado/CTE/considerado/pago), regras de divergencia, aprovacao</ref>
+    <ref path=".claude/references/negocio/MARGEM_CUSTEIO.md" trigger="margem bruta, custeio, custo produto, comissao, custo operacao, markup">Formula margem = Venda - CustoConsiderado - CustoFrete - Comissao - CUSTO_OPERACAO - ICMS - PIS - COFINS</ref>
   </negocio>
   <odoo>
     <ref path=".claude/references/odoo/PIPELINE_RECEBIMENTO.md" trigger="fases do recebimento, status de DFe, quality check, em qual etapa esta">4 fases (fiscal → match → consolidacao → fisico), status por fase, skills por fase</ref>

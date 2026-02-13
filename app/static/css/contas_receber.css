@@ -217,9 +217,9 @@ input[type="date"] {
     padding: 0.2rem 0.4rem;
 }
 
-.badge-fb { background-color: var(--bs-success); }
-.badge-sc { background-color: var(--bs-info); }
-.badge-cd { background-color: hsl(270 50% 50%); }
+.badge-fb { background-color: var(--semantic-success); color: hsl(0 0% 100%); }
+.badge-sc { background-color: hsl(0 0% 40%); color: hsl(0 0% 100%); }
+.badge-cd { background-color: hsl(270 50% 50%); color: hsl(0 0% 100%); }
 
 .badge-status {
     font-size: 0.7rem;

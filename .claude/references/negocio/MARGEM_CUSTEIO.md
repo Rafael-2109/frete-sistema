@@ -12,6 +12,9 @@ Margem Bruta = Preco Venda
              - CustoFrete (% frete sobre venda, por incoterm e UF)
              - RegraComissao (comissao do vendedor)
              - ParametroCusteio('CUSTO_OPERACAO') (custo operacional fixo %)
+             - ICMS
+             - PIS
+             - COFINS
 ```
 
 ### Campo pre-calculado
