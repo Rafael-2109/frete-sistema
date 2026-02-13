@@ -135,15 +135,18 @@ def extrato_api_itens():
         })
 
     # Stats agregados em single query
+    # Excluir conciliados dos counts de match status e aprovados (evita dupla contagem)
+    from sqlalchemy import and_
+    _nao_conciliado = ExtratoItem.status != 'CONCILIADO'
     stats_q = db.session.query(
         func.count().label('total'),
-        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('match_unico'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
-        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
-        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
-        func.sum(case((ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', 1), else_=0)).label('cnab'),
-        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MATCH_ENCONTRADO', _nao_conciliado), 1), else_=0)).label('match_unico'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', _nao_conciliado), 1), else_=0)).label('vinculados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_MATCHES', _nao_conciliado), 1), else_=0)).label('multiplos'),
+        func.sum(case((and_(ExtratoItem.status_match == 'SEM_MATCH', _nao_conciliado), 1), else_=0)).label('sem_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'PENDENTE', _nao_conciliado), 1), else_=0)).label('pendentes'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', _nao_conciliado), 1), else_=0)).label('cnab'),
+        func.sum(case((and_(ExtratoItem.aprovado == True, _nao_conciliado), 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).first()
 
@@ -627,16 +630,18 @@ def extrato_lote_detalhe(lote_id):
         itens = pagination.items
 
     # OTIMIZAÇÃO: Estatísticas em uma única query com GROUP BY
-    from sqlalchemy import func, case, or_
+    # Excluir conciliados dos counts de match status e aprovados (evita dupla contagem)
+    from sqlalchemy import func, case, or_, and_
+    _nao_conciliado = ExtratoItem.status != 'CONCILIADO'
     stats_query = db.session.query(
         func.count().label('total'),
-        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
-        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
-        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
-        func.sum(case((ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', 1), else_=0)).label('via_cnab'),
-        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MATCH_ENCONTRADO', _nao_conciliado), 1), else_=0)).label('com_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_MATCHES', _nao_conciliado), 1), else_=0)).label('multiplos'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', _nao_conciliado), 1), else_=0)).label('vinculados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'SEM_MATCH', _nao_conciliado), 1), else_=0)).label('sem_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'PENDENTE', _nao_conciliado), 1), else_=0)).label('pendentes'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', _nao_conciliado), 1), else_=0)).label('via_cnab'),
+        func.sum(case((and_(ExtratoItem.aprovado == True, _nao_conciliado), 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
 
@@ -745,14 +750,16 @@ def extrato_lotes_detalhe():
         itens = pagination.items
 
     # OTIMIZAÇÃO: Estatísticas agregadas em uma única query
-    from sqlalchemy import func, case
+    # Excluir conciliados dos counts de match status e aprovados (evita dupla contagem)
+    from sqlalchemy import func, case, and_
+    _nao_conciliado = ExtratoItem.status != 'CONCILIADO'
     stats_query = db.session.query(
         func.count().label('total'),
-        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
-        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
-        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
-        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MATCH_ENCONTRADO', _nao_conciliado), 1), else_=0)).label('com_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_MATCHES', _nao_conciliado), 1), else_=0)).label('multiplos'),
+        func.sum(case((and_(ExtratoItem.status_match == 'SEM_MATCH', _nao_conciliado), 1), else_=0)).label('sem_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'PENDENTE', _nao_conciliado), 1), else_=0)).label('pendentes'),
+        func.sum(case((and_(ExtratoItem.aprovado == True, _nao_conciliado), 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).filter(ExtratoItem.lote_id.in_(lote_ids)).first()
 
@@ -853,15 +860,17 @@ def extrato_lote_pagamentos_detalhe(lote_id):
         itens = pagination.items
 
     # Estatísticas
-    from sqlalchemy import func, case, or_
+    # Excluir conciliados dos counts de match status e aprovados (evita dupla contagem)
+    from sqlalchemy import func, case, or_, and_
+    _nao_conciliado = ExtratoItem.status != 'CONCILIADO'
     stats_query = db.session.query(
         func.count().label('total'),
-        func.sum(case((ExtratoItem.status_match == 'MATCH_ENCONTRADO', 1), else_=0)).label('com_match'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_MATCHES', 1), else_=0)).label('multiplos'),
-        func.sum(case((ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', 1), else_=0)).label('vinculados'),
-        func.sum(case((ExtratoItem.status_match == 'SEM_MATCH', 1), else_=0)).label('sem_match'),
-        func.sum(case((ExtratoItem.status_match == 'PENDENTE', 1), else_=0)).label('pendentes'),
-        func.sum(case((ExtratoItem.aprovado == True, 1), else_=0)).label('aprovados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MATCH_ENCONTRADO', _nao_conciliado), 1), else_=0)).label('com_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_MATCHES', _nao_conciliado), 1), else_=0)).label('multiplos'),
+        func.sum(case((and_(ExtratoItem.status_match == 'MULTIPLOS_VINCULADOS', _nao_conciliado), 1), else_=0)).label('vinculados'),
+        func.sum(case((and_(ExtratoItem.status_match == 'SEM_MATCH', _nao_conciliado), 1), else_=0)).label('sem_match'),
+        func.sum(case((and_(ExtratoItem.status_match == 'PENDENTE', _nao_conciliado), 1), else_=0)).label('pendentes'),
+        func.sum(case((and_(ExtratoItem.aprovado == True, _nao_conciliado), 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
 

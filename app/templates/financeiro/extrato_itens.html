@@ -200,6 +200,42 @@
                     </div>
                 </div>
 
+                {# === ROW 2.5: Tri-state Score Faixas === #}
+                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+                    <span class="text-muted small fw-bold"><i class="fas fa-percentage me-1"></i>Score:</span>
+
+                    <div class="d-flex align-items-center gap-1">
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-score-alto"
+                                   data-tristate="neutral" data-group="score_faixa" data-score-min="90" data-score-max="100">
+                            <label class="form-check-label" for="f-score-alto">
+                                <span class="badge score-badge-high" style="font-size: 0.72em;">&#8805; 90</span>
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-score-medio"
+                                   data-tristate="neutral" data-group="score_faixa" data-score-min="70" data-score-max="89">
+                            <label class="form-check-label" for="f-score-medio">
+                                <span class="badge score-badge-medium" style="font-size: 0.72em;">70-89</span>
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-score-baixo"
+                                   data-tristate="neutral" data-group="score_faixa" data-score-min="0" data-score-max="69">
+                            <label class="form-check-label" for="f-score-baixo">
+                                <span class="badge score-badge-low" style="font-size: 0.72em;">&lt; 70</span>
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input filtro-check" type="checkbox" id="f-score-nulo"
+                                   data-tristate="neutral" data-group="score_faixa" data-score-min="-1" data-score-max="-1">
+                            <label class="form-check-label" for="f-score-nulo">
+                                <span class="badge bg-secondary" style="font-size: 0.72em;">Sem score</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 {# === ROW 3: Filtros de Texto/Range/Selects === #}
                 <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
                     {# Tipo Transacao #}
@@ -850,7 +886,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const row = dataTable.row(dataIndex).data();
         if (!row) return true;
 
+        const isConciliado = row.status === 'CONCILIADO';
+
         // Tri-state: status_match
+        // Quando filtros de match estao ativos, excluir conciliados automaticamente
+        // (a menos que o filtro "Conciliado" esteja em "include")
         const matchChecks = document.querySelectorAll('.filtro-check[data-group="status_match"]');
         const includes = [];
         const excludes = [];
@@ -858,8 +898,44 @@ document.addEventListener('DOMContentLoaded', function() {
             if (cb.dataset.tristate === 'include') includes.push(cb.value);
             if (cb.dataset.tristate === 'exclude') excludes.push(cb.value);
         });
+        if (includes.length > 0 || excludes.length > 0) {
+            // Verificar se usuario explicitamente incluiu conciliados
+            const conciliadoEl = document.getElementById('f-conciliado-bool');
+            const conciliadoExplicito = conciliadoEl && conciliadoEl.dataset.tristate === 'include';
+            // Se ha filtros de match ativos e item e conciliado (sem filtro explicito), ocultar
+            if (isConciliado && !conciliadoExplicito) return false;
+        }
         if (includes.length > 0 && !includes.includes(row.status_match)) return false;
         if (excludes.includes(row.status_match)) return false;
+
+        // Tri-state: score_faixa
+        const scoreChecks = document.querySelectorAll('.filtro-check[data-group="score_faixa"]');
+        const scoreIncludes = [];
+        const scoreExcludes = [];
+        scoreChecks.forEach(cb => {
+            if (cb.dataset.tristate === 'include') scoreIncludes.push({ min: parseInt(cb.dataset.scoreMin), max: parseInt(cb.dataset.scoreMax) });
+            if (cb.dataset.tristate === 'exclude') scoreExcludes.push({ min: parseInt(cb.dataset.scoreMin), max: parseInt(cb.dataset.scoreMax) });
+        });
+        if (scoreIncludes.length > 0 || scoreExcludes.length > 0) {
+            const score = row.match_score;
+            const isNull = (score == null);
+
+            // Check includes — item must match at least one
+            if (scoreIncludes.length > 0) {
+                const matched = scoreIncludes.some(f => {
+                    if (f.min === -1) return isNull;  // "Sem score"
+                    if (isNull) return false;
+                    return score >= f.min && score <= f.max;
+                });
+                if (!matched) return false;
+            }
+
+            // Check excludes — item must NOT match any
+            for (const f of scoreExcludes) {
+                if (f.min === -1 && isNull) return false;
+                if (!isNull && score >= f.min && score <= f.max) return false;
+            }
+        }
 
         // Tri-state booleanos (Titulo Vinculado, Aprovado, Conciliado)
         const boolFiltros = [

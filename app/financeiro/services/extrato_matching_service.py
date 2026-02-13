@@ -165,17 +165,25 @@ class ExtratoMatchingService:
             # Múltiplos matches - precisa decisão manual
             item.status_match = 'MULTIPLOS_MATCHES'
             item.set_matches_candidatos(candidatos)
+            # Guardar score/criterio do melhor candidato (já ordenado DESC)
+            melhor = candidatos[0]
+            item.match_score = melhor['score']
+            item.match_criterio = melhor.get('criterio', '') + f'+MULTIPLOS({len(matches_altos)})'
             item.mensagem = f'{len(matches_altos)} títulos encontrados com score >= {SCORE_MINIMO_AUTO}'
             self.estatisticas['multiplos'] += 1
-            logger.info(f"  Múltiplos matches: {len(matches_altos)} candidatos")
+            logger.info(f"  Múltiplos matches: {len(matches_altos)} candidatos (melhor score={melhor['score']})")
 
         elif candidatos:
             # Candidatos com score baixo - precisa revisão
             item.status_match = 'MULTIPLOS_MATCHES'
             item.set_matches_candidatos(candidatos)
+            # Guardar score/criterio do melhor candidato (já ordenado DESC)
+            melhor = candidatos[0]
+            item.match_score = melhor['score']
+            item.match_criterio = melhor.get('criterio', '') + f'+MULTIPLOS({len(candidatos)})'
             item.mensagem = f'{len(candidatos)} candidato(s) encontrado(s) com score < {SCORE_MINIMO_AUTO}'
             self.estatisticas['multiplos'] += 1
-            logger.info(f"  Candidatos com score baixo: {len(candidatos)}")
+            logger.info(f"  Candidatos com score baixo: {len(candidatos)} (melhor score={melhor['score']})")
 
     def buscar_titulos_candidatos(
         self,
