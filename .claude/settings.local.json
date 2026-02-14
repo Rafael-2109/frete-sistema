@@ -86,7 +86,8 @@
       "WebFetch(domain:addyosmani.com)",
       "WebFetch(domain:claudekit.cc)",
       "WebFetch(domain:www.pubnub.com)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "WebFetch(domain:til.simonwillison.net)"
     ],
     "deny": []
   },
