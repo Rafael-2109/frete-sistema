@@ -1,8 +1,8 @@
 from flask import render_template, redirect, url_for, flash, request, session, jsonify, make_response
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.transportadoras.forms import TransportadoraForm, ImportarTransportadorasForm
-from app.transportadoras.models import Transportadora
+from app.transportadoras.models import Transportadora, GrupoTransportadora
 from app.transportadoras import transportadoras_bp
 from app.utils.importacao.importar_transportadoras import importar_transportadoras
 from app.utils.importacao.utils_importacao import salvar_temp
@@ -17,14 +17,14 @@ import pandas as pd
 @login_required
 def cadastrar_transportadora():
     form = TransportadoraForm()
-    
+
     # Recupera erros da sessão
     erros_importacao = session.get('erros_importacao', [])
-    
+
     if form.validate_on_submit():
         # Mantém o CNPJ como digitado (sem limpeza)
         cnpj_digitado = form.cnpj.data.strip()
-        
+
         # Verifica se o CNPJ já existe ANTES de tentar criar
         transportadora_existente = Transportadora.query.filter_by(cnpj=cnpj_digitado).first()
         if transportadora_existente:
@@ -51,38 +51,40 @@ def cadastrar_transportadora():
             except Exception as e:
                 db.session.rollback()
                 flash(f'Erro ao cadastrar transportadora: {str(e)}', 'danger')
-    
+
     transportadoras = Transportadora.query.order_by(Transportadora.razao_social.asc()).all()
-    return render_template('transportadoras/transportadoras.html', 
-                         form=form, 
+    grupos = GrupoTransportadora.query.filter_by(ativo=True).order_by(GrupoTransportadora.nome.asc()).all()
+    return render_template('transportadoras/transportadoras.html',
+                         form=form,
                          transportadoras=transportadoras,
+                         grupos=grupos,
                          erros_importacao=erros_importacao)
 
 @transportadoras_bp.route('/importar', methods=['GET', 'POST'])
 @login_required
 def importar():
     form = ImportarTransportadorasForm()
-    
+
     print("[DEBUG] Iniciando rota de importação")
     print(f"[DEBUG] Método da requisição: {request.method}")
-    
+
     if request.method == 'POST':
         print("[DEBUG] Dados do formulário:", request.form)
         print("[DEBUG] Arquivos:", request.files)
-    
+
     if form.validate_on_submit():
         try:
             print("[DEBUG] Formulário válido, processando arquivo")
-            
+
             # Salva o arquivo temporariamente
             caminho_arquivo = salvar_temp(form.arquivo.data)
-            
+
             # Importa as transportadoras usando a função utilitária
             resumo = importar_transportadoras(caminho_arquivo)
-            
+
             # Divide o resumo em seções
             secoes = resumo.split('\n=== ')
-            
+
             # Processa cada seção
             for secao in secoes:
                 if 'ERROS ENCONTRADOS' in secao:
@@ -93,14 +95,14 @@ def importar():
                     flash(secao, 'info')
                 elif secao.startswith('Total:'):
                     flash(secao, 'primary')
-            
+
             return redirect(url_for('transportadoras.cadastrar_transportadora'))
-                
+
         except Exception as e:
             flash(f'Erro ao processar arquivo: {str(e)}', 'danger')
             print(traceback.format_exc())
-    
-    return render_template('transportadoras/importar.html', 
+
+    return render_template('transportadoras/importar.html',
                          form=form)
 
 
@@ -111,7 +113,7 @@ def dados_transportadora(id):
     """Retorna dados da transportadora em JSON para o modal"""
     try:
         transportadora = Transportadora.query.get_or_404(id)
-        
+
         # Garante que os valores boolean sejam tratados corretamente
         optante_valor = transportadora.optante if transportadora.optante is not None else False
         freteiro_valor = transportadora.freteiro if transportadora.freteiro is not None else False
@@ -132,6 +134,7 @@ def dados_transportadora(id):
                 'ativo': transportadora.ativo if hasattr(transportadora, 'ativo') else True,
                 'nao_aceita_nf_pallet': nao_aceita_nf_pallet_valor,
                 'motorista_proprio': motorista_proprio_valor,
+                'grupo_transportadora_id': transportadora.grupo_transportadora_id,
                 # Campos financeiros
                 'banco': transportadora.banco or '',
                 'agencia': transportadora.agencia or '',
@@ -152,22 +155,22 @@ def editar_transportadora_ajax(id):
     """Edita transportadora via AJAX"""
     try:
         transportadora = Transportadora.query.get_or_404(id)
-        
+
         # Mantém o CNPJ como recebido (sem limpeza)
         cnpj_recebido = request.form.get('cnpj', '').strip()
-        
+
         # Verifica se o CNPJ já existe para outra transportadora
         cnpj_existente = Transportadora.query.filter(
             Transportadora.cnpj == cnpj_recebido,
             Transportadora.id != id
         ).first()
-        
+
         if cnpj_existente:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'message': f'ERRO: CNPJ {cnpj_recebido} já está cadastrado para a transportadora "{cnpj_existente.razao_social}". Não é permitido ter duas transportadoras com o mesmo CNPJ. Por favor, verifique o CNPJ informado.'
             })
-        
+
         # Atualiza os dados
         transportadora.cnpj = cnpj_recebido
         transportadora.razao_social = request.form.get('razao_social', '')
@@ -182,6 +185,9 @@ def editar_transportadora_ajax(id):
         transportadora.nao_aceita_nf_pallet = request.form.get('nao_aceita_nf_pallet') == 'on'
         # Campo motorista próprio - checkbox envia 'on' quando marcado
         transportadora.motorista_proprio = request.form.get('motorista_proprio') == 'on'
+        # Grupo de transportadora - select envia string do ID ou vazio
+        grupo_id = request.form.get('grupo_transportadora_id', '').strip()
+        transportadora.grupo_transportadora_id = int(grupo_id) if grupo_id else None
 
         # Campos financeiros
         transportadora.banco = request.form.get('banco', '').strip() or None
@@ -192,14 +198,10 @@ def editar_transportadora_ajax(id):
         transportadora.cpf_cnpj_favorecido = request.form.get('cpf_cnpj_favorecido', '').strip() or None
         transportadora.obs_financ = request.form.get('obs_financ', '').strip() or None
 
-        # TODO: Adicionar campos de auditoria no futuro
-        # transportadora.alterado_por = current_user.nome
-        # transportadora.alterado_em = agora_utc_naive()
-        
         db.session.commit()
-        
+
         return jsonify({'success': True, 'message': 'Transportadora atualizada com sucesso!'})
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro ao atualizar transportadora: {str(e)}'})
@@ -215,7 +217,7 @@ def excluir_transportadora(id):
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao excluir transportadora: {str(e)}', 'danger')
-    
+
     return redirect(url_for('transportadoras.cadastrar_transportadora'))
 
 @transportadoras_bp.route('/config-frete/<int:id>', methods=['GET'])
@@ -224,7 +226,7 @@ def obter_config_frete(id):
     """Obtém configurações de cálculo de frete da transportadora"""
     try:
         transportadora = Transportadora.query.get_or_404(id)
-        
+
         # Retorna as configurações atuais
         config = {
             'aplica_gris_pos_minimo': transportadora.aplica_gris_pos_minimo or False,
@@ -236,7 +238,7 @@ def obter_config_frete(id):
             'aplica_cte_pos_minimo': transportadora.aplica_cte_pos_minimo or False,
             'pedagio_por_fracao': transportadora.pedagio_por_fracao if transportadora.pedagio_por_fracao is not None else True
         }
-        
+
         return jsonify({
             'success': True,
             'transportadora': {
@@ -255,7 +257,7 @@ def salvar_config_frete(id):
     try:
         transportadora = Transportadora.query.get_or_404(id)
         data = request.get_json()
-        
+
         # Atualiza as configurações
         transportadora.aplica_gris_pos_minimo = data.get('aplica_gris_pos_minimo', False)
         transportadora.aplica_adv_pos_minimo = data.get('aplica_adv_pos_minimo', False)
@@ -265,11 +267,11 @@ def salvar_config_frete(id):
         transportadora.aplica_despacho_pos_minimo = data.get('aplica_despacho_pos_minimo', False)
         transportadora.aplica_cte_pos_minimo = data.get('aplica_cte_pos_minimo', False)
         transportadora.pedagio_por_fracao = data.get('pedagio_por_fracao', True)
-        
+
         db.session.commit()
-        
+
         return jsonify({'success': True, 'message': 'Configuração salva com sucesso!'})
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro ao salvar configuração: {str(e)}'})
@@ -288,6 +290,7 @@ def exportar_transportadoras():
             dados.append({
                 'CNPJ': t.cnpj or '',
                 'Razão Social': t.razao_social or '',
+                'Grupo': t.grupo.nome if t.grupo else '',
                 'Cidade': t.cidade or '',
                 'UF': t.uf or '',
                 'Optante Simples': 'Sim' if t.optante else 'Não',
@@ -334,3 +337,131 @@ def exportar_transportadoras():
     except Exception as e:
         flash(f'Erro ao exportar transportadoras: {str(e)}', 'danger')
         return redirect(url_for('transportadoras.cadastrar_transportadora'))
+
+
+# ===== ROTAS CRUD DE GRUPOS DE TRANSPORTADORAS =====
+
+@transportadoras_bp.route('/grupos', methods=['GET'])
+@login_required
+def listar_grupos():
+    """Lista todos os grupos de transportadoras com contagem de membros"""
+    try:
+        grupos = GrupoTransportadora.query.filter_by(ativo=True).order_by(GrupoTransportadora.nome.asc()).all()
+
+        resultado = []
+        for grupo in grupos:
+            membros = grupo.transportadoras.all()
+            resultado.append({
+                'id': grupo.id,
+                'nome': grupo.nome,
+                'descricao': grupo.descricao or '',
+                'total_membros': len(membros),
+                'membros': [
+                    {'id': m.id, 'razao_social': m.razao_social, 'cnpj': m.cnpj}
+                    for m in membros
+                ],
+                'criado_em': grupo.criado_em.strftime('%d/%m/%Y %H:%M') if grupo.criado_em else '',
+                'criado_por': grupo.criado_por or ''
+            })
+
+        return jsonify({'success': True, 'grupos': resultado})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@transportadoras_bp.route('/grupos', methods=['POST'])
+@login_required
+def criar_grupo():
+    """Cria um novo grupo de transportadoras"""
+    try:
+        data = request.get_json()
+        nome = (data.get('nome') or '').strip()
+        descricao = (data.get('descricao') or '').strip() or None
+
+        if not nome:
+            return jsonify({'success': False, 'message': 'Nome do grupo é obrigatório'})
+
+        # Verificar se já existe
+        existente = GrupoTransportadora.query.filter_by(nome=nome).first()
+        if existente:
+            return jsonify({'success': False, 'message': f'Já existe um grupo com o nome "{nome}"'})
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        grupo = GrupoTransportadora(
+            nome=nome,
+            descricao=descricao,
+            criado_por=usuario
+        )
+        db.session.add(grupo)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Grupo "{nome}" criado com sucesso!',
+            'grupo': {
+                'id': grupo.id,
+                'nome': grupo.nome,
+                'descricao': grupo.descricao or ''
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao criar grupo: {str(e)}'})
+
+
+@transportadoras_bp.route('/grupos/<int:id>', methods=['PUT'])
+@login_required
+def editar_grupo(id):
+    """Edita um grupo de transportadoras"""
+    try:
+        grupo = GrupoTransportadora.query.get_or_404(id)
+        data = request.get_json()
+
+        nome = (data.get('nome') or '').strip()
+        descricao = (data.get('descricao') or '').strip() or None
+
+        if not nome:
+            return jsonify({'success': False, 'message': 'Nome do grupo é obrigatório'})
+
+        # Verificar se outro grupo já tem esse nome
+        existente = GrupoTransportadora.query.filter(
+            GrupoTransportadora.nome == nome,
+            GrupoTransportadora.id != id
+        ).first()
+        if existente:
+            return jsonify({'success': False, 'message': f'Já existe outro grupo com o nome "{nome}"'})
+
+        grupo.nome = nome
+        grupo.descricao = descricao
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': f'Grupo "{nome}" atualizado com sucesso!'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao editar grupo: {str(e)}'})
+
+
+@transportadoras_bp.route('/grupos/<int:id>', methods=['DELETE'])
+@login_required
+def excluir_grupo(id):
+    """Desativa um grupo de transportadoras (soft delete)"""
+    try:
+        grupo = GrupoTransportadora.query.get_or_404(id)
+
+        # Remover vinculo de todas as transportadoras do grupo
+        transportadoras_do_grupo = Transportadora.query.filter_by(grupo_transportadora_id=id).all()
+        for t in transportadoras_do_grupo:
+            t.grupo_transportadora_id = None
+
+        # Soft delete
+        grupo.ativo = False
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Grupo "{grupo.nome}" removido. {len(transportadoras_do_grupo)} transportadora(s) desvinculada(s).'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao excluir grupo: {str(e)}'})

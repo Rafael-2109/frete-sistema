@@ -201,16 +201,16 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_vencimento",
+      "name": "ix_contas_a_receber_cnpj",
       "columns": [
-        "vencimento"
+        "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_cnpj",
+      "name": "ix_contas_a_receber_vencimento",
       "columns": [
-        "cnpj"
+        "vencimento"
       ],
       "unique": false
     },

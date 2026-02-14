@@ -163,29 +163,37 @@ class DespesaCteService:
                     logger.info(f"Prioridade 2: {len(ctes_prioridade_2)} CTes encontrados")
 
             # =============================================================
-            # PRIORIDADE 3: CTe Complementar via CNPJ
+            # PRIORIDADE 3: CTe Complementar via CNPJ (suporta grupo)
             # =============================================================
             if frete.cnpj_cliente and frete.transportadora:
-                prefixo_transp = frete.transportadora.cnpj[:8] if frete.transportadora.cnpj else None
+                prefixos_grupo = frete.transportadora.obter_prefixos_cnpj_grupo()
 
-                if prefixo_transp:
-                    # Buscar CTes Complementares com mesmo destinatário e prefixo emitente
+                if prefixos_grupo:
+                    # Montar filtros OR para cada prefixo do grupo
+                    filtros_cnpj = [
+                        ConhecimentoTransporte.cnpj_emitente.like(f'{p}%')
+                        for p in prefixos_grupo
+                    ]
+
+                    # IDs ja listados nas prioridades anteriores
+                    ids_anteriores = (
+                        [c.id for c in resultado['sugestoes_prioridade_0']] +
+                        [c.id for c in resultado['sugestoes_prioridade_1']] +
+                        [c.id for c in resultado['sugestoes_prioridade_2']]
+                    )
+
+                    # Buscar CTes Complementares com mesmo destinatário e prefixo emitente do grupo
                     ctes_prioridade_3 = ConhecimentoTransporte.query.filter(
                         and_(
                             ConhecimentoTransporte.tipo_cte == '1',  # Complementar
                             ConhecimentoTransporte.cnpj_destinatario == frete.cnpj_cliente,
-                            ConhecimentoTransporte.cnpj_emitente.like(f'{prefixo_transp}%'),
+                            or_(*filtros_cnpj),
                             ConhecimentoTransporte.id.notin_(ids_excluir) if ids_excluir else True,
-                            # Excluir os já listados nas prioridades anteriores
-                            ConhecimentoTransporte.id.notin_(
-                                [c.id for c in resultado['sugestoes_prioridade_0']] +
-                                [c.id for c in resultado['sugestoes_prioridade_1']] +
-                                [c.id for c in resultado['sugestoes_prioridade_2']]
-                            ) if resultado['sugestoes_prioridade_0'] or resultado['sugestoes_prioridade_1'] or resultado['sugestoes_prioridade_2'] else True
+                            ConhecimentoTransporte.id.notin_(ids_anteriores) if ids_anteriores else True
                         )
                     ).all()
                     resultado['sugestoes_prioridade_3'] = ctes_prioridade_3
-                    logger.info(f"Prioridade 3: {len(ctes_prioridade_3)} CTes encontrados")
+                    logger.info(f"Prioridade 3: {len(ctes_prioridade_3)} CTes encontrados (grupo: {len(prefixos_grupo)} prefixos)")
 
             # =============================================================
             # PRIORIDADE 4: CTes Normais via NFs em comum (NOVO!)

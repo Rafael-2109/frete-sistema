@@ -89,6 +89,19 @@
         padding-left: 15px !important;
         padding-right: 15px !important;
     }
+
+    /* Grupos de transportadoras */
+    .grupo-card {
+        border-left: 3px solid var(--bs-primary);
+        transition: box-shadow 0.2s;
+    }
+    .grupo-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .grupo-membros {
+        font-size: 0.75rem;
+        color: var(--bs-secondary);
+    }
 </style>
 {% endblock %}
 
@@ -155,6 +168,54 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
+
+    <!-- Card de Grupos de Transportadoras -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-layer-group"></i> Grupos de Transportadoras</h5>
+            <button class="btn btn-sm btn-light" onclick="abrirModalNovoGrupo()">
+                <i class="fas fa-plus"></i> Novo Grupo
+            </button>
+        </div>
+        <div class="card-body" id="gruposContainer">
+            {% if grupos %}
+            <div class="row" id="gruposGrid">
+                {% for grupo in grupos %}
+                <div class="col-md-4 col-lg-3 mb-3" id="grupo-card-{{ grupo.id }}">
+                    <div class="card grupo-card h-100">
+                        <div class="card-body py-2 px-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>{{ grupo.nome }}</strong>
+                                    <div class="grupo-membros mt-1">
+                                        {{ grupo.transportadoras.count() }} transportadora(s)
+                                    </div>
+                                    {% if grupo.descricao %}
+                                    <small class="text-muted d-block mt-1">{{ grupo.descricao }}</small>
+                                    {% endif %}
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-warning btn-sm" onclick="editarGrupo({{ grupo.id }}, '{{ grupo.nome }}', '{{ grupo.descricao or '' }}')" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="excluirGrupo({{ grupo.id }}, '{{ grupo.nome }}')" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0" id="gruposVazio">
+                Nenhum grupo cadastrado. Grupos permitem agrupar transportadoras com diferentes CNPJs
+                para vinculação automática de CTe.
+            </p>
+            {% endif %}
+        </div>
+    </div>
 
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
@@ -229,6 +290,7 @@
                         <tr>
                             <th>CNPJ</th>
                             <th>Razão Social</th>
+                            <th>Grupo</th>
                             <th>Cidade</th>
                             <th>UF</th>
                             <th>Optante</th>
@@ -244,6 +306,13 @@
                         <tr>
                             <td>{{ transportadora.cnpj }}</td>
                             <td>{{ transportadora.razao_social }}</td>
+                            <td>
+                                {% if transportadora.grupo %}
+                                    <span class="badge bg-primary" title="{{ transportadora.grupo.descricao or '' }}">{{ transportadora.grupo.nome }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
                             <td>{{ transportadora.cidade }}</td>
                             <td>{{ transportadora.uf }}</td>
                             <td>{{ 'Sim' if transportadora.optante else 'Não' }}</td>
@@ -295,7 +364,7 @@
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title">
-                    <i class="fas fa-calculator"></i> Configuração de Cálculo de Frete - 
+                    <i class="fas fa-calculator"></i> Configuração de Cálculo de Frete -
                     <span id="config_transportadora_nome"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -303,7 +372,7 @@
             <form id="formConfigurarFrete">
                 <div class="modal-body">
                     <input type="hidden" id="config_id" name="id">
-                    
+
                     <!-- Explicação Geral -->
                     <div class="alert alert-info">
                         <h6><i class="fas fa-info-circle"></i> Como funciona esta configuração?</h6>
@@ -315,7 +384,7 @@
                             <li>DEPOIS adiciona-se os componentes marcados</li>
                         </ol>
                     </div>
-                    
+
                     <div class="row">
                         <!-- Coluna 1: Taxas Percentuais -->
                         <div class="col-md-6">
@@ -335,7 +404,7 @@
                                             </small>
                                         </label>
                                     </div>
-                                    
+
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" id="config_aplica_adv_pos_minimo" name="aplica_adv_pos_minimo">
                                         <label class="form-check-label" for="config_aplica_adv_pos_minimo">
@@ -347,7 +416,7 @@
                                             </small>
                                         </label>
                                     </div>
-                                    
+
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" id="config_aplica_rca_pos_minimo" name="aplica_rca_pos_minimo">
                                         <label class="form-check-label" for="config_aplica_rca_pos_minimo">
@@ -362,7 +431,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Coluna 2: Taxas Fixas -->
                         <div class="col-md-6">
                             <div class="card mb-3">
@@ -381,7 +450,7 @@
                                             </small>
                                         </label>
                                     </div>
-                                    
+
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" id="config_aplica_despacho_pos_minimo" name="aplica_despacho_pos_minimo">
                                         <label class="form-check-label" for="config_aplica_despacho_pos_minimo">
@@ -393,7 +462,7 @@
                                             </small>
                                         </label>
                                     </div>
-                                    
+
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" id="config_aplica_cte_pos_minimo" name="aplica_cte_pos_minimo">
                                         <label class="form-check-label" for="config_aplica_cte_pos_minimo">
@@ -409,7 +478,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Pedágio -->
                     <div class="card mb-3">
                         <div class="card-header bg-secondary text-white">
@@ -446,7 +515,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Exemplo de Cálculo -->
                     <div class="alert alert-warning">
                         <h6><i class="fas fa-calculator"></i> Exemplo de Cálculo:</h6>
@@ -512,13 +581,13 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <label class="form-label">Cidade</label>
                                 <input type="text" class="form-control" id="edit_cidade" name="cidade" required>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <label class="form-label">UF</label>
                                 <select class="form-control" id="edit_uf" name="uf" required>
@@ -526,6 +595,18 @@
                                         <option value="{{ uf_code }}">{{ uf_name }}</option>
                                     {% endfor %}
                                 </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Grupo de Transportadora</label>
+                                <select class="form-control" id="edit_grupo_transportadora_id" name="grupo_transportadora_id">
+                                    <option value="">Nenhum</option>
+                                    {% for grupo in grupos %}
+                                        <option value="{{ grupo.id }}">{{ grupo.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Agrupa transportadoras com diferentes CNPJs para vinculação de CTe</small>
                             </div>
                         </div>
                     </div>
@@ -556,7 +637,7 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="edit_ativo" name="ativo" checked>
@@ -568,7 +649,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="edit_nao_aceita_nf_pallet" name="nao_aceita_nf_pallet">
@@ -580,9 +661,7 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="edit_motorista_proprio" name="motorista_proprio">
@@ -661,10 +740,134 @@
     </div>
 </div>
 
+<!-- Modal Novo/Editar Grupo -->
+<div class="modal fade" id="modalGrupo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title" id="modalGrupoTitulo">Novo Grupo de Transportadoras</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formGrupo">
+                <div class="modal-body">
+                    <input type="hidden" id="grupo_id" name="grupo_id">
+                    <div class="mb-3">
+                        <label class="form-label">Nome do Grupo</label>
+                        <input type="text" class="form-control" id="grupo_nome" name="nome" required
+                               placeholder="Ex: JSL Logistica, Grupo XYZ...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição <small class="text-muted">(opcional)</small></label>
+                        <textarea class="form-control" id="grupo_descricao" name="descricao" rows="2"
+                                  placeholder="Descrição do grupo..."></textarea>
+                    </div>
+                    <div class="alert alert-info mb-0">
+                        <small>
+                            <i class="fas fa-info-circle"></i>
+                            Após criar o grupo, vincule transportadoras a ele editando cada transportadora
+                            e selecionando o grupo no campo "Grupo de Transportadora".
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvarGrupo">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-// Função para configurar cálculo de frete
+// ===== GRUPOS DE TRANSPORTADORAS =====
+
+function abrirModalNovoGrupo() {
+    document.getElementById('grupo_id').value = '';
+    document.getElementById('grupo_nome').value = '';
+    document.getElementById('grupo_descricao').value = '';
+    document.getElementById('modalGrupoTitulo').textContent = 'Novo Grupo de Transportadoras';
+    new bootstrap.Modal(document.getElementById('modalGrupo')).show();
+}
+
+function editarGrupo(id, nome, descricao) {
+    document.getElementById('grupo_id').value = id;
+    document.getElementById('grupo_nome').value = nome;
+    document.getElementById('grupo_descricao').value = descricao;
+    document.getElementById('modalGrupoTitulo').textContent = 'Editar Grupo de Transportadoras';
+    new bootstrap.Modal(document.getElementById('modalGrupo')).show();
+}
+
+function excluirGrupo(id, nome) {
+    if (!confirm(`Tem certeza que deseja excluir o grupo "${nome}"?\nTodas as transportadoras serão desvinculadas.`)) {
+        return;
+    }
+
+    fetch(`/transportadoras/grupos/${id}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao excluir grupo');
+    });
+}
+
+// Submit do formulário de grupo (criar/editar)
+document.getElementById('formGrupo').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const grupoId = document.getElementById('grupo_id').value;
+    const nome = document.getElementById('grupo_nome').value.trim();
+    const descricao = document.getElementById('grupo_descricao').value.trim();
+
+    if (!nome) {
+        alert('Nome do grupo é obrigatório');
+        return;
+    }
+
+    const isEdicao = grupoId !== '';
+    const url = isEdicao ? `/transportadoras/grupos/${grupoId}` : '/transportadoras/grupos';
+    const method = isEdicao ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ nome, descricao })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar grupo');
+    });
+});
+
+// ===== CONFIGURAÇÃO DE FRETE =====
+
 function configurarFrete(id) {
-    // Busca os dados da transportadora e suas configurações
     fetch(`/transportadoras/config-frete/${id}`)
         .then(response => {
             if (!response.ok) {
@@ -674,11 +877,9 @@ function configurarFrete(id) {
         })
         .then(data => {
             if (data.success) {
-                // Preenche o nome da transportadora
                 document.getElementById('config_transportadora_nome').textContent = data.transportadora.razao_social;
                 document.getElementById('config_id').value = data.transportadora.id;
-                
-                // Preenche as configurações
+
                 document.getElementById('config_aplica_gris_pos_minimo').checked = data.config.aplica_gris_pos_minimo || false;
                 document.getElementById('config_aplica_adv_pos_minimo').checked = data.config.aplica_adv_pos_minimo || false;
                 document.getElementById('config_aplica_rca_pos_minimo').checked = data.config.aplica_rca_pos_minimo || false;
@@ -686,9 +887,8 @@ function configurarFrete(id) {
                 document.getElementById('config_aplica_tas_pos_minimo').checked = data.config.aplica_tas_pos_minimo || false;
                 document.getElementById('config_aplica_despacho_pos_minimo').checked = data.config.aplica_despacho_pos_minimo || false;
                 document.getElementById('config_aplica_cte_pos_minimo').checked = data.config.aplica_cte_pos_minimo || false;
-                document.getElementById('config_pedagio_por_fracao').checked = data.config.pedagio_por_fracao !== false; // Default true
-                
-                // Abre o modal
+                document.getElementById('config_pedagio_por_fracao').checked = data.config.pedagio_por_fracao !== false;
+
                 new bootstrap.Modal(document.getElementById('modalConfigurarFrete')).show();
             } else {
                 alert('Erro ao carregar configurações: ' + (data.message || 'Erro desconhecido'));
@@ -703,11 +903,10 @@ function configurarFrete(id) {
 // Submit do formulário de configuração
 document.getElementById('formConfigurarFrete').addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
     const id = formData.get('id');
-    
-    // Converte checkboxes para valores booleanos
+
     const config = {
         aplica_gris_pos_minimo: formData.get('aplica_gris_pos_minimo') === 'on',
         aplica_adv_pos_minimo: formData.get('aplica_adv_pos_minimo') === 'on',
@@ -718,7 +917,7 @@ document.getElementById('formConfigurarFrete').addEventListener('submit', functi
         aplica_cte_pos_minimo: formData.get('aplica_cte_pos_minimo') === 'on',
         pedagio_por_fracao: formData.get('pedagio_por_fracao') === 'on'
     };
-    
+
     fetch(`/transportadoras/config-frete/${id}`, {
         method: 'POST',
         headers: {
@@ -742,8 +941,9 @@ document.getElementById('formConfigurarFrete').addEventListener('submit', functi
     });
 });
 
+// ===== EDIÇÃO DE TRANSPORTADORA =====
+
 function editarTransportadora(id) {
-    // Busca os dados da transportadora
     fetch(`/transportadoras/dados/${id}`)
         .then(response => {
             if (!response.ok) {
@@ -753,17 +953,19 @@ function editarTransportadora(id) {
         })
         .then(data => {
             if (data.success) {
-                // Preenche o formulário com tratamento seguro dos valores
                 document.getElementById('edit_id').value = data.transportadora.id || '';
                 document.getElementById('edit_cnpj').value = data.transportadora.cnpj || '';
                 document.getElementById('edit_razao_social').value = data.transportadora.razao_social || '';
                 document.getElementById('edit_cidade').value = data.transportadora.cidade || '';
                 document.getElementById('edit_uf').value = data.transportadora.uf || '';
-                
-                // Tratamento seguro para campos boolean
+
+                // Grupo de transportadora
+                const grupoSelect = document.getElementById('edit_grupo_transportadora_id');
+                grupoSelect.value = data.transportadora.grupo_transportadora_id || '';
+
                 const optante = data.transportadora.optante === true || data.transportadora.optante === 'true';
                 const freteiro = data.transportadora.freteiro === true || data.transportadora.freteiro === 'true';
-                const ativo = data.transportadora.ativo !== false; // Default true se não existir
+                const ativo = data.transportadora.ativo !== false;
                 const nao_aceita_nf_pallet = data.transportadora.nao_aceita_nf_pallet === true || data.transportadora.nao_aceita_nf_pallet === 'true';
                 const motorista_proprio = data.transportadora.motorista_proprio === true || data.transportadora.motorista_proprio === 'true';
 
@@ -783,7 +985,6 @@ function editarTransportadora(id) {
                 document.getElementById('edit_cpf_cnpj_favorecido').value = data.transportadora.cpf_cnpj_favorecido || '';
                 document.getElementById('edit_obs_financ').value = data.transportadora.obs_financ || '';
 
-                // Abre o modal
                 new bootstrap.Modal(document.getElementById('modalEditarTransportadora')).show();
             } else {
                 console.error('Erro do servidor:', data.message);
@@ -799,10 +1000,10 @@ function editarTransportadora(id) {
 // Submit do formulário de edição
 document.getElementById('formEditarTransportadora').addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
     const id = formData.get('id');
-    
+
     fetch(`/transportadoras/editar/${id}`, {
         method: 'POST',
         body: formData,

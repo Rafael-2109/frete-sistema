@@ -88,13 +88,6 @@
       "unique": false
     },
     {
-      "name": "ix_tabela_rede_precos_regiao",
-      "columns": [
-        "regiao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_tabela_rede_regiao",
       "columns": [
         "rede",
@@ -107,6 +100,13 @@
       "columns": [
         "rede",
         "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_tabela_rede_precos_regiao",
+      "columns": [
+        "regiao"
       ],
       "unique": false
     }
