@@ -1765,13 +1765,14 @@ class RecebimentoLfOdooService:
         Produtos com standard_price=0 gerariam invoice com vProd=0.00,
         causando rejeicao na SEFAZ ou problemas contabeis.
 
+        Fallback: se standard_price <= 0, calcula custo a partir do valor
+        total da NF da LF dividido pela quantidade de produto acabado.
+        Se houver multiplos produtos acabados, rateia igualmente.
+
         Args:
             odoo: Conexao Odoo
             rec: RecebimentoLf (para log)
             transfer_lotes: Lista de RecebimentoLfLote para transferir
-
-        Raises:
-            ValueError: Se algum produto tem standard_price <= 0
         """
         product_ids = list({lt.odoo_product_id for lt in transfer_lotes if lt.odoo_product_id})
         if not product_ids:
@@ -1791,21 +1792,116 @@ class RecebimentoLfOdooService:
         for prod in products:
             price = prod.get('standard_price', 0)
             if not price or float(price) <= 0:
-                nome = prod.get('default_code') or prod.get('name') or f"ID={prod['id']}"
-                sem_custo.append(nome)
+                sem_custo.append(prod)
 
         if sem_custo:
-            lista_str = ', '.join(sem_custo)
-            msg = (
-                f"Produtos sem custo (standard_price=0) na company FB: [{lista_str}]. "
-                f"Transfer bloqueada ate custo ser atualizado no Odoo."
+            # Fallback: calcular custo a partir do total da NF / qtd acabado
+            custo_fallback = self._calcular_custo_fallback_nf(
+                odoo, rec, transfer_lotes, sem_custo
             )
-            logger.error(f"  [RecLF {rec.id}] {msg}")
-            raise ValueError(msg)
+            if not custo_fallback:
+                nomes = [
+                    p.get('default_code') or p.get('name') or f"ID={p['id']}"
+                    for p in sem_custo
+                ]
+                msg = (
+                    f"Produtos sem custo (standard_price<=0) na company FB: "
+                    f"[{', '.join(nomes)}]. Fallback NF tambem falhou."
+                )
+                logger.error(f"  [RecLF {rec.id}] {msg}")
+                raise ValueError(msg)
+        else:
+            logger.info(
+                f"  Verificacao de custo OK: "
+                f"{len(product_ids)} produtos com standard_price > 0"
+            )
 
-        logger.info(
-            f"  Verificacao de custo OK: {len(product_ids)} produtos com standard_price > 0"
-        )
+    def _calcular_custo_fallback_nf(self, odoo, rec, transfer_lotes, produtos_sem_custo):
+        """
+        Fallback: calcula standard_price a partir do valor total da NF da LF.
+
+        Formula: custo_unitario = (total_nf / num_produtos_acabados) / qtd_produto
+        Se houver 1 produto acabado: custo = total_nf / qtd
+        Se houver N produtos acabados: custo = (total_nf / N) / qtd de cada
+
+        Args:
+            odoo: Conexao Odoo
+            rec: RecebimentoLf
+            transfer_lotes: Lista de RecebimentoLfLote (produtos acabados)
+            produtos_sem_custo: Lista de dicts product.product com standard_price <= 0
+
+        Returns:
+            True se conseguiu corrigir, False se falhou
+        """
+        try:
+            # 1. Ler valor total da NF no DFe
+            dfe_id = rec.odoo_dfe_id
+            dfe_data = odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe', 'read',
+                [[dfe_id]],
+                {'fields': ['nfe_infnfe_total_icmstot_vnf']}
+            )
+            if not dfe_data:
+                logger.error(f"  [RecLF {rec.id}] Fallback: DFe {dfe_id} nao encontrado")
+                return False
+
+            total_nf = float(dfe_data[0].get('nfe_infnfe_total_icmstot_vnf', 0))
+            if total_nf <= 0:
+                logger.error(
+                    f"  [RecLF {rec.id}] Fallback: valor total NF <= 0 ({total_nf})"
+                )
+                return False
+
+            # 2. Contar produtos acabados e suas quantidades
+            num_acabados = len(transfer_lotes)
+            if num_acabados == 0:
+                return False
+
+            # Rateio igualitario do total da NF entre os produtos acabados
+            valor_por_produto = total_nf / num_acabados
+
+            # 3. Indexar lotes por product_id para pegar quantidades
+            qtd_by_product = {}
+            for lt in transfer_lotes:
+                pid = lt.odoo_product_id
+                if pid:
+                    qtd_by_product[pid] = qtd_by_product.get(pid, 0) + float(lt.quantidade)
+
+            # 4. Calcular e atualizar custo de cada produto sem preco
+            corrigidos = 0
+            for prod in produtos_sem_custo:
+                pid = prod['id']
+                qtd = qtd_by_product.get(pid, 0)
+                if qtd <= 0:
+                    logger.warning(
+                        f"  [RecLF {rec.id}] Fallback: produto {pid} sem quantidade"
+                    )
+                    continue
+
+                custo_unitario = round(valor_por_produto / qtd, 6)
+                nome = prod.get('default_code') or prod.get('name') or f"ID={pid}"
+
+                # Atualizar standard_price no Odoo (company FB)
+                odoo.execute_kw(
+                    'product.product', 'write',
+                    [[pid], {'standard_price': custo_unitario}],
+                    {'context': {'company_id': self.COMPANY_FB}}
+                )
+                logger.info(
+                    f"  [RecLF {rec.id}] Fallback custo: {nome} = "
+                    f"R$ {custo_unitario:.4f}/un "
+                    f"(total_nf={total_nf:.2f} / {num_acabados} produtos / "
+                    f"{qtd:.4f} un)"
+                )
+                corrigidos += 1
+
+            return corrigidos > 0
+
+        except Exception as e:
+            logger.error(
+                f"  [RecLF {rec.id}] Fallback custo falhou: {e}"
+            )
+            return False
 
     def _step_20_criar_picking_saida_fb(self, odoo):
         """
@@ -2241,7 +2337,7 @@ class RecebimentoLfOdooService:
 
         invoice_id = self._fire_and_poll(
             odoo, fire_noop, poll_invoice, 'Aguardar Invoice Transfer',
-            poll_interval=15, max_poll_time=900  # 15min (robo age apos liberar)
+            poll_interval=40, max_poll_time=1800  # 30min (robo age apos liberar, poll a cada 40s)
         )
 
         if isinstance(invoice_id, dict):
@@ -2250,7 +2346,7 @@ class RecebimentoLfOdooService:
         if not invoice_id:
             raise ValueError(
                 "Invoice de transferencia nao foi gerada pelo robo do Odoo "
-                f"apos 15min (picking {picking_name}). "
+                f"apos 30min (picking {picking_name}). "
                 "Verificar se action_liberar_faturamento executou com sucesso."
             )
 
@@ -2415,14 +2511,21 @@ class RecebimentoLfOdooService:
                 return None
 
             # Primeira tentativa de transmissao
-            result = self._fire_and_poll(
-                odoo, fire_gerar_nfe, poll_nfe_transmitida,
-                'Transmitir NF-e Transfer',
-                poll_interval=15, max_poll_time=300  # 5min
-            )
+            # TimeoutError capturado: SEFAZ pode demorar, retry loop trata
+            try:
+                self._fire_and_poll(
+                    odoo, fire_gerar_nfe, poll_nfe_transmitida,
+                    'Transmitir NF-e Transfer',
+                    poll_interval=60, max_poll_time=1800  # 30min, poll a cada 60s
+                )
+            except TimeoutError:
+                logger.warning(
+                    f"  Primeiro fire_and_poll expirou (1800s). "
+                    f"Entrando no retry loop..."
+                )
 
             # --- Loop de retry para erros transitorios da SEFAZ ---
-            # Procedimento fiscal: retry a cada 2 min, ate 10 min total
+            # Procedimento fiscal: verificar status + retry a cada 2 min, ate 30 min total
             nfe_autorizada = False
             for attempt in range(1, self.NFE_RETRY_MAX + 1):
                 # Ler estado atual da invoice (sempre fresco)
@@ -2479,7 +2582,7 @@ class RecebimentoLfOdooService:
                     )
                     time.sleep(self.NFE_RETRY_INTERVAL)
 
-                    # Re-transmitir
+                    # Re-transmitir (TimeoutError capturado para nao matar o loop)
                     logger.info(
                         f"  Re-chamando action_gerar_nfe "
                         f"(tentativa {attempt + 1}/{self.NFE_RETRY_MAX})..."
@@ -2488,11 +2591,17 @@ class RecebimentoLfOdooService:
                         rec.id, 6, 23, rec.total_etapas,
                         f'Transmitindo NF-e (tentativa {attempt + 1}/{self.NFE_RETRY_MAX})...'
                     )
-                    result = self._fire_and_poll(
-                        odoo, fire_gerar_nfe, poll_nfe_transmitida,
-                        f'Transmitir NF-e Transfer (retry {attempt + 1})',
-                        poll_interval=15, max_poll_time=300
-                    )
+                    try:
+                        self._fire_and_poll(
+                            odoo, fire_gerar_nfe, poll_nfe_transmitida,
+                            f'Transmitir NF-e Transfer (retry {attempt + 1})',
+                            poll_interval=60, max_poll_time=1800
+                        )
+                    except TimeoutError:
+                        logger.warning(
+                            f"  Retry {attempt + 1} fire_and_poll expirou. "
+                            f"Continuando loop..."
+                        )
                 else:
                     # Ultima tentativa — falhou definitivamente
                     logger.error(
