@@ -72,6 +72,10 @@ class Config:
     # Filtrar NFs FOB do monitoramento (True por padrão)
     FILTRAR_FOB_MONITORAMENTO = os.environ.get("FILTRAR_FOB_MONITORAMENTO", "True").lower() == "true"
 
+    # Query Profiler — conta queries por request e detecta N+1
+    # Ativar via ENABLE_QUERY_PROFILING=true no Render (reinicia servico)
+    ENABLE_QUERY_PROFILING = os.environ.get("ENABLE_QUERY_PROFILING", "False").lower() == "true"
+
     # ✅ CONFIGURAÇÕES DE CSRF OTIMIZADAS
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = 7200  # 2 horas (era 1 hora por padrão)

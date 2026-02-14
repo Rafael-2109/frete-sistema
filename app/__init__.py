@@ -255,6 +255,10 @@ def create_app(config_name=None):
     migrate.init_app(app, db)
     Session(app)
 
+    # 📊 Query Profiler — detecta N+1 e conta queries por request
+    from app.utils.query_profiler import init_query_profiling, start_profiling, get_profiling_summary
+    init_query_profiling(app)
+
     # 🗜️ Compressao gzip de respostas dinamicas (HTML, JSON, APIs)
     from flask_compress import Compress
     Compress(app)
@@ -319,6 +323,10 @@ def create_app(config_name=None):
             """Monitora o início das requisições"""
             g.start_time = time.time()
 
+            # Query Profiler: inicia contagem se habilitado
+            if app.config.get("ENABLE_QUERY_PROFILING"):
+                start_profiling()
+
             # Log básico da requisição (só para rotas importantes)
             if not request.path.startswith("/static") and not request.path.endswith(".ico"):
                 log_request_info(request)
@@ -346,11 +354,30 @@ def create_app(config_name=None):
 
                 # Log apenas para rotas não ignoradas
                 if not deve_ignorar:
-                    logger.info(
-                        f"⏱️ {request.method} {request.path} | "
-                        f"Status: {response.status_code} | "
-                        f"Tempo: {duration:.3f}s"
-                    )
+                    # Query Profiler: inclui contagem de queries se habilitado
+                    profiling = get_profiling_summary()
+                    if profiling:
+                        logger.info(
+                            f"⏱️ {request.method} {request.path} | "
+                            f"Status: {response.status_code} | "
+                            f"Queries: {profiling['count']} | "
+                            f"DB: {profiling['db_time']:.3f}s | "
+                            f"Total: {duration:.3f}s"
+                        )
+                        # Alerta N+1
+                        if profiling["n_plus_one"]:
+                            repeated = {q[:80]: c for q, c in profiling["n_plus_one"].items()}
+                            logger.warning(
+                                f"N+1 SUSPECT: {request.path} | "
+                                f"{profiling['count']} queries | "
+                                f"Repeated: {repeated}"
+                            )
+                    else:
+                        logger.info(
+                            f"⏱️ {request.method} {request.path} | "
+                            f"Status: {response.status_code} | "
+                            f"Tempo: {duration:.3f}s"
+                        )
 
                     # Alerta para requisições lentas
                     if duration > 3:
