@@ -546,6 +546,37 @@
     color: var(--agent-text-inverse) !important;
 }
 
+/* === Effort Selector === */
+.effort-selector {
+    background: rgba(255,255,255,0.1);
+}
+.effort-btn {
+    color: var(--agent-text-muted);
+}
+.effort-btn:hover {
+    color: var(--agent-text-secondary);
+    background: rgba(255,255,255,0.1);
+}
+.effort-btn.active {
+    background: var(--agent-accent-primary);
+    color: var(--agent-text-inverse);
+}
+
+[data-theme="light"] .effort-selector {
+    background: var(--agent-bg-tertiary);
+}
+[data-theme="light"] .effort-btn {
+    color: var(--agent-text-secondary);
+}
+[data-theme="light"] .effort-btn:hover {
+    color: var(--agent-text-primary);
+    background: var(--agent-bg-hover);
+}
+[data-theme="light"] .effort-btn.active {
+    background: var(--agent-accent-primary);
+    color: #ffffff;
+}
+
 /* === Model Selector === */
 .model-select {
     background: var(--agent-bg-tertiary) !important;

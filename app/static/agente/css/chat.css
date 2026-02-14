@@ -216,7 +216,6 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    background: rgba(255,255,255,0.1);
     border-radius: 8px;
     padding: 2px;
 }
@@ -231,7 +230,6 @@
 .effort-btn {
     background: transparent;
     border: none;
-    color: rgba(255,255,255,0.6);
     font-size: 0.65rem;
     font-weight: 500;
     padding: 3px 6px;
@@ -244,14 +242,7 @@
     white-space: nowrap;
 }
 
-.effort-btn:hover {
-    color: rgba(255,255,255,0.85);
-    background: rgba(255,255,255,0.1);
-}
-
 .effort-btn.active {
-    background: #ffc107;
-    color: #1a1a2e;
     font-weight: 600;
 }
 
