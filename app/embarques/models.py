@@ -94,10 +94,19 @@ class Embarque(db.Model):
     @property
     def itens(self):
         """
-        ✅ SOLUÇÃO DEFINITIVA: Propriedade que SEMPRE retorna itens ordenados por ID
-        Isso garante ordem estável independente de commits, reloads ou operações do SQLAlchemy
+        Retorna itens ordenados por ID. Memoizado por instancia para evitar N+1.
+        Usa __dict__ diretamente para nao conflitar com instrumentacao SQLAlchemy.
+        Chamar invalidar_cache_itens() apos adicionar/remover itens.
         """
-        return self._itens.order_by(EmbarqueItem.id).all()
+        cached = self.__dict__.get('_itens_cache')
+        if cached is None:
+            cached = self._itens.order_by(EmbarqueItem.id).all()
+            self.__dict__['_itens_cache'] = cached
+        return cached
+
+    def invalidar_cache_itens(self):
+        """Invalida cache memoizado de itens. Chamar apos CRUD em EmbarqueItem."""
+        self.__dict__.pop('_itens_cache', None)
 
     def total_notas(self):
         return len([i for i in self.itens if i.status == 'ativo'])

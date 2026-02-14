@@ -157,12 +157,41 @@ class SincronizacaoContasAPagarService:
             cnpj_map = self._buscar_cnpjs_fornecedores(partner_ids)
             logger.info(f"   ✅ {len(cnpj_map)} fornecedores encontrados")
 
-            # 3. Processar cada registro
-            logger.info("\n[3/3] Processando registros...")
+            # 3. Pre-carregar registros existentes para batch lookup (evita N+1)
+            logger.info("\n[3/4] Pre-carregando registros existentes...")
+            odoo_line_ids = [r.get('id') for r in dados_odoo if r.get('id')]
+            contas_por_line_id = {}
+            contas_por_chave = {}
+
+            # Batch lookup por odoo_line_id (chunks de 500 para evitar SQL IN muito grande)
+            for i in range(0, len(odoo_line_ids), 500):
+                chunk = odoo_line_ids[i:i+500]
+                for c in ContasAPagar.query.filter(ContasAPagar.odoo_line_id.in_(chunk)).all():
+                    if c.odoo_line_id:
+                        contas_por_line_id[c.odoo_line_id] = c
+
+            # Batch lookup por chave composta (empresa, titulo_nf, parcela)
+            # Determinar empresas presentes nos dados
+            empresas_presentes = set()
+            for r in dados_odoo:
+                emp_nome = r.get('company_id', [None, ''])[1] or ''
+                emp = self._mapear_empresa(emp_nome)
+                if emp != 0:
+                    empresas_presentes.add(emp)
+
+            for emp in empresas_presentes:
+                for c in ContasAPagar.query.filter(ContasAPagar.empresa == emp).all():
+                    chave = (c.empresa, c.titulo_nf, c.parcela)
+                    contas_por_chave[chave] = c
+
+            logger.info(f"   ✅ {len(contas_por_line_id)} por line_id, {len(contas_por_chave)} por chave composta")
+
+            # 4. Processar cada registro
+            logger.info("\n[4/4] Processando registros...")
 
             for idx, row in enumerate(dados_odoo):
                 try:
-                    self._processar_registro(row, cnpj_map)
+                    self._processar_registro(row, cnpj_map, contas_por_line_id, contas_por_chave)
                 except Exception as e:
                     logger.error(f"   ❌ Erro no registro {idx}: {e}")
                     self.estatisticas['erros'] += 1
@@ -306,8 +335,14 @@ class SincronizacaoContasAPagarService:
 
         return result
 
-    def _processar_registro(self, row: Dict, cnpj_map: Dict[int, Dict]):
-        """Processa um registro do Odoo"""
+    def _processar_registro(
+        self,
+        row: Dict,
+        cnpj_map: Dict[int, Dict],
+        contas_por_line_id: Dict = None,
+        contas_por_chave: Dict = None
+    ):
+        """Processa um registro do Odoo. Usa dicts pre-carregados para lookup O(1)."""
 
         # Extrair dados básicos
         odoo_line_id = row.get('id')
@@ -350,15 +385,22 @@ class SincronizacaoContasAPagarService:
         parcela_paga = bool(row.get('l10n_br_paga'))
         reconciliado = bool(row.get('reconciled'))
 
-        # Buscar registro existente por odoo_line_id OU empresa+nf+parcela
-        conta = ContasAPagar.query.filter_by(odoo_line_id=odoo_line_id).first()
+        # Buscar registro existente: batch dict O(1) com fallback para query
+        conta = None
+        if contas_por_line_id is not None:
+            conta = contas_por_line_id.get(odoo_line_id)
+        else:
+            conta = ContasAPagar.query.filter_by(odoo_line_id=odoo_line_id).first()
 
         if not conta:
-            conta = ContasAPagar.query.filter_by(
-                empresa=empresa,
-                titulo_nf=titulo_nf,
-                parcela=parcela
-            ).first()
+            if contas_por_chave is not None:
+                conta = contas_por_chave.get((empresa, titulo_nf, parcela))
+            else:
+                conta = ContasAPagar.query.filter_by(
+                    empresa=empresa,
+                    titulo_nf=titulo_nf,
+                    parcela=parcela
+                ).first()
 
         if conta:
             # Atualizar registro existente
@@ -407,4 +449,9 @@ class SincronizacaoContasAPagarService:
                 criado_por='Sistema Odoo'
             )
             db.session.add(conta)
+            # Atualizar dicts para evitar duplicatas no mesmo batch
+            if contas_por_line_id is not None and odoo_line_id:
+                contas_por_line_id[odoo_line_id] = conta
+            if contas_por_chave is not None:
+                contas_por_chave[(empresa, titulo_nf, parcela)] = conta
             self.estatisticas['novos'] += 1

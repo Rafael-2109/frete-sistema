@@ -1005,8 +1005,11 @@ def motivo_cancelamento(id):
 @login_required
 def excluir_item_embarque(item_id):
     item = EmbarqueItem.query.get_or_404(item_id)
+    embarque = item.embarque
     db.session.delete(item)
     db.session.commit()
+    if embarque:
+        embarque.invalidar_cache_itens()
     return "", 204
 
 
@@ -1031,6 +1034,7 @@ def novo_item(embarque_id):
             )
             db.session.add(novo_item)
             db.session.commit()
+            embarque.invalidar_cache_itens()
             flash("Item adicionado com sucesso!", "success")
             return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
 
@@ -2102,7 +2106,10 @@ def desvincular_pedido(lote_id):
             
             # Remove item de embarque se existir e o embarque estiver cancelado
             if embarque_cancelado and item_embarque:
+                embarque_ref = item_embarque.embarque
                 db.session.delete(item_embarque)
+                if embarque_ref:
+                    embarque_ref.invalidar_cache_itens()
                 vinculos_removidos.append(f"item do embarque #{embarque_relacionado.numero}")
             
             db.session.commit()

@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import tempfile
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 import logging
 
 from collections import defaultdict
@@ -39,7 +40,7 @@ from app.monitoramento.forms import (
 from app.financeiro.models import PendenciaFinanceiraNF
 from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
 from app.carteira.models import CarteiraPrincipal
-from app.embarques.models import EmbarqueItem  # ✅ Adicionar import
+from app.embarques.models import Embarque, EmbarqueItem
 
 from app.cadastros_agendamento.models import ContatoAgendamento
 
@@ -593,6 +594,119 @@ def resolver_pendencia(id):
     db.session.commit()
     return redirect(url_for('monitoramento.listar_entregas', **request.args))
 
+def _enriquecer_entregas_batch(entregas):
+    """
+    Enriquece lista de EntregaMonitorada com dados de faturamento, carteira e embarque.
+    Usa batch pre-fetch com IN() para evitar N+1 queries.
+    """
+    if not entregas:
+        return
+
+    # Coletar NFs unicas
+    nfs = list({e.numero_nf for e in entregas if e.numero_nf})
+
+    if not nfs:
+        # Sem NFs — inicializar defaults
+        for entrega in entregas:
+            entrega.num_pedido = None
+            entrega.incoterm = None
+            entrega.observ_ped_1 = None
+            entrega.pedido_cliente = None
+            entrega.nf_cancelada = False
+            entrega.modalidade = None
+            entrega.rastreamento_id = None
+        return
+
+    # Batch 1: RelatorioFaturamentoImportado (num_pedido, incoterm, valor)
+    fat_imp_map = {}
+    for f in RelatorioFaturamentoImportado.query.filter(
+        RelatorioFaturamentoImportado.numero_nf.in_(nfs)
+    ).all():
+        if f.numero_nf not in fat_imp_map:
+            fat_imp_map[f.numero_nf] = f
+
+    # Batch 2: FaturamentoProduto (status NF cancelada)
+    fat_prod_map = {}
+    for f in FaturamentoProduto.query.filter(
+        FaturamentoProduto.numero_nf.in_(nfs)
+    ).all():
+        if f.numero_nf not in fat_prod_map:
+            fat_prod_map[f.numero_nf] = f
+
+    # Batch 3: EmbarqueItem com joinedload do embarque e rastreamento
+    emb_itens_map = {}
+    emb_itens_raw = EmbarqueItem.query.options(
+        joinedload(EmbarqueItem.embarque).joinedload(Embarque.rastreamento)
+    ).filter(EmbarqueItem.nota_fiscal.in_(nfs)).all()
+    for ei in emb_itens_raw:
+        if ei.nota_fiscal not in emb_itens_map:
+            emb_itens_map[ei.nota_fiscal] = ei
+
+    # Coletar num_pedido para batch CarteiraPrincipal
+    pedidos_set = set()
+    for entrega in entregas:
+        fat = fat_imp_map.get(entrega.numero_nf)
+        if fat and fat.origem:
+            pedidos_set.add(fat.origem)
+    pedidos_list = list(pedidos_set)
+
+    # Batch 4: CarteiraPrincipal (observ_ped_1, pedido_cliente)
+    carteira_map = {}
+    if pedidos_list:
+        for c in CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.num_pedido.in_(pedidos_list)
+        ).all():
+            if c.num_pedido not in carteira_map:
+                carteira_map[c.num_pedido] = c
+
+    # Enriquecer cada entrega via lookup O(1)
+    for entrega in entregas:
+        faturamento = fat_imp_map.get(entrega.numero_nf)
+        entrega.num_pedido = faturamento.origem if faturamento else None
+
+        if not entrega.valor_nf and faturamento:
+            entrega.valor_nf = faturamento.valor_total
+
+        entrega.incoterm = faturamento.incoterm if faturamento else None
+
+        # CarteiraPrincipal
+        if entrega.num_pedido:
+            carteira_item = carteira_map.get(entrega.num_pedido)
+            entrega.observ_ped_1 = carteira_item.observ_ped_1 if carteira_item else None
+            entrega.pedido_cliente = getattr(carteira_item, 'pedido_cliente', None)
+        else:
+            entrega.observ_ped_1 = None
+            entrega.pedido_cliente = None
+
+        # NF cancelada
+        faturamento_produto = fat_prod_map.get(entrega.numero_nf)
+        entrega.nf_cancelada = (faturamento_produto and faturamento_produto.status_nf == 'Cancelado')
+
+        # Embarque / modalidade / rastreamento
+        embarque_item = emb_itens_map.get(entrega.numero_nf)
+        if embarque_item:
+            if embarque_item.modalidade:
+                entrega.modalidade = embarque_item.modalidade
+            elif embarque_item.embarque:
+                entrega.modalidade = embarque_item.embarque.modalidade
+            else:
+                entrega.modalidade = None
+
+            if embarque_item.embarque and hasattr(embarque_item.embarque, 'rastreamento'):
+                rastreamento = embarque_item.embarque.rastreamento
+                if rastreamento and rastreamento.aceite_lgpd:
+                    entrega.rastreamento_id = rastreamento.id
+                    entrega.rastreamento_status = rastreamento.status
+                    entrega.embarque_numero = embarque_item.embarque.numero
+                else:
+                    entrega.rastreamento_id = None
+            else:
+                entrega.rastreamento_id = None
+        else:
+            entrega.modalidade = None
+            entrega.rastreamento_id = None
+
+
 @monitoramento_bp.route('/listar_entregas')
 @login_required
 @allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
@@ -891,55 +1005,9 @@ def listar_entregas():
         # Remove grupos vazios
         entregas_agrupadas = {k: v for k, v in entregas_agrupadas.items() if v}
         
-        # ✅ ENRIQUECER DADOS DAS ENTREGAS AGRUPADAS com origem, valor_nf E RASTREAMENTO
-        for grupo_entregas in entregas_agrupadas.values():
-            for entrega in grupo_entregas:
-                faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
-                entrega.num_pedido = faturamento.origem if faturamento else None
-                if not entrega.valor_nf and faturamento:
-                    entrega.valor_nf = faturamento.valor_total
-
-                # ✅ ADICIONAR INCOTERM E MODALIDADE
-                entrega.incoterm = faturamento.incoterm if faturamento else None
-
-                # ✅ BUSCAR observ_ped_1 da CarteiraPrincipal
-                if entrega.num_pedido:
-                    carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=entrega.num_pedido).first()
-                    entrega.observ_ped_1 = carteira_item.observ_ped_1 if carteira_item else None
-                else:
-                    entrega.observ_ped_1 = None
-
-                # ✅ VERIFICAR SE NF ESTÁ CANCELADA (FaturamentoProduto)
-                faturamento_produto = FaturamentoProduto.query.filter_by(numero_nf=entrega.numero_nf).first()
-                entrega.nf_cancelada = (faturamento_produto and faturamento_produto.status_nf == 'Cancelado')
-
-                # Buscar modalidade do embarque/item do embarque
-                embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
-                if embarque_item:
-                    # Se modalidade está no item, usar do item
-                    if embarque_item.modalidade:
-                        entrega.modalidade = embarque_item.modalidade
-                    # Senão buscar do embarque principal
-                    elif embarque_item.embarque:
-                        entrega.modalidade = embarque_item.embarque.modalidade
-                    else:
-                        entrega.modalidade = None
-
-                    # 🚚 ADICIONAR RASTREAMENTO (se embarque tem rastreamento com aceite)
-                    if embarque_item.embarque and hasattr(embarque_item.embarque, 'rastreamento'):
-                        rastreamento = embarque_item.embarque.rastreamento
-                        # Só mostrar se motorista aceitou LGPD
-                        if rastreamento and rastreamento.aceite_lgpd:
-                            entrega.rastreamento_id = rastreamento.id
-                            entrega.rastreamento_status = rastreamento.status
-                            entrega.embarque_numero = embarque_item.embarque.numero
-                        else:
-                            entrega.rastreamento_id = None
-                    else:
-                        entrega.rastreamento_id = None
-                else:
-                    entrega.modalidade = None
-                    entrega.rastreamento_id = None
+        # Batch pre-fetch: enriquecer todas as entregas agrupadas de uma vez
+        todas_entregas_agrupadas = [e for grupo in entregas_agrupadas.values() for e in grupo]
+        _enriquecer_entregas_batch(todas_entregas_agrupadas)
 
     # ✅ CALCULANDO CONTADORES DOS FILTROS
     contadores = {}
@@ -1032,57 +1100,8 @@ def listar_entregas():
         .distinct().order_by(RelatorioFaturamentoImportado.vendedor).all()
     vendedores_unicos = [v[0] for v in vendedores_unicos]
 
-    # ✅ ENRIQUECER DADOS DAS ENTREGAS com origem (número do pedido), valor_nf E RASTREAMENTO
-    for entrega in paginacao.items:
-        faturamento = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
-        entrega.num_pedido = faturamento.origem if faturamento else None
-        # Priorizar valor_nf da EntregaMonitorada, senão usar valor_total do faturamento
-        if not entrega.valor_nf and faturamento:
-            entrega.valor_nf = faturamento.valor_total
-
-        # ✅ ADICIONAR INCOTERM E MODALIDADE
-        entrega.incoterm = faturamento.incoterm if faturamento else None
-
-        # ✅ BUSCAR observ_ped_1 e pedido_cliente da CarteiraPrincipal
-        if entrega.num_pedido:
-            carteira_item = CarteiraPrincipal.query.filter_by(num_pedido=entrega.num_pedido).first()
-            entrega.observ_ped_1 = carteira_item.observ_ped_1 if carteira_item else None
-            entrega.pedido_cliente = carteira_item.pedido_cliente if carteira_item else None
-        else:
-            entrega.observ_ped_1 = None
-            entrega.pedido_cliente = None
-
-        # ✅ VERIFICAR SE NF ESTÁ CANCELADA (FaturamentoProduto)
-        faturamento_produto = FaturamentoProduto.query.filter_by(numero_nf=entrega.numero_nf).first()
-        entrega.nf_cancelada = (faturamento_produto and faturamento_produto.status_nf == 'Cancelado')
-
-        # Buscar modalidade do embarque/item do embarque
-        embarque_item = EmbarqueItem.query.filter_by(nota_fiscal=entrega.numero_nf).first()
-        if embarque_item:
-            # Se modalidade está no item, usar do item
-            if embarque_item.modalidade:
-                entrega.modalidade = embarque_item.modalidade
-            # Senão buscar do embarque principal
-            elif embarque_item.embarque:
-                entrega.modalidade = embarque_item.embarque.modalidade
-            else:
-                entrega.modalidade = None
-
-            # 🚚 ADICIONAR RASTREAMENTO (se embarque tem rastreamento com aceite)
-            if embarque_item.embarque and hasattr(embarque_item.embarque, 'rastreamento'):
-                rastreamento = embarque_item.embarque.rastreamento
-                # Só mostrar se motorista aceitou LGPD
-                if rastreamento and rastreamento.aceite_lgpd:
-                    entrega.rastreamento_id = rastreamento.id
-                    entrega.rastreamento_status = rastreamento.status
-                    entrega.embarque_numero = embarque_item.embarque.numero
-                else:
-                    entrega.rastreamento_id = None
-            else:
-                entrega.rastreamento_id = None
-        else:
-            entrega.modalidade = None
-            entrega.rastreamento_id = None
+    # Batch pre-fetch: enriquecer entregas paginadas de uma vez
+    _enriquecer_entregas_batch(paginacao.items)
 
     return render_template(
         'monitoramento/listar_entregas.html',

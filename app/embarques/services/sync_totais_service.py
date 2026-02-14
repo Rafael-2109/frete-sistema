@@ -68,11 +68,12 @@ def sincronizar_totais_embarque(embarque_ou_id):
         itens_atualizados = []
         itens_com_erro = []
 
-        # Processa cada EmbarqueItem
-        for item in embarque.itens:
-            if item.status != 'ativo':
-                continue
+        # Carrega itens uma unica vez (memoizado via Embarque.itens)
+        todos_itens = embarque.itens
+        itens_ativos = [i for i in todos_itens if i.status == 'ativo']
 
+        # Processa cada EmbarqueItem ativo
+        for item in itens_ativos:
             try:
                 resultado_item = _sincronizar_item(item)
                 itens_atualizados.append(resultado_item)
@@ -85,10 +86,15 @@ def sincronizar_totais_embarque(embarque_ou_id):
                     'erro': str(e)
                 })
 
-        # Recalcula totais do embarque
-        embarque.peso_total = sum(i.peso or 0 for i in embarque.itens if i.status == 'ativo')
-        embarque.valor_total = sum(i.valor or 0 for i in embarque.itens if i.status == 'ativo')
-        embarque.pallet_total = sum(i.pallets or 0 for i in embarque.itens if i.status == 'ativo')
+        # Recalcula totais do embarque em uma unica iteracao sobre itens_ativos
+        peso = valor = pallet = 0.0
+        for i in itens_ativos:
+            peso += i.peso or 0
+            valor += i.valor or 0
+            pallet += i.pallets or 0
+        embarque.peso_total = peso
+        embarque.valor_total = valor
+        embarque.pallet_total = pallet
 
         db.session.commit()
 

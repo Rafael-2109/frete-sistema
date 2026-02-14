@@ -4,12 +4,23 @@ Centraliza todas as funções de busca e normalização para eliminar redundânc
 """
 
 from sqlalchemy import func
+from flask import g
 from app import db
 from app.localidades.models import Cidade
 from app.utils.string_utils import remover_acentos
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cidade_cache():
+    """Retorna cache de cidades no escopo do request (via Flask g).
+    Objetos SQLAlchemy ficam na mesma sessao durante o request inteiro,
+    evitando problemas de sessao desvinculada."""
+    if not hasattr(g, '_cidade_cache_ibge'):
+        g._cidade_cache_ibge = {}
+        g._cidade_cache_nome = {}
+    return g._cidade_cache_ibge, g._cidade_cache_nome
 
 
 class LocalizacaoService:
@@ -82,94 +93,89 @@ class LocalizacaoService:
     def buscar_cidade_por_ibge(codigo_ibge):
         """
         Busca cidade por código IBGE (método mais confiável e rápido).
-        ✅ CORRIGIDO: Garante que o objeto sempre esteja vinculado à sessão atual.
+        Cache request-scoped via Flask g para evitar queries repetidas
+        sem problemas de sessão SQLAlchemy (mesmo request = mesma sessão).
         """
         if not codigo_ibge:
             return None
-            
+
         codigo_ibge = str(codigo_ibge).strip()
-        
-        # ✅ CORREÇÃO: Não usa cache para evitar problemas de sessão
-        # O cache pode retornar objetos órfãos de sessões anteriores
-        
-        # Busca sempre no banco com a sessão atual
+
+        # Cache request-scoped (objetos na mesma sessão SQLAlchemy)
+        try:
+            cache_ibge, _ = _get_cidade_cache()
+            if codigo_ibge in cache_ibge:
+                return cache_ibge[codigo_ibge]
+        except RuntimeError:
+            # Fora de request context (scripts standalone, etc.)
+            cache_ibge = None
+
         cidade = Cidade.query.filter_by(codigo_ibge=codigo_ibge).first()
-        
-        # Se encontrou a cidade, garante que está na sessão atual
+
         if cidade:
             try:
-                # ✅ GARANTE SESSÃO ATIVA: Força carregamento na sessão atual
-                cidade = db.session.merge(cidade)
-                
-                # Teste de acesso aos atributos para garantir que funciona
                 _ = cidade.nome
                 _ = cidade.uf
-                _ = cidade.icms
-                _ = cidade.codigo_ibge
-                
-                logger.debug(f"✅ Cidade IBGE {codigo_ibge} carregada: {cidade.nome}/{cidade.uf}")
-                
+                logger.debug(f"Cidade IBGE {codigo_ibge} carregada: {cidade.nome}/{cidade.uf}")
             except Exception as e:
                 logger.warning(f"Erro ao processar cidade IBGE {codigo_ibge}: {e}")
-                # Se falhou, tenta buscar novamente diretamente
-                try:
-                    cidade = db.session.query(Cidade).filter_by(codigo_ibge=codigo_ibge).first()
-                    if cidade:
-                        _ = cidade.nome  # Teste de acesso
-                        logger.debug(f"✅ Cidade IBGE {codigo_ibge} recarregada: {cidade.nome}/{cidade.uf}")
-                    else:
-                        logger.warning(f"❌ Cidade IBGE {codigo_ibge} não encontrada na segunda tentativa")
-                except Exception as e2:
-                    logger.error(f"❌ Erro crítico ao buscar cidade IBGE {codigo_ibge}: {e2}")
-                    cidade = None
-        
+                cidade = None
+
+        # Salvar no cache (inclusive None para evitar re-query)
+        if cache_ibge is not None:
+            cache_ibge[codigo_ibge] = cidade
+
         return cidade
     
     @staticmethod
     def buscar_cidade_por_nome(nome, uf):
         """
         Busca cidade por nome e UF (fallback quando não tem código IBGE).
-        ✅ CORRIGIDO: Evita problemas de sessão SQLAlchemy.
+        Cache request-scoped via Flask g para evitar queries repetidas.
         """
         if not nome or not uf:
             return None
-            
-        # Normaliza parâmetros
+
         nome_normalizado = remover_acentos(nome.strip()).upper()
         uf_normalizado = uf.strip().upper()
-        
-        # ✅ CORREÇÃO: Busca diretamente no banco sem cache
+        cache_key = (nome_normalizado, uf_normalizado)
+
+        # Cache request-scoped
         try:
-            # Busca todas as cidades do UF na sessão atual
+            _, cache_nome = _get_cidade_cache()
+            if cache_key in cache_nome:
+                return cache_nome[cache_key]
+        except RuntimeError:
+            cache_nome = None
+
+        try:
             cidades_uf = db.session.query(Cidade).filter(
                 func.upper(Cidade.uf) == uf_normalizado
             ).all()
-            
-            # Compara nomes normalizados
+
             for cidade in cidades_uf:
                 try:
-                    # ✅ GARANTE SESSÃO ATIVA: Já está na sessão atual da query
                     nome_db = cidade.nome
                     cidade_nome_normalizado = remover_acentos(nome_db.strip()).upper()
-                    
+
                     if cidade_nome_normalizado == nome_normalizado:
-                        # Testa acesso a todos os atributos para garantir que funciona
-                        _ = cidade.uf
-                        _ = cidade.icms
-                        _ = cidade.codigo_ibge
-                        
-                        logger.debug(f"✅ Cidade encontrada por nome: {cidade.nome}/{cidade.uf}")
+                        logger.debug(f"Cidade encontrada por nome: {cidade.nome}/{cidade.uf}")
+                        if cache_nome is not None:
+                            cache_nome[cache_key] = cidade
                         return cidade
-                        
+
                 except Exception as e:
                     logger.warning(f"Erro ao acessar dados da cidade {getattr(cidade, 'id', 'N/A')}: {e}")
                     continue
-            
-            logger.debug(f"❌ Cidade não encontrada: {nome_normalizado}/{uf_normalizado}")
+
+            logger.debug(f"Cidade nao encontrada: {nome_normalizado}/{uf_normalizado}")
+            # Salvar None no cache para evitar re-query
+            if cache_nome is not None:
+                cache_nome[cache_key] = None
             return None
-            
+
         except Exception as e:
-            logger.error(f"❌ Erro ao buscar cidade por nome {nome_normalizado}/{uf_normalizado}: {e}")
+            logger.error(f"Erro ao buscar cidade por nome {nome_normalizado}/{uf_normalizado}: {e}")
             return None
     
     @staticmethod
