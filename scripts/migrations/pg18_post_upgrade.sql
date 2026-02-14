@@ -8,11 +8,13 @@
 -- 1. Confirmar versao nova
 SELECT version();
 
--- 2. REINDEX DATABASE (obrigatorio apos major upgrade)
+-- 2. REINDEX SCHEMA (obrigatorio apos major upgrade)
 -- Reconstroi todos os indexes para garantir consistencia
 -- com possiveis mudancas de collation e formato interno.
 -- Tempo estimado: ~2-5 min para banco de 1.2 GB com 1.187 indexes.
-REINDEX DATABASE sistema_fretes;
+-- Nota: Usar SCHEMA em vez de DATABASE para nao depender do nome do banco
+-- (no Render, o nome e gerado automaticamente).
+REINDEX SCHEMA public;
 
 -- 3. ANALYZE (atualizar estatisticas do planner)
 -- Necessario apos upgrade para que o query planner use
@@ -50,7 +52,16 @@ SHOW password_encryption;
 -- 7. Verificar data checksums
 SHOW data_checksums;
 
--- 8. Verificar saude geral pos-upgrade
+-- 8. Verificar collation e ordering pos-upgrade
+-- Se collation da glibc mudou entre versoes, ordering de strings
+-- com acentos pode ser diferente. Verificar visualmente.
+SELECT datcollate, datctype FROM pg_database WHERE datname = current_database();
+
+-- Teste de ordering com dados reais (strings acentuadas)
+SELECT nome_cidade, cod_uf FROM carteira_principal
+WHERE nome_cidade LIKE 'São%' ORDER BY nome_cidade LIMIT 5;
+
+-- 9. Verificar saude geral pos-upgrade
 SELECT
   (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') AS total_indexes,
   (SELECT count(*) FROM pg_stat_user_tables) AS total_tables,

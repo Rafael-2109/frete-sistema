@@ -12,7 +12,10 @@ Executar em janela de manutencao.
 
 Uso:
     source .venv/bin/activate
-    python scripts/migrations/pg18_post_upgrade.py
+    python scripts/migrations/pg18_post_upgrade.py [--force]
+
+Flags:
+    --force     Prosseguir mesmo se versao nao for PG18 (util para testes)
 """
 
 import sys
@@ -34,7 +37,7 @@ def main():
         print("=" * 60)
 
         # --- Verificar versao ---
-        print("\n[1/5] VERIFICANDO VERSAO")
+        print("\n[1/6] VERIFICANDO VERSAO")
         print("-" * 40)
 
         with db.engine.connect() as conn:
@@ -45,13 +48,13 @@ def main():
             if "PostgreSQL 18" not in version:
                 print(f"\n  ⚠  ATENCAO: Versao nao e PostgreSQL 18!")
                 print(f"     Este script e para execucao POS-UPGRADE.")
-                resp = input("     Deseja continuar mesmo assim? (s/N): ")
-                if resp.lower() != "s":
-                    print("  Abortado.")
+                if "--force" not in sys.argv:
+                    print("     Use --force para continuar mesmo assim.")
                     return 1
+                print("     --force detectado, continuando...")
 
         # --- REINDEX ---
-        print("\n[2/5] REINDEX DATABASE")
+        print("\n[2/6] REINDEX DATABASE")
         print("-" * 40)
         print("  ℹ  Isso pode demorar alguns minutos...")
         print("  ℹ  O banco ficara indisponivel durante o REINDEX.")
@@ -62,7 +65,9 @@ def main():
             with db.engine.connect().execution_options(
                 isolation_level="AUTOCOMMIT"
             ) as conn:
-                conn.execute(text("REINDEX DATABASE sistema_fretes"))
+                db_name = conn.execute(text("SELECT current_database()")).scalar()
+                print(f"  ℹ  Database: {db_name}")
+                conn.execute(text(f'REINDEX DATABASE "{db_name}"'))
             elapsed = time.time() - start
             print(f"  ✓  REINDEX concluido em {elapsed:.1f}s")
         except Exception as e:
@@ -78,10 +83,10 @@ def main():
                 print(f"  ✓  REINDEX SCHEMA public concluido")
             except Exception as e2:
                 print(f"  ✗  REINDEX SCHEMA tambem falhou: {e2}")
-                print("  ℹ  Execute manualmente: REINDEX DATABASE sistema_fretes;")
+                print("  ℹ  Execute manualmente: REINDEX SCHEMA public;")
 
         # --- ANALYZE ---
-        print("\n[3/5] ANALYZE (atualizando estatisticas)")
+        print("\n[3/6] ANALYZE (atualizando estatisticas)")
         print("-" * 40)
 
         start = time.time()
@@ -97,7 +102,7 @@ def main():
             print("  ℹ  Execute manualmente: ANALYZE;")
 
         # --- Verificar Extensions ---
-        print("\n[4/5] VERIFICANDO EXTENSIONS")
+        print("\n[4/6] VERIFICANDO EXTENSIONS")
         print("-" * 40)
 
         with db.engine.connect() as conn:
@@ -115,7 +120,7 @@ def main():
                     print(f"  ✓  {row[0]}: v{row[1]} (atual)")
 
         # --- Testes de Trigger ---
-        print("\n[5/5] VERIFICANDO TRIGGERS")
+        print("\n[5/6] VERIFICANDO TRIGGERS")
         print("-" * 40)
 
         with db.engine.connect() as conn:
@@ -138,6 +143,37 @@ def main():
                 print(f"  {marker}  [{row[3]}] {row[0]} em {row[1]} → {row[2]}()")
 
             print(f"\n  ℹ  Total: {len(rows)} triggers ativos")
+
+        # --- Verificar Collation / Ordering ---
+        print("\n[6/6] VERIFICANDO COLLATION E ORDERING")
+        print("-" * 40)
+
+        with db.engine.connect() as conn:
+            # Collation do banco
+            result = conn.execute(text(
+                "SELECT datcollate, datctype FROM pg_database "
+                "WHERE datname = current_database()"
+            )).fetchone()
+            if result:
+                print(f"  ℹ  Collation: {result[0]}  /  Ctype: {result[1]}")
+
+            # Teste de ordering com dados reais (strings acentuadas)
+            print("  ℹ  Teste de ordering com strings acentuadas...")
+            try:
+                rows = conn.execute(text(
+                    "SELECT nome_cidade, cod_uf FROM carteira_principal "
+                    "WHERE nome_cidade LIKE 'São%%' "
+                    "ORDER BY nome_cidade LIMIT 5"
+                )).fetchall()
+                if rows:
+                    for row in rows:
+                        print(f"       {row[0]} / {row[1]}")
+                    print("  ✓  Ordering OK — verificar visualmente se ordem e consistente")
+                else:
+                    print("  ℹ  Nenhuma cidade com 'São' encontrada para teste")
+            except Exception as e:
+                print(f"  ⚠  Teste de ordering falhou: {e}")
+                print("     Verificar manualmente apos upgrade.")
 
         # --- Verificar MD5 ---
         print("\n[EXTRA] VERIFICANDO PASSWORD ENCRYPTION")
