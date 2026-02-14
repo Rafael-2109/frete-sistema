@@ -1,6 +1,6 @@
 # Sistema de Fretes — Instrucoes de Projeto
 
-**Ultima Atualizacao**: 13/02/2026
+**Ultima Atualizacao**: 14/02/2026
 
 ---
 
@@ -77,6 +77,7 @@ Gotchas rapidos:
 | **Routing de skills** | `.claude/references/ROUTING_SKILLS.md` |
 | **Infraestrutura Render** | `.claude/references/INFRAESTRUTURA.md` |
 | **Confiabilidade de subagentes** | `.claude/references/SUBAGENT_RELIABILITY.md` |
+| **Manual CLAUDE.md de modulo** | `.claude/references/MANUAL_CLAUDE_MD.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:
@@ -155,11 +156,15 @@ Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao auto
 
 ## SUBDIRECTORY CLAUDE.md (Planejados)
 
+> **Manual**: `.claude/references/MANUAL_CLAUDE_MD.md` — template, principios, checklist e exemplo comentado
+
 Modulos complexos terao CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
-- `app/financeiro/CLAUDE.md` — P0 (34.5K LOC, 59 arquivos)
-- `app/recebimento/CLAUDE.md` — P0 (22.3K LOC, 28 arquivos)
+- `app/financeiro/CLAUDE.md` — P0 (38.7K LOC, 64 arquivos)
+- `app/recebimento/CLAUDE.md` — P0 (27.3K LOC, 28 arquivos)
 - `app/carteira/CLAUDE.md` — P1 (19K LOC, 49 arquivos)
 - `app/odoo/CLAUDE.md` — P1 (16.8K LOC, 30 arquivos)
+- `app/pallet/CLAUDE.md` — P2 (13.3K LOC, 27 arquivos)
+- `app/agente/CLAUDE.md` — P2 (11.9K LOC, 35 arquivos)
 
 ---
 
