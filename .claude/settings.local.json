@@ -76,9 +76,23 @@
       "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/backfill_sincronizacao_extrato_comprovantes.py /home/rafaelnascimento/projetos/frete_sistema/scripts/reprocessar_ibscbs.py /home/rafaelnascimento/projetos/frete_sistema/scripts/testes/test_sincronizacao_contas_receber.py /home/rafaelnascimento/projetos/frete_sistema/scripts/documentar_tabelas_odoo_contas_receber.py /home/rafaelnascimento/projetos/frete_sistema/scripts/migracao_abatimentos_odoo.py)",
       "Bash(for f in /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/backup_manager.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/verify_backups.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/recovery_manager.py /home/rafaelnascimento/projetos/frete_sistema/scripts/backup/restore_test.py /home/rafaelnascimento/projetos/frete_sistema/scripts/corrigir_multiproduto_separacao.py)",
       "Bash(do echo \"=== $f ===\" head -50 \"$f\")",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "WebFetch(domain:claudefa.st)",
+      "WebFetch(domain:labs.voidwire.info)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:claudelog.com)",
+      "WebFetch(domain:www.richsnapp.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:addyosmani.com)",
+      "WebFetch(domain:claudekit.cc)",
+      "WebFetch(domain:www.pubnub.com)",
+      "Bash(git status:*)"
     ],
     "deny": []
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "printf '\\033[01;32m%s@%s\\033[00m:\\033[01;34m%s\\033[00m' \"$(whoami)\" \"$(hostname -s)\" \"$(pwd)\""
   },
   "outputStyle": "precision-engineer",
   "prefersReducedMotion": false

@@ -89,14 +89,14 @@
       "unique": false
     },
     {
-      "name": "idx_unificacao_ativo",
+      "name": "ix_unificacao_codigos_ativo",
       "columns": [
         "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_unificacao_codigos_ativo",
+      "name": "idx_unificacao_ativo",
       "columns": [
         "ativo"
       ],

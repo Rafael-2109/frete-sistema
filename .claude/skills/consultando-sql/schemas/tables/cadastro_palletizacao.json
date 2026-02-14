@@ -87,12 +87,12 @@
     {
       "name": "lead_time",
       "type": "integer",
-      "comment": "Lead time de compra em dias"
+      "description": "Lead time de compra em dias"
     },
     {
       "name": "lote_minimo_compra",
       "type": "integer",
-      "comment": "Lote minimo de compra (unidades)"
+      "description": "Lote minimo de compra (unidades)"
     },
     {
       "name": "disparo_producao",
@@ -124,6 +124,20 @@
   ],
   "indices": [
     {
+      "name": "ix_cadastro_palletizacao_categoria_produto",
+      "columns": [
+        "categoria_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cadastro_palletizacao_tipo_embalagem",
+      "columns": [
+        "tipo_embalagem"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_cadastro_palletizacao_linha_producao",
       "columns": [
         "linha_producao"
@@ -141,20 +155,6 @@
       "name": "ix_cadastro_palletizacao_tipo_materia_prima",
       "columns": [
         "tipo_materia_prima"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cadastro_palletizacao_categoria_produto",
-      "columns": [
-        "categoria_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cadastro_palletizacao_tipo_embalagem",
-      "columns": [
-        "tipo_embalagem"
       ],
       "unique": false
     }

@@ -102,9 +102,9 @@
   ],
   "indices": [
     {
-      "name": "ix_match_nf_po_item_odoo_dfe_line_id",
+      "name": "ix_match_nf_po_item_validacao_id",
       "columns": [
-        "odoo_dfe_line_id"
+        "validacao_id"
       ],
       "unique": false
     },
@@ -116,9 +116,9 @@
       "unique": false
     },
     {
-      "name": "ix_match_nf_po_item_validacao_id",
+      "name": "ix_match_nf_po_item_odoo_dfe_line_id",
       "columns": [
-        "validacao_id"
+        "odoo_dfe_line_id"
       ],
       "unique": false
     }

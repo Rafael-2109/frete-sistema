@@ -57,52 +57,52 @@
     {
       "name": "nome_pagador",
       "type": "varchar(255)",
-      "description": "Nome do cliente/pagador"
+      "description": "Nome do cliente"
     },
     {
       "name": "cnpj_pagador",
       "type": "varchar(20)",
-      "description": "CNPJ extraído do payment_ref"
+      "description": "CNPJ extraído"
     },
     {
       "name": "odoo_partner_id",
       "type": "integer",
-      "description": "res.partner ID do Odoo (capturado na importação)"
+      "description": "res.partner ID"
     },
     {
       "name": "odoo_partner_name",
       "type": "varchar(255)",
-      "description": "Nome do parceiro no Odoo"
+      "description": "nome do parceiro no Odoo"
     },
     {
       "name": "odoo_partner_cnpj",
       "type": "varchar(20)",
-      "description": "l10n_br_cnpj do res.partner (buscado do Odoo)"
+      "description": "l10n_br_cnpj do res.partner"
     },
     {
       "name": "favorecido_cnpj",
       "type": "varchar(20)",
-      "description": "CNPJ final resolvido pelo pipeline"
+      "description": "CNPJ final resolvido"
     },
     {
       "name": "favorecido_nome",
       "type": "varchar(255)",
-      "description": "Nome final resolvido pelo pipeline"
+      "description": "Nome final resolvido"
     },
     {
       "name": "favorecido_metodo",
       "type": "varchar(30)",
-      "description": "Método de resolução: ODOO_PARTNER|REGEX_CNPJ|REGEX_NOME|CPF_PARCIAL|NOME_FUZZY|CATEGORIA|NAO_RESOLVIDO"
+      "description": "ODOO_PARTNER|REGEX_CNPJ|REGEX_NOME|CPF_PARCIAL|NOME_FUZZY|CATEGORIA|NAO_RESOLVIDO"
     },
     {
       "name": "favorecido_confianca",
       "type": "integer",
-      "description": "Score de confiança da resolução (0-100)"
+      "description": "0-100"
     },
     {
       "name": "categoria_pagamento",
       "type": "varchar(30)",
-      "description": "Categoria: PIX_ENVIADO|TED_ENVIADA|BOLETO_COMPE|IMPOSTO|TARIFA|FOLHA|TRANSFERENCIA|OUTRO"
+      "description": "PIX_ENVIADO|TED_ENVIADA|BOLETO_COMPE|IMPOSTO|TARIFA|..."
     },
     {
       "name": "journal_id",
@@ -259,63 +259,87 @@
   ],
   "indices": [
     {
+      "name": "idx_extrato_item_favorecido_cnpj",
+      "columns": [
+        "favorecido_cnpj"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_extrato_item_status_match",
-      "columns": ["status_match"],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_statement_line",
-      "columns": ["statement_line_id"],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_status",
-      "columns": ["status"],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_statement_line_id",
-      "columns": ["statement_line_id"],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_cnpj_pagador",
-      "columns": ["cnpj_pagador"],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_lote",
-      "columns": ["lote_id"],
+      "columns": [
+        "status_match"
+      ],
       "unique": false
     },
     {
       "name": "ix_extrato_item_lote_id",
-      "columns": ["lote_id"],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_status",
-      "columns": ["status"],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_cnpj",
-      "columns": ["cnpj_pagador"],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_favorecido_cnpj",
-      "columns": ["favorecido_cnpj"],
+      "columns": [
+        "lote_id"
+      ],
       "unique": false
     },
     {
       "name": "idx_extrato_item_categoria_pag",
-      "columns": ["categoria_pagamento"],
+      "columns": [
+        "categoria_pagamento"
+      ],
       "unique": false
     },
     {
       "name": "idx_extrato_item_odoo_partner",
-      "columns": ["odoo_partner_id"],
+      "columns": [
+        "odoo_partner_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_cnpj_pagador",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_cnpj",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_statement_line",
+      "columns": [
+        "statement_line_id"
+      ],
       "unique": false
     }
   ]
