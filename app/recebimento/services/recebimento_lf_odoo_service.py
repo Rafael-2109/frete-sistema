@@ -175,6 +175,9 @@ class RecebimentoLfOdooService:
                 )
                 self._recover_state_from_odoo(odoo)
 
+            # Step 0: Criar DFe na FB se fluxo antecipado (lf_invoice_id sem dfe_id)
+            self._step_00_criar_dfe_fb(odoo)
+
             # Dispatch sequencial — cada step re-busca recebimento internamente
             self._step_01_buscar_dfe(odoo)
             self._step_02_avancar_status_dfe(odoo)
@@ -826,6 +829,146 @@ class RecebimentoLfOdooService:
     # =================================================================
     # FASE 1: Preparacao DFe (etapas 1-3)
     # =================================================================
+
+    def _step_00_criar_dfe_fb(self, odoo):
+        """
+        Etapa 0: Criar DFe na FB a partir da NF emitida pela LF.
+
+        So executa se odoo_lf_invoice_id presente e odoo_dfe_id ausente.
+        Para fluxo normal (dfe_id ja existe), e um no-op.
+
+        Fluxo:
+        1. Buscar XML e chave da invoice LF
+        2. Verificar se DFe ja existe na FB (por chave ou numero_nf) — idempotencia
+        3. Se nao, criar DFe via upload XML
+        4. Garantir XML/PDF preenchidos
+        5. action_processar_arquivo_manual
+        6. Salvar dfe_id no recebimento
+        """
+        rec = self._get_recebimento()
+        if rec.odoo_dfe_id:
+            return  # DFe ja existe (fluxo normal)
+        if not rec.odoo_lf_invoice_id:
+            return  # Nao e fluxo antecipado
+
+        lf_invoice_id = rec.odoo_lf_invoice_id
+        logger.info(f"  Etapa 0/{rec.total_etapas}: Criando DFe na FB a partir de LF invoice {lf_invoice_id}")
+        self._atualizar_redis(rec.id, 1, 0, rec.total_etapas, 'Criando DFe na FB...')
+
+        # 1. Buscar XML e chave da invoice LF
+        inv_data = odoo.execute_kw(
+            'account.move', 'read',
+            [[lf_invoice_id]],
+            {'fields': [
+                'l10n_br_xml_aut_nfe', 'l10n_br_pdf_aut_nfe',
+                'l10n_br_chave_nf', 'name', 'l10n_br_numero_nota_fiscal',
+            ]}
+        )
+        if not inv_data:
+            raise ValueError(f"LF invoice {lf_invoice_id} nao encontrada no Odoo")
+
+        inv = inv_data[0]
+        xml_b64 = inv.get('l10n_br_xml_aut_nfe')
+        pdf_b64 = inv.get('l10n_br_pdf_aut_nfe')
+        chave = str(inv.get('l10n_br_chave_nf', '') or '')
+
+        if not xml_b64:
+            raise ValueError(f"LF invoice {lf_invoice_id}: XML autorizado vazio")
+        if not chave or len(chave) != 44:
+            raise ValueError(f"LF invoice {lf_invoice_id}: chave NF-e invalida ({chave})")
+
+        # 2. Verificar se DFe ja existe na FB por chave (idempotencia)
+        existing = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe', 'search_read', [[
+                ['protnfe_infnfe_chnfe', '=', chave],
+                ['company_id', '=', self.COMPANY_FB],
+            ]],
+            {'fields': ['id', 'l10n_br_status', 'purchase_id'], 'limit': 1}
+        )
+
+        dfe_id = None
+        if existing:
+            dfe_id = existing[0]['id']
+            logger.info(f"  DFe FB ja existe: ID={dfe_id} (chave={chave[:20]}...)")
+        else:
+            # 3. Buscar por numero_nf (fallback)
+            numero_nf = rec.numero_nf or str(inv.get('l10n_br_numero_nota_fiscal', '') or '')
+            if numero_nf:
+                by_nf = odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe', 'search_read', [[
+                        ['nfe_infnfe_ide_nnf', '=', numero_nf],
+                        ['nfe_infnfe_emit_cnpj', '=', '18.467.441/0001-63'],
+                        ['company_id', '=', self.COMPANY_FB],
+                    ]],
+                    {'fields': ['id'], 'limit': 1, 'order': 'id desc'}
+                )
+                if by_nf:
+                    dfe_id = by_nf[0]['id']
+                    logger.info(f"  DFe FB encontrado por NF {numero_nf}: ID={dfe_id}")
+
+        if not dfe_id:
+            # 4. Criar DFe via upload XML
+            logger.info(f"  Criando DFe FB via upload XML (chave={chave[:20]}...)")
+            dfe_id = odoo.create('l10n_br_ciel_it_account.dfe', {
+                'company_id': self.COMPANY_FB,
+                'l10n_br_xml_dfe': xml_b64,
+            })
+            logger.info(f"  DFe FB criado: ID={dfe_id}")
+
+        # 5. Garantir XML/PDF
+        dfe_check = odoo.execute_kw(
+            'l10n_br_ciel_it_account.dfe', 'read',
+            [[dfe_id]],
+            {'fields': ['l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_status']}
+        )
+
+        if dfe_check and not dfe_check[0].get('l10n_br_xml_dfe'):
+            odoo.write('l10n_br_ciel_it_account.dfe', [dfe_id], {
+                'l10n_br_xml_dfe': xml_b64,
+            })
+            logger.info(f"  XML uploaded para DFe FB {dfe_id}")
+
+        if pdf_b64 and dfe_check and not dfe_check[0].get('l10n_br_pdf_dfe'):
+            odoo.write('l10n_br_ciel_it_account.dfe', [dfe_id], {
+                'l10n_br_pdf_dfe': pdf_b64,
+            })
+            logger.info(f"  PDF uploaded para DFe FB {dfe_id}")
+
+        # 6. Processar DFe [fire_and_poll] — cria linhas, avanca status
+        current_status = dfe_check[0].get('l10n_br_status') if dfe_check else '01'
+        if current_status not in ('03', '04', '05'):
+            logger.info(f"  Processando DFe FB {dfe_id} (status atual={current_status})...")
+
+            def fire_processar():
+                return odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe',
+                    'action_processar_arquivo_manual',
+                    [[dfe_id]],
+                    timeout_override=self.FIRE_TIMEOUT
+                )
+
+            def poll_processar():
+                d = odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe', 'read',
+                    [[dfe_id]],
+                    {'fields': ['l10n_br_status']}
+                )
+                if d and d[0].get('l10n_br_status') in ('03', '04', '05'):
+                    return d[0]
+                return None
+
+            self._fire_and_poll(
+                odoo, fire_processar, poll_processar,
+                'Processar DFe FB (antecipado)'
+            )
+
+        # 7. Salvar dfe_id no recebimento
+        self._checkpoint(
+            etapa=0, fase=1,
+            odoo_dfe_id=dfe_id,
+            msg=f'DFe FB {dfe_id} criado/encontrado'
+        )
+        logger.info(f"  Step 0 concluido: DFe FB {dfe_id} vinculado ao recebimento")
 
     def _step_01_buscar_dfe(self, odoo):
         """Etapa 1: Buscar DFe no Odoo e validar existencia."""
@@ -2746,7 +2889,7 @@ class RecebimentoLfOdooService:
             dfe_status = existing_dfe[0].get('l10n_br_status')
             purchase = existing_dfe[0].get('purchase_id')
             logger.info(
-                f"  DFe CD encontrado: ID={dfe_id}, status={dfe_status}, "
+                f"  DFe CD encontrado por CHAVE: ID={dfe_id}, status={dfe_status}, "
                 f"purchase={purchase}"
             )
             # Se ja tem PO vinculado, pular processamento
@@ -2760,8 +2903,8 @@ class RecebimentoLfOdooService:
                 return
 
         if not dfe_id:
-            # 2. Buscar DFe recente sem chave na company CD (pode ser upload pendente)
-            # Ou buscar pelo numero da NF
+            # 2. Buscar DFe pelo numero da NF (sem filtro de status — queremos encontrar
+            # em qualquer estado para evitar duplicatas; logica posterior decide se processar)
             numero_nf = rec.numero_nf
             if numero_nf:
                 dfe_by_nf = odoo.execute_kw(
@@ -2769,13 +2912,16 @@ class RecebimentoLfOdooService:
                     [[
                         ['nfe_infnfe_ide_nnf', '=', numero_nf],
                         ['company_id', '=', self.COMPANY_CD],
-                        ['l10n_br_status', 'in', ['01', '02', '03']],
                     ]],
-                    {'fields': ['id', 'l10n_br_status'], 'limit': 1, 'order': 'id desc'}
+                    {'fields': ['id', 'l10n_br_status', 'purchase_id'], 'limit': 1, 'order': 'id desc'}
                 )
                 if dfe_by_nf:
                     dfe_id = dfe_by_nf[0]['id']
-                    logger.info(f"  DFe CD encontrado por NF {numero_nf}: ID={dfe_id}")
+                    logger.info(
+                        f"  DFe CD encontrado por NUMERO_NF {numero_nf}: ID={dfe_id}, "
+                        f"status={dfe_by_nf[0].get('l10n_br_status')}, "
+                        f"purchase={dfe_by_nf[0].get('purchase_id')}"
+                    )
 
         if not dfe_id:
             # 3. Criar DFe via upload de XML

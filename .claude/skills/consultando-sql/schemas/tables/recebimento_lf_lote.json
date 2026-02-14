@@ -63,6 +63,10 @@
       "type": "integer"
     },
     {
+      "name": "odoo_lot_id_cd",
+      "type": "integer"
+    },
+    {
       "name": "processado",
       "type": "boolean",
       "nullable": false,

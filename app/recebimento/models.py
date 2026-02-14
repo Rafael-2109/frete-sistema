@@ -1479,11 +1479,14 @@ class RecebimentoLf(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # DFe / NF de entrada
-    odoo_dfe_id = db.Column(db.Integer, nullable=False, index=True, unique=True)
+    # DFe / NF de entrada (nullable: DFe pode ser criado em step 0 para fluxo antecipado)
+    odoo_dfe_id = db.Column(db.Integer, nullable=True, index=True, unique=True)
     numero_nf = db.Column(db.String(50), nullable=True)
     chave_nfe = db.Column(db.String(44), nullable=True, index=True)
     cnpj_emitente = db.Column(db.String(20), nullable=True)
+
+    # Invoice da LF que originou o recebimento (fluxo antecipado, sem DFe inicial)
+    odoo_lf_invoice_id = db.Column(db.Integer, nullable=True, index=True)
 
     # PO gerado
     odoo_po_id = db.Column(db.Integer, nullable=True)
@@ -1560,6 +1563,7 @@ class RecebimentoLf(db.Model):
         return {
             'id': self.id,
             'odoo_dfe_id': self.odoo_dfe_id,
+            'odoo_lf_invoice_id': self.odoo_lf_invoice_id,
             'numero_nf': self.numero_nf,
             'chave_nfe': self.chave_nfe,
             'cnpj_emitente': self.cnpj_emitente,

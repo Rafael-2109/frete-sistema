@@ -9,8 +9,7 @@
     },
     {
       "name": "odoo_dfe_id",
-      "type": "integer",
-      "nullable": false
+      "type": "integer"
     },
     {
       "name": "numero_nf",
@@ -23,6 +22,10 @@
     {
       "name": "cnpj_emitente",
       "type": "varchar(20)"
+    },
+    {
+      "name": "odoo_lf_invoice_id",
+      "type": "integer"
     },
     {
       "name": "odoo_po_id",
@@ -76,7 +79,59 @@
       "name": "total_etapas",
       "type": "integer",
       "nullable": false,
-      "default": 18
+      "default": 37
+    },
+    {
+      "name": "odoo_transfer_out_picking_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_transfer_out_picking_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_transfer_invoice_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_transfer_invoice_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_transfer_in_picking_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_transfer_in_picking_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_cd_dfe_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_cd_po_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_cd_po_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "odoo_cd_invoice_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_cd_invoice_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "transfer_status",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "transfer_erro_mensagem",
+      "type": "text"
     },
     {
       "name": "erro_mensagem",
@@ -128,6 +183,13 @@
         "odoo_dfe_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_recebimento_lf_odoo_lf_invoice_id",
+      "columns": [
+        "odoo_lf_invoice_id"
+      ],
+      "unique": false
     },
     {
       "name": "ix_recebimento_lf_chave_nfe",

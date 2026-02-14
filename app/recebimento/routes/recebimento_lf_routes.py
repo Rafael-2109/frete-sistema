@@ -7,12 +7,13 @@ Views (Telas HTML):
     GET /recebimento/lf/status     -> Tela de status/progresso
 
 APIs:
-    GET  /recebimento/lf/dfes                   -> Lista DFes da LF disponiveis
-    GET  /recebimento/lf/dfe/<id>/detalhes      -> Linhas do DFe separadas por CFOP
-    POST /recebimento/lf/salvar                 -> Salvar recebimento + enqueue job
-    GET  /recebimento/lf/status/listar          -> Listar recebimentos com status
-    GET  /recebimento/lf/status/<id>/progresso  -> Progresso via Redis
-    POST /recebimento/lf/status/<id>/retry      -> Retry de recebimento com erro
+    GET  /recebimento/lf/dfes                        -> Lista DFes da LF disponiveis
+    GET  /recebimento/lf/dfe/<id>/detalhes           -> Linhas do DFe separadas por CFOP
+    GET  /recebimento/lf/lf-invoice/<id>/detalhes    -> Linhas de NF LF via XML (sem DFe)
+    POST /recebimento/lf/salvar                      -> Salvar recebimento + enqueue job
+    GET  /recebimento/lf/status/listar               -> Listar recebimentos com status
+    GET  /recebimento/lf/status/<id>/progresso       -> Progresso via Redis
+    POST /recebimento/lf/status/<id>/retry           -> Retry de recebimento com erro
 """
 
 from flask import Blueprint, render_template, request, jsonify
@@ -109,13 +110,37 @@ def api_detalhes_dfe(dfe_id):
         return jsonify({'error': str(e)}), 500
 
 
+@recebimento_lf_bp.route('/lf-invoice/<int:lf_invoice_id>/detalhes')
+def api_detalhes_lf_invoice(lf_invoice_id):
+    """
+    API: Buscar detalhes de uma NF emitida pela LF (via XML parsing, sem DFe).
+
+    Usado quando a NF ainda nao tem DFe na FB (fluxo antecipado).
+    Retorna no mesmo formato que /dfe/<id>/detalhes para compatibilidade.
+    """
+    try:
+        from app.recebimento.services.recebimento_lf_service import RecebimentoLfService
+
+        service = RecebimentoLfService()
+        detalhes = service.buscar_detalhes_lf_invoice(lf_invoice_id)
+
+        return jsonify(detalhes)
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.error(f"Erro ao buscar detalhes LF invoice {lf_invoice_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @recebimento_lf_bp.route('/salvar', methods=['POST'])
 def api_salvar():
     """
     API: Salvar recebimento LF localmente e enfileirar job RQ.
 
     Body JSON:
-        dfe_id: ID do DFe no Odoo (obrigatorio)
+        dfe_id: ID do DFe no Odoo (obrigatorio se nao tiver lf_invoice_id)
+        lf_invoice_id: ID da invoice LF (obrigatorio se nao tiver dfe_id)
         numero_nf: Numero da NF
         chave_nfe: Chave de acesso da NF-e
         cnpj_emitente: CNPJ do emitente (default LF)
@@ -131,9 +156,9 @@ def api_salvar():
         if not dados:
             return jsonify({'error': 'Body JSON obrigatorio'}), 400
 
-        # Validacoes basicas
-        if not dados.get('dfe_id'):
-            return jsonify({'error': 'dfe_id obrigatorio'}), 400
+        # Validacoes basicas: dfe_id OU lf_invoice_id obrigatorio
+        if not dados.get('dfe_id') and not dados.get('lf_invoice_id'):
+            return jsonify({'error': 'dfe_id ou lf_invoice_id obrigatorio'}), 400
 
         if not dados.get('lotes_manuais') and not dados.get('lotes_auto'):
             return jsonify({'error': 'Deve haver pelo menos 1 lote (manual ou auto)'}), 400

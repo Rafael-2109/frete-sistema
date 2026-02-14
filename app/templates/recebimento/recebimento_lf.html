@@ -359,18 +359,27 @@ function renderDfes(dfes) {
         const dataFormatada = formatarData(dfe.data_emissao);
         const valorFormatado = formatarMoeda(dfe.valor_total);
         const statusBadge = getStatusDfeBadge(dfe.status_dfe);
+        const isLfInvoice = dfe.origem === 'lf_invoice';
         const poBadge = dfe.tem_po
             ? '<span class="badge bg-info status-badge">c/ PO</span>'
             : '';
+        const origemBadge = isLfInvoice
+            ? '<span class="badge bg-success status-badge">Antecipada</span>'
+            : '';
+
+        // Para LF invoice: passar lf_invoice_id; para DFe: passar dfe.id
+        const clickId = isLfInvoice ? dfe.lf_invoice_id : dfe.id;
+        const clickType = isLfInvoice ? 'lf_invoice' : 'dfe';
 
         container.innerHTML += `
             <div class="col-md-4 col-lg-3">
                 <div class="card card-dfe ${dfe.tem_po ? 'tem-po' : ''}"
-                     onclick="abrirRecebimentoLf(${dfe.id})">
+                     onclick="abrirRecebimentoLf(${clickId}, '${clickType}')">
                     <div class="card-body py-3">
                         <div class="d-flex justify-content-between align-items-start mb-1">
                             <span class="nf-destaque">NF ${escapeHtml(dfe.numero_nf) || '-'}</span>
                             <div>
+                                ${origemBadge}
                                 ${statusBadge}
                                 ${poBadge}
                             </div>
@@ -397,8 +406,9 @@ function renderDfes(dfes) {
 // =====================================================
 // ABRIR MODAL DE RECEBIMENTO LF
 // =====================================================
-function abrirRecebimentoLf(dfeId) {
-    dfeAtual = dfeId;
+function abrirRecebimentoLf(id, tipo) {
+    tipo = tipo || 'dfe';
+    dfeAtual = tipo === 'dfe' ? id : null;
 
     // Reset modal
     document.getElementById('loadingDetalhes').style.display = 'block';
@@ -409,8 +419,12 @@ function abrirRecebimentoLf(dfeId) {
     const modal = new bootstrap.Modal(document.getElementById('modalRecebimentoLf'));
     modal.show();
 
-    // Buscar detalhes
-    fetch(`/recebimento/lf/dfe/${dfeId}/detalhes`)
+    // Rota diferente conforme tipo
+    const url = tipo === 'lf_invoice'
+        ? `/recebimento/lf/lf-invoice/${id}/detalhes`
+        : `/recebimento/lf/dfe/${id}/detalhes`;
+
+    fetch(url)
         .then(r => r.json())
         .then(data => {
             if (data.error) {
@@ -436,7 +450,11 @@ function renderDetalhesLf(data) {
     document.getElementById('modalEmitente').textContent = info.emitente_nome || 'La Famiglia';
     document.getElementById('modalDataEmissao').textContent = formatarData(info.data_emissao);
     document.getElementById('modalValorTotal').textContent = formatarMoeda(info.valor_total);
-    document.getElementById('modalStatusDfe').innerHTML = getStatusDfeBadge(info.status_dfe);
+    const isLfInvoice = info.origem === 'lf_invoice';
+    const statusHtml = isLfInvoice
+        ? '<span class="badge bg-success status-badge">Antecipada</span>'
+        : getStatusDfeBadge(info.status_dfe);
+    document.getElementById('modalStatusDfe').innerHTML = statusHtml;
 
     const manuais = data.linhas_manuais || [];
     const auto = data.linhas_auto || [];
@@ -782,12 +800,13 @@ function salvarRecebimentoLf() {
             });
         });
 
-        // Montar payload
+        // Montar payload (dfe_id OU lf_invoice_id — servico aceita ambos)
         const payload = {
-            dfe_id: dfeAtual,
+            dfe_id: info.id || dfeAtual || null,
+            lf_invoice_id: info.lf_invoice_id || null,
             numero_nf: info.numero_nf,
             chave_nfe: info.chave_nfe,
-            cnpj_emitente: info.emitente_cnpj,
+            cnpj_emitente: info.emitente_cnpj || info.emitente_nome,
             lotes_manuais: lotesManuais,
             lotes_auto: lotesAuto,
         };
