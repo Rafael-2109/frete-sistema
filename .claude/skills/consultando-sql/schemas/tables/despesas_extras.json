@@ -158,16 +158,16 @@
   ],
   "indices": [
     {
-      "name": "ix_despesas_extras_odoo_dfe_id",
+      "name": "ix_despesas_extras_fatura_frete_id",
       "columns": [
-        "odoo_dfe_id"
+        "fatura_frete_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_chave_cte",
+      "name": "ix_despesas_extras_odoo_dfe_id",
       "columns": [
-        "chave_cte"
+        "odoo_dfe_id"
       ],
       "unique": false
     },
@@ -179,9 +179,9 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_nfd_id",
+      "name": "ix_despesas_extras_chave_cte",
       "columns": [
-        "nfd_id"
+        "chave_cte"
       ],
       "unique": false
     },
@@ -193,16 +193,16 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_transportadora_id",
+      "name": "ix_despesas_extras_nfd_id",
       "columns": [
-        "transportadora_id"
+        "nfd_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_fatura_frete_id",
+      "name": "ix_despesas_extras_transportadora_id",
       "columns": [
-        "fatura_frete_id"
+        "transportadora_id"
       ],
       "unique": false
     }

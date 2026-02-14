@@ -201,20 +201,6 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_uf_cliente",
-      "columns": [
-        "uf_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_receber_vencimento",
       "columns": [
         "vencimento"
@@ -260,6 +246,20 @@
       "name": "ix_contas_a_receber_titulo_nf",
       "columns": [
         "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_uf_cliente",
+      "columns": [
+        "uf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
       ],
       "unique": false
     }

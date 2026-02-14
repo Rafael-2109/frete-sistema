@@ -178,6 +178,13 @@
   ],
   "indices": [
     {
+      "name": "ix_recebimento_lf_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_recebimento_lf_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
@@ -195,13 +202,6 @@
       "name": "ix_recebimento_lf_chave_nfe",
       "columns": [
         "chave_nfe"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_recebimento_lf_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     }

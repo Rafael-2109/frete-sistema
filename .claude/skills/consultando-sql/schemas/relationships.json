@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 172,
+  "total_relationships": 173,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1014,6 +1014,12 @@
       "from_table": "titulo_financeiro",
       "from_column": "titulo_pai_id",
       "to_table": "titulo_financeiro",
+      "to_column": "id"
+    },
+    {
+      "from_table": "transportadoras",
+      "from_column": "grupo_transportadora_id",
+      "to_table": "grupo_transportadora",
       "to_column": "id"
     },
     {

@@ -1,0 +1,36 @@
+{
+  "name": "grupo_transportadora",
+  "description": "Grupo de transportadoras que operam com multiplos CNPJs.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

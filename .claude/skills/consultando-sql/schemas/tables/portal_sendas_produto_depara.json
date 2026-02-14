@@ -68,16 +68,9 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
+      "name": "ix_portal_sendas_produto_depara_cnpj_cliente",
       "columns": [
-        "codigo_sendas"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_portal_sendas_produto_depara_codigo_nosso",
-      "columns": [
-        "codigo_nosso"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -89,9 +82,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_produto_depara_cnpj_cliente",
+      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
       "columns": [
-        "cnpj_cliente"
+        "codigo_sendas"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_produto_depara_codigo_nosso",
+      "columns": [
+        "codigo_nosso"
       ],
       "unique": false
     }

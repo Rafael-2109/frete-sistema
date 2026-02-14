@@ -336,14 +336,14 @@ def _buscar_despesas_para_cte_complementar(cte):
                     prioridade = 2
                     motivo = f"NFs em comum: {', '.join(list(nfs_comuns)[:3])}"
 
-        # PRIORIDADE 3: CNPJ cliente + prefixo transportadora
+        # PRIORIDADE 3: CNPJ cliente + prefixo transportadora (ou grupo)
         if not prioridade:
             if (frete.cnpj_cliente and cte.cnpj_destinatario and
                 frete.cnpj_cliente == cte.cnpj_destinatario): # noqa: E129
                 if frete.transportadora and cte.cnpj_emitente:
-                    prefixo_frete = frete.transportadora.cnpj[:8] if frete.transportadora.cnpj else None
-                    prefixo_cte = cte.cnpj_emitente[:8] if cte.cnpj_emitente else None
-                    if prefixo_frete and prefixo_cte and prefixo_frete == prefixo_cte:
+                    prefixos_grupo = frete.transportadora.obter_prefixos_cnpj_grupo()
+                    prefixo_cte = ''.join(filter(str.isdigit, cte.cnpj_emitente or ''))[:8]
+                    if prefixo_cte and prefixo_cte in prefixos_grupo:
                         prioridade = 3
                         motivo = "Mesmo cliente e transportadora"
 

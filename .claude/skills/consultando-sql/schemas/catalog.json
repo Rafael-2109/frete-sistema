@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 107,
+  "total_tabelas": 108,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -499,6 +499,15 @@
         "nome_grupo",
         "prefixo_cnpj",
         "descricao"
+      ]
+    },
+    {
+      "name": "grupo_transportadora",
+      "description": "Grupo de transportadoras que operam com multiplos CNPJs.",
+      "key_fields": [
+        "nome",
+        "descricao",
+        "criado_por"
       ]
     },
     {

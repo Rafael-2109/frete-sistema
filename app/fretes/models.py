@@ -190,7 +190,8 @@ class Frete(db.Model):
         Busca CTes relacionados do Odoo baseado em:
         1. Pelo menos 1 NF em comum entre frete e CTe
         2. Prefixo do CNPJ da transportadora (primeiros 8 dígitos: XX.XXX.XXX)
-        3. ✅ Tomador deve ser a empresa (CNPJ começa com 61.724.241)
+           — Suporta grupo de transportadoras (multiplos prefixos CNPJ)
+        3. Tomador deve ser a empresa (CNPJ começa com 61.724.241)
 
         Returns:
             list: Lista de ConhecimentoTransporte relacionados
@@ -204,22 +205,17 @@ class Frete(db.Model):
         if not nfs_frete:
             return []
 
-        # Extrair prefixo do CNPJ da transportadora (primeiros 8 dígitos)
-        # Formato: XX.XXX.XXX/XXXX-XX -> pegar XX.XXX.XXX
-        cnpj_transportadora = self.transportadora.cnpj or ''
-        # Remover formatação e pegar primeiros 8 dígitos
-        cnpj_limpo = ''.join(filter(str.isdigit, cnpj_transportadora))
+        # Obter prefixos CNPJ validos (proprio + grupo)
+        prefixos_validos = self.transportadora.obter_prefixos_cnpj_grupo()
 
-        if len(cnpj_limpo) < 8:
+        if not prefixos_validos:
             return []
 
-        prefixo_cnpj = cnpj_limpo[:8]  # Primeiros 8 dígitos
-
         # Buscar CTes que:
-        # 1. Tenham prefixo CNPJ da transportadora batendo
+        # 1. Tenham prefixo CNPJ da transportadora (ou grupo) batendo
         # 2. Tenham pelo menos 1 NF em comum
         # 3. Estejam ativos
-        # 4. ✅ Tomador seja a empresa
+        # 4. Tomador seja a empresa
         from sqlalchemy import and_
 
         ctes_relacionados = ConhecimentoTransporte.query.filter(
@@ -227,7 +223,7 @@ class Frete(db.Model):
                 ConhecimentoTransporte.ativo == True,
                 ConhecimentoTransporte.cnpj_emitente.isnot(None),
                 ConhecimentoTransporte.numeros_nfs.isnot(None),
-                ConhecimentoTransporte.tomador_e_empresa == True  # ✅ FILTRO ADICIONADO
+                ConhecimentoTransporte.tomador_e_empresa == True
             )
         ).all()
 
@@ -235,9 +231,9 @@ class Frete(db.Model):
         ctes_validos = []
 
         for cte in ctes_relacionados:
-            # Verificar prefixo CNPJ
+            # Verificar prefixo CNPJ contra todos os prefixos do grupo
             cnpj_cte_limpo = ''.join(filter(str.isdigit, cte.cnpj_emitente or ''))
-            if len(cnpj_cte_limpo) < 8 or cnpj_cte_limpo[:8] != prefixo_cnpj:
+            if len(cnpj_cte_limpo) < 8 or cnpj_cte_limpo[:8] not in prefixos_validos:
                 continue
 
             # Verificar se tem pelo menos 1 NF em comum
@@ -892,7 +888,7 @@ class ConhecimentoTransporte(db.Model):
         if len(cnpj_limpo) < 8:
             return []
 
-        prefixo_cnpj = cnpj_limpo[:8]
+        prefixo_cnpj_emitente = cnpj_limpo[:8]
 
         # Buscar todos os Fretes ativos
         from app.transportadoras.models import Transportadora
@@ -904,11 +900,12 @@ class ConhecimentoTransporte(db.Model):
         fretes_relacionados = []
 
         for frete in fretes_todos:
-            # Verificar prefixo CNPJ da transportadora
-            cnpj_transp = frete.transportadora.cnpj if frete.transportadora else ''
-            cnpj_transp_limpo = ''.join(filter(str.isdigit, cnpj_transp))
+            # Verificar se o emitente do CTe pertence ao grupo da transportadora do frete
+            if not frete.transportadora:
+                continue
 
-            if len(cnpj_transp_limpo) < 8 or cnpj_transp_limpo[:8] != prefixo_cnpj:
+            prefixos_grupo = frete.transportadora.obter_prefixos_cnpj_grupo()
+            if prefixo_cnpj_emitente not in prefixos_grupo:
                 continue
 
             # Extrair NFs do frete
@@ -918,12 +915,12 @@ class ConhecimentoTransporte(db.Model):
             nfs_comuns = set(nfs_cte) & set(nfs_frete)
 
             if nfs_comuns:
-                # ✅ Se este CTe já está vinculado a este frete, não incluir na lista de sugestões
+                # Se este CTe já está vinculado a este frete, não incluir na lista de sugestões
                 if self.frete_id == frete.id:
                     continue
 
                 # Buscar outros CTes que também vinculariam com este frete (CTes concorrentes)
-                ctes_concorrentes = self._buscar_ctes_concorrentes(frete, prefixo_cnpj, nfs_frete)
+                ctes_concorrentes = self._buscar_ctes_concorrentes(frete, prefixos_grupo, nfs_frete)
 
                 fretes_relacionados.append({
                     'frete': frete,
@@ -934,14 +931,14 @@ class ConhecimentoTransporte(db.Model):
 
         return fretes_relacionados
 
-    def _buscar_ctes_concorrentes(self, frete, prefixo_cnpj, nfs_frete):
+    def _buscar_ctes_concorrentes(self, frete, prefixos_cnpj, nfs_frete):
         """
         Busca outros CTes (não complementares) que também vinculariam com o mesmo frete.
         Isso ajuda a identificar se há CTes substituídos/reemitidos.
 
         Args:
             frete: Frete para verificar
-            prefixo_cnpj: Prefixo do CNPJ da transportadora
+            prefixos_cnpj: Set de prefixos CNPJ (8 dígitos) do grupo da transportadora
             nfs_frete: Lista de NFs do frete
 
         Returns:
@@ -949,7 +946,7 @@ class ConhecimentoTransporte(db.Model):
         """
         from sqlalchemy import and_
 
-        # Buscar CTes não complementares, ativos, com mesma transportadora
+        # Buscar CTes não complementares, ativos, com mesma transportadora (ou grupo)
         ctes_candidatos = ConhecimentoTransporte.query.filter(
             and_(
                 ConhecimentoTransporte.ativo == True,
@@ -963,9 +960,9 @@ class ConhecimentoTransporte(db.Model):
         ctes_concorrentes = []
 
         for cte in ctes_candidatos:
-            # Verificar prefixo CNPJ
+            # Verificar prefixo CNPJ contra grupo da transportadora
             cnpj_cte_limpo = ''.join(filter(str.isdigit, cte.cnpj_emitente or ''))
-            if len(cnpj_cte_limpo) < 8 or cnpj_cte_limpo[:8] != prefixo_cnpj:
+            if len(cnpj_cte_limpo) < 8 or cnpj_cte_limpo[:8] not in prefixos_cnpj:
                 continue
 
             # Verificar NFs em comum

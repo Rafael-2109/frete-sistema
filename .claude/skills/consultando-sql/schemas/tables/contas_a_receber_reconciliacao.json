@@ -98,16 +98,16 @@
   ],
   "indices": [
     {
-      "name": "idx_reconciliacao_conta",
+      "name": "idx_reconciliacao_odoo_id",
       "columns": [
-        "conta_a_receber_id"
+        "odoo_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_reconciliacao_tipo_baixa",
+      "name": "idx_reconciliacao_conta",
       "columns": [
-        "tipo_baixa"
+        "conta_a_receber_id"
       ],
       "unique": false
     },
@@ -119,9 +119,9 @@
       "unique": true
     },
     {
-      "name": "idx_reconciliacao_odoo_id",
+      "name": "idx_reconciliacao_tipo_baixa",
       "columns": [
-        "odoo_id"
+        "tipo_baixa"
       ],
       "unique": false
     },

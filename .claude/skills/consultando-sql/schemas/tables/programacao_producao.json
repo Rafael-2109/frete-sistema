@@ -68,6 +68,13 @@
   ],
   "indices": [
     {
+      "name": "ix_programacao_producao_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_programacao_data_linha",
       "columns": [
         "data_programacao",
@@ -76,23 +83,16 @@
       "unique": false
     },
     {
-      "name": "idx_programacao_produto_data",
+      "name": "ix_programacao_producao_data_programacao",
       "columns": [
-        "cod_produto",
         "data_programacao"
       ],
       "unique": false
     },
     {
-      "name": "ix_programacao_producao_cod_produto",
+      "name": "idx_programacao_produto_data",
       "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_programacao_producao_data_programacao",
-      "columns": [
+        "cod_produto",
         "data_programacao"
       ],
       "unique": false

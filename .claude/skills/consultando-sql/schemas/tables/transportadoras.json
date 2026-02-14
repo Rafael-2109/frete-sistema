@@ -51,6 +51,11 @@
       "default": true
     },
     {
+      "name": "grupo_transportadora_id",
+      "type": "integer",
+      "description": "FK → grupo_transportadora.id"
+    },
+    {
       "name": "aplica_gris_pos_minimo",
       "type": "boolean",
       "description": "Se True, GRIS é aplicado após frete mínimo",
@@ -139,6 +144,21 @@
     {
       "name": "obs_financ",
       "type": "text"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "grupo_transportadora_id",
+      "references": "grupo_transportadora.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_transportadoras_grupo_transportadora_id",
+      "columns": [
+        "grupo_transportadora_id"
+      ],
+      "unique": false
     }
   ]
 }
