@@ -743,6 +743,12 @@ def detalhe_validacao_nf_po(validacao_id):
         # Buscar divergencias
         divergencias = db.session.query(DivergenciaNfPo).filter_by(validacao_id=validacao_id).all()
 
+        # Montar mapa dfe_line_id -> match para enriquecer divergencias
+        match_por_dfe_line = {}
+        for m in matches:
+            if m.odoo_dfe_line_id:
+                match_por_dfe_line[m.odoo_dfe_line_id] = m
+
         # Buscar dados de recebimento fisico
         recebimento = RecebimentoFisico.query.filter_by(
             validacao_id=validacao_id
@@ -823,19 +829,53 @@ def detalhe_validacao_nf_po(validacao_id):
             } for m in matches],
             'divergencias': [{
                 'id': d.id,
+                'odoo_dfe_id': d.odoo_dfe_id,
                 'odoo_dfe_line_id': d.odoo_dfe_line_id,
+                'odoo_po_id': d.odoo_po_id,
+                'odoo_po_name': d.odoo_po_name,
+                'cnpj_fornecedor': d.cnpj_fornecedor,
+                'razao_fornecedor': d.razao_fornecedor,
                 'cod_produto_fornecedor': d.cod_produto_fornecedor,
                 'cod_produto_interno': d.cod_produto_interno,
                 'nome_produto': d.nome_produto,
+                'nome_produto_interno': (
+                    match_por_dfe_line[d.odoo_dfe_line_id].nome_produto_interno
+                    if d.odoo_dfe_line_id and d.odoo_dfe_line_id in match_por_dfe_line
+                    and match_por_dfe_line[d.odoo_dfe_line_id].nome_produto_interno
+                    else None
+                ),
                 'tipo_divergencia': d.tipo_divergencia,
                 'campo_label': d.campo_label,
                 'valor_nf': d.valor_nf,
                 'valor_po': d.valor_po,
                 'diferenca_percentual': float(d.diferenca_percentual) if d.diferenca_percentual else None,
-                'odoo_po_name': d.odoo_po_name,
+                'qtd_nf': (
+                    float(match_por_dfe_line[d.odoo_dfe_line_id].qtd_nf)
+                    if d.odoo_dfe_line_id and d.odoo_dfe_line_id in match_por_dfe_line
+                    and match_por_dfe_line[d.odoo_dfe_line_id].qtd_nf
+                    else None
+                ),
+                'preco_nf': (
+                    float(match_por_dfe_line[d.odoo_dfe_line_id].preco_nf)
+                    if d.odoo_dfe_line_id and d.odoo_dfe_line_id in match_por_dfe_line
+                    and match_por_dfe_line[d.odoo_dfe_line_id].preco_nf
+                    else None
+                ),
+                'um_nf': (
+                    match_por_dfe_line[d.odoo_dfe_line_id].um_nf
+                    if d.odoo_dfe_line_id and d.odoo_dfe_line_id in match_por_dfe_line
+                    else None
+                ),
+                'fator_conversao': (
+                    float(match_por_dfe_line[d.odoo_dfe_line_id].fator_conversao)
+                    if d.odoo_dfe_line_id and d.odoo_dfe_line_id in match_por_dfe_line
+                    and match_por_dfe_line[d.odoo_dfe_line_id].fator_conversao
+                    else None
+                ),
                 'status': d.status,
                 'resolucao': d.resolucao,
-                'justificativa': d.justificativa
+                'justificativa': d.justificativa,
+                'resolvido_por': d.resolvido_por
             } for d in divergencias],
             'recebimento': recebimento_data
         })

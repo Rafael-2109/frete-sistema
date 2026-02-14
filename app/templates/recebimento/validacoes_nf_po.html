@@ -158,35 +158,57 @@
                     <tbody>
                         {% for item in items %}
                         <tr data-id="{{ item.id }}">
+                            {% set tem_divergencias = (item.itens_sem_depara or 0) + (item.itens_sem_po or 0) + (item.itens_preco_diverge or 0) + (item.itens_data_diverge or 0) + (item.itens_qtd_diverge or 0) %}
                             <td class="text-center">
                                 <small class="text-muted">{{ item.data_nf|formatar_data_segura or 'N/A' }}</small>
                                 <br><strong class="text-primary">{{ item.numero_nf or item.odoo_dfe_id }}</strong>
                             </td>
-                            <td>
+                            <td{% if tem_divergencias > 0 %} class="rec-expandable" onclick="toggleDivergencias({{ item.id }})"{% endif %}>
                                 <strong>{{ (item.razao_empresa_compradora or 'N/A')|truncate(25) }}</strong>
                                 <br><small class="text-muted">{{ item.cnpj_empresa_compradora|formatar_cnpj if item.cnpj_empresa_compradora else '-' }}</small>
                             </td>
-                            <td>
+                            <td{% if tem_divergencias > 0 %} class="rec-expandable" onclick="toggleDivergencias({{ item.id }})"{% endif %}>
                                 <strong>{{ item.razao_fornecedor or 'N/A' }}</strong>
                                 <br><small class="text-muted">{{ item.cnpj_fornecedor|formatar_cnpj if item.cnpj_fornecedor else '-' }}</small>
                             </td>
-                            <td class="text-end">
+                            <td class="text-end{% if tem_divergencias > 0 %} rec-expandable{% endif %}"{% if tem_divergencias > 0 %} onclick="toggleDivergencias({{ item.id }})"{% endif %}>
                                 {% if item.valor_total_nf %}
                                 R$ {{ '{:,.2f}'.format(item.valor_total_nf).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                                 {% else %}
                                 N/A
                                 {% endif %}
                             </td>
-                            <td class="text-center">
+                            <td class="text-center{% if tem_divergencias > 0 %} rec-expandable{% endif %}"{% if tem_divergencias > 0 %} onclick="toggleDivergencias({{ item.id }})"{% endif %}>
                                 <span class="badge bg-primary">{{ item.total_itens or 0 }}</span>
                                 {% if item.itens_match %}
                                 <br><small class="text-success">{{ item.itens_match }} OK</small>
                                 {% endif %}
-                                {% if item.itens_sem_depara %}
-                                <br><small class="text-danger">{{ item.itens_sem_depara }} s/De-Para</small>
-                                {% endif %}
-                                {% if item.itens_sem_po %}
-                                <br><small class="text-warning">{{ item.itens_sem_po }} s/PO</small>
+                                {% if tem_divergencias > 0 %}
+                                <div class="rec-expand-indicator mt-1">
+                                    {% if item.itens_sem_depara %}
+                                    <small class="text-danger d-block">{{ item.itens_sem_depara }} s/De-Para</small>
+                                    {% endif %}
+                                    {% if item.itens_sem_po %}
+                                    <small class="text-warning d-block">{{ item.itens_sem_po }} s/PO</small>
+                                    {% endif %}
+                                    {% if item.itens_preco_diverge %}
+                                    <small class="text-danger d-block">{{ item.itens_preco_diverge }} preco</small>
+                                    {% endif %}
+                                    {% if item.itens_qtd_diverge %}
+                                    <small class="text-warning d-block">{{ item.itens_qtd_diverge }} qtd</small>
+                                    {% endif %}
+                                    {% if item.itens_data_diverge %}
+                                    <small class="text-warning d-block">{{ item.itens_data_diverge }} data</small>
+                                    {% endif %}
+                                    <i class="fas fa-chevron-down rec-chevron"></i>
+                                </div>
+                                {% else %}
+                                    {% if item.itens_sem_depara %}
+                                    <br><small class="text-danger">{{ item.itens_sem_depara }} s/De-Para</small>
+                                    {% endif %}
+                                    {% if item.itens_sem_po %}
+                                    <br><small class="text-warning">{{ item.itens_sem_po }} s/PO</small>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -333,6 +355,14 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        {# Sub-row accordion para divergencias inline #}
+                        {% if tem_divergencias > 0 %}
+                        <tr class="rec-divergencias-row d-none" id="divRow-{{ item.id }}">
+                            <td colspan="9" class="p-0 border-0">
+                                <div id="divBody-{{ item.id }}"></div>
+                            </td>
+                        </tr>
+                        {% endif %}
                         {% else %}
                         <tr>
                             <td colspan="9" class="text-center text-muted py-4">
@@ -446,412 +476,9 @@
     </div>
 </div>
 
-<script>
-const modalDetalhes = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+{% include 'recebimento/_modals_divergencias.html' %}
 
-function verDetalhes(id) {
-    document.getElementById('modalDetalhesBody').innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Carregando...</span>
-            </div>
-        </div>
-    `;
-    modalDetalhes.show();
-
-    fetch(`/api/recebimento/validacoes-nf-po/${id}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.sucesso) {
-                renderizarDetalhes(data);
-            } else {
-                document.getElementById('modalDetalhesBody').innerHTML = `
-                    <div class="alert alert-danger">Erro: ${data.erro}</div>
-                `;
-            }
-        })
-        .catch(err => {
-            document.getElementById('modalDetalhesBody').innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Erro ao carregar detalhes: ${err.message}
-                </div>
-            `;
-        });
-}
-
-function renderizarDetalhes(data) {
-    const v = data.validacao;
-    const matches = data.matches;
-    const divergencias = data.divergencias;
-
-    // Badge de status
-    const statusMap = {
-        'aprovado': '<span class="badge bg-success">Aprovado</span>',
-        'bloqueado': '<span class="badge bg-danger">Bloqueado</span>',
-        'consolidado': '<span class="badge bg-primary">Consolidado</span>',
-        'finalizado_odoo': '<span class="badge bg-success">Finalizado</span>',
-        'pendente': '<span class="badge bg-secondary">Pendente</span>',
-        'erro': '<span class="badge bg-danger">Erro</span>'
-    };
-    const statusBadge = statusMap[v.status] || `<span class="badge bg-secondary">${v.status}</span>`;
-
-    let html = `
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <h6>Dados da NF ${statusBadge}</h6>
-                <table class="table table-sm">
-                    <tr><td>Numero:</td><td><strong>${v.numero_nf || v.odoo_dfe_id}</strong></td></tr>
-                    <tr><td>Data:</td><td>${v.data_nf || 'N/A'}</td></tr>
-                    <tr><td>Valor:</td><td>R$ ${parseFloat(v.valor_total_nf)?.toFixed(2) || 'N/A'}</td></tr>
-                    <tr><td>Itens:</td><td>${v.total_itens || 'N/A'}</td></tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <h6>Fornecedor</h6>
-                <table class="table table-sm">
-                    <tr><td>Razao:</td><td><strong>${v.razao_fornecedor || 'N/A'}</strong></td></tr>
-                    <tr><td>CNPJ:</td><td>${v.cnpj_fornecedor}</td></tr>
-                </table>
-            </div>
-        </div>
-    `;
-
-    // Mostrar informacao especial se status for finalizado_odoo
-    if (v.status === 'finalizado_odoo') {
-        html += `
-            <div class="alert alert-success mb-4">
-                <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>DFE Finalizado no Odoo</h6>
-                <p class="mb-1">Este DFE ja possui PO vinculado diretamente no Odoo e nao requer validacao manual.</p>
-                <table class="table table-sm table-borderless mt-2 mb-0">
-                    ${v.odoo_po_vinculado_name ? `<tr><td><strong>PO Vinculado:</strong></td><td>${v.odoo_po_vinculado_name}</td></tr>` : ''}
-                    ${v.odoo_po_fiscal_name ? `<tr><td><strong>PO Fiscal:</strong></td><td>${v.odoo_po_fiscal_name}</td></tr>` : ''}
-                    ${v.pos_vinculados_importados_em ? `<tr><td><strong>Importado em:</strong></td><td>${v.pos_vinculados_importados_em}</td></tr>` : ''}
-                    <tr><td><strong>Total Itens:</strong></td><td>${v.total_itens || 'N/A'}</td></tr>
-                </table>
-            </div>
-        `;
-
-        // Nao mostrar tabela de matches se nao houver
-        if (matches.length === 0) {
-            document.getElementById('modalDetalhesBody').innerHTML = html;
-            return;
-        }
-    }
-
-    // Mostrar informacao de consolidacao se status for consolidado
-    if (v.status === 'consolidado' && v.po_consolidado_name) {
-        html += `
-            <div class="alert alert-primary mb-4">
-                <h6 class="mb-2"><i class="fas fa-object-group me-2"></i>PO Consolidado</h6>
-                <p class="mb-0">PO Conciliador: <strong>${v.po_consolidado_name}</strong></p>
-                ${v.consolidado_em ? `<small class="text-muted">Consolidado em: ${v.consolidado_em}</small>` : ''}
-            </div>
-        `;
-    }
-
-    // Secao de Recebimento Fisico
-    if (data.recebimento) {
-        const r = data.recebimento;
-        let recebBadge = '';
-        let recebIcon = 'fas fa-boxes';
-
-        if (r.odoo_status === 'done' || r.status === 'processado') {
-            recebBadge = '<span class="badge bg-success ms-2">Recebido</span>';
-            recebIcon = 'fas fa-check-double text-success';
-        } else if (r.status === 'processando') {
-            recebBadge = '<span class="badge bg-info ms-2">Processando</span>';
-            recebIcon = 'fas fa-spinner fa-spin text-info';
-        } else if (r.status === 'erro') {
-            recebBadge = '<span class="badge bg-danger ms-2">Erro</span>';
-            recebIcon = 'fas fa-exclamation-circle text-danger';
-        } else if (r.status === 'pendente') {
-            recebBadge = '<span class="badge bg-warning ms-2">Pendente</span>';
-            recebIcon = 'fas fa-clock text-warning';
-        } else if (r.odoo_status === 'assigned') {
-            recebBadge = '<span class="badge bg-primary ms-2">Pronto Receber</span>';
-            recebIcon = 'fas fa-box-open text-primary';
-        } else if (r.odoo_status) {
-            recebBadge = `<span class="badge bg-secondary ms-2">${r.odoo_status}</span>`;
-        }
-
-        html += `
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card border-info">
-                        <div class="card-header bg-info bg-opacity-10">
-                            <h6 class="mb-0">
-                                <i class="${recebIcon} me-2"></i>Recebimento Fisico ${recebBadge}
-                            </h6>
-                        </div>
-                        <div class="card-body py-2">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <small class="text-muted">Picking</small>
-                                    <div><strong>${r.picking_name || 'N/A'}</strong></div>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted">Status Odoo</small>
-                                    <div>${r.odoo_status || 'N/A'}</div>
-                                </div>
-                                <div class="col-md-4">
-                                    <small class="text-muted">Processado em</small>
-                                    <div>${r.processado_em || '-'}</div>
-                                </div>
-                            </div>
-                            ${r.erro_mensagem ? `
-                                <div class="alert alert-danger mt-2 mb-0 py-1 small">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>${r.erro_mensagem}
-                                </div>
-                            ` : ''}
-                            ${r.picking_id ? `
-                                <a href="https://odoo.nacomgoya.com.br/web#id=${r.picking_id}&model=stock.picking&view_type=form"
-                                   class="btn btn-sm btn-outline-info mt-2" target="_blank">
-                                    <i class="fas fa-external-link-alt me-1"></i>Abrir no Odoo
-                                </a>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    } else if (v.status === 'consolidado' || v.status === 'finalizado_odoo') {
-        html += `
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="alert alert-secondary mb-0">
-                        <i class="fas fa-boxes me-2"></i>
-                        <strong>Recebimento Fisico:</strong> Aguardando picking no Odoo ou recebimento nao iniciado.
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    html += `<h6>Resultado do Match (${matches.length} itens)</h6>
-        <table class="table table-sm table-bordered">
-            <thead class="table-light">
-                <tr>
-                    <th>Produto</th>
-                    <th class="text-end">Qtd NF</th>
-                    <th class="text-end">Preco NF</th>
-                    <th>PO</th>
-                    <th class="text-end">Qtd PO</th>
-                    <th>Data PO</th>
-                    <th class="text-center">Status</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    for (const m of matches) {
-        let matchBadge = '';
-        if (m.status_match === 'match') {
-            matchBadge = '<span class="badge bg-success">Match</span>';
-        } else if (m.status_match === 'sem_depara') {
-            matchBadge = '<span class="badge bg-secondary">Sem De-Para</span>';
-        } else if (m.status_match === 'sem_po') {
-            matchBadge = '<span class="badge bg-warning">Sem PO</span>';
-        } else {
-            matchBadge = `<span class="badge bg-danger">${m.status_match}</span>`;
-        }
-
-        html += `
-            <tr>
-                <td>
-                    <code>${m.cod_produto_fornecedor || 'N/A'}</code>
-                    ${m.cod_produto_interno ? `<i class="fas fa-arrow-right mx-1"></i><code class="text-success">${m.cod_produto_interno}</code>` : ''}
-                    <br>
-                    <small class="${m.nome_produto_interno ? 'text-success' : ''}">
-                        ${m.nome_produto_interno || m.nome_produto || ''}
-                    </small>
-                </td>
-                <td class="text-end">${m.qtd_nf != null ? parseFloat(m.qtd_nf).toFixed(2) : 'N/A'}</td>
-                <td class="text-end">${m.preco_nf != null ? parseFloat(m.preco_nf).toFixed(4) : 'N/A'}</td>
-                <td>${m.odoo_po_name || '-'}</td>
-                <td class="text-end">${m.qtd_po != null ? parseFloat(m.qtd_po).toFixed(2) : '-'}</td>
-                <td>${m.data_po || '-'}</td>
-                <td class="text-center">${matchBadge}</td>
-            </tr>
-        `;
-    }
-
-    html += '</tbody></table>';
-
-    if (divergencias.length > 0) {
-        html += `
-            <h6 class="mt-4">Divergencias (${divergencias.length})</h6>
-            <table class="table table-sm table-bordered">
-                <thead class="table-light">
-                    <tr>
-                        <th>Tipo</th>
-                        <th>Produto</th>
-                        <th>NF</th>
-                        <th>PO</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        for (const d of divergencias) {
-            html += `
-                <tr>
-                    <td><span class="badge bg-warning">${d.tipo_divergencia}</span></td>
-                    <td>${d.nome_produto || d.cod_produto_fornecedor}</td>
-                    <td>${d.valor_nf || 'N/A'}</td>
-                    <td>${d.valor_po || 'N/A'}</td>
-                    <td>${d.status}</td>
-                </tr>
-            `;
-        }
-
-        html += '</tbody></table>';
-    }
-
-    document.getElementById('modalDetalhesBody').innerHTML = html;
-}
-
-function validarNf(dfeId) {
-    if (!confirm('Validar esta NF contra os POs do fornecedor?')) return;
-
-    fetch(`/api/recebimento/validar-nf-po/${dfeId}`, {method: 'POST'})
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'aprovado') {
-                alert('NF aprovada! Todos os itens com match.');
-            } else if (data.status === 'bloqueado') {
-                alert('NF bloqueada: ' + data.mensagem);
-            } else {
-                alert('Erro: ' + data.mensagem);
-            }
-            location.reload();
-        });
-}
-
-function consolidarPos(validacaoId) {
-    if (!confirm('Consolidar os POs desta NF?\n\nEsta acao ira:\n- Unificar POs em 1 principal\n- Criar POs de saldo se necessario\n- Cancelar POs vazios')) return;
-
-    fetch(`/api/recebimento/consolidar-pos/${validacaoId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-        },
-        body: JSON.stringify({})
-    })
-        .then(r => r.json())
-        .then(data => {
-            if (data.sucesso) {
-                alert(`Consolidacao concluida!\n\nPO principal: ${data.po_consolidado_name}\nSaldos criados: ${data.pos_saldo_criados?.length || 0}`);
-                location.reload();
-            } else {
-                alert('Erro: ' + data.erro);
-            }
-        });
-}
-
-function reverterConsolidacao(validacaoId) {
-    if (!confirm('ATENCAO: Reverter consolidacao?\n\nEsta acao pode nao ser 100% reversivel.')) return;
-
-    fetch(`/api/recebimento/reverter-consolidacao/${validacaoId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-        },
-        body: JSON.stringify({})
-    })
-        .then(r => r.json())
-        .then(data => {
-            if (data.sucesso) {
-                alert('Consolidacao revertida!');
-                location.reload();
-            } else {
-                alert('Erro: ' + data.erro);
-            }
-        });
-}
-
-// =============================================================================
-// EXECUTAR VALIDACAO (com periodo selecionavel)
-// =============================================================================
-
-function confirmarValidacao() {
-    const dataDe = document.getElementById('validacaoDataDe').value;
-    const dataAte = document.getElementById('validacaoDataAte').value;
-
-    if (!dataDe || !dataAte) {
-        alert('Selecione o período (De e Até)');
-        return;
-    }
-
-    // Validar periodo
-    const de = new Date(dataDe);
-    const ate = new Date(dataAte);
-    const diffDias = (ate - de) / (1000 * 60 * 60 * 24);
-    if (diffDias < 0) {
-        alert('Data "De" deve ser anterior à data "Até"');
-        return;
-    }
-    if (diffDias > 90) {
-        alert('Período máximo: 90 dias');
-        return;
-    }
-
-    const btn = document.getElementById('btnConfirmarValidacao');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...';
-    btn.disabled = true;
-
-    fetch('/api/recebimento/executar-validacao', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ data_de: dataDe, data_ate: dataAte })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.sucesso) {
-            const res = data.resultado || {};
-            const syncPo = res.sync_pos_vinculados || {};
-            const msg = [
-                'Validação executada com sucesso!',
-                '',
-                `POs vinculados (sync): ${syncPo.dfes_atualizados || 0} atualizados`,
-                `DFEs processados: ${res.dfes_processados || 0}`,
-                `Fase 1 - Aprovados: ${res.fase1_fiscal?.dfes_aprovados || 0}`,
-                `Fase 1 - Bloqueados: ${res.fase1_fiscal?.dfes_bloqueados || 0}`,
-                `Fase 2 - Aprovados: ${res.fase2_nf_po?.dfes_aprovados || 0}`,
-                `Fase 2 - Bloqueados: ${res.fase2_nf_po?.dfes_bloqueados || 0}`
-            ].join('\n');
-            alert(msg);
-            location.reload();
-        } else {
-            alert('Erro: ' + (data.erro || 'Erro desconhecido'));
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
-        }
-    })
-    .catch(err => {
-        alert('Erro de conexão: ' + err.message);
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-    });
-}
-
-// Inicializar datas padrao (ultimos 7 dias)
-function initValidacaoDatas() {
-    const hoje = new Date();
-    const seteDiasAtras = new Date();
-    seteDiasAtras.setDate(hoje.getDate() - 7);
-
-    document.getElementById('validacaoDataAte').value = hoje.toISOString().split('T')[0];
-    document.getElementById('validacaoDataDe').value = seteDiasAtras.toISOString().split('T')[0];
-}
-
-// Inicializar ao carregar
-document.addEventListener('DOMContentLoaded', function() {
-    initValidacaoDatas();
-});
-</script>
+<!-- JavaScript externo -->
+<script src="{{ url_for('static', filename='js/recebimento/divergencias_shared.js') }}"></script>
+<script src="{{ url_for('static', filename='js/recebimento/validacoes_nf_po.js') }}"></script>
 {% endblock %}

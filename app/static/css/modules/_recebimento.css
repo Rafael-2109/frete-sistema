@@ -247,4 +247,54 @@
       padding: 0.2em 0.5em;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ACCORDION DIVERGENCIAS - Validacoes NF x PO inline expand
+     Sub-rows that show divergency details when clicking item counters.
+     Colunas Empresa/Fornecedor/Valor/Itens sao clicaveis quando ha divergencias.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Colunas clicaveis para expandir accordion — props que NAO conflitam com Bootstrap */
+  .rec-expandable {
+      cursor: pointer;
+      position: relative;
+      transition: background 0.15s ease;
+  }
+
+  /* Indicador com chevron na coluna Itens */
+  .rec-expand-indicator {
+      color: var(--text-muted);
+  }
+
+  .rec-expand-indicator .rec-chevron {
+      transition: transform 0.2s ease;
+      font-size: 0.6rem;
+  }
+
+  tr.rec-row-expanded .rec-expand-indicator .rec-chevron {
+      transform: rotate(180deg);
+  }
+
+  /* Toolbar com links Odoo/XML/PDF */
+  .rec-div-toolbar {
+      background: var(--bg);
+      font-size: 0.85rem;
+  }
+
+  .rec-div-table {
+      font-size: 0.85rem;
+      margin: 0;
+  }
+
+  .rec-div-table thead {
+      background: var(--bg);
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.3px;
+  }
+
+  .rec-div-actions .btn {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.4rem;
+  }
+
 } /* End @layer modules */
