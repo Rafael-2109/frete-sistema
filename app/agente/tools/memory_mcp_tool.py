@@ -101,7 +101,7 @@ def _sanitize_content(content: str) -> str:
 
 
 # =====================================================================
-# VALIDAÇÃO DE PATH (reutilizada de memory_tool.py)
+# VALIDAÇÃO DE PATH
 # =====================================================================
 def _validate_path(path: str) -> str:
     """
