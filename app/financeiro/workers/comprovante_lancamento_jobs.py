@@ -22,10 +22,7 @@ TRATAMENTO DE ERROS:
 
 import json
 import logging
-import os
-import sys
 import traceback
-from contextlib import contextmanager
 from app.utils.timezone import agora_utc_naive
 from typing import Any, Dict, List, Optional
 
@@ -96,31 +93,7 @@ def obter_progresso_lancamento(batch_id: str) -> Optional[dict]:
 # CONTEXT MANAGER SEGURO
 # ========================================
 
-@contextmanager
-def _app_context_safe():
-    """
-    Context manager seguro para execução no worker.
-
-    Verifica se já existe um contexto ativo para evitar
-    criar contextos aninhados que podem causar travamentos.
-    """
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
-    from flask import has_app_context
-
-    # Se já existe contexto ativo, apenas executa
-    if has_app_context():
-        logger.debug("[Context] Reutilizando contexto Flask existente")
-        yield
-        return
-
-    # Criar novo contexto
-    from app import create_app
-    app = create_app()
-    logger.debug("[Context] Novo contexto Flask criado para comprovante lancamento")
-
-    with app.app_context():
-        yield
+from app.financeiro.workers.utils import app_context_safe as _app_context_safe
 
 
 # ========================================

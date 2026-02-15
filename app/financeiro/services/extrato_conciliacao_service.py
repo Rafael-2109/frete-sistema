@@ -43,20 +43,15 @@ from app.financeiro.models import (
     ExtratoLote, ExtratoItem, ContasAReceber, ContasAPagar, ExtratoItemTitulo
 )
 from app.financeiro.parcela_utils import parcela_to_odoo
-from app.financeiro.services.baixa_titulos_service import (
-    BaixaTitulosService,
+from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
+from app.financeiro.constants import (
+    CONTA_PAGAMENTOS_PENDENTES,
+    CONTA_TRANSITORIA,
+    CONTA_CLIENTES_NACIONAIS,
     JOURNAL_GRAFENO_ID,
 )
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# CONSTANTES - IDs de contas contábeis no Odoo
-# =============================================================================
-CONTA_PAGAMENTOS_PENDENTES = 26868  # 1110100004 PAGAMENTOS/RECEBIMENTOS PENDENTES
-CONTA_TRANSITORIA = 22199           # 1110100003 TRANSITÓRIA DE VALORES
-CONTA_CLIENTES_NACIONAIS = 24801    # 1120100001 CLIENTES NACIONAIS
 
 
 # Campos para snapshot

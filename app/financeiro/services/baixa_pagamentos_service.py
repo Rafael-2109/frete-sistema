@@ -34,12 +34,17 @@ from typing import Dict, List, Optional, Tuple
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import BaixaPagamentoLote, BaixaPagamentoItem
+from app.financeiro.constants import (
+    CONTA_PAGAMENTOS_PENDENTES,
+    CONTA_TRANSITORIA,
+    CONTA_JUROS_PAGAMENTOS_POR_COMPANY,
+)
 
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CONSTANTES
+# CONSTANTES LOCAIS
 # =============================================================================
 
 # Campos para snapshot do título a pagar
@@ -51,20 +56,6 @@ CAMPOS_SNAPSHOT_TITULO = [
     'date_maturity', 'partner_id', 'move_id', 'company_id',
     'l10n_br_paga', 'l10n_br_cobranca_parcela', 'x_studio_nf_e'
 ]
-
-# Contas contábeis (mesmo do recebimentos)
-CONTA_PAGAMENTOS_PENDENTES = 26868  # 1110100004 PAGAMENTOS/RECEBIMENTOS PENDENTES
-CONTA_TRANSITORIA = 22199           # 1110100003 TRANSITÓRIA DE VALORES
-
-# Conta 3701010003 JUROS DE PAGAMENTOS EM ATRASO (expense)
-# Quando pagamento a fornecedor tem juros (valor_pago > saldo do título),
-# a diferença vai para esta conta como DESPESA
-CONTA_JUROS_PAGAMENTOS_POR_COMPANY = {
-    1: 22769,  # NACOM GOYA - FB
-    3: 24051,  # NACOM GOYA - SC
-    4: 25335,  # NACOM GOYA - CD
-    5: 26619,  # LA FAMIGLIA - LF
-}
 
 # Regex para extrair CNPJ do payment_ref
 REGEX_CNPJ = re.compile(r'(\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2})')

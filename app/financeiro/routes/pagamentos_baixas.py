@@ -19,6 +19,7 @@ import logging
 import re
 from datetime import datetime
 from flask import render_template, request, jsonify, flash, redirect, url_for
+from flask_login import login_required, current_user
 from sqlalchemy import func, case
 
 from app import db
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas')
+@login_required
 def pagamentos_baixas_hub():
     """
     Hub principal de baixas de pagamentos.
@@ -88,6 +90,7 @@ def pagamentos_baixas_hub():
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas/importar-extrato/<int:extrato_lote_id>', methods=['POST'])
+@login_required
 def pagamentos_importar_extrato(extrato_lote_id):
     """
     Importa linhas de saída (amount < 0) de um extrato para criar lote de pagamentos.
@@ -203,6 +206,7 @@ def pagamentos_importar_extrato(extrato_lote_id):
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas/lote/<int:lote_id>')
+@login_required
 def pagamentos_baixas_lote_detalhe(lote_id):
     """
     Visualiza detalhes de um lote de pagamentos.
@@ -255,6 +259,7 @@ def pagamentos_baixas_lote_detalhe(lote_id):
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas/executar-matching/<int:lote_id>', methods=['POST'])
+@login_required
 def pagamentos_executar_matching(lote_id):
     """
     Executa matching automático para todos os itens pendentes do lote.
@@ -362,6 +367,7 @@ def pagamentos_executar_matching(lote_id):
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas/api/vincular-titulo', methods=['POST'])
+@login_required
 def pagamentos_vincular_titulo():
     """
     Vincula manualmente um título a um item.
@@ -404,6 +410,7 @@ def pagamentos_vincular_titulo():
 
 
 @financeiro_bp.route('/contas-pagar/baixas/api/buscar-titulos', methods=['GET'])
+@login_required
 def pagamentos_buscar_titulos():
     """
     Busca títulos a pagar por NF ou CNPJ.
@@ -467,6 +474,7 @@ def pagamentos_buscar_titulos():
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas/api/aprovar-item', methods=['POST'])
+@login_required
 def pagamentos_aprovar_item():
     """
     Aprova um item para processamento.
@@ -483,7 +491,7 @@ def pagamentos_aprovar_item():
 
         item.aprovado = aprovar
         item.aprovado_em = agora_utc_naive() if aprovar else None
-        item.aprovado_por = 'Usuario' if aprovar else None
+        item.aprovado_por = current_user.nome if aprovar else None
         item.status = 'APROVADO' if aprovar else 'PENDENTE'
 
         db.session.commit()
@@ -496,6 +504,7 @@ def pagamentos_aprovar_item():
 
 
 @financeiro_bp.route('/contas-pagar/baixas/api/aprovar-todos/<int:lote_id>', methods=['POST'])
+@login_required
 def pagamentos_aprovar_todos(lote_id):
     """
     Aprova todos os itens com match encontrado.
@@ -508,7 +517,7 @@ def pagamentos_aprovar_todos(lote_id):
         ).update({
             'aprovado': True,
             'aprovado_em': agora_utc_naive(),
-            'aprovado_por': 'Usuario',
+            'aprovado_por': current_user.nome,
             'status': 'APROVADO'
         })
 
@@ -534,6 +543,7 @@ def pagamentos_aprovar_todos(lote_id):
 # =============================================================================
 
 @financeiro_bp.route('/contas-pagar/baixas/processar/<int:lote_id>', methods=['POST'])
+@login_required
 def pagamentos_processar_lote(lote_id):
     """
     Processa todos os itens aprovados do lote.
@@ -554,6 +564,7 @@ def pagamentos_processar_lote(lote_id):
 
 
 @financeiro_bp.route('/contas-pagar/baixas/api/processar-item/<int:item_id>', methods=['POST'])
+@login_required
 def pagamentos_processar_item(item_id):
     """
     Processa um item individual.

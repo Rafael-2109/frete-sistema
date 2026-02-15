@@ -32,24 +32,8 @@ from app.financeiro.routes import financeiro_bp
 from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
 
 
-# =============================================================================
-# CONSTANTES - JOURNALS ESPECIAIS (HARDCODED)
-# =============================================================================
-
-# Journal de DESCONTO CONCEDIDO - limitado ao saldo do titulo
-JOURNAL_DESCONTO_CONCEDIDO_ID = 886
-JOURNAL_DESCONTO_CONCEDIDO_CODE = 'DESCO'
-JOURNAL_DESCONTO_CONCEDIDO_NAME = 'DESCONTO CONCEDIDO'
-
-# Journal de ACORDO COMERCIAL - limitado ao saldo do titulo
-JOURNAL_ACORDO_COMERCIAL_ID = 885
-JOURNAL_ACORDO_COMERCIAL_CODE = 'ACORD'
-JOURNAL_ACORDO_COMERCIAL_NAME = 'ACORDO COMERCIAL'
-
-# Journal de DEVOLUCAO - limitado ao saldo do titulo
-JOURNAL_DEVOLUCAO_ID = 879
-JOURNAL_DEVOLUCAO_CODE = 'DEVOL'
-JOURNAL_DEVOLUCAO_NAME = 'DEVOLUCAO'
+# NOTA: Constantes de journals (DESCONTO, ACORDO, DEVOLUCAO) centralizadas
+# em app.financeiro.constants — importar de la se necessario.
 
 
 # =============================================================================

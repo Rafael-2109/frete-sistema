@@ -35,11 +35,8 @@ class SincronizacaoContasAPagarService:
     """
 
     # Mapeamento de empresa Odoo -> código interno
-    EMPRESA_MAP = {
-        'NACOM GOYA - FB': 1,
-        'NACOM GOYA - SC': 2,
-        'NACOM GOYA - CD': 3,
-    }
+    # Importado de app.financeiro.constants.EMPRESA_MAP
+    from app.financeiro.constants import EMPRESA_MAP
 
     # Campos a buscar no Odoo (account.move.line)
     CAMPOS_ODOO = [

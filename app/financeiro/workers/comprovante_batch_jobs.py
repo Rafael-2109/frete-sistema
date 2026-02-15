@@ -22,9 +22,7 @@ TRATAMENTO DE ERROS:
 
 import json
 import logging
-import os
 import traceback
-from contextlib import contextmanager
 from typing import Any, Dict, List
 
 from app.utils.timezone import agora_utc_naive
@@ -95,32 +93,7 @@ def obter_progresso_batch(batch_id: str) -> dict | None:
 # CONTEXT MANAGER SEGURO
 # ========================================
 
-@contextmanager
-def _app_context_safe():
-    """
-    Context manager seguro para execução no worker.
-
-    Verifica se já existe um contexto ativo para evitar
-    criar contextos aninhados que podem causar travamentos.
-    """
-    import sys
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
-    from flask import has_app_context
-
-    # Se já existe contexto ativo, apenas executa
-    if has_app_context():
-        logger.debug("[Context] Reutilizando contexto Flask existente")
-        yield
-        return
-
-    # Criar novo contexto
-    from app import create_app
-    app = create_app()
-    logger.debug("[Context] Novo contexto Flask criado para comprovante batch")
-
-    with app.app_context():
-        yield
+from app.financeiro.workers.utils import app_context_safe as _app_context_safe
 
 
 # ========================================
@@ -294,8 +267,8 @@ def processar_batch_comprovantes_job(
                 _atualizar_progresso(batch_id, progresso)
 
         # Finalizar
-        resultado['success'] = True
-        progresso['status'] = 'concluido'
+        resultado['success'] = resultado.get('erros', 0) == 0
+        progresso['status'] = 'concluido' if resultado['success'] else 'concluido_com_erros'
         progresso['concluido_em'] = agora_utc_naive().isoformat()
         progresso['arquivo_atual'] = None
 

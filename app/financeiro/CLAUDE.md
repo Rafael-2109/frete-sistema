@@ -50,7 +50,8 @@ Usar `set_matches_candidatos()`/`get_matches_candidatos()`. SEM `flag_modified`,
 ### A9: Float vs Numeric misturados para valores monetarios
 ~25 campos Float (impreciso) vs ~11 Numeric(15,2) (exato). Mesma informacao em tipos diferentes:
 `ExtratoItem.titulo_saldo_antes` = Float. `ExtratoItemTitulo.titulo_saldo_antes` = Numeric.
-Comparar diretamente pode falhar. Novos campos: SEMPRE Numeric(15,2).
+Comparar diretamente pode falhar.
+**REGRA**: Novos campos monetarios DEVEM ser `Numeric(15,2)`. NAO usar Float para valores em R$.
 
 ### A10: Parcela VARCHAR em Contas*, INTEGER em Extrato*/Baixa*
 `ContasAReceber.parcela` = VARCHAR(10) (pode ter "P3" de CNAB).
@@ -107,8 +108,8 @@ No matching: agregar com NF real. Na baixa: corrigir antes.
 
 ### CNAB400 usa `cnab400_bp` (prefix `/cnab400/`), NAO `financeiro_bp`
 
-### pagamentos_baixas.py e pendencias.py SEM @login_required
-Todas rotas de baixa de pagamentos sao publicas. pendencias.py usa current_user sem protecao.
+### @login_required adicionado em pagamentos_baixas.py e pendencias.py (2026-02-14)
+Corrigido: todas as 10 rotas de pagamentos_baixas.py + responder_pendencia agora protegidas.
 
 ### exportar_contas_receber_json() e publica (Power Query)
 NAO adicionar @login_required — quebra integracao. Cuidado ao expor campos novos.
@@ -124,11 +125,32 @@ NAO adicionar @login_required — quebra integracao. Cuidado ao expor campos nov
 ### Lock Redis fail-open e INTENCIONAL
 Se Redis indisponivel, prossegue sem lock. NAO "corrigir" para return False.
 
-### success=True NAO significa zero erros
-extrato_conciliacao e comprovante_batch: `success=True` sempre. Verificar `erros`/`linhas_erro`.
+### success agora reflete erros (padronizado 2026-02-14)
+Todos workers: `success = erros == 0`. cnab400_batch: parcial = `success=False` com status `'parcial'`.
 
 ### ExtratoLote UNIQUE = (statement_id + tipo_transacao)
 Mesmo statement gera lote `entrada` + `saida`. NAO usar statement_id sozinho.
 
 ### CASCADE assimetrico
 ExtratoItemTitulo cascadeia com ExtratoItem. ContasAReceberReconciliacao NAO cascadeia.
+
+### RQ job.started_at e UTC aware (corrigido 2026-02-14)
+`job.started_at`/`job.ended_at` sao `datetime` UTC aware (via `rq.utils.now()`).
+Para calcular duracao de job em execucao: usar `datetime.now(timezone.utc)`, NAO `agora_utc_naive()`.
+
+---
+
+## Arquitetura do Modulo
+
+### Constantes centralizadas em `app/financeiro/constants.py` (2026-02-14)
+Contas contabeis, journals e mapeamentos Odoo em arquivo unico.
+NAO definir constantes Odoo localmente nos services — importar de `constants.py`.
+
+### Context manager `_app_context_safe` em `app/financeiro/workers/utils.py` (2026-02-14)
+Workers usam `from app.financeiro.workers.utils import app_context_safe as _app_context_safe`.
+NAO copiar a funcao localmente — importar do modulo compartilhado.
+
+### Resposta JSON: padrao de chaves
+- Comprovantes (`comprovantes.py`, `comprovante_match.py`): `'sucesso'` (portugues)
+- Todos os demais endpoints: `'success'` (ingles)
+NAO migrar — frontend depende dos nomes atuais. Manter consistencia DENTRO de cada arquivo.

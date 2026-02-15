@@ -24,8 +24,6 @@ TRATAMENTO DE ERROS:
 import json
 import logging
 import traceback
-from contextlib import contextmanager
-from datetime import datetime
 from typing import Dict, Any, List
 
 from app.utils.timezone import agora_utc_naive
@@ -119,34 +117,7 @@ def _limpar_progresso_batch(batch_id: str):
 # CONTEXT MANAGER SEGURO
 # ========================================
 
-
-@contextmanager
-def _app_context_safe():
-    """
-    Context manager seguro para execução no worker.
-
-    IMPORTANTE: Verifica se já existe um contexto ativo para evitar
-    criar contextos aninhados que podem causar travamentos.
-    """
-    import sys
-    import os
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
-    from flask import has_app_context
-
-    # Se já existe contexto ativo, apenas executa o código
-    if has_app_context():
-        logger.debug("[Context] Reutilizando contexto Flask existente")
-        yield
-        return
-
-    # Criar novo contexto apenas quando necessário
-    from app import create_app
-    app = create_app()
-    logger.debug("[Context] Novo contexto Flask criado")
-
-    with app.app_context():
-        yield
+from app.financeiro.workers.utils import app_context_safe as _app_context_safe
 
 
 # ========================================
@@ -312,7 +283,7 @@ def processar_batch_cnab400_job(
                 resultado['success'] = True
                 progresso['status'] = 'concluido'
             elif resultado['arquivos_sucesso'] > 0:
-                resultado['success'] = True  # Parcial conta como sucesso
+                resultado['success'] = False  # Parcial = houve erros
                 progresso['status'] = 'parcial'
             else:
                 resultado['success'] = False

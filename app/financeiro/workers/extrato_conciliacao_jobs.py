@@ -24,7 +24,6 @@ TRATAMENTO DE ERROS:
 import json
 import logging
 import traceback
-from contextlib import contextmanager
 from typing import Dict, Any, Optional, List
 from app.utils.timezone import agora_utc_naive
 
@@ -176,29 +175,7 @@ def obter_progresso(job_id: str) -> Optional[dict]:
 # CONTEXT MANAGER SEGURO
 # ========================================
 
-@contextmanager
-def _app_context_safe():
-    """
-    Context manager seguro para execucao no worker.
-    Verifica se ja existe um contexto ativo para evitar contextos aninhados.
-    """
-    import sys
-    import os
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
-    from flask import has_app_context
-
-    if has_app_context():
-        logger.debug("[Context] Reutilizando contexto Flask existente")
-        yield
-        return
-
-    from app import create_app
-    app = create_app()
-    logger.debug("[Context] Novo contexto Flask criado")
-
-    with app.app_context():
-        yield
+from app.financeiro.workers.utils import app_context_safe as _app_context_safe
 
 
 # ========================================
@@ -242,10 +219,12 @@ def get_job_status(job_id: str) -> Dict[str, Any]:
         }
 
         # Calcular tempo de execucao se disponivel
+        # RQ armazena started_at/ended_at como UTC aware
         if job.started_at and job.ended_at:
             result['duracao_segundos'] = (job.ended_at - job.started_at).total_seconds()
         elif job.started_at:
-            result['duracao_segundos'] = (agora_utc_naive() - job.started_at).total_seconds()
+            from datetime import datetime as dt_cls, timezone
+            result['duracao_segundos'] = (dt_cls.now(timezone.utc) - job.started_at).total_seconds()
 
         return result
 
@@ -444,7 +423,7 @@ def processar_conciliacao_extrato_job(
             # Finalizar
             tempo_total = (agora_utc_naive() - inicio).total_seconds()
             resultado['tempo_segundos'] = tempo_total
-            resultado['success'] = True  # Job concluiu (mesmo com erros individuais)
+            resultado['success'] = resultado['erros'] == 0
 
             # Progresso final
             progresso['status'] = 'concluido' if resultado['erros'] == 0 else 'concluido_com_erros'

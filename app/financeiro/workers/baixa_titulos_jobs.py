@@ -24,8 +24,6 @@ TRATAMENTO DE ERROS:
 import json
 import logging
 import traceback
-from contextlib import contextmanager
-from datetime import datetime
 from typing import Dict, Any, Optional, List
 from app.utils.timezone import agora_utc_naive
 
@@ -217,38 +215,7 @@ def _limpar_progresso_baixa(job_id: str):
 # CONTEXT MANAGER SEGURO
 # ========================================
 
-
-@contextmanager
-def _app_context_safe():
-    """
-    Context manager seguro para execucao no worker.
-
-    IMPORTANTE: Verifica se ja existe um contexto ativo (ex: chamado de dentro de outro job)
-    para evitar criar contextos aninhados que podem causar travamentos.
-
-    Uso:
-        with _app_context_safe():
-            # codigo que precisa de contexto Flask
-    """
-    import sys
-    import os
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
-    from flask import has_app_context
-
-    # Se ja existe contexto ativo, apenas executa o codigo (nao cria novo contexto)
-    if has_app_context():
-        logger.debug("[Context] Reutilizando contexto Flask existente")
-        yield
-        return
-
-    # Criar novo contexto apenas quando necessario
-    from app import create_app
-    app = create_app()
-    logger.debug("[Context] Novo contexto Flask criado")
-
-    with app.app_context():
-        yield
+from app.financeiro.workers.utils import app_context_safe as _app_context_safe
 
 
 # ========================================
@@ -657,10 +624,12 @@ def get_job_status(job_id: str) -> Dict[str, Any]:
         }
 
         # Calcular tempo de execucao se disponivel
+        # RQ armazena started_at/ended_at como UTC aware
         if job.started_at and job.ended_at:
             result['duracao_segundos'] = (job.ended_at - job.started_at).total_seconds()
         elif job.started_at:
-            result['duracao_segundos'] = (agora_utc_naive() - job.started_at).total_seconds()
+            from datetime import datetime as dt_cls, timezone
+            result['duracao_segundos'] = (dt_cls.now(timezone.utc) - job.started_at).total_seconds()
 
         # Adicionar progresso do Redis se disponivel
         progresso = obter_progresso_baixa(job_id)

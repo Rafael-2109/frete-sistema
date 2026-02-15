@@ -30,59 +30,17 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CONSTANTES - JOURNALS ESPECIAIS (HARDCODED)
+# CONSTANTES - importadas de app.financeiro.constants
 # =============================================================================
-
-# Journal de DESCONTO CONCEDIDO - limitado ao saldo do titulo
-JOURNAL_DESCONTO_CONCEDIDO_ID = 886
-JOURNAL_DESCONTO_CONCEDIDO_CODE = 'DESCO'
-JOURNAL_DESCONTO_CONCEDIDO_NAME = 'DESCONTO CONCEDIDO'
-
-# Journal de ACORDO COMERCIAL - limitado ao saldo do titulo
-JOURNAL_ACORDO_COMERCIAL_ID = 885
-JOURNAL_ACORDO_COMERCIAL_CODE = 'ACORD'
-JOURNAL_ACORDO_COMERCIAL_NAME = 'ACORDO COMERCIAL'
-
-# Journal de DEVOLUCAO - limitado ao saldo do titulo
-JOURNAL_DEVOLUCAO_ID = 879
-JOURNAL_DEVOLUCAO_CODE = 'DEVOL'
-JOURNAL_DEVOLUCAO_NAME = 'DEVOLUCAO'
-
-# =============================================================================
-# CONTAS DE JUROS POR EMPRESA (para Write-Off)
-# =============================================================================
-# Conta 3702010003 JUROS DE RECEBIMENTOS EM ATRASO (income_other)
-# Quando cliente paga valor > saldo do titulo, a diferenca vai para esta conta como RECEITA
-CONTA_JUROS_RECEBIMENTOS_POR_COMPANY = {
-    1: 22778,  # NACOM GOYA - FB
-    3: 24061,  # NACOM GOYA - SC
-    4: 25345,  # NACOM GOYA - CD
-    5: 26629,  # LA FAMIGLIA - LF
-}
-
-# =============================================================================
-# MAPEAMENTO DE BANCOS CNAB PARA JOURNALS ODOO
-# =============================================================================
-# Usado para identificar o journal_id quando processando retorno CNAB.
-# Chave: codigo do banco no arquivo CNAB (posição 77-79 do header)
-# Valor: dict com journal_id, code e nome
-#
-# FLUXO TESTADO (22/01/2026): Banco Grafeno (274) com journal GRAFENO (883)
-CNAB_BANCO_PARA_JOURNAL = {
-    '274': {  # BMP Money Plus / Banco Grafeno
-        'journal_id': 883,
-        'journal_code': 'GRAFENO',
-        'journal_name': 'Banco Grafeno',
-    },
-    # Adicionar outros bancos conforme configurados:
-    # '001': {'journal_id': ???, 'journal_code': 'BB', 'journal_name': 'Banco do Brasil'},
-    # '341': {'journal_id': ???, 'journal_code': 'ITAU', 'journal_name': 'Itaú'},
-    # '237': {'journal_id': ???, 'journal_code': 'BRAD', 'journal_name': 'Bradesco'},
-}
-
-# Journal padrão quando não houver mapeamento (usar GRAFENO como fallback)
-JOURNAL_GRAFENO_ID = 883
-JOURNAL_GRAFENO_CODE = 'GRAFENO'
+from app.financeiro.constants import (
+    JOURNAL_DESCONTO_CONCEDIDO_ID,
+    JOURNAL_ACORDO_COMERCIAL_ID,
+    JOURNAL_DEVOLUCAO_ID,
+    CONTA_JUROS_RECEBIMENTOS_POR_COMPANY,
+    CNAB_BANCO_PARA_JOURNAL,
+    JOURNAL_GRAFENO_ID,
+    JOURNAL_GRAFENO_CODE,
+)
 
 
 def obter_journal_por_banco_cnab(banco_codigo: str) -> dict:

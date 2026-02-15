@@ -33,12 +33,8 @@ class SincronizacaoContasReceberService:
     """
 
     # Mapeamento de empresa Odoo -> código interno
-    # 1 = FB (Fábrica), 2 = SC (Santa Catarina), 3 = CD (Centro de Distribuição)
-    EMPRESA_MAP = {
-        'NACOM GOYA - FB': 1,
-        'NACOM GOYA - SC': 2,
-        'NACOM GOYA - CD': 3,
-    }
+    # Importado de app.financeiro.constants.EMPRESA_MAP
+    from app.financeiro.constants import EMPRESA_MAP
 
     # Campos do Odoo que devem gerar snapshot quando alterados
     CAMPOS_ODOO_AUDITADOS = [

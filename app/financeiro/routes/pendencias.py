@@ -4,8 +4,9 @@ Importação, consulta, exportação e exclusão de pendências
 """
 
 import os
+from io import BytesIO
 import pandas as pd
-from flask import render_template, request, redirect, flash, send_from_directory, url_for, jsonify
+from flask import current_app, render_template, request, redirect, flash, send_file, send_from_directory, url_for, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -58,7 +59,7 @@ def importar_pendencias():
 def baixar_modelo_pendencias():
     """Download do modelo Excel para importação de pendências financeiras"""
     return send_from_directory(
-        directory=os.path.join(os.getcwd(), 'app', 'static', 'modelos'),
+        directory=os.path.join(current_app.root_path, 'static', 'modelos'),
         path='modelo_pendencias_financeiras.xlsx',
         as_attachment=True,
         download_name='modelo_pendencias_financeiras.xlsx'
@@ -66,6 +67,7 @@ def baixar_modelo_pendencias():
 
 
 @financeiro_bp.route('/pendencias/<numero_nf>/responder', methods=['POST'])
+@login_required
 def responder_pendencia(numero_nf):
     print("DEBUG: Chegou em responder_pendencia")
     print("request.is_json =", request.is_json)
@@ -135,10 +137,16 @@ def exportar_pendencias():
     } for p in pendencias]
 
     df = pd.DataFrame(dados)
-    arquivo = 'pendencias_financeiras.xlsx'
-    df.to_excel(arquivo, index=False)
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
 
-    return send_from_directory(os.getcwd(), arquivo, as_attachment=True)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name='pendencias_financeiras.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 
 @financeiro_bp.route('/excluir-pendencias-selecionadas', methods=['POST'])
