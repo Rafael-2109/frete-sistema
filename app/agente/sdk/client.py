@@ -1117,6 +1117,40 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool render: {e}")
 
+        # =================================================================
+        # MCP Browser Tool (navegacao web via Playwright headless)
+        # =================================================================
+        try:
+            from ..tools.playwright_mcp_tool import browser_server
+
+            if browser_server is not None:
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["browser"] = browser_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                allowed = options_dict.get("allowed_tools", [])
+                browser_tool_names = [
+                    "mcp__browser__browser_navigate",
+                    "mcp__browser__browser_snapshot",
+                    "mcp__browser__browser_click",
+                    "mcp__browser__browser_type",
+                    "mcp__browser__browser_select_option",
+                    "mcp__browser__browser_read_content",
+                    "mcp__browser__browser_close",
+                ]
+                for tool_name in browser_tool_names:
+                    if tool_name not in allowed:
+                        allowed.append(tool_name)
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'browser' registrada (7 operações)")
+            else:
+                logger.debug("[AGENT_CLIENT] browser_server é None — playwright não disponível")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool browser não disponível (módulo não encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool browser: {e}")
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "

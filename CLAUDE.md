@@ -83,6 +83,7 @@ Gotchas rapidos:
 Documentos adicionais:
 - Card de Separacao: `CARD_SEPARACAO.md` (raiz)
 - Sistema de Devolucoes: `app/devolucao/README.md`
+- **SSW Sistemas (documentacao completa)**: `.claude/references/ssw/INDEX.md`
 
 ---
 

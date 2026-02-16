@@ -87,7 +87,16 @@
       "WebFetch(domain:claudekit.cc)",
       "WebFetch(domain:www.pubnub.com)",
       "Bash(git status:*)",
-      "WebFetch(domain:til.simonwillison.net)"
+      "WebFetch(domain:til.simonwillison.net)",
+      "WebFetch(domain:sistema.ssw.inf.br)",
+      "Bash(while read f)",
+      "Bash(do echo '  $\\(wc -l < $f\\) linhas  $f')",
+      "WebFetch(domain:leehanchung.github.io)",
+      "Bash(for opt in 026 028 040 062 064 069 071 078 084 108 133 156 185 206 222 264 284 295 313 314 315 316 317 320)",
+      "Bash(do if ! ls */*-$opt-*.md)",
+      "Bash(then echo \"MISSING: $opt\")",
+      "Bash(fi)",
+      "Bash(__NEW_LINE_829bc68f8fc526d2__ ls -1 operacional/)"
     ],
     "deny": []
   },

@@ -1,4 +1,5 @@
 ---
+name: visao-produto
 description: Visao 360 de produto - agrega dados de cadastro, estoque, custo, faturamento, carteira e producao em uma consulta unificada.
 triggers:
   - resumo completo de produto
