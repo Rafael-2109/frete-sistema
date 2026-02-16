@@ -119,16 +119,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pedido_importacao_temp_chave_importacao",
+      "name": "idx_importacao_temp_criado",
       "columns": [
-        "chave_importacao"
+        "criado_em"
       ],
-      "unique": true
+      "unique": false
     },
     {
-      "name": "ix_pedido_importacao_temp_status",
+      "name": "idx_importacao_temp_expira",
       "columns": [
-        "status"
+        "expira_em"
       ],
       "unique": false
     },
@@ -140,16 +140,16 @@
       "unique": false
     },
     {
-      "name": "idx_importacao_temp_criado",
+      "name": "ix_pedido_importacao_temp_chave_importacao",
       "columns": [
-        "criado_em"
+        "chave_importacao"
       ],
-      "unique": false
+      "unique": true
     },
     {
-      "name": "idx_importacao_temp_expira",
+      "name": "ix_pedido_importacao_temp_status",
       "columns": [
-        "expira_em"
+        "status"
       ],
       "unique": false
     }

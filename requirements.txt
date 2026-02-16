@@ -150,3 +150,9 @@ weasyprint==67.0         # Geração de PDFs
 # ==========================================
 pypdfium2==5.1.0           # Renderização de PDF para imagem (leitor comprovantes)
 tesserocr==2.9.2           # OCR via Tesseract C API (requer tesseract-ocr no sistema)
+
+# ==========================================
+# EMBEDDINGS & VECTOR SEARCH
+# ==========================================
+voyageai>=0.3.0            # SDK Voyage AI (embeddings + reranking) — recomendado pela Anthropic
+pgvector>=0.3.0            # Python bindings para pgvector (busca vetorial no PostgreSQL)

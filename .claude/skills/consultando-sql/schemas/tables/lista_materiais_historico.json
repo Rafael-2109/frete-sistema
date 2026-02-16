@@ -78,9 +78,9 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_historico_alterado_por",
+      "name": "ix_lista_materiais_historico_cod_produto_produzido",
       "columns": [
-        "alterado_por"
+        "cod_produto_produzido"
       ],
       "unique": false
     },
@@ -89,13 +89,6 @@
       "columns": [
         "cod_produto_produzido",
         "alterado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lista_materiais_historico_cod_produto_produzido",
-      "columns": [
-        "cod_produto_produzido"
       ],
       "unique": false
     },
@@ -132,6 +125,13 @@
       "columns": [
         "operacao",
         "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_alterado_por",
+      "columns": [
+        "alterado_por"
       ],
       "unique": false
     }

@@ -6,6 +6,8 @@ Uso:
     python resolver_produto.py --termo "palmito"
     python resolver_produto.py --termo "AZ VF"
     python resolver_produto.py --termo "mezzani balde"
+    python resolver_produto.py --termo "champignon fatiado" --modo semantica
+    python resolver_produto.py --termo "cogumelo" --modo hibrida
 """
 
 import argparse
@@ -96,7 +98,7 @@ def detectar_abreviacoes(tokens: list) -> tuple:
     return abreviacoes, tokens_restantes
 
 
-def resolver_produto(termo: str, limite: int = 50) -> dict:
+def resolver_produto(termo: str, limite: int = 50, modo: str = 'hibrida') -> dict:
     """
     Resolve termo de produto usando tokenizacao e busca em CadastroPalletizacao.
 
@@ -109,27 +111,34 @@ def resolver_produto(termo: str, limite: int = 50) -> dict:
     3. Tokens restantes: busca parcial ILIKE em todos os campos
     4. Ordena por relevancia (mais matches = maior score)
 
+    Modos de busca:
+    - "texto": apenas ILIKE (comportamento original)
+    - "semantica": apenas embeddings Voyage AI
+    - "hibrida": ambos combinados (default)
+
     Args:
         termo: Termo de busca (pode ser abreviacao, nome parcial, combinacao)
         limite: Maximo de resultados
+        modo: "texto", "semantica" ou "hibrida"
 
     Returns:
         dict: {
             'sucesso': bool,
             'termo': str,
+            'modo': str,
             'abreviacoes_detectadas': list,
             'produtos': list,
             'total': int
         }
     """
     from app import create_app, db
-    from sqlalchemy import text
 
     termo = termo.strip().lower()
 
     resultado = {
         'sucesso': False,
         'termo_original': termo,
+        'modo': modo,
         'abreviacoes_detectadas': [],
         'produtos': [],
         'total': 0
@@ -139,18 +148,38 @@ def resolver_produto(termo: str, limite: int = 50) -> dict:
         resultado['erro'] = 'Termo de busca vazio'
         return resultado
 
-    # Tokenizar
+    # Detectar abreviacoes para info no retorno
     tokens = termo.split()
-
-    # Detectar abreviacoes conhecidas
     abreviacoes, tokens_restantes = detectar_abreviacoes(tokens)
-
     resultado['abreviacoes_detectadas'] = [a['descricao'] for a in abreviacoes]
 
     app = create_app()
     with app.app_context():
         try:
-            # Montar filtros
+            # Tentar busca hibrida se modo != "texto"
+            if modo in ('hibrida', 'semantica'):
+                try:
+                    from app.embeddings.product_search import buscar_produtos_hibrido
+                    produtos = buscar_produtos_hibrido(
+                        termo=termo,
+                        modo=modo,
+                        limite=limite,
+                    )
+                    if produtos:
+                        resultado['sucesso'] = True
+                        resultado['produtos'] = produtos
+                        resultado['total'] = len(produtos)
+                        return resultado
+                    # Se vazio, fallback para texto
+                    resultado['modo'] = 'texto (fallback)'
+                except ImportError:
+                    resultado['modo'] = 'texto (embeddings indisponiveis)'
+                except Exception as e:
+                    resultado['modo'] = f'texto (fallback: {e})'
+
+            # Busca por texto (ILIKE original) — fallback ou modo explícito
+            from sqlalchemy import text
+
             filtros = []
             params = {}
 
@@ -226,7 +255,8 @@ def resolver_produto(termo: str, limite: int = 50) -> dict:
                     'palletizacao': float(row[6]) if row[6] else 0,
                     'peso_bruto': float(row[7]) if row[7] else 0,
                     'score': 0,
-                    'matches': []
+                    'matches': [],
+                    'source': 'texto',
                 }
 
                 # Score para abreviacoes encontradas (peso alto pois foi busca exata)
@@ -280,12 +310,16 @@ def main():
 
     parser.add_argument('--termo', type=str, required=True, help='Nome, abreviacao ou caracteristica do produto')
     parser.add_argument('--limite', type=int, default=50, help='Maximo de registros')
+    parser.add_argument('--modo', type=str, default='hibrida',
+                        choices=['texto', 'semantica', 'hibrida'],
+                        help='Modo de busca: texto (ILIKE), semantica (embeddings), hibrida (ambos)')
 
     args = parser.parse_args()
 
     resultado = resolver_produto(
         termo=args.termo,
-        limite=args.limite
+        limite=args.limite,
+        modo=args.modo
     )
 
     print(json.dumps(resultado, indent=2, ensure_ascii=False, default=str))

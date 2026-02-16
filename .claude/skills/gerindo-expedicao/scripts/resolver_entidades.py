@@ -1114,19 +1114,24 @@ def resolver_cidades_multiplas(cidades: list, fonte: str = 'separacao', apenas_p
 # RESOLVER PRODUTO
 # Busca por tokenizacao em CadastroPalletizacao
 # ============================================================
-def resolver_produto(termo: str, limit: int = 50):
+def resolver_produto(termo: str, limit: int = 50, modo: str = 'hibrida'):
     """
     Resolve termo de produto usando tokenizacao e busca em CadastroPalletizacao.
 
     Busca em: nome_produto, categoria_produto, subcategoria,
               tipo_embalagem, tipo_materia_prima
 
-    Estrategia MELHORADA (12/12/2025):
+    Estrategia:
     1. Tokeniza o termo (ex: "az vf mezzani" -> ["az", "vf", "mezzani"])
     2. Detecta abreviacoes conhecidas (ex: "AZ VF" -> busca EXATA em tipo_materia_prima)
     3. Tokens restantes: busca parcial ILIKE em todos os campos
     4. Combina resultados com AND (todos criterios devem dar match)
     5. Ordena por relevancia (mais matches = maior score)
+
+    Modos de busca:
+    - "texto": apenas ILIKE (comportamento original)
+    - "semantica": apenas embeddings Voyage AI
+    - "hibrida": ambos combinados (default)
 
     IMPORTANTE: Abreviacoes como CI, CF, BR usam busca EXATA para evitar falsos positivos.
     Ex: "CI" busca tipo_materia_prima='CI', NAO encontra "INTENSA" ou "ADOCICADA".
@@ -1134,6 +1139,7 @@ def resolver_produto(termo: str, limit: int = 50):
     Args:
         termo: Termo de busca (pode ser abreviacao, nome parcial, combinacao)
         limit: Maximo de resultados
+        modo: "texto", "semantica" ou "hibrida" (default)
 
     Returns:
         list: Lista de dicts com produtos encontrados, ordenados por relevancia
@@ -1145,6 +1151,23 @@ def resolver_produto(termo: str, limit: int = 50):
     termo = termo.strip().lower()
     if not termo:
         return []
+
+    # Tentar busca hibrida/semantica se modo != "texto"
+    if modo in ('hibrida', 'semantica'):
+        try:
+            from app.embeddings.product_search import buscar_produtos_hibrido
+            produtos = buscar_produtos_hibrido(
+                termo=termo,
+                modo=modo,
+                limite=limit,
+            )
+            if produtos:
+                return produtos
+            # Se vazio, fallback para texto puro
+        except ImportError:
+            pass  # Embeddings nao disponiveis, fallback para texto
+        except Exception:
+            pass  # Qualquer erro, fallback para texto
 
     # Tokenizar
     tokens = termo.split()
@@ -1281,19 +1304,20 @@ def resolver_produto(termo: str, limit: int = 50):
     return resultados[:limit]
 
 
-def resolver_produto_unico(termo: str):
+def resolver_produto_unico(termo: str, modo: str = 'hibrida'):
     """
     Resolve termo de produto esperando resultado unico.
 
     Args:
         termo: Termo de busca
+        modo: "texto", "semantica" ou "hibrida" (default)
 
     Returns:
         tuple: (produto_dict, info)
         - produto_dict: Dict com dados do produto ou None
         - info: Dict com metadados {encontrado, multiplos, candidatos}
     """
-    resultados = resolver_produto(termo, limit=10)
+    resultados = resolver_produto(termo, limit=10, modo=modo)
 
     info = {
         'termo_original': termo,

@@ -889,6 +889,80 @@ class AIResolverService:
             logger.error(f"[AI_RESOLVER] Erro ao extrair termos de busca: {e}")
             return {'termos': [], 'materia_prima': None}
 
+    def _buscar_produtos_semantico(
+        self,
+        descricao_cliente: str,
+        limite: int = 50
+    ) -> List[Dict]:
+        """
+        Busca produtos usando embeddings semanticos (Voyage AI).
+
+        Substitui a chamada Haiku de _extrair_termos_busca() — busca direta
+        por similaridade semantica, capturando sinonimos e variacoes de nome.
+
+        Args:
+            descricao_cliente: Descricao do produto do cliente
+            limite: Maximo de produtos a retornar
+
+        Returns:
+            Lista de produtos candidatos (mesmo formato de _buscar_produtos_prefiltrados)
+            ou lista vazia se embeddings indisponiveis
+        """
+        try:
+            from app.embeddings.config import EMBEDDINGS_ENABLED
+            if not EMBEDDINGS_ENABLED:
+                return []
+
+            from app.embeddings.service import EmbeddingService
+            from app.producao.models import CadastroPalletizacao
+
+            svc = EmbeddingService()
+            resultados_semanticos = svc.search_products(
+                query=descricao_cliente,
+                limit=limite,
+                min_similarity=0.30,
+            )
+
+            if not resultados_semanticos:
+                return []
+
+            # Enriquecer com campos completos do cadastro
+            cod_produtos = [r['cod_produto'] for r in resultados_semanticos]
+            produtos_db = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.cod_produto.in_(cod_produtos),
+                CadastroPalletizacao.ativo == True,
+                CadastroPalletizacao.produto_vendido == True
+            ).all()
+
+            prod_map = {p.cod_produto: p for p in produtos_db}
+            resultados = []
+            for r in resultados_semanticos:
+                prod = prod_map.get(r['cod_produto'])
+                if prod:
+                    resultados.append({
+                        'cod_produto': prod.cod_produto,
+                        'nome_produto': prod.nome_produto,
+                        'categoria_produto': prod.categoria_produto,
+                        'tipo_materia_prima': prod.tipo_materia_prima,
+                        'tipo_embalagem': prod.tipo_embalagem,
+                        'subcategoria': prod.subcategoria,
+                        'palletizacao': float(prod.palletizacao) if prod.palletizacao else 0,
+                        'peso_bruto': float(prod.peso_bruto) if prod.peso_bruto else 0,
+                    })
+
+            logger.info(
+                f"[AI_RESOLVER] SEMANTIC SEARCH: {len(resultados)} produtos "
+                f"encontrados para '{descricao_cliente[:50]}'"
+            )
+            return resultados
+
+        except ImportError:
+            logger.debug("[AI_RESOLVER] Embeddings nao disponiveis, pulando busca semantica")
+            return []
+        except Exception as e:
+            logger.warning(f"[AI_RESOLVER] Erro na busca semantica, usando fallback: {e}")
+            return []
+
     def _buscar_produtos_prefiltrados(
         self,
         descricao_cliente: str,
@@ -896,11 +970,11 @@ class AIResolverService:
         limite: int = 50
     ) -> List[Dict]:
         """
-        SMART FILTER: Busca produtos usando termos gerados pelo Haiku.
+        SMART FILTER: Busca produtos usando semantica (preferencial) ou Haiku+ILIKE (fallback).
 
         Fluxo:
-        1. Haiku extrai termos de busca da descricao
-        2. Filtra produtos no banco com ILIKE
+        1. Tenta busca semantica (sem chamada Haiku — economia de ~$0.003/produto)
+        2. Se semantica falhar/vazio: Haiku extrai termos → ILIKE
         3. Se poucos resultados, relaxa os termos
         4. Retorna lista focada de candidatos
 
@@ -915,7 +989,18 @@ class AIResolverService:
         try:
             from app.producao.models import CadastroPalletizacao
 
-            # 1. Haiku extrai termos de busca
+            # 0. Tentar busca semantica primeiro (elimina 1 chamada Haiku)
+            from app.embeddings.config import EMBEDDINGS_ENABLED, PRODUCT_SEMANTIC_SEARCH
+
+            if EMBEDDINGS_ENABLED and PRODUCT_SEMANTIC_SEARCH:
+                resultados_semanticos = self._buscar_produtos_semantico(
+                    descricao_cliente, limite
+                )
+                if resultados_semanticos:
+                    return resultados_semanticos
+                logger.info("[AI_RESOLVER] Busca semantica sem resultados, fallback para Haiku+ILIKE")
+
+            # 1. Haiku extrai termos de busca (fallback)
             termos_result = self._extrair_termos_busca(descricao_cliente, codigo_cliente)
             termos = termos_result.get('termos', [])
             materia_prima = termos_result.get('materia_prima')

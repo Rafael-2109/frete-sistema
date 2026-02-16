@@ -201,9 +201,9 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_cnpj",
+      "name": "ix_contas_a_receber_empresa",
       "columns": [
-        "cnpj"
+        "empresa"
       ],
       "unique": false
     },
@@ -222,9 +222,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_empresa",
+      "name": "ix_contas_a_receber_cnpj",
       "columns": [
-        "empresa"
+        "cnpj"
       ],
       "unique": false
     },

@@ -95,20 +95,24 @@ Se ambiguo → perguntar: "Voce quer no SSW (CarVia) ou no sistema interno (Naco
 
 ### 1. `consultar_documentacao_ssw.py`
 
-Busca textual em todos os .md da documentacao SSW.
+Busca na documentacao SSW com 3 modos: regex, semantica (embeddings Voyage AI) e hibrida.
 
 ```bash
 python scripts/consultar_documentacao_ssw.py --busca "MDF-e"
-python scripts/consultar_documentacao_ssw.py --busca "faturamento manual" --limite 5
-python scripts/consultar_documentacao_ssw.py --busca "conta corrente fornecedor" --diretorio pops
+python scripts/consultar_documentacao_ssw.py --busca "como transferir entre filiais" --modo semantica
+python scripts/consultar_documentacao_ssw.py --busca "faturamento manual" --modo hibrida --limite 5
+python scripts/consultar_documentacao_ssw.py --busca "conta corrente fornecedor" --diretorio pops --modo regex
 ```
 
 **Parametros:**
-- `--busca` (obrigatorio): Texto a buscar (case-insensitive)
+- `--busca` (obrigatorio): Texto a buscar
+- `--modo` (opcional, default `hibrida`): Modo de busca — `regex` (textual case-insensitive), `semantica` (embeddings pgvector), `hibrida` (ambos, semantica primeiro)
 - `--limite` (opcional, default 10): Maximo de resultados
 - `--diretorio` (opcional): Filtrar por subdiretorio (pops, visao-geral, operacional, etc.)
 
-**Retorno:** Lista de arquivos com trechos relevantes.
+**Retorno:** Lista de arquivos com trechos relevantes, similaridade (modo semantica/hibrida) e fonte de cada resultado.
+
+**Nota:** Modo `semantica` e `hibrida` requerem embeddings indexados (rodar `ssw_indexer.py` primeiro) e `VOYAGE_API_KEY` configurada.
 
 ### 2. `resolver_opcao_ssw.py`
 

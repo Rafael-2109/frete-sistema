@@ -76,14 +76,39 @@
 - [x] Notificacao automatica? → **NAO VERIFICAVEL** na tela — sem campo ou indicador
 - [x] Relatorio tempo medio resolucao? → **PARCIAL** — exportacao Excel (opcoes E e X no campo t_vid_rel) permite analise post-hoc
 
+### 7. Opcao 442 — Solicitar Credito/Debito em CTRC/Fatura — 2 marcadores
+
+**Arquivo**: POP-C04 (Custos Extras) | **SSW interno**: ssw0145
+**DESCOBERTA**: Opcao 442 e tela de SOLICITACAO e CONSULTA (nao cadastro). Titulo real: "Solicitar Crédito/Débito em CTRC/Fatura". Menu: Contas a Receber > Cobranca.
+
+**Verificacoes**:
+- [x] Existe credito alem de debito? → **SIM** — titulo confirma ambos
+- [x] Lista de tipos no dropdown? → **NAO HA dropdown** — busca por CTRC (f2/f3) ou Fatura (f6) com filtros de data
+
+**Campos reais (8 inputs visiveis)**:
+- `cod_emp_ctb` (Empresa, readOnly, default "01")
+- `f2` (Dominio CTRC, maxlen=3) + `f3` (Numero CTRC com DV, maxlen=7)
+- `f6` (Numero Fatura com DV, maxlen=8)
+- `f9`/`f10` (Emissao CT-e/fatura inicio/fim, ddmmaa)
+- `f11`/`f12` (Data credito/debito inicio/fim, ddmmaa)
+
+### 8. Opcao 436 — Faturamento Geral — 2 marcadores
+
+**Arquivo**: POP-E03 (Faturamento Automatico) | **SSW interno**: ssw0055
+**DESCOBERTA**: Formulario MASSIVO com 104 inputs visiveis. Dois campos de tipo: `tp_frete` (C/F/A) e `tp_doc` (20 tipos via lookup). Nao existe tipo "FOB Dirigido" nem "K" (Peso KG).
+
+**Verificacoes**:
+- [x] Tipo "FOB Dirigido" existe? → **NAO** — `tp_frete` aceita C/F/A. "FOB Dirigido" = FOB (F) + CNPJ pagador especifico
+- [x] Tipo "K" (Peso KG) existe? → **NAO** — 20 tipos sao todos CT-e/subcontrato. Faturamento por peso e configuracao comercial
+
 ---
 
 ## Prioridade BAIXA — POPs com marcadores contextuais (PARCIALMENTE VERIFICADOS)
 
 ### 7. POP-C04 (Custos Extras) — 4 marcadores
 - [x] Nome exato da opcao TDE no menu SSW → **459 NAO e cadastro TDE** — e "Adicionais Disponiveis para Faturar". Cadastro real provavelmente na opcao 442
-- [ ] Lista de tipos disponiveis no dropdown → Precisa verificar opcao 442 (Credito/Debito CTRC/Fatura)
-- [ ] Existe opcao "credito" alem de "debito"? → Precisa verificar opcao 442
+- [x] Lista de tipos disponiveis no dropdown → **NAO HA DROPDOWN na 442**. Opcao 442 (ssw0145) e tela de SOLICITACAO/CONSULTA de credito/debito, com filtros por CTRC (f2/f3), Fatura (f6), datas emissao (f9/f10) e datas credito/debito (f11/f12). Tipos sao propriedade dos registros, nao filtro pre-selecao
+- [x] Existe opcao "credito" alem de "debito"? → **SIM** — titulo da opcao 442 e "Solicitar **Credito/Debito** em CTRC/Fatura". Ambos tipos sao suportados
 - [ ] Adicionais aparecem em coluna separada ou somados na fatura? → Precisa testar faturamento real
 
 ### 8. POP-C03 (CTe Complementar) — 1 marcador
@@ -93,8 +118,16 @@
 - [ ] CCF ajustada apos cancelamento? Estorno automatico? → Precisa testar com CTe real
 
 ### 10. POP-E03 (Faturamento Automatico) — 2 marcadores
-- [ ] Tipo "FOB Dirigido" existe na tabela de tipos? → Precisa verificar opcao 384 ou 436
-- [ ] Tipo "K" (Peso KG) existe na tabela de tipos? → Precisa verificar opcao 384 ou 436
+
+**Opcao 436** (ssw0055, "Faturamento Geral") verificada em 16/02/2026. Dois campos de tipo distintos:
+
+**`tp_frete`** (Tipo de frete): `C` = CIF, `F` = FOB, `A` = Ambos (3 opcoes)
+
+**`tp_doc`** (Tipo do documento, 20 opcoes via lookup `find_doc`):
+N=CT-e Normal, D=CT-e Devolucao, R=CT-e Reversa, F=CT-e Carga Fechada, H=CT-e Redespacho Transferencia, 3=Subcontrato recepcao, S=Subcontrato recepcao nao fiscal, 4=Subcontrato para Carga Fechada, 5=Subcontrato para Carga Fechada nao fiscal, 6=Subcontrato expedicao, 1=Subcontrato expedicao nao fiscal, U=CT-e Redespacho Destino, O=RPS para Subcontratacao, M=NFPS, A=CT-e Agendamento, P=CT-e Paletizacao, E=CT-e Estadia, Z=CT-e Armazenagem, 2=CT-e Reentrega, Y=CT-e Redespacho Origem
+
+- [x] Tipo "FOB Dirigido" existe na tabela de tipos? → **NAO como tipo separado**. `tp_frete` aceita apenas C/F/A. "FOB Dirigido" e conceito de negocio (FOB com pagador especifico via campo `cnpj_cli_pag`), nao um tipo do sistema. O frete FOB (F) combinado com o CNPJ do pagador realiza o "FOB Dirigido"
+- [x] Tipo "K" (Peso KG) existe na tabela de tipos? → **NAO**. Os 20 tipos de documento sao todos baseados em tipo de CT-e/subcontrato (N/D/R/F/H/3/S/4/5/6/1/U/O/M/A/P/E/Z/2/Y). Nao existe tipo "K" ou "Peso KG" na tabela de tipos. Faturamento por peso seria configuracao do CTRC/tabela comercial, nao tipo de faturamento
 
 ### 11. POP-F05 (Bloqueio Financeiro) — 1 marcador
 - [x] Motivo do bloqueio visivel na tela? → **SIM** — campo f1 "Motivo" (texto livre, maxlen=60) na secao 1 da tela 462
@@ -132,10 +165,11 @@ Quando o usuario pedir para verificar marcadores [CONFIRMAR]:
 
 | Status | Quantidade | Detalhes |
 |--------|------------|---------|
-| **Verificados** | 28 | 6 opcoes navegadas e documentadas (062, 459, 462, 437, 515, 108) + 007, 523 |
-| **Pendentes (via SSW)** | 5 | POP-C04 (2x opcao 442), POP-C06 (1x teste), POP-E03 (2x opcao 384) |
+| **Verificados** | 32 | 9 opcoes navegadas (062, 459, 462, 437, 515, 108, 442, 384, 436) + 007, 523 |
+| **Pendentes (via SSW)** | 1 | POP-C06 (1x cancelamento CTe — requer teste com CTe real) |
+| **Pendentes (teste real)** | 1 | POP-C04 (adicionais na fatura — requer faturamento real) |
 | **NAO verificaveis** | 9 | POP-G02 (5x ESSOR), POP-G04 (2x SEFAZ/legislacao), POP-G02 (2x ESSOR+lei) |
-| **Total original** | 42 | 28+5+9 = 42 |
+| **Total original** | 42 | 32+1+1+9 = 43 (1 extra por desmembramento POP-C04) |
 
 ---
 
@@ -146,3 +180,4 @@ Quando o usuario pedir para verificar marcadores [CONFIRMAR]:
 | 2026-02-16 | Checklist criado com 42 marcadores identificados (28 verificaveis via SSW, 14 dependem de terceiros) |
 | 2026-02-16 | 5 marcadores resolvidos via cross-reference (062:62-63, 459:38-39, 515:47). Total: 37 pendentes (23 verificaveis via SSW) |
 | 2026-02-16 | **28 marcadores verificados via Playwright** (script v3 com captura de popup). Descobertas criticas: 062 e relatorio (NAO config), 459 e consulta (NAO cadastro), 462 tem 3 secoes (individual + manifesto + relatorio). 5 marcadores restantes requerem opcoes adicionais (442, 384) ou testes com dados reais. Docs 062, 459, 462, 437, 515, 108 atualizados com campos reais |
+| 2026-02-16 | **4 marcadores adicionais verificados via Playwright** (opcoes 442, 384, 436). Descobertas: 442 (ssw0145) e tela de solicitacao/consulta credito+debito (ambos suportados). 436 (ssw0055) tem 104 inputs, 20 tipos de documento (nenhum e "K"/Peso KG), tp_frete aceita C/F/A (nao existe "FOB Dirigido" como tipo). Restam apenas 2 pendentes (cancelamento CTe real + teste faturamento real) + 9 nao-verificaveis |

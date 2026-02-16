@@ -185,6 +185,13 @@
   ],
   "indices": [
     {
+      "name": "ix_lancamento_comprovante_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_lancamento_comprovante_odoo_move_line_id",
       "columns": [
         "odoo_move_line_id"
@@ -218,13 +225,6 @@
       "columns": [
         "nf_numero",
         "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lancamento_comprovante_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     }
