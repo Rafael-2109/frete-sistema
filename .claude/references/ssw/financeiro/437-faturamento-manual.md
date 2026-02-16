@@ -1,8 +1,9 @@
 # Opcao 437 — Faturamento Manual
 
-> **Modulo**: Financeiro
+> **Modulo**: Contas a Receber / Faturamento (menu: Contas a Receber > Faturamento > 437)
 > **Status CarVia**: ATIVO (E02)
 > **Atualizado em**: 2026-02-16
+> **SSW interno**: ssw0114 | Verificado via Playwright em 16/02/2026
 
 ## Funcao
 
@@ -37,7 +38,9 @@ Permite faturar CTRCs manualmente, selecionando individualmente quais documentos
 
 ## Campos / Interface
 
-> **[CONFIRMAR]**: Campos inferidos do POP-E02 e da documentacao da opcao 436. Validar detalhes no ambiente SSW real.
+> **Verificado via Playwright em 16/02/2026 contra o SSW real.**
+>
+> Campos reais da tela ssw0114 (24 inputs visiveis):
 
 ### Tela Inicial
 

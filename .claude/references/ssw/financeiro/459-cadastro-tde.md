@@ -1,12 +1,13 @@
 # Opcao 459 — Relacao de Adicionais (Debitos e Creditos)
 
-> **Modulo**: Financeiro
-> **Status CarVia**: NAO CONHECE
+> **Modulo**: Contas a Receber / CTRCs disponíveis (menu: Contas a Receber > CTRCs disponíveis > 459)
+> **Status CarVia**: ACESSIVEL — tela de consulta/exclusao de adicionais disponiveis para faturamento
 > **Atualizado em**: 2026-02-16
+> **SSW interno**: ssw0182 | Verificado via Playwright em 16/02/2026
 
 ## Funcao
 
-Cadastra e gerencia adicionais financeiros (debitos e creditos) vinculados a CTRCs, que serao incluidos automaticamente no faturamento. Adicionais representam custos extras nao previstos no CTe original (debitos ao cliente) ou descontos/bonificacoes (creditos ao cliente). Exemplos comuns: TDE (Taxa de Dificuldade de Entrega), diarias de caminhao, pernoites, taxas de agendamento, re-entregas, descontos comerciais.
+**CORRECAO**: A opcao 459 NAO e um cadastro de adicionais. O titulo real e **"Adicionais Disponíveis para Faturar"**. E uma tela de **consulta e exclusao** de adicionais ja registrados que estao disponiveis para entrar no faturamento. A opcao permite listar adicionais por periodo e empresa, e tambem excluir adicionais selecionados.
 
 ## Quando Usar
 
@@ -18,26 +19,36 @@ Cadastra e gerencia adicionais financeiros (debitos e creditos) vinculados a CTR
 
 ## Pre-requisitos
 
-- CTe original autorizado pelo SEFAZ (opcao 007)
-- Evento gerador do custo documentado (foto, relatorio, confirmacao do cliente)
-- Valor do adicional definido (tabela contratual ou negociacao)
-- [CONFIRMAR: se e necessario tipo/codigo de adicional pre-cadastrado]
+- Adicionais ja registrados no sistema (cadastro acontece em OUTRA opcao, provavelmente 442)
+- Adicionais disponiveis (nao faturados)
 
-## Campos / Interface
+## Campos / Interface — VERIFICADOS
 
-> **[CONFIRMAR]**: Campos inferidos do POP-C04 e das referencias nas opcoes 435, 436 e 437. Validar detalhes no ambiente SSW real.
+> **Verificado via Playwright em 16/02/2026 contra o SSW real.**
 
-### Tela Principal
+### Secao 1: Consulta de Adicionais
 
-| Campo | Obrigatorio | Descricao |
-|-------|-------------|-----------|
-| **CTe / CTRC** | Sim | Serie e numero do CTe ao qual o adicional sera vinculado |
-| **Tipo** | Sim | Debito (cobrar do cliente) ou Credito (desconto/bonificacao ao cliente) |
-| **[CONFIRMAR: Codigo adicional]** | [CONFIRMAR] | Pode haver tipos pre-cadastrados (TDE, diaria, pernoite, agendamento, etc.) |
-| **Valor** | Sim | Valor monetario do adicional (R$) |
-| **Descricao / Justificativa** | Sim | Texto explicativo do motivo do adicional (confirmado: POP-C04:75 — "Justificativa (texto curto)") |
-| **Data do evento** | Sim | Data em que ocorreu o evento gerador (confirmado: POP-C04:61-62) |
-| **Cliente** | Automatico | CNPJ do cliente — preenchido automaticamente pelo CTe |
+| Campo | Name/ID | Obrigatorio | Descricao |
+|-------|---------|-------------|-----------|
+| **Empresa** | cod_emp_ctb | Sim | Codigo da empresa contabil (default: "01"). Link para lista de empresas |
+| **Periodo de inclusao Adicional (inicio)** | f2 / id=2 | Sim | Data inicio no formato ddmmaa (maxlen=6) |
+| **Periodo de inclusao Adicional (fim)** | f3 / id=3 | Sim | Data fim no formato ddmmaa (maxlen=6) |
+| **CNPJ do cliente** | f5 / id=5 | Opcional | CNPJ para filtrar por cliente (maxlen=14). Link "findcli" abre lookup |
+
+### Secao 2: Exclusao de Adicionais
+
+| Acao | Botao | Descricao |
+|------|-------|-----------|
+| **Listar para exclusao** | ► (`ajaxEnvia('EXC_LIS', 0)`) | Relaciona adicionais para selecionar e excluir |
+
+### Acoes Disponiveis
+
+| Botao | Acao |
+|-------|------|
+| **► (Pesquisar)** | `ajaxEnvia('PES', 0)` — lista adicionais disponiveis no periodo |
+| **► (Excluir lista)** | `ajaxEnvia('EXC_LIS', 0)` — relaciona adicionais para exclusao |
+| **×** | `btnClose()` — fecha/limpa |
+| **?** | Abre ajuda SSW |
 
 ### Tipos Comuns de Adicionais (Debitos)
 
@@ -94,16 +105,15 @@ Cadastra e gerencia adicionais financeiros (debitos e creditos) vinculados a CTR
 | 457 | Manutencao de faturas — pode adicionar debito/credito a fatura existente |
 | 462 | Bloqueio financeiro — CTRCs bloqueados nao aparecem, adicionais associados tambem nao |
 | 007 | Emissao CTe — alternativa: emitir CTe complementar (POP-C03) em vez de adicional |
-| 523 | Cobranca estadia entrega — pode estar relacionado a cobranca de diarias [CONFIRMAR] |
+| 523 | Horas de Estadia em Entregas (ssw0956) — relatorio de tempo retido, NAO cadastro de diarias |
 
 ## Observacoes e Gotchas
 
-- **Cadastrar ANTES de faturar**: Adicionais nao cadastrados nao aparecem na fatura. Verificar opcao 459 antes de usar 436/437
+- **Opcao 459 NAO cadastra adicionais**: Apenas CONSULTA e EXCLUI adicionais ja registrados. O cadastro real acontece em outra opcao (provavelmente 442 — Credito/Debito em CTRC/Fatura)
+- **Dois modos**: Pesquisar (listar adicionais por periodo/empresa/cliente) e Excluir (relacionar adicionais para remocao)
 - **Credito maior que debito**: Se creditos (descontos) forem maiores que soma dos fretes + debitos, a fatura nao e gerada
 - **CTe ja faturado**: Se CTe ja foi faturado, nao e possivel vincular novo adicional ao CTe. Usar opcao 457 (manutencao de faturas) para adicionar debito/credito direto na fatura
-- **Separacao de faturas**: A opcao 384 pode configurar separacao por adicionais/abatimentos (codigo 5), gerando faturas separadas para adicionais
-- **Alternativa para custos formais**: Para custos extras que precisam de documento fiscal, usar CTe complementar (opcao 007, POP-C03) em vez de adicional
-- **[CONFIRMAR]**: Verificar se existe relatorio de adicionais por cliente/periodo para controle gerencial
+- **Opcao 523 e relatorio de estadia**: Titulo real "Horas de Estadia em Entregas" (ssw0956) — consulta tempos, NAO cadastra diarias
 
 ## POPs Relacionados
 
@@ -122,8 +132,8 @@ Cadastra e gerencia adicionais financeiros (debitos e creditos) vinculados a CTR
 
 | Aspecto | Status |
 |---------|--------|
-| **Adocao** | NAO CONHECE — Rafael nao sabe onde cadastrar custos extras no SSW |
-| **Hoje** | Custos extras anotados em planilha, "encaixados" na proxima cotacao, ou simplesmente nao cobrados (prejuizo) |
-| **Executor futuro** | Rafael (registro) / Jaqueline (faturamento) |
-| **Impacto** | Custos extras nao cadastrados = nao aparecem na fatura = prejuizo |
+| **Adocao** | VERIFICADO — tela acessivel (consulta/exclusao, NAO cadastro) |
+| **Hoje** | Custos extras anotados em planilha. Para CADASTRAR, usar opcao 442 (Credito/Debito CTRC/Fatura), depois 459 para consultar |
+| **Executor futuro** | Rafael (registro via 442) / Jaqueline (faturamento via 436/437) |
+| **Impacto** | Custos extras nao cadastrados na 442 = nao aparecem na 459 = nao sao faturados = prejuizo |
 | **POPs dependentes** | POP-C04 |

@@ -1,8 +1,9 @@
 # Opcao 515 — SPED Contribuicoes (PIS/COFINS)
 
-> **Modulo**: Fiscal
+> **Modulo**: Fiscal / IR e PIS/COFINS (menu: Fiscal > IR e PIS/COFINS > 515)
 > **Status CarVia**: EXTERNO (contabilidade externa executa)
 > **Atualizado em**: 2026-02-16
+> **SSW interno**: ssw1018 | Verificado via Playwright em 16/02/2026
 
 ## Funcao
 
@@ -39,13 +40,59 @@ Gera o arquivo SPED Contribuicoes (EFD-Contribuicoes) para envio a Receita Feder
 
 ## Campos / Interface
 
-> **[CONFIRMAR]**: Campos inferidos da documentacao do POP-G04 e da opcao 512 (estrutura similar). Validar detalhes no ambiente SSW real.
+> **Verificado via Playwright em 16/02/2026 contra o SSW real.**
+>
+> A tela ssw1018 tem 28 inputs visiveis — muito mais completa que o inferido.
 
-| Campo | Obrigatorio | Descricao |
-|-------|-------------|-----------|
-| **Periodo** | Sim | Mes/ano de apuracao (formato MM/AAAA) |
-| **CNPJ / Raiz** | Sim | Selecao por raiz de CNPJ — diferente da 512 que usa IE (confirmado: proprio doc 515:11-21 diferencia claramente) |
-| **[CONFIRMAR: Filtros adicionais]** | [CONFIRMAR] | Pode haver filtros por unidade, empresa ou regime |
+### Campos Principais
+
+| Campo | Name/ID | Obrigatorio | Descricao |
+|-------|---------|-------------|-----------|
+| **CNPJ** | cnpj_emp | Sim | CNPJ da empresa (default: 62312605000175, maxlen=14). Link para lookup de unidades |
+| **Periodo de referencia (inicio)** | per_ref_ini | Sim | Formato ddmmaa (maxlen=6) |
+| **Periodo de referencia (fim)** | per_ref_fin | Sim | Formato ddmmaa (maxlen=6) |
+| **Periodo extemporaneo (inicio)** | per_ext_ini | Opc | Formato ddmmaa (maxlen=6). Para declaracoes fora do prazo |
+| **Periodo extemporaneo (fim)** | per_ext_fin | Opc | Formato ddmmaa (maxlen=6) |
+| **Tipo de escrituracao** | tp_escrituracao | Sim | "0" = Original, "1" = Retificadora (maxlen=1, default: 0) |
+| **Referencia** | referencia | Sim | "X" = XML, "P" = Contas a Pagar (maxlen=1, default: P) |
+| **Objetivo** | objetivo | Sim | "S" = Simulacao, "E" = Envio (maxlen=1, default: S) |
+| **Usa contab Credito a recuperar** | lancto_contab | Sim | "S" = Sim, "N" = Nao (maxlen=1, default: N) |
+| **Relatorio Conferencia Excel** | excel | Sim | "S" = Sim, "N" = Nao (maxlen=1, default: N) |
+| **Numero recibo anterior** | nro_recib_ant | Opc | So para Tipo 1 — Retificadora (maxlen=41) |
+| **Base calc sobre rendimento aplicacao** | base_calc_rend_aplica | Opc | Valor monetario (maxlen=18) |
+| **Base calc sobre outras receitas** | base_calc_outras_receitas | Opc | Valor monetario (maxlen=18) |
+| **Valor credito PIS periodo anterior** | vlr_cred_pis_per_ant | Opc | Valor monetario (maxlen=15) |
+| **Valor credito COFINS periodo anterior** | vlr_cred_cofins_per_ant | Opc | Valor monetario (maxlen=15) |
+| **Base calculo DEBITO PIS/COFINS** | deduz_icms_debito | Sim | "0" = Nao deduzir ICMS, "1" = Deduzir ICMS, "2" = Deduzir ICMS recolhido SPED FISCAL (maxlen=1, default: 1) |
+
+### Dados do Contabilista
+
+| Campo | Name/ID | Descricao |
+|-------|---------|-----------|
+| Nome | contab_nome | Nome completo (maxlen=40) |
+| CPF | contab_cpf | CPF do contabilista (maxlen=11) |
+| CRC | contab_crc | Registro no CRC (maxlen=11) |
+| CNPJ | contab_cnpj | CNPJ do escritorio (maxlen=14) |
+| CEP | contab_cep | CEP (maxlen=8) |
+| Endereco/Numero/Complemento | contab_end / contab_numero / contab_comple | Endereco completo |
+| Bairro | contab_bairro | Bairro (maxlen=40) |
+| Fone | contab_ddd_fone / contab_fone | DDD (maxlen=2) + Fone (maxlen=8) |
+| E-mail | contab_email | E-mail do contabilista (maxlen=40) |
+
+### Acoes Adicionais
+
+| Botao | Acao |
+|-------|------|
+| **Cadastro de Contas contabeis** | `ajaxEnvia('TELA_CONTAS', 1)` — abre tela auxiliar |
+| **ICMS recolhido SPED FISCAL** | `ajaxEnvia('TELA_DEDUCAO', 1)` — abre tela de deducoes |
+
+### Campos Inferidos vs Reais
+
+| Inferido | Status Real |
+|----------|-------------|
+| Filtros por unidade/empresa/regime | **PARCIAL** — CNPJ filtra empresa; tipo escrituracao e referencia sao controles, nao filtros |
+| Log/historico de geracoes anteriores | **NAO VISIVEL** na tela — pode existir internamente |
+| Integracao direta com Receitanet | **NAO** — gera arquivo para transmissao manual (campo "Objetivo" S/E) |
 
 ## Fluxo de Uso
 

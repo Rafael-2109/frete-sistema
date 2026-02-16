@@ -1,8 +1,9 @@
 # Opcao 108 — Instrucoes para Ocorrencias de Entrega
 
-> **Modulo**: Operacional
-> **Status CarVia**: NAO IMPLANTADO
+> **Modulo**: Cliente / Ocorrências (menu: Cliente > Ocorrências > 108)
+> **Status CarVia**: ACESSIVEL — NAO IMPLANTADO operacionalmente
 > **Atualizado em**: 2026-02-16
+> **SSW interno**: ssw0118 | Verificado via Playwright em 16/02/2026
 
 ## Funcao
 
@@ -31,32 +32,68 @@ Gerencia instrucoes para CTRCs com ocorrencias pendentes de resolucao. Enquanto 
 
 - Ocorrencia registrada previamente (opcao 033 para transferencia ou 038 para entrega)
 - Tabela de ocorrencias configurada (opcao 405)
-- Acesso com perfil operacional na unidade destino
-- [CONFIRMAR: se unidade especifica e necessaria para acessar]
+- Acesso com perfil operacional na unidade
 
-## Campos / Interface
+## Campos / Interface — VERIFICADOS
 
-> **[CONFIRMAR]**: Os campos abaixo sao inferidos do contexto do POP-D06 e da documentacao da opcao 133. Validar no ambiente SSW real.
+> **Verificado via Playwright em 16/02/2026 contra o SSW real.**
+>
+> Titulo real: "Instruções para ocorrências" (ssw0118). Tela muito completa com 12 inputs visiveis e multiplas secoes de filtro/pesquisa.
 
-### Tela Inicial — Lista de CTRCs Pendentes
+### Secao 1: Sem Instrucao
 
-| Campo | Descricao |
-|-------|-----------|
-| **CTRC** | Numero do CTRC com ocorrencia pendente |
-| **Ocorrencia** | Codigo e descricao da ocorrencia (opcao 405) |
-| **Data ocorrencia** | Data/hora em que a ocorrencia foi registrada |
-| **Unidade origem** | Unidade que expediu o CTRC |
-| **Status** | Aguardando instrucao / Instrucao enviada / Resolvido |
-| **[CONFIRMAR: Dias pendente]** | Tempo desde registro da ocorrencia |
+| Campo | Name/ID | Descricao |
+|-------|---------|-----------|
+| **Sem instrucao (S/N)** | t_sem_instr | Default "S" — filtra CTRCs sem instrucao (maxlen=2) |
 
-### Tela de Instrucao
+**Acao**: ► `ajaxEnvia('PES_SEM', 1)` — pesquisa CTRCs sem instrucao
 
-| Campo | Descricao |
-|-------|-----------|
-| **Instrucao** | Texto descritivo da acao a ser tomada (ex: "Reagendar entrega para 20/02", "Devolver ao remetente") |
-| **[CONFIRMAR: Tipo de instrucao]** | Pode haver tipos pre-cadastrados (reagendar, devolver, descartar, etc.) |
-| **[CONFIRMAR: Data prevista]** | Data prevista para resolucao |
-| **Observacoes** | Campo adicional para registro de tentativas de contato |
+### Secao 2: Filtros por Tipo
+
+| Campo | Name/ID | Descricao |
+|-------|---------|-----------|
+| **Codigo de ocorrencia** | t_codigo / msgoco | Codigo da ocorrencia (maxlen=2) + descricao. Link "findocor" abre lookup |
+| **Sigla do subcontratante** | t_sigla_sub | Filtra por parceiro (maxlen=5). Link "findtra" |
+| **CNPJ do cliente** | t_cnpj_cli | Filtra por cliente (maxlen=14). Link "findcli" |
+| **CNPJ do grupo** | t_cnpj_grupo | Filtra por grupo economico (maxlen=14). Link para lookup |
+| **Usuario** | t_usuario | Filtra por usuario registrador (maxlen=8). Link "findusu" |
+| **Conferente** | t_conferente | Filtra por conferente (maxlen=4). Link "findcon" |
+
+Cada filtro tem seu proprio ► de pesquisa independente (`PES_OCO`, `PES_SUB`, `PES_CLI`, `PES_GRU`, `PES_USU`, `PES_CON`).
+
+### Secao 3: Pesquisa por Responsabilidade
+
+| Botao | Acao |
+|-------|------|
+| **Ocorrencias resp. cliente com origem aqui** | `ajaxEnvia('PES_RES', 1)` |
+| **Ocorrencias resp. transportadora** | `ajaxEnvia('PES_RE2', 1)` |
+
+### Secao 4: Relatorio por Periodo
+
+| Campo | Name/ID | Descricao |
+|-------|---------|-----------|
+| **Periodo de ocorrencias (inicio)** | t_data_ini_ult | Data inicio ddmmaa (maxlen=6, default: 3 meses atras) |
+| **Periodo de ocorrencias (fim)** | t_data_fim_ult | Data fim ddmmaa (maxlen=6, default: hoje) |
+| **Selecionar** | t_sel_atrasados | "A" = atrasados, "T" = todos (maxlen=1, default: T) |
+| **Mostrar em** | t_vid_rel | "V" = video, "R" = relatorio, "E" = excel ocor+instr, "X" = excel ocorrencias (maxlen=1, default: V) |
+
+### Acoes Adicionais
+
+| Botao | Acao |
+|-------|------|
+| **Minhas Ocorrencias** | `ajaxEnvia('', 1, 'ssw1184')` — abre tela de ocorrencias do usuario |
+| **Localizacao de SOBRAS** | `ajaxEnvia('SOB', 0)` — busca sobras nao identificadas |
+
+### Campos Inferidos vs Reais
+
+| Inferido | Status Real |
+|----------|-------------|
+| Status (aguardando/enviada/resolvido) | **NAO como campo visivel** — filtro "Sem instrucao S/N" indica se tem ou nao instrucao |
+| Dias pendente | **NAO como campo** — periodo de datas serve este proposito |
+| Tipo de instrucao (reagendar/devolver/descartar) | **NAO EXISTE** — instrucao e acao dentro do resultado da pesquisa, nao tipo pre-cadastrado |
+| Data prevista resolucao | **NAO EXISTE** na tela de filtros |
+| Notificacao automatica | **NAO VERIFICAVEL** na tela — pode existir internamente |
+| Relatorio tempo medio resolucao | **SIM** — exportacao para Excel (opcoes E e X no campo t_vid_rel) permite analise |
 
 ## Fluxo de Uso
 
