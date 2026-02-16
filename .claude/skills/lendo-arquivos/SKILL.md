@@ -1,6 +1,17 @@
 ---
 name: lendo-arquivos
-description: "Le arquivos Excel (.xlsx, .xls) e CSV enviados pelo usuario. Use quando o usuario anexar um arquivo e pedir para analisar, importar ou processar os dados. Retorna o conteudo como JSON para analise."
+description: |
+  Le arquivos Excel (.xlsx, .xls) e CSV enviados pelo usuario. Retorna conteudo como JSON para analise.
+
+  USAR QUANDO:
+  - Usuario anexou arquivo: "analise essa planilha", "o que tem nesse Excel?"
+  - Importar dados: "importa os dados desse CSV", "processa esse arquivo"
+  - Analisar upload: "confere os valores dessa planilha", "quantas linhas tem?"
+
+  NAO USAR QUANDO:
+  - CRIAR/exportar arquivo para download → usar **exportando-arquivos**
+  - Ler arquivo de codigo/texto do projeto → usar Read tool
+  - Consultar dados do sistema → usar skill de consulta apropriada
 ---
 
 # Lendo Arquivos - Processar Uploads do Usuario

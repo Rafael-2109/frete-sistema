@@ -1,39 +1,71 @@
 ---
 name: descobrindo-odoo-estrutura
-description: "Descobre campos e estrutura de qualquer modelo do Odoo. Lista campos de tabela, busca campo por nome, inspeciona registro, faz consulta generica. Use quando: nao conhecer um modelo Odoo, precisar descobrir nome de campo, explorar estrutura de tabela, consulta em modelo nao mapeado."
+description: |
+  Descobre campos e estrutura de qualquer modelo do Odoo. ULTIMO RECURSO — use apenas quando nenhuma skill Odoo especializada cobre o modelo.
+
+  USAR QUANDO:
+  - Modelo desconhecido: "quais campos tem stock.picking?", "estrutura do modelo X"
+  - Buscar campo: "qual campo guarda codigo de barras?", "campo de CNPJ no res.partner"
+  - Inspecionar registro: "mostra todos os campos do registro 12345", "valor do campo X"
+  - Consulta generica: "busque parceiros com CNPJ 93209765", "registros do modelo Y com filtro Z"
+
+  NAO USAR QUANDO:
+  - Rastrear fluxo de NF/PO/SO → usar **rastreando-odoo**
+  - Criar pagamento/reconciliar extrato → usar **executando-odoo-financeiro**
+  - Split/consolidar PO → usar **conciliando-odoo-po**
+  - Validar match NF x PO → usar **validacao-nf-po**
+  - Recebimento fisico (lotes/quality check) → usar **recebimento-fisico-odoo**
+  - Exportar razao geral → usar **razao-geral-odoo**
+  - Criar nova integracao → usar **integracao-odoo**
 ---
 
-## QUANDO NAO USAR ESTA SKILL (ULTIMO RECURSO)
-Esta skill e ULTIMO RECURSO. Nao use se a tarefa se encaixa em um dominio ja coberto:
-- Validacao/match de NF contra PO (dominio de recebimento Fase 2)
-- Split ou consolidacao de pedidos de compra (dominio de recebimento Fase 3)
-- Preenchimento de lotes ou quality checks (dominio de recebimento Fase 4)
-- Operacoes financeiras: pagamentos, extratos, reconciliacoes
-- Rastrear fluxo documental completo de NF/PO/SO
-- Exportar razao geral ou relatorios contabeis
-- Criar nova integracao (service, route, migration)
+## Quando NAO Usar Esta Skill
+
+| Situacao | Skill Correta | Por que? |
+|----------|--------------|----------|
+| Rastrear fluxo NF/PO/SO | **rastreando-odoo** | Rastreamento usa modelos ja mapeados |
+| Validar match NF x PO | **validacao-nf-po** | Fase 2, dominio especifico |
+| Split/consolidar PO | **conciliando-odoo-po** | Fase 3, operacao de PO |
+| Recebimento fisico (lotes/quality check) | **recebimento-fisico-odoo** | Fase 4, armazem |
+| Pagamentos/extratos/reconciliacao | **executando-odoo-financeiro** | Financeiro |
+| Exportar razao geral | **razao-geral-odoo** | Relatorio contabil |
+| Criar integracao (service/route) | **integracao-odoo** | Desenvolvimento |
+
+---
 
 # Descobrindo Odoo Estrutura
 
-Skill para **descoberta de campos e estrutura** de modelos do Odoo.
+Skill de **ULTIMO RECURSO** para descoberta de campos e estrutura de modelos Odoo.
 
-> **QUANDO USAR:** Quando o Agent nao conhecer um modelo/campo especifico do Odoo
-> e precisar descobrir a estrutura para enriquecer a resposta ao usuario.
+## DECISION TREE — Qual Operacao Usar?
 
-## Casos de Uso
+| Se a pergunta menciona... | Operacao | Flag |
+|----------------------------|----------|------|
+| **Listar campos de modelo** | Listar todos os campos | `--listar-campos` |
+| **Buscar campo por nome** | Buscar em nomes/descricoes | `--buscar-campo TERMO` |
+| **Ver valores de registro** | Inspecionar registro | `--inspecionar ID` |
+| **Consulta com filtro** | Consulta generica | `--filtro '[JSON]'` |
 
-1. **Usuario pergunta sobre dado que nao esta mapeado**
-   - Agent usa esta skill para descobrir campos
-   - Retorna informacao enriquecida ao usuario
+### Regras de Decisao
 
-2. **Implementar nova consulta**
-   - Descobrir estrutura do modelo
-   - Mapear campos relevantes
-   - Documentar em rastreando-odoo (references/relacionamentos.md)
+1. **Modelo desconhecido** → `--listar-campos` primeiro para mapear estrutura
+2. **Campo especifico** → `--buscar-campo` com termo (ex: "barcode", "cnpj")
+3. **Debug de valor** → `--inspecionar ID` para ver todos os campos de um registro
+4. **Consulta com dados** → `--filtro` + `--campos` + `--limit`
 
-3. **Debug de integracoes**
-   - Inspecionar registro especifico
-   - Verificar valores de campos
+## Regras de Negocio (Anti-Alucinacao)
+
+### O Agente PODE Afirmar
+- Nomes e tipos de campos retornados pelo Odoo
+- Valores de registros inspecionados
+- Resultados de consultas com filtro
+
+### O Agente NAO PODE Inventar
+- Campos que nao existem no modelo (sem verificar)
+- Relacionamentos nao retornados pela API
+- Valores de campos nao consultados
+
+---
 
 ## Script Disponivel
 

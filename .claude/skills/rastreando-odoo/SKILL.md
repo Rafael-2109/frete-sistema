@@ -24,17 +24,62 @@ description: |
 ---
 
 
-## QUANDO NAO USAR ESTA SKILL
-- Match NF x PO especifico (Fase 2 do recebimento, nao rastreamento geral)
-- Split/consolidar PO (Fase 3, operacao de escrita em POs)
-- Recebimento fisico com lotes/quality checks (Fase 4, operacao no armazem)
-- Criar pagamentos ou reconciliar extratos (operacao financeira de escrita)
-- Explorar modelo Odoo desconhecido (esta skill usa modelos ja mapeados)
-- Criar nova integracao/service (esta skill consulta, nao desenvolve)
+## Quando NAO Usar Esta Skill
+
+| Situacao | Skill Correta | Por que? |
+|----------|--------------|----------|
+| Match NF x PO especifico | **validacao-nf-po** | Fase 2 do recebimento, nao rastreamento geral |
+| Split/consolidar PO | **conciliando-odoo-po** | Fase 3, operacao de escrita em POs |
+| Recebimento fisico (lotes/quality check) | **recebimento-fisico-odoo** | Fase 4, operacao no armazem |
+| Criar pagamento ou reconciliar extrato | **executando-odoo-financeiro** | Operacao financeira de escrita |
+| Explorar modelo Odoo desconhecido | **descobrindo-odoo-estrutura** | Esta skill usa modelos ja mapeados |
+| Criar integracao/service | **integracao-odoo** | Esta skill consulta, nao desenvolve |
+| Exportar razao geral | **razao-geral-odoo** | Relatorio contabil, nao rastreamento |
+
+---
 
 # Rastreando Odoo
 
 Rastreia fluxo completo de documentos e executa auditorias financeiras.
+
+## DECISION TREE — Qual Script Usar?
+
+### Mapeamento Rapido
+
+| Se a pergunta menciona... | Script | Parametros |
+|----------------------------|--------|------------|
+| **NF, nota fiscal, chave NF-e** | `rastrear.py` | `"NF 12345"` ou `"3525..."` |
+| **PO, pedido de compra** | `rastrear.py` | `"PO00789"` ou `"C2513147"` |
+| **VCD, VFB, VSC, pedido de venda** | `rastrear.py` | `"VCD123"` |
+| **Parceiro, fornecedor, cliente** | `rastrear.py` | `"Atacadao"` ou CNPJ |
+| **Apenas normalizar/detectar tipo** | `normalizar.py` | `"NF 12345" --json` |
+| **Auditoria faturas de compra** | `auditoria_faturas_compra.py` | `--mes 11 --ano 2025` |
+| **Extrato bancario, conciliacao** | `auditoria_extrato_bancario.py` | `--inicio ... --fim ...` |
+| **Extratos sem vinculo, titulos soltos** | `mapeamento_vinculos_completo.py` | `--inicio ... --fim ...` |
+| **Vincular extrato via planilha** | `vincular_extrato_fatura_excel.py` | `-a planilha.xlsx` |
+
+### Regras de Decisao
+
+1. **Rastreamento de documento unico** → `rastrear.py` (aceita qualquer entrada)
+2. **Apenas identificar tipo** → `normalizar.py --detectar`
+3. **Auditoria em massa** (por periodo) → scripts de auditoria
+4. **Vinculacao bulk via Excel** → `vincular_extrato_fatura_excel.py`
+
+## Regras de Negocio (Anti-Alucinacao)
+
+### O Agente PODE Afirmar
+- Fluxo documental completo (DFE → PO → Fatura → Titulos)
+- Status de pagamento (paid/not_paid/partial)
+- Status de conciliacao (reconciled=True/False)
+- Dados de auditoria (valores, datas, parceiros)
+
+### O Agente NAO PODE Inventar
+- Motivos de nao-pagamento sem evidencia no Odoo
+- Status de documentos nao consultados
+- Vinculos entre documentos sem navegacao real
+- Previsoes de pagamento ou conciliacao
+
+---
 
 ## Fluxos Suportados
 
@@ -52,6 +97,8 @@ Rastreia fluxo completo de documentos e executa auditorias financeiras.
 4. **Retornar JSON** → Estrutura completa com todos os documentos
 
 ## Scripts
+
+**Para parametros completos e retornos JSON**: LER `SCRIPTS.md`
 
 ### [normalizar.py](scripts/normalizar.py)
 

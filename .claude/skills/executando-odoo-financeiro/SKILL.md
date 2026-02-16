@@ -16,15 +16,40 @@ description: |
   - Criar lancamentos fiscais (CTe, despesas extras)
 ---
 
-## QUANDO NAO USAR ESTA SKILL
-- Apenas CONSULTAR/rastrear documentos sem modificar (esta skill EXECUTA operacoes)
-- Explorar modelo Odoo desconhecido (esta skill trabalha com modelos financeiros conhecidos)
-- Validar match NF x PO (este e processo de recebimento, nao financeiro)
-- Exportar balancete/razao geral (existe skill especializada para relatorios contabeis)
+## Quando NAO Usar Esta Skill
+
+| Situacao | Skill Correta | Por que? |
+|----------|--------------|----------|
+| Apenas consultar/rastrear documentos | **rastreando-odoo** | Esta skill EXECUTA, nao consulta |
+| Explorar modelo Odoo desconhecido | **descobrindo-odoo-estrutura** | Esta skill usa modelos financeiros conhecidos |
+| Validar match NF x PO | **validacao-nf-po** | Processo de recebimento, nao financeiro |
+| Exportar balancete/razao geral | **razao-geral-odoo** | Relatorio contabil, nao operacao |
+| Split/consolidar PO | **conciliando-odoo-po** | Operacao de PO, nao financeira |
+| Criar CTe/despesas extras | **integracao-odoo** | Lancamento fiscal, nao financeiro |
+
+---
 
 # Executando Odoo Financeiro
 
 Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-odoo que apenas consulta).
+
+## DECISION TREE — Qual Operacao Usar?
+
+| Se a pergunta menciona... | Operacao | Metodo |
+|----------------------------|----------|--------|
+| **Criar pagamento simples** | Criar payment draft | `_criar_pagamento()` → postar |
+| **Criar pagamento com juros** | Wizard com write-off | `_criar_pagamento_com_writeoff_juros()` |
+| **Baixar titulo** ("marque como pago") | Criar payment + reconciliar | Payment → reconcile |
+| **Reconciliar extrato** | Vincular payment ↔ extrato | `reconcile()` em account.move.line |
+| **Corrigir extrato ja reconciliado** | Fluxo corretivo (7 passos) | Desconciliar → draft → editar → post → re-reconciliar |
+
+### Regras de Decisao
+
+1. **Pagamento SEM juros**: `_criar_pagamento()` → `action_post` → reconcile manual
+2. **Pagamento COM juros** (valor_extrato > saldo_titulo): Wizard `account.payment.register` com `writeoff_account_id`
+3. **APOS criar payment**: SEMPRE reconciliar com extrato (se extrato existe)
+4. **APOS reconciliar extrato**: SEMPRE corrigir 3 campos (conta, partner, rotulo)
+5. **Registros JA reconciliados**: Fluxo CORRETIVO (7 passos) — NUNCA editar direto
 
 ## Operacoes Suportadas
 

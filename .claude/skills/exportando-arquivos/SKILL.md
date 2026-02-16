@@ -1,6 +1,18 @@
 ---
 name: exportando-arquivos
-description: "Gera arquivos Excel, CSV ou JSON para download pelo usuario. Use quando o usuario pedir para exportar dados, criar planilha, gerar relatorio ou baixar informacoes. SEMPRE use esta skill em vez de Write para criar arquivos que o usuario precisa baixar."
+description: |
+  Gera arquivos Excel, CSV ou JSON para download pelo usuario. SEMPRE use esta skill em vez de Write para criar arquivos de download.
+
+  USAR QUANDO:
+  - Exportar dados: "exporte os pedidos para Excel", "gere planilha dos 10 maiores"
+  - Criar relatorio: "gere relatorio de entregas", "relatorio mensal em CSV"
+  - Baixar informacoes: "quero baixar esses dados", "me manda em Excel"
+  - Exportar imagem: "exporte o grafico", "salve screenshot para download"
+
+  NAO USAR QUANDO:
+  - LER arquivo enviado pelo usuario → usar **lendo-arquivos**
+  - Criar arquivo de codigo/config (nao download) → usar Write tool
+  - Consultar dados sem exportar → usar skill de consulta apropriada primeiro
 ---
 
 # Exportando Arquivos - Gerar Downloads para Usuario

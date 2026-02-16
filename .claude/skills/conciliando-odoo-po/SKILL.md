@@ -18,15 +18,40 @@ description: |
   - Validar match NF x PO (este e processo anterior, Fase 2)
 ---
 
-## QUANDO NAO USAR ESTA SKILL
-- Validar match NF x PO (este e Fase 2, anterior a consolidacao)
-- Processar recebimento fisico com lotes/quality check (este e Fase 4, posterior)
-- Operacoes financeiras como pagamentos ou reconciliacao de extratos
-- Apenas consultar/rastrear documentos sem modificar POs
+## Quando NAO Usar Esta Skill
+
+| Situacao | Skill Correta | Por que? |
+|----------|--------------|----------|
+| Validar match NF x PO | **validacao-nf-po** | Fase 2, anterior a consolidacao |
+| Recebimento fisico (lotes/quality check) | **recebimento-fisico-odoo** | Fase 4, posterior |
+| Pagamentos ou reconciliacao de extratos | **executando-odoo-financeiro** | Operacao financeira |
+| Apenas consultar/rastrear documentos | **rastreando-odoo** | Esta skill modifica POs |
+| Explorar modelo Odoo desconhecido | **descobrindo-odoo-estrutura** | Esta skill usa modelos mapeados |
+
+---
 
 # Conciliando Odoo PO
 
 Skill para **EXECUTAR** operacoes de Split e Consolidacao de Pedidos de Compra no Odoo.
+
+## DECISION TREE — Qual Operacao Usar?
+
+| Se a pergunta menciona... | Operacao | Metodo |
+|----------------------------|----------|--------|
+| **Consolidar POs de uma NF** | Consolidacao completa | `consolidar_pos()` |
+| **Simular antes de executar** | Simulacao (dry-run) | `simular_consolidacao()` |
+| **Criar PO Conciliador** | Duplicar PO | `_criar_po_conciliador()` |
+| **Ajustar quantidade** | Reduzir qtd original | `_ajustar_quantidade_linha()` |
+| **Reverter consolidacao** | Desfazer (best-effort) | `reverter_consolidacao()` |
+| **Vincular DFe ao PO** | Escrever dfe_id | `_vincular_dfe_ao_po()` |
+
+### Regras de Decisao
+
+1. **SEMPRE simular ANTES de executar**: `simular_consolidacao()` primeiro
+2. **Consolidacao requer**: ValidacaoNfPoDfe com status='aprovado'
+3. **Multi-PO**: Quando 1 item NF vem de N POs, usa MatchAlocacao
+4. **PO sem saldo**: Pode ser cancelado via `_cancelar_po()`
+5. **Reverter**: Best-effort — pode nao restaurar estado exato
 
 ## Contexto
 
