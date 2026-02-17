@@ -1342,6 +1342,19 @@
     text-decoration: underline;
 }
 
+.message-bubble img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.message-bubble img:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
 .message-bubble p {
     margin: 0.5em 0;
     line-height: 1.5;

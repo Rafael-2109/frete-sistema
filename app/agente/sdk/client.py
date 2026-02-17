@@ -1176,6 +1176,7 @@ Nunca invente informações."""
                 browser_tool_names = [
                     "mcp__browser__browser_navigate",
                     "mcp__browser__browser_snapshot",
+                    "mcp__browser__browser_screenshot",
                     "mcp__browser__browser_click",
                     "mcp__browser__browser_type",
                     "mcp__browser__browser_select_option",
@@ -1191,7 +1192,7 @@ Nunca invente informações."""
                         allowed.append(tool_name)
                 options_dict["allowed_tools"] = allowed
 
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'browser' registrada (11 operações)")
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'browser' registrada (12 operações)")
             else:
                 logger.debug("[AGENT_CLIENT] browser_server é None — playwright não disponível")
         except ImportError:

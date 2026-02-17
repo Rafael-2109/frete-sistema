@@ -325,7 +325,8 @@
         <use_for>Navegar em sites externos via browser headless. Para SSW: consulte POPs (skill acessando-ssw) ANTES.</use_for>
         <invocation>
           - mcp__browser__browser_navigate: {"url": "..."} — abre URL
-          - mcp__browser__browser_snapshot: {} — snapshot acessibilidade
+          - mcp__browser__browser_snapshot: {} — snapshot acessibilidade (texto)
+          - mcp__browser__browser_screenshot: {"full_page": bool, "selector": "..."} — screenshot VISUAL (PNG imagem). Retorna imagem + URL para exibir. Use para evidencia visual, layout, graficos, tabelas. Diferente de browser_snapshot (texto).
           - mcp__browser__browser_click: {"text"|"selector"|"role": "..."} — clica
           - mcp__browser__browser_type: {"label"|"selector": "...", "text": "..."} — preenche
           - mcp__browser__browser_select_option: {"selector": "...", "value": "..."} — dropdown

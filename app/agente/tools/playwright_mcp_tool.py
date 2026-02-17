@@ -14,9 +14,10 @@ Suporte SSW:
     - Login: browser_ssw_login faz login automatico via .env
     - Navegacao: browser_ssw_navigate_option vai direto a uma opcao
 
-Tools expostas (11):
+Tools expostas (12):
     - browser_navigate: abre URL e retorna snapshot
     - browser_snapshot: captura snapshot da pagina atual
+    - browser_screenshot: captura screenshot visual (PNG) da pagina
     - browser_click: clica em elemento por texto/selector/role
     - browser_type: preenche campo por label/selector
     - browser_select_option: seleciona opcao em dropdown
@@ -33,9 +34,12 @@ Referencia SDK:
 
 import atexit
 import asyncio
+import base64
 import logging
 import os
 import threading
+import time
+import uuid
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -372,7 +376,181 @@ try:
             }
 
     # -----------------------------------------------------------------
-    # Tool 3: browser_click
+    # Tool 3: browser_screenshot (screenshot visual PNG)
+    # -----------------------------------------------------------------
+
+    SCREENSHOTS_DIR = os.path.join("/tmp", "agente_files", "screenshots")
+
+    def _cleanup_old_screenshots(max_age_seconds: int = 3600) -> int:
+        """
+        Remove screenshots com mais de max_age_seconds.
+
+        Lazy cleanup — chamado no inicio de cada captura.
+        Limpa PNGs antigos em /tmp/agente_files/screenshots/.
+
+        Returns:
+            Numero de arquivos removidos.
+        """
+        removed = 0
+        try:
+            if not os.path.exists(SCREENSHOTS_DIR):
+                return 0
+            now = time.time()
+            for fname in os.listdir(SCREENSHOTS_DIR):
+                if not fname.endswith(".png"):
+                    continue
+                fpath = os.path.join(SCREENSHOTS_DIR, fname)
+                try:
+                    if now - os.path.getmtime(fpath) > max_age_seconds:
+                        os.remove(fpath)
+                        removed += 1
+                except OSError:
+                    pass
+        except Exception as e:
+            logger.warning(f"[BROWSER] Erro no cleanup de screenshots: {e}")
+        return removed
+
+    def _save_screenshot(png_bytes: bytes, prefix: str = "screenshot") -> str:
+        """
+        Salva PNG em /tmp/agente_files/screenshots/ com nome unico.
+
+        Args:
+            png_bytes: Bytes da imagem PNG.
+            prefix: Prefixo do nome do arquivo.
+
+        Returns:
+            Nome do arquivo salvo (ex: screenshot_abc12345.png).
+        """
+        os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+        short_id = uuid.uuid4().hex[:8]
+        filename = f"{prefix}_{short_id}.png"
+        filepath = os.path.join(SCREENSHOTS_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(png_bytes)
+        return filename
+
+    @tool(
+        "browser_screenshot",
+        (
+            "Captura screenshot VISUAL (imagem PNG) da pagina ou elemento. "
+            "Retorna a imagem para analise visual + URL para exibir ao usuario. "
+            "Diferente de browser_snapshot que retorna apenas texto (acessibilidade). "
+            "Use para: evidencia visual, verificar layout, graficos, tabelas, aparencia. "
+            "Parametros: full_page (bool, default false), selector (string CSS, opcional). "
+            "Exemplos: {} (viewport), {\"full_page\": true} (pagina inteira), "
+            "{\"selector\": \"#tabela\"} (elemento especifico)."
+        ),
+        {
+            "full_page": bool,
+            "selector": str,
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def browser_screenshot(args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Captura screenshot visual (PNG) da pagina ou elemento.
+
+        Retorna dual content:
+        1. ImageContent (base64 PNG) — Claude ve a pagina via Vision
+        2. TextContent com URL — agente inclui ![Screenshot](url) no markdown
+
+        Args:
+            args: {
+                "full_page": bool (default False — viewport only),
+                "selector": str (CSS selector para capturar elemento especifico, opcional),
+            }
+
+        Returns:
+            MCP tool response com [ImageContent, TextContent].
+        """
+        global _page
+        if _page is None:
+            return {
+                "content": [{"type": "text", "text": "Nenhuma pagina aberta. Use browser_navigate primeiro."}],
+                "is_error": True,
+            }
+
+        full_page = args.get("full_page", False)
+        selector = (args.get("selector") or "").strip()
+
+        try:
+            # Lazy cleanup de screenshots antigos (> 1 hora)
+            removed = _cleanup_old_screenshots(max_age_seconds=3600)
+            if removed > 0:
+                logger.info(f"[BROWSER] Cleanup: {removed} screenshots antigos removidos")
+
+            target = _get_active_target()
+
+            # Capturar PNG bytes
+            if selector:
+                # Screenshot de elemento especifico
+                try:
+                    element = target.locator(selector)
+                    png_bytes = await element.screenshot(type="png")
+                    capture_desc = f"elemento '{selector}'"
+                except Exception as e:
+                    return {
+                        "content": [{"type": "text", "text": f"Erro: selector '{selector}' nao encontrado ou nao visivel: {str(e)[:200]}"}],
+                        "is_error": True,
+                    }
+            else:
+                # Screenshot da pagina (viewport ou full_page)
+                png_bytes = await _page.screenshot(type="png", full_page=full_page)
+                capture_desc = "pagina inteira" if full_page else "viewport"
+
+            # Salvar arquivo e gerar URL
+            filename = _save_screenshot(png_bytes)
+            url = f"/agente/api/files/screenshots/{filename}"
+
+            # Codificar em base64 para ImageContent
+            b64_data = base64.b64encode(png_bytes).decode("utf-8")
+
+            # Log de tamanho
+            size_kb = len(png_bytes) / 1024
+            size_mb = size_kb / 1024
+            if size_mb > 5:
+                logger.warning(f"[BROWSER] Screenshot grande: {size_mb:.1f}MB ({capture_desc})")
+            else:
+                logger.info(f"[BROWSER] Screenshot capturado: {size_kb:.0f}KB ({capture_desc}) → {filename}")
+
+            title = await _page.title()
+            page_url = _page.url
+
+            return {
+                "content": [
+                    {
+                        "type": "image",
+                        "data": b64_data,
+                        "mimeType": "image/png",
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            f"Screenshot capturado ({capture_desc}): {size_kb:.0f}KB\n"
+                            f"Pagina: {title} ({page_url})\n"
+                            f"URL da imagem: {url}\n\n"
+                            f"Para exibir ao usuario, inclua no markdown:\n"
+                            f"![Screenshot]({url})"
+                        ),
+                    },
+                ],
+            }
+
+        except Exception as e:
+            error_msg = f"Erro ao capturar screenshot: {str(e)[:300]}"
+            logger.error(f"[BROWSER] {error_msg}", exc_info=True)
+            return {
+                "content": [{"type": "text", "text": error_msg}],
+                "is_error": True,
+            }
+
+    # -----------------------------------------------------------------
+    # Tool 4: browser_click
     # -----------------------------------------------------------------
     @tool(
         "browser_click",
@@ -1184,10 +1362,11 @@ try:
     # =====================================================================
     browser_server = create_sdk_mcp_server(
         name="browser",
-        version="2.0.0",
+        version="2.1.0",
         tools=[
             browser_navigate,
             browser_snapshot,
+            browser_screenshot,
             browser_click,
             browser_type,
             browser_select_option,
@@ -1200,7 +1379,7 @@ try:
         ],
     )
 
-    logger.info("[BROWSER] Custom Tool MCP 'browser' registrado com sucesso (11 tools)")
+    logger.info("[BROWSER] Custom Tool MCP 'browser' registrado com sucesso (12 tools)")
 
 except ImportError as e:
     browser_server = None
