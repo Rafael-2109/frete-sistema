@@ -71,3 +71,11 @@ PRODUCT_SEMANTIC_SEARCH = os.environ.get("PRODUCT_SEMANTIC_SEARCH", "true").lowe
 # Quando True, FavorecidoResolverService e ExtratoMatchingService usam embeddings
 # como complemento a tokenizacao ILIKE para nomes truncados/abreviados
 FINANCIAL_SEMANTIC_SEARCH = os.environ.get("FINANCIAL_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Habilita busca semantica em sessoes do agente
+# Consumers: session_search_tool.py (semantic_search_sessions), routes.py (on-save trigger)
+SESSION_SEMANTIC_SEARCH = os.environ.get("SESSION_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Habilita busca semantica em memorias do agente
+# Consumers: client.py (_load_user_memories_for_context), memory_mcp_tool.py (on-save trigger)
+MEMORY_SEMANTIC_SEARCH = os.environ.get("MEMORY_SEMANTIC_SEARCH", "true").lower() == "true"

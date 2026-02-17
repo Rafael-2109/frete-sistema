@@ -49,15 +49,20 @@ logger = logging.getLogger('sistema_fretes')
 # HELPER: Auto-injeção de memórias do usuário
 # =====================================================================
 
-def _load_user_memories_for_context(user_id: int) -> Optional[str]:
+def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optional[str]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
 
     Chamado pelo UserPromptSubmit hook para injetar memórias
     automaticamente no início de cada turno via additionalContext.
 
+    Quando busca semântica está habilitada e prompt disponível,
+    seleciona memórias por relevância ao prompt atual.
+    Fallback: memórias mais recentes (comportamento original).
+
     Args:
         user_id: ID do usuário no banco
+        prompt: Prompt do usuário (para seleção semântica)
 
     Returns:
         String XML formatada com memórias ou None se vazio
@@ -79,10 +84,48 @@ def _load_user_memories_for_context(user_id: int) -> Optional[str]:
         def _load():
             from ..models import AgentMemory
 
-            memories = AgentMemory.query.filter_by(
-                user_id=user_id,
-                is_directory=False,
-            ).order_by(AgentMemory.updated_at.desc()).limit(20).all()
+            memories = None
+
+            # ── Tentativa 1: Busca semântica (se flag ativa + prompt disponível) ──
+            try:
+                from ..config.feature_flags import USE_MEMORY_SEMANTIC_SEARCH
+
+                if USE_MEMORY_SEMANTIC_SEARCH and prompt and user_id:
+                    from app.embeddings.memory_search import buscar_memorias_semantica
+                    resultados = buscar_memorias_semantica(
+                        prompt, user_id, limite=10, min_similarity=0.30
+                    )
+
+                    if resultados:
+                        # Buscar conteúdo real das memórias via IDs
+                        memory_ids = [r['memory_id'] for r in resultados]
+                        memories = AgentMemory.query.filter(
+                            AgentMemory.id.in_(memory_ids),
+                            AgentMemory.is_directory == False,  # noqa: E712
+                        ).all()
+
+                        # Ordenar por relevância semântica (mesma ordem dos resultados)
+                        id_order = {mid: i for i, mid in enumerate(memory_ids)}
+                        memories.sort(key=lambda m: id_order.get(m.id, 999))
+
+                        logger.info(
+                            f"[MEMORY_INJECT] Semântica: {len(memories)} memórias "
+                            f"selecionadas por relevância ao prompt"
+                        )
+                    else:
+                        memories = None  # Sem resultados semânticos → fallback
+            except Exception as sem_err:
+                logger.warning(
+                    f"[MEMORY_INJECT] Semantic fallback to recency: {sem_err}"
+                )
+                memories = None
+
+            # ── Tentativa 2: Fallback por recência (comportamento original) ──
+            if memories is None:
+                memories = AgentMemory.query.filter_by(
+                    user_id=user_id,
+                    is_directory=False,
+                ).order_by(AgentMemory.updated_at.desc()).limit(20).all()
 
             if not memories:
                 return None
@@ -893,7 +936,7 @@ Nunca invente informações."""
                     additional_context = None
                     if USE_AUTO_MEMORY_INJECTION and user_id:
                         try:
-                            additional_context = _load_user_memories_for_context(user_id)
+                            additional_context = _load_user_memories_for_context(user_id, prompt=prompt)
                         except Exception as mem_err:
                             logger.warning(
                                 f"[HOOK:UserPromptSubmit] Erro ao carregar memórias "

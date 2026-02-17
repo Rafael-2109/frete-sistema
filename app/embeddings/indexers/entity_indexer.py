@@ -29,6 +29,16 @@ from typing import List, Dict, Tuple, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 
+def _has_app_context() -> bool:
+    """Verifica se ja estamos dentro de um Flask app context."""
+    try:
+        from flask import current_app
+        _ = current_app.name
+        return True
+    except (RuntimeError, ImportError):
+        return False
+
+
 def build_embedding_text(nome_canonico: str, nomes_alternativos: List[str]) -> str:
     """
     Constroi texto para embedding a partir do nome canonico e variacoes.
@@ -55,143 +65,165 @@ def build_embedding_text(nome_canonico: str, nomes_alternativos: List[str]) -> s
     return ' | '.join(parts)
 
 
+def _collect_suppliers_impl() -> List[Dict]:
+    """Implementacao real da coleta de fornecedores. REQUER app context ativo."""
+    from app import db
+    from sqlalchemy import text
+
+    result = db.session.execute(text("""
+        WITH cnpj_limpo AS (
+            SELECT
+                cnpj,
+                raz_social,
+                substring(regexp_replace(cnpj, '\\D', '', 'g') FROM 1 FOR 8) AS raiz,
+                length(raz_social) AS len_nome
+            FROM contas_a_pagar
+            WHERE cnpj IS NOT NULL
+              AND cnpj != ''
+              AND raz_social IS NOT NULL
+              AND raz_social != ''
+        ),
+        agrupado AS (
+            SELECT
+                raiz,
+                -- CNPJ mais completo (primeiro por raiz)
+                (array_agg(cnpj ORDER BY len_nome DESC))[1] AS cnpj_representativo,
+                -- Nome mais longo = canonico
+                (array_agg(raz_social ORDER BY len_nome DESC))[1] AS nome_canonico,
+                -- Todas as variacoes
+                array_agg(DISTINCT raz_social ORDER BY raz_social) AS nomes
+            FROM cnpj_limpo
+            WHERE raiz != ''
+              AND length(raiz) = 8
+            GROUP BY raiz
+        )
+        SELECT raiz, cnpj_representativo, nome_canonico, nomes
+        FROM agrupado
+        ORDER BY nome_canonico
+    """))
+
+    entidades = []
+    for row in result.fetchall():
+        raiz = row[0]
+        cnpj = row[1]
+        nome_canonico = row[2]
+        nomes = list(row[3]) if row[3] else []
+
+        # Filtrar nomes alternativos (remover canonico da lista)
+        nomes_alt = [n for n in nomes if n.upper() != nome_canonico.upper()]
+
+        entidades.append({
+            'entity_type': 'supplier',
+            'cnpj_raiz': raiz,
+            'cnpj_completo': cnpj,
+            'nome': nome_canonico,
+            'nomes_alternativos': nomes_alt,
+            'texto_embedado': build_embedding_text(nome_canonico, nomes_alt),
+        })
+
+    return entidades
+
+
 def collect_suppliers() -> List[Dict]:
     """
     Coleta fornecedores unicos de contas_a_pagar, agrupados por CNPJ raiz.
 
+    Funciona tanto em app context existente (scheduler) quanto standalone (CLI).
+
     Returns:
         Lista de dicts com cnpj_raiz, cnpj_completo, nome, nomes_alternativos
     """
-    from app import create_app, db
-    from sqlalchemy import text
+    if _has_app_context():
+        return _collect_suppliers_impl()
 
+    from app import create_app
     app = create_app()
     with app.app_context():
-        result = db.session.execute(text("""
-            WITH cnpj_limpo AS (
-                SELECT
-                    cnpj,
-                    raz_social,
-                    substring(regexp_replace(cnpj, '\\D', '', 'g') FROM 1 FOR 8) AS raiz,
-                    length(raz_social) AS len_nome
-                FROM contas_a_pagar
-                WHERE cnpj IS NOT NULL
-                  AND cnpj != ''
-                  AND raz_social IS NOT NULL
-                  AND raz_social != ''
-            ),
-            agrupado AS (
-                SELECT
-                    raiz,
-                    -- CNPJ mais completo (primeiro por raiz)
-                    (array_agg(cnpj ORDER BY len_nome DESC))[1] AS cnpj_representativo,
-                    -- Nome mais longo = canonico
-                    (array_agg(raz_social ORDER BY len_nome DESC))[1] AS nome_canonico,
-                    -- Todas as variacoes
-                    array_agg(DISTINCT raz_social ORDER BY raz_social) AS nomes
-                FROM cnpj_limpo
-                WHERE raiz != ''
-                  AND length(raiz) = 8
-                GROUP BY raiz
-            )
-            SELECT raiz, cnpj_representativo, nome_canonico, nomes
-            FROM agrupado
-            ORDER BY nome_canonico
-        """))
+        return _collect_suppliers_impl()
 
-        entidades = []
-        for row in result.fetchall():
-            raiz = row[0]
-            cnpj = row[1]
-            nome_canonico = row[2]
-            nomes = list(row[3]) if row[3] else []
 
-            # Filtrar nomes alternativos (remover canonico da lista)
-            nomes_alt = [n for n in nomes if n.upper() != nome_canonico.upper()]
+def _collect_customers_impl() -> List[Dict]:
+    """Implementacao real da coleta de clientes. REQUER app context ativo."""
+    from app import db
+    from sqlalchemy import text
 
-            entidades.append({
-                'entity_type': 'supplier',
-                'cnpj_raiz': raiz,
-                'cnpj_completo': cnpj,
-                'nome': nome_canonico,
-                'nomes_alternativos': nomes_alt,
-                'texto_embedado': build_embedding_text(nome_canonico, nomes_alt),
-            })
+    result = db.session.execute(text("""
+        WITH cnpj_limpo AS (
+            SELECT
+                cnpj,
+                raz_social,
+                raz_social_red,
+                substring(regexp_replace(cnpj, '\\D', '', 'g') FROM 1 FOR 8) AS raiz,
+                length(raz_social) AS len_nome
+            FROM contas_a_receber
+            WHERE cnpj IS NOT NULL
+              AND cnpj != ''
+              AND raz_social IS NOT NULL
+              AND raz_social != ''
+        ),
+        agrupado AS (
+            SELECT
+                raiz,
+                (array_agg(cnpj ORDER BY len_nome DESC))[1] AS cnpj_representativo,
+                (array_agg(raz_social ORDER BY len_nome DESC))[1] AS nome_canonico,
+                array_agg(DISTINCT raz_social ORDER BY raz_social) AS nomes_razao,
+                array_agg(DISTINCT raz_social_red ORDER BY raz_social_red)
+                    FILTER (WHERE raz_social_red IS NOT NULL AND raz_social_red != '')
+                    AS nomes_red
+            FROM cnpj_limpo
+            WHERE raiz != ''
+              AND length(raiz) = 8
+            GROUP BY raiz
+        )
+        SELECT raiz, cnpj_representativo, nome_canonico, nomes_razao, nomes_red
+        FROM agrupado
+        ORDER BY nome_canonico
+    """))
 
-        return entidades
+    entidades = []
+    for row in result.fetchall():
+        raiz = row[0]
+        cnpj = row[1]
+        nome_canonico = row[2]
+        nomes_razao = list(row[3]) if row[3] else []
+        nomes_red = list(row[4]) if row[4] else []
+
+        # Combinar variacoes de raz_social + raz_social_red
+        todos_nomes = set()
+        for n in nomes_razao + nomes_red:
+            if n and n.upper() != nome_canonico.upper():
+                todos_nomes.add(n)
+
+        nomes_alt = sorted(todos_nomes)
+
+        entidades.append({
+            'entity_type': 'customer',
+            'cnpj_raiz': raiz,
+            'cnpj_completo': cnpj,
+            'nome': nome_canonico,
+            'nomes_alternativos': nomes_alt,
+            'texto_embedado': build_embedding_text(nome_canonico, nomes_alt),
+        })
+
+    return entidades
 
 
 def collect_customers() -> List[Dict]:
     """
     Coleta clientes unicos de contas_a_receber, agrupados por CNPJ raiz.
 
+    Funciona tanto em app context existente (scheduler) quanto standalone (CLI).
+
     Returns:
         Lista de dicts com cnpj_raiz, cnpj_completo, nome, nomes_alternativos
     """
-    from app import create_app, db
-    from sqlalchemy import text
+    if _has_app_context():
+        return _collect_customers_impl()
 
+    from app import create_app
     app = create_app()
     with app.app_context():
-        result = db.session.execute(text("""
-            WITH cnpj_limpo AS (
-                SELECT
-                    cnpj,
-                    raz_social,
-                    raz_social_red,
-                    substring(regexp_replace(cnpj, '\\D', '', 'g') FROM 1 FOR 8) AS raiz,
-                    length(raz_social) AS len_nome
-                FROM contas_a_receber
-                WHERE cnpj IS NOT NULL
-                  AND cnpj != ''
-                  AND raz_social IS NOT NULL
-                  AND raz_social != ''
-            ),
-            agrupado AS (
-                SELECT
-                    raiz,
-                    (array_agg(cnpj ORDER BY len_nome DESC))[1] AS cnpj_representativo,
-                    (array_agg(raz_social ORDER BY len_nome DESC))[1] AS nome_canonico,
-                    array_agg(DISTINCT raz_social ORDER BY raz_social) AS nomes_razao,
-                    array_agg(DISTINCT raz_social_red ORDER BY raz_social_red)
-                        FILTER (WHERE raz_social_red IS NOT NULL AND raz_social_red != '')
-                        AS nomes_red
-                FROM cnpj_limpo
-                WHERE raiz != ''
-                  AND length(raiz) = 8
-                GROUP BY raiz
-            )
-            SELECT raiz, cnpj_representativo, nome_canonico, nomes_razao, nomes_red
-            FROM agrupado
-            ORDER BY nome_canonico
-        """))
-
-        entidades = []
-        for row in result.fetchall():
-            raiz = row[0]
-            cnpj = row[1]
-            nome_canonico = row[2]
-            nomes_razao = list(row[3]) if row[3] else []
-            nomes_red = list(row[4]) if row[4] else []
-
-            # Combinar variacoes de raz_social + raz_social_red
-            todos_nomes = set()
-            for n in nomes_razao + nomes_red:
-                if n and n.upper() != nome_canonico.upper():
-                    todos_nomes.add(n)
-
-            nomes_alt = sorted(todos_nomes)
-
-            entidades.append({
-                'entity_type': 'customer',
-                'cnpj_raiz': raiz,
-                'cnpj_completo': cnpj,
-                'nome': nome_canonico,
-                'nomes_alternativos': nomes_alt,
-                'texto_embedado': build_embedding_text(nome_canonico, nomes_alt),
-            })
-
-        return entidades
+        return _collect_customers_impl()
 
 
 def collect_entities(entity_type: Optional[str] = None) -> Tuple[List[Dict], Dict]:
@@ -227,23 +259,13 @@ def collect_entities(entity_type: Optional[str] = None) -> Tuple[List[Dict], Dic
     return entidades, stats
 
 
-def index_entities(entidades: List[Dict], reindex: bool = False) -> Dict:
-    """
-    Gera embeddings e salva no banco via upsert.
-
-    Args:
-        entidades: Lista de entidades do collect_entities()
-        reindex: Se True, apaga embeddings existentes primeiro
-
-    Returns:
-        Dict com estatisticas
-    """
-    from app import create_app, db
+def _index_entities_impl(entidades: List[Dict], reindex: bool = False) -> Dict:
+    """Implementacao real da indexacao. REQUER app context ativo."""
+    from app import db
     from app.embeddings.service import EmbeddingService
     from app.embeddings.config import VOYAGE_DEFAULT_MODEL
     from sqlalchemy import text
 
-    app = create_app()
     stats = {
         "total": len(entidades),
         "embedded": 0,
@@ -252,102 +274,123 @@ def index_entities(entidades: List[Dict], reindex: bool = False) -> Dict:
         "total_tokens_est": 0,
     }
 
-    with app.app_context():
-        svc = EmbeddingService()
+    svc = EmbeddingService()
 
-        if reindex:
-            print("[INFO] Removendo embeddings existentes...")
-            db.session.execute(text("DELETE FROM financial_entity_embeddings"))
+    if reindex:
+        print("[INFO] Removendo embeddings existentes...")
+        db.session.execute(text("DELETE FROM financial_entity_embeddings"))
+        db.session.commit()
+
+    # Verificar quais entidades ja existem
+    existing = set()
+    if not reindex:
+        result = db.session.execute(text(
+            "SELECT entity_type || ':' || cnpj_raiz FROM financial_entity_embeddings"
+        ))
+        existing = {row[0] for row in result.fetchall()}
+        print(f"[INFO] {len(existing)} entidades ja existem no banco")
+
+    # Filtrar novas
+    new_entities = [
+        e for e in entidades
+        if f"{e['entity_type']}:{e['cnpj_raiz']}" not in existing
+    ]
+
+    if not new_entities:
+        print("[INFO] Nenhuma entidade nova para indexar")
+        stats["skipped"] = len(entidades)
+        return stats
+
+    stats["skipped"] = len(entidades) - len(new_entities)
+    print(f"[INFO] {len(new_entities)} entidades novas para indexar")
+
+    # Gerar embeddings em batches
+    batch_size = 128
+    for i in range(0, len(new_entities), batch_size):
+        batch = new_entities[i:i + batch_size]
+        texts = [e['texto_embedado'] for e in batch]
+
+        num_batch = i // batch_size + 1
+        total_batches = (len(new_entities) - 1) // batch_size + 1
+        print(f"  Batch {num_batch}/{total_batches} ({len(batch)} entidades)...", end=" ")
+
+        try:
+            embeddings = svc.embed_texts(texts, input_type="document")
+
+            # Salvar no banco via upsert
+            for ent, embedding in zip(batch, embeddings):
+                embedding_str = json.dumps(embedding)
+                nomes_alt_json = json.dumps(
+                    ent['nomes_alternativos'], ensure_ascii=False
+                ) if ent['nomes_alternativos'] else None
+
+                char_count = len(ent['texto_embedado'])
+                token_est = max(1, char_count // 4)
+                stats["total_tokens_est"] += token_est
+
+                db.session.execute(text("""
+                    INSERT INTO financial_entity_embeddings
+                        (entity_type, cnpj_raiz, cnpj_completo, nome,
+                         nomes_alternativos, texto_embedado, embedding, model_used)
+                    VALUES
+                        (:entity_type, :cnpj_raiz, :cnpj_completo, :nome,
+                         :nomes_alternativos, :texto_embedado, :embedding, :model_used)
+                    ON CONFLICT ON CONSTRAINT uq_fin_entity_type_cnpj
+                    DO UPDATE SET
+                        cnpj_completo = EXCLUDED.cnpj_completo,
+                        nome = EXCLUDED.nome,
+                        nomes_alternativos = EXCLUDED.nomes_alternativos,
+                        texto_embedado = EXCLUDED.texto_embedado,
+                        embedding = EXCLUDED.embedding,
+                        model_used = EXCLUDED.model_used,
+                        updated_at = NOW()
+                """), {
+                    "entity_type": ent['entity_type'],
+                    "cnpj_raiz": ent['cnpj_raiz'],
+                    "cnpj_completo": ent['cnpj_completo'],
+                    "nome": ent['nome'],
+                    "nomes_alternativos": nomes_alt_json,
+                    "texto_embedado": ent['texto_embedado'],
+                    "embedding": embedding_str,
+                    "model_used": VOYAGE_DEFAULT_MODEL,
+                })
+
             db.session.commit()
+            stats["embedded"] += len(batch)
+            print(f"OK ({len(batch)} embeddings salvos)")
 
-        # Verificar quais entidades ja existem
-        existing = set()
-        if not reindex:
-            result = db.session.execute(text(
-                "SELECT entity_type || ':' || cnpj_raiz FROM financial_entity_embeddings"
-            ))
-            existing = {row[0] for row in result.fetchall()}
-            print(f"[INFO] {len(existing)} entidades ja existem no banco")
+        except Exception as e:
+            print(f"ERRO: {e}")
+            db.session.rollback()
+            stats["errors"] += len(batch)
 
-        # Filtrar novas
-        new_entities = [
-            e for e in entidades
-            if f"{e['entity_type']}:{e['cnpj_raiz']}" not in existing
-        ]
-
-        if not new_entities:
-            print("[INFO] Nenhuma entidade nova para indexar")
-            stats["skipped"] = len(entidades)
-            return stats
-
-        stats["skipped"] = len(entidades) - len(new_entities)
-        print(f"[INFO] {len(new_entities)} entidades novas para indexar")
-
-        # Gerar embeddings em batches
-        batch_size = 128
-        for i in range(0, len(new_entities), batch_size):
-            batch = new_entities[i:i + batch_size]
-            texts = [e['texto_embedado'] for e in batch]
-
-            num_batch = i // batch_size + 1
-            total_batches = (len(new_entities) - 1) // batch_size + 1
-            print(f"  Batch {num_batch}/{total_batches} ({len(batch)} entidades)...", end=" ")
-
-            try:
-                embeddings = svc.embed_texts(texts, input_type="document")
-
-                # Salvar no banco via upsert
-                for ent, embedding in zip(batch, embeddings):
-                    embedding_str = json.dumps(embedding)
-                    nomes_alt_json = json.dumps(
-                        ent['nomes_alternativos'], ensure_ascii=False
-                    ) if ent['nomes_alternativos'] else None
-
-                    char_count = len(ent['texto_embedado'])
-                    token_est = max(1, char_count // 4)
-                    stats["total_tokens_est"] += token_est
-
-                    db.session.execute(text("""
-                        INSERT INTO financial_entity_embeddings
-                            (entity_type, cnpj_raiz, cnpj_completo, nome,
-                             nomes_alternativos, texto_embedado, embedding, model_used)
-                        VALUES
-                            (:entity_type, :cnpj_raiz, :cnpj_completo, :nome,
-                             :nomes_alternativos, :texto_embedado, :embedding, :model_used)
-                        ON CONFLICT ON CONSTRAINT uq_fin_entity_type_cnpj
-                        DO UPDATE SET
-                            cnpj_completo = EXCLUDED.cnpj_completo,
-                            nome = EXCLUDED.nome,
-                            nomes_alternativos = EXCLUDED.nomes_alternativos,
-                            texto_embedado = EXCLUDED.texto_embedado,
-                            embedding = EXCLUDED.embedding,
-                            model_used = EXCLUDED.model_used,
-                            updated_at = NOW()
-                    """), {
-                        "entity_type": ent['entity_type'],
-                        "cnpj_raiz": ent['cnpj_raiz'],
-                        "cnpj_completo": ent['cnpj_completo'],
-                        "nome": ent['nome'],
-                        "nomes_alternativos": nomes_alt_json,
-                        "texto_embedado": ent['texto_embedado'],
-                        "embedding": embedding_str,
-                        "model_used": VOYAGE_DEFAULT_MODEL,
-                    })
-
-                db.session.commit()
-                stats["embedded"] += len(batch)
-                print(f"OK ({len(batch)} embeddings salvos)")
-
-            except Exception as e:
-                print(f"ERRO: {e}")
-                db.session.rollback()
-                stats["errors"] += len(batch)
-
-            # Rate limiting gentil
-            if i + batch_size < len(new_entities):
-                time.sleep(0.5)
+        # Rate limiting gentil
+        if i + batch_size < len(new_entities):
+            time.sleep(0.5)
 
     return stats
+
+
+def index_entities(entidades: List[Dict], reindex: bool = False) -> Dict:
+    """
+    Gera embeddings e salva no banco via upsert.
+
+    Funciona tanto em app context existente (scheduler) quanto standalone (CLI).
+
+    Args:
+        entidades: Lista de entidades do collect_entities()
+        reindex: Se True, apaga embeddings existentes primeiro
+
+    Returns:
+        Dict com estatisticas
+    """
+    if _has_app_context():
+        return _index_entities_impl(entidades, reindex=reindex)
+
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        return _index_entities_impl(entidades, reindex=reindex)
 
 
 def show_stats():

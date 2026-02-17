@@ -961,11 +961,129 @@ def _save_messages_to_db(
                 # SILENCIOSO: análise de padrões falha não deve afetar nada
                 logger.warning(f"[AGENTE] Erro na análise de padrões (ignorado): {pattern_error}")
 
+            # =============================================================
+            # Fase 4: Embedding de turn para busca semântica (best-effort)
+            # Roda APÓS padrões — falha não afeta nada anterior
+            # =============================================================
+            try:
+                from .config.feature_flags import USE_SESSION_SEMANTIC_SEARCH
+                if USE_SESSION_SEMANTIC_SEARCH and user_message and assistant_message:
+                    _embed_session_turn_best_effort(
+                        app, our_session_id, user_id,
+                        user_message, assistant_message, session
+                    )
+            except Exception as emb_err:
+                logger.debug(f"[AGENTE] Embedding turn falhou (ignorado): {emb_err}")
+
     except Exception as e:
         logger.error(f"[AGENTE] Erro ao salvar mensagens: {e}")
         try:
             with app.app_context():
                 db.session.rollback()
+        except Exception:
+            pass
+
+
+def _embed_session_turn_best_effort(app, session_id, user_id, user_message, assistant_message, session):
+    """
+    Gera embedding de um turn (par user+assistant) para busca semântica.
+
+    Best-effort: falhas são silenciosas e não afetam o fluxo principal.
+    O embedding é gerado inline (~150ms) e salvo via upsert.
+
+    Args:
+        app: Flask app
+        session_id: Nosso session_id (UUID)
+        user_id: ID do usuário
+        user_message: Mensagem do usuário
+        assistant_message: Resposta do assistente
+        session: AgentSession (para metadata)
+    """
+    import hashlib
+    from sqlalchemy import text as sql_text
+
+    try:
+        from app.embeddings.config import SESSION_SEMANTIC_SEARCH, VOYAGE_DEFAULT_MODEL
+        if not SESSION_SEMANTIC_SEARCH:
+            return
+
+        from app.embeddings.service import EmbeddingService
+
+        # Calcular turn_index (pares de mensagens na sessão)
+        msg_count = session.message_count or 0
+        turn_index = max(0, (msg_count - 1) // 2)
+
+        # Build texto embedado
+        assistant_summary = (assistant_message or '')[:500]
+        texto_embedado = f"[USER]: {user_message}\n[ASSISTANT]: {assistant_summary}"
+
+        # Content hash para stale detection
+        c_hash = hashlib.md5(texto_embedado.encode('utf-8')).hexdigest()
+
+        # Verificar se já existe com mesmo hash (skip)
+        existing = db.session.execute(sql_text("""
+            SELECT content_hash FROM session_turn_embeddings
+            WHERE session_id = :session_id AND turn_index = :turn_index
+        """), {"session_id": session_id, "turn_index": turn_index}).fetchone()
+
+        if existing and existing[0] == c_hash:
+            return  # Conteúdo não mudou
+
+        # Gerar embedding
+        svc = EmbeddingService()
+        embeddings = svc.embed_texts([texto_embedado], input_type="document")
+
+        if not embeddings:
+            return
+
+        import json
+        embedding_str = json.dumps(embeddings[0])
+
+        # Upsert
+        db.session.execute(sql_text("""
+            INSERT INTO session_turn_embeddings
+                (session_id, user_id, turn_index,
+                 user_content, assistant_summary, texto_embedado,
+                 embedding, model_used, content_hash,
+                 session_title, session_created_at)
+            VALUES
+                (:session_id, :user_id, :turn_index,
+                 :user_content, :assistant_summary, :texto_embedado,
+                 :embedding, :model_used, :content_hash,
+                 :session_title, :session_created_at)
+            ON CONFLICT ON CONSTRAINT uq_session_turn
+            DO UPDATE SET
+                user_content = EXCLUDED.user_content,
+                assistant_summary = EXCLUDED.assistant_summary,
+                texto_embedado = EXCLUDED.texto_embedado,
+                embedding = EXCLUDED.embedding,
+                model_used = EXCLUDED.model_used,
+                content_hash = EXCLUDED.content_hash,
+                session_title = EXCLUDED.session_title,
+                updated_at = NOW()
+        """), {
+            "session_id": session_id,
+            "user_id": user_id,
+            "turn_index": turn_index,
+            "user_content": user_message,
+            "assistant_summary": assistant_summary if assistant_summary else None,
+            "texto_embedado": texto_embedado,
+            "embedding": embedding_str,
+            "model_used": VOYAGE_DEFAULT_MODEL,
+            "content_hash": c_hash,
+            "session_title": session.title,
+            "session_created_at": session.created_at,
+        })
+        db.session.commit()
+
+        logger.debug(
+            f"[AGENTE] Embedding turn {turn_index} salvo para sessão {session_id[:8]}"
+        )
+
+    except Exception as e:
+        logger.debug(f"[AGENTE] _embed_session_turn_best_effort falhou: {e}")
+        try:
+            db.session.rollback()
         except Exception:
             pass
 

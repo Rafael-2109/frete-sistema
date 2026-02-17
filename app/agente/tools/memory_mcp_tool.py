@@ -170,6 +170,100 @@ def _execute_with_context(func):
 
 
 # =====================================================================
+# HELPER: Embedding de memória para busca semântica
+# =====================================================================
+
+def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
+    """
+    Gera embedding de uma memória para busca semântica.
+
+    Best-effort: falhas são silenciosas e não afetam o fluxo principal.
+    O embedding é gerado inline (~100ms) e salvo via upsert.
+
+    Args:
+        user_id: ID do usuário
+        path: Path da memória (ex: /memories/user.xml)
+        content: Conteúdo da memória
+    """
+    import hashlib
+    import json
+
+    try:
+        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, VOYAGE_DEFAULT_MODEL
+        if not MEMORY_SEMANTIC_SEARCH:
+            return
+
+        from app.embeddings.service import EmbeddingService
+
+        # Build texto embedado
+        texto_embedado = f"[{path}]: {content}"
+        c_hash = hashlib.md5(content.encode('utf-8')).hexdigest()
+
+        def _do_embed():
+            from ..models import AgentMemory
+            from app import db
+            from sqlalchemy import text
+
+            # Buscar memory_id
+            mem = AgentMemory.get_by_path(user_id, path)
+            if not mem:
+                return
+
+            # Verificar se hash mudou (skip se identico)
+            existing = db.session.execute(text("""
+                SELECT content_hash FROM agent_memory_embeddings
+                WHERE memory_id = :memory_id
+            """), {"memory_id": mem.id}).fetchone()
+
+            if existing and existing[0] == c_hash:
+                return  # Conteúdo não mudou
+
+            # Gerar embedding
+            svc = EmbeddingService()
+            embeddings = svc.embed_texts([texto_embedado], input_type="document")
+
+            if not embeddings:
+                return
+
+            embedding_str = json.dumps(embeddings[0])
+
+            # Upsert
+            db.session.execute(text("""
+                INSERT INTO agent_memory_embeddings
+                    (memory_id, user_id, path,
+                     texto_embedado, embedding, model_used, content_hash)
+                VALUES
+                    (:memory_id, :user_id, :path,
+                     :texto_embedado, :embedding, :model_used, :content_hash)
+                ON CONFLICT ON CONSTRAINT uq_memory_embedding
+                DO UPDATE SET
+                    user_id = EXCLUDED.user_id,
+                    path = EXCLUDED.path,
+                    texto_embedado = EXCLUDED.texto_embedado,
+                    embedding = EXCLUDED.embedding,
+                    model_used = EXCLUDED.model_used,
+                    content_hash = EXCLUDED.content_hash,
+                    updated_at = NOW()
+            """), {
+                "memory_id": mem.id,
+                "user_id": user_id,
+                "path": path,
+                "texto_embedado": texto_embedado,
+                "embedding": embedding_str,
+                "model_used": VOYAGE_DEFAULT_MODEL,
+                "content_hash": c_hash,
+            })
+            db.session.commit()
+
+            logger.debug(f"[MEMORY_MCP] Embedding salvo para {path}")
+
+        _execute_with_context(_do_embed)
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_MCP] _embed_memory_best_effort falhou: {e}")
+
+
+# =====================================================================
 # CUSTOM TOOLS — @tool decorator
 # =====================================================================
 
@@ -339,6 +433,14 @@ try:
                     f"[MEMORY_MCP] Consolidação não executada (ignorado): {consolidation_err}"
                 )
 
+            # Best-effort: embeddar memória para busca semântica
+            try:
+                from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+                if MEMORY_SEMANTIC_SEARCH:
+                    _embed_memory_best_effort(user_id, path, content)
+            except Exception as emb_err:
+                logger.debug(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
+
             return {
                 "content": [{"type": "text", "text": f"Memória {action} em {path}"}]
             }
@@ -417,6 +519,23 @@ try:
 
             _execute_with_context(_update)
             logger.info(f"[MEMORY_MCP] update_memory: {path}")
+
+            # Best-effort: re-embeddar memória atualizada
+            try:
+                from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+                if MEMORY_SEMANTIC_SEARCH:
+                    # Ler conteúdo atualizado
+                    def _get_content():
+                        from ..models import AgentMemory
+                        mem = AgentMemory.get_by_path(user_id, path)
+                        return mem.content if mem else None
+
+                    updated_content = _execute_with_context(_get_content)
+                    if updated_content:
+                        _embed_memory_best_effort(user_id, path, updated_content)
+            except Exception as emb_err:
+                logger.debug(f"[MEMORY_MCP] Embedding update falhou (ignorado): {emb_err}")
+
             return {
                 "content": [{"type": "text", "text": f"Memória atualizada em {path}"}]
             }

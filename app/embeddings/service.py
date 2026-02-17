@@ -529,6 +529,258 @@ class EmbeddingService:
         return results
 
     # ================================================================
+    # BUSCA SEMANTICA — SESSION TURNS
+    # ================================================================
+
+    def search_session_turns(
+        self,
+        query: str,
+        user_id: int,
+        limit: int = 10,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em turns de sessoes passadas do usuario.
+
+        Args:
+            query: Texto de busca
+            user_id: ID do usuario (filtro obrigatorio)
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com session_id, turn_index, user_content,
+            assistant_summary, session_title, session_created_at, similarity
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_session_turns(
+                query_embedding, user_id, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_session_turns(
+                query_embedding, user_id, limit, min_similarity
+            )
+
+    def _search_pgvector_session_turns(
+        self,
+        query_embedding: List[float],
+        user_id: int,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca session turns via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        sql = text("""
+            SELECT
+                id,
+                session_id,
+                turn_index,
+                user_content,
+                assistant_summary,
+                session_title,
+                session_created_at,
+                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM session_turn_embeddings
+            WHERE user_id = :user_id
+              AND embedding IS NOT NULL
+            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        result = db.session.execute(sql, {
+            "query_embedding": embedding_str,
+            "user_id": user_id,
+            "limit": limit * 2,
+        })
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "session_id": row.session_id,
+                    "turn_index": row.turn_index,
+                    "user_content": row.user_content,
+                    "assistant_summary": row.assistant_summary,
+                    "session_title": row.session_title,
+                    "session_created_at": row.session_created_at.isoformat() if row.session_created_at else None,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_session_turns(
+        self,
+        query_embedding: List[float],
+        user_id: int,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca session turns fallback sem pgvector."""
+        from app.embeddings.models import SessionTurnEmbedding
+
+        docs = SessionTurnEmbedding.query.filter(
+            SessionTurnEmbedding.user_id == user_id,
+            SessionTurnEmbedding.embedding.isnot(None),
+        ).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "session_id": doc.session_id,
+                "turn_index": doc.turn_index,
+                "user_content": doc.user_content,
+                "assistant_summary": doc.assistant_summary,
+                "session_title": doc.session_title,
+                "session_created_at": doc.session_created_at.isoformat() if doc.session_created_at else None,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — MEMORIAS DO AGENTE
+    # ================================================================
+
+    def search_memories(
+        self,
+        query: str,
+        user_id: int,
+        limit: int = 10,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em memorias persistentes do usuario.
+
+        Args:
+            query: Texto de busca
+            user_id: ID do usuario (filtro obrigatorio)
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com memory_id, path, texto_embedado, similarity
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_memories(
+                query_embedding, user_id, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_memories(
+                query_embedding, user_id, limit, min_similarity
+            )
+
+    def _search_pgvector_memories(
+        self,
+        query_embedding: List[float],
+        user_id: int,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca memorias via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        sql = text("""
+            SELECT
+                id,
+                memory_id,
+                path,
+                texto_embedado,
+                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM agent_memory_embeddings
+            WHERE user_id = :user_id
+              AND embedding IS NOT NULL
+            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        result = db.session.execute(sql, {
+            "query_embedding": embedding_str,
+            "user_id": user_id,
+            "limit": limit * 2,
+        })
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "memory_id": row.memory_id,
+                    "path": row.path,
+                    "texto_embedado": row.texto_embedado,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_memories(
+        self,
+        query_embedding: List[float],
+        user_id: int,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca memorias fallback sem pgvector."""
+        from app.embeddings.models import AgentMemoryEmbedding
+
+        docs = AgentMemoryEmbedding.query.filter(
+            AgentMemoryEmbedding.user_id == user_id,
+            AgentMemoryEmbedding.embedding.isnot(None),
+        ).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "memory_id": doc.memory_id,
+                "path": doc.path,
+                "texto_embedado": doc.texto_embedado,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
     # RERANKING
     # ================================================================
 

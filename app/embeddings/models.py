@@ -146,3 +146,110 @@ class FinancialEntityEmbedding(db.Model):
             'nome': self.nome,
             'nomes_alternativos': self.nomes_alternativos,
         }
+
+
+class SessionTurnEmbedding(db.Model):
+    """
+    Embedding de turns (pares user+assistant) de sessoes do agente.
+
+    Cada registro corresponde a um par de mensagens (user -> assistant)
+    de uma sessao do agente web. Permite busca semantica em conversas
+    passadas ("lembra quando conversamos sobre...").
+
+    Granularidade: turn-level (nao session-level) para precisao na busca.
+    """
+    __tablename__ = 'session_turn_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    session_id = db.Column(db.String(255), nullable=False)   # AgentSession.session_id (nosso UUID)
+    user_id = db.Column(db.Integer, nullable=False)           # Denormalizado para WHERE
+    turn_index = db.Column(db.Integer, nullable=False)        # Indice do par no session (0-based)
+
+    # Conteudo
+    user_content = db.Column(db.Text, nullable=False)         # Mensagem do usuario
+    assistant_summary = db.Column(db.Text, nullable=True)     # Primeiros 500 chars da resposta
+    texto_embedado = db.Column(db.Text, nullable=False)       # Combinado para embedding
+
+    # Embedding
+    embedding = db.Column(db.Text, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(32), nullable=True)    # MD5 para stale detection
+
+    # Metadata de sessao (denormalizado para display)
+    session_title = db.Column(db.String(200), nullable=True)
+    session_created_at = db.Column(db.DateTime, nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('session_id', 'turn_index', name='uq_session_turn'),
+        db.Index('idx_ste_user_id', 'user_id'),
+        db.Index('idx_ste_session_id', 'session_id'),
+    )
+
+    def __repr__(self):
+        return f'<SessionTurnEmbedding {self.session_id[:8]}#{self.turn_index}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'turn_index': self.turn_index,
+            'user_content': self.user_content[:200] + '...' if len(self.user_content or '') > 200 else self.user_content,
+            'assistant_summary': self.assistant_summary,
+            'session_title': self.session_title,
+            'session_created_at': self.session_created_at.isoformat() if self.session_created_at else None,
+        }
+
+
+class AgentMemoryEmbedding(db.Model):
+    """
+    Embedding de memorias persistentes do agente.
+
+    Cada registro corresponde a um arquivo de memoria (agent_memories)
+    do usuario. Permite injecao de memorias por relevancia semantica
+    ao inves de recencia.
+
+    FK logica para agent_memories.id — ON DELETE CASCADE via trigger.
+    """
+    __tablename__ = 'agent_memory_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    memory_id = db.Column(db.Integer, nullable=False)         # FK logica -> agent_memories.id
+    user_id = db.Column(db.Integer, nullable=False)            # Denormalizado para WHERE
+    path = db.Column(db.String(500), nullable=False)           # Denormalizado de agent_memories.path
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)
+    embedding = db.Column(db.Text, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(32), nullable=True)    # MD5 para stale detection
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('memory_id', name='uq_memory_embedding'),
+        db.Index('idx_ame_user_id', 'user_id'),
+        db.Index('idx_ame_memory_id', 'memory_id'),
+    )
+
+    def __repr__(self):
+        return f'<AgentMemoryEmbedding memory_id={self.memory_id} {self.path}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'memory_id': self.memory_id,
+            'path': self.path,
+            'content_hash': self.content_hash,
+        }

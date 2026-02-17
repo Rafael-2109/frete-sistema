@@ -246,16 +246,121 @@ try:
                 "is_error": True,
             }
 
+    @tool(
+        "semantic_search_sessions",
+        (
+            "Busca semântica em sessões anteriores do usuário. "
+            "Mais precisa que search_sessions para perguntas conceituais, "
+            "temas ou situações passadas. Use quando o operador perguntar "
+            "'lembra que...', 'já conversamos sobre...', ou temas abstratos. "
+            "Encontra conversas por similaridade de significado, não apenas texto exato."
+        ),
+        {"query": str, "limit": int},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def semantic_search_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Busca semântica em sessões anteriores do usuário via embeddings."""
+        query = args.get("query", "").strip()
+        limit = min(args.get("limit", 10), MAX_SEARCH_RESULTS)
+
+        if not query or len(query) < 2:
+            return {
+                "content": [{"type": "text", "text": "Erro: query deve ter pelo menos 2 caracteres."}],
+                "is_error": True,
+            }
+
+        try:
+            user_id = get_current_user_id()
+        except RuntimeError as e:
+            return {
+                "content": [{"type": "text", "text": f"Erro: {e}"}],
+                "is_error": True,
+            }
+
+        def _semantic_search():
+            try:
+                from app.embeddings.session_search import buscar_sessoes_semantica
+                results = buscar_sessoes_semantica(
+                    query=query,
+                    user_id=user_id,
+                    limite=limit,
+                    min_similarity=0.35,
+                )
+            except Exception as emb_err:
+                logger.warning(f"[SESSION_SEARCH] Semantic search falhou, fallback ILIKE: {emb_err}")
+                results = []
+
+            if not results:
+                return None  # Sinal para fallback
+
+            # Formatar resultados
+            output_lines = [
+                f"🔍 Busca semântica encontrou {len(results)} resultado(s) para '{query}':\n"
+            ]
+
+            for r in results:
+                title = r.get('session_title') or 'Sem título'
+                created = r.get('session_created_at', '')
+                if created:
+                    # ISO -> DD/MM/YYYY HH:MM
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(created)
+                        created = dt.strftime('%d/%m/%Y %H:%M')
+                    except (ValueError, TypeError):
+                        pass
+
+                similarity_pct = round(r.get('similarity', 0) * 100, 1)
+                user_content = (r.get('user_content') or '')[:200]
+                assistant_summary = (r.get('assistant_summary') or '')[:150]
+
+                output_lines.append(f"📋 **{title}** ({created}) — {similarity_pct}% relevância")
+                output_lines.append(f"   Pergunta: \"{user_content}\"")
+                if assistant_summary:
+                    output_lines.append(f"   Resposta: \"{assistant_summary}...\"")
+                output_lines.append("")
+
+            return "\n".join(output_lines)
+
+        try:
+            result = _execute_with_context(_semantic_search)
+
+            # Se semantic search nao retornou nada, fallback para ILIKE
+            if result is None:
+                # Delegar para search_sessions (ILIKE)
+                fallback_result = await search_sessions({"query": query})
+                # Adicionar nota de fallback
+                if not fallback_result.get("is_error"):
+                    text_content = fallback_result["content"][0]["text"]
+                    text_content = "⚠️ Busca semântica indisponível, usando busca textual:\n\n" + text_content
+                    fallback_result["content"][0]["text"] = text_content
+                return fallback_result
+
+            return {
+                "content": [{"type": "text", "text": result}],
+            }
+        except Exception as e:
+            logger.error(f"[SESSION_SEARCH] Erro na busca semântica: {e}")
+            return {
+                "content": [{"type": "text", "text": f"Erro ao buscar sessões: {str(e)[:200]}"}],
+                "is_error": True,
+            }
+
     # ========================================================================
     # MCP Server Registration
     # ========================================================================
     sessions_server = create_sdk_mcp_server(
         name="sessions",
-        version="1.0.0",
-        tools=[search_sessions, list_recent_sessions],
+        version="2.0.0",
+        tools=[search_sessions, list_recent_sessions, semantic_search_sessions],
     )
 
-    logger.info("[SESSION_SEARCH] Custom Tool MCP 'sessions' registrado com sucesso")
+    logger.info("[SESSION_SEARCH] Custom Tool MCP 'sessions' registrado com sucesso (3 tools)")
 
 except ImportError as e:
     sessions_server = None

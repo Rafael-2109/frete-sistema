@@ -143,6 +143,22 @@ MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION
 MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
 
 # ====================================================================
+# RAG Semantico (Fase 4)
+# ====================================================================
+
+# Busca semantica em sessoes anteriores via embeddings
+# Quando true: tool semantic_search_sessions disponivel + search_sessions usa semantica
+# Quando false: comportamento original (ILIKE em JSONB)
+# Default false: ativar apos batch indexer popular session_turn_embeddings
+USE_SESSION_SEMANTIC_SEARCH = os.getenv("AGENT_SESSION_SEMANTIC_SEARCH", "false").lower() == "true"
+
+# Injecao de memorias baseada em relevancia semantica
+# Quando true: UserPromptSubmit hook usa embeddings para selecionar memorias relevantes
+# Quando false: comportamento original (ultimas 20 por recencia)
+# Default false: ativar apos batch indexer popular agent_memory_embeddings
+USE_MEMORY_SEMANTIC_SEARCH = os.getenv("AGENT_MEMORY_SEMANTIC_SEARCH", "false").lower() == "true"
+
+# ====================================================================
 # Teams Bot
 # ====================================================================
 

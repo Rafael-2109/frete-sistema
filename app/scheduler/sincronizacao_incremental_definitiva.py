@@ -1469,12 +1469,33 @@ def main():
         replace_existing=True
     )
 
+    # ── Reindexação diária de embeddings (Voyage AI) ──
+    EMBEDDINGS_REINDEX_ENABLED = os.environ.get("EMBEDDINGS_REINDEX_ENABLED", "true").lower() == "true"
+    EMBEDDINGS_REINDEX_HOUR = int(os.environ.get("EMBEDDINGS_REINDEX_HOUR", "3"))
+
+    if EMBEDDINGS_REINDEX_ENABLED:
+        from app.scheduler.reindexacao_embeddings import executar_reindexacao
+
+        scheduler.add_job(
+            func=executar_reindexacao,
+            trigger="cron",
+            hour=EMBEDDINGS_REINDEX_HOUR,
+            minute=0,
+            id="reindexacao_embeddings",
+            name="Reindexação Diária de Embeddings (Voyage AI)",
+            max_instances=1,
+            misfire_grace_time=3600,  # 1h grace — ok se atrasou
+            replace_existing=True,
+        )
+
     logger.info("=" * 60)
     logger.info("✅ Scheduler configurado com TODAS as correções:")
     logger.info("   1. Valores de janela corretos para cada serviço")
     logger.info("   2. Services instanciados FORA do contexto")
     logger.info("   3. Tratamento robusto de erros e reconexão")
     logger.info(f"   Próxima execução em {INTERVALO_MINUTOS} minutos...")
+    if EMBEDDINGS_REINDEX_ENABLED:
+        logger.info(f"   ✅ Reindexação embeddings: diária às {EMBEDDINGS_REINDEX_HOUR:02d}:00")
     logger.info("=" * 60)
 
     # Handlers de shutdown
