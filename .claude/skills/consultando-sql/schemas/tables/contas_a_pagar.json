@@ -149,6 +149,13 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_pagar_odoo_line_id",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_conta_pagar_vencimento",
       "columns": [
         "vencimento"
@@ -231,13 +238,6 @@
         "cnpj"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": true
     }
   ]
 }

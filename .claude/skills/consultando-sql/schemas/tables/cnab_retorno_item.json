@@ -172,8 +172,9 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_status_match",
+      "name": "idx_cnab_item_lote_status",
       "columns": [
+        "lote_id",
         "status_match"
       ],
       "unique": false
@@ -189,14 +190,6 @@
       "name": "ix_cnab_retorno_item_conta_a_receber_id",
       "columns": [
         "conta_a_receber_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cnab_item_lote_status",
-      "columns": [
-        "lote_id",
-        "status_match"
       ],
       "unique": false
     },
@@ -218,6 +211,13 @@
       "name": "idx_cnab_item_seu_numero",
       "columns": [
         "seu_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_status_match",
+      "columns": [
+        "status_match"
       ],
       "unique": false
     },

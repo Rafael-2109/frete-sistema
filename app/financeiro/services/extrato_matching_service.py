@@ -595,6 +595,26 @@ class ExtratoMatchingService:
                     score = min(score + 10, 80)
                     criterio = f'VALOR_SEM_CNPJ+NOME_PARCIAL({tokens_match}/{len(tokens_pagador)})'
 
+            # Boost semântico: quando tokens não matcharam mas nome é semanticamente similar
+            elif nome_pagador and titulo.cnpj:
+                try:
+                    from app.embeddings.entity_search import buscar_entidade_semantica
+                    from app.embeddings.config import FINANCIAL_SEMANTIC_SEARCH
+                    if FINANCIAL_SEMANTIC_SEARCH:
+                        resultados_sem = buscar_entidade_semantica(
+                            nome_pagador, entity_type='customer',
+                            limite=3, min_similarity=0.50
+                        )
+                        cnpj_titulo = re.sub(r'\D', '', titulo.cnpj or '')[:8]
+                        for r in resultados_sem:
+                            if r['cnpj_raiz'] == cnpj_titulo:
+                                boost = min(int(r['similarity'] * 20), 15)
+                                score = min(score + boost, 85)
+                                criterio = f'VALOR_SEM_CNPJ+NOME_SEMANTICO({r["similarity"]:.2f})'
+                                break
+                except Exception:
+                    pass  # Fallback silencioso — embeddings indisponíveis
+
             # Boost para data exata de vencimento
             if data_pagamento and titulo.vencimento and data_pagamento == titulo.vencimento:
                 score = min(score + 5, 85)

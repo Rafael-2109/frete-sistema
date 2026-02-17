@@ -95,3 +95,54 @@ class ProductEmbedding(db.Model):
 
     def __repr__(self):
         return f'<ProductEmbedding {self.cod_produto}>'
+
+
+class FinancialEntityEmbedding(db.Model):
+    """
+    Embedding de entidades financeiras (fornecedores e clientes) para matching semantico.
+
+    Cada registro corresponde a um CNPJ raiz (8 digitos) agrupando filiais.
+    O texto embedado combina nome canonico + variacoes conhecidas.
+
+    Usado pelo FavorecidoResolverService (Layer 4) e ExtratoMatchingService
+    para resolver nomes truncados/abreviados que ILIKE nao consegue.
+    """
+    __tablename__ = 'financial_entity_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    entity_type = db.Column(db.String(20), nullable=False)   # 'supplier' ou 'customer'
+    cnpj_raiz = db.Column(db.String(8), nullable=False)       # 8 digitos (grupo empresarial)
+    cnpj_completo = db.Column(db.String(20), nullable=True)   # Um CNPJ representativo
+    nome = db.Column(db.Text, nullable=False)                  # Nome canonico (longest raz_social)
+    nomes_alternativos = db.Column(db.Text, nullable=True)    # JSON: variacoes conhecidas
+    texto_embedado = db.Column(db.Text, nullable=False)       # Texto usado para embedding
+
+    # Embedding — mesmo padrao do SswDocumentEmbedding/ProductEmbedding
+    embedding = db.Column(db.Text, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('entity_type', 'cnpj_raiz', name='uq_fin_entity_type_cnpj'),
+        db.Index('idx_fin_entity_type', 'entity_type'),
+        db.Index('idx_fin_entity_cnpj_raiz', 'cnpj_raiz'),
+    )
+
+    def __repr__(self):
+        return f'<FinancialEntityEmbedding {self.entity_type}:{self.cnpj_raiz} {self.nome[:30]}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding por ser muito grande)."""
+        return {
+            'id': self.id,
+            'entity_type': self.entity_type,
+            'cnpj_raiz': self.cnpj_raiz,
+            'cnpj_completo': self.cnpj_completo,
+            'nome': self.nome,
+            'nomes_alternativos': self.nomes_alternativos,
+        }

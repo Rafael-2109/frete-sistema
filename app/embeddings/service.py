@@ -392,6 +392,143 @@ class EmbeddingService:
         return results
 
     # ================================================================
+    # BUSCA SEMANTICA — ENTIDADES FINANCEIRAS
+    # ================================================================
+
+    def search_entities(
+        self,
+        query: str,
+        entity_type: str = 'supplier',
+        limit: int = 5,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em entidades financeiras (fornecedores/clientes).
+
+        Args:
+            query: Nome do fornecedor/cliente (pode ser truncado/abreviado)
+            entity_type: 'supplier', 'customer', ou 'all'
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com cnpj_raiz, cnpj_completo, nome, similarity, entity_type
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_entities(
+                query_embedding, entity_type, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_entities(
+                query_embedding, entity_type, limit, min_similarity
+            )
+
+    def _search_pgvector_entities(
+        self,
+        query_embedding: List[float],
+        entity_type: str,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca entidades financeiras via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        where_clause = ""
+        if entity_type != 'all':
+            where_clause = "AND entity_type = :entity_type"
+
+        sql = text(f"""
+            SELECT
+                id,
+                entity_type,
+                cnpj_raiz,
+                cnpj_completo,
+                nome,
+                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM financial_entity_embeddings
+            WHERE embedding IS NOT NULL
+            {where_clause}
+            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        params = {
+            "query_embedding": embedding_str,
+            "limit": limit * 2,
+        }
+        if entity_type != 'all':
+            params["entity_type"] = entity_type
+
+        result = db.session.execute(sql, params)
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "cnpj_raiz": row.cnpj_raiz,
+                    "cnpj_completo": row.cnpj_completo,
+                    "nome": row.nome,
+                    "similarity": round(similarity, 4),
+                    "entity_type": row.entity_type,
+                })
+
+        return results[:limit]
+
+    def _search_fallback_entities(
+        self,
+        query_embedding: List[float],
+        entity_type: str,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca entidades financeiras fallback sem pgvector."""
+        from app.embeddings.models import FinancialEntityEmbedding
+
+        query = FinancialEntityEmbedding.query.filter(
+            FinancialEntityEmbedding.embedding.isnot(None)
+        )
+
+        if entity_type != 'all':
+            query = query.filter(
+                FinancialEntityEmbedding.entity_type == entity_type
+            )
+
+        docs = query.all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "cnpj_raiz": doc.cnpj_raiz,
+                "cnpj_completo": doc.cnpj_completo,
+                "nome": doc.nome,
+                "similarity": round(similarity, 4),
+                "entity_type": doc.entity_type,
+            })
+
+        return results
+
+    # ================================================================
     # RERANKING
     # ================================================================
 

@@ -68,16 +68,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
+      "name": "ix_portal_atacadao_produto_depara_ativo",
       "columns": [
-        "codigo_atacadao"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_ativo",
+      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
       "columns": [
-        "ativo"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -89,9 +89,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
+      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
       "columns": [
-        "cnpj_cliente"
+        "codigo_atacadao"
       ],
       "unique": false
     }

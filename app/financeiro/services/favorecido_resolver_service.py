@@ -38,6 +38,7 @@ from app.financeiro.services._resolver_utils import (
     normalizar_cnpj,
     tokenizar_nome,
     resolver_por_tokenizacao,
+    resolver_por_semantica,
     buscar_nome_por_cnpj,
     prefetch_partner_cnpjs,
 )
@@ -353,11 +354,13 @@ class FavorecidoResolverService:
 
     def _layer4_nome_fuzzy(self, item: ExtratoItem) -> bool:
         """
-        Resolve via nome do parceiro Odoo ou nome_pagador, usando tokenização.
+        Resolve via nome do parceiro Odoo ou nome_pagador, usando tokenização
+        e busca semântica como fallback.
 
         Usa: odoo_partner_name, nome_pagador, ou nome já extraído.
 
         Confiança: 85 se match único, 60 se ambíguo.
+        Método: NOME_FUZZY (tokenização) ou NOME_FUZZY_SEMANTICO (embedding).
         """
         # Prioridade: odoo_partner_name > nome_pagador
         nome = item.odoo_partner_name or item.nome_pagador
@@ -369,13 +372,23 @@ class FavorecidoResolverService:
         if item.favorecido_metodo == 'REGEX_NOME' and item.favorecido_nome == nome:
             return False
 
+        # 1. Tentar tokenização (rápido, sem API call)
         resultado = self._resolver_por_tokenizacao(nome)
+        metodo_suffix = ''
+
+        # 2. Se tokenização falhou ou baixa confiança, tentar semântica
+        if not resultado or resultado[2] < 70:
+            resultado_sem = self._resolver_por_semantica_wrapper(nome)
+            if resultado_sem:
+                if not resultado or resultado_sem[2] > resultado[2]:
+                    resultado = resultado_sem
+                    metodo_suffix = '_SEMANTICO'
 
         if resultado:
             cnpj, raz_social, confianca = resultado
             item.favorecido_cnpj = cnpj
             item.favorecido_nome = raz_social
-            item.favorecido_metodo = 'NOME_FUZZY'
+            item.favorecido_metodo = f'NOME_FUZZY{metodo_suffix}'
             item.favorecido_confianca = confianca
             self._propagar_campos_legado(item)
             return True
@@ -444,6 +457,10 @@ class FavorecidoResolverService:
     def _tokenizar_nome(self, nome: str) -> List[str]:
         """Tokeniza nome de fornecedor. Delega para _resolver_utils."""
         return tokenizar_nome(nome)
+
+    def _resolver_por_semantica_wrapper(self, nome: str) -> Optional[Tuple[str, str, int]]:
+        """Resolve nome via semântica em financial_entity_embeddings. Delega para _resolver_utils."""
+        return resolver_por_semantica(nome, entity_type='supplier')
 
     def _resolver_por_tokenizacao(self, nome: str) -> Optional[Tuple[str, str, int]]:
         """Resolve nome via tokenização em contas_a_pagar. Delega para _resolver_utils."""

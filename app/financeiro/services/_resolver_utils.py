@@ -334,6 +334,76 @@ def buscar_nome_por_cnpj(cnpj: str, model_class, campo_cnpj: str = 'cnpj') -> Op
     return None
 
 
+def resolver_por_semantica(
+    nome: str,
+    entity_type: str = 'supplier',
+    min_similarity: float = 0.45,
+) -> Optional[Tuple[str, str, int]]:
+    """
+    Resolve nome via busca semantica em financial_entity_embeddings.
+
+    Complementa resolver_por_tokenizacao() para nomes truncados/abreviados
+    que ILIKE nao consegue resolver (ex: "MEZZANI ALIM", "ABC FRETES").
+
+    Args:
+        nome: Nome do fornecedor/cliente
+        entity_type: 'supplier' ou 'customer'
+        min_similarity: Threshold minimo de similaridade
+
+    Returns:
+        Tuple (cnpj_completo, nome_canonico, confianca) ou None
+        Confianca: 80 (similarity > 0.7), 65 (> 0.5), 55 (> 0.45)
+    """
+    try:
+        from app.embeddings.entity_search import buscar_entidade_semantica
+        from app.embeddings.config import FINANCIAL_SEMANTIC_SEARCH
+    except ImportError:
+        return None
+
+    if not FINANCIAL_SEMANTIC_SEARCH:
+        return None
+
+    if not nome or not nome.strip():
+        return None
+
+    try:
+        resultados = buscar_entidade_semantica(
+            nome, entity_type=entity_type, limite=3, min_similarity=min_similarity
+        )
+    except Exception as e:
+        logger.warning(f"Busca semantica falhou para '{nome}': {e}")
+        return None
+
+    if not resultados:
+        return None
+
+    melhor = resultados[0]
+    similarity = melhor['similarity']
+
+    # Calcular confianca baseada em similarity
+    if similarity > 0.7:
+        confianca = 80
+    elif similarity > 0.5:
+        confianca = 65
+    else:
+        confianca = 55
+
+    # Boost se todos os top results tem o mesmo CNPJ raiz (indica match forte)
+    if len(resultados) >= 2:
+        raizes = {r['cnpj_raiz'] for r in resultados}
+        if len(raizes) == 1:
+            confianca = min(confianca + 5, 85)
+
+    cnpj = melhor.get('cnpj_completo') or ''
+    nome_canonico = melhor.get('nome') or ''
+
+    # Normalizar CNPJ se presente
+    if cnpj:
+        cnpj = normalizar_cnpj(cnpj)
+
+    return cnpj, nome_canonico, confianca
+
+
 def prefetch_partner_cnpjs(connection, partner_ids: List[int], cache: dict) -> None:
     """
     Busca CNPJs de parceiros Odoo em batch e atualiza o cache.

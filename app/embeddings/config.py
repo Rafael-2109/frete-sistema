@@ -66,3 +66,8 @@ RERANKING_ENABLED = os.environ.get("RERANKING_ENABLED", "false").lower() == "tru
 # Habilita busca semantica de produtos no AI Resolver (devolucoes)
 # Quando True, substitui chamada Haiku de extracao de termos por busca por embeddings
 PRODUCT_SEMANTIC_SEARCH = os.environ.get("PRODUCT_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Habilita busca semantica de entidades financeiras (fornecedores/clientes)
+# Quando True, FavorecidoResolverService e ExtratoMatchingService usam embeddings
+# como complemento a tokenizacao ILIKE para nomes truncados/abreviados
+FINANCIAL_SEMANTIC_SEARCH = os.environ.get("FINANCIAL_SEMANTIC_SEARCH", "true").lower() == "true"

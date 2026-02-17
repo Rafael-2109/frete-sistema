@@ -174,9 +174,9 @@
   ],
   "indices": [
     {
-      "name": "ix_historico_pedido_compras_pedido_compra_id",
+      "name": "ix_historico_pedido_compras_operacao",
       "columns": [
-        "pedido_compra_id"
+        "operacao"
       ],
       "unique": false
     },
@@ -195,9 +195,9 @@
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_operacao",
+      "name": "ix_historico_pedido_compras_pedido_compra_id",
       "columns": [
-        "operacao"
+        "pedido_compra_id"
       ],
       "unique": false
     },
