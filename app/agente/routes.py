@@ -110,7 +110,7 @@ def api_chat():
     {
         "message": "Tem pedido pendente pro Atacadão?",
         "session_id": "uuid-da-nossa-sessao",  // Nosso ID, não do SDK
-        "model": "claude-sonnet-4-5-20250929",
+        "model": "claude-sonnet-4-6",
         "effort_level": "auto",
         "plan_mode": false,
         "files": []

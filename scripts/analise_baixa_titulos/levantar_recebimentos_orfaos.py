@@ -374,7 +374,7 @@ def levantar_recebimentos_orfaos(
             worksheet = writer.sheets['Orfaos']
             for idx, col in enumerate(df.columns):
                 max_length = max(
-                    df[col].astype(str).map(len).max() if len(df) > 0 else 0,
+                    df[col].fillna('').astype(str).map(len).max() if len(df) > 0 else 0,
                     len(col)
                 ) + 2
                 worksheet.column_dimensions[chr(65 + idx) if idx < 26 else f'{chr(65 + idx // 26 - 1)}{chr(65 + idx % 26)}'].width = min(max_length, 50)

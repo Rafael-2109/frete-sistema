@@ -244,7 +244,7 @@ def exportar_xlsx():
             worksheet = writer.sheets['Recursos de Produção']
             for idx, col in enumerate(df.columns):
                 max_length = max(
-                    df[col].astype(str).map(len).max(),
+                    df[col].fillna('').astype(str).map(len).max(),
                     len(col)
                 ) + 2
                 worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)

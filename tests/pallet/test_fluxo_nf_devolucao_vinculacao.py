@@ -54,18 +54,16 @@ class TestVinculacaoManualDevolucao:
                 'odoo_dfe_id': None
             }
 
-            # Vincular manualmente
+            # Vincular manualmente (1:1)
             match_service = MatchService()
-            solucoes = match_service.vincular_devolucao_manual(
-                nf_remessa_ids=[nf_remessa.id],
+            solucao = match_service.vincular_devolucao_manual(
+                nf_remessa_id=nf_remessa.id,
                 nf_devolucao=nf_devolucao,
-                quantidades={nf_remessa.id: 10},
+                quantidade=10,
                 usuario='test_user'
             )
 
             # Verificar solucao criada
-            assert len(solucoes) == 1
-            solucao = solucoes[0]
             assert solucao.tipo == 'DEVOLUCAO'
             assert solucao.quantidade == 10
             assert solucao.vinculacao == 'MANUAL'
@@ -103,9 +101,9 @@ class TestVinculacaoManualDevolucao:
                 'odoo_dfe_id': None
             }
 
-            # Vincular todas as NFs
+            # Vincular todas as NFs (1:N)
             match_service = MatchService()
-            solucoes = match_service.vincular_devolucao_manual(
+            solucoes = match_service.vincular_devolucao_manual_multiplas(
                 nf_remessa_ids=[nf1.id, nf2.id, nf3.id],
                 nf_devolucao=nf_devolucao,
                 quantidades={
@@ -145,10 +143,10 @@ class TestVinculacaoManualDevolucao:
                 'odoo_dfe_id': None
             }
 
-            # Tentar vincular 30 (maior que 20 devolvidos)
+            # Tentar vincular 30 (maior que 20 devolvidos) via multiplas
             match_service = MatchService()
-            with pytest.raises(ValueError, match=r"maior que quantidade devolvida"):
-                match_service.vincular_devolucao_manual(
+            with pytest.raises(ValueError, match=r"maior que.*quantidade devolvida"):
+                match_service.vincular_devolucao_manual_multiplas(
                     nf_remessa_ids=[nf_remessa.id],
                     nf_devolucao=nf_devolucao,
                     quantidades={nf_remessa.id: 30},  # 30 > 20
@@ -167,7 +165,7 @@ class TestVinculacaoManualRetorno:
     """
 
     def test_vincular_retorno_simples(self, app, db, criar_nf_remessa):
-        """Vincula uma NF de retorno a uma NF de remessa"""
+        """Vincula uma NF de retorno a uma NF de remessa (consolidado como DEVOLUCAO)"""
         with app.app_context():
             from app.pallet.services.match_service import MatchService
 
@@ -187,23 +185,23 @@ class TestVinculacaoManualRetorno:
                 'odoo_dfe_id': None
             }
 
-            # Vincular manualmente
+            # Vincular manualmente (retorno consolidado em vincular_devolucao_manual)
             match_service = MatchService()
-            solucao = match_service.vincular_retorno_manual(
+            solucao = match_service.vincular_devolucao_manual(
                 nf_remessa_id=nf_remessa.id,
-                nf_retorno=nf_retorno,
+                nf_devolucao=nf_retorno,
                 quantidade=30,
                 usuario='test_user'
             )
 
-            # Verificar solucao
-            assert solucao.tipo == 'RETORNO'
+            # Verificar solucao (tipo DEVOLUCAO — retorno consolidado)
+            assert solucao.tipo == 'DEVOLUCAO'
             assert solucao.quantidade == 30
             assert solucao.vinculacao == 'MANUAL'
             assert solucao.confirmado == True
 
     def test_vincular_retorno_quantidade_parcial(self, app, db, criar_nf_remessa):
-        """Vincula um retorno parcial"""
+        """Vincula um retorno parcial (consolidado como DEVOLUCAO)"""
         with app.app_context():
             from app.pallet.services.match_service import MatchService
             from app.pallet.models.nf_remessa import PalletNFRemessa
@@ -225,9 +223,9 @@ class TestVinculacaoManualRetorno:
             }
 
             match_service = MatchService()
-            solucao = match_service.vincular_retorno_manual(
+            solucao = match_service.vincular_devolucao_manual(
                 nf_remessa_id=nf_remessa.id,
-                nf_retorno=nf_retorno,
+                nf_devolucao=nf_retorno,
                 quantidade=20,
                 usuario='test_user'
             )
@@ -497,10 +495,10 @@ class TestMatchAutomatico:
                 'tipo_sugestao': 'RETORNO'
             }
 
-            # Sugerir vinculacao de retorno
+            # Sugerir vinculacao (retorno com referencia = match exato)
             match_service = MatchService()
-            resultado = match_service.sugerir_vinculacao_retorno(
-                nf_retorno=nf_retorno,
+            resultado = match_service.sugerir_vinculacao_devolucao_com_referencia(
+                nf_devolucao=nf_retorno,
                 criar_sugestao=True
             )
 
@@ -534,12 +532,12 @@ class TestMatchAutomatico:
             }
 
             match_service = MatchService()
-            resultado = match_service.sugerir_vinculacao_retorno(
-                nf_retorno=nf_retorno,
+            resultado = match_service.sugerir_vinculacao_devolucao_com_referencia(
+                nf_devolucao=nf_retorno,
                 criar_sugestao=True
             )
 
-            # Deve retornar None (sera tratado como devolucao)
+            # Deve retornar None (sem referencia, sera tratado como devolucao generica)
             assert resultado is None
 
 

@@ -2,14 +2,24 @@
 Modelos SQLAlchemy para embeddings com pgvector.
 
 Cada dominio (SSW, produtos, extrato, etc.) tem seu proprio modelo
-com colunas especificas + coluna `embedding` do tipo vector.
+com colunas especificas + coluna `embedding` do tipo vector(1024).
 
 IMPORTANTE: Requer extensao pgvector no PostgreSQL:
     CREATE EXTENSION IF NOT EXISTS vector;
+
+O tipo Vector(1024) do pgvector-sqlalchemy e usado nativamente,
+permitindo que indices HNSW funcionem sem CAST overhead.
+Se pgvector nao estiver instalado (raro), fallback para db.Text.
 """
 
 from app import db
 from app.utils.timezone import agora_utc_naive
+
+try:
+    from pgvector.sqlalchemy import Vector
+    EMBEDDING_VECTOR_TYPE = Vector(1024)
+except ImportError:
+    EMBEDDING_VECTOR_TYPE = db.Text
 
 
 class SswDocumentEmbedding(db.Model):
@@ -30,10 +40,8 @@ class SswDocumentEmbedding(db.Model):
     heading = db.Column(db.Text, nullable=True)          # Titulo da secao (ex: "## Como Usar")
     doc_title = db.Column(db.Text, nullable=True)        # Titulo do documento (primeiro # do arquivo)
 
-    # Embedding — armazenado como TEXT contendo a representacao do vetor
-    # Em producao com pgvector: ALTER COLUMN embedding TYPE vector(1024)
-    # Sem pgvector: armazenado como JSON string para fallback
-    embedding = db.Column(db.Text, nullable=True)
+    # Embedding — tipo vector(1024) nativo do pgvector
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
 
     # Metadados
     char_count = db.Column(db.Integer, nullable=True)    # Tamanho do chunk em caracteres
@@ -83,8 +91,8 @@ class ProductEmbedding(db.Model):
     tipo_materia_prima = db.Column(db.String(100), nullable=True)
     texto_embedado = db.Column(db.Text, nullable=False)  # Texto combinado usado para gerar embedding
 
-    # Embedding — mesmo padrao do SswDocumentEmbedding
-    embedding = db.Column(db.Text, nullable=True)
+    # Embedding — tipo vector(1024) nativo do pgvector
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
 
     # Metadados
     model_used = db.Column(db.String(50), nullable=True)
@@ -120,7 +128,7 @@ class FinancialEntityEmbedding(db.Model):
     texto_embedado = db.Column(db.Text, nullable=False)       # Texto usado para embedding
 
     # Embedding — mesmo padrao do SswDocumentEmbedding/ProductEmbedding
-    embedding = db.Column(db.Text, nullable=True)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
     model_used = db.Column(db.String(50), nullable=True)
 
     # Timestamps
@@ -173,7 +181,7 @@ class SessionTurnEmbedding(db.Model):
     texto_embedado = db.Column(db.Text, nullable=False)       # Combinado para embedding
 
     # Embedding
-    embedding = db.Column(db.Text, nullable=True)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
     model_used = db.Column(db.String(50), nullable=True)
     content_hash = db.Column(db.String(32), nullable=True)    # MD5 para stale detection
 
@@ -228,7 +236,7 @@ class AgentMemoryEmbedding(db.Model):
 
     # Embedding
     texto_embedado = db.Column(db.Text, nullable=False)
-    embedding = db.Column(db.Text, nullable=True)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
     model_used = db.Column(db.String(50), nullable=True)
     content_hash = db.Column(db.String(32), nullable=True)    # MD5 para stale detection
 
@@ -252,4 +260,190 @@ class AgentMemoryEmbedding(db.Model):
             'memory_id': self.memory_id,
             'path': self.path,
             'content_hash': self.content_hash,
+        }
+
+
+class SqlTemplateEmbedding(db.Model):
+    """
+    Embedding de templates SQL para few-shot retrieval.
+
+    Cada registro corresponde a uma query SQL bem-sucedida associada
+    a uma pergunta em linguagem natural. Permite reusar queries passadas
+    como few-shot examples ou atalhos diretos (skip Generator+Evaluator).
+
+    Fluxo: pergunta nova → embed → buscar templates similares →
+    se match alto: reusar SQL; se medio: injetar como few-shot.
+    """
+    __tablename__ = 'sql_template_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Conteudo
+    question_text = db.Column(db.Text, nullable=False)      # Pergunta original em linguagem natural
+    sql_text = db.Column(db.Text, nullable=False)            # SQL que funcionou
+    tables_used = db.Column(db.Text, nullable=True)          # JSON: lista de tabelas usadas no SQL
+
+    # Metricas de uso
+    execution_count = db.Column(db.Integer, nullable=False, default=1)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)      # Texto usado para gerar embedding
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(32), nullable=True)   # MD5 do question_text para dedup
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.Index('idx_sqlt_content_hash', 'content_hash'),
+    )
+
+    def __repr__(self):
+        return f'<SqlTemplateEmbedding {self.question_text[:50]}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'question_text': self.question_text,
+            'sql_text': self.sql_text,
+            'tables_used': self.tables_used,
+            'execution_count': self.execution_count,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+        }
+
+
+class PaymentCategoryEmbedding(db.Model):
+    """
+    Embedding de categorias de pagamento para classificacao semantica.
+
+    Cada registro corresponde a uma categoria (IMPOSTO, TARIFA, FOLHA, etc.)
+    com exemplos reais de payment_ref. Permite classificar pagamentos que
+    nao matcham nos regex hardcoded do Layer 5 do FavorecidoResolverService.
+
+    Substitui abordagem regex-only por fallback semantico.
+    """
+    __tablename__ = 'payment_category_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    category_name = db.Column(db.String(50), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)          # Descricao legivel da categoria
+    examples = db.Column(db.Text, nullable=True)             # JSON: exemplos reais de payment_ref
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    def __repr__(self):
+        return f'<PaymentCategoryEmbedding {self.category_name}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'category_name': self.category_name,
+            'description': self.description,
+            'examples': self.examples,
+        }
+
+
+class DevolucaoReasonEmbedding(db.Model):
+    """
+    Embedding de motivos de devolucao para classificacao por similaridade.
+
+    Cada registro corresponde a uma devolucao ja classificada.
+    Permite classificar novas devolucoes por similaridade semantica
+    ao inves de chamar Haiku para cada uma (~$0.003/chamada).
+
+    Busca por similaridade: "quais devolucoes similares a essa?"
+    """
+    __tablename__ = 'devolucao_reason_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    nf_devolucao_linha_id = db.Column(db.Integer, nullable=True)  # FK logica -> nf_devolucao_linhas.id
+    descricao_text = db.Column(db.Text, nullable=False)            # Texto original da descricao/observacao
+    motivo_classificado = db.Column(db.String(50), nullable=True)  # AVARIA, FALTA, SOBRA, etc.
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(32), nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.Index('idx_dre_motivo', 'motivo_classificado'),
+        db.Index('idx_dre_content_hash_unique', 'content_hash', unique=True, postgresql_where=db.text('content_hash IS NOT NULL')),
+    )
+
+    def __repr__(self):
+        return f'<DevolucaoReasonEmbedding {self.motivo_classificado}:{self.descricao_text[:30]}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'nf_devolucao_linha_id': self.nf_devolucao_linha_id,
+            'descricao_text': self.descricao_text[:200] + '...' if len(self.descricao_text or '') > 200 else self.descricao_text,
+            'motivo_classificado': self.motivo_classificado,
+        }
+
+
+class CarrierEmbedding(db.Model):
+    """
+    Embedding de transportadoras para matching semantico de nomes.
+
+    Cada registro corresponde a uma transportadora unica (nome canonico).
+    Resolve variacoes de nome: "TAC" vs "Tacogna", "Transmerc" vs "Transmercur".
+
+    Usado como fallback quando ILIKE nao encontra match.
+    """
+    __tablename__ = 'carrier_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    carrier_name = db.Column(db.Text, nullable=False)         # Nome canonico (normalizado upper)
+    cnpj = db.Column(db.String(20), nullable=True)            # CNPJ se disponivel
+    aliases = db.Column(db.Text, nullable=True)               # JSON: variacoes conhecidas do nome
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('carrier_name', name='uq_carrier_name'),
+        db.Index('idx_carrier_name', 'carrier_name'),
+    )
+
+    def __repr__(self):
+        return f'<CarrierEmbedding {self.carrier_name}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'carrier_name': self.carrier_name,
+            'cnpj': self.cnpj,
+            'aliases': self.aliases,
         }

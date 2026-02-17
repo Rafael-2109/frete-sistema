@@ -18,7 +18,7 @@ DATA: 30/12/2024
 import os
 import json
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 import asyncio
 
@@ -1595,6 +1595,16 @@ class AIResolverService:
                     texto_original=texto or ''
                 )
 
+            # Pre-check: tentar classificar motivo via embeddings semanticos
+            motivo_semantico = None
+            confianca_semantica = 0.0
+            try:
+                result_sem = self.classificar_motivo_semantico(texto)
+                if result_sem:
+                    motivo_semantico, confianca_semantica = result_sem
+            except Exception:
+                pass  # Best-effort
+
             prompt = PROMPT_EXTRAIR_OBSERVACAO.format(
                 texto_observacao=texto
             )
@@ -1624,12 +1634,24 @@ class AIResolverService:
             # Manter compatibilidade com campo antigo
             numero_nf_venda = numeros_nf_venda[0] if numeros_nf_venda else dados.get('numero_nf_venda')
 
+            # Usar motivo semantico se Haiku deu confianca baixa ou motivo generico
+            motivo_final = dados.get('motivo_sugerido')
+            confianca_final = float(dados.get('confianca', 0))
+
+            if motivo_semantico and (
+                confianca_final < 0.7
+                or motivo_final == 'OUTROS'
+                or not motivo_final
+            ):
+                motivo_final = motivo_semantico
+                confianca_final = max(confianca_final, confianca_semantica)
+
             resultado = ResultadoExtracaoObservacao(
                 numero_nf_venda=numero_nf_venda,
                 numeros_nf_venda=numeros_nf_venda,
-                motivo_sugerido=dados.get('motivo_sugerido'),
+                motivo_sugerido=motivo_final,
                 descricao_motivo=dados.get('descricao_motivo'),
-                confianca=float(dados.get('confianca', 0)),
+                confianca=confianca_final,
                 texto_original=texto
             )
 
@@ -1717,6 +1739,73 @@ class AIResolverService:
                 fator_conversao=None,
                 confianca=0.0
             )
+
+    # =========================================================================
+    # CLASSIFICACAO SEMANTICA DE MOTIVO DE DEVOLUCAO
+    # =========================================================================
+
+    def classificar_motivo_semantico(self, texto: str) -> Optional[Tuple[str, float]]:
+        """
+        Classifica motivo de devolucao via embeddings semanticos.
+
+        Busca em devolucoes historicas ja classificadas (devolucao_reason_embeddings)
+        as mais similares e retorna o motivo por maioria dos top-5.
+
+        Args:
+            texto: Texto da observacao/descricao da devolucao
+
+        Returns:
+            Tuple (motivo, confianca) ou None se confianca baixa
+        """
+        try:
+            from app.embeddings.config import DEVOLUCAO_REASON_SEMANTIC, EMBEDDINGS_ENABLED
+            if not EMBEDDINGS_ENABLED or not DEVOLUCAO_REASON_SEMANTIC:
+                return None
+
+            if not texto or len(texto.strip()) < 10:
+                return None
+
+            from app.embeddings.service import EmbeddingService
+            svc = EmbeddingService()
+            results = svc.search_devolucao_reasons(
+                texto, limit=5, min_similarity=0.70
+            )
+
+            if not results:
+                return None
+
+            # Votacao por maioria dos top-5 resultados
+            from collections import Counter
+            votos = Counter()
+            total_sim = 0.0
+            for r in results:
+                motivo = r.get('motivo_classificado', 'OUTROS')
+                sim = r.get('similarity', 0)
+                votos[motivo] += 1
+                total_sim += sim
+
+            if not votos:
+                return None
+
+            motivo_mais_votado, contagem = votos.most_common(1)[0]
+            proporcao = contagem / len(results)
+            avg_sim = total_sim / len(results)
+
+            # Confianca baseada em proporcao de votos + similaridade media
+            confianca = proporcao * avg_sim
+
+            # Threshold: pelo menos 60% de concordancia e media > 0.75
+            if proporcao >= 0.6 and avg_sim >= 0.75:
+                logger.info(
+                    f"[AI_RESOLVER] Motivo semantico: {motivo_mais_votado} "
+                    f"(votos={contagem}/{len(results)}, sim_avg={avg_sim:.2f})"
+                )
+                return (motivo_mais_votado, confianca)
+
+        except Exception as e:
+            logger.debug(f"[AI_RESOLVER] Classificacao semantica falhou (ignorado): {e}")
+
+        return None
 
     # =========================================================================
     # RESOLUCAO EM LOTE

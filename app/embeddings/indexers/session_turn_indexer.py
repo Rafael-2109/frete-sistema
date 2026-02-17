@@ -29,7 +29,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 
 # Tamanho maximo da resposta do assistant incluida no embedding
-ASSISTANT_SUMMARY_MAX_CHARS = 500
+# 1000 chars captura melhor o contexto da resposta (P2.3)
+ASSISTANT_SUMMARY_MAX_CHARS = 1000
 
 # Tamanho minimo da mensagem do usuario para ser indexada
 MIN_USER_CONTENT_CHARS = 10
@@ -262,36 +263,8 @@ def _index_turns_impl(turns: List[Dict], reindex: bool = False) -> Dict:
         if i + batch_size < len(new_turns):
             time.sleep(0.5)
 
-    # Criar indice IVFFlat se pgvector disponivel e tabela nao vazia
-    try:
-        result = db.session.execute(text(
-            "SELECT COUNT(*) FROM session_turn_embeddings WHERE embedding IS NOT NULL"
-        ))
-        count = result.scalar()
-        if count > 0:
-            result = db.session.execute(text(
-                "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
-            ))
-            if result.fetchone():
-                lists = max(1, min(count // 10, 100))
-                print(f"\n[INFO] Criando indice IVFFlat (lists={lists})...")
-                try:
-                    db.session.execute(text(
-                        "DROP INDEX IF EXISTS idx_ste_emb_cosine"
-                    ))
-                    db.session.execute(text(f"""
-                        CREATE INDEX idx_ste_emb_cosine
-                            ON session_turn_embeddings
-                            USING ivfflat (CAST(embedding AS vector) vector_cosine_ops)
-                            WITH (lists = {lists})
-                    """))
-                    db.session.commit()
-                    print("   IVFFlat index criado com sucesso")
-                except Exception as idx_err:
-                    print(f"   IVFFlat index falhou (ignorado): {idx_err}")
-                    db.session.rollback()
-    except Exception:
-        pass
+    # Nota: Indices HNSW sao criados pela migration criar_indices_hnsw_embeddings.py
+    # IVFFlat removido (HNSW tem melhor recall e funciona em tabelas vazias)
 
     return stats
 

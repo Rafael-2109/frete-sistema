@@ -386,3 +386,86 @@ def detalhe_conta_pagar(conta_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# BUSCA SEMANTICA DE ENTIDADES (compartilhado pagar/receber)
+# =============================================================================
+
+@financeiro_bp.route('/api/busca-semantica', methods=['GET'])
+@login_required
+def busca_semantica_entidades():
+    """
+    Busca semantica de fornecedores/clientes via embeddings.
+
+    Recebe termo parcial/abreviado e retorna matches por similaridade
+    usando FinancialEntityEmbedding (Voyage AI + pgvector).
+
+    Query params:
+        q: Termo de busca (min 2 chars)
+        tipo: 'supplier', 'customer', ou 'all' (default: 'all')
+        limit: Maximo de resultados (default: 8, max: 20)
+
+    Returns:
+        JSON: { success, resultados: [{ cnpj_raiz, cnpj_completo, nome, entity_type, similarity }] }
+    """
+    try:
+        q = request.args.get('q', '').strip()
+        tipo = request.args.get('tipo', 'all')
+        limit = min(request.args.get('limit', 8, type=int), 20)
+
+        if not q or len(q) < 2:
+            return jsonify({'success': True, 'resultados': []})
+
+        if tipo not in ('supplier', 'customer', 'all'):
+            tipo = 'all'
+
+        # Tentar busca semantica
+        try:
+            from app.embeddings.config import FINANCIAL_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
+            if not EMBEDDINGS_ENABLED or not FINANCIAL_SEMANTIC_SEARCH:
+                return jsonify({
+                    'success': True,
+                    'resultados': [],
+                    'metodo': 'desabilitado'
+                })
+
+            from app.embeddings.service import EmbeddingService
+            svc = EmbeddingService()
+            results = svc.search_entities(
+                query=q,
+                entity_type=tipo,
+                limit=limit,
+                min_similarity=0.60,
+            )
+
+            resultados = []
+            for r in results:
+                resultados.append({
+                    'cnpj_raiz': r.get('cnpj_raiz', ''),
+                    'cnpj_completo': r.get('cnpj_completo', ''),
+                    'nome': r.get('nome', ''),
+                    'entity_type': r.get('entity_type', ''),
+                    'similarity': round(r.get('similarity', 0), 3),
+                })
+
+            return jsonify({
+                'success': True,
+                'resultados': resultados,
+                'metodo': 'semantico',
+                'total': len(resultados),
+            })
+
+        except Exception:
+            # Fallback: retornar vazio (busca ILIKE normal continua funcionando no form)
+            return jsonify({
+                'success': True,
+                'resultados': [],
+                'metodo': 'fallback'
+            })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

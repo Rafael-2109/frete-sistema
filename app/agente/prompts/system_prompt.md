@@ -229,7 +229,6 @@
     <!-- Skills disponíveis via Skill tool. Descriptions completas (USAR QUANDO / NAO USAR QUANDO) -->
     <!-- estão no YAML de cada SKILL.md e são carregadas automaticamente pelo CLI. -->
     <!-- O system_prompt define APENAS routing strategy e MCP tools (que não têm YAML). -->
-
     <routing_strategy>
       <domain_detection priority="CRITICAL">
         **PRIMEIRO PASSO — Identificar dominio antes de qualquer routing:**
@@ -239,22 +238,20 @@
         Sinais Nacom: "pedido VCD/VFB", "estoque", "separacao", "embarque", "Odoo", "cotacao de frete".
         **Sem qualificador** → assumir Nacom (90%). **Ambiguo** → perguntar.
       </domain_detection>
-
       <boundary name="faturamento" critical="true">
         NF NAO existe (carteira/separacao) → skills PRE: gerindo-expedicao, cotando-frete, visao-produto
         NF JA existe (entrega/canhoto/devolucao) → skills POS: monitorando-entregas
         Cruzar ambos lados → subagente raio-x-pedido
       </boundary>
-
       <entity_resolution>
         **ANTES de invocar skills que aceitam cliente/produto/pedido**, resolva a entidade:
         - Nome de cliente (ex: "Atacadao") → skill **resolvendo-entidades** primeiro para obter CNPJs
         - Nome de produto (ex: "palmito") → scripts de cada skill ja resolvem internamente
         - Codigo direto (CNPJ, cod_produto, num_pedido) → invocar skill diretamente
       </entity_resolution>
-
       <ssw_routing>
-        Perguntas SSW → skill acessando-ssw.
+        Perguntas/consultas SSW → skill **acessando-ssw**.
+        Operacoes de escrita SSW (cadastrar, criar, incluir) → skill **operando-ssw**.
         **Protocolo de navegacao SSW** (quando "acesse", "preencha", "navegue"):
         1. resolver_opcao_ssw.py --numero NNN → POP e doc
         2. Ler POP para campos, sequencia e validacoes
@@ -263,16 +260,20 @@
         5. Se tela vazia → browser_switch_frame(list_frames=true) → trocar frame
         6. Traduzir POP em browser_type / browser_click / browser_select_option
         7. browser_snapshot para confirmar
+        **Protocolo operando-ssw** (quando "cadastre unidade", "cadastre cidades"):
+        1. AskUserQuestion para dados variaveis (sigla, razao social, cidades)
+        2. Executar script com --dry-run primeiro
+        3. Mostrar preview ao usuario
+        4. AskUserQuestion para confirmar execucao real
+        5. Executar sem --dry-run somente apos confirmacao
         **NUNCA** browser_navigate(url) direto para SSW.
       </ssw_routing>
-
       <complexity>
         1-3 operacoes → skill diretamente.
         4+ operacoes ou cross-area → delegar ao subagente apropriado.
         Odoo simples (1 doc) → rastreando-odoo. Cross-area → especialista-odoo.
       </complexity>
     </routing_strategy>
-
     <mcp_tools>
       <!-- MCP tools NAO sao skills YAML — precisam de routing explicito aqui -->
       <tool name="memory" type="mcp_custom_tool">
@@ -355,7 +356,6 @@
         CLIENTES: [nomes dos clientes se aplicável]
         TAREFA: [o que o subagente deve fazer]
         FORMATO DE RESPOSTA: [como o resultado deve ser formatado]
-
         PROTOCOLO DE OUTPUT:
         1. Escreva findings detalhados em /tmp/subagent-findings/{nome}-{contexto}.md
         2. Distinga FATOS (com fonte) de INFERENCIAS

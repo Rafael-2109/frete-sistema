@@ -590,7 +590,7 @@ def register_custeio_routes(bp):
                 worksheet = writer.sheets['Custos']
                 for idx, col in enumerate(df.columns):
                     max_length = max(
-                        df[col].astype(str).map(len).max(),
+                        df[col].fillna('').astype(str).map(len).max(),
                         len(col)
                     ) + 2
                     worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
@@ -992,7 +992,7 @@ def register_custeio_routes(bp):
                 worksheet = writer.sheets['Custo Frete']
                 for idx, col in enumerate(df.columns):
                     max_length = max(
-                        df[col].astype(str).map(len).max() if len(df) > 0 else 0,
+                        df[col].fillna('').astype(str).map(len).max() if len(df) > 0 else 0,
                         len(col)
                     ) + 2
                     worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 30)
@@ -3098,7 +3098,7 @@ def register_custeio_routes(bp):
                 worksheet = writer.sheets['Regras Comissao']
                 for idx, col in enumerate(df.columns):
                     max_length = max(
-                        df[col].astype(str).map(len).max(),
+                        df[col].fillna('').astype(str).map(len).max(),
                         len(col)
                     ) + 2
                     worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 40)
@@ -3174,7 +3174,7 @@ def register_custeio_routes(bp):
                 worksheet = writer.sheets['Modelo']
                 for idx, col in enumerate(df.columns):
                     max_length = max(
-                        df[col].astype(str).map(len).max(),
+                        df[col].fillna('').astype(str).map(len).max(),
                         len(col)
                     ) + 2
                     worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 40)

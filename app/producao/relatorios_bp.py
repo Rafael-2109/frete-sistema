@@ -504,7 +504,7 @@ def exportar_relatorios_producao():
                 elif col_name == 'Emb.':
                     worksheet_estoque.set_column(col_num, col_num, 12)  # ✅ NOVA
                 else:
-                    column_width = max(df_estoque[col_name].astype(str).map(len).max() if len(df_estoque) > 0 else 10, len(col_name)) + 2
+                    column_width = max(df_estoque[col_name].fillna('').astype(str).map(len).max() if len(df_estoque) > 0 else 10, len(col_name)) + 2
                     worksheet_estoque.set_column(col_num, col_num, min(column_width, 50))
             
             # Aba de Movimentações Previstas - NOVO FORMATO COM 3 COLUNAS

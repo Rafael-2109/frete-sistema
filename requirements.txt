@@ -4,7 +4,7 @@
 # ==========================================
 # CORE FRAMEWORK
 # ==========================================
-Flask==3.1.0
+Flask==3.1.2
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
 Flask-Migrate==4.1.0
@@ -15,50 +15,54 @@ WTForms==3.2.1
 # ==========================================
 # DATABASE & DATA PROCESSING
 # ==========================================
-psycopg2-binary==2.9.10
-pandas==2.2.3
+psycopg2-binary==2.9.11
+SQLAlchemy==2.0.46             # patch (transitiva via Flask-SQLAlchemy)
+Werkzeug==3.1.5                # patch (transitiva via Flask)
+certifi>=2026.1.4              # CA roots atualizados (transitiva via requests)
+pandas==3.0.0
 openpyxl==3.1.5
 # xlsxwriter removido - usando openpyxl com template
-xlrd==2.0.1
+xlrd==2.0.2
 xlwt==1.3.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
-requests==2.32.3
+requests==2.32.5
+urllib3>=2.6.0             # CVE-2025-66418 (decompression bomb)
 
 # ==========================================
 # CLOUD & DEPLOYMENT
 # ==========================================
-gunicorn==23.0.0  # Atualizado para melhor compatibilidade
-greenlet==3.1.1  # CRÍTICO: Versão 3.1+ para Python 3.12+
-gevent==24.11.1  # Atualizado para compatibilidade com greenlet
-boto3==1.35.0
-python-dotenv==1.1.0
-psutil==5.9.6
+gunicorn==25.1.0  # CVE-2024-6827 fix (HTTP smuggling)
+greenlet==3.3.1  # CRÍTICO: Versão 3.1+ para Python 3.12+
+gevent==25.9.1  # Atualizado para compatibilidade com greenlet
+boto3==1.42.50
+python-dotenv==1.2.1
+psutil==7.2.2
 
 # ==========================================
 # CACHE & PERFORMANCE
 # ==========================================
-redis==5.0.8
-rq==1.16.2  # Redis Queue para processamento em background (atualizado)
-rq-dashboard==0.6.1  # Dashboard para monitorar jobs (opcional)
-APScheduler==3.11.0
-whitenoise==6.8.2  # Serve arquivos estaticos com compressao e cache no WSGI layer
-Flask-Compress==1.17  # Compressao gzip de respostas dinamicas (HTML, JSON)
+redis==7.2.0                # 5.0.8 → 7.2.0 (API core compatível, requer Python 3.10+)
+rq==2.6.1                   # 1.16.2 → 2.6.1 (Connection ctx removido, worker_ttl renomeado)
+# rq-dashboard removido — abandonware (2020), não importado no app, incompatível com rq 2.x
+APScheduler==3.11.2
+whitenoise==6.11.0  # Serve arquivos estaticos com compressao e cache no WSGI layer
+Flask-Compress==1.23  # Compressao gzip de respostas dinamicas (HTML, JSON)
 
 # ==========================================
 # VALIDATION
 # ==========================================
-dnspython==2.7.0
-email-validator==2.2.0
+dnspython==2.8.0
+email-validator==2.3.0
 
 # ==========================================
 # AI & CLAUDE INTEGRATION
 # ==========================================
-anthropic==0.77.0           # API direta Anthropic (fallback)
-claude-agent-sdk==0.1.36    # Claude Agent SDK oficial (upgraded from 0.1.33 — extra_args support for --effort flag)
-mcp>=1.10.0                 # Model Context Protocol (latest stable)
-pydantic==2.11.7           # Data validation
-anyio==4.9.0               # Async support
+anthropic==0.79.0           # API direta Anthropic (fallback)
+claude-agent-sdk==0.1.37    # Claude Agent SDK oficial (upgraded from 0.1.33 — extra_args support for --effort flag)
+mcp>=1.26.0                 # Model Context Protocol (latest stable)
+pydantic==2.12.5           # Data validation
+anyio==4.12.1              # Async support
 
 # ==========================================
 # NLP PARA MELHOR ENTENDIMENTO (NOVO!)
@@ -70,15 +74,15 @@ anyio==4.9.0               # Async support
 # - Detecção de sinônimos
 
 fuzzywuzzy==0.18.0         # Matching fuzzy de strings
-rapidfuzz==3.10.1          # Substitui python-Levenshtein - mais rápido e compatível com Python 3.12+
+rapidfuzz==3.14.3          # Substitui python-Levenshtein - mais rápido e compatível com Python 3.12+
 # python-Levenshtein-wheels==0.13.2  # Alternativa se precisar manter Levenshtein
 unidecode==1.4.0           # Remove acentos para comparação
 
 # NLTK Simplificado (apenas o essencial)
-nltk==3.8.1                # Natural Language Toolkit
+nltk==3.9.2                # Natural Language Toolkit
 
 # Fuzzy matching adicional (necessário para entity_mapper)
-jellyfish==1.1.0           # String matching algorithms
+jellyfish==1.2.1           # String matching algorithms
 
 # SpaCy - Processamento Avançado de Linguagem Natural
 # spacy==3.7.4               # Engine principal de NLP
@@ -98,19 +102,19 @@ jellyfish==1.1.0           # String matching algorithms
 # ==========================================
 # plotly==5.20.0          # Gráficos interativos
 # matplotlib==3.8.3       # Gráficos básicos
-structlog==24.4.0  # Versão específica para estabilidade
+structlog==25.5.0  # Versão específica para estabilidade
 # Logging colorido
-colorlog==6.8.2  # Versão específica para estabilidade
-PyJWT==2.8.0
+colorlog==6.10.1  # Versão específica para estabilidade
+PyJWT==2.11.0
 
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-python-multipart==0.0.14
-python-jose[cryptography]==3.3.0
+fastapi==0.129.0
+uvicorn[standard]==0.41.0
+python-multipart==0.0.22
+python-jose[cryptography]==3.5.0
 httpx==0.28.1
-aioredis==2.0.1  # Para async Redis
-python-json-logger==2.0.7  # Para JSON logging
-xlsxwriter==3.2.5
+# aioredis removido — deprecado (merged em redis-py 4.2+), não importado no app
+# python-json-logger removido — não importado em nenhum arquivo do app (structlog+colorlog são usados)
+xlsxwriter==3.2.9
 
 # ==========================================
 # EMAIL PROCESSING
@@ -123,33 +127,33 @@ extract-msg==0.55.0  # Para ler arquivos .msg e .eml do Outlook
 # Escolha uma das opções abaixo conforme necessidade:
 
 # Opção 1: Selenium (para Chrome Debug Mode - RECOMENDADO)
-selenium==4.27.1           # Automação browser (atualizado)
+selenium==4.40.0           # Automação browser (atualizado)
 webdriver-manager==4.0.2   # Gerenciamento de drivers (atualizado)
 
 # Opção 2: Playwright (alternativa moderna)
-playwright==1.49.0         # Automação multi-browser (atualizado)
+playwright==1.58.0         # Automação multi-browser (compatível com greenlet 3.3+)
 nest-asyncio==1.6.0        # Fix para Playwright Sync em loop asyncio
 
 # Dependências adicionais para portal
-cryptography==43.0.3       # Criptografia de cookies/sessões (atualizado para segurança)
+cryptography==46.0.5       # Criptografia de cookies/sessões (OpenSSL patches)
 # PyPDF2==3.0.1            # Removido - pypdf é o sucessor
-pdfplumber==0.11.7
-pypdf==5.1.0
+pdfplumber==0.11.9
+pypdf==6.7.1
 
 # ==========================================
 # RASTREAMENTO GPS E QRCODE
 # ==========================================
-qrcode==8.0              # Geração de QR Codes
-pillow==11.0.0           # Processamento de imagens (requerido por qrcode)
+qrcode==8.2              # Geração de QR Codes
+pillow==12.1.1           # Processamento de imagens (CVE-2026-25990 fix)
 haversine==2.9.0         # Distância entre coordenadas GPS
 # Geocoding agora usa Google Maps API (mesma do mapa_service.py)
-weasyprint==67.0         # Geração de PDFs
+weasyprint==68.1         # Geração de PDFs
 
 # ==========================================
 # OCR / PDF PROCESSING (Comprovantes)
 # ==========================================
-pypdfium2==5.1.0           # Renderização de PDF para imagem (leitor comprovantes)
-tesserocr==2.9.2           # OCR via Tesseract C API (requer tesseract-ocr no sistema)
+pypdfium2==5.4.0           # Renderização de PDF para imagem (leitor comprovantes)
+tesserocr==2.10.0          # OCR via Tesseract C API (requer tesseract-ocr no sistema)
 
 # ==========================================
 # EMBEDDINGS & VECTOR SEARCH

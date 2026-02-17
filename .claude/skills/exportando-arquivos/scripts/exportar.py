@@ -113,7 +113,7 @@ def gerar_excel(dados, nome_arquivo, titulo=None, colunas=None):
         # Ajustar largura das colunas
         for i, col in enumerate(df.columns):
             max_len = max(
-                df[col].astype(str).map(len).max() if len(df) > 0 else 0,
+                df[col].fillna('').astype(str).map(len).max() if len(df) > 0 else 0,
                 len(str(col))
             ) + 2
             worksheet.set_column(i, i, min(max_len, 50))

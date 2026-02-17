@@ -423,6 +423,16 @@ class FavorecidoResolverService:
                 item.favorecido_nome = cat
                 return True
 
+        # Fallback semantico: buscar categoria via embeddings
+        if payment_ref and len(payment_ref) >= 5:
+            cat_sem = self._classificar_categoria_semantica(payment_ref)
+            if cat_sem:
+                item.categoria_pagamento = cat_sem
+                item.favorecido_metodo = 'CATEGORIA_SEMANTICO'
+                item.favorecido_confianca = 85
+                item.favorecido_nome = cat_sem
+                return True
+
         return False
 
     # =========================================================================
@@ -444,7 +454,48 @@ class FavorecidoResolverService:
             if pattern.search(payment_ref):
                 return cat
 
+        # Fallback semântico
+        if len(payment_ref) >= 5:
+            cat_sem = self._classificar_categoria_semantica(payment_ref)
+            if cat_sem:
+                return cat_sem
+
         return 'OUTRO'
+
+    def _classificar_categoria_semantica(self, payment_ref: str) -> Optional[str]:
+        """
+        Classifica categoria de pagamento via embeddings semanticos.
+
+        Busca nas categorias pre-indexadas (payment_category_embeddings)
+        a mais similar ao payment_ref. Retorna None se confianca baixa.
+
+        Args:
+            payment_ref: Texto do pagamento no extrato
+
+        Returns:
+            Nome da categoria ou None se similaridade < threshold
+        """
+        try:
+            from app.embeddings.config import PAYMENT_CATEGORY_SEMANTIC, EMBEDDINGS_ENABLED
+            if not EMBEDDINGS_ENABLED or not PAYMENT_CATEGORY_SEMANTIC:
+                return None
+
+            from app.embeddings.service import EmbeddingService
+            svc = EmbeddingService()
+            results = svc.search_payment_categories(
+                payment_ref, limit=1, min_similarity=0.70
+            )
+            if results and results[0].get('similarity', 0) >= 0.70:
+                cat = results[0]['category_name']
+                if cat and cat != 'OUTRO':
+                    logger.debug(
+                        f"[FAVORECIDO] Categoria semantica: {payment_ref[:40]} → "
+                        f"{cat} (sim={results[0]['similarity']:.2f})"
+                    )
+                    return cat
+        except Exception as e:
+            logger.debug(f"[FAVORECIDO] Classificacao semantica falhou (ignorado): {e}")
+        return None
 
     def _prefetch_partner_cnpjs(self, partner_ids: List[int]) -> None:
         """Busca CNPJs de parceiros Odoo em batch. Delega para _resolver_utils."""

@@ -17,7 +17,7 @@ Referência Memory Tool:
 import logging
 import re
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +263,54 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
         logger.debug(f"[MEMORY_MCP] _embed_memory_best_effort falhou: {e}")
 
 
+def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') -> Optional[str]:
+    """
+    Verifica se ja existe memoria semanticamente similar para o usuario.
+
+    Busca em agent_memory_embeddings por conteudo com cosine > 0.90,
+    excluindo o path atual (para nao detectar self-match em updates).
+
+    Args:
+        user_id: ID do usuario
+        content: Conteudo da nova memoria
+        current_path: Path sendo atualizado (excluido da busca)
+
+    Returns:
+        Path da memoria duplicada ou None se nao houver duplicata
+    """
+    try:
+        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
+        if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
+            return None
+
+        from app.embeddings.service import EmbeddingService
+
+        svc = EmbeddingService()
+        results = svc.search_memories(
+            content, user_id=user_id, limit=3, min_similarity=0.90
+        )
+
+        if not results:
+            return None
+
+        for r in results:
+            path = r.get('path', '')
+            # Excluir self-match
+            if path and path != current_path:
+                similarity = r.get('similarity', 0)
+                if similarity >= 0.90:
+                    logger.info(
+                        f"[MEMORY_MCP] Duplicata detectada: {current_path} ~ {path} "
+                        f"(sim={similarity:.3f})"
+                    )
+                    return path
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_MCP] Dedup check falhou (ignorado): {e}")
+
+    return None
+
+
 # =====================================================================
 # CUSTOM TOOLS — @tool decorator
 # =====================================================================
@@ -424,6 +472,18 @@ try:
             action = _execute_with_context(_save)
             logger.info(f"[MEMORY_MCP] save_memory: {path} ({action})")
 
+            # Best-effort: verificar duplicatas semanticas
+            dedup_warning = ''
+            try:
+                dup_path = _check_memory_duplicate(user_id, content, current_path=path)
+                if dup_path:
+                    dedup_warning = (
+                        f" AVISO: conteudo similar ja existe em '{dup_path}'. "
+                        f"Considere consolidar."
+                    )
+            except Exception:
+                pass
+
             # Best-effort: verificar se memórias precisam de consolidação
             try:
                 from ..services.memory_consolidator import maybe_consolidate
@@ -442,7 +502,7 @@ try:
                 logger.debug(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
 
             return {
-                "content": [{"type": "text", "text": f"Memória {action} em {path}"}]
+                "content": [{"type": "text", "text": f"Memória {action} em {path}{dedup_warning}"}]
             }
 
         except Exception as e:

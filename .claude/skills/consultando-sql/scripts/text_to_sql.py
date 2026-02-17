@@ -830,13 +830,74 @@ class TextToSQLPipeline:
 
         try:
             # =====================================================
-            # ETAPA 1: GENERATOR — Gerar SQL com catálogo leve
+            # ETAPA 0: TEMPLATE RETRIEVAL — Buscar queries similares
             # =====================================================
-            t1 = time.time()
-            sql = self.generator.generate(question)
-            result["etapas"]["generator_ms"] = int((time.time() - t1) * 1000)
-            result["sql_original"] = sql
-            result["sql"] = sql
+            template_match = None
+            few_shot_examples = []
+            try:
+                from app.embeddings.config import SQL_TEMPLATE_SEARCH, EMBEDDINGS_ENABLED
+                if EMBEDDINGS_ENABLED and SQL_TEMPLATE_SEARCH:
+                    from app.embeddings.service import EmbeddingService
+                    t0 = time.time()
+                    svc = EmbeddingService()
+                    templates = svc.search_sql_templates(
+                        question, limit=3, min_similarity=0.75
+                    )
+                    result["etapas"]["template_retrieval_ms"] = int((time.time() - t0) * 1000)
+
+                    if templates:
+                        best = templates[0]
+                        logger.info(
+                            f"[TEXT_TO_SQL] Template match: similarity={best['similarity']}, "
+                            f"q='{best['question_text'][:60]}'"
+                        )
+
+                        if best["similarity"] >= 0.92:
+                            # Match alto: usar SQL do template direto
+                            template_match = best
+                            result["etapas"]["template_direct_hit"] = True
+                        elif best["similarity"] >= 0.80:
+                            # Match medio: injetar como few-shot
+                            few_shot_examples = templates[:2]
+                            result["etapas"]["template_few_shot"] = len(few_shot_examples)
+            except Exception as e:
+                logger.debug(f"[TEXT_TO_SQL] Template retrieval falhou (ignorando): {e}")
+
+            # Se template direto, pular Generator
+            if template_match:
+                sql = template_match["sql_text"]
+                result["sql_original"] = sql
+                result["sql"] = sql
+                result["etapas"]["generator_ms"] = 0
+                result["etapas"]["template_used"] = template_match["question_text"]
+                logger.info(f"[TEXT_TO_SQL] Usando template direto (skip Generator)")
+
+                # Atualizar usage do template
+                try:
+                    from app.embeddings.indexers.sql_template_indexer import save_successful_query
+                    tables_in_sql = extract_tables_from_sql(sql)
+                    save_successful_query(question, sql, tables_in_sql)
+                except Exception:
+                    pass
+
+            else:
+                # =====================================================
+                # ETAPA 1: GENERATOR — Gerar SQL com catálogo leve
+                # =====================================================
+                t1 = time.time()
+
+                # Injetar few-shot examples se disponíveis
+                gen_question = question
+                if few_shot_examples:
+                    examples_text = "\n\nEXEMPLOS DE QUERIES SIMILARES (use como referencia):\n"
+                    for ex in few_shot_examples:
+                        examples_text += f"Pergunta: {ex['question_text']}\nSQL: {ex['sql_text']}\n\n"
+                    gen_question = question + examples_text
+
+                sql = self.generator.generate(gen_question)
+                result["etapas"]["generator_ms"] = int((time.time() - t1) * 1000)
+                result["sql_original"] = sql
+                result["sql"] = sql
 
             logger.info(f"[TEXT_TO_SQL] Generator: {sql[:200]}")
 
@@ -947,6 +1008,13 @@ class TextToSQLPipeline:
                 f"[TEXT_TO_SQL] Sucesso: {len(dados)} linhas em "
                 f"{int((time.time() - start_time) * 1000)}ms"
             )
+
+            # Best-effort: salvar query bem-sucedida como template para few-shot
+            try:
+                from app.embeddings.indexers.sql_template_indexer import save_successful_query
+                save_successful_query(question, sql, tables_in_sql)
+            except Exception:
+                pass  # Nao bloquear pipeline
 
         except RuntimeError as e:
             result["aviso"] = str(e)

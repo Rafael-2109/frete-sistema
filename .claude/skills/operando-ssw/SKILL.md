@@ -107,8 +107,9 @@ Demais campos usam defaults do ssw_defaults.json se omitidos.
 
 ## Defaults (ssw_defaults.json)
 
-Valores padrao CarVia carregados automaticamente. Campos `null` serao solicitados
-ao usuario na primeira execucao real (ex: dados bancarios).
+Valores padrao CarVia carregados automaticamente. Dados extraidos das unidades
+reais (CGR, MTZ) em 2026-02-17. Inclui dados bancarios (Banco Inter 077),
+seguro (Essor), RNTRC, empresa contabil, e flags operacionais.
 
 ## Fluxo Completo: Nova Rota (POP-A10)
 

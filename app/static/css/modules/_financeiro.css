@@ -1139,4 +1139,143 @@
       background: var(--bg-light);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BUSCA SEMANTICA — Autocomplete inteligente de entidades
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .semantic-search-wrapper {
+      position: relative;
+      width: 100%;
+  }
+
+  .semantic-search-wrapper input {
+      padding-right: 2rem;
+  }
+
+  .semantic-search-indicator {
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      color: var(--amber-50);
+      font-size: 0.75rem;
+      pointer-events: none;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+  }
+
+  .semantic-search-indicator--loading {
+      opacity: 1;
+      animation: semantic-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes semantic-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+  }
+
+  .semantic-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 1050;
+      background: var(--bg-light);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      max-height: 320px;
+      overflow-y: auto;
+  }
+
+  .semantic-search-header {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--amber-50);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+  }
+
+  .semantic-search-item {
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+      transition: background 0.15s;
+  }
+
+  .semantic-search-item:last-child {
+      border-bottom: none;
+  }
+
+  .semantic-search-item:hover,
+  .semantic-search-item--selected {
+      background: var(--hover-bg);
+  }
+
+  .semantic-search-item__main {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+  }
+
+  .semantic-search-item__name {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+  }
+
+  .semantic-search-item__cnpj {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono, monospace);
+      white-space: nowrap;
+      flex-shrink: 0;
+  }
+
+  .semantic-search-item__meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.2rem;
+  }
+
+  .semantic-tag {
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+  }
+
+  .semantic-tag--supplier {
+      background: color-mix(in srgb, var(--semantic-danger) 15%, transparent);
+      color: var(--semantic-danger);
+  }
+
+  .semantic-tag--customer {
+      background: color-mix(in srgb, var(--semantic-success) 15%, transparent);
+      color: var(--semantic-success);
+  }
+
+  .semantic-search-item__score {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 500;
+  }
+
 } /* End @layer modules */

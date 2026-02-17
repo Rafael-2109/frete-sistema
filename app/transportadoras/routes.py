@@ -320,7 +320,7 @@ def exportar_transportadoras():
             worksheet = writer.sheets['Transportadoras']
             for idx, col in enumerate(df.columns):
                 max_length = max(
-                    df[col].astype(str).map(len).max(),
+                    df[col].fillna('').astype(str).map(len).max(),
                     len(col)
                 ) + 2
                 worksheet.column_dimensions[chr(65 + idx) if idx < 26 else 'A' + chr(65 + idx - 26)].width = min(max_length, 50)

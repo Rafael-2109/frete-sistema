@@ -7,10 +7,9 @@ Versão segura para executar jobs assíncronos no ambiente de produção
 import os
 import sys
 import logging
-import threading
 import time
 from redis import Redis
-from rq import Worker, Queue, Connection
+from rq import Worker, Queue
 from app.utils.timezone import agora_utc_naive
 import click
 
@@ -60,7 +59,7 @@ def run_single_worker(config, burst=False):
         queues=config['queues'],
         connection=config['connection'],
         log_job_description=True,
-        default_worker_ttl=1800,  # 30 minutos TTL para o worker
+        worker_ttl=1800,  # 30 minutos TTL para o worker (rq 2.x: default_worker_ttl → worker_ttl)
         default_result_ttl=86400,  # 24 horas para resultados
         job_monitoring_interval=30  # Monitorar jobs a cada 30 segundos
     )
@@ -121,31 +120,30 @@ def run_worker(workers, verbose, burst, queues):
     logger.info("ℹ️ [Scheduler Sendas] REMOVIDO - usar exportação manual em /portal/sendas/exportacao")
 
     try:
-        with Connection(redis_conn):
-            # Startup
-            worker_startup()
+        # Startup
+        worker_startup()
 
-            if workers > 1:
-                logger.info(f"🔄 Iniciando {workers} workers paralelos...")
+        if workers > 1:
+            logger.info(f"🔄 Iniciando {workers} workers paralelos...")
 
-                from multiprocessing import Process
+            from multiprocessing import Process
 
-                processes = []
-                for i in range(workers):
-                    p = Process(target=run_single_worker, args=(worker_config, burst))
-                    p.start()
-                    processes.append(p)
-                    logger.info(f"   Worker {i+1} iniciado (PID: {p.pid})")
+            processes = []
+            for i in range(workers):
+                p = Process(target=run_single_worker, args=(worker_config, burst))
+                p.start()
+                processes.append(p)
+                logger.info(f"   Worker {i+1} iniciado (PID: {p.pid})")
 
-                # Aguardar todos terminarem
-                for p in processes:
-                    p.join()
-            else:
-                # Worker único
-                run_single_worker(worker_config, burst)
+            # Aguardar todos terminarem
+            for p in processes:
+                p.join()
+        else:
+            # Worker único
+            run_single_worker(worker_config, burst)
 
-            # Shutdown
-            worker_shutdown()
+        # Shutdown
+        worker_shutdown()
 
     except KeyboardInterrupt:
         logger.info("\n⚠️  Interrompido pelo usuário (Ctrl+C)")

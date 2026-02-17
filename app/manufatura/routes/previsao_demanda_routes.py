@@ -720,7 +720,7 @@ def register_previsao_demanda_routes(bp):
                 worksheet = writer.sheets['Previsão Demanda']
                 for idx, col in enumerate(df.columns):
                     max_length = max(
-                        df[col].astype(str).apply(len).max(),
+                        df[col].fillna('').astype(str).apply(len).max(),
                         len(col)
                     ) + 2
                     worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)

@@ -152,11 +152,9 @@ MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_G
 # Default false: ativar apos batch indexer popular session_turn_embeddings
 USE_SESSION_SEMANTIC_SEARCH = os.getenv("AGENT_SESSION_SEMANTIC_SEARCH", "false").lower() == "true"
 
-# Injecao de memorias baseada em relevancia semantica
-# Quando true: UserPromptSubmit hook usa embeddings para selecionar memorias relevantes
-# Quando false: comportamento original (ultimas 20 por recencia)
-# Default false: ativar apos batch indexer popular agent_memory_embeddings
-USE_MEMORY_SEMANTIC_SEARCH = os.getenv("AGENT_MEMORY_SEMANTIC_SEARCH", "false").lower() == "true"
+# REMOVIDO: USE_MEMORY_SEMANTIC_SEARCH — unificado em app.embeddings.config.MEMORY_SEMANTIC_SEARCH
+# Env var: MEMORY_SEMANTIC_SEARCH (default true)
+# Ver: app/embeddings/config.py linha 81
 
 # ====================================================================
 # Teams Bot

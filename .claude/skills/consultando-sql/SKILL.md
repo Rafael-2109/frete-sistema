@@ -1,6 +1,7 @@
 ---
 name: consultando-sql
 description: "Executa consultas analiticas SQL no banco de dados via linguagem natural. Use para perguntas ad-hoc sobre rankings, agregacoes, distribuicoes, tendencias, cruzamentos de tabelas. Converte perguntas em SQL, valida com Evaluator-Optimizer, e executa read-only. Cobre 104 tabelas ativas via catalogo dinamico."
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # Consultando SQL - Consultas Analiticas via Linguagem Natural

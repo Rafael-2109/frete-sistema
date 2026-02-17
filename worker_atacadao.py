@@ -16,10 +16,9 @@ Uso:
 import os
 import sys
 import logging
-import threading
 import time
 from redis import Redis
-from rq import Worker, Queue, Connection
+from rq import Worker, Queue
 from rq.job import Job
 import click
 from app.utils.timezone import agora_utc_naive
@@ -119,32 +118,31 @@ def run_worker(workers, verbose, burst, queues):
     logger.info("ℹ️ [Scheduler Sendas] REMOVIDO - usar exportação manual em /portal/sendas/exportacao")
 
     try:
-        with Connection(redis_conn):
-            # Startup
-            worker_startup()
-            
-            if workers > 1:
-                logger.info(f"🔄 Iniciando {workers} workers paralelos...")
-                
-                # Importar multiprocessing
-                from multiprocessing import Process
-                
-                processes = []
-                for i in range(workers):
-                    p = Process(target=run_single_worker, args=(worker_config, burst))
-                    p.start()
-                    processes.append(p)
-                    logger.info(f"   Worker {i+1} iniciado (PID: {p.pid})")
-                
-                # Aguardar todos terminarem
-                for p in processes:
-                    p.join()
-            else:
-                # Worker único
-                run_single_worker(worker_config, burst)
-            
-            # Shutdown
-            worker_shutdown()
+        # Startup
+        worker_startup()
+
+        if workers > 1:
+            logger.info(f"🔄 Iniciando {workers} workers paralelos...")
+
+            # Importar multiprocessing
+            from multiprocessing import Process
+
+            processes = []
+            for i in range(workers):
+                p = Process(target=run_single_worker, args=(worker_config, burst))
+                p.start()
+                processes.append(p)
+                logger.info(f"   Worker {i+1} iniciado (PID: {p.pid})")
+
+            # Aguardar todos terminarem
+            for p in processes:
+                p.join()
+        else:
+            # Worker único
+            run_single_worker(worker_config, burst)
+
+        # Shutdown
+        worker_shutdown()
             
     except KeyboardInterrupt:
         logger.info("\n⚠️  Interrompido pelo usuário (Ctrl+C)")

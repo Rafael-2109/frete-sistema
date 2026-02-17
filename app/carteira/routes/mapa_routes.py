@@ -358,7 +358,7 @@ def exportar_mapa_excel():
             # Ajustar largura das colunas
             worksheet = writer.sheets['Pedidos']
             for idx, col in enumerate(df.columns):
-                max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                max_len = max(df[col].fillna('').astype(str).map(len).max(), len(col)) + 2
                 worksheet.set_column(idx, idx, min(max_len, 50))
 
             # Se tem rota, adicionar aba com resumo

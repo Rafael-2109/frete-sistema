@@ -88,9 +88,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
 
             # ── Tentativa 1: Busca semântica (se flag ativa + prompt disponível) ──
             try:
-                from ..config.feature_flags import USE_MEMORY_SEMANTIC_SEARCH
+                from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
 
-                if USE_MEMORY_SEMANTIC_SEARCH and prompt and user_id:
+                if MEMORY_SEMANTIC_SEARCH and prompt and user_id:
                     from app.embeddings.memory_search import buscar_memorias_semantica
                     resultados = buscar_memorias_semantica(
                         prompt, user_id, limite=10, min_similarity=0.30

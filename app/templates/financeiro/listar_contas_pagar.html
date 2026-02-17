@@ -75,7 +75,9 @@
             <div class="fin-filter-group">
                 <label class="fin-filter-group__label">Fornecedor</label>
                 <input type="text" name="fornecedor" class="fin-filter-group__input"
-                       value="{{ request.args.get('fornecedor', '') }}" placeholder="Nome">
+                       value="{{ request.args.get('fornecedor', '') }}" placeholder="Nome"
+                       data-semantic-search="supplier"
+                       data-semantic-cnpj="input[name='cnpj']">
             </div>
             <div class="fin-filter-group">
                 <label class="fin-filter-group__label">Status</label>
@@ -282,4 +284,5 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
+<script src="{{ url_for('static', filename='js/financeiro/busca-semantica.js') }}"></script>
 {% endblock %}

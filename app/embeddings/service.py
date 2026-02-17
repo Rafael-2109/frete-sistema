@@ -15,7 +15,9 @@ Uso:
 """
 
 import json
+import logging
 import math
+import time as _time
 from typing import List, Dict, Any
 
 from sqlalchemy import text
@@ -23,15 +25,26 @@ from sqlalchemy import text
 from app import db
 from app.embeddings.config import (
     VOYAGE_DEFAULT_MODEL,
+    VOYAGE_FINANCE_MODEL,
     VOYAGE_RERANK_MODEL,
     VOYAGE_EMBEDDING_DIMENSIONS,
     EMBEDDING_BATCH_SIZE,
     SEARCH_DEFAULT_LIMIT,
-    SEARCH_MIN_SIMILARITY,
     RERANK_TOP_K,
     EMBEDDINGS_ENABLED,
     RERANKING_ENABLED,
+    THRESHOLD_SSW,
+    THRESHOLD_PRODUCT,
+    THRESHOLD_ENTITY,
+    THRESHOLD_SESSION,
+    THRESHOLD_MEMORY,
+    THRESHOLD_SQL_TEMPLATE,
+    THRESHOLD_PAYMENT_CATEGORY,
+    THRESHOLD_DEVOLUCAO,
+    THRESHOLD_CARRIER,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
@@ -42,10 +55,14 @@ class EmbeddingService:
     para os consumidores (skills, services, etc.).
     """
 
+    # TTL de 5 minutos para cache de deteccao pgvector (P0.6)
+    _PGVECTOR_CACHE_TTL = 300
+
     def __init__(self, model: str = None, dimensions: int = None):
         self.model = model or VOYAGE_DEFAULT_MODEL
         self.dimensions = dimensions or VOYAGE_EMBEDDING_DIMENSIONS
         self._pgvector_available = None  # Cache de deteccao
+        self._pgvector_check_time = 0.0  # Timestamp da ultima verificacao
 
     # ================================================================
     # EMBEDDING
@@ -75,8 +92,7 @@ class EmbeddingService:
         if not texts:
             return []
 
-        from app.embeddings.client import get_voyage_client
-        vo = get_voyage_client()
+        from app.embeddings.client import embed_with_retry, normalize_for_embedding
 
         model = model or self.model
         all_embeddings = []
@@ -84,14 +100,16 @@ class EmbeddingService:
         # Processar em batches de 128 (limite Voyage AI)
         for i in range(0, len(texts), EMBEDDING_BATCH_SIZE):
             batch = texts[i:i + EMBEDDING_BATCH_SIZE]
+            # Normalizar textos antes de embeddar (P1.3)
+            batch = [normalize_for_embedding(t) for t in batch]
             try:
-                result = vo.embed(
+                embeddings = embed_with_retry(
                     batch,
                     model=model,
                     input_type=input_type,
                     output_dimension=self.dimensions,
                 )
-                all_embeddings.extend(result.embeddings)
+                all_embeddings.extend(embeddings)
             except Exception as e:
                 raise RuntimeError(
                     f"Erro ao gerar embeddings com Voyage AI (modelo={model}, "
@@ -141,7 +159,7 @@ class EmbeddingService:
             return []
 
         limit = limit or SEARCH_DEFAULT_LIMIT
-        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+        min_similarity = min_similarity or THRESHOLD_SSW
 
         # Gerar embedding da query
         query_embedding = self.embed_query(query)
@@ -187,11 +205,11 @@ class EmbeddingService:
                 heading,
                 doc_title,
                 char_count,
-                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
             FROM ssw_document_embeddings
             WHERE embedding IS NOT NULL
             {where_clause}
-            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
 
@@ -246,7 +264,9 @@ class EmbeddingService:
                 SswDocumentEmbedding.doc_path.like(f"{subdir_filter}/%")
             )
 
-        docs = query.all()
+        docs = query.limit(1000).all()
+        if len(docs) == 1000:
+            logger.warning("[EmbeddingService] Fallback SSW hit LIMIT=1000, resultados podem ser incompletos")
 
         if not docs:
             return []
@@ -305,7 +325,7 @@ class EmbeddingService:
         if not EMBEDDINGS_ENABLED:
             return []
 
-        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+        min_similarity = min_similarity or THRESHOLD_PRODUCT
 
         query_embedding = self.embed_query(query)
 
@@ -329,10 +349,10 @@ class EmbeddingService:
                 cod_produto,
                 nome_produto,
                 tipo_materia_prima,
-                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
             FROM product_embeddings
             WHERE embedding IS NOT NULL
-            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
 
@@ -365,7 +385,7 @@ class EmbeddingService:
 
         docs = ProductEmbedding.query.filter(
             ProductEmbedding.embedding.isnot(None)
-        ).all()
+        ).limit(1000).all()
 
         scored = []
         for doc in docs:
@@ -417,9 +437,10 @@ class EmbeddingService:
         if not EMBEDDINGS_ENABLED:
             return []
 
-        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+        min_similarity = min_similarity or THRESHOLD_ENTITY
 
-        query_embedding = self.embed_query(query)
+        # Entidades financeiras usam voyage-finance-2 (P1.1)
+        query_embedding = self.embed_query(query, model=VOYAGE_FINANCE_MODEL)
 
         if self._is_pgvector_available():
             return self._search_pgvector_entities(
@@ -451,11 +472,11 @@ class EmbeddingService:
                 cnpj_raiz,
                 cnpj_completo,
                 nome,
-                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
             FROM financial_entity_embeddings
             WHERE embedding IS NOT NULL
             {where_clause}
-            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
 
@@ -501,7 +522,7 @@ class EmbeddingService:
                 FinancialEntityEmbedding.entity_type == entity_type
             )
 
-        docs = query.all()
+        docs = query.limit(1000).all()
 
         scored = []
         for doc in docs:
@@ -555,7 +576,7 @@ class EmbeddingService:
         if not EMBEDDINGS_ENABLED:
             return []
 
-        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+        min_similarity = min_similarity or THRESHOLD_SESSION
 
         query_embedding = self.embed_query(query)
 
@@ -587,11 +608,11 @@ class EmbeddingService:
                 assistant_summary,
                 session_title,
                 session_created_at,
-                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
             FROM session_turn_embeddings
             WHERE user_id = :user_id
               AND embedding IS NOT NULL
-            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
 
@@ -630,7 +651,7 @@ class EmbeddingService:
         docs = SessionTurnEmbedding.query.filter(
             SessionTurnEmbedding.user_id == user_id,
             SessionTurnEmbedding.embedding.isnot(None),
-        ).all()
+        ).limit(1000).all()
 
         scored = []
         for doc in docs:
@@ -685,7 +706,7 @@ class EmbeddingService:
         if not EMBEDDINGS_ENABLED:
             return []
 
-        min_similarity = min_similarity or SEARCH_MIN_SIMILARITY
+        min_similarity = min_similarity or THRESHOLD_MEMORY
 
         query_embedding = self.embed_query(query)
 
@@ -714,11 +735,11 @@ class EmbeddingService:
                 memory_id,
                 path,
                 texto_embedado,
-                1 - (CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)) AS similarity
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
             FROM agent_memory_embeddings
             WHERE user_id = :user_id
               AND embedding IS NOT NULL
-            ORDER BY CAST(embedding AS vector) <=> CAST(:query_embedding AS vector)
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
 
@@ -754,7 +775,7 @@ class EmbeddingService:
         docs = AgentMemoryEmbedding.query.filter(
             AgentMemoryEmbedding.user_id == user_id,
             AgentMemoryEmbedding.embedding.isnot(None),
-        ).all()
+        ).limit(500).all()
 
         scored = []
         for doc in docs:
@@ -775,6 +796,500 @@ class EmbeddingService:
                 "memory_id": doc.memory_id,
                 "path": doc.path,
                 "texto_embedado": doc.texto_embedado,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — SQL TEMPLATES
+    # ================================================================
+
+    def search_sql_templates(
+        self,
+        query: str,
+        limit: int = 5,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em templates SQL (few-shot para text_to_sql).
+
+        Args:
+            query: Pergunta do usuario em linguagem natural
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com question_text, sql_text, tables_used,
+            execution_count, similarity
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or THRESHOLD_SQL_TEMPLATE
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_sql_templates(
+                query_embedding, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_sql_templates(
+                query_embedding, limit, min_similarity
+            )
+
+    def _search_pgvector_sql_templates(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca SQL templates via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        sql = text("""
+            SELECT
+                id,
+                question_text,
+                sql_text,
+                tables_used,
+                execution_count,
+                last_used_at,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM sql_template_embeddings
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        result = db.session.execute(sql, {
+            "query_embedding": embedding_str,
+            "limit": limit * 2,
+        })
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "id": row.id,
+                    "question_text": row.question_text,
+                    "sql_text": row.sql_text,
+                    "tables_used": row.tables_used,
+                    "execution_count": row.execution_count,
+                    "last_used_at": row.last_used_at.isoformat() if row.last_used_at else None,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_sql_templates(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca SQL templates fallback sem pgvector."""
+        from app.embeddings.models import SqlTemplateEmbedding
+
+        docs = SqlTemplateEmbedding.query.filter(
+            SqlTemplateEmbedding.embedding.isnot(None)
+        ).limit(500).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "id": doc.id,
+                "question_text": doc.question_text,
+                "sql_text": doc.sql_text,
+                "tables_used": doc.tables_used,
+                "execution_count": doc.execution_count,
+                "last_used_at": doc.last_used_at.isoformat() if doc.last_used_at else None,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — CATEGORIAS DE PAGAMENTO
+    # ================================================================
+
+    def search_payment_categories(
+        self,
+        query: str,
+        limit: int = 3,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em categorias de pagamento.
+
+        Usado como fallback apos regex em favorecido_resolver_service.py Layer 5.
+
+        Args:
+            query: Texto do payment_ref do extrato bancario
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com category_name, description, similarity
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or THRESHOLD_PAYMENT_CATEGORY
+
+        # Categorias de pagamento usam voyage-finance-2 (P1.1)
+        query_embedding = self.embed_query(query, model=VOYAGE_FINANCE_MODEL)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_payment_categories(
+                query_embedding, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_payment_categories(
+                query_embedding, limit, min_similarity
+            )
+
+    def _search_pgvector_payment_categories(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca categorias de pagamento via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        sql = text("""
+            SELECT
+                id,
+                category_name,
+                description,
+                examples,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM payment_category_embeddings
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        result = db.session.execute(sql, {
+            "query_embedding": embedding_str,
+            "limit": limit * 2,
+        })
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "category_name": row.category_name,
+                    "description": row.description,
+                    "examples": row.examples,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_payment_categories(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca categorias de pagamento fallback sem pgvector."""
+        from app.embeddings.models import PaymentCategoryEmbedding
+
+        docs = PaymentCategoryEmbedding.query.filter(
+            PaymentCategoryEmbedding.embedding.isnot(None)
+        ).limit(100).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "category_name": doc.category_name,
+                "description": doc.description,
+                "examples": doc.examples,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — MOTIVOS DE DEVOLUCAO
+    # ================================================================
+
+    def search_devolucao_reasons(
+        self,
+        query: str,
+        limit: int = 5,
+        min_similarity: float = None,
+        motivo_filter: str = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em motivos de devolucao.
+
+        Classifica texto livre de devolucao por similaridade com motivos historicos.
+
+        Args:
+            query: Texto da descricao/observacao da devolucao
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+            motivo_filter: Filtrar por categoria de motivo (AVARIA, FALTA, etc.)
+
+        Returns:
+            Lista de dicts com descricao_text, motivo_classificado, similarity
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or THRESHOLD_DEVOLUCAO
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_devolucao_reasons(
+                query_embedding, limit, min_similarity, motivo_filter
+            )
+        else:
+            return self._search_fallback_devolucao_reasons(
+                query_embedding, limit, min_similarity, motivo_filter
+            )
+
+    def _search_pgvector_devolucao_reasons(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+        motivo_filter: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Busca motivos de devolucao via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        where_clause = ""
+        if motivo_filter:
+            where_clause = "AND motivo_classificado = :motivo_filter"
+
+        sql = text(f"""
+            SELECT
+                id,
+                nf_devolucao_linha_id,
+                descricao_text,
+                motivo_classificado,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM devolucao_reason_embeddings
+            WHERE embedding IS NOT NULL
+            {where_clause}
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        params = {
+            "query_embedding": embedding_str,
+            "limit": limit * 2,
+        }
+        if motivo_filter:
+            params["motivo_filter"] = motivo_filter
+
+        result = db.session.execute(sql, params)
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "id": row.id,
+                    "nf_devolucao_linha_id": row.nf_devolucao_linha_id,
+                    "descricao_text": row.descricao_text,
+                    "motivo_classificado": row.motivo_classificado,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_devolucao_reasons(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+        motivo_filter: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Busca motivos de devolucao fallback sem pgvector."""
+        from app.embeddings.models import DevolucaoReasonEmbedding
+
+        query = DevolucaoReasonEmbedding.query.filter(
+            DevolucaoReasonEmbedding.embedding.isnot(None)
+        )
+
+        if motivo_filter:
+            query = query.filter(
+                DevolucaoReasonEmbedding.motivo_classificado == motivo_filter
+            )
+
+        docs = query.limit(1000).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "id": doc.id,
+                "nf_devolucao_linha_id": doc.nf_devolucao_linha_id,
+                "descricao_text": doc.descricao_text,
+                "motivo_classificado": doc.motivo_classificado,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — TRANSPORTADORAS
+    # ================================================================
+
+    def search_carriers(
+        self,
+        query: str,
+        limit: int = 5,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em transportadoras.
+
+        Resolve nomes de transportadoras com variacoes (abreviacoes, aliases).
+
+        Args:
+            query: Nome da transportadora (pode ser abreviado/parcial)
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com carrier_name, cnpj, aliases, similarity
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or THRESHOLD_CARRIER
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_carriers(
+                query_embedding, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_carriers(
+                query_embedding, limit, min_similarity
+            )
+
+    def _search_pgvector_carriers(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca transportadoras via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        sql = text("""
+            SELECT
+                id,
+                carrier_name,
+                cnpj,
+                aliases,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM carrier_embeddings
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        result = db.session.execute(sql, {
+            "query_embedding": embedding_str,
+            "limit": limit * 2,
+        })
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "carrier_name": row.carrier_name,
+                    "cnpj": row.cnpj,
+                    "aliases": row.aliases,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_carriers(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca transportadoras fallback sem pgvector."""
+        from app.embeddings.models import CarrierEmbedding
+
+        docs = CarrierEmbedding.query.filter(
+            CarrierEmbedding.embedding.isnot(None)
+        ).limit(500).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "carrier_name": doc.carrier_name,
+                "cnpj": doc.cnpj,
+                "aliases": doc.aliases,
                 "similarity": round(similarity, 4),
             })
 
@@ -829,7 +1344,7 @@ class EmbeddingService:
             ]
         except Exception as e:
             # Fallback: retornar documentos na ordem original
-            print(f"[EmbeddingService] Rerank falhou, retornando ordem original: {e}")
+            logger.warning(f"[EmbeddingService] Rerank falhou, retornando ordem original: {e}")
             return [
                 {"index": i, "document": d, "relevance_score": 0.0}
                 for i, d in enumerate(documents[:top_k])
@@ -863,9 +1378,22 @@ class EmbeddingService:
     # ================================================================
 
     def _is_pgvector_available(self) -> bool:
-        """Verifica se a extensao pgvector esta disponivel no banco."""
+        """
+        Verifica se a extensao pgvector esta disponivel no banco.
+
+        Cache com TTL de 5 minutos: se resultado anterior foi False,
+        re-testa apos o TTL (pgvector pode ter sido instalado/restaurado).
+        Se True, cacheia indefinidamente (extensao nao some sozinha).
+        """
+        now = _time.time()
+
         if self._pgvector_available is not None:
-            return self._pgvector_available
+            # Se True, confia no cache (extensao nao some)
+            if self._pgvector_available:
+                return True
+            # Se False, re-testa apos TTL
+            if now - self._pgvector_check_time < self._PGVECTOR_CACHE_TTL:
+                return False
 
         try:
             result = db.session.execute(
@@ -874,6 +1402,11 @@ class EmbeddingService:
             self._pgvector_available = result.fetchone() is not None
         except Exception:
             self._pgvector_available = False
+
+        self._pgvector_check_time = now
+
+        if not self._pgvector_available:
+            logger.warning("[EmbeddingService] pgvector indisponivel, usando fallback Python")
 
         return self._pgvector_available
 

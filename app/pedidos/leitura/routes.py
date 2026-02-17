@@ -1441,7 +1441,7 @@ def tabela_precos_exportar():
         # Ajusta largura das colunas
         worksheet = writer.sheets['Tabela Preços']
         for idx, col in enumerate(df.columns):
-            max_len = max(df[col].astype(str).apply(len).max(), len(col)) + 2
+            max_len = max(df[col].fillna('').astype(str).apply(len).max(), len(col)) + 2
             worksheet.column_dimensions[chr(65 + idx)].width = min(max_len, 50)
 
     output.seek(0)
@@ -1690,7 +1690,7 @@ def regioes_exportar():
         # Ajusta largura das colunas
         worksheet = writer.sheets['Regiões']
         for idx, col in enumerate(df.columns):
-            max_len = max(df[col].astype(str).apply(len).max(), len(col)) + 2
+            max_len = max(df[col].fillna('').astype(str).apply(len).max(), len(col)) + 2
             worksheet.column_dimensions[chr(65 + idx)].width = min(max_len, 50)
 
     output.seek(0)

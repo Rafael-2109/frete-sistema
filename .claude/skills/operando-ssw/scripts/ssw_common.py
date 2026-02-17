@@ -151,7 +151,7 @@ async def interceptar_ajax_response(popup, frame, action_code, timeout_s=15):
         nonlocal response_body
         url = response.url
         # Capturar apenas responses da mesma opcao SSW
-        if "ssw0" in url and response.status == 200:
+        if "/bin/ssw" in url and response.status == 200:
             try:
                 body = await response.text()
                 if len(body) > 500:  # Ignorar responses pequenos (erros, redirects)

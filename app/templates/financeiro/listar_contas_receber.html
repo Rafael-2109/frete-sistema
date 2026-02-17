@@ -78,7 +78,9 @@
                             <div class="col-md-2">
                                 <label class="form-label small">Cliente</label>
                                 <input type="text" name="cliente" class="form-control form-control-sm"
-                                       placeholder="Razão Social" value="{{ request.args.get('cliente', '') }}">
+                                       placeholder="Razão Social" value="{{ request.args.get('cliente', '') }}"
+                                       data-semantic-search="customer"
+                                       data-semantic-cnpj="input[name='cnpj']">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label small">UF</label>
@@ -1010,4 +1012,5 @@ initContasReceber(
     "{{ url_for('financeiro.sincronizar_contas_receber_odoo') }}"
 );
 </script>
+<script src="{{ url_for('static', filename='js/financeiro/busca-semantica.js') }}"></script>
 {% endblock %}

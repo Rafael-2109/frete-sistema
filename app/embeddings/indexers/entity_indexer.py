@@ -263,7 +263,7 @@ def _index_entities_impl(entidades: List[Dict], reindex: bool = False) -> Dict:
     """Implementacao real da indexacao. REQUER app context ativo."""
     from app import db
     from app.embeddings.service import EmbeddingService
-    from app.embeddings.config import VOYAGE_DEFAULT_MODEL
+    from app.embeddings.config import VOYAGE_FINANCE_MODEL
     from sqlalchemy import text
 
     stats = {
@@ -315,7 +315,7 @@ def _index_entities_impl(entidades: List[Dict], reindex: bool = False) -> Dict:
         print(f"  Batch {num_batch}/{total_batches} ({len(batch)} entidades)...", end=" ")
 
         try:
-            embeddings = svc.embed_texts(texts, input_type="document")
+            embeddings = svc.embed_texts(texts, input_type="document", model=VOYAGE_FINANCE_MODEL)
 
             # Salvar no banco via upsert
             for ent, embedding in zip(batch, embeddings):
@@ -352,7 +352,7 @@ def _index_entities_impl(entidades: List[Dict], reindex: bool = False) -> Dict:
                     "nomes_alternativos": nomes_alt_json,
                     "texto_embedado": ent['texto_embedado'],
                     "embedding": embedding_str,
-                    "model_used": VOYAGE_DEFAULT_MODEL,
+                    "model_used": VOYAGE_FINANCE_MODEL,
                 })
 
             db.session.commit()

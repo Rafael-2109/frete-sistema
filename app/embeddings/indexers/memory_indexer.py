@@ -226,36 +226,8 @@ def _index_memories_impl(memories: List[Dict], reindex: bool = False) -> Dict:
         if i + batch_size < len(new_memories):
             time.sleep(0.5)
 
-    # Criar indice IVFFlat se pgvector disponivel e tabela nao vazia
-    try:
-        result = db.session.execute(text(
-            "SELECT COUNT(*) FROM agent_memory_embeddings WHERE embedding IS NOT NULL"
-        ))
-        count = result.scalar()
-        if count > 0:
-            result = db.session.execute(text(
-                "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
-            ))
-            if result.fetchone():
-                lists = max(1, min(count // 10, 50))
-                print(f"\n[INFO] Criando indice IVFFlat (lists={lists})...")
-                try:
-                    db.session.execute(text(
-                        "DROP INDEX IF EXISTS idx_ame_emb_cosine"
-                    ))
-                    db.session.execute(text(f"""
-                        CREATE INDEX idx_ame_emb_cosine
-                            ON agent_memory_embeddings
-                            USING ivfflat (CAST(embedding AS vector) vector_cosine_ops)
-                            WITH (lists = {lists})
-                    """))
-                    db.session.commit()
-                    print("   IVFFlat index criado com sucesso")
-                except Exception as idx_err:
-                    print(f"   IVFFlat index falhou (ignorado): {idx_err}")
-                    db.session.rollback()
-    except Exception:
-        pass
+    # Nota: Indices HNSW sao criados pela migration criar_indices_hnsw_embeddings.py
+    # IVFFlat removido (HNSW tem melhor recall e funciona em tabelas vazias)
 
     return stats
 

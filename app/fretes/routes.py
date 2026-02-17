@@ -348,7 +348,7 @@ def analises_api_export_excel():
 
             # Ajustar largura das colunas
             for idx, col in enumerate(df.columns):
-                max_length = max(df[col].astype(str).map(len).max(), len(col))
+                max_length = max(df[col].fillna('').astype(str).map(len).max(), len(col))
                 worksheet.column_dimensions[chr(65 + idx)].width = max_length + 2
 
         output.seek(0)
@@ -5954,7 +5954,7 @@ def exportar_fechamento_freteiros():
             # Ajustar larguras
             worksheet = writer.sheets["Detalhamento"]
             for idx, col in enumerate(df_detalhamento.columns):
-                max_length = max(df_detalhamento[col].astype(str).map(len).max(), len(col)) + 2
+                max_length = max(df_detalhamento[col].fillna('').astype(str).map(len).max(), len(col)) + 2
                 col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
                 worksheet.column_dimensions[col_letter].width = min(max_length, 50)
 
@@ -5963,7 +5963,7 @@ def exportar_fechamento_freteiros():
             df_resumo.to_excel(writer, index=False, sheet_name="Resumo por Transportadora")
             worksheet = writer.sheets["Resumo por Transportadora"]
             for idx, col in enumerate(df_resumo.columns):
-                max_length = max(df_resumo[col].astype(str).map(len).max(), len(col)) + 2
+                max_length = max(df_resumo[col].fillna('').astype(str).map(len).max(), len(col)) + 2
                 col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
                 worksheet.column_dimensions[col_letter].width = min(max_length, 50)
 

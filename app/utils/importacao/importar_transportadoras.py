@@ -11,12 +11,12 @@ def importar_transportadoras(caminho_arquivo):
     atualizadas = []
     
     # Converte campo 'OPTANTE' para booleano
-    df['OPTANTE'] = df['OPTANTE'].astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(False)
+    df['OPTANTE'] = df['OPTANTE'].fillna('').astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(False)
 
     # Converte campo 'Aceita NF Pallet' para booleano (opcional)
     # Se a coluna existir, converte. SIM = aceita (nao_aceita_nf_pallet = False)
     if 'Aceita NF Pallet' in df.columns:
-        df['_aceita_nf_pallet'] = df['Aceita NF Pallet'].astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(True)
+        df['_aceita_nf_pallet'] = df['Aceita NF Pallet'].fillna('').astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(True)
 
     # Itera pelas linhas e valida os dados
     for index, row in df.iterrows():

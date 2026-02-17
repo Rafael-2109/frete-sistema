@@ -23,7 +23,7 @@ let totalOutputTokens = 0;
 let totalCost = 0;
 
 // FEAT-001: Modelo selecionado
-let currentModel = 'claude-sonnet-4-5-20250929';
+let currentModel = 'claude-sonnet-4-6';
 
 // Effort Level (Adaptive Thinking): auto|off|low|medium|high|max
 let effortLevel = 'auto';
@@ -172,7 +172,7 @@ const MODEL_INFO = {
         speed: '⚡⚡⚡',
         cost: '$'
     },
-    'claude-sonnet-4-5-20250929': {
+    'claude-sonnet-4-6': {
         name: 'Sonnet',
         description: 'Equilibrado. Bom para a maioria das tarefas.',
         speed: '⚡⚡',

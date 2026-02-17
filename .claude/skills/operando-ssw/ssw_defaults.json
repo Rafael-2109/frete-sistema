@@ -20,12 +20,12 @@
     "cnpj_rcv": null
   },
   "banco": {
-    "codigo": null,
-    "agencia": null,
-    "dv_agencia": null,
-    "conta": null,
-    "dv_conta": null,
-    "_nota": "Preencher na 1a execucao real — agente pergunta ao usuario"
+    "codigo": "077",
+    "agencia": "00001",
+    "dv_agencia": "0",
+    "conta": "047977495",
+    "dv_conta": "1",
+    "_nota": "Banco Inter — extraido da unidade CGR (2026-02-17)"
   },
   "opcao_401": {
     "ativa": "S",

@@ -6,13 +6,10 @@ Para processamento assíncrono de ruptura e outros jobs
 
 import os
 import sys
-from rq import Worker, Connection
+from rq import Worker
 from redis import Redis
 import logging
 import multiprocessing
-import threading
-import time
-from datetime import datetime
 
 # Configurar logging
 logging.basicConfig(
@@ -38,10 +35,9 @@ def start_worker(queue_names):
         redis_conn = Redis.from_url(redis_url)
         
         try:
-            with Connection(redis_conn):
-                worker = Worker(queue_names)
-                logger.info(f"Worker iniciado para filas: {queue_names}")
-                worker.work()
+            worker = Worker(queue_names, connection=redis_conn)
+            logger.info(f"Worker iniciado para filas: {queue_names}")
+            worker.work()
         except Exception as e:
             logger.error(f"Erro no worker: {e}")
             sys.exit(1)

@@ -382,13 +382,13 @@ def importar_fase4():
 
         # ✅ LIMPAR ESPAÇOS EM BRANCO de colunas críticas (resolve "03.09JR " vs "03.09JR")
         if 'numero_pedido' in df_pedidos.columns:
-            df_pedidos['numero_pedido'] = df_pedidos['numero_pedido'].astype(str).str.strip()
+            df_pedidos['numero_pedido'] = df_pedidos['numero_pedido'].fillna('').astype(str).str.strip()
         if 'cliente_cnpj' in df_pedidos.columns:
-            df_pedidos['cliente_cnpj'] = df_pedidos['cliente_cnpj'].astype(str).str.strip()
+            df_pedidos['cliente_cnpj'] = df_pedidos['cliente_cnpj'].fillna('').astype(str).str.strip()
         if 'numero_pedido' in df_itens.columns:
-            df_itens['numero_pedido'] = df_itens['numero_pedido'].astype(str).str.strip()
+            df_itens['numero_pedido'] = df_itens['numero_pedido'].fillna('').astype(str).str.strip()
         if 'numero_chassi' in df_itens.columns:
-            df_itens['numero_chassi'] = df_itens['numero_chassi'].astype(str).str.strip()
+            df_itens['numero_chassi'] = df_itens['numero_chassi'].fillna('').astype(str).str.strip()
 
         # 4. IMPORTAR PEDIDOS COM O MODO ESPECIFICADO
         resultado = ImportacaoFase4Service.importar_pedidos_completo(

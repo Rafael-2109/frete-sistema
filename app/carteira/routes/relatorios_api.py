@@ -109,7 +109,7 @@ def exportar_separacoes():
                 if col in colunas_data:
                     worksheet.set_column(i, i, 12, colunas_data[col])
                 else:
-                    column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                    column_width = max(df[col].fillna('').astype(str).map(len).max(), len(col)) + 2
                     worksheet.set_column(i, i, min(column_width, 50))
         
         output.seek(0)
@@ -206,7 +206,7 @@ def exportar_carteira_simples():
                 if col in colunas_data:
                     worksheet.set_column(i, i, 12, colunas_data[col])
                 else:
-                    column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                    column_width = max(df[col].fillna('').astype(str).map(len).max(), len(col)) + 2
                     worksheet.set_column(i, i, min(column_width, 50))
         
         output.seek(0)
@@ -496,7 +496,7 @@ def exportar_carteira_detalhada():
                 elif col in colunas_datetime:
                     worksheet.set_column(i, i, 16, formato_datetime)
                 else:
-                    column_width = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                    column_width = max(df[col].fillna('').astype(str).map(len).max(), len(col)) + 2
                     worksheet.set_column(i, i, min(column_width, 50))
         
         output.seek(0)

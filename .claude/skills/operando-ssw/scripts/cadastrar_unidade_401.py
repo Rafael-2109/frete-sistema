@@ -305,12 +305,20 @@ async def cadastrar_unidade(args):
 
             # ── 2. Abrir opcao 401 (popup) ──
             popup = await abrir_opcao_popup(context, page.frames[0], 401)
-            frame = popup.frames[0]
+            await asyncio.sleep(1)
 
             # ── 3. Pesquisar sigla (PES) ──
-            await frame.fill('input[name="f2"]', sigla)
+            # Campo inicial: f2 (name) ou unidade (name) — preencher ambos por seguranca
+            await popup.evaluate(f"""() => {{
+                const f2 = document.querySelector('input[name="f2"]');
+                const uni = document.querySelector('input[name="unidade"]');
+                if (f2) {{ f2.value = '{sigla}'; f2.dispatchEvent(new Event('change', {{ bubbles: true }})); }}
+                if (uni) {{ uni.value = '{sigla}'; uni.dispatchEvent(new Event('change', {{ bubbles: true }})); }}
+            }}""")
+            await asyncio.sleep(0.5)
+
             pes_html = await interceptar_ajax_response(
-                popup, frame, "ajaxEnvia('PES', 1)", timeout_s=15
+                popup, popup.main_frame, "ajaxEnvia('PES', 1)", timeout_s=15
             )
 
             if not pes_html:
@@ -360,7 +368,7 @@ async def cadastrar_unidade(args):
 
             # PES para sigla inexistente retorna formulario em modo inclusao
             # (tipo=inclusao, acao=I). Se nao, chamar INC explicitamente.
-            if form_info.get("tipo") != "inclusao" or form_info.get("inputCount", 0) < 20:
+            if form_info.get("inputCount", 0) < 20:
                 inc_html = await interceptar_ajax_response(
                     popup, popup.main_frame, "ajaxEnvia('INC', 1)", timeout_s=15
                 )

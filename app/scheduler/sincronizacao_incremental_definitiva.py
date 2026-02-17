@@ -54,6 +54,11 @@ JANELA_PICKINGS = int(os.environ.get('JANELA_PICKINGS', 90))  # ✅ 90 minutos p
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
+# Reindexação diária de embeddings (20º módulo)
+EMBEDDINGS_REINDEX_ENABLED = os.environ.get("EMBEDDINGS_REINDEX_ENABLED", "true").lower() == "true"
+EMBEDDINGS_REINDEX_HOUR = int(os.environ.get("EMBEDDINGS_REINDEX_HOUR", "3"))
+_ultima_reindexacao_embeddings = None  # Timestamp da ultima reindexacao bem-sucedida
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -138,7 +143,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1348,6 +1353,61 @@ def executar_sincronizacao():
                 else:
                     break
 
+        # ── 2️⃣0️⃣ EMBEDDINGS REINDEXAÇÃO (diário, 20º módulo) ──
+        sucesso_embeddings = False
+        embeddings_executou = False  # True = tentou rodar (hora certa + >24h)
+
+        if EMBEDDINGS_REINDEX_ENABLED:
+            hora_atual = agora_utc_naive().hour
+            hoje = agora_utc_naive().date()
+
+            deve_rodar = (
+                hora_atual == EMBEDDINGS_REINDEX_HOUR
+                and (_ultima_reindexacao_embeddings is None
+                     or _ultima_reindexacao_embeddings.date() < hoje)
+            )
+
+            if deve_rodar:
+                embeddings_executou = True
+
+                # Cleanup antes (padrao do scheduler)
+                try:
+                    db.session.remove()
+                    db.engine.dispose()
+                    logger.info("♻️ Reconexão antes de Embeddings")
+                except Exception:
+                    pass
+
+                try:
+                    logger.info("🧠 Reindexação diária de embeddings...")
+                    from app.scheduler.reindexacao_embeddings import executar_reindexacao_no_contexto
+
+                    resultado_embeddings = executar_reindexacao_no_contexto()
+
+                    if resultado_embeddings is not None:
+                        erros_emb = sum(1 for v in resultado_embeddings.values() if 'error' in v)
+                        if erros_emb == 0:
+                            sucesso_embeddings = True
+                            logger.info("✅ Embeddings reindexados com sucesso!")
+                        else:
+                            logger.warning(f"⚠️ Embeddings: {erros_emb} indexer(s) com erro")
+                    else:
+                        # EMBEDDINGS_ENABLED=false — ok, nao e falha
+                        sucesso_embeddings = True
+                        logger.info("   Embeddings desabilitado via EMBEDDINGS_ENABLED")
+
+                    # Marcar como executado (mesmo com erros parciais, evita retry a cada 30min)
+                    _ultima_reindexacao_embeddings = agora_utc_naive()
+
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reindexar embeddings: {e}")
+                    # Marcar como executado para nao retentar no proximo ciclo
+                    _ultima_reindexacao_embeddings = agora_utc_naive()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1357,12 +1417,19 @@ def executar_sincronizacao():
 
         # Resumo final
         logger.info("=" * 60)
-        total_sucesso = sum([sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs, sucesso_pickings_recebimento])
 
-        if total_sucesso == 19:
-            logger.info("✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO!")
-        elif total_sucesso >= 17:
-            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/19 módulos OK")
+        modulos_sync = [sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs, sucesso_pickings_recebimento]
+
+        if embeddings_executou:
+            modulos_sync.append(sucesso_embeddings)
+
+        total_modulos = len(modulos_sync)
+        total_sucesso = sum(modulos_sync)
+
+        if total_sucesso == total_modulos:
+            logger.info(f"✅ SINCRONIZAÇÃO COMPLETA COM SUCESSO! ({total_modulos}/{total_modulos})")
+        elif total_sucesso >= total_modulos - 2:
+            logger.info(f"⚠️ Sincronização parcial - {total_sucesso}/{total_modulos} módulos OK")
             if not sucesso_faturamento:
                 logger.info("   ❌ Faturamento: FALHOU")
             if not sucesso_carteira:
@@ -1401,8 +1468,10 @@ def executar_sincronizacao():
                 logger.info("   ❌ Validação IBS/CBS (CTe+NF-e): FALHOU")
             if not sucesso_pickings_recebimento:
                 logger.info("   ❌ Pickings Recebimento (Fase 4): FALHOU")
+            if embeddings_executou and not sucesso_embeddings:
+                logger.info("   ❌ Embeddings Reindexação: FALHOU")
         else:
-            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/19 módulos OK")
+            logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/{total_modulos} módulos OK")
         logger.info("=" * 60)
 
 
@@ -1469,33 +1538,13 @@ def main():
         replace_existing=True
     )
 
-    # ── Reindexação diária de embeddings (Voyage AI) ──
-    EMBEDDINGS_REINDEX_ENABLED = os.environ.get("EMBEDDINGS_REINDEX_ENABLED", "true").lower() == "true"
-    EMBEDDINGS_REINDEX_HOUR = int(os.environ.get("EMBEDDINGS_REINDEX_HOUR", "3"))
-
-    if EMBEDDINGS_REINDEX_ENABLED:
-        from app.scheduler.reindexacao_embeddings import executar_reindexacao
-
-        scheduler.add_job(
-            func=executar_reindexacao,
-            trigger="cron",
-            hour=EMBEDDINGS_REINDEX_HOUR,
-            minute=0,
-            id="reindexacao_embeddings",
-            name="Reindexação Diária de Embeddings (Voyage AI)",
-            max_instances=1,
-            misfire_grace_time=3600,  # 1h grace — ok se atrasou
-            replace_existing=True,
-        )
-
     logger.info("=" * 60)
     logger.info("✅ Scheduler configurado com TODAS as correções:")
     logger.info("   1. Valores de janela corretos para cada serviço")
     logger.info("   2. Services instanciados FORA do contexto")
     logger.info("   3. Tratamento robusto de erros e reconexão")
+    logger.info(f"   4. Embeddings: 20º módulo, diário às {EMBEDDINGS_REINDEX_HOUR:02d}:00 (enabled={EMBEDDINGS_REINDEX_ENABLED})")
     logger.info(f"   Próxima execução em {INTERVALO_MINUTOS} minutos...")
-    if EMBEDDINGS_REINDEX_ENABLED:
-        logger.info(f"   ✅ Reindexação embeddings: diária às {EMBEDDINGS_REINDEX_HOUR:02d}:00")
     logger.info("=" * 60)
 
     # Handlers de shutdown
