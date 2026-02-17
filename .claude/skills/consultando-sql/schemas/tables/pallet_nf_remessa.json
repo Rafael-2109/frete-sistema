@@ -160,16 +160,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_remessa_odoo_account_move_id",
+      "name": "ix_pallet_nf_remessa_status",
       "columns": [
-        "odoo_account_move_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_status",
+      "name": "ix_pallet_nf_remessa_numero_nf",
       "columns": [
-        "status"
+        "numero_nf"
       ],
       "unique": false
     },
@@ -182,13 +182,6 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_remessa_destinatario_tipo",
       "columns": [
         "cnpj_destinatario",
@@ -197,9 +190,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_numero_nf",
+      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
       "columns": [
-        "numero_nf"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -208,6 +201,13 @@
       "columns": [
         "data_emissao",
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_remessa_odoo_account_move_id",
+      "columns": [
+        "odoo_account_move_id"
       ],
       "unique": false
     }

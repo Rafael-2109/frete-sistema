@@ -1,12 +1,17 @@
 ---
 name: visao-produto
-description: Visao 360 de produto - agrega dados de cadastro, estoque, custo, faturamento, carteira e producao em uma consulta unificada.
-triggers:
-  - resumo completo de produto
-  - visao 360 produto
-  - tudo sobre produto X
-  - producao vs realizado
-  - programado vs produzido
+description: |
+  Visao 360 de produto - agrega dados de cadastro, estoque, custo, faturamento, carteira e producao em uma consulta unificada.
+
+  USAR QUANDO:
+  - Resumo completo de produto: "tudo sobre palmito", "visao 360 do produto X"
+  - Producao vs realizado: "cumpriram a programacao?", "programado vs produzido"
+  - Dados cross-domain de produto: "cadastro, estoque e demanda do produto X"
+
+  NAO USAR QUANDO:
+  - Apenas estoque sem visao completa -> usar **gerindo-expedicao**
+  - Apenas faturamento/vendas -> usar **consultando-sql**
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # Skill: visao-produto

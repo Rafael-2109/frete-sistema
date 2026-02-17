@@ -12,6 +12,7 @@ description: |
   - CRIAR/exportar arquivo para download → usar **exportando-arquivos**
   - Ler arquivo de codigo/texto do projeto → usar Read tool
   - Consultar dados do sistema → usar skill de consulta apropriada
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # Lendo Arquivos - Processar Uploads do Usuario

@@ -2,9 +2,17 @@
 name: prd-generator
 description: |
   Gera PRD/Spec para o Ralph Loop atraves de perguntas iterativas.
-  Use quando: (1) Usuario pede "cria PRD", "cria spec", "documenta feature",
-  (2) Precisa estruturar requisitos antes de implementar,
-  (3) Quer rodar Ralph Loop mas nao tem spec pronta.
+
+  USAR QUANDO:
+  - Criar especificacao: "cria PRD", "cria spec", "documenta feature"
+  - Estruturar requisitos: "preciso estruturar requisitos antes de implementar"
+  - Preparar para Ralph Loop: "quero rodar Ralph Loop mas nao tenho spec"
+  - Documentar feature existente: "documenta como funciona o modulo X"
+
+  NAO USAR QUANDO:
+  - Implementar diretamente sem spec -> usar **ralph-wiggum**
+  - Consultas de dados -> usar skill de consulta apropriada
+allowed-tools: Read, Write, Bash, Glob, Grep
 ---
 
 # PRD Generator
@@ -232,6 +240,20 @@ CERTO:
 Proximo passo:
 ./ralph-loop.sh plan 3"
 ```
+
+---
+
+## Error Handling
+
+### Input Ambiguo
+
+| Cenario | Acao |
+|---------|------|
+| Usuario pede PRD mas nao especifica o que | Perguntar "O que voce quer construir?" (Fase 1) |
+| Pedido muito vago ("melhora o sistema") | Pedir exemplos concretos: "Pode dar um exemplo do que esta ruim hoje?" |
+| Feature ja existe parcialmente | Mostrar codigo existente e perguntar: "Quer estender isso ou criar algo novo?" |
+| Conflito entre requisitos | Listar conflitos e pedir priorizacao: "Esses requisitos conflitam: X vs Y. Qual tem prioridade?" |
+| Usuario quer implementar direto (sem spec) | Sugerir: "Posso gerar uma spec rapida primeiro? Ou prefere ir direto com /ralph-loop?" |
 
 ---
 

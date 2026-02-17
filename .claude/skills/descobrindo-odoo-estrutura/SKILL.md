@@ -17,6 +17,7 @@ description: |
   - Recebimento fisico (lotes/quality check) → usar **recebimento-fisico-odoo**
   - Exportar razao geral → usar **razao-geral-odoo**
   - Criar nova integracao → usar **integracao-odoo**
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 ## Quando NAO Usar Esta Skill

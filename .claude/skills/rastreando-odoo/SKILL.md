@@ -21,6 +21,7 @@ description: |
   - Descobrir campos de modelo desconhecido (esta skill rastreia fluxos, nao explora estrutura)
   - Criar lancamentos fiscais (esta skill apenas consulta, nao cria documentos)
   - Apenas listar registros sem rastrear fluxo
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 

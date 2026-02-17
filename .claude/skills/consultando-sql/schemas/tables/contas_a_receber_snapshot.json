@@ -48,17 +48,17 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_snapshot_conta_a_receber_id",
-      "columns": [
-        "conta_a_receber_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_snapshot_conta_campo",
       "columns": [
         "conta_a_receber_id",
         "campo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_snapshot_conta_a_receber_id",
+      "columns": [
+        "conta_a_receber_id"
       ],
       "unique": false
     }

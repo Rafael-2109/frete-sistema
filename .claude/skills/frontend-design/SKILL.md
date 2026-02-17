@@ -1,6 +1,7 @@
 ---
 name: frontend-design
 description: Cria interfaces frontend de alta qualidade com Flask/Jinja2. Gera componentes web, paginas, dashboards e aplicacoes com design profissional, suporte obrigatorio light/dark mode e estetica nao-generica. Usar quando precisar construir telas, artefatos visuais ou posters.
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 Create distinctive frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details.

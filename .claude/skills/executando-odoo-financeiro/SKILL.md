@@ -11,9 +11,13 @@ description: |
   - Baixar titulo a receber: "marque como pago no Odoo"
 
   NAO USAR QUANDO:
-  - Apenas consultar/rastrear documentos sem modificar
-  - Explorar campos de modelo Odoo desconhecido
-  - Criar lancamentos fiscais (CTe, despesas extras)
+  - Apenas consultar/rastrear documentos sem modificar -> usar **rastreando-odoo**
+  - Explorar campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
+  - Criar lancamentos fiscais (CTe, despesas extras) -> usar **integracao-odoo**
+  - Split/consolidar PO -> usar **conciliando-odoo-po**
+  - Validar match NF x PO -> usar **validacao-nf-po**
+  - Exportar razao geral -> usar **razao-geral-odoo**
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 ## Quando NAO Usar Esta Skill
@@ -59,6 +63,19 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
 | Criar pagamento com juros | `_criar_pagamento_com_writeoff_juros()` | Payment posted + reconciliado |
 | Reconciliar titulo | `reconcile()` em `account.move.line` | Full/Partial reconcile |
 | Reconciliar extrato | `reconcile()` linha transitoria <-> payment | is_reconciled=True |
+
+## Error Handling
+
+| Cenario de Falha | Causa Comum | Acao |
+|-------------------|-------------|------|
+| `cannot marshal None` ao criar payment | Campo obrigatorio None (journal_id, partner_id) | Verificar dados antes de criar — nao e erro real, e validacao Odoo |
+| Reconciliacao parcial (nao full) | Valores divergentes titulo vs payment | Verificar saldo residual, pode precisar write-off |
+| Wizard `account.payment.register` falha | Titulo ja reconciliado ou sem saldo | Verificar `amount_residual > 0` antes de criar wizard |
+| Fluxo corretivo (7 passos) falha no passo 3 | Extrato tem outros vinculos | Desconciliar TODOS os vinculos antes de editar |
+| `is_reconciled` ainda False apos reconciliar | Linha transitoria nao encontrada (conta 26868) | Buscar TODAS as linhas do payment, filtrar por conta transitoria |
+| Payment duplicado | Ja existe payment para mesmo titulo+extrato | Verificar payments existentes antes de criar novo |
+
+---
 
 ## Fluxo Completo de Recebimento
 

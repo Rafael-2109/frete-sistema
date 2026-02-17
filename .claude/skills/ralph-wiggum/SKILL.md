@@ -2,9 +2,17 @@
 name: ralph-wiggum
 description: |
   Executa loops autonomos de desenvolvimento via tecnica Ralph Wiggum.
-  Usar quando: (1) Iniciar loop Ralph na sessao atual, (2) Usuario diz "/ralph-loop",
-  (3) Explicar a tecnica Ralph Wiggum, (4) Configurar estrutura Ralph para um projeto,
-  (5) Usuario menciona "autonomous loop", "I'm in danger" ou "ralph".
+
+  USAR QUANDO:
+  - Loop autonomo: "/ralph-loop", "iniciar loop autonomo", "autonomous development"
+  - Implementar feature: "implementar feature X de forma autonoma", "I'm in danger"
+  - Configurar Ralph: "configurar estrutura Ralph para projeto"
+  - Explicar tecnica: "o que e Ralph Wiggum?", "explica o ralph loop"
+
+  NAO USAR QUANDO:
+  - Apenas gerar spec/PRD sem implementar -> usar **prd-generator**
+  - Consultas de dados -> usar skill de consulta apropriada
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Ralph Wiggum Technique

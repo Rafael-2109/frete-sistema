@@ -1,6 +1,7 @@
 ---
 name: razao-geral-odoo
 description: "Exporta Razao Geral (General Ledger) do Odoo em Excel. Busca account.move.line com paginacao, calcula saldo inicial para contas patrimoniais via read_group, gera Excel com coluna de conta contabil e saldo acumulado. Use quando: exportar razao geral, relatorio contabil, balancete, consulta account.move.line em massa."
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 ## QUANDO NAO USAR ESTA SKILL

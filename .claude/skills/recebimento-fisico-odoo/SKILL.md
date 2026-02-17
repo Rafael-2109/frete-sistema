@@ -12,11 +12,12 @@ description: |
   - Problema com lotes: "lote duplicado", "quantidade errada", "move.line nao criou"
 
   NAO USAR QUANDO:
-  - Rastrear documentos fiscais (NF, PO, SO) sem operar recebimento fisico
-  - Descobrir campos de modelo Odoo desconhecido (esta skill usa modelos de picking conhecidos)
-  - Criar pagamentos ou reconciliar extratos (operacao financeira, nao de armazem)
-  - Depurar match NF x PO (Fase 2, anterior ao recebimento fisico)
-  - Conciliar POs por split/consolidacao (Fase 3, anterior ao recebimento fisico)
+  - Rastrear documentos fiscais (NF, PO, SO) -> usar **rastreando-odoo**
+  - Descobrir campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
+  - Criar pagamentos ou reconciliar extratos -> usar **executando-odoo-financeiro**
+  - Depurar match NF x PO (Fase 2) -> usar **validacao-nf-po**
+  - Conciliar POs por split/consolidacao (Fase 3) -> usar **conciliando-odoo-po**
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 ## QUANDO NAO USAR ESTA SKILL
@@ -62,6 +63,29 @@ TELA 2 (status)                 │
 - Service Odoo: `app/recebimento/services/recebimento_fisico_odoo_service.py`
 - Worker RQ: `app/recebimento/workers/recebimento_fisico_jobs.py`
 - Scheduler: `app/scheduler/sincronizacao_incremental_definitiva.py` (variavel: `picking_recebimento_sync_service`)
+
+## Error Handling
+
+### Falhas do Worker (8 Passos)
+
+| Passo | Falha | Causa Comum | Fallback |
+|-------|-------|-------------|----------|
+| 1 | Picking state != assigned | Ja processado ou cancelado | Verificar state atual, marcar como erro |
+| 2 | Lote duplicado | Mesmo numero de lote para produto diferente | Buscar lote existente antes de criar |
+| 3 | move.line nao encontrado | Produto nao esta no picking | Comparar itens locais vs Odoo |
+| 4 | Quantidade zerada | Arredondamento ou conversao UM | Validar quantidade > 0 antes de write |
+| 5 | Quality check nao existe | Picking sem QC configurado | Pular passo se QC nao obrigatorio |
+| 6 | button_validate falha | Quantidades divergentes | Comparar sum(move_line) vs sum(move) |
+| 7 | Timeout RQ (>300s) | Picking muito grande | Retry automatico, verificar job status |
+| 8 | Erro parcial (alguns itens ok) | Falha em item especifico | Reverter tudo, nao deixar estado parcial |
+
+### Retentativas
+
+- Worker RQ tem retry automatico (3 tentativas com backoff)
+- Status muda para `erro` apenas apos esgotar retentativas
+- Cada tentativa loga o passo exato que falhou
+
+---
 
 ## Classe Principal
 

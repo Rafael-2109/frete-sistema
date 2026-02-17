@@ -68,9 +68,9 @@
   ],
   "indices": [
     {
-      "name": "ix_unificacao_codigos_codigo_destino",
+      "name": "ix_unificacao_codigos_codigo_origem",
       "columns": [
-        "codigo_destino"
+        "codigo_origem"
       ],
       "unique": false
     },
@@ -96,9 +96,9 @@
       "unique": false
     },
     {
-      "name": "ix_unificacao_codigos_codigo_origem",
+      "name": "ix_unificacao_codigos_codigo_destino",
       "columns": [
-        "codigo_origem"
+        "codigo_destino"
       ],
       "unique": false
     },

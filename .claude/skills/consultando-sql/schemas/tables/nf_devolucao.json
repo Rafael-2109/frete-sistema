@@ -230,6 +230,62 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "columns": [
+        "odoo_nf_venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_chave_nfd",
+      "columns": [
+        "chave_nfd"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nota_credito_id",
+      "columns": [
+        "odoo_nota_credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_e_pallet_devolucao",
+      "columns": [
+        "e_pallet_devolucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
         "numero_nfd"
@@ -327,62 +383,6 @@
       "columns": [
         "status_odoo",
         "status_monitoramento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_odoo_nf_venda_id",
-      "columns": [
-        "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_chave_nfd",
-      "columns": [
-        "chave_nfd"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_nf_devolucao_odoo_nota_credito_id",
-      "columns": [
-        "odoo_nota_credito_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_e_pallet_devolucao",
-      "columns": [
-        "e_pallet_devolucao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
       ],
       "unique": false
     }

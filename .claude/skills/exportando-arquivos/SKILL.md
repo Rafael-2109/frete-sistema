@@ -13,6 +13,7 @@ description: |
   - LER arquivo enviado pelo usuario → usar **lendo-arquivos**
   - Criar arquivo de codigo/config (nao download) → usar Write tool
   - Consultar dados sem exportar → usar skill de consulta apropriada primeiro
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # Exportando Arquivos - Gerar Downloads para Usuario

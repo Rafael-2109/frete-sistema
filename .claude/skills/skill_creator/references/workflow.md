@@ -26,3 +26,27 @@ For tasks with branching logic, guide Claude through decision points:
 2. Creation workflow: [steps]
 3. Editing workflow: [steps]
 ```
+
+## Multi-script Decision Patterns
+
+Skills com multiplos scripts devem incluir uma "Decision Tree" no SKILL.md que mapeia triggers do usuario ao script correto.
+
+Formato recomendado (tabela + regras numeradas):
+
+```markdown
+## Mapeamento Rapido
+
+| Se a pergunta menciona... | Script | Parametros |
+|----------------------------|--------|------------|
+| **Resumo completo** ("tudo sobre X") | `script_completo.py` | `--item X` |
+| **Comparativo** ("programado vs real") | `script_comparativo.py` | `--item X --de Y --ate Z` |
+| **Listagem geral** (sem item especifico) | `script_listagem.py` | `--de Y --ate Z` |
+
+## Regras de Decisao
+
+1. **VISAO COMPLETA** -> `script_completo.py`
+2. **COMPARATIVO** -> `script_comparativo.py`
+3. SE ambiguo -> perguntar ao usuario
+```
+
+Este padrao evita que o agente escolha o script errado quando a skill tem 2+ scripts com dominios sobrepostos. Regras numeradas resolvem ambiguidades apos a tabela.

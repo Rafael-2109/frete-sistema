@@ -190,37 +190,17 @@
   ],
   "indices": [
     {
-      "name": "idx_pedido_dfe",
-      "columns": [
-        "dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_tipo_pedido",
-      "columns": [
-        "tipo_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_num_requisicao",
-      "columns": [
-        "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_dfe_id",
-      "columns": [
-        "dfe_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pedido_compras_cnpj_fornecedor",
       "columns": [
         "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_empresa",
+      "columns": [
+        "company_id",
+        "num_pedido"
       ],
       "unique": false
     },
@@ -253,17 +233,9 @@
       "unique": false
     },
     {
-      "name": "idx_pedido_empresa",
+      "name": "idx_pedido_dfe",
       "columns": [
-        "company_id",
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_company_id",
-      "columns": [
-        "company_id"
+        "dfe_id"
       ],
       "unique": false
     },
@@ -278,6 +250,34 @@
       "name": "ix_pedido_compras_status_odoo",
       "columns": [
         "status_odoo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_tipo_pedido",
+      "columns": [
+        "tipo_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_num_requisicao",
+      "columns": [
+        "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_dfe_id",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_company_id",
+      "columns": [
+        "company_id"
       ],
       "unique": false
     }

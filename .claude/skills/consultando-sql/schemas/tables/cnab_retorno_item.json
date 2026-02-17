@@ -201,6 +201,13 @@
       "unique": false
     },
     {
+      "name": "ix_cnab_retorno_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_cnab_retorno_item_processado",
       "columns": [
         "processado"
@@ -218,13 +225,6 @@
       "name": "ix_cnab_retorno_item_nosso_numero",
       "columns": [
         "nosso_numero"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cnab_retorno_item_status_match",
-      "columns": [
-        "status_match"
       ],
       "unique": false
     },

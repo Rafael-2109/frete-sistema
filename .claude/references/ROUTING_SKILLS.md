@@ -18,7 +18,8 @@
 | VISAO 360 PRODUTO | "resumo do produto", "producao vs programado", "visao completa do produto" | -> `visao-produto` |
 | EXPORTAR/IMPORTAR DADOS | Gerar Excel, CSV, processar planilha | -> `exportando-arquivos` / `lendo-arquivos` |
 | SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
-| SSW (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
+| SSW consulta (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
+| SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
 
 ---
 
@@ -74,6 +75,7 @@ Se a resposta esta no reference -> NAO usar skill.
 | integracao vs descobrindo | CRIAR novo service -> integracao. EXPLORAR modelo -> descobrindo |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
 | cotando-frete vs acessando-ssw | **Nacom** (industria, contrata frete) -> cotando-frete. **CarVia** (transportadora, vende frete) -> acessando-ssw. Sinal: "no SSW", "opcao NNN", "CarVia" -> SSW. Sem qualificador -> Nacom. Sinais adicionais CarVia: "parametros de frete" (opcao 062), "resultado CTRC" (opcao 101), "formacao de preco" (opcao 062/004) |
+| acessando-ssw vs operando-ssw | **Consultar/entender** SSW -> acessando-ssw. **Executar/cadastrar/criar** no SSW -> operando-ssw. Sinal: "cadastre", "crie unidade", "inclua cidade" -> operando. "como funciona", "o que e", "passo a passo" -> acessando |
 | gerindo-expedicao vs acessando-ssw | Estoque/separacao/embarque **Nacom** -> gerindo-expedicao. Romaneio/manifesto **SSW** -> acessando-ssw |
 | monitorando-entregas vs acessando-ssw | Entrega rastreada no **sistema local** -> monitorando-entregas. Baixa/ocorrencia no **SSW** -> acessando-ssw |
 
@@ -95,7 +97,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 `frontend-design`, `skill_creator`, `ralph-wiggum`, `prd-generator`
 
 ### Skills SSW (Claude Code)
-`acessando-ssw`
+`acessando-ssw`, `operando-ssw`
 
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,

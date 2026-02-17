@@ -1,7 +1,17 @@
 ---
 name: skill-creator
-description: Guia a criacao e atualizacao de skills Claude Code. Estrutura SKILL.md, scripts, references e descriptions seguindo best practices oficiais da Anthropic. Usar quando precisar criar nova skill ou melhorar skill existente.
-license: Complete terms in LICENSE.txt
+description: |
+  Guia a criacao e atualizacao de skills Claude Code. Estrutura SKILL.md, scripts, references e descriptions seguindo best practices oficiais da Anthropic.
+
+  USAR QUANDO:
+  - Criar nova skill: "cria uma skill para X", "preciso de nova skill"
+  - Melhorar skill existente: "melhora a skill Y", "atualiza description da skill Z"
+  - Auditar skills: "revisa as skills do projeto", "skills seguem best practices?"
+
+  NAO USAR QUANDO:
+  - Usar skill existente (executar, nao criar/melhorar)
+  - Consultas de dados -> usar skill de consulta apropriada
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Skill Creator
@@ -67,6 +77,8 @@ Every SKILL.md consists of:
 
 - **Frontmatter** (YAML): Contains `name` and `description` fields. These are the only fields that Claude reads to determine when the skill gets used, thus it is very important to be clear and comprehensive in describing what the skill is, and when it should be used.
 - **Body** (Markdown): Instructions and guidance for using the skill. Only loaded AFTER the skill triggers (if at all).
+
+**Campo recomendado:** `allowed-tools` — lista as tools que a skill precisa (ex: `Read, Bash, Glob, Grep`). Skills que criam/editam arquivos devem incluir `Write, Edit`. Ajuda o agente a entender as permissoes necessarias.
 
 #### Bundled Resources (optional)
 

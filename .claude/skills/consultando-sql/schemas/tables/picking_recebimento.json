@@ -89,6 +89,20 @@
   ],
   "indices": [
     {
+      "name": "idx_picking_rec_po",
+      "columns": [
+        "odoo_purchase_order_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_picking_rec_write",
+      "columns": [
+        "write_date"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_picking_rec_company",
       "columns": [
         "company_id",
@@ -121,20 +135,6 @@
       "name": "idx_picking_rec_origin",
       "columns": [
         "origin"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_po",
-      "columns": [
-        "odoo_purchase_order_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_write",
-      "columns": [
-        "write_date"
       ],
       "unique": false
     }

@@ -12,12 +12,13 @@ description: |
   - Entender tabelas locais: "o que tem em MatchNfPoItem", "campos da validacao"
 
   NAO USAR QUANDO:
-  - Rastrear documentos no Odoo sem foco em match NF x PO
-  - Descobrir campos de modelo Odoo desconhecido (esta skill usa modelos ja mapeados)
-  - Criar pagamentos ou reconciliar extratos (operacao financeira, nao de recebimento)
-  - Criar CTe ou despesas (lancamento fiscal, nao validacao de compra)
-  - Depurar recebimento fisico com lotes/quality checks (Fase 4, posterior a validacao)
-  - Conciliar POs por split/consolidacao (Fase 3, posterior a validacao)
+  - Rastrear documentos no Odoo sem foco em match -> usar **rastreando-odoo**
+  - Descobrir campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
+  - Criar pagamentos ou reconciliar extratos -> usar **executando-odoo-financeiro**
+  - Criar CTe ou despesas -> usar **integracao-odoo**
+  - Depurar recebimento fisico (Fase 4) -> usar **recebimento-fisico-odoo**
+  - Conciliar POs por split/consolidacao (Fase 3) -> usar **conciliando-odoo-po**
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 ## QUANDO NAO USAR ESTA SKILL
@@ -76,6 +77,20 @@ app/recebimento/services/validacao_nf_po_service.py
 │     Se <100% → status='bloqueado' + divergencias            │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Error Handling
+
+| Cenario de Falha | Causa Comum | Acao |
+|-------------------|-------------|------|
+| DFE nao encontrado no Odoo | ID invalido ou DFE deletada | Verificar `dfe_id` com `descobrindo-odoo-estrutura` |
+| De-Para ausente (itens_sem_depara) | Produto novo do fornecedor | Cadastrar em `produto_fornecedor_depara` via tela de resolucao |
+| Match 0% (nenhum PO candidato) | PO de outro fornecedor ou cancelado | Verificar CNPJ fornecedor e status POs |
+| Preco divergente (tolerancia 0%) | Fornecedor enviou preco diferente | Criar divergencia manual, aguardar aprovacao |
+| Quantidade NF > PO + tolerancia (10%) | Fornecedor enviou mais que pedido | Criar divergencia, opcionalmente ajustar PO |
+| Scheduler (APScheduler) nao executa | Cron desativado ou erro de conexao | Verificar logs do scheduler, executar sync manual |
+| Validacao trava em `processando` | Timeout na busca Odoo | Verificar conexao Odoo, reprocessar DFE |
+
+---
 
 ## Constantes de Tolerancia
 
