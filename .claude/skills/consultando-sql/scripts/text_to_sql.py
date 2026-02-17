@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # =====================================================================
 
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
-SONNET_MODEL = "claude-sonnet-4-5-20250929"
+SONNET_MODEL = "claude-sonnet-4-6"
 
 # Paths dos schemas
 SCHEMAS_DIR = os.path.join(os.path.dirname(__file__), '..', 'schemas')

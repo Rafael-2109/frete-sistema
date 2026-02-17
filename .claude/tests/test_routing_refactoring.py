@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script para validar refatoracao .claude/ (routing de skills, references, disambiguation).
-Usa Anthropic API (claude-sonnet-4-20250514) com prompts reais.
+Usa Anthropic API (claude-sonnet-4-6) com prompts reais.
 
 Custo estimado: ~$0.14 USD (10 prompts x ~3.1K input + ~300 output tokens)
 
@@ -27,7 +27,7 @@ except ImportError:
 # CONFIGURACAO
 # ============================================================
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 512
 RESULTS_FILE = Path(__file__).parent / "routing_test_results.json"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # .claude/tests/ -> projeto raiz

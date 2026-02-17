@@ -129,15 +129,15 @@ Este documento cataloga todas as features disponiveis no Claude Agent SDK e Clau
 | Alias | Model ID | Uso | Velocidade |
 |-------|----------|-----|------------|
 | haiku | claude-haiku-4-5-20251001 | Tarefas simples | Muito rapido |
-| sonnet | claude-sonnet-4-5-20250929 | Equilibrado | Rapido |
-| opus | claude-opus-4-5-20251101 | Complexo | Moderado |
-| sonnet[1m] | claude-sonnet-4-5 (extended) | Contexto grande | Rapido |
+| sonnet | claude-sonnet-4-6 | Equilibrado | Rapido |
+| opus | claude-opus-4-6 | Complexo | Moderado |
+| sonnet[1m] | claude-sonnet-4-6 (extended) | Contexto grande | Rapido |
 | opusplan | Opus -> Sonnet | Planejamento hibrido | Variavel |
 
 **Configuracao:**
 ```python
 # Via SDK
-options_dict["model"] = "claude-sonnet-4-5-20250929"
+options_dict["model"] = "claude-sonnet-4-6"
 
 # Via CLI
 claude --model sonnet
@@ -811,8 +811,8 @@ FASE 1 (Sprint 1)     FASE 2 (Sprint 2)     FASE 3 (Sprint 3)     FASE 4 (Sprint
 <div class="model-selector-container ms-3">
     <select id="model-selector" class="form-select form-select-sm">
         <option value="claude-haiku-4-5-20251001">Haiku (Rapido)</option>
-        <option value="claude-sonnet-4-5-20250929" selected>Sonnet (Equilibrado)</option>
-        <option value="claude-opus-4-5-20251101">Opus (Potente)</option>
+        <option value="claude-sonnet-4-6" selected>Sonnet (Equilibrado)</option>
+        <option value="claude-opus-4-6">Opus (Potente)</option>
     </select>
 </div>
 
@@ -833,7 +833,7 @@ FASE 1 (Sprint 1)     FASE 2 (Sprint 2)     FASE 3 (Sprint 3)     FASE 4 (Sprint
 </style>
 
 <script>
-let currentModel = 'claude-sonnet-4-5-20250929';
+let currentModel = 'claude-sonnet-4-6';
 
 document.getElementById('model-selector').addEventListener('change', function() {
     currentModel = this.value;
@@ -873,8 +873,8 @@ def api_settings():
 
     if model and model in [
         'claude-haiku-4-5-20251001',
-        'claude-sonnet-4-5-20250929',
-        'claude-opus-4-5-20251101'
+        'claude-sonnet-4-6',
+        'claude-opus-4-6'
     ]:
         # Armazenar em sessao Flask
         session['agent_model'] = model

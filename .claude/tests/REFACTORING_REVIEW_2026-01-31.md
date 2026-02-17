@@ -130,7 +130,7 @@ Refatoracao completa da infraestrutura `.claude/` do sistema de fretes Nacom Goy
 
 ### 4.1 Abordagem
 
-- **API real**: Anthropic API com `claude-sonnet-4-20250514`
+- **API real**: Anthropic API com `claude-sonnet-4-6`
 - **10 test cases** cobrindo 4 categorias
 - **System prompt**: CLAUDE.md completo + frontmatter de 8 skills (name + description + QUANDO NAO USAR)
 - **Scoring**: 0-5 pontos por teste com 4 criterios
@@ -411,5 +411,5 @@ O teto pratico de score com o framework atual e ~85-90%, pois a metrica "anti-sk
 ---
 
 **Gerado**: 31/01/2026 17:30 (Rodada 1) / 31/01/2026 17:55 (Rodada 2)
-**Modelo teste**: claude-sonnet-4-20250514
-**Modelo review**: claude-opus-4-5-20251101
+**Modelo teste**: claude-sonnet-4-6
+**Modelo review**: claude-opus-4-6

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "date": "2026-01-31T17:55:30.700637",
-    "model": "claude-sonnet-4-20250514",
+    "model": "claude-sonnet-4-6",
     "total_tests": 10,
     "total_input_tokens": 71177,
     "total_output_tokens": 3578,
