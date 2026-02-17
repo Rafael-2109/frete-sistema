@@ -7,6 +7,11 @@ Roda in-process no SDK, eliminando overhead de subprocess.
 Reutiliza a pipeline existente de .claude/skills/consultando-sql/scripts/text_to_sql.py
 (Generator → Evaluator → Safety → Executor).
 
+Suporte a MCP Structured Output (spec 2025-06-18):
+    - outputSchema define formato tipado do resultado
+    - structuredContent retorna dados parseáveis pelo agente
+    - TextContent mantido para backward compat (leitura humana)
+
 Referência SDK:
   https://platform.claude.com/docs/pt-BR/agent-sdk/custom-tools
 """
@@ -95,7 +100,7 @@ def _format_result(result: dict) -> str:
     if not result.get("sucesso"):
         aviso = result.get("aviso", "Erro desconhecido")
         sql = result.get("sql")
-        parts = [f"❌ Consulta falhou: {aviso}"]
+        parts = [f"Consulta falhou: {aviso}"]
         if sql:
             parts.append(f"\nSQL gerada: {sql}")
         return "\n".join(parts)
@@ -111,14 +116,14 @@ def _format_result(result: dict) -> str:
     parts = []
 
     # Header
-    parts.append(f"✅ Consulta executada com sucesso ({total} linhas, {tempo}ms)")
+    parts.append(f"Consulta executada com sucesso ({total} linhas, {tempo}ms)")
 
     # SQL executada
     parts.append(f"\n**SQL executada:**\n```sql\n{sql}\n```")
 
     # Aviso do evaluator (se corrigiu)
     if aviso:
-        parts.append(f"\n⚠️ {aviso}")
+        parts.append(f"\nAviso: {aviso}")
 
     # Dados
     if not dados:
@@ -170,17 +175,119 @@ def _format_result(result: dict) -> str:
     return "\n".join(parts)
 
 
+def _build_structured_content(result: dict) -> dict[str, Any]:
+    """
+    Constrói structuredContent a partir do resultado do pipeline.
+
+    O structuredContent é o dado tipado que o agente pode usar programaticamente,
+    conforme MCP spec 2025-06-18. É complementar ao TextContent (legível).
+
+    Args:
+        result: Dict retornado por TextToSQLPipeline.run()
+
+    Returns:
+        Dict conforming to o outputSchema definido na tool
+    """
+    if not result.get("sucesso"):
+        return {
+            "success": False,
+            "error": result.get("aviso", "Erro desconhecido"),
+            "query_executed": result.get("sql"),
+            "columns": [],
+            "rows": [],
+            "row_count": 0,
+            "execution_time_ms": result.get("tempo_total_ms", 0),
+            "tables_used": [],
+        }
+
+    dados = result.get("dados", [])
+    colunas = result.get("colunas", [])
+
+    # Converter rows de list[dict] para list[list] (mais compacto)
+    rows = []
+    for row in dados:
+        rows.append([row.get(col) for col in colunas])
+
+    return {
+        "success": True,
+        "error": None,
+        "query_executed": result.get("sql", ""),
+        "columns": colunas,
+        "rows": rows,
+        "row_count": result.get("total_linhas", 0),
+        "execution_time_ms": result.get("tempo_total_ms", 0),
+        "tables_used": result.get("tabelas_usadas", []),
+        "warning": result.get("aviso"),
+    }
+
+
 # =====================================================================
-# CUSTOM TOOL — @tool decorator
+# OUTPUT SCHEMA — MCP Structured Output (spec 2025-06-18)
+# =====================================================================
+
+SQL_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "success": {
+            "type": "boolean",
+            "description": "Whether the query executed successfully",
+        },
+        "error": {
+            "type": ["string", "null"],
+            "description": "Error message if success=false",
+        },
+        "query_executed": {
+            "type": ["string", "null"],
+            "description": "The SQL query that was executed",
+        },
+        "columns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Column names in the result set",
+        },
+        "rows": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "description": "Row values in column order",
+            },
+            "description": "Result rows as arrays (column order matches 'columns')",
+        },
+        "row_count": {
+            "type": "integer",
+            "description": "Total number of rows returned",
+        },
+        "execution_time_ms": {
+            "type": "number",
+            "description": "Total execution time in milliseconds",
+        },
+        "tables_used": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Tables referenced in the query",
+        },
+        "warning": {
+            "type": ["string", "null"],
+            "description": "Warning from the SQL evaluator (e.g., column corrections)",
+        },
+    },
+    "required": ["success", "columns", "rows", "row_count"],
+}
+
+
+# =====================================================================
+# CUSTOM TOOL — Enhanced MCP with Structured Output
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import enhanced_tool, create_enhanced_mcp_server
 
-    @tool(
+    @enhanced_tool(
         "consultar_sql",
         "Converte uma pergunta em linguagem natural para SQL PostgreSQL e executa "
-        "no banco de dados do sistema de frete. Retorna dados formatados em tabela. "
+        "no banco de dados do sistema de frete. Retorna dados formatados em tabela "
+        "e dados estruturados (columns, rows, row_count) para processamento programático. "
         "Use para consultas analíticas: rankings, agregações, distribuições, "
         "comparações, totais por período, etc. "
         "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
@@ -193,6 +300,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=SQL_OUTPUT_SCHEMA,
     )
     async def consultar_sql(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -204,17 +312,14 @@ try:
         3. Safety: regex contra SQL injection
         4. Executor: SET TRANSACTION READ ONLY + timeout 5s
 
-        Args:
-            args: {"pergunta": str} — pergunta em linguagem natural
-
         Returns:
-            MCP tool response: {"content": [{"type": "text", "text": ...}]}
+            MCP tool response com TextContent (legível) + structuredContent (tipado)
         """
         pergunta = args.get("pergunta", "").strip()
 
         if not pergunta:
             return {
-                "content": [{"type": "text", "text": "❌ Pergunta vazia. Forneça uma pergunta em linguagem natural."}],
+                "content": [{"type": "text", "text": "Pergunta vazia. Forneca uma pergunta em linguagem natural."}],
                 "is_error": True,
             }
 
@@ -225,31 +330,43 @@ try:
             # Executar com app context garantido
             result = _execute_in_app_context(pipeline, pergunta)
 
-            # Formatar resultado legível
+            # Formatar resultado legível (TextContent — backward compat)
             formatted = _format_result(result)
 
-            return {
-                "content": [{"type": "text", "text": formatted}]
+            # Construir structuredContent (MCP spec 2025-06-18)
+            structured = _build_structured_content(result)
+
+            response: dict[str, Any] = {
+                "content": [{"type": "text", "text": formatted}],
             }
 
+            # Adicionar structuredContent apenas em sucesso
+            # (em erro, is_error=True já sinaliza ao client)
+            if result.get("sucesso"):
+                response["structuredContent"] = structured
+            else:
+                response["is_error"] = True
+
+            return response
+
         except Exception as e:
-            error_msg = f"❌ Erro ao executar consulta SQL: {str(e)}"
+            error_msg = f"Erro ao executar consulta SQL: {str(e)}"
             logger.error(f"[SQL_TOOL] {error_msg}", exc_info=True)
             return {
                 "content": [{"type": "text", "text": error_msg}],
                 "is_error": True,
             }
 
-    # Criar MCP server in-process
-    sql_server = create_sdk_mcp_server(
+    # Criar Enhanced MCP server in-process (com outputSchema support)
+    sql_server = create_enhanced_mcp_server(
         name="sql-tools",
-        version="1.0.0",
+        version="2.0.0",
         tools=[consultar_sql],
     )
 
-    logger.info("[SQL_TOOL] Custom Tool MCP 'consultar_sql' registrada com sucesso")
+    logger.info("[SQL_TOOL] Enhanced MCP 'consultar_sql' registrada (Structured Output ativo)")
 
 except ImportError as e:
-    # claude_agent_sdk não disponível (ex: rodando fora do agente)
+    # claude_agent_sdk ou _mcp_enhanced não disponível
     sql_server = None
-    logger.debug(f"[SQL_TOOL] claude_agent_sdk não disponível: {e}")
+    logger.debug(f"[SQL_TOOL] Dependência não disponível: {e}")

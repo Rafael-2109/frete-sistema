@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 14/02/2026
+**Ultima atualizacao**: 17/02/2026
 
 ---
 
@@ -23,6 +23,7 @@
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
 | **Manual para CLAUDE.md de modulo** | [MANUAL_CLAUDE_MD.md](MANUAL_CLAUDE_MD.md) |
+| **Capacidades MCP (versoes, features, gaps)** | [MCP_CAPABILITIES_2026.md](MCP_CAPABILITIES_2026.md) |
 
 ---
 

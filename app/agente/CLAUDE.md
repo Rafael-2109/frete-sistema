@@ -51,6 +51,12 @@ Alterar um arquivo sem verificar os outros 2 quebra o fluxo silenciosamente.
 Tools em `tools/` sao registros MCP (ToolAnnotations). O agente usa `mcp__X__Y` diretamente.
 NUNCA importar e chamar como funcao Python — nao sao callables, gera erro silencioso.
 
+### MCP Enhanced Wrapper
+`tools/_mcp_enhanced.py` adiciona `outputSchema` + `structuredContent` (MCP spec 2025-06-18).
+- Usar `@enhanced_tool` + `create_enhanced_mcp_server` para tools que precisam de structured output
+- SQL tool ja migrada (v2.0.0). Demais tools usam `@tool` + `create_sdk_mcp_server` (standard)
+- Ref completa: `.claude/references/MCP_CAPABILITIES_2026.md`
+
 ### JSONB: flag_modified
 Manter o padrao existente em `models.py`: SEMPRE `flag_modified(session, 'data')` apos modificar JSONB.
 

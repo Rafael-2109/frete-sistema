@@ -1116,13 +1116,14 @@ Nunca invente informações."""
                 sessions_tool_names = [
                     "mcp__sessions__search_sessions",
                     "mcp__sessions__list_recent_sessions",
+                    "mcp__sessions__semantic_search_sessions",
                 ]
                 for tool_name in sessions_tool_names:
                     if tool_name not in allowed:
                         allowed.append(tool_name)
                 options_dict["allowed_tools"] = allowed
 
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'sessions' registrada (2 operações)")
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'sessions' registrada (3 operações)")
             else:
                 logger.debug("[AGENT_CLIENT] sessions_server é None — claude_agent_sdk não disponível")
         except ImportError:
@@ -1180,13 +1181,17 @@ Nunca invente informações."""
                     "mcp__browser__browser_select_option",
                     "mcp__browser__browser_read_content",
                     "mcp__browser__browser_close",
+                    "mcp__browser__browser_evaluate_js",
+                    "mcp__browser__browser_switch_frame",
+                    "mcp__browser__browser_ssw_login",
+                    "mcp__browser__browser_ssw_navigate_option",
                 ]
                 for tool_name in browser_tool_names:
                     if tool_name not in allowed:
                         allowed.append(tool_name)
                 options_dict["allowed_tools"] = allowed
 
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'browser' registrada (7 operações)")
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'browser' registrada (11 operações)")
             else:
                 logger.debug("[AGENT_CLIENT] browser_server é None — playwright não disponível")
         except ImportError:
