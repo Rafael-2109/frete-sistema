@@ -83,6 +83,13 @@
   ],
   "indices": [
     {
+      "name": "ix_validacao_fiscal_dfe_chave_nfe",
+      "columns": [
+        "chave_nfe"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_validacao_fiscal_dfe_status",
       "columns": [
         "status"
@@ -107,13 +114,6 @@
       "name": "ix_validacao_fiscal_dfe_cnpj_empresa_compradora",
       "columns": [
         "cnpj_empresa_compradora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_fiscal_dfe_chave_nfe",
-      "columns": [
-        "chave_nfe"
       ],
       "unique": false
     }

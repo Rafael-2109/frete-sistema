@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "versao": "1.0",
+    "descricao": "Valores padrao CarVia para operacoes de escrita no SSW",
+    "atualizado": "2026-02-17"
+  },
+  "empresa": {
+    "cnpj": "62312605000175",
+    "ie": "623371998113",
+    "razao_social": "CARVIA LOGISTICA E TRANSPORTE LTDA",
+    "codigo_empresa_ctb": "01",
+    "sigla_mtz_ctb": "MTZ",
+    "rntrc": "058506755"
+  },
+  "seguro": {
+    "rctrc_apolice": "1005406001944",
+    "cnpj_seguradora": "14525684000150",
+    "nome_seguradora": "ESSOR SEGUROS",
+    "rcv_apolice": null,
+    "cnpj_rcv": null
+  },
+  "banco": {
+    "codigo": null,
+    "agencia": null,
+    "dv_agencia": null,
+    "conta": null,
+    "dv_conta": null,
+    "_nota": "Preencher na 1a execucao real — agente pergunta ao usuario"
+  },
+  "opcao_401": {
+    "ativa": "S",
+    "aereo": "N",
+    "aquaviaria": "N",
+    "rodoviario": "S",
+    "tipo_unidade_padrao": "T",
+    "simples_nacional": "N",
+    "regime_pis_cofins": "N",
+    "imprime_fatura": "N",
+    "gera_fatura_bloqueto": "N",
+    "arquiva_comprovante": "N",
+    "imprime_subcontrato": "S",
+    "romaneio_gera_damdfe": "N",
+    "possui_almoxarifado": "N",
+    "cobra_frete_avista": "S",
+    "impedir_cfop_5932_6932": "N",
+    "debita_auto_frete_avista": "N",
+    "cobra_agencia_via_fat": "N",
+    "servico_logistica": "N"
+  },
+  "opcao_402": {
+    "tipo_frete": "A",
+    "coleta": "S",
+    "entrega": "S",
+    "restrita": "N",
+    "prazo_ecommerce": "0",
+    "qtde_pedagios": "0",
+    "valor_tda": "0,00",
+    "valor_suframa": "0,00",
+    "valor_coleta_entrega": "0,00",
+    "praca_comercial": ""
+  }
+}

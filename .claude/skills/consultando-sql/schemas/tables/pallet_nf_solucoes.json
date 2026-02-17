@@ -177,17 +177,17 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_emitente",
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
       "columns": [
-        "cnpj_emitente",
-        "tipo"
+        "numero_nf_solucao"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "name": "idx_nf_solucao_emitente",
       "columns": [
-        "numero_nf_solucao"
+        "cnpj_emitente",
+        "tipo"
       ],
       "unique": false
     },

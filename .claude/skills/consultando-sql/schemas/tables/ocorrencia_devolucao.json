@@ -153,16 +153,16 @@
   ],
   "indices": [
     {
+      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_ocorrencia_devolucao_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_ocorrencia_data_abertura",
-      "columns": [
-        "data_abertura"
       ],
       "unique": false
     },
@@ -205,11 +205,11 @@
       "unique": false
     },
     {
-      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "name": "idx_ocorrencia_data_abertura",
       "columns": [
-        "nf_devolucao_id"
+        "data_abertura"
       ],
-      "unique": true
+      "unique": false
     }
   ]
 }

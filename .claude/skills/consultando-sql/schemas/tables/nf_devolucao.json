@@ -230,13 +230,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_odoo_nf_venda_id",
-      "columns": [
-        "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_chave_nfd",
       "columns": [
         "chave_nfd"
@@ -383,6 +376,13 @@
       "columns": [
         "status_odoo",
         "status_monitoramento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "columns": [
+        "odoo_nf_venda_id"
       ],
       "unique": false
     }

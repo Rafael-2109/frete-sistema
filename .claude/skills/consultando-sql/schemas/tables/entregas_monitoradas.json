@@ -154,9 +154,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "ix_entregas_monitoradas_numero_nf",
       "columns": [
-        "cnpj_cliente"
+        "numero_nf"
       ],
       "unique": false
     },
@@ -168,9 +168,9 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_numero_nf",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "numero_nf"
+        "cnpj_cliente"
       ],
       "unique": false
     }

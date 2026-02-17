@@ -142,6 +142,20 @@
   ],
   "indices": [
     {
+      "name": "ix_historico_requisicao_compras_operacao",
+      "columns": [
+        "operacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_requisicao_compras_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_historico_requisicao_compras_num_requisicao",
       "columns": [
         "num_requisicao"
@@ -152,13 +166,6 @@
       "name": "ix_historico_requisicao_compras_alterado_em",
       "columns": [
         "alterado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_historico_requisicao_compras_operacao",
-      "columns": [
-        "operacao"
       ],
       "unique": false
     },
@@ -178,13 +185,6 @@
       "unique": false
     },
     {
-      "name": "ix_historico_requisicao_compras_alterado_por",
-      "columns": [
-        "alterado_por"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_hist_req_num_data",
       "columns": [
         "num_requisicao",
@@ -193,9 +193,9 @@
       "unique": false
     },
     {
-      "name": "ix_historico_requisicao_compras_cod_produto",
+      "name": "ix_historico_requisicao_compras_alterado_por",
       "columns": [
-        "cod_produto"
+        "alterado_por"
       ],
       "unique": false
     }
