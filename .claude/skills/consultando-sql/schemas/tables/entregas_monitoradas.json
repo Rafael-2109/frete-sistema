@@ -154,16 +154,16 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_numero_nf",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "numero_nf"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "ix_entregas_monitoradas_numero_nf",
       "columns": [
-        "separacao_lote_id"
+        "numero_nf"
       ],
       "unique": false
     },

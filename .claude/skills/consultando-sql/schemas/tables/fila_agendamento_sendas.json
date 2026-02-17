@@ -91,16 +91,16 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_data_agendamento",
+      "name": "ix_fila_agendamento_sendas_status",
       "columns": [
-        "data_agendamento"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_status",
+      "name": "ix_fila_agendamento_sendas_data_agendamento",
       "columns": [
-        "status"
+        "data_agendamento"
       ],
       "unique": false
     },

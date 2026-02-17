@@ -149,6 +149,13 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_odoo_line_id",
       "columns": [
         "odoo_line_id"
@@ -229,13 +236,6 @@
       "name": "ix_contas_a_pagar_partner_id",
       "columns": [
         "partner_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
       ],
       "unique": false
     }

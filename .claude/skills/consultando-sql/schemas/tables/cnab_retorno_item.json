@@ -215,16 +215,16 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_status_match",
+      "name": "ix_cnab_retorno_item_nosso_numero",
       "columns": [
-        "status_match"
+        "nosso_numero"
       ],
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_nosso_numero",
+      "name": "ix_cnab_retorno_item_status_match",
       "columns": [
-        "nosso_numero"
+        "status_match"
       ],
       "unique": false
     },

@@ -201,6 +201,34 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_receber_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_empresa",
+      "columns": [
+        "empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_conta_receber_cnpj",
       "columns": [
         "cnpj"
@@ -232,34 +260,6 @@
       "name": "ix_contas_a_receber_parcela",
       "columns": [
         "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_receber_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_empresa",
-      "columns": [
-        "empresa"
       ],
       "unique": false
     }
