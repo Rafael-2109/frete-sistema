@@ -78,6 +78,7 @@ Gotchas rapidos:
 | **Infraestrutura Render** | `.claude/references/INFRAESTRUTURA.md` |
 | **Confiabilidade de subagentes** | `.claude/references/SUBAGENT_RELIABILITY.md` |
 | **Manual CLAUDE.md de modulo** | `.claude/references/MANUAL_CLAUDE_MD.md` |
+| **Capacidades MCP (versoes, gaps, enhanced)** | `.claude/references/MCP_CAPABILITIES_2026.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:
