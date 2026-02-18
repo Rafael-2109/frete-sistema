@@ -1588,7 +1588,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const borderCls = score >= 90 ? 'var(--fin-accent-success)' : score >= 70 ? 'var(--fin-accent-info)' : 'var(--fin-accent-danger)';
             const tituloId = c.id || c.titulo_id;
-            const nf = c.numero_nf || c.nf || '-';
+            const nf = c.numero_nf || c.titulo_nf || c.nf || '-';
             const parcela = c.parcela || c.numero_parcela || 1;
             const cliente = c.cliente || c.nome_cliente || c.razao_social || '-';
             const valor = c.valor || c.saldo || c.valor_titulo || 0;
