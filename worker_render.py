@@ -29,6 +29,55 @@ def setup_redis_connection():
     logger.info(f"Conectando ao Redis: {redis_url[:30]}...")
     return Redis.from_url(redis_url)
 
+def _cleanup_orphaned_recebimentos_lf():
+    """Detecta e reseta recebimentos LF presos em 'processando' por >30min.
+
+    Cenario: worker morre (deploy, OOM, crash) durante processamento.
+    O registro fica 'processando' eternamente sem mecanismo de recovery.
+    Esta funcao roda no startup do worker para corrigir orfaos do deploy anterior.
+    """
+    try:
+        from app import create_app
+        app = create_app()
+        with app.app_context():
+            from app.recebimento.models import RecebimentoLf
+            from app import db
+            from datetime import timedelta
+
+            threshold = agora_utc_naive() - timedelta(minutes=30)
+            stuck = RecebimentoLf.query.filter(
+                RecebimentoLf.status == 'processando',
+                RecebimentoLf.atualizado_em < threshold,
+            ).all()
+
+            for rec in stuck:
+                logger.info(
+                    f"  Cleanup: RecLF {rec.id} preso (etapa={rec.etapa_atual}, "
+                    f"checkpoint={rec.ultimo_checkpoint_em})"
+                )
+                rec.status = 'erro'
+                rec.erro_mensagem = (
+                    f'Processamento interrompido (etapa: {rec.etapa_atual}, '
+                    f'ultimo checkpoint: {rec.ultimo_checkpoint_em}). '
+                    f'Possivel crash/deploy do worker.'
+                )
+                # Liberar lock Redis
+                try:
+                    if rec.odoo_dfe_id:
+                        from app.recebimento.workers.recebimento_lf_jobs import _liberar_lock
+                        _liberar_lock(rec.odoo_dfe_id)
+                except Exception:
+                    pass
+
+            if stuck:
+                db.session.commit()
+                logger.info(f"Cleanup: {len(stuck)} recebimentos LF resetados para 'erro'")
+            else:
+                logger.info("Cleanup: nenhum recebimento LF orfao encontrado")
+    except Exception as e:
+        logger.warning(f"Erro no cleanup de recebimentos LF: {e}")
+
+
 def worker_startup():
     """Executa ao iniciar o worker"""
     logger.info("="*60)
@@ -37,6 +86,10 @@ def worker_startup():
     logger.info(f"🔧 PID: {os.getpid()}")
     logger.info(f"🌍 Ambiente: RENDER")
     logger.info("="*60)
+
+    # Cleanup de recebimentos LF orfaos (presos por deploy anterior)
+    logger.info("Executando cleanup de recebimentos LF orfaos...")
+    _cleanup_orphaned_recebimentos_lf()
 
 def worker_shutdown():
     """Executa ao parar o worker"""

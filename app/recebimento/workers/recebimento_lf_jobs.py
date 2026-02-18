@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Redis para progresso e locks
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 PROGRESSO_TTL = 3600  # 1 hora
-LOCK_TTL = 7200  # 2 horas — acomodar polling longo (fire and poll)
+LOCK_TTL = 3600  # 1 hora — reduzido de 2h; cleanup de orphans complementa
 
 
 def _get_redis():

@@ -120,6 +120,7 @@ class RecebimentoLfOdooService:
     LOCATION_CD_ESTOQUE = 32       # CD/Estoque
     LOCATION_CLIENTES = 5          # Parceiros/Clientes
     CARRIER_ID_FB = 996             # NACOM GOYA (61.724.241/0001-78) — transportadora propria para transferencias
+    CNPJ_FB = '61.724.241/0001-78'  # FB como emissora de NF de transferência
 
     # Recebimento CD via DFe (Fase 7) — IDs fixos
     TEAM_ID_CD = 119               # Lançamento Frete (mesmo da FB)
@@ -2903,8 +2904,10 @@ class RecebimentoLfOdooService:
                 return
 
         if not dfe_id:
-            # 2. Buscar DFe pelo numero da NF (sem filtro de status — queremos encontrar
-            # em qualquer estado para evitar duplicatas; logica posterior decide se processar)
+            # 2. Buscar DFe pelo numero da NF + CNPJ emitente (sem filtro de status —
+            # queremos encontrar em qualquer estado para evitar duplicatas)
+            # IMPORTANTE: Filtrar por CNPJ_FB para não retornar CTe ou NFs de outros emitentes
+            # (Bug corrigido 2026-02-18: ID 8 retornou CTe 12814 sem filtro de emitente)
             numero_nf = rec.numero_nf
             if numero_nf:
                 dfe_by_nf = odoo.execute_kw(
@@ -2912,16 +2915,28 @@ class RecebimentoLfOdooService:
                     [[
                         ['nfe_infnfe_ide_nnf', '=', numero_nf],
                         ['company_id', '=', self.COMPANY_CD],
+                        ['nfe_infnfe_emit_cnpj', '=', self.CNPJ_FB],
                     ]],
-                    {'fields': ['id', 'l10n_br_status', 'purchase_id'], 'limit': 1, 'order': 'id desc'}
+                    {'fields': ['id', 'l10n_br_status', 'purchase_id', 'protnfe_infnfe_chnfe'],
+                     'limit': 1, 'order': 'id desc'}
                 )
                 if dfe_by_nf:
-                    dfe_id = dfe_by_nf[0]['id']
-                    logger.info(
-                        f"  DFe CD encontrado por NUMERO_NF {numero_nf}: ID={dfe_id}, "
-                        f"status={dfe_by_nf[0].get('l10n_br_status')}, "
-                        f"purchase={dfe_by_nf[0].get('purchase_id')}"
-                    )
+                    candidate_id = dfe_by_nf[0]['id']
+                    dfe_chave = dfe_by_nf[0].get('protnfe_infnfe_chnfe', '')
+                    # Validar chave se disponivel (evitar match falso-positivo)
+                    if chave and dfe_chave and dfe_chave != chave:
+                        logger.warning(
+                            f"  DFe CD {candidate_id} encontrado por numero {numero_nf} mas "
+                            f"chave diverge (esperada={chave[:20]}..., encontrada={dfe_chave[:20]}...). "
+                            f"Ignorando — sera criado novo DFe."
+                        )
+                    else:
+                        dfe_id = candidate_id
+                        logger.info(
+                            f"  DFe CD encontrado por NUMERO_NF {numero_nf}: ID={dfe_id}, "
+                            f"status={dfe_by_nf[0].get('l10n_br_status')}, "
+                            f"purchase={dfe_by_nf[0].get('purchase_id')}"
+                        )
 
         if not dfe_id:
             # 3. Criar DFe via upload de XML

@@ -286,12 +286,19 @@ def api_progresso(recebimento_id):
 
 @recebimento_lf_bp.route('/status/<int:recebimento_id>/retry', methods=['POST'])
 def api_retry(recebimento_id):
-    """API: Retentar processamento de recebimento LF com erro."""
+    """API: Retentar processamento de recebimento LF com erro.
+
+    Body JSON (opcional):
+        force (bool): Se True, permite retry de recebimento preso em 'processando' >30min.
+    """
     try:
         from app.recebimento.services.recebimento_lf_service import RecebimentoLfService
 
+        data = request.get_json(silent=True) or {}
+        force = bool(data.get('force', False))
+
         service = RecebimentoLfService()
-        recebimento = service.retry_recebimento(recebimento_id)
+        recebimento = service.retry_recebimento(recebimento_id, force=force)
 
         return jsonify({
             'success': True,

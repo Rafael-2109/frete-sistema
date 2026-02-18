@@ -930,12 +930,13 @@ class RecebimentoLfService:
             logger.error(f"Erro ao listar recebimentos LF: {e}")
             raise
 
-    def retry_recebimento(self, recebimento_id):
+    def retry_recebimento(self, recebimento_id, force=False):
         """
         Retry de recebimento LF com erro.
 
         Args:
             recebimento_id: ID do RecebimentoLf
+            force: Se True, permite retry de recebimento preso em 'processando' >30min
 
         Returns:
             RecebimentoLf re-enfileirado
@@ -946,10 +947,32 @@ class RecebimentoLfService:
                 raise ValueError(f"Recebimento LF {recebimento_id} nao encontrado")
 
             if recebimento.status != 'erro':
-                raise ValueError(
-                    f"Recebimento LF {recebimento_id} nao esta com erro "
-                    f"(status={recebimento.status})"
-                )
+                if force and recebimento.status == 'processando':
+                    # Permitir retry forçado de registros presos (worker morto/deploy)
+                    from datetime import timedelta
+                    threshold = agora_utc_naive() - timedelta(minutes=30)
+                    if recebimento.atualizado_em and recebimento.atualizado_em < threshold:
+                        logger.warning(
+                            f"Force retry: recebimento {recebimento_id} preso em 'processando' "
+                            f"(atualizado_em={recebimento.atualizado_em})"
+                        )
+                        # Liberar lock Redis antes do retry
+                        try:
+                            from app.recebimento.workers.recebimento_lf_jobs import _liberar_lock
+                            if recebimento.odoo_dfe_id:
+                                _liberar_lock(recebimento.odoo_dfe_id)
+                        except Exception:
+                            pass
+                    else:
+                        raise ValueError(
+                            f"Recebimento LF {recebimento_id} ainda em processamento ativo "
+                            f"(atualizado_em={recebimento.atualizado_em}). Aguarde 30min."
+                        )
+                else:
+                    raise ValueError(
+                        f"Recebimento LF {recebimento_id} nao esta com erro "
+                        f"(status={recebimento.status})"
+                    )
 
             if recebimento.tentativas >= recebimento.max_tentativas:
                 raise ValueError(
