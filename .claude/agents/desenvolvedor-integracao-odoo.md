@@ -412,17 +412,20 @@ Escrever em `/tmp/subagent-findings/dev-odoo-{contexto}.md` com:
 
 Ao criar/modificar service que reconcilia payment ↔ extrato:
 
-- [ ] **ANTES** de `reconcile()`: Trocar conta TRANSITORIA (22199) → PENDENTES (26868)
-- [ ] **DEPOIS** de `reconcile()`: Atualizar `partner_id` da statement line
-- [ ] **DEPOIS** de `reconcile()`: Atualizar rotulo (`payment_ref` + `name` das move lines)
-- [ ] Usar `BaixaPagamentosService.formatar_rotulo_pagamento()` para formatar rotulo
+**Usar `_preparar_extrato_para_reconciliacao(item, partner_id, partner_name)`** ANTES de reconciliar.
+Faz TUDO em UM ciclo draft→write→post:
+
+- [ ] 1. `button_draft` no move do extrato
+- [ ] 2. Write `partner_id` + `payment_ref` na statement_line (pode regenerar move_lines!)
+- [ ] 3. Write `name` nas move_lines (re-buscar IDs apos passo 2!)
+- [ ] 4. Write `account_id` TRANSITORIA (22199) → PENDENTES (26868) (**ULTIMO!** re-buscar IDs!)
+- [ ] 5. `action_post`
+- [ ] 6. `reconcile()` **POR ULTIMO** (`button_draft` desfaz reconciliacao!)
 - [ ] Tratar excecoes com `logger.warning` (nao bloquear fluxo principal)
-- [ ] Testar: verificar os 3 campos no Odoo apos execucao
+- [ ] Testar: verificar `is_reconciled=True` + 3 campos no Odoo apos execucao
 
-**Metodos disponiveis (BaixaPagamentosService):**
-- `trocar_conta_move_line_extrato(move_id, conta_origem, conta_destino)`
-- `atualizar_statement_line_partner(statement_line_id, partner_id)`
-- `atualizar_rotulo_extrato(move_id, statement_line_id, rotulo)`
-- `formatar_rotulo_pagamento(valor, nome_fornecedor, data_pagamento)` (estatico)
+**GOTCHA O12:** Write na `account.bank.statement.line` faz Odoo REGENERAR `account.move.line`, revertendo `account_id` se escrito antes. Por isso account_id DEVE ser ULTIMO.
 
-**Ref:** `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos"
+**GOTCHA O11:** `button_draft` em move reconciliado DESFAZ a reconciliacao. NUNCA chamar `_atualizar_campos_extrato()` apos reconcile — metodo **DEPRECADO**.
+
+**Ref:** `app/financeiro/CLAUDE.md` (O11, O12) e `.claude/references/odoo/GOTCHAS.md`

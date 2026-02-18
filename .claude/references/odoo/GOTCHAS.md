@@ -251,7 +251,7 @@ Quando um extrato JA foi reconciliado (`is_reconciled=True`) mas os 3 campos est
 ### ⚠️ GOTCHAS Criticos
 
 1. **Odoo RECRIA move lines ao voltar para draft**: Apos `button_draft` + qualquer edicao, os IDs das `account.move.line` mudam. Usar IDs antigos causa `MissingError`.
-2. **`account_id` DEVE ser o ULTIMO campo alterado antes do `action_post`**: Se alterar antes de outros campos, o Odoo pode resetar para a conta default ao recriar lines.
+2. **`account_id` DEVE ser o ULTIMO campo alterado antes do `action_post`**: Write na `account.bank.statement.line` (partner_id, payment_ref) faz Odoo REGENERAR as `account.move.line` associadas, revertendo qualquer `account_id` ja escrito e potencialmente mudando IDs. Sempre re-buscar IDs apos write na statement_line.
 3. **Assimetria debito/credito**: Para pagamentos (fornecedor), TRANSITORIA esta na linha de DEBITO. Para recebimentos (cliente), TRANSITORIA esta na linha de CREDITO. Sempre verificar AMBOS.
 
 ### Fluxo Completo (7 Passos)

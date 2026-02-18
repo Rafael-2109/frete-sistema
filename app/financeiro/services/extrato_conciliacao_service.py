@@ -250,31 +250,26 @@ class ExtratoConciliacaoService:
                     f"conta={payment_account_id}"
                 )
 
-                # Trocar conta do extrato ANTES de reconciliar
-                # Se payment usou conta PENDENTES → trocar TRANSITÓRIA→PENDENTES (padrão)
-                # Se payment usou conta bancária → trocar TRANSITÓRIA→conta bancária
-                if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
-                    troca_ok = self._trocar_conta_extrato(item.move_id)
-                else:
-                    troca_ok = self._trocar_conta_extrato_para(item.move_id, payment_account_id)
-
-                if not troca_ok:
+                # Preparar extrato: trocar conta + partner + rótulo
+                # em UM ciclo draft→write→post (ANTES de reconciliar!)
+                # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
+                p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                prep_ok = self._preparar_extrato_para_reconciliacao(
+                    item, p_id, p_name, conta_destino=payment_account_id
+                )
+                if not prep_ok:
                     logger.warning(
-                        f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id}). "
+                        f"  ⚠️ Falha ao preparar extrato (move {item.move_id}). "
                         f"Reconciliação pode falhar."
                     )
 
-                # Executar reconciliação: linha payment <-> linha EXTRATO
+                # Executar reconciliação: linha payment <-> linha EXTRATO (POR ÚLTIMO!)
                 logger.info(
                     f"  Reconciliando: "
                     f"payment_line={payment_pendente_line_id} (conta={payment_account_id}) <-> "
                     f"extrato_line={item.credit_line_id}"
                 )
                 self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
-
-                # Atualizar partner e rótulo do extrato
-                p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                self._atualizar_campos_extrato(item, p_id, p_name)
 
                 # Buscar partial_reconcile criado na linha do payment
                 item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
@@ -346,23 +341,23 @@ class ExtratoConciliacaoService:
                 # =====================================================================
                 logger.info(f"  Mesma empresa - reconciliação direta")
 
-                # Trocar conta do extrato ANTES de reconciliar
-                troca_ok = self._trocar_conta_extrato(item.move_id)
-                if not troca_ok:
+                # Preparar extrato: trocar conta + partner + rótulo
+                # em UM ciclo draft→write→post (ANTES de reconciliar!)
+                # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
+                p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                prep_ok = self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
+                if not prep_ok:
                     logger.warning(
-                        f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id}). "
+                        f"  ⚠️ Falha ao preparar extrato (move {item.move_id}). "
                         f"Reconciliação direta pode falhar."
                     )
 
+                # Executar reconciliação DIRETA (POR ÚLTIMO!)
                 logger.info(
                     f"  Reconciliando DIRETO: "
                     f"credit_line={item.credit_line_id} <-> titulo={titulo_odoo_id}"
                 )
                 self._executar_reconcile(item.credit_line_id, titulo_odoo_id)
-
-                # Atualizar partner e rótulo do extrato
-                p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                self._atualizar_campos_extrato(item, p_id, p_name)
 
                 item.partial_reconcile_id = self._buscar_partial_reconcile(titulo_odoo_id)
 
@@ -451,23 +446,23 @@ class ExtratoConciliacaoService:
                 if payment_pendente_line:
                     payment_pendente_line_id = payment_pendente_line['id']
 
-                    # Trocar conta do extrato ANTES de reconciliar
-                    troca_ok = self._trocar_conta_extrato(item.move_id)
-                    if not troca_ok:
+                    # Preparar extrato: trocar conta + partner + rótulo
+                    # em UM ciclo draft→write→post (ANTES de reconciliar!)
+                    # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
+                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                    prep_ok = self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
+                    if not prep_ok:
                         logger.warning(
-                            f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id}). "
+                            f"  ⚠️ Falha ao preparar extrato (move {item.move_id}). "
                             f"Reconciliação extrato pode falhar."
                         )
 
+                    # Reconciliar extrato (POR ÚLTIMO!)
                     logger.info(
                         f"  Reconciliando extrato: "
                         f"payment_line={payment_pendente_line_id} <-> extrato_line={item.credit_line_id}"
                     )
                     self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
-
-                    # Atualizar partner e rótulo do extrato
-                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                    self._atualizar_campos_extrato(item, p_id, p_name)
 
                     item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
                 else:
@@ -1048,22 +1043,19 @@ class ExtratoConciliacaoService:
                 )
 
                 try:
-                    # Trocar conta do extrato ANTES de reconciliar
-                    # Se payment usou conta PENDENTES → trocar padrão
-                    # Se payment usou conta bancária → trocar para conta bancária
-                    if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
-                        troca_ok = self._trocar_conta_extrato(item.move_id)
-                    else:
-                        troca_ok = self._trocar_conta_extrato_para(
-                            item.move_id, payment_account_id
-                        )
-
-                    if not troca_ok:
+                    # Preparar extrato: trocar conta + partner + rótulo
+                    # em UM ciclo draft→write→post (ANTES de reconciliar!)
+                    # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
+                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+                    prep_ok = self._preparar_extrato_para_reconciliacao(
+                        item, p_id, p_name, conta_destino=payment_account_id
+                    )
+                    if not prep_ok:
                         logger.warning(
-                            f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id})"
+                            f"  ⚠️ Falha ao preparar extrato (move {item.move_id})"
                         )
 
-                    # Buscar linha DEBIT do extrato (counterpart na TRANSITÓRIA/PENDENTES)
+                    # Buscar linha DEBIT do extrato (counterpart, agora na conta destino)
                     baixa_pag_service = self._get_baixa_pagamentos_service()
                     debit_line_extrato = baixa_pag_service.buscar_linha_debito_extrato(
                         item.move_id
@@ -1080,14 +1072,10 @@ class ExtratoConciliacaoService:
                         f"<-> extrato_debit={debit_line_extrato}"
                     )
 
-                    # Executar reconciliação no Odoo
+                    # Executar reconciliação no Odoo (POR ÚLTIMO!)
                     baixa_pag_service.reconciliar(
                         payment_credit_line_id, debit_line_extrato
                     )
-
-                    # Atualizar partner e rótulo do extrato
-                    p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                    self._atualizar_campos_extrato(item, p_id, p_name)
 
                     # Buscar partial_reconcile criado
                     item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
@@ -1664,10 +1652,148 @@ class ExtratoConciliacaoService:
             )
             return False
 
+    def _preparar_extrato_para_reconciliacao(
+        self, item: ExtratoItem, partner_id: int, partner_name: str,
+        conta_destino: int = None
+    ) -> bool:
+        """
+        Prepara o extrato para reconciliação: TODAS as escritas em UM ciclo draft→write→post.
+
+        DEVE ser chamado ANTES de _executar_reconcile() porque button_draft em um move
+        com linhas reconciliadas REMOVE a reconciliação (comportamento Odoo 17).
+
+        Consolida _trocar_conta_extrato() + _atualizar_campos_extrato() em uma operação:
+        1. button_draft no move do extrato (UMA vez)
+        2. write partner_id + payment_ref na statement_line
+        3. write name nas move_lines (re-busca IDs pois Odoo regenera após write na stmt_line)
+        4. write account_id: TRANSITÓRIA → conta_destino (ÚLTIMO! Odoo reseta ao regenerar lines)
+        5. action_post no move (UMA vez)
+
+        GOTCHA CRÍTICO: account_id DEVE ser o ÚLTIMO write antes de action_post.
+        Escrever na statement_line (partner_id, payment_ref) faz o Odoo regenerar as
+        move_lines associadas, revertendo qualquer account_id já escrito.
+
+        Args:
+            item: ExtratoItem com statement_line_id e move_id
+            partner_id: ID do res.partner (fornecedor/cliente)
+            partner_name: Nome do fornecedor/cliente
+            conta_destino: Conta destino para a move_line (default: PENDENTES 26868)
+
+        Returns:
+            True se preparou com sucesso, False se falhou
+        """
+        if not item.move_id:
+            return False
+
+        if conta_destino is None:
+            conta_destino = CONTA_PAGAMENTOS_PENDENTES
+
+        try:
+            # 1. button_draft (UMA vez para todos os writes)
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[item.move_id]]
+            )
+
+            try:
+                # 2. Atualizar partner_id + payment_ref na statement_line (PRIMEIRO)
+                # NOTA: Este write pode fazer o Odoo regenerar as move_lines,
+                # por isso account_id é escrito POR ÚLTIMO.
+                rotulo = None
+                if item.statement_line_id and partner_id:
+                    from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+                    rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+                        valor=abs(float(item.valor)),
+                        nome_fornecedor=partner_name or '',
+                        data_pagamento=item.data_transacao,
+                    )
+
+                    self.connection.execute_kw(
+                        'account.bank.statement.line', 'write',
+                        [[item.statement_line_id], {
+                            'partner_id': partner_id,
+                            'payment_ref': rotulo,
+                        }]
+                    )
+                    logger.info(
+                        f"  Partner + rótulo atualizados: statement_line "
+                        f"{item.statement_line_id} → partner_id={partner_id}"
+                    )
+
+                # 3. Atualizar name de TODAS as move_lines do move
+                # Re-busca IDs pois Odoo pode ter regenerado lines após write na stmt_line
+                if rotulo:
+                    all_lines = self.connection.search_read(
+                        'account.move.line',
+                        [['move_id', '=', item.move_id]],
+                        fields=['id'],
+                    )
+                    if all_lines:
+                        line_ids = [l['id'] for l in all_lines]
+                        self.connection.execute_kw(
+                            'account.move.line', 'write',
+                            [line_ids, {'name': rotulo}]
+                        )
+                    logger.info(f"  Rótulo atualizado: {rotulo[:60]}...")
+
+                # 4. Trocar account_id na move_line (ÚLTIMO antes de post!)
+                # GOTCHA: Deve ser ÚLTIMO write. Odoo regenera lines ao escrever
+                # na statement_line, revertendo account_id se escrito antes.
+                # Re-busca a linha (IDs podem ter mudado após passo 2).
+                linhas = self.connection.search_read(
+                    'account.move.line',
+                    [
+                        ['move_id', '=', item.move_id],
+                        ['account_id', 'in', [CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES]],
+                    ],
+                    fields=['id', 'account_id'],
+                    limit=1
+                )
+                if linhas:
+                    line_id = linhas[0]['id']
+                    conta_atual = linhas[0]['account_id']
+                    if isinstance(conta_atual, (list, tuple)):
+                        conta_atual = conta_atual[0]
+
+                    if conta_atual != conta_destino:
+                        self.connection.execute_kw(
+                            'account.move.line', 'write',
+                            [[line_id], {'account_id': conta_destino}]
+                        )
+                        logger.info(
+                            f"  Conta atualizada: move_line {line_id}, "
+                            f"{conta_atual} → {conta_destino}"
+                        )
+                    else:
+                        logger.info(f"  Conta já é {conta_destino}, nada a trocar")
+                else:
+                    logger.warning(
+                        f"  Linha TRANSITÓRIA/PENDENTES não encontrada no move {item.move_id}"
+                    )
+
+            finally:
+                # 5. action_post (SEMPRE, mesmo se write falhou)
+                self.connection.execute_kw(
+                    'account.move', 'action_post', [[item.move_id]]
+                )
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"  Falha ao preparar extrato para reconciliação: {e}")
+            return False
+
     def _atualizar_campos_extrato(
         self, item: ExtratoItem, partner_id: int, partner_name: str
     ) -> None:
         """
+        DEPRECADO: Usar _preparar_extrato_para_reconciliacao() em seu lugar.
+
+        Este método faz button_draft no move, o que REMOVE reconciliação existente.
+        Se chamado APÓS _executar_reconcile(), desfaz a reconciliação (bug O11).
+
+        Mantido apenas para compatibilidade. Novos fluxos DEVEM usar
+        _preparar_extrato_para_reconciliacao() ANTES de reconciliar.
+
         Atualiza partner_id e rótulo do extrato no Odoo.
 
         Usa padrão draft → write → post para evitar Fault 2 no Odoo 17+.
@@ -2438,27 +2564,20 @@ class ExtratoConciliacaoService:
                 )
 
                 try:
-                    # Trocar conta do extrato ANTES de reconciliar
-                    # Se payment usou conta PENDENTES → trocar padrão
-                    # Se payment usou conta bancária → trocar para conta bancária
-                    if payment_account_id == CONTA_PAGAMENTOS_PENDENTES:
-                        troca_ok = self._trocar_conta_extrato(item.move_id)
-                    else:
-                        troca_ok = self._trocar_conta_extrato_para(
-                            item.move_id, payment_account_id
-                        )
-
-                    if not troca_ok:
-                        logger.warning(
-                            f"  ⚠️ Falha ao trocar conta do extrato (move {item.move_id})"
-                        )
-
-                    # Executar reconciliação no Odoo
-                    self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
-
-                    # Atualizar partner e rótulo do extrato
+                    # Preparar extrato: trocar conta + partner + rótulo
+                    # em UM ciclo draft→write→post (ANTES de reconciliar!)
+                    # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
                     p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                    self._atualizar_campos_extrato(item, p_id, p_name)
+                    prep_ok = self._preparar_extrato_para_reconciliacao(
+                        item, p_id, p_name, conta_destino=payment_account_id
+                    )
+                    if not prep_ok:
+                        logger.warning(
+                            f"  ⚠️ Falha ao preparar extrato (move {item.move_id})"
+                        )
+
+                    # Executar reconciliação no Odoo (POR ÚLTIMO!)
+                    self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
 
                     # Buscar partial_reconcile criado
                     item.partial_reconcile_id = self._buscar_partial_reconcile_linha(

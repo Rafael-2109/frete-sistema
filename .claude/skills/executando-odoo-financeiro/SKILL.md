@@ -262,34 +262,30 @@ except Exception as e:
     # Erro "cannot marshal None" = SUCESSO!
 ```
 
-### Corrigir Campos do Extrato (OBRIGATORIO para Boletos)
+### Preparar Extrato ANTES de Reconciliar (OBRIGATORIO)
 
-Apos reconciliar extrato com payment, **SEMPRE** corrigir os 3 campos:
+**SEMPRE** usar `_preparar_extrato_para_reconciliacao()` ANTES de `_executar_reconcile()`.
+Este metodo faz TUDO em UM ciclo draft→write→post:
 
 ```python
-from app.financeiro.services.baixa_pagamentos_service import (
-    BaixaPagamentosService, CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES
-)
+# 1. ANTES de reconciliar: preparar extrato (conta + partner + rotulo)
+p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
 
-baixa_service = BaixaPagamentosService()
-
-# 1. ANTES de reconciliar: trocar conta
-baixa_service.trocar_conta_move_line_extrato(
-    move_id=extrato_move_id,
-    conta_origem=CONTA_TRANSITORIA,            # 22199
-    conta_destino=CONTA_PAGAMENTOS_PENDENTES,  # 26868
-)
-
-# 2. Reconciliar (codigo existente)
-
-# 3. DEPOIS: atualizar partner e rotulo
-baixa_service.atualizar_statement_line_partner(statement_line_id, partner_id)
-rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(valor, nome, data)
-baixa_service.atualizar_rotulo_extrato(extrato_move_id, statement_line_id, rotulo)
+# 2. Reconciliar (POR ULTIMO!)
+self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
 ```
 
-> **REGRA:** Qualquer operacao que reconcilie payment ↔ extrato DEVE incluir estes 3 passos.
-> Ver [erros-comuns.md](references/erros-comuns.md) Erro 11 e `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos".
+**Ordem DENTRO de `_preparar_extrato_para_reconciliacao()`:**
+1. `button_draft`
+2. Write `partner_id` + `payment_ref` na statement_line (pode regenerar move_lines!)
+3. Write `name` nas move_lines (re-busca IDs!)
+4. Write `account_id` TRANSITORIA → PENDENTES (**ULTIMO!** re-busca IDs!)
+5. `action_post`
+
+> **GOTCHA CRITICO**: account_id DEVE ser ULTIMO write. Write na statement_line regenera move_lines, revertendo account_id.
+> `_atualizar_campos_extrato()` esta **DEPRECADO** — NAO usar.
+> Ver [erros-comuns.md](references/erros-comuns.md) Erro 11 e Erro 12.
 
 ### Correcao Retroativa (Registros Ja Conciliados)
 

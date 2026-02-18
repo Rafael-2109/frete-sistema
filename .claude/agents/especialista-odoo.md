@@ -225,22 +225,25 @@ if match:
     cnpj = match.group(1)
 ```
 
-### Correcao de Campos do Extrato (Boletos)
+### Preparar Extrato ANTES de Reconciliar (OBRIGATORIO)
 
-Para boletos, o Odoo NAO preenche automaticamente 3 campos. Apos reconciliar:
+Para boletos, o Odoo NAO preenche automaticamente 3 campos. **TODOS devem ser escritos ANTES do reconcile.**
 
-| Passo | Quando | O que |
-|-------|--------|-------|
-| Trocar conta | **ANTES** de reconciliar | `22199` (TRANSITORIA) → `26868` (PENDENTES) |
-| Atualizar partner | **DEPOIS** de reconciliar | `partner_id` na statement line |
-| Atualizar rotulo | **DEPOIS** de reconciliar | `payment_ref` + `name` nas move lines |
+**Usar `_preparar_extrato_para_reconciliacao()`** que faz tudo em UM ciclo draft→write→post:
 
-**Formato rotulo:** `"Pagamento de fornecedor R$ {valor} - {NOME} - {DD/MM/YYYY}"`
+| Ordem | O que | GOTCHA |
+|-------|-------|--------|
+| 1 | `button_draft` | - |
+| 2 | Write `partner_id` + `payment_ref` na statement_line | Pode regenerar move_lines! |
+| 3 | Write `name` nas move_lines | Re-buscar IDs! |
+| 4 | Write `account_id` TRANSITORIA → PENDENTES | **ULTIMO!** Re-buscar IDs! |
+| 5 | `action_post` | - |
+| 6 | `reconcile` (**POR ULTIMO**, fora do metodo) | `button_draft` desfaz reconciliacao! |
 
-**Services que implementam:**
-- `baixa_pagamentos_service.py` → metodos publicos (`trocar_conta_move_line_extrato`, `atualizar_statement_line_partner`, `atualizar_rotulo_extrato`)
-- `extrato_conciliacao_service.py` → metodos privados (`_trocar_conta_extrato`, `_atualizar_campos_extrato`)
-- `comprovante_lancamento_service.py` → passos 5a-5e em `lancar_no_odoo()`
+**GOTCHA O12:** Write na statement_line faz Odoo REGENERAR move_lines, revertendo account_id se escrito antes.
+**GOTCHA O11:** `button_draft` em move reconciliado DESFAZ a reconciliacao. Reconcile SEMPRE por ultimo.
+
+`_atualizar_campos_extrato()` esta **DEPRECADO** — NAO usar.
 
 > **REGRA:** Ao diagnosticar "extrato reconciliado mas sem partner/rotulo", a causa eh que os 3 campos nao foram atualizados. Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos".
 

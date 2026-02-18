@@ -297,10 +297,21 @@ Atualizar MANUALMENTE os 3 campos via API:
 
 Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para codigo completo.
 
-### Checklist Atualizado
-- [ ] Trocar conta TRANSITORIA → PENDENTES **antes** de reconciliar
-- [ ] Atualizar partner_id da statement line **depois** de reconciliar
-- [ ] Atualizar rotulo (payment_ref + name) **depois** de reconciliar
+### Checklist Atualizado (corrigido 2026-02-18)
+
+**Ordem DENTRO do ciclo draft→write→post:**
+1. [ ] `button_draft` no move do extrato
+2. [ ] Write `partner_id` + `payment_ref` na statement_line (pode regenerar move_lines!)
+3. [ ] Write `name` nas move_lines (re-buscar IDs apos passo 2!)
+4. [ ] Write `account_id` TRANSITORIA → PENDENTES (**ULTIMO write!** re-buscar IDs apos passo 2!)
+5. [ ] `action_post` no move
+6. [ ] Reconciliar **por ultimo** (`button_draft` desfaz reconciliacao existente!)
+
+**GOTCHA CRITICO**: Write na `account.bank.statement.line` (partner_id, payment_ref) faz Odoo
+REGENERAR as `account.move.line` associadas. Se `account_id` foi escrito ANTES, sera REVERTIDO.
+Por isso account_id DEVE ser o ULTIMO write antes de action_post.
+
+**REGRA**: Usar `_preparar_extrato_para_reconciliacao()` que faz TUDO em UM ciclo draft→write→post, ANTES do reconcile.
 
 ---
 
