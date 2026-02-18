@@ -65,6 +65,7 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': total_sessions,
                 'threshold': 3,
+                'action': None,
             }]
 
         # ── Regra 1: Taxa de resolucao baixa ──
@@ -80,6 +81,11 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': resolution_rate,
                 'threshold': 60.0,
+                'action': {
+                    'type': 'filter_sessions',
+                    'target': 'no_tools,abandoned',
+                    'label': 'Ver sessoes problematicas',
+                },
             })
 
         # ── Regra 2: Taxa de resolucao caiu vs periodo anterior ──
@@ -95,6 +101,11 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': delta_resolution,
                 'threshold': -20.0,
+                'action': {
+                    'type': 'switch_tab',
+                    'target': 'sessions',
+                    'label': 'Ver sessoes',
+                },
             })
 
         # ── Regra 3: Custo medio subiu ──
@@ -110,6 +121,11 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': delta_cost,
                 'threshold': 50.0,
+                'action': {
+                    'type': 'switch_tab',
+                    'target': 'sessions',
+                    'label': 'Ver sessoes por custo',
+                },
             })
 
         # ── Regra 4: Friccao alta ──
@@ -125,6 +141,11 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': friction_score,
                 'threshold': 50.0,
+                'action': {
+                    'type': 'switch_tab',
+                    'target': 'friction',
+                    'label': 'Ver friccao',
+                },
             })
 
         # ── Regra 5: Adocao baixa ──
@@ -139,6 +160,11 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': adoption_rate,
                 'threshold': 50.0,
+                'action': {
+                    'type': 'switch_tab',
+                    'target': 'users',
+                    'label': 'Ver usuarios',
+                },
             })
 
         # ── Regra 6: Modelo caro dominante ──
@@ -161,6 +187,11 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                             ),
                             'metric_value': opus_pct,
                             'threshold': 80.0,
+                            'action': {
+                                'type': 'scroll_to',
+                                'target': 'modelChart',
+                                'label': 'Ver modelos',
+                            },
                         })
                     break
 
@@ -176,6 +207,7 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 ),
                 'metric_value': resolution_rate,
                 'threshold': 85.0,
+                'action': None,
             })
 
     except Exception as e:

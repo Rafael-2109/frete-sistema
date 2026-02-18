@@ -171,6 +171,9 @@
         <button class="filter-pill" data-filter="no_tools" onclick="filterSessions('no_tools')">
           Sem Tools <span class="pill-count" id="countNoTools">0</span>
         </button>
+        <button class="filter-pill" data-filter="not_reviewed" onclick="filterSessions('not_reviewed')">
+          Nao Revisadas <span class="pill-count" id="countNotReviewed">0</span>
+        </button>
       </div>
       <div class="table-card" style="margin-bottom:0;">
         <div style="overflow-x:auto;">
@@ -259,14 +262,109 @@
 
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL: Transcricao de Sessao (Fullscreen)
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="session-modal-overlay" id="sessionModal" style="display:none;" onclick="closeSessionModal(event)">
+  <div class="session-modal" onclick="event.stopPropagation()">
+    <div class="session-modal-header">
+      <div class="session-modal-meta">
+        <h4 id="modalTitle">(sem titulo)</h4>
+        <div class="session-modal-badges">
+          <span class="session-modal-badge" id="modalUser"><i class="fas fa-user"></i> -</span>
+          <span class="session-modal-badge" id="modalDate"><i class="fas fa-calendar"></i> -</span>
+          <span class="session-modal-badge" id="modalModel"><i class="fas fa-microchip"></i> -</span>
+          <span class="session-modal-badge" id="modalCost"><i class="fas fa-dollar-sign"></i> -</span>
+          <span class="badge-status" id="modalStatus">-</span>
+        </div>
+      </div>
+      <div class="session-modal-actions">
+        <button class="session-modal-btn" onclick="openInstructionPanel()" id="btnInstruct" title="Instruir o agente">
+          <i class="fas fa-graduation-cap"></i> Instruir
+        </button>
+        <button class="session-modal-btn" onclick="toggleReviewed()" id="btnReviewed" title="Marcar como revisada">
+          <i class="fas fa-check"></i> Revisada
+        </button>
+        <button class="session-modal-btn" onclick="copyTranscript()" title="Copiar transcricao">
+          <i class="fas fa-copy"></i>
+        </button>
+        <button class="session-modal-close" onclick="closeSessionModal()" title="Fechar">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Painel de Instrucao (entre header e body) -->
+    <div class="session-instruction-panel" id="instructionPanel" style="display:none;">
+      <!-- Fase 1: Input do admin -->
+      <div id="instructionInput">
+        <label class="instruction-label">Orientacao para o agente:</label>
+        <textarea id="adminGuidance" class="instruction-textarea"
+                  placeholder="Ex: Voce deveria ter usado a skill cotando-frete ao inves de consultando-sql..."
+                  rows="3"></textarea>
+        <div class="instruction-actions">
+          <button class="instruction-btn instruction-btn-primary" onclick="generateCorrection()" id="btnGenerate">
+            <i class="fas fa-magic"></i> Gerar Correcao
+          </button>
+          <button class="instruction-btn instruction-btn-secondary" onclick="closeInstructionPanel()">
+            Cancelar
+          </button>
+        </div>
+      </div>
+
+      <!-- Fase 2: Preview da correcao -->
+      <div id="correctionPreview" style="display:none;">
+        <label class="instruction-label">Correcao gerada pelo agente:</label>
+        <textarea id="correctionText" class="instruction-textarea" rows="4"></textarea>
+        <div class="instruction-meta">
+          <label class="instruction-label">Path:</label>
+          <input id="correctionPath" type="text" class="instruction-path-input" />
+        </div>
+        <div class="instruction-actions">
+          <button class="instruction-btn instruction-btn-primary" onclick="saveCorrection()" id="btnSave">
+            <i class="fas fa-check"></i> Aprovar e Salvar
+          </button>
+          <button class="instruction-btn instruction-btn-secondary" onclick="generateCorrection()" id="btnRegenerate">
+            <i class="fas fa-redo"></i> Regenerar
+          </button>
+          <button class="instruction-btn instruction-btn-secondary" onclick="closeInstructionPanel()">
+            Cancelar
+          </button>
+        </div>
+      </div>
+
+      <!-- Fase 3: Resultado -->
+      <div id="correctionResult" style="display:none;">
+        <div class="correction-success">
+          <i class="fas fa-check-circle"></i>
+          <span id="correctionResultText"></span>
+        </div>
+        <div class="instruction-actions">
+          <button class="instruction-btn instruction-btn-secondary" onclick="closeInstructionPanel()">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="session-modal-body" id="modalBody">
+      <div class="insights-loading">
+        <i class="fas fa-spinner"></i>
+        <span>Carregando conversa...</span>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   INSIGHTS DASHBOARD — Frontend
-   Redesign: De vanity metrics para insights acionaveis
+   INSIGHTS DASHBOARD — Frontend v2
+   De vanity metrics para insights acionaveis + drill-down completo
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // Chart instances
@@ -279,8 +377,32 @@ const sparklineInstances = {};
 // Data cache for filtering
 let cachedSessions = [];
 
+// Current modal session (for reviewed toggle)
+let currentModalSessionId = null;
+
 // CSRF token
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+// ── Reviewed Sessions (localStorage) ──
+function getReviewedSessions() {
+  try {
+    return JSON.parse(localStorage.getItem('insights_reviewed_sessions') || '{}');
+  } catch { return {}; }
+}
+
+function isReviewed(sessionId) {
+  return !!getReviewedSessions()[sessionId];
+}
+
+function setReviewed(sessionId, reviewed) {
+  const data = getReviewedSessions();
+  if (reviewed) {
+    data[sessionId] = new Date().toISOString();
+  } else {
+    delete data[sessionId];
+  }
+  localStorage.setItem('insights_reviewed_sessions', JSON.stringify(data));
+}
 
 // ── Theme Colors ──
 function getThemeColors() {
@@ -295,7 +417,6 @@ function getThemeColors() {
     success: root.getPropertyValue('--semantic-success')?.trim() || '#34d399',
     danger: root.getPropertyValue('--semantic-danger')?.trim() || '#ef4444',
     grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-    // Domain colors
     logistica: '#22d3ee',
     produto: '#a78bfa',
     dados: '#60a5fa',
@@ -395,12 +516,10 @@ function renderHealthScore(score) {
 
   el.textContent = value;
 
-  // Animate gauge (circumference = 2 * PI * 50 = 314.16)
   const circumference = 314.16;
   const offset = circumference - (circumference * value / 100);
   fill.style.strokeDashoffset = offset;
 
-  // Color class
   card.classList.remove('health-good', 'health-moderate', 'health-poor');
   if (value > 70) {
     card.classList.add('health-good');
@@ -429,15 +548,49 @@ function renderRecommendations(recs) {
     return;
   }
 
-  container.innerHTML = recs.map(r => `
+  container.innerHTML = recs.map(r => {
+    const actionBtn = r.action
+      ? `<button class="recommendation-action-btn" onclick="executeRecommendationAction(${escAttr(JSON.stringify(r.action))})">${escHtml(r.action.label)} <i class="fas fa-arrow-right"></i></button>`
+      : '';
+
+    return `
     <div class="recommendation-item severity-${r.severity}">
       <span class="recommendation-icon"><i class="fas ${r.icon}"></i></span>
       <div class="recommendation-content">
         <div class="recommendation-title">${escHtml(r.title)}</div>
         <div class="recommendation-description">${escHtml(r.description)}</div>
+        ${actionBtn}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+}
+
+function executeRecommendationAction(action) {
+  if (!action) return;
+
+  switch (action.type) {
+    case 'switch_tab':
+      switchTab(action.target);
+      document.getElementById(`tab-${action.target}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      break;
+
+    case 'filter_sessions':
+      switchTab('sessions');
+      // Apply first filter from comma-separated list
+      const firstFilter = action.target.split(',')[0].trim();
+      setTimeout(() => filterSessions(firstFilter), 100);
+      break;
+
+    case 'scroll_to':
+      const el = document.getElementById(action.target);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Brief highlight
+        el.parentElement?.classList.add('chart-highlight');
+        setTimeout(() => el.parentElement?.classList.remove('chart-highlight'), 2000);
+      }
+      break;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -449,7 +602,6 @@ function renderKPIs(data) {
   const d = data.deltas || {};
   const friction = data.friction || {};
 
-  // Values
   setText('kpiResolution', `${Math.round(data.resolution_rate || 0)}%`);
   setText('kpiCostPerRes', `$${(data.cost_per_resolution || 0).toFixed(2)}`);
   setText('kpiFriction', `${Math.round(friction.friction_score || 0)}/100`);
@@ -457,7 +609,6 @@ function renderKPIs(data) {
   setText('kpiSessions', (o.total_sessions || 0).toLocaleString('pt-BR'));
   setText('kpiCost', `$${(o.total_cost_usd || 0).toFixed(2)}`);
 
-  // Deltas — note inversions: for cost/friction, down is good
   renderDelta('kpiResolutionDelta', d.resolution_rate, false);
   renderDelta('kpiCostPerResDelta', d.avg_cost_per_session, true);
   renderDelta('kpiFrictionDelta', d.friction_score, true);
@@ -465,7 +616,6 @@ function renderKPIs(data) {
   renderDelta('kpiSessionsDelta', d.total_sessions, false);
   renderDelta('kpiCostDelta', d.total_cost_usd, true);
 
-  // Sparklines from daily data
   const daily = data.daily || {};
   const dates = daily.dates || [];
   const last7 = Math.min(7, dates.length);
@@ -474,8 +624,6 @@ function renderKPIs(data) {
   renderSparkline('sparkSessions', tail(daily.session_counts));
   renderSparkline('sparkCost', tail(daily.cost_values));
   renderSparkline('sparkResolution', tail(daily.resolution_rates));
-
-  // Sparklines sem dados daily diretos — usar placeholder vazio
   renderSparkline('sparkCostPerRes', []);
   renderSparkline('sparkFriction', []);
   renderSparkline('sparkAdoption', []);
@@ -493,7 +641,6 @@ function renderDelta(elId, value, invertColors) {
   const arrow = isPositive ? '&#9650;' : (value < 0 ? '&#9660;' : '');
   const absVal = Math.abs(value).toFixed(1);
 
-  // invertColors: for cost/friction, going UP is bad (red), DOWN is good (green)
   let colorClass;
   if (value === 0) {
     colorClass = 'neutral';
@@ -539,10 +686,7 @@ function renderSparkline(canvasId, dataPoints) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
-      scales: {
-        x: { display: false },
-        y: { display: false },
-      },
+      scales: { x: { display: false }, y: { display: false } },
       animation: { duration: 500 },
     }
   });
@@ -554,60 +698,27 @@ function renderSparkline(canvasId, dataPoints) {
 
 function renderDailyChart(daily) {
   if (dailyChartInstance) dailyChartInstance.destroy();
-
   const c = getThemeColors();
   const ctx = document.getElementById('dailyChart').getContext('2d');
-
-  const labels = (daily.dates || []).map(d => {
-    const p = d.split('-');
-    return `${p[2]}/${p[1]}`;
-  });
+  const labels = (daily.dates || []).map(d => { const p = d.split('-'); return `${p[2]}/${p[1]}`; });
 
   dailyChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: labels,
+      labels,
       datasets: [
-        {
-          label: 'Sessoes',
-          data: daily.session_counts || [],
-          borderColor: c.amber,
-          backgroundColor: c.amber + '1a',
-          borderWidth: 2,
-          fill: true,
-          tension: 0.3,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Resolucao %',
-          data: daily.resolution_rates || [],
-          borderColor: c.success,
-          borderWidth: 2,
-          borderDash: [4, 2],
-          fill: false,
-          tension: 0.3,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          yAxisID: 'y1',
-        }
+        { label: 'Sessoes', data: daily.session_counts || [], borderColor: c.amber, backgroundColor: c.amber + '1a', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 4, yAxisID: 'y' },
+        { label: 'Resolucao %', data: daily.resolution_rates || [], borderColor: c.success, borderWidth: 2, borderDash: [4, 2], fill: false, tension: 0.3, pointRadius: 0, pointHoverRadius: 4, yAxisID: 'y1' }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: true,
+      responsive: true, maintainAspectRatio: true,
       interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } },
-      },
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } } },
       scales: {
         x: { grid: { display: false }, ticks: { maxRotation: 0, maxTicksLimit: 10 } },
         y: { position: 'left', title: { display: true, text: 'Sessoes' }, beginAtZero: true },
-        y1: {
-          position: 'right', title: { display: true, text: 'Resolucao %' },
-          beginAtZero: true, max: 100, grid: { drawOnChartArea: false },
-        },
+        y1: { position: 'right', title: { display: true, text: 'Resolucao %' }, beginAtZero: true, max: 100, grid: { drawOnChartArea: false } },
       }
     }
   });
@@ -615,175 +726,46 @@ function renderDailyChart(daily) {
 
 function renderToolsChart(toolsData) {
   if (toolsChartInstance) toolsChartInstance.destroy();
-
   const ctx = document.getElementById('toolsChart').getContext('2d');
   const items = (toolsData.by_category || []).slice(0, 10);
-
-  if (!items.length) {
-    ctx.canvas.parentElement.innerHTML += '<p style="text-align:center;color:var(--text-muted);">Sem dados</p>';
-    return;
-  }
-
-  const labels = items.map(t => t.category);
-  const values = items.map(t => t.count);
-  const colors = items.map(t => t.color || '#6b7280');
-
+  if (!items.length) { ctx.canvas.parentElement.innerHTML += '<p style="text-align:center;color:var(--text-muted);">Sem dados</p>'; return; }
   toolsChartInstance = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Usos',
-        data: values,
-        backgroundColor: colors.map(c => c + 'cc'),
-        borderColor: colors,
-        borderWidth: 1,
-        borderRadius: 4,
-        barThickness: 20,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { beginAtZero: true },
-        y: { ticks: { font: { size: 11 } } },
-      }
-    }
+    data: { labels: items.map(t => t.category), datasets: [{ label: 'Usos', data: items.map(t => t.count), backgroundColor: items.map(t => (t.color || '#6b7280') + 'cc'), borderColor: items.map(t => t.color || '#6b7280'), borderWidth: 1, borderRadius: 4, barThickness: 20 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } } }
   });
 }
 
 function renderTopicsChart(topics) {
   if (topicsChartInstance) topicsChartInstance.destroy();
-
   const ctx = document.getElementById('topicsChart').getContext('2d');
-
-  if (!topics.length) {
-    ctx.canvas.style.display = 'none';
-    ctx.canvas.parentElement.innerHTML += '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Sem topicos (sessoes sem summary)</p>';
-    return;
-  }
-
+  if (!topics.length) { ctx.canvas.style.display = 'none'; ctx.canvas.parentElement.innerHTML += '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Sem topicos (sessoes sem summary)</p>'; return; }
   const c = getThemeColors();
-  const palette = [c.logistica, c.produto, c.dados, c.odoo, c.ssw, c.sistema,
-                    c.amber, c.success, c.danger, '#818cf8', '#fb7185', '#38bdf8'];
-
+  const palette = [c.logistica, c.produto, c.dados, c.odoo, c.ssw, c.sistema, c.amber, c.success, c.danger, '#818cf8', '#fb7185', '#38bdf8'];
   topicsChartInstance = new Chart(ctx, {
     type: 'doughnut',
-    data: {
-      labels: topics.map(t => t.topic),
-      datasets: [{
-        data: topics.map(t => t.count),
-        backgroundColor: topics.map((_, i) => palette[i % palette.length] + 'cc'),
-        borderColor: topics.map((_, i) => palette[i % palette.length]),
-        borderWidth: 1,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { boxWidth: 10, padding: 8, font: { size: 11 } },
-        },
-      },
-    }
+    data: { labels: topics.map(t => t.topic), datasets: [{ data: topics.map(t => t.count), backgroundColor: topics.map((_, i) => palette[i % palette.length] + 'cc'), borderColor: topics.map((_, i) => palette[i % palette.length]), borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'right', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } } } }
   });
 }
 
 function renderModelChart(modelDist, costsData) {
   if (modelChartInstance) modelChartInstance.destroy();
-
   const ctx = document.getElementById('modelChart').getContext('2d');
   const c = getThemeColors();
-
   const models = Object.keys(modelDist);
-  if (!models.length) {
-    ctx.canvas.style.display = 'none';
-    ctx.canvas.parentElement.innerHTML += '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Sem dados de modelo</p>';
-    return;
-  }
-
-  // Color per model
+  if (!models.length) { ctx.canvas.style.display = 'none'; ctx.canvas.parentElement.innerHTML += '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Sem dados de modelo</p>'; return; }
   const modelColors = {};
-  models.forEach(m => {
-    const lower = m.toLowerCase();
-    if (lower.includes('opus')) modelColors[m] = '#a78bfa';
-    else if (lower.includes('sonnet')) modelColors[m] = '#60a5fa';
-    else if (lower.includes('haiku')) modelColors[m] = '#34d399';
-    else modelColors[m] = '#94a3b8';
-  });
-
-  // Stacked bar chart by week
-  const weekly = costsData?.weekly || [];
-  if (!weekly.length) {
-    // Fallback: simple bar
-    modelChartInstance = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: models.map(m => m.replace('claude-', '').replace('-4-6', '')),
-        datasets: [{
-          label: 'Sessoes',
-          data: models.map(m => modelDist[m].count),
-          backgroundColor: models.map(m => modelColors[m] + 'cc'),
-          borderRadius: 4,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } },
-      }
-    });
-    return;
-  }
-
-  // Bar chart: count + cost per model
+  models.forEach(m => { const l = m.toLowerCase(); if (l.includes('opus')) modelColors[m] = '#a78bfa'; else if (l.includes('sonnet')) modelColors[m] = '#60a5fa'; else if (l.includes('haiku')) modelColors[m] = '#34d399'; else modelColors[m] = '#94a3b8'; });
   modelChartInstance = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: models.map(m => m.replace('claude-', '').replace('-4-6', '')),
-      datasets: [
-        {
-          label: 'Sessoes',
-          data: models.map(m => modelDist[m].count),
-          backgroundColor: models.map(m => modelColors[m] + 'cc'),
-          borderRadius: 4,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Custo USD',
-          data: models.map(m => modelDist[m].cost_usd),
-          backgroundColor: models.map(m => modelColors[m] + '55'),
-          borderColor: models.map(m => modelColors[m]),
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y1',
-        },
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } },
-        tooltip: {
-          callbacks: {
-            label: (item) => {
-              if (item.datasetIndex === 1) return `$${item.raw.toFixed(4)}`;
-              return `${item.raw} sessoes`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: { position: 'left', title: { display: true, text: 'Sessoes' }, beginAtZero: true },
-        y1: { position: 'right', title: { display: true, text: 'USD' }, beginAtZero: true, grid: { drawOnChartArea: false } },
-      }
+    data: { labels: models.map(m => m.replace('claude-', '').replace('-4-6', '')), datasets: [
+      { label: 'Sessoes', data: models.map(m => modelDist[m].count), backgroundColor: models.map(m => modelColors[m] + 'cc'), borderRadius: 4, yAxisID: 'y' },
+      { label: 'Custo USD', data: models.map(m => modelDist[m].cost_usd), backgroundColor: models.map(m => modelColors[m] + '55'), borderColor: models.map(m => modelColors[m]), borderWidth: 1, borderRadius: 4, yAxisID: 'y1' },
+    ] },
+    options: { responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } }, tooltip: { callbacks: { label: (item) => item.datasetIndex === 1 ? `$${item.raw.toFixed(4)}` : `${item.raw} sessoes` } } },
+      scales: { y: { position: 'left', title: { display: true, text: 'Sessoes' }, beginAtZero: true }, y1: { position: 'right', title: { display: true, text: 'USD' }, beginAtZero: true, grid: { drawOnChartArea: false } } }
     }
   });
 }
@@ -793,11 +775,8 @@ function renderModelChart(modelDist, costsData) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function switchTab(tabName) {
-  // Deactivate all tabs
   document.querySelectorAll('.insights-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
-  // Activate selected
   document.querySelector(`.insights-tab[onclick="switchTab('${tabName}')"]`)?.classList.add('active');
   document.getElementById(`tab-${tabName}`)?.classList.add('active');
 }
@@ -807,27 +786,36 @@ function renderSessionsTable(sessions) {
   cachedSessions = sessions;
   const tbody = document.getElementById('sessionsBody');
 
-  // Count by status
-  const counts = { all: sessions.length, resolved: 0, abandoned: 0, no_tools: 0 };
-  sessions.forEach(s => { if (counts[s.status] !== undefined) counts[s.status]++; });
+  const reviewed = getReviewedSessions();
+  const counts = { all: sessions.length, resolved: 0, abandoned: 0, no_tools: 0, not_reviewed: 0 };
+  sessions.forEach(s => {
+    if (counts[s.status] !== undefined) counts[s.status]++;
+    if (!reviewed[s.session_id]) counts.not_reviewed++;
+  });
 
   setText('countAll', counts.all);
   setText('countResolved', counts.resolved);
   setText('countAbandoned', counts.abandoned);
   setText('countNoTools', counts.no_tools);
+  setText('countNotReviewed', counts.not_reviewed);
 
   _renderSessionRows(tbody, sessions);
 }
 
 function filterSessions(filter) {
-  // Update pills
   document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
   document.querySelector(`.filter-pill[data-filter="${filter}"]`)?.classList.add('active');
 
   const tbody = document.getElementById('sessionsBody');
-  const filtered = filter === 'all'
-    ? cachedSessions
-    : cachedSessions.filter(s => s.status === filter);
+  let filtered;
+  if (filter === 'all') {
+    filtered = cachedSessions;
+  } else if (filter === 'not_reviewed') {
+    const reviewed = getReviewedSessions();
+    filtered = cachedSessions.filter(s => !reviewed[s.session_id]);
+  } else {
+    filtered = cachedSessions.filter(s => s.status === filter);
+  }
 
   _renderSessionRows(tbody, filtered);
 }
@@ -838,8 +826,13 @@ function _renderSessionRows(tbody, sessions) {
     return;
   }
 
+  const reviewed = getReviewedSessions();
+
   tbody.innerHTML = sessions.map(s => {
     const statusBadge = _statusBadge(s.status);
+    const reviewedIcon = reviewed[s.session_id]
+      ? '<i class="fas fa-check-circle session-reviewed-icon" title="Revisada"></i> '
+      : '';
     const topicTags = (s.topics || []).map(t =>
       `<span style="font-size:0.7rem;background:var(--bg);padding:0.1rem 0.4rem;border-radius:3px;margin-right:0.25rem;">${escHtml(t)}</span>`
     ).join('');
@@ -847,7 +840,7 @@ function _renderSessionRows(tbody, sessions) {
     return `<tr>
       <td style="white-space:nowrap;">${formatDate(s.created_at)}</td>
       <td>${escHtml(s.user_name)}</td>
-      <td title="${escHtml(s.session_id)}">${escHtml(truncate(s.title, 35))}</td>
+      <td>${reviewedIcon}<a class="session-link" href="javascript:void(0)" onclick="openSessionDetail('${escAttr(s.session_id)}')" title="${escHtml(s.session_id)}">${escHtml(truncate(s.title, 35))}</a></td>
       <td>${s.message_count}</td>
       <td class="cost-badge">$${s.cost_usd.toFixed(4)}</td>
       <td>${statusBadge}</td>
@@ -867,7 +860,7 @@ function _statusBadge(status) {
   return `<span class="badge-status ${m.cls}"><i class="fas ${m.icon}"></i> ${m.label}</span>`;
 }
 
-// ── Friction Tab ──
+// ── Friction Tab (with clickable sessions) ──
 function renderFriction(data) {
   const score = data.friction_score || 0;
   const scoreEl = document.getElementById('frictionScoreDisplay');
@@ -879,24 +872,24 @@ function renderFriction(data) {
 
   setText('frictionSummary', data.summary || '');
 
-  // Repeated queries
+  // Repeated queries (no session_id to link)
   _renderSimpleTable('repeatedQueries', data.repeated_queries || [],
     q => `<td title="${escHtml(q.examples?.[0] || '')}">${escHtml(truncate(q.query, 50))}</td><td>${q.count}</td><td>${q.sessions}</td>`,
     3);
 
-  // Abandoned sessions
+  // Abandoned sessions — clickable
   _renderSimpleTable('abandonedSessions', data.abandoned_sessions || [],
-    s => `<td>${escHtml(truncate(s.title, 40))}</td><td>${s.message_count}</td><td>${formatDate(s.created_at)}</td>`,
+    s => `<td><a class="session-link" href="javascript:void(0)" onclick="openSessionDetail('${escAttr(s.session_id)}')">${escHtml(truncate(s.title, 40))}</a></td><td>${s.message_count}</td><td>${formatDate(s.created_at)}</td>`,
     3);
 
-  // Frustration signals
+  // Frustration signals — clickable
   _renderSimpleTable('frustrationSignals', data.frustration_signals || [],
-    f => `<td>${escHtml(truncate(f.title, 40))}</td><td>${f.signal_count}</td><td>${formatDate(f.created_at)}</td>`,
+    f => `<td><a class="session-link" href="javascript:void(0)" onclick="openSessionDetail('${escAttr(f.session_id)}')">${escHtml(truncate(f.title, 40))}</a></td><td>${f.signal_count}</td><td>${formatDate(f.created_at)}</td>`,
     3);
 
-  // No tool sessions
+  // No tool sessions — clickable
   _renderSimpleTable('noToolSessions', data.no_tool_sessions || [],
-    s => `<td>${escHtml(truncate(s.title, 30))}</td><td>${s.message_count}</td><td>${escHtml(truncate(s.first_message, 40))}</td>`,
+    s => `<td><a class="session-link" href="javascript:void(0)" onclick="openSessionDetail('${escAttr(s.session_id)}')">${escHtml(truncate(s.title, 30))}</a></td><td>${s.message_count}</td><td>${escHtml(truncate(s.first_message, 40))}</td>`,
     3);
 }
 
@@ -911,37 +904,208 @@ function _renderSimpleTable(tbodyId, items, rowFn, colCount) {
 
 // ── Users Tab ──
 function renderUsersTab(usersData, costsData) {
-  // Active users
   const activeBody = document.getElementById('activeUsers');
   const activeUsers = usersData?.most_active || [];
   if (!activeUsers.length) {
     activeBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Sem dados</td></tr>';
   } else {
     activeBody.innerHTML = activeUsers.map(u => `
-      <tr>
-        <td>${escHtml(u.name || 'User #' + u.user_id)}</td>
-        <td>${u.sessions}</td>
-        <td>${u.messages}</td>
-        <td class="cost-badge">$${u.cost_usd.toFixed(4)}</td>
-      </tr>
+      <tr><td>${escHtml(u.name || 'User #' + u.user_id)}</td><td>${u.sessions}</td><td>${u.messages}</td><td class="cost-badge">$${u.cost_usd.toFixed(4)}</td></tr>
     `).join('');
   }
 
-  // Cost by user
   const costBody = document.getElementById('costByUser');
   const byUser = costsData?.by_user || [];
   if (!byUser.length) {
     costBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Sem dados</td></tr>';
   } else {
     costBody.innerHTML = byUser.map(u => `
-      <tr>
-        <td>${escHtml(u.name || 'User #' + u.user_id)}</td>
-        <td>${u.sessions}</td>
-        <td class="cost-badge">$${u.cost_usd.toFixed(4)}</td>
-      </tr>
+      <tr><td>${escHtml(u.name || 'User #' + u.user_id)}</td><td>${u.sessions}</td><td class="cost-badge">$${u.cost_usd.toFixed(4)}</td></tr>
     `).join('');
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SESSION DETAIL MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function openSessionDetail(sessionId) {
+  currentModalSessionId = sessionId;
+  const modal = document.getElementById('sessionModal');
+  const body = document.getElementById('modalBody');
+
+  // Show modal with loading + fade-in
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  body.innerHTML = '<div class="insights-loading"><i class="fas fa-spinner"></i><span>Carregando conversa...</span></div>';
+  requestAnimationFrame(() => modal.classList.add('show'));
+
+  // Update reviewed button state
+  _updateReviewedBtn();
+
+  try {
+    const resp = await fetch(`/agente/api/admin/sessions/${sessionId}/messages`, {
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    if (!json.success) throw new Error(json.error || 'Erro');
+
+    // Update header
+    setText('modalTitle', json.title || '(sem titulo)');
+    document.getElementById('modalUser').innerHTML = `<i class="fas fa-user"></i> ${escHtml(json.user_name)}`;
+    document.getElementById('modalDate').innerHTML = `<i class="fas fa-calendar"></i> ${formatDateTime(json.created_at)}`;
+    document.getElementById('modalModel').innerHTML = `<i class="fas fa-microchip"></i> ${escHtml((json.model || '').replace('claude-', '').replace('-4-6', ''))}`;
+    document.getElementById('modalCost').innerHTML = `<i class="fas fa-dollar-sign"></i> $${json.cost_usd.toFixed(4)}`;
+    document.getElementById('modalStatus').innerHTML = _statusBadge(json.status);
+
+    // Render messages
+    const messages = json.messages || [];
+    if (!messages.length) {
+      body.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">Nenhuma mensagem nesta sessao.</p>';
+      return;
+    }
+
+    let runningCost = 0;
+    body.innerHTML = messages.map(msg => {
+      const isUser = msg.role === 'user';
+      const cssClass = isUser ? 'session-msg-user' : 'session-msg-assistant';
+
+      // Cost tracking
+      let costHtml = '';
+      if (!isUser && msg.tokens) {
+        const msgCost = _estimateMsgCost(msg.tokens, json.model);
+        runningCost += msgCost;
+        costHtml = `<span class="session-msg-cost" title="Custo acumulado: $${runningCost.toFixed(4)}">$${msgCost.toFixed(4)}</span>`;
+      }
+
+      // Tools used
+      let toolsHtml = '';
+      if (!isUser && msg.tools_used && msg.tools_used.length) {
+        toolsHtml = '<div class="session-msg-tools">' +
+          msg.tools_used.map(t => `<span class="session-tool-badge">${escHtml(t)}</span>`).join('') +
+          '</div>';
+      }
+
+      // Content rendering with markdown for assistant
+      let contentHtml;
+      if (isUser) {
+        contentHtml = `<div class="session-msg-text">${escHtml(msg.content || '')}</div>`;
+      } else {
+        try {
+          contentHtml = `<div class="session-msg-text session-msg-markdown">${marked.parse(msg.content || '')}</div>`;
+        } catch {
+          contentHtml = `<div class="session-msg-text">${escHtml(msg.content || '')}</div>`;
+        }
+      }
+
+      const timeStr = msg.timestamp ? formatTime(msg.timestamp) : '';
+
+      return `
+        <div class="session-msg ${cssClass}">
+          <div class="session-msg-header">
+            <span class="session-msg-role">${isUser ? '<i class="fas fa-user"></i> Usuario' : '<i class="fas fa-robot"></i> Agente'}</span>
+            <div class="session-msg-meta">
+              ${costHtml}
+              <span class="session-msg-time">${timeStr}</span>
+            </div>
+          </div>
+          ${contentHtml}
+          ${toolsHtml}
+        </div>`;
+    }).join('');
+
+  } catch (err) {
+    console.error('[INSIGHTS] Erro ao carregar sessao:', err);
+    body.innerHTML = `<p style="text-align:center;color:var(--semantic-danger);padding:2rem;">Erro ao carregar: ${escHtml(err.message)}</p>`;
+  }
+}
+
+function closeSessionModal(event) {
+  // If called from overlay click, only close if clicked directly on overlay
+  if (event && event.target !== document.getElementById('sessionModal')) return;
+
+  // Close instruction panel if open
+  const instrPanel = document.getElementById('instructionPanel');
+  if (instrPanel) instrPanel.style.display = 'none';
+
+  const modalEl = document.getElementById('sessionModal');
+  modalEl.classList.remove('show');
+  // Wait for fade-out transition before hiding
+  setTimeout(() => { modalEl.style.display = 'none'; }, 200);
+  document.body.style.overflow = '';
+  currentModalSessionId = null;
+}
+
+function toggleReviewed() {
+  if (!currentModalSessionId) return;
+  const wasReviewed = isReviewed(currentModalSessionId);
+  setReviewed(currentModalSessionId, !wasReviewed);
+  _updateReviewedBtn();
+
+  // Refresh table to show updated icon
+  if (cachedSessions.length) {
+    renderSessionsTable(cachedSessions);
+  }
+}
+
+function _updateReviewedBtn() {
+  const btn = document.getElementById('btnReviewed');
+  if (!currentModalSessionId) return;
+
+  if (isReviewed(currentModalSessionId)) {
+    btn.classList.add('reviewed-active');
+    btn.innerHTML = '<i class="fas fa-check-circle"></i> Revisada';
+  } else {
+    btn.classList.remove('reviewed-active');
+    btn.innerHTML = '<i class="fas fa-check"></i> Revisada';
+  }
+}
+
+function copyTranscript() {
+  const body = document.getElementById('modalBody');
+  const messages = body.querySelectorAll('.session-msg');
+  let text = '';
+
+  messages.forEach(msg => {
+    const role = msg.classList.contains('session-msg-user') ? 'USUARIO' : 'AGENTE';
+    const content = msg.querySelector('.session-msg-text')?.textContent || '';
+    text += `[${role}]\n${content.trim()}\n\n`;
+  });
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.currentTarget;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i>';
+    setTimeout(() => { btn.innerHTML = origHtml; }, 1500);
+  }).catch(err => {
+    console.error('Erro ao copiar:', err);
+  });
+}
+
+function _estimateMsgCost(tokens, model) {
+  if (!tokens) return 0;
+  const input = tokens.input || 0;
+  const output = tokens.output || 0;
+  const m = (model || '').toLowerCase();
+
+  // Precos aproximados por 1K tokens
+  let inputPer1K, outputPer1K;
+  if (m.includes('opus')) { inputPer1K = 0.015; outputPer1K = 0.075; }
+  else if (m.includes('sonnet')) { inputPer1K = 0.003; outputPer1K = 0.015; }
+  else if (m.includes('haiku')) { inputPer1K = 0.00025; outputPer1K = 0.00125; }
+  else { inputPer1K = 0.003; outputPer1K = 0.015; }
+
+  return (input / 1000) * inputPer1K + (output / 1000) * outputPer1K;
+}
+
+// Close modal on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('sessionModal').style.display === 'flex') {
+    closeSessionModal();
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -959,6 +1123,11 @@ function escHtml(str) {
   return div.innerHTML;
 }
 
+function escAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+}
+
 function truncate(str, max) {
   if (!str) return '(sem titulo)';
   return str.length > max ? str.substring(0, max) + '...' : str;
@@ -970,6 +1139,171 @@ function formatDate(iso) {
     const d = new Date(iso);
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   } catch { return iso; }
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch { return iso; }
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INSTRUCTION PANEL — Ciclo de Aprendizado Admin → Agente
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openInstructionPanel() {
+  const panel = document.getElementById('instructionPanel');
+  panel.style.display = 'block';
+
+  // Reset to phase 1
+  document.getElementById('instructionInput').style.display = 'block';
+  document.getElementById('correctionPreview').style.display = 'none';
+  document.getElementById('correctionResult').style.display = 'none';
+  document.getElementById('adminGuidance').value = '';
+
+  // Focus textarea
+  setTimeout(() => document.getElementById('adminGuidance').focus(), 100);
+}
+
+function closeInstructionPanel() {
+  const panel = document.getElementById('instructionPanel');
+  panel.style.display = 'none';
+
+  // Reset all phases
+  document.getElementById('instructionInput').style.display = 'block';
+  document.getElementById('correctionPreview').style.display = 'none';
+  document.getElementById('correctionResult').style.display = 'none';
+  document.getElementById('adminGuidance').value = '';
+
+  // Reset button states
+  _resetBtn('btnGenerate', '<i class="fas fa-magic"></i> Gerar Correcao');
+  _resetBtn('btnSave', '<i class="fas fa-check"></i> Aprovar e Salvar');
+  _resetBtn('btnRegenerate', '<i class="fas fa-redo"></i> Regenerar');
+}
+
+async function generateCorrection() {
+  const guidance = document.getElementById('adminGuidance').value.trim();
+  if (!guidance) {
+    document.getElementById('adminGuidance').focus();
+    return;
+  }
+
+  const btn = document.getElementById('btnGenerate');
+  const regenBtn = document.getElementById('btnRegenerate');
+  const activeBtn = document.getElementById('correctionPreview').style.display === 'none' ? btn : regenBtn;
+
+  _setBtnLoading(activeBtn, 'Gerando...');
+
+  try {
+    const resp = await fetch('/agente/api/admin/generate-correction', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      body: JSON.stringify({
+        session_id: currentModalSessionId,
+        guidance: guidance,
+      }),
+    });
+
+    const json = await resp.json();
+    if (!resp.ok || !json.success) {
+      throw new Error(json.error || `HTTP ${resp.status}`);
+    }
+
+    // Show phase 2
+    document.getElementById('instructionInput').style.display = 'none';
+    document.getElementById('correctionPreview').style.display = 'block';
+    document.getElementById('correctionResult').style.display = 'none';
+
+    document.getElementById('correctionText').value = json.correction;
+    document.getElementById('correctionPath').value = json.suggested_path;
+
+  } catch (err) {
+    console.error('[INSIGHTS] Erro ao gerar correcao:', err);
+    alert('Erro ao gerar correcao: ' + err.message);
+  } finally {
+    _resetBtn(btn, '<i class="fas fa-magic"></i> Gerar Correcao');
+    _resetBtn(regenBtn, '<i class="fas fa-redo"></i> Regenerar');
+  }
+}
+
+async function saveCorrection() {
+  const correction = document.getElementById('correctionText').value.trim();
+  const path = document.getElementById('correctionPath').value.trim();
+
+  if (!correction) {
+    document.getElementById('correctionText').focus();
+    return;
+  }
+  if (!path) {
+    document.getElementById('correctionPath').focus();
+    return;
+  }
+
+  const btn = document.getElementById('btnSave');
+  _setBtnLoading(btn, 'Salvando...');
+
+  try {
+    const resp = await fetch('/agente/api/admin/save-correction', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      body: JSON.stringify({
+        session_id: currentModalSessionId,
+        correction: correction,
+        path: path,
+      }),
+    });
+
+    const json = await resp.json();
+    if (!resp.ok || !json.success) {
+      throw new Error(json.error || `HTTP ${resp.status}`);
+    }
+
+    // Show phase 3
+    document.getElementById('correctionPreview').style.display = 'none';
+    document.getElementById('correctionResult').style.display = 'block';
+
+    const resultText = `Correcao salva para ${json.saved_for} usuario(s)`;
+    const skipText = json.skipped_duplicate > 0
+      ? ` (${json.skipped_duplicate} duplicata(s) ignorada(s))`
+      : '';
+    document.getElementById('correctionResultText').textContent = resultText + skipText;
+
+  } catch (err) {
+    console.error('[INSIGHTS] Erro ao salvar correcao:', err);
+    alert('Erro ao salvar correcao: ' + err.message);
+  } finally {
+    _resetBtn(btn, '<i class="fas fa-check"></i> Aprovar e Salvar');
+  }
+}
+
+function _setBtnLoading(btn, text) {
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${text || 'Aguarde...'}`;
+}
+
+function _resetBtn(btnOrId, html) {
+  const btn = typeof btnOrId === 'string' ? document.getElementById(btnOrId) : btnOrId;
+  if (!btn) return;
+  btn.disabled = false;
+  btn.innerHTML = html;
 }
 
 // ── Init ──
