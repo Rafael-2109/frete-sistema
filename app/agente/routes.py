@@ -1985,16 +1985,19 @@ def pagina_insights():
 @login_required
 def api_insights_data():
     """
-    P2-2: API de dados de insights.
+    API unificada de dados de insights (inclui friccao e recomendacoes).
 
-    GET /agente/api/insights/data?days=30&user_id=123
+    GET /agente/api/insights/data?days=30&compare=true&user_id=123
 
     Params:
-        days: Período em dias (default 30, max 90)
-        user_id: Filtrar por usuário específico (opcional)
+        days: Periodo em dias (default 30, max 90)
+        compare: Se 'true', inclui deltas vs periodo anterior (default true)
+        user_id: Filtrar por usuario especifico (opcional)
 
     Response:
-        JSON com seções: overview, costs, tools, users, sessions, daily
+        JSON com secoes: overview, costs, tools, users, sessions, daily,
+        friction, recommendations, deltas, health_score, resolution_rate,
+        model_distribution, topics, adoption_rate
     """
     from .config.feature_flags import USE_AGENT_INSIGHTS
 
@@ -2006,13 +2009,18 @@ def api_insights_data():
 
     try:
         days = request.args.get('days', 30, type=int)
-        days = min(max(days, 1), 90)  # Limita entre 1 e 90 dias
+        days = min(max(days, 1), 90)
 
+        compare = request.args.get('compare', 'true').lower() == 'true'
         filter_user_id = request.args.get('user_id', None, type=int)
 
         from .services.insights_service import get_insights_data
 
-        data = get_insights_data(days=days, user_id=filter_user_id)
+        data = get_insights_data(
+            days=days,
+            user_id=filter_user_id,
+            compare=compare,
+        )
 
         return jsonify({
             'success': True,
@@ -2031,21 +2039,16 @@ def api_insights_data():
 @login_required
 def api_insights_friction():
     """
-    P2-4: API de análise de fricção.
+    Alias de compatibilidade — friccao agora esta integrada em /api/insights/data.
 
     GET /agente/api/insights/friction?days=30
 
-    Params:
-        days: Período em dias (default 30, max 90)
-
-    Response:
-        JSON com seções: friction_score, repeated_queries, abandoned_sessions,
-        frustration_signals, no_tool_sessions, summary
+    Retorna apenas a secao de friccao extraida do endpoint unificado.
     """
     from .config.feature_flags import USE_AGENT_INSIGHTS, USE_FRICTION_ANALYSIS
 
     if not USE_AGENT_INSIGHTS or not USE_FRICTION_ANALYSIS:
-        return jsonify({'error': 'Análise de fricção desabilitada'}), 404
+        return jsonify({'error': 'Analise de friccao desabilitada'}), 404
 
     if current_user.perfil != 'administrador':
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
@@ -2064,7 +2067,7 @@ def api_insights_friction():
         })
 
     except Exception as e:
-        logger.error(f"[AGENTE] Erro na análise de fricção: {e}")
+        logger.error(f"[AGENTE] Erro na analise de friccao: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

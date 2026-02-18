@@ -1,0 +1,602 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   INSIGHTS DASHBOARD — Modulo CSS
+   Migrado de <style> inline em insights.html para modulo dedicado.
+   Usa design tokens (--bg, --text, --border) em vez de --bs-*.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page Layout ── */
+.insights-page {
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.insights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.insights-header h2 {
+  margin: 0;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.insights-header h2 i {
+  color: var(--amber-55);
+}
+
+/* ── Controls ── */
+.insights-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.insights-controls select {
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.insights-controls .btn-refresh {
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.insights-controls .btn-refresh:hover {
+  background: var(--amber-55);
+  color: hsl(0 0% 10%);
+  border-color: var(--amber-55);
+}
+
+.insights-controls .btn-refresh.loading i {
+  animation: insights-spin 1s linear infinite;
+}
+
+@keyframes insights-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZONA 1: Health Score + Recomendacoes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.health-zone {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ── Health Score Gauge ── */
+.health-gauge-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.health-gauge {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 0.75rem;
+}
+
+.health-gauge svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.health-gauge-bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 10;
+}
+
+.health-gauge-fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease, stroke 0.3s ease;
+}
+
+.health-gauge-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.health-gauge-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.health-status-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+
+/* Health score colors */
+.health-good { color: var(--semantic-success); }
+.health-good .health-gauge-fill { stroke: var(--semantic-success); }
+
+.health-moderate { color: var(--amber-50); }
+.health-moderate .health-gauge-fill { stroke: var(--amber-50); }
+
+.health-poor { color: var(--semantic-danger); }
+.health-poor .health-gauge-fill { stroke: var(--semantic-danger); }
+
+/* ── Recommendations Panel ── */
+.recommendations-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.recommendations-card h5 {
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.recommendation-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+  border-left: 3px solid transparent;
+}
+
+.recommendation-item:last-child {
+  margin-bottom: 0;
+}
+
+.recommendation-item.severity-critical {
+  background: hsla(0 70% 50% / 0.08);
+  border-left-color: var(--semantic-danger);
+}
+
+.recommendation-item.severity-warning {
+  background: hsla(45 100% 50% / 0.08);
+  border-left-color: var(--amber-50);
+}
+
+.recommendation-item.severity-info {
+  background: hsla(220 90% 60% / 0.08);
+  border-left-color: hsl(220 90% 60%);
+}
+
+.recommendation-item.severity-success {
+  background: hsla(145 65% 40% / 0.08);
+  border-left-color: var(--semantic-success);
+}
+
+.recommendation-icon {
+  font-size: 1rem;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.severity-critical .recommendation-icon { color: var(--semantic-danger); }
+.severity-warning .recommendation-icon { color: var(--amber-50); }
+.severity-info .recommendation-icon { color: hsl(220 90% 60%); }
+.severity-success .recommendation-icon { color: var(--semantic-success); }
+
+.recommendation-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.recommendation-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+.recommendation-description {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZONA 2: KPI Cards
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 0.75rem;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.kpi-card:hover {
+  border-color: var(--amber-55);
+}
+
+.kpi-card .kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.kpi-card .kpi-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  margin-bottom: 0.35rem;
+}
+
+/* ── Delta indicator ── */
+.kpi-delta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.kpi-delta.positive { color: var(--semantic-success); }
+.kpi-delta.negative { color: var(--semantic-danger); }
+.kpi-delta.neutral { color: var(--text-muted); }
+
+/* ── Sparkline ── */
+.kpi-sparkline {
+  height: 24px;
+  margin-top: 0.25rem;
+}
+
+.kpi-sparkline canvas {
+  width: 100% !important;
+  height: 24px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZONA 3: Charts
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.chart-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.chart-card h5 {
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chart-card h5 i {
+  color: var(--text-muted);
+}
+
+.chart-card canvas {
+  max-height: 300px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZONA 4: Tabs + Tables
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.insights-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.insights-tab {
+  padding: 0.6rem 1.25rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.insights-tab:hover {
+  color: var(--text);
+}
+
+.insights-tab.active {
+  color: var(--amber-55);
+  border-bottom-color: var(--amber-55);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* ── Table Styles ── */
+.table-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.table-card h5 {
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.insights-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.insights-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg);
+}
+
+.insights-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.insights-table tr:hover td {
+  background: var(--hover-bg);
+}
+
+.insights-table .cost-badge {
+  font-weight: 600;
+  color: var(--amber-55);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ── Status Badges ── */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.badge-status:hover {
+  opacity: 0.8;
+}
+
+.badge-resolved {
+  background: hsla(145 65% 40% / 0.15);
+  color: var(--semantic-success);
+}
+
+.badge-abandoned {
+  background: hsla(45 100% 50% / 0.15);
+  color: var(--amber-50);
+}
+
+.badge-friction {
+  background: hsla(0 70% 50% / 0.15);
+  color: var(--semantic-danger);
+}
+
+.badge-no-tools {
+  background: hsla(0 0% 50% / 0.15);
+  color: var(--text-muted);
+}
+
+/* ── Domain Color Dots ── */
+.domain-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+/* ── Filter Pills ── */
+.filter-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filter-pill {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-pill:hover {
+  border-color: var(--amber-55);
+  color: var(--text);
+}
+
+.filter-pill.active {
+  background: var(--amber-55);
+  color: hsl(0 0% 10%);
+  border-color: var(--amber-55);
+}
+
+.filter-pill .pill-count {
+  font-weight: 700;
+  margin-left: 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   States
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.insights-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-muted);
+}
+
+.insights-loading i {
+  font-size: 2rem;
+  animation: insights-spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.insights-empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+}
+
+.insights-empty i {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .health-zone {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .insights-page {
+    padding: 1rem;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-card .kpi-value {
+    font-size: 1.25rem;
+  }
+
+  .insights-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-gauge {
+    width: 100px;
+    height: 100px;
+  }
+
+  .health-gauge-value {
+    font-size: 1.5rem;
+  }
+}

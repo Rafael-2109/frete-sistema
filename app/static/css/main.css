@@ -69,6 +69,7 @@
 @import url('./modules/_rastreamento-standalone.css') layer(modules);
 @import url('./modules/_devolucao.css') layer(modules);
 @import url('./modules/_monitoramento.css') layer(modules);
+@import url('./modules/_insights.css') layer(modules);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
