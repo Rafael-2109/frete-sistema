@@ -151,9 +151,48 @@ Define as cidades atendidas pela transportadora, vinculando-as às unidades oper
 - Mudança tem efeito apenas operacional (não afeta cálculo de frete nem questões fiscais)
 - Apenas um critério de unidade alternativa pode ser escolhido por unidade principal
 
-### Importação e Exportação
-- Função "Baixar arquivo CSV / Importar" permite alterações em massa
-- Importação de parceiro é irreversível - usar com cuidado
+### Importação e Exportação CSV
+
+**Regra de filtro**: Informar EXATAMENTE UM filtro (UF ou Unidade ou Cidade). Dois ou mais filtros simultaneos geram erro "Informe somente um dos campos para busca".
+
+**Exportar CSV** (`Baixar arquivo CSV`):
+- Acao: `ajaxEnvia('_MOD_CSV', 0)` — requer 1 filtro preenchido
+- Gera download: `ssw0137_modeloCV1[N]HHMMSS.csv`
+- Encoding: ISO-8859-1, separador `;`
+
+**Importar CSV** (`Importar`):
+- Acao: `ajaxEnvia('IMPORTAR', 1)` abre tela ssw0137.08
+- Upload: `<input name="f1" type="file">`, submit via `ajaxEnvia('IMPORTA2', 0)`
+- Mecanismo interno: SSW faz upload do arquivo para `/bin/ssw0475` (multipart), recebe fileId, depois POST `/bin/ssw0137` com `act=IMPORTA2&f1=<fileId>`
+- Cidades existentes sao atualizadas, novas sao adicionadas
+
+**Formato CSV (45 colunas, separador `;`):**
+
+| # | Coluna | Tipo | Exemplo |
+|---|--------|------|---------|
+| 1 | UF | A(2) | MS |
+| 2 | CIDADE | A | CAMPO GRANDE |
+| 3 | UNIDADE | A(3) | CGR |
+| 4 | POLO | A(1) | P/R/I |
+| 5 | TIPO_FRETE | A(1) | A/C/F |
+| 6 | RESTRITA | A(1) | N/S |
+| 7 | COLETA | A(1) | N/S |
+| 8 | ENTREGA | A(1) | S/N |
+| 9 | PRAZO_ENTREGA | N | 7 |
+| 10 | PRAZO_ECOMMERCE | N | 0 |
+| 11 | QTDE_PEDAGIO | N | 0 |
+| 12 | DISTANCIA | N | 228 (vazio=SSW calcula) |
+| 13 | TDA | N(5,2) | 0 |
+| 14 | VALOR_SUFRAMA | N(3,2) | 0 |
+| 15 | COLETA_ENTREGA | N(3,2) | 0 |
+| 16 | PRACA_COMERCIAL | A(4) | CGRP |
+| 17 | OBSERVACAO | A | (texto livre) |
+| 18-23 | ENTREGA_SEG..SAB | A(1) | X ou espaco |
+| 24-43 | FERIADO_1..10_DATA/COMEMORA | A | DD/MM;descricao |
+| 44 | ALIQUOTA_ISS | N | 5 |
+| 45 | TIPO_ALIQUOTA | A(1) | N |
+
+- Importação de parceiro (botao separado) é irreversível - usar com cuidado
 - Função "Trocar unidades" permite substituir unidades mantendo classificações
 
 ---

@@ -157,17 +157,17 @@ Por demanda — a cada nova regiao de atendimento. Estimativa: 30-60 minutos por
 |-------|-------|-------------|
 | **CNPJ** | CNPJ da **transportadora parceira** | CNPJ Alemar |
 | **Razao Social** | Nome juridico do parceiro | ALEMAR TRANSPORTES LTDA |
-| **Especialidade** | Agencias/Parceiros | Agencias/Parceiros |
+| **Especialidade** | TRANSPORTADORA | Valores validos: TRANSPORTADORA, PARCEIRO TRANSPORTADOR |
 | **Ativo** | S | S |
 | **UF** | UF da sede do parceiro | MS |
 | **Banco/Agencia/Conta** | Conta bancaria do **parceiro** (se pagamentos diretos) | Conta Alemar |
 
-17. **Ativar CCF** (Conta Corrente de Fornecedor):
-    - Marcar **"CCF ativada" = S**
-    - Definir **Evento padrao**: 503 (evento de subcontratacao — ver PEND-06)
-    - Gravar
+17. **CCF** (Conta Corrente de Fornecedor) — **OPCIONAL para 408**:
+    - Se ativar: Marcar **"CCF ativada" = S** + definir **Evento** (ex: 5224 REDESPACHO)
+    - Se NAO ativar: Manter **fg_cc = N** (padrao seguro)
+    - Gravar com GRA
 
-> **CRITICO**: CCF sem ativacao NAO e reconhecida por processos. A [opcao 408](../comercial/408-comissao-unidades.md) (custos) e a 486 (conta corrente) exigem CCF ativa.
+> **CORRECAO (2026-02-18)**: CCF (fg_cc=S) NAO e prerequisito para a [opcao 408](../comercial/408-comissao-unidades.md). Muitas transportadoras operam com fg_cc=N (ex: CAZAN, TRANSPEROLA, MONTENEGRO). A 486 (conta corrente) exige CCF ativa, mas a 408 nao.
 
 ---
 
@@ -302,8 +302,8 @@ Usar este checklist para confirmar que todos os cadastros foram feitos corretame
 | 7 | Coleta=S e Entrega=S em todas cidades | [402](../cadastros/402-cidades-atendidas.md) | [ ] |
 | 8 | Tipo frete=A (Ambos) em todas cidades | [402](../cadastros/402-cidades-atendidas.md) | [ ] |
 | 9 | Rota CAR → [SIGLA] criada com prazo | [403](../cadastros/403-rotas.md) | [ ] |
-| 10 | Fornecedor cadastrado com CNPJ do parceiro | [478](../financeiro/478-cadastro-fornecedores.md) | [ ] |
-| 11 | CCF ativada = S no fornecedor | [478](../financeiro/478-cadastro-fornecedores.md) | [ ] |
+| 10 | Fornecedor cadastrado e **finalizado** (inclusao != S) | [478](../financeiro/478-cadastro-fornecedores.md) | [ ] |
+| 11 | Especialidade = TRANSPORTADORA no fornecedor | [478](../financeiro/478-cadastro-fornecedores.md) | [ ] |
 | 12 | Comissao geral cadastrada (custo parceiro) | [408](../comercial/408-comissao-unidades.md) | [ ] |
 | 13 | Tabela CARP-[SIGLA]P criada e ativa | 420 | [ ] |
 | 14 | Tabela CARP-[SIGLA]R criada e ativa | 420 | [ ] |
@@ -341,6 +341,13 @@ Usar este checklist para confirmar que todos os cadastros foram feitos corretame
 | Tabela 420 duplicada | Ja existe tabela para mesma origem/destino | Verificar se rota ja foi implantada parcialmente |
 | Erro "subcontratado nao encontrado" na 408 | Fornecedor nao esta como transportadora ([485](../financeiro/485-cadastro-transportadoras.md)) | Cadastrar na 485 antes de usar na 408 |
 | Margem negativa | Preco venda (420) menor que custo ([408](../comercial/408-comissao-unidades.md)) | Revisar tabelas — ajustar margem no Sistema Fretes |
+| "CNPJ nao cadastrado como fornecedor" na 408 | Fornecedor na 478 com `inclusao=S` (registro nao finalizado) | Corrigir campos obrigatorios na 478 e re-gravar (GRA). Campos: nome, IE, especialidade, DDD, telefone, endereco |
+| "DDD do telefone invalido" na 478 | DDD inexistente (ex: '01', '00') | Usar DDD real da cidade sede do parceiro (ex: '11' SP, '92' AM) |
+| "Telefone invalido" na 478 | Telefone '00000000' ou '99999999' | Usar formato valido: '30001234' (8 digitos, prefixo 3) |
+| "Informe a especialidade do fornecedor" na 478 | Campo `especialidade` vazio | Preencher com 'TRANSPORTADORA' ou 'PARCEIRO TRANSPORTADOR' |
+| "Informar ISENTO ou codigo em Inscricao Estadual" na 478 | Campo `inscr_estadual` vazio | Preencher com 'ISENTO' (se isento) ou IE real |
+| "Se o fornecedor possui conta corrente, deve ser informado o evento" na 478 | `fg_cc=S` sem campo `evento` | Salvar com `fg_cc=N` primeiro. CCF NAO e prerequisito para 408 |
+| "Endereco invalido" na 478 | Campos de endereco vazios | Preencher cep_end, logradouro, numero_end, bairro_end |
 
 ---
 
@@ -367,7 +374,7 @@ Resumo dos cadastros para a rota CGR completa:
 | 2 | [401](../cadastros/401-cadastro-unidades.md) | Unidade **CGR**, Tipo T, "Alemar - Campo Grande/MS" |
 | 3 | [402](../cadastros/402-cidades-atendidas.md) | 7 cidades: Campo Grande (P), Sidrolandia (R), Terenos (R), Dourados (R), Corumba (I), Ponta Pora (I), Tres Lagoas (I) |
 | 4 | [403](../cadastros/403-rotas.md) | Rota **CAR → CGR**, prazo transferencia 2 dias |
-| 5 | [478](../financeiro/478-cadastro-fornecedores.md) | Fornecedor CNPJ Alemar, CCF ativa, especialidade Agencias/Parceiros |
+| 5 | [478](../financeiro/478-cadastro-fornecedores.md) | Fornecedor CNPJ Alemar, finalizado (inclusao ausente), especialidade TRANSPORTADORA |
 | 6 | [408](../comercial/408-comissao-unidades.md) | Comissao geral CGR: faixas de peso = tabela Alemar (custo), CCF forma Mapa |
 | 7 | 420 | 3 tabelas: **CARP-CGRP**, **CARP-CGRR**, **CARP-CGRI** (precos com margem) |
 | 8 | [002](../operacional/002-consulta-coletas.md) | Cotacao teste: Campo Grande 100Kg R$5.000 → valor calculado e prazo 4 dias |
@@ -390,8 +397,57 @@ Resumo dos cadastros para a rota CGR completa:
 
 ---
 
+## Gotchas Operacionais (descobertos em Feb/2026)
+
+### 478: Campo `inclusao=S` e bloqueante
+
+Quando um fornecedor e cadastrado na 478 mas faltam campos obrigatorios (nome, IE, especialidade,
+DDD, telefone, endereco), o SSW salva o registro em estado `inclusao=S` (modo inclusao). Neste estado:
+- A opcao 408 rejeita o CNPJ com "CNPJ nao cadastrado como fornecedor"
+- A 485 pode funcionar normalmente (nao valida estado da 478)
+- O campo `inclusao` e hidden e so visivel via DOM inspection
+
+**Solucao**: Preencher TODOS os campos obrigatorios e re-executar GRA. Apos GRA bem-sucedido,
+o elemento `inclusao` desaparece do DOM (confirmacao de finalizacao).
+
+### 478: CCF NAO e prerequisito para 408
+
+Apesar do POP original indicar "CCF deve estar ativa", na pratica a 408 funciona com `fg_cc=N`.
+Exemplo: CAZAN (07797011000193) opera 4 unidades (SSA, JPA, MCZ, NAT) com `fg_cc=N`.
+Apenas DAGO tem CCF ativa (`fg_cc=S`, `evento=5224`).
+
+### 478: Validacao de DDD e telefone
+
+SSW valida DDDs contra lista real brasileira. DDDs invalidos comuns:
+- '01' — nao existe (antigo codigo SP)
+- '00' — nao existe
+- Telefones '00000000' e '99999999' sao rejeitados como invalidos
+- Formato aceito: 8 digitos (ex: '30001234', '47059494')
+
+### 478: Acentuacao nas mensagens de erro
+
+SSW retorna mensagens COM acentos ("inválido", "ação"). Scripts que comparam mensagens
+devem usar normalizacao Unicode ou verificar ambas formas (com e sem acento).
+
+### 408: Popup fecha = sucesso
+
+Apos `ajaxEnvia('ENV2', 0)`, se a comissao e criada com sucesso, o popup fecha automaticamente.
+Isso gera `TargetClosedError` no Playwright, que deve ser tratado como sucesso (not error).
+
+### Ordem obrigatoria: 478 → 485 → 408
+
+A 408 depende de:
+1. Fornecedor na 478 com `inclusao` != 'S' (finalizado)
+2. Transportadora na 485 cadastrada
+3. Unidade na 401 existente
+
+Sem qualquer um destes, a 408 falha silenciosamente ou com erro generico.
+
+---
+
 ## Historico de Revisoes
 
 | Data | Alteracao | Autor |
 |------|-----------|-------|
 | 2026-02-16 | Criacao inicial — processo composto A02-A07 com exemplo CGR/Alemar | Claude (Agente Logistico) |
+| 2026-02-18 | Gotchas operacionais (inclusao=S, DDD, CCF, acentos) + 7 novos erros comuns | Claude (Agente Logistico) |

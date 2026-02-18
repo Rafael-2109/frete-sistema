@@ -1,12 +1,35 @@
 ---
-description: Executa operacoes de escrita no SSW via Playwright. Cadastra unidades (401), cidades atendidas (402) e futuras operacoes. Requer --dry-run na primeira execucao. Usa ssw_defaults.json para valores padrao CarVia.
+name: operando-ssw
+description: |
+  Executa operacoes de escrita no SSW via Playwright. Cadastra unidades (401), cidades atendidas (402), fornecedores (478), transportadoras (485) e comissoes (408). Requer --dry-run na primeira execucao. Usa ssw_defaults.json para valores padrao CarVia.
+
+  USAR QUANDO:
+  - Cadastrar unidade: "cadastre unidade CGR no SSW", "criar unidade parceira"
+  - Cadastrar cidades: "importar cidades da rota CGR", "adicionar cidades atendidas"
+  - Cadastrar fornecedor: "cadastrar CNPJ como fornecedor no SSW"
+  - Cadastrar transportadora: "registrar transportadora no SSW"
+  - Criar comissao: "vincular unidade a transportadora", "criar comissao 408"
+  - Implantar rota: "POP-A10", "nova rota completa"
+
+  NAO USAR QUANDO:
+  - Consultar/navegar SSW sem alterar → usar **acessando-ssw**
+  - Cotacao de frete → usar **cotando-frete**
 decision_tree: |
   Cadastrar unidade parceira (tipo T)?
     → cadastrar_unidade_401.py --sigla X --tipo T --razao-social "..." --dry-run
-  Cadastrar cidades atendidas para unidade?
+  Importar cidades em massa via CSV (>5 cidades)?
+    → importar_cidades_402.py --csv /tmp/cidades.csv --dry-run
+  Cadastrar poucas cidades na grid (<5)?
     → cadastrar_cidades_402.py --uf XX --unidade XXX --cidades '[...]' --dry-run
+  Cadastrar/ativar fornecedor (478)?
+    → cadastrar_fornecedor_478.py --cnpj X --nome "..." --especialidade TRANSPORTADORA --dry-run
+  Cadastrar transportadora (485)?
+    → cadastrar_transportadora_485.py --cnpj X --nome "..." --dry-run
+  Criar comissao de unidade (408)?
+    → criar_comissao_408.py --unidade XXX --cnpj X --dry-run
   Consultar/navegar SSW (sem alterar)?
     → NÃO usar esta skill. Usar **acessando-ssw**
+allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # operando-ssw
@@ -14,12 +37,16 @@ decision_tree: |
 Executa operacoes de **ESCRITA** no SSW via scripts Playwright standalone.
 Separada de `acessando-ssw` (apenas consulta/documentacao).
 
-## Principio de Safety
+---
+
+## REGRAS CRITICAS
 
 1. `--dry-run` e **OBRIGATORIO** na primeira execucao — preview sem submeter
 2. Screenshot capturado antes de qualquer submit — evidencia do formulario
 3. Agente DEVE usar AskUserQuestion para confirmar antes de executar sem --dry-run
-4. Output JSON detalhado — cada campo preenchido e logado
+4. Ordem obrigatoria para nova rota: 401 → 402 → 478 → 485 → 408
+
+---
 
 ## Arquitetura
 
@@ -34,96 +61,44 @@ Agente Web
 ```
 
 Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
+Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_campos()` → `montar_campos()` → loop FIELD_MAP → `gerar_saida()`.
 
-## Scripts
+---
 
-### cadastrar_unidade_401.py — Opcao 401
+## Scripts — Referencia Detalhada
 
-Cadastra nova unidade operacional no SSW.
+**Para parametros completos, FIELD_MAP, limites e gotchas**: LER `SCRIPTS.md`
 
-```bash
-source .venv/bin/activate
-python .claude/skills/operando-ssw/scripts/cadastrar_unidade_401.py \
-  --sigla CGR --tipo T \
-  --razao-social "ALEMAR - CAMPO GRANDE/MS" \
-  --nome-fantasia "ALEMAR CGR" \
-  --ie "ISENTO" \
-  [--cnpj 62312605000175] \
-  [--defaults-file .claude/skills/operando-ssw/ssw_defaults.json] \
-  --dry-run
-```
+| # | Script | Opcao | Proposito |
+|---|--------|-------|-----------|
+| 0 | `ssw_common.py` | — | Funcoes Playwright compartilhadas (login, popup, campos) |
+| 1 | `cadastrar_unidade_401.py` | 401 | Cadastrar unidade operacional (31 campos) |
+| 2 | `cadastrar_cidades_402.py` | 402 | Cadastrar cidades na grid (<5 cidades) |
+| 3 | `importar_cidades_402.py` | 402 | Importar cidades via CSV (>5 cidades) |
+| 4 | `cadastrar_fornecedor_478.py` | 478 | Cadastrar fornecedor (12 campos, prerequisito 485/408) |
+| 5 | `cadastrar_transportadora_485.py` | 485 | Cadastrar transportadora (3 campos) |
+| 6 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos) |
 
-| Parametro | Obrigatorio | Descricao |
-|-----------|-------------|-----------|
-| --sigla | Sim | Codigo IATA 3 chars (ex: CGR, CWB, POA) |
-| --tipo | Nao | T=Terceiro, F=Filial, M=Matriz (default: T) |
-| --razao-social | Sim | Max 45 chars. Padrao: "[Parceiro] - [Cidade]/[UF]" |
-| --nome-fantasia | Nao | Max 30 chars (default: razao social truncada) |
-| --cnpj | Nao | 14 digitos (default: CNPJ CarVia do ssw_defaults.json) |
-| --ie | Nao | Inscricao Estadual (vazio se isento) |
-| --dry-run | -- | Preview sem submeter |
-
-**Regra tipo T**: Usa CNPJ, IE, banco e dados fiscais da **CarVia** (nao do parceiro).
-Veja POP-A02 para detalhes.
-
-### cadastrar_cidades_402.py — Opcao 402
-
-Cadastra cidades atendidas para uma unidade.
-
-```bash
-python .claude/skills/operando-ssw/scripts/cadastrar_cidades_402.py \
-  --uf MS --unidade CGR \
-  --cidades '[
-    {"cidade": "CAMPO GRANDE", "polo": "P", "prazo": 2},
-    {"cidade": "DOURADOS", "polo": "R", "prazo": 3},
-    {"cidade": "CORUMBA", "polo": "I", "prazo": 5}
-  ]' \
-  --dry-run
-```
-
-| Parametro | Obrigatorio | Descricao |
-|-----------|-------------|-----------|
-| --uf | Sim | UF para filtrar cidades (ex: MS, SP) |
-| --unidade | Sim | Sigla da unidade responsavel (ex: CGR) |
-| --cidades | Sim | JSON array (ver formato abaixo) |
-| --dry-run | -- | Preview sem submeter |
-
-**Formato cidades** (JSON array):
-```json
-[
-  {
-    "cidade": "CAMPO GRANDE",
-    "polo": "P",
-    "prazo": 2,
-    "tipo_frete": "A",
-    "coleta": "S",
-    "entrega": "S"
-  }
-]
-```
-
-Campos obrigatorios por cidade: `cidade`, `polo` (P/R/I). `prazo` recomendado.
-Demais campos usam defaults do ssw_defaults.json se omitidos.
-
-## Defaults (ssw_defaults.json)
-
-Valores padrao CarVia carregados automaticamente. Dados extraidos das unidades
-reais (CGR, MTZ) em 2026-02-17. Inclui dados bancarios (Banco Inter 077),
-seguro (Essor), RNTRC, empresa contabil, e flags operacionais.
+---
 
 ## Fluxo Completo: Nova Rota (POP-A10)
 
-Para implantar uma nova rota completa, o agente orquestra em sequencia:
-1. **401** — Cadastrar unidade parceira (esta skill)
-2. **402** — Cadastrar cidades atendidas (esta skill)
-3. **403** — Cadastrar rota CAR → [SIGLA] (futuro)
-4. **478** — Cadastrar fornecedor (futuro)
-5. **408** — Cadastrar custos/comissao (futuro)
-6. **420** — Cadastrar tabelas de preco (futuro)
+1. **401** — Cadastrar unidade parceira
+2. **402** — Cadastrar cidades atendidas
+3. **403** — Cadastrar rota CAR → [SIGLA] (manual / futuro)
+4. **478** — Cadastrar fornecedor
+5. **485** — Cadastrar transportadora
+6. **408** — Cadastrar comissao de unidade
+7. **420** — Cadastrar tabelas de preco (futuro)
+8. **002** — Verificar cotacao (futuro)
 
-## References
+---
 
-- POP-A02: `.claude/references/ssw/pops/POP-A02-cadastrar-unidade-parceira.md`
-- POP-A03: `.claude/references/ssw/pops/POP-A03-cadastrar-cidades.md`
-- Doc 401: `.claude/references/ssw/cadastros/401-cadastro-unidades.md`
-- Doc 402: `.claude/references/ssw/cadastros/402-cidades-atendidas.md`
+## References (sob demanda)
+
+| Gatilho | Reference a Ler |
+|---------|-----------------|
+| Cadastrar unidade passo-a-passo | `POP-A02-cadastrar-unidade-parceira.md` |
+| Cadastrar cidades passo-a-passo | `POP-A03-cadastrar-cidades.md` |
+| Implantar rota completa | `POP-A10-implantar-nova-rota.md` |
+| FIELD_MAP, limites, erros SSW | `SCRIPTS.md` |

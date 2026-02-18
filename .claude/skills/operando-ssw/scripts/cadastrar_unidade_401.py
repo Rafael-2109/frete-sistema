@@ -68,6 +68,7 @@ from ssw_common import (
     carregar_defaults,
     login_ssw,
     abrir_opcao_popup,
+    preencher_campo_js,
     capturar_campos,
     capturar_screenshot,
     gerar_saida,
@@ -310,37 +311,6 @@ def montar_campos(args, defaults):
 
     # Remover campos vazios (nao preencher o que nao tem valor)
     return {k: v for k, v in campos.items() if v}
-
-
-async def preencher_campo_js(popup, field_name, value):
-    """
-    Preenche campo via JS direto no DOM.
-
-    IMPORTANTE: NAO dispara eventos change/input. O SSW ajaxEnvia() le
-    el.value diretamente na serializacao. Eventos change em campos como CEP
-    disparam geocoding automatico que usa o ajaxGeral (XMLHttpRequest
-    compartilhado), bloqueando chamadas subsequentes de ajaxEnvia.
-
-    Campos readonly sao IGNORADOS (nao forcamos escrita).
-    Unico campo readonly que forcamos: 'sigla' (tratado separadamente).
-
-    Tenta por name primeiro, depois por id.
-
-    Returns:
-        dict com {found: bool, readonly: bool, current: str, set: str}
-    """
-    escaped_value = str(value).replace("\\", "\\\\").replace("'", "\\'")
-    result = await popup.evaluate(f"""() => {{
-        let el = document.querySelector('input[name="{field_name}"], select[name="{field_name}"]');
-        if (!el) el = document.getElementById('{field_name}');
-        if (!el) return {{found: false}};
-        if (el.readOnly || el.className.includes('nodata')) {{
-            return {{found: true, readonly: true, current: el.value}};
-        }}
-        el.value = '{escaped_value}';
-        return {{found: true, readonly: false, set: '{escaped_value}'}};
-    }}""")
-    return result
 
 
 async def cadastrar_unidade(args):

@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "versao": "1.0",
+    "versao": "1.1",
     "descricao": "Valores padrao CarVia para operacoes de escrita no SSW",
-    "atualizado": "2026-02-17"
+    "atualizado": "2026-02-18"
   },
   "empresa": {
     "cnpj": "62312605000175",
@@ -56,6 +56,21 @@
     "debita_auto_frete_avista": "N",
     "cobra_agencia_via_fat": "N",
     "servico_logistica": "N"
+  },
+  "opcao_478": {
+    "contribuinte": "N",
+    "inscr_estadual": "ISENTO",
+    "especialidade": "TRANSPORTADORA",
+    "fg_cc": "N",
+    "_nota_fg_cc": "CCF=N e seguro. Se ativar S, campo 'evento' e obrigatorio (ex: 5224=REDESPACHO)",
+    "_nota_ddd": "Usar DDD real da cidade sede. '01' e '00' sao invalidos",
+    "_nota_telefone": "8 digitos. '00000000' e '99999999' sao rejeitados. Ex valido: '30001234'"
+  },
+  "opcao_408": {
+    "data_ini": "180226",
+    "exp_emit_despacho_pol": "1,00",
+    "rec_dest_despacho_pol": "1,00",
+    "_nota": "data_ini formato DDMMAA. Despachos em R$ com virgula"
   },
   "opcao_402": {
     "tipo_frete": "A",

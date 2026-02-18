@@ -2,7 +2,24 @@
 """
 ssw_common.py — Funcoes reutilizaveis para scripts Playwright SSW.
 
-Compartilhado entre cadastrar_unidade_401.py e cadastrar_cidades_402.py.
+Compartilhado entre cadastrar_unidade_401.py, cadastrar_cidades_402.py,
+importar_cidades_402.py, cadastrar_fornecedor_478.py,
+cadastrar_transportadora_485.py e criar_comissao_408.py.
+
+Funcoes exportadas:
+  - verificar_credenciais()
+  - carregar_defaults(path)
+  - login_ssw(page)
+  - abrir_opcao_popup(context, frame, opcao)
+  - interceptar_ajax_response(popup, frame, action_code)
+  - injetar_html_no_dom(popup, html)
+  - preencher_campo_js(popup, field_name, value) — SEM eventos (evita geocoding)
+  - preencher_campo_no_html(popup, field_name, value) — COM eventos
+  - preencher_campo_inline(frame, field_id, value) — para grids (402)
+  - capturar_campos(target)
+  - capturar_screenshot(page, nome)
+  - gerar_saida(sucesso, **kwargs)
+  - verificar_mensagem_ssw(popup)
 """
 import asyncio
 import json
@@ -234,6 +251,38 @@ async def preencher_campo_no_html(popup, field_name, value, by="name"):
 
     if not success:
         raise ValueError(f"Campo nao encontrado: {field_name} (by={by})")
+
+
+async def preencher_campo_js(popup, field_name, value):
+    """
+    Preenche campo via JS direto no DOM, SEM disparar eventos change/input.
+
+    Diferente de preencher_campo_no_html (que dispara eventos), esta funcao
+    evita que geocoding automatico do CEP bloqueie ajaxGeral.
+
+    Campos readonly sao IGNORADOS (nao forcamos escrita).
+    Tenta por name primeiro, depois por id.
+
+    Args:
+        popup: Playwright Page
+        field_name: nome ou id do campo
+        value: valor a preencher
+
+    Returns:
+        dict com {found: bool, readonly: bool, current: str, set: str}
+    """
+    escaped_value = str(value).replace("\\", "\\\\").replace("'", "\\'")
+    result = await popup.evaluate(f"""() => {{
+        let el = document.querySelector('input[name="{field_name}"], select[name="{field_name}"]');
+        if (!el) el = document.getElementById('{field_name}');
+        if (!el) return {{found: false}};
+        if (el.readOnly || el.className.includes('nodata')) {{
+            return {{found: true, readonly: true, current: el.value}};
+        }}
+        el.value = '{escaped_value}';
+        return {{found: true, readonly: false, set: '{escaped_value}'}};
+    }}""")
+    return result
 
 
 async def preencher_campo_inline(frame, field_id, value):
