@@ -135,4 +135,4 @@ RUPTURA DETECTADA
 
 ---
 
-**Fonte:** Extraido de `historia_organizada.md` - entrevistas com Rafael (dono).
+**Fonte:** Extraido de `historia_nacom.md` - entrevistas com Rafael (dono).

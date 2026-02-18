@@ -37,7 +37,7 @@ Refatoracao completa da infraestrutura `.claude/` do sistema de fretes Nacom Goy
 .claude/references/
 ├── design/          (1 arquivo: MAPEAMENTO_CORES.md)
 ├── modelos/         (3 arquivos: CAMPOS_CARTEIRA_SEPARACAO, MODELOS_CAMPOS, QUERIES_MAPEAMENTO)
-├── negocio/         (3 arquivos: RECEBIMENTO_MATERIAIS, REGRAS_NEGOCIO, historia_organizada)
+├── negocio/         (3 arquivos: RECEBIMENTO_MATERIAIS, REGRAS_NEGOCIO, historia_nacom)
 ├── odoo/            (6 arquivos: CONVERSAO_UOM, GOTCHAS, IDS_FIXOS, MODELOS_CAMPOS, PADROES_AVANCADOS, PIPELINE_RECEBIMENTO)
 ├── roadmaps/        (2 arquivos: FEATURES_AGENTE, IMPLEMENTACAO_ODOO)
 └── INDEX.md

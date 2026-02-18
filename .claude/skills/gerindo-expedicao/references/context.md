@@ -154,4 +154,4 @@ POR ISSO: Entrega agil = Loja abastecida = Mais pedido
 
 ---
 
-**Fonte:** Extraido de `historia_organizada.md` - entrevistas com Rafael (dono).
+**Fonte:** Extraido de `historia_nacom.md` - entrevistas com Rafael (dono).
