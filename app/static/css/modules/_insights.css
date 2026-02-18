@@ -372,11 +372,11 @@
   border-bottom-color: var(--amber-55);
 }
 
-.tab-content {
+.insights-page .tab-content {
   display: none;
 }
 
-.tab-content.active {
+.insights-page .tab-content.active {
   display: block;
 }
 
