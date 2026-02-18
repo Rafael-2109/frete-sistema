@@ -16,6 +16,7 @@ import json
 import logging
 import os
 from redis import Redis
+from rq.timeouts import JobTimeoutException
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,23 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
 
             return resultado
 
+        except JobTimeoutException as e:
+            # Timeout RQ: salvar estado no DB mas RE-RAISE para que RQ acione Retry
+            logger.error(
+                f"[Job LF] TIMEOUT recebimento {recebimento_id} "
+                f"(etapa_atual pode estar em checkpoint): {e}"
+            )
+            _atualizar_progresso(recebimento_id, 0, 0, total, f'Timeout: {str(e)[:100]}')
+            try:
+                recebimento = RecebimentoLf.query.get(recebimento_id)
+                if recebimento:
+                    recebimento.status = 'erro'
+                    recebimento.erro_mensagem = f'Timeout RQ: {str(e)[:450]}'
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+            raise  # Propagar para RQ → Retry(max=3) aciona
+
         except Exception as e:
             logger.error(f"[Job LF] Erro ao processar recebimento {recebimento_id}: {e}")
             _atualizar_progresso(recebimento_id, 0, 0, total, f'Erro: {str(e)[:100]}')
@@ -201,6 +219,27 @@ def processar_transfer_fb_cd_job(recebimento_id):
                 f"[Job Transfer] Recebimento {recebimento_id} transferencia concluida"
             )
             return resultado
+
+        except JobTimeoutException as e:
+            # Timeout RQ: salvar estado no DB mas RE-RAISE para que RQ acione Retry
+            logger.error(
+                f"[Job Transfer] TIMEOUT transferencia {recebimento_id}: {e}"
+            )
+            _atualizar_progresso(
+                recebimento_id, 6, 0, total, f'Timeout: {str(e)[:100]}',
+                transfer_status='erro',
+                status='processado',
+            )
+            try:
+                from app import db
+                rec = RecebimentoLf.query.get(recebimento_id)
+                if rec:
+                    rec.transfer_status = 'erro'
+                    rec.transfer_erro_mensagem = f'Timeout RQ: {str(e)[:450]}'
+                    db.session.commit()
+            except Exception:
+                pass
+            raise  # Propagar para RQ → Retry(max=2) aciona
 
         except Exception as e:
             logger.error(

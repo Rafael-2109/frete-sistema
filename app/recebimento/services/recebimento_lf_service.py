@@ -1061,7 +1061,7 @@ class RecebimentoLfService:
                 processar_transfer_fb_cd_job,
                 recebimento.id,
                 queue_name='recebimento',
-                timeout='45m',
+                timeout='90m',  # 90min — pipeline transfer tem 19 steps com fire_and_poll
                 retry=retry_config,
             )
             recebimento.job_id = job.id
