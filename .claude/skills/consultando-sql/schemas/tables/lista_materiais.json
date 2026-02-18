@@ -89,6 +89,13 @@
       "unique": false
     },
     {
+      "name": "ix_lista_materiais_cod_produto_produzido",
+      "columns": [
+        "cod_produto_produzido"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_lista_materiais_status",
       "columns": [
         "status"
@@ -99,13 +106,6 @@
       "name": "ix_lista_materiais_cod_produto_componente",
       "columns": [
         "cod_produto_componente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lista_materiais_cod_produto_produzido",
-      "columns": [
-        "cod_produto_produzido"
       ],
       "unique": false
     }

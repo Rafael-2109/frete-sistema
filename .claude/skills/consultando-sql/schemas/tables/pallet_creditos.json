@@ -102,6 +102,14 @@
   ],
   "indices": [
     {
+      "name": "idx_credito_responsavel_status",
+      "columns": [
+        "cnpj_responsavel",
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_credito_tipo_status",
       "columns": [
         "tipo_responsavel",
@@ -135,14 +143,6 @@
       "name": "ix_pallet_creditos_cnpj_responsavel",
       "columns": [
         "cnpj_responsavel"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_credito_responsavel_status",
-      "columns": [
-        "cnpj_responsavel",
-        "status"
       ],
       "unique": false
     }

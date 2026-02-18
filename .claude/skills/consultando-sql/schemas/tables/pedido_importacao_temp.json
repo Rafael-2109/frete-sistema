@@ -126,14 +126,14 @@
       "unique": true
     },
     {
-      "name": "ix_pedido_importacao_temp_status",
+      "name": "idx_importacao_temp_status",
       "columns": [
         "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_importacao_temp_status",
+      "name": "ix_pedido_importacao_temp_status",
       "columns": [
         "status"
       ],

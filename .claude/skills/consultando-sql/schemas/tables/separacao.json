@@ -229,9 +229,16 @@
   ],
   "indices": [
     {
-      "name": "idx_sep_falta_pgto_sync",
+      "name": "idx_sep_status",
       "columns": [
-        "falta_pagamento",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf",
+      "columns": [
+        "numero_nf",
         "sincronizado_nf"
       ],
       "unique": false
@@ -284,13 +291,6 @@
       "unique": false
     },
     {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_num_pedido",
       "columns": [
         "num_pedido"
@@ -306,19 +306,19 @@
       "unique": false
     },
     {
-      "name": "idx_sep_pedido_produto_sync",
+      "name": "idx_sep_falta_pgto_sync",
       "columns": [
-        "num_pedido",
-        "cod_produto",
+        "falta_pagamento",
         "sincronizado_nf"
       ],
       "unique": false
     },
     {
-      "name": "idx_sep_produto_qtd_sync",
+      "name": "idx_sep_pedido_produto_sync",
       "columns": [
+        "num_pedido",
         "cod_produto",
-        "qtd_saldo"
+        "sincronizado_nf"
       ],
       "unique": false
     },
@@ -337,6 +337,21 @@
       "unique": false
     },
     {
+      "name": "idx_sep_produto_qtd_sync",
+      "columns": [
+        "cod_produto",
+        "qtd_saldo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_estoque_projetado",
       "columns": [
         "cod_produto",
@@ -349,21 +364,6 @@
       "columns": [
         "expedicao",
         "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_nf",
-      "columns": [
-        "numero_nf",
-        "sincronizado_nf"
       ],
       "unique": false
     }
