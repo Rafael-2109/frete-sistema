@@ -103,8 +103,13 @@ def formatar_numero_br(valor, casas_decimais=None):
 
 
 def formatar_cidade_uf(cidade, uf):
-    """Formata CIDADE/UF no padrao SSW: uppercase, sem acentos."""
+    """Formata CIDADE/UF no padrao SSW: uppercase, sem acentos, apostrofos→espaco."""
     cidade_limpa = remover_acentos(str(cidade)).upper().strip()
+    # SSW usa espaco onde IBGE usa apostrofo ou hifen em nomes de cidades
+    # Ex: D'OESTE → D OESTE, GRAO-PARA → GRAO PARA, JI-PARANA → JI PARANA
+    cidade_limpa = cidade_limpa.replace("'", " ").replace("'", " ").replace("-", " ")
+    # Normalizar espacos multiplos
+    cidade_limpa = " ".join(cidade_limpa.split())
     uf_limpa = str(uf).upper().strip()
     return f"{cidade_limpa}/{uf_limpa}"
 

@@ -196,7 +196,23 @@ Por demanda — a cada nova regiao de atendimento. Estimativa: 30-60 minutos por
 
 > **Ponto chave**: Os valores na [opcao 408](../comercial/408-comissao-unidades.md) refletem o **custo** que a CarVia paga ao parceiro (espelho do Sistema Fretes). A **margem** da CarVia esta na diferenca entre a tabela 420 (preco de venda) e a tabela 408 (custo).
 
-22. Se necessario, criar **tabelas especificas** por rota:
+22. Importar **tabelas especificas por cidade** via CSV (automatizado):
+
+```bash
+# 1. Gerar CSVs a partir da planilha de vinculos:
+python gerar_csv_comissao_408.py --excel /tmp/backup_vinculos.xlsx --unidades CGR --dry-run
+python gerar_csv_comissao_408.py --excel /tmp/backup_vinculos.xlsx --unidades CGR
+
+# 2. Importar no SSW:
+python importar_comissao_cidade_408.py --csv-dir /tmp/ssw_408_csvs/ --unidades CGR --dry-run
+python importar_comissao_cidade_408.py --csv-dir /tmp/ssw_408_csvs/ --unidades CGR
+```
+
+> **Resposta SSW**: "Incluidas: N" (novas), "Alteradas: N" (atualizadas), "Nao inclusas: N" (valores iguais). O SSW sobrescreve dados existentes quando valores diferem.
+>
+> **Nomes de cidades**: O SSW usa espaco onde IBGE usa apostrofo (`D'OESTE` → `D OESTE`). O script normaliza automaticamente. Excecoes SSW-especificas (ex: `OLHO-D AGUA`) requerem correcao manual.
+
+23. Se necessario, criar **tabelas especificas por rota** (alternativa):
     - Selecionar "Tabelas especificas" → "Por Rota"
     - Rota: CAR → CGR
     - Informar parametros diferenciados
@@ -305,6 +321,7 @@ Usar este checklist para confirmar que todos os cadastros foram feitos corretame
 | 10 | Fornecedor cadastrado e **finalizado** (inclusao != S) | [478](../financeiro/478-cadastro-fornecedores.md) | [ ] |
 | 11 | Especialidade = TRANSPORTADORA no fornecedor | [478](../financeiro/478-cadastro-fornecedores.md) | [ ] |
 | 12 | Comissao geral cadastrada (custo parceiro) | [408](../comercial/408-comissao-unidades.md) | [ ] |
+| 12b | Tabelas especificas por cidade importadas via CSV | [408](../comercial/408-comissao-unidades.md) | [ ] |
 | 13 | Tabela CARP-[SIGLA]P criada e ativa | 420 | [ ] |
 | 14 | Tabela CARP-[SIGLA]R criada e ativa | 420 | [ ] |
 | 15 | Tabela CARP-[SIGLA]I criada e ativa | 420 | [ ] |
@@ -335,7 +352,7 @@ Usar este checklist para confirmar que todos os cadastros foram feitos corretame
 | Cotacao nao encontra cidade | Cidade nao cadastrada na 402 | Verificar se cidade foi incluida com unidade correta |
 | Prazo de entrega errado | Prazo rota ([403](../cadastros/403-rotas.md)) ou prazo cidade ([402](../cadastros/402-cidades-atendidas.md)) incorreto | Conferir ambos os prazos — total = transferencia + entrega |
 | Cidade em polo errado (P/R/I) | Classificacao diverge do Sistema Fretes | Corrigir na 402 — afeta qual tabela 420 e usada |
-| Custo ([408](../comercial/408-comissao-unidades.md)) nao calcula | Fornecedor sem CCF ativa | Ativar CCF=S na [opcao 478](../financeiro/478-cadastro-fornecedores.md) |
+| Custo ([408](../comercial/408-comissao-unidades.md)) nao calcula | Fornecedor com `inclusao=S` (nao finalizado) na 478 | Preencher campos obrigatorios na [478](../financeiro/478-cadastro-fornecedores.md) e re-gravar (GRA) |
 | Custo ([408](../comercial/408-comissao-unidades.md)) nao calcula | Fornecedor nao cadastrado como transportadora ([485](../financeiro/485-cadastro-transportadoras.md)) | Cadastrar parceiro na [opcao 485](../financeiro/485-cadastro-transportadoras.md) com status ativo |
 | Sigla ja existe na 401 | Outra unidade usa a mesma sigla | Usar variacao (ex: CGS se CGR ja existir) |
 | Tabela 420 duplicada | Ja existe tabela para mesma origem/destino | Verificar se rota ja foi implantada parcialmente |
@@ -451,3 +468,4 @@ Sem qualquer um destes, a 408 falha silenciosamente ou com erro generico.
 |------|-----------|-------|
 | 2026-02-16 | Criacao inicial — processo composto A02-A07 com exemplo CGR/Alemar | Claude (Agente Logistico) |
 | 2026-02-18 | Gotchas operacionais (inclusao=S, DDD, CCF, acentos) + 7 novos erros comuns | Claude (Agente Logistico) |
+| 2026-02-18 | Etapa 6: importacao CSV por cidade + normalizacao nomes (apostrofo→espaco) + checklist 12b | Claude (Agente Logistico) |

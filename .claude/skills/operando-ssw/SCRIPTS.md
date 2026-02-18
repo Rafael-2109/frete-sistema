@@ -271,7 +271,7 @@ python .claude/skills/operando-ssw/scripts/gerar_csv_comissao_408.py \
 
 **POLO/REGIAO/INTERIOR**: Recebem o MESMO valor (comissao por cidade).
 
-**CIDADE/UF**: `{CIDADE_UPPERCASE_SEM_ACENTO}/{UF}` (ex: `COLORADO DO OESTE/RO`)
+**CIDADE/UF**: `{CIDADE_UPPERCASE_SEM_ACENTO}/{UF}` (ex: `COLORADO DO OESTE/RO`). Apostrofos e hifens sao convertidos para espaco (SSW usa `D OESTE`, nao `D'OESTE`).
 
 **Template**: `comissao_408_template.json` contem 238 headers, metadata, 202 defaults e 6 conversoes. Extraido do BVH CSV de referencia.
 
@@ -324,7 +324,7 @@ python .claude/skills/operando-ssw/scripts/importar_comissao_cidade_408.py \
 
 **Resposta SSW**: "Processamento concluído. Tabelas incluídas: N Alteradas: N Não inclusas: N"
 - HTML entities decodificadas automaticamente (`&iacute;` → `í`, etc.)
-- "Não inclusas" indica tabelas que ja existiam (SSW nao atualiza automaticamente)
+- "Incluidas" = novas (nao existiam). "Alteradas" = existiam com valores diferentes (atualizadas). "Nao inclusas" = existiam com mesmos valores (nenhuma alteracao necessaria). O SSW SOBRESCREVE dados existentes quando valores diferem.
 
 **Prerequisitos**:
 - CSVs gerados por `gerar_csv_comissao_408.py` (238 cols, `;`, ISO-8859-1)
@@ -385,4 +385,6 @@ Para registrar N transportadoras em lote:
 7. **Popup fecha = sucesso na 408**: TargetClosedError e indicador de ENV2 bem-sucedido.
 8. **Sempre verificar apos GRA**: Re-abrir 478, PES novamente e conferir que `inclusao` sumiu.
 9. **Response interceptor pode capturar resposta errada**: SSW envia multiplas responses AJAX. O interceptor `/bin/ssw` pode pegar uma resposta de versao ("v.10.2") em vez do resultado real. Usar `html.unescape()` nas respostas para decodificar `&iacute;` etc.
-10. **"Nao inclusas" na 408 = tabelas ja existentes**: SSW nao atualiza automaticamente — precisa excluir primeiro para re-importar.
+10. **"Nao inclusas" na 408 = valores identicos**: SSW compara dados existentes com CSV. Se iguais → "nao inclusas". Se diferentes → "alteradas" (sobrescreve). NAO precisa excluir para atualizar.
+11. **Apostrofos em nomes de cidade**: SSW usa espaco onde IBGE usa apostrofo. `D'OESTE` → `D OESTE`, `D'AGUA` → `D AGUA`, `GRAO-PARA` → `GRAO PARA`. O script `gerar_csv_comissao_408.py` normaliza automaticamente (apostrofo e hifen → espaco). Excecoes SSW-especificas (ex: `OLHO-D AGUA DO BORGES`) requerem correcao manual.
+12. **JANUARIO CICCO/RN**: Cidade nao existe no cadastro SSW (402). Ignorar na importacao.

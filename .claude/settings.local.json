@@ -99,7 +99,8 @@
       "Bash(__NEW_LINE_829bc68f8fc526d2__ ls -1 operacional/)",
       "WebFetch(domain:docs.voyageai.com)",
       "Skill(skill-creator)",
-      "Skill(executando-odoo-financeiro)"
+      "Skill(executando-odoo-financeiro)",
+      "mcp__render__get_deploy"
     ],
     "deny": []
   },
