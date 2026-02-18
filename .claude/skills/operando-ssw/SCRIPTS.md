@@ -230,6 +230,111 @@ python .claude/skills/operando-ssw/scripts/criar_comissao_408.py \
 
 ---
 
+## gerar_csv_comissao_408.py
+
+Gera CSVs de comissao **por cidade** para importacao em lote na 408. Nao usa Playwright — Python puro (pandas + csv).
+
+```bash
+python .claude/skills/operando-ssw/scripts/gerar_csv_comissao_408.py \
+  --excel /tmp/backup_vinculos.xlsx \
+  [--aba Sheet] \
+  [--output-dir /tmp/ssw_408_csvs/] \
+  [--unidades BVH,CGR] \
+  [--template ../comissao_408_template.json] \
+  [--dry-run]
+```
+
+| Parametro | Obrigatorio | Descricao |
+|-----------|-------------|-----------|
+| --excel | Sim | Caminho do Excel com precos por cidade (backup_vinculos.xlsx) |
+| --aba | Nao | Nome da aba (default: Sheet) |
+| --output-dir | Nao | Diretorio de saida (default: /tmp/ssw_408_csvs/) |
+| --unidades | Nao | Filtrar por IATA virgula-sep (ex: BVH,CGR). Sem = todas |
+| --template | Nao | Caminho do template JSON (default: ../comissao_408_template.json) |
+| --dry-run | -- | Mostra estatisticas sem gerar arquivos |
+
+**Formato CSV de saida**: 238 colunas, separador `;`, encoding ISO-8859-1, decimais com virgula.
+- Linha 1: metadata (descricao das colunas de origem)
+- Linha 2: headers (nomes das 238 colunas)
+- Linhas 3+: dados (2 linhas por cidade: E=expedicao, R=recepcao)
+
+**Conversoes Excel → CSV** (verificadas contra BVH/Colorado do Oeste):
+
+| Excel (col#, nome) | CSV targets | Conversao |
+|---|---|---|
+| 21, Acr. Frete | EXP/REC_1_PERC_FRETE_* | x100 (decimal → %) |
+| 18, GRIS/ADV | EXP/REC_2_PERC_VLR_MERC_* | x100 (decimal → %) |
+| 19, DESPACHO/CTE/TAS | EXP/REC_3_DESPACHO_* | as-is (R$) |
+| 17, FRETE PESO | EXP/REC_3_APOS_ULT_FX_* | x1000 (R$/KG → R$/TON) |
+| 16, VALOR MINIMO | EXP/REC_4_MINIMO_R$_* | as-is (R$) |
+| 20, PEDAGIO | EXP/REC_5_PEDAGIO_FRACAO_100KG | as-is (R$) |
+
+**POLO/REGIAO/INTERIOR**: Recebem o MESMO valor (comissao por cidade).
+
+**CIDADE/UF**: `{CIDADE_UPPERCASE_SEM_ACENTO}/{UF}` (ex: `COLORADO DO OESTE/RO`)
+
+**Template**: `comissao_408_template.json` contem 238 headers, metadata, 202 defaults e 6 conversoes. Extraido do BVH CSV de referencia.
+
+**Cada linha (E ou R) contem ambas as secoes EXP e REC** preenchidas com os mesmos valores. O campo EXPEDICAO/RECEPCAO identifica o tipo, mas os dados sao duplicados.
+
+**Importacao no SSW**: Usar `importar_comissao_cidade_408.py` (Playwright automatizado).
+
+---
+
+## importar_comissao_cidade_408.py
+
+Importa CSVs de comissao por cidade na opcao 408 do SSW via Playwright. Suporta importacao individual ou em lote.
+
+```bash
+# Importar uma unidade:
+python .claude/skills/operando-ssw/scripts/importar_comissao_cidade_408.py \
+  --csv /tmp/ssw_408_csvs/BVH_comissao_408.csv --unidade BVH --dry-run
+
+# Importar todas (lote):
+python .claude/skills/operando-ssw/scripts/importar_comissao_cidade_408.py \
+  --csv-dir /tmp/ssw_408_csvs/ [--unidades BVH,CGR,SSA] --dry-run
+```
+
+| Parametro | Obrigatorio | Descricao |
+|-----------|-------------|-----------|
+| --csv | Sim* | Caminho do CSV (modo individual) |
+| --unidade | Nao | Sigla IATA (auto-detectado do nome se omitido) |
+| --csv-dir | Sim* | Diretorio com CSVs `*_comissao_408.csv` (modo lote) |
+| --unidades | Nao | Filtrar por IATA virgula-sep (sem = todas) |
+| --dry-run | -- | Valida CSVs sem importar |
+
+*Obrigatorio: `--csv` OU `--csv-dir` (um dos dois). Default: `/tmp/ssw_408_csvs/`.
+
+**Fluxo SSW por unidade**:
+1. Abrir 408 popup
+2. Preencher unidade no campo `f2` (id='2')
+3. `ajaxEnvia('CSV_CID', 1)` → abre popup de importacao
+4. Upload CSV via `<input type="file">`
+5. `ajaxEnvia('IMP_CSV', 0)` → submete importacao
+6. Coleta resultado: "Tabelas incluídas: N Alteradas: N Não inclusas: N"
+7. Fechar popups e repetir proxima unidade
+
+**AJAX actions (descobertos via exploracao DOM)**:
+- `CSV_CID` (flag 1) — Abre popup de importacao CSV para cidade
+- `IMP_CSV` (flag 0) — Submete a importacao do CSV carregado
+- `LINK_CID` (flag 1) — Visualiza tabelas especificas por cidade
+- `LINK_DOWN_CID` (flag 0) — Baixa CSV das tabelas por cidade
+
+**Validacao pre-import**: 238 colunas, headers corretos, formato CIDADE/UF, tipos E/R.
+
+**Resposta SSW**: "Processamento concluído. Tabelas incluídas: N Alteradas: N Não inclusas: N"
+- HTML entities decodificadas automaticamente (`&iacute;` → `í`, etc.)
+- "Não inclusas" indica tabelas que ja existiam (SSW nao atualiza automaticamente)
+
+**Prerequisitos**:
+- CSVs gerados por `gerar_csv_comissao_408.py` (238 cols, `;`, ISO-8859-1)
+- Comissao geral ja existente (`criar_comissao_408.py`)
+- Credenciais SSW no .env
+
+**Pausa entre unidades**: 3 segundos entre imports para nao sobrecarregar SSW.
+
+---
+
 ## Sequencia de Execucao Batch
 
 Para registrar N transportadoras em lote:
@@ -279,3 +384,5 @@ Para registrar N transportadoras em lote:
 6. **Acentos nas mensagens SSW**: Comparar texto normalizado (sem acentos) ou usar ambas formas.
 7. **Popup fecha = sucesso na 408**: TargetClosedError e indicador de ENV2 bem-sucedido.
 8. **Sempre verificar apos GRA**: Re-abrir 478, PES novamente e conferir que `inclusao` sumiu.
+9. **Response interceptor pode capturar resposta errada**: SSW envia multiplas responses AJAX. O interceptor `/bin/ssw` pode pegar uma resposta de versao ("v.10.2") em vez do resultado real. Usar `html.unescape()` nas respostas para decodificar `&iacute;` etc.
+10. **"Nao inclusas" na 408 = tabelas ja existentes**: SSW nao atualiza automaticamente — precisa excluir primeiro para re-importar.

@@ -9,6 +9,8 @@ description: |
   - Cadastrar fornecedor: "cadastrar CNPJ como fornecedor no SSW"
   - Cadastrar transportadora: "registrar transportadora no SSW"
   - Criar comissao: "vincular unidade a transportadora", "criar comissao 408"
+  - Gerar CSVs comissao por cidade: "gerar CSV 408 por cidade", "importar precos por cidade"
+  - Importar CSVs comissao por cidade: "importar comissao por cidade no SSW", "importar CSV 408"
   - Implantar rota: "POP-A10", "nova rota completa"
 
   NAO USAR QUANDO:
@@ -25,8 +27,12 @@ decision_tree: |
     → cadastrar_fornecedor_478.py --cnpj X --nome "..." --especialidade TRANSPORTADORA --dry-run
   Cadastrar transportadora (485)?
     → cadastrar_transportadora_485.py --cnpj X --nome "..." --dry-run
-  Criar comissao de unidade (408)?
+  Criar comissao de unidade (408, geral)?
     → criar_comissao_408.py --unidade XXX --cnpj X --dry-run
+  Gerar CSVs comissao por cidade (408, em lote)?
+    → gerar_csv_comissao_408.py --excel /tmp/backup_vinculos.xlsx [--unidades BVH,CGR] --dry-run
+  Importar CSVs comissao por cidade no SSW (408)?
+    → importar_comissao_cidade_408.py --csv-dir /tmp/ssw_408_csvs/ [--unidades BVH,CGR] --dry-run
   Consultar/navegar SSW (sem alterar)?
     → NÃO usar esta skill. Usar **acessando-ssw**
 allowed-tools: Read, Bash, Glob, Grep
@@ -77,7 +83,9 @@ Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_
 | 3 | `importar_cidades_402.py` | 402 | Importar cidades via CSV (>5 cidades) |
 | 4 | `cadastrar_fornecedor_478.py` | 478 | Cadastrar fornecedor (12 campos, prerequisito 485/408) |
 | 5 | `cadastrar_transportadora_485.py` | 485 | Cadastrar transportadora (3 campos) |
-| 6 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos) |
+| 6 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos, geral) |
+| 7 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, importacao em lote) |
+| 8 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW via Playwright |
 
 ---
 
