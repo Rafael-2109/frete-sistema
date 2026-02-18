@@ -298,7 +298,7 @@ class SqlTemplateEmbedding(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
 
     __table_args__ = (
-        db.Index('idx_sqlt_content_hash', 'content_hash'),
+        db.Index('idx_sqlt_content_hash_unique', 'content_hash', unique=True, postgresql_where=db.text('content_hash IS NOT NULL')),
     )
 
     def __repr__(self):

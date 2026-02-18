@@ -5,7 +5,6 @@ Coleta transportadoras da tabela `transportadoras` (fonte canonica)
 e gera embeddings dos nomes + aliases para resolucao semantica.
 
 Aliases sao coletados de:
-- faturamento_produto.nome_transportadora (variacoes em NFs)
 - entregas_monitoradas.transportadora (nomes informais)
 
 Executar:
@@ -55,7 +54,7 @@ def collect_carriers() -> List[Dict[str, Any]]:
     Coleta transportadoras do banco com aliases.
 
     Fonte canonica: tabela `transportadoras`
-    Aliases: nomes distintos em `faturamento_produto` e `entregas_monitoradas`
+    Aliases: nomes distintos em `entregas_monitoradas`
 
     Returns:
         Lista de dicts com carrier_name, cnpj, aliases, texto_embedado
@@ -89,40 +88,7 @@ def collect_carriers() -> List[Dict[str, Any]]:
                 "t_id": t_id,
             }
 
-    # 2. Coletar aliases de faturamento_produto
-    aliases_result = _db.session.execute(text("""
-        SELECT DISTINCT nome_transportadora
-        FROM faturamento_produto
-        WHERE nome_transportadora IS NOT NULL AND nome_transportadora != ''
-        LIMIT 2000
-    """))
-
-    for row in aliases_result.fetchall():
-        alias = row[0].strip().upper()
-        if not alias or len(alias) < 3:
-            continue
-
-        normalized = _normalize_name(alias)
-
-        # Tentar associar a transportadora existente
-        matched = False
-        for key, carrier in carriers.items():
-            if key in normalized or normalized in key:
-                carrier["aliases_set"].add(alias)
-                matched = True
-                break
-
-        if not matched:
-            # Nova transportadora (so do faturamento)
-            if normalized not in carriers:
-                carriers[normalized] = {
-                    "carrier_name": alias,
-                    "cnpj": None,
-                    "aliases_set": {alias},
-                    "t_id": None,
-                }
-
-    # 3. Coletar aliases de entregas_monitoradas
+    # 2. Coletar aliases de entregas_monitoradas
     aliases_result2 = _db.session.execute(text("""
         SELECT DISTINCT transportadora
         FROM entregas_monitoradas
@@ -142,7 +108,7 @@ def collect_carriers() -> List[Dict[str, Any]]:
                 carrier["aliases_set"].add(alias)
                 break
 
-    # 4. Montar resultado final
+    # 3. Montar resultado final
     results = []
     for key, carrier in carriers.items():
         aliases = sorted(carrier["aliases_set"])

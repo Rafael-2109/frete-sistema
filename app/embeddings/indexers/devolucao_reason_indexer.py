@@ -4,7 +4,7 @@ Indexer de motivos de devolucao para classificacao por similaridade.
 Coleta devolucoes ja classificadas (motivo != NULL, descricao_motivo != NULL)
 e gera embeddings para busca semantica posterior.
 
-Fonte: nf_devolucao (motivo + descricao_motivo + observacoes_logistica)
+Fonte: nf_devolucao (motivo + descricao_motivo + info_complementar)
 
 Executar:
     source .venv/bin/activate
@@ -46,7 +46,7 @@ def collect_devolucao_reasons() -> List[Dict[str, Any]]:
     Coleta devolucoes ja classificadas do banco.
 
     Busca nf_devolucao com motivo classificado e descricao nao vazia.
-    Combina descricao_motivo + observacoes_logistica para texto rico.
+    Combina descricao_motivo + info_complementar para texto rico.
 
     Returns:
         Lista de dicts com nf_devolucao_id, descricao_text, motivo_classificado,
@@ -59,12 +59,12 @@ def collect_devolucao_reasons() -> List[Dict[str, Any]]:
             nd.id,
             nd.motivo,
             nd.descricao_motivo,
-            nd.observacoes_logistica
+            nd.info_complementar
         FROM nf_devolucao nd
         WHERE nd.motivo IS NOT NULL
             AND nd.motivo != ''
             AND (nd.descricao_motivo IS NOT NULL AND nd.descricao_motivo != ''
-                 OR nd.observacoes_logistica IS NOT NULL AND nd.observacoes_logistica != '')
+                 OR nd.info_complementar IS NOT NULL AND nd.info_complementar != '')
         ORDER BY nd.id
     """))
 
