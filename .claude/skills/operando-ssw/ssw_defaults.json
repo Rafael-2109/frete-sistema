@@ -27,6 +27,16 @@
     "dv_conta": "1",
     "_nota": "Banco Inter — extraido da unidade CGR (2026-02-17)"
   },
+  "endereco_fiscal": {
+    "logradouro": "RUA VICTORIO MARCHEZINE",
+    "numero": "61",
+    "complemento": "",
+    "bairro": "JARDIM SABRINA",
+    "cep": "06530581",
+    "ddd": "11",
+    "telefone": "47059494",
+    "_nota": "Sede CarVia — Santana de Parnaiba/SP"
+  },
   "opcao_401": {
     "ativa": "S",
     "aereo": "N",
