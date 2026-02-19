@@ -138,6 +138,7 @@ class RecebimentoLfOdooService:
     # Retry NF-e — transmissao SEFAZ (erro transitorio)
     NFE_RETRY_MAX = 5           # 5 tentativas (procedimento fiscal: retry a cada 2 min, ate 10 min)
     NFE_RETRY_INTERVAL = 120    # 2 minutos entre tentativas
+    NFE_SCHEMA_ERROR_THRESHOLD = 3  # Apos 3 erros consecutivos de Schema XML, tentar workaround
 
     # =================================================================
     # Metodos principais
@@ -2517,6 +2518,14 @@ class RecebimentoLfOdooService:
           - Criterio de sucesso: situacao_nf='autorizado' + chave_nf de 44 digitos
           - excecao_autorizado SEM chave = rejeicao transitoria (retry)
 
+        Workaround Schema XML (erro SEFAZ 225):
+          - Se "Falha no Schema XML" persistir por NFE_SCHEMA_ERROR_THRESHOLD
+            tentativas consecutivas, tenta action_previsualizar_xml_nfe
+            para forcar re-geracao do XML
+          - Workaround testado: via XML-RPC tem eficacia limitada
+            (funciona melhor via Odoo UI)
+          - Se falhar: erro inclui instrucao para workaround manual
+
         IMPORTANTE: NAO setar l10n_br_situacao_nf='autorizado' manualmente.
         A transmissao real via SEFAZ e feita por action_gerar_nfe.
         """
@@ -2671,6 +2680,8 @@ class RecebimentoLfOdooService:
             # --- Loop de retry para erros transitorios da SEFAZ ---
             # Procedimento fiscal: verificar status + retry a cada 2 min, ate 30 min total
             nfe_autorizada = False
+            schema_error_count = 0  # Contador de erros consecutivos de Schema XML
+            workaround_tentado = False
             for attempt in range(1, self.NFE_RETRY_MAX + 1):
                 # Ler estado atual da invoice (sempre fresco)
                 inv_check = odoo.execute_kw(
@@ -2678,7 +2689,7 @@ class RecebimentoLfOdooService:
                     [[invoice_id]],
                     {'fields': [
                         'name', 'l10n_br_situacao_nf', 'l10n_br_chave_nf',
-                        'l10n_br_cstat_nf',
+                        'l10n_br_cstat_nf', 'l10n_br_xmotivo_nf',
                     ]}
                 )
                 if not inv_check:
@@ -2689,6 +2700,7 @@ class RecebimentoLfOdooService:
                 sit = check_data.get('l10n_br_situacao_nf')
                 chave = check_data.get('l10n_br_chave_nf')
                 cstat = check_data.get('l10n_br_cstat_nf')
+                xmotivo = check_data.get('l10n_br_xmotivo_nf', '')
                 inv_name = check_data.get('name', inv_name)
 
                 # Sucesso: autorizado COM chave de 44 digitos
@@ -2711,12 +2723,56 @@ class RecebimentoLfOdooService:
                     nfe_autorizada = True
                     break
 
+                # Detectar erro persistente de Schema XML (SEFAZ 225)
+                is_schema_error = (
+                    xmotivo and 'schema xml' in str(xmotivo).lower()
+                )
+                if is_schema_error:
+                    schema_error_count += 1
+                else:
+                    schema_error_count = 0
+
+                # Workaround XML Preview: se mesmo erro Schema XML persistir
+                # apos NFE_SCHEMA_ERROR_THRESHOLD tentativas, tentar
+                # action_previsualizar_xml_nfe para forcar re-geracao do XML
+                if (
+                    is_schema_error
+                    and schema_error_count >= self.NFE_SCHEMA_ERROR_THRESHOLD
+                    and not workaround_tentado
+                ):
+                    workaround_tentado = True
+                    logger.warning(
+                        f"  [workaround_xml_preview] Erro Schema XML persistente "
+                        f"({schema_error_count}x consecutivo). "
+                        f"Tentando action_previsualizar_xml_nfe para re-gerar XML..."
+                    )
+                    self._atualizar_redis(
+                        rec.id, 6, 23, rec.total_etapas,
+                        'Erro Schema XML persistente — tentando workaround...'
+                    )
+                    try:
+                        odoo.execute_kw(
+                            'account.move', 'action_previsualizar_xml_nfe',
+                            [[invoice_id]],
+                            timeout_override=self.FIRE_TIMEOUT
+                        )
+                        logger.info(
+                            f"  [workaround_xml_preview] "
+                            f"action_previsualizar_xml_nfe executado"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"  [workaround_xml_preview] Falhou: {e}"
+                        )
+                    time.sleep(10)
+
                 # Rejeicao transitoria: excecao_autorizado SEM chave, ou rascunho
                 if attempt < self.NFE_RETRY_MAX:
                     logger.warning(
                         f"  NF-e {inv_name} nao autorizada "
                         f"(tentativa {attempt}/{self.NFE_RETRY_MAX}, "
-                        f"situacao={sit}, cstat={cstat}, chave={chave}). "
+                        f"situacao={sit}, cstat={cstat}, chave={chave}, "
+                        f"xmotivo={xmotivo}). "
                         f"Retry em {self.NFE_RETRY_INTERVAL}s..."
                     )
                     self._atualizar_redis(
@@ -2751,15 +2807,27 @@ class RecebimentoLfOdooService:
                     logger.error(
                         f"  NF-e {inv_name} NAO autorizada apos "
                         f"{self.NFE_RETRY_MAX} tentativas (~{self.NFE_RETRY_MAX * self.NFE_RETRY_INTERVAL // 60} min). "
-                        f"situacao={sit}, cstat={cstat}, chave={chave}"
+                        f"situacao={sit}, cstat={cstat}, chave={chave}, "
+                        f"xmotivo={xmotivo}"
                     )
 
             if not nfe_autorizada:
-                raise ValueError(
+                # Mensagem de erro especifica para Schema XML
+                erro_base = (
                     f"NF-e transfer {inv_name} nao autorizada apos "
                     f"{self.NFE_RETRY_MAX} tentativas "
-                    f"(~{self.NFE_RETRY_MAX * self.NFE_RETRY_INTERVAL // 60} min). "
-                    f"Verificar manualmente no Odoo."
+                    f"(~{self.NFE_RETRY_MAX * self.NFE_RETRY_INTERVAL // 60} min)."
+                )
+                if schema_error_count > 0:
+                    raise ValueError(
+                        f"{erro_base} "
+                        f"Erro SEFAZ persistente: '{xmotivo}' "
+                        f"({schema_error_count}x consecutivo). "
+                        f"Workaround: no Odoo UI, clicar 'Transmitir' e depois "
+                        f"'Pre-visualizar XML NF-e' para forcar re-geracao do XML."
+                    )
+                raise ValueError(
+                    f"{erro_base} Verificar manualmente no Odoo."
                 )
 
         elif inv_state == 'posted' and situacao_nf == 'autorizado':
@@ -2840,11 +2908,18 @@ class RecebimentoLfOdooService:
         Etapa 25: Encontrar DFe no CD, upload XML/PDF, e processar.
 
         Fluxo:
-        1. Buscar DFe no CD por chave
+        1. Buscar DFe no CD por chave (ou numero NF + CNPJ)
         2. Se nao encontrar, criar DFe manual via upload
-        3. Garantir XML/PDF preenchidos
-        4. action_processar_arquivo_manual
+        3. Force-update XML/PDF da invoice (fonte de verdade)
+        4. action_processar_arquivo_manual (somente se status < 03)
         5. Poll ate status '04' (PO Vinculado) ou '03' (Confirmado)
+
+        Notas:
+        - XML do DFe e sempre atualizado com o da invoice, pois DFe via
+          SEFAZ pode ter XML parcial (ex: excecao_autorizado antes da correcao).
+        - Status 03 (Confirmado): pula action_processar_arquivo_manual pois
+          DFe ja foi processado. Re-chamar causa "XML nao esta completa" se
+          o XML original era parcial (bug SEFAZ 225 / Schema XML).
         """
         rec = self._get_recebimento()
         if rec.etapa_atual >= 25:
@@ -2947,17 +3022,25 @@ class RecebimentoLfOdooService:
             })
             logger.info(f"  DFe CD criado: ID={dfe_id}")
 
-        # 4. Garantir XML preenchido
+        # 4. Garantir XML/PDF atualizados no DFe
+        # IMPORTANTE: Sempre atualizar XML da invoice (fonte de verdade) — o DFe pode
+        # ter XML desatualizado (ex: recebido via SEFAZ durante excecao_autorizado)
         dfe_check = odoo.execute_kw(
             'l10n_br_ciel_it_account.dfe', 'read',
             [[dfe_id]],
             {'fields': ['l10n_br_xml_dfe', 'l10n_br_pdf_dfe', 'l10n_br_status']}
         )
-        if dfe_check and not dfe_check[0].get('l10n_br_xml_dfe'):
+        if dfe_check and xml_b64:
+            had_xml = bool(dfe_check[0].get('l10n_br_xml_dfe'))
+            # Sempre atualizar XML da invoice (fonte de verdade).
+            # DFe pode ter XML desatualizado (ex: SEFAZ durante excecao_autorizado).
             odoo.write('l10n_br_ciel_it_account.dfe', [dfe_id], {
                 'l10n_br_xml_dfe': xml_b64,
             })
-            logger.info(f"  XML uploaded para DFe CD {dfe_id}")
+            if had_xml:
+                logger.info(f"  XML atualizado no DFe CD {dfe_id} (force-update da invoice)")
+            else:
+                logger.info(f"  XML uploaded para DFe CD {dfe_id}")
 
         if pdf_b64 and dfe_check and not dfe_check[0].get('l10n_br_pdf_dfe'):
             odoo.write('l10n_br_ciel_it_account.dfe', [dfe_id], {
@@ -2966,8 +3049,11 @@ class RecebimentoLfOdooService:
             logger.info(f"  PDF uploaded para DFe CD {dfe_id}")
 
         # 5. action_processar_arquivo_manual [fire_and_poll]
+        # NOTA: Status 03 = Confirmado (DFe ja processado, dados extraidos).
+        # Nao re-processar — causa "XML nao esta completa" se XML original era parcial.
+        # Status 04/05 = PO vinculado/concluido (tambem pular).
         current_status = dfe_check[0].get('l10n_br_status') if dfe_check else '01'
-        if current_status not in ('04', '05'):
+        if current_status not in ('03', '04', '05'):
             logger.info(f"  Chamando action_processar_arquivo_manual no DFe CD {dfe_id}...")
 
             def fire_processar():
@@ -2991,6 +3077,11 @@ class RecebimentoLfOdooService:
             self._fire_and_poll(
                 odoo, fire_processar, poll_processar,
                 'Processar DFe CD'
+            )
+        else:
+            logger.info(
+                f"  DFe CD {dfe_id} ja em status {current_status} "
+                f"(confirmado/vinculado) — pulando action_processar_arquivo_manual"
             )
 
         # Corrigir company_id das DFe lines: action_processar_arquivo_manual
