@@ -93,6 +93,13 @@
   ],
   "indices": [
     {
+      "name": "ix_correcao_data_nf_credito_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_correcao_data_emissao",
       "columns": [
         "data_emissao"
@@ -110,13 +117,6 @@
       "name": "ix_correcao_data_nf_credito_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_correcao_data_nf_credito_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
       ],
       "unique": false
     }

@@ -72,9 +72,9 @@
   ],
   "indices": [
     {
-      "name": "idx_nf_ref_numero",
+      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
       "columns": [
-        "numero_nf"
+        "chave_nf"
       ],
       "unique": false
     },
@@ -100,9 +100,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
+      "name": "idx_nf_ref_numero",
       "columns": [
-        "chave_nf"
+        "numero_nf"
       ],
       "unique": false
     },

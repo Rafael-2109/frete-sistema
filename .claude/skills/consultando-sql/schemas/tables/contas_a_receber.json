@@ -87,6 +87,10 @@
       "description": "x_studio_status_de_pagamento"
     },
     {
+      "name": "metodo_baixa",
+      "type": "varchar(30)"
+    },
+    {
       "name": "valor_titulo",
       "type": "float"
     },
@@ -201,27 +205,6 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_conta_receber_vencimento",
       "columns": [
         "vencimento"
@@ -243,6 +226,27 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_receber_uf_cliente",
+      "columns": [
+        "uf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_conta_receber_nf",
       "columns": [
         "titulo_nf"
@@ -250,16 +254,23 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_titulo_nf",
+      "name": "ix_contas_a_receber_metodo_baixa",
       "columns": [
-        "titulo_nf"
+        "metodo_baixa"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_uf_cliente",
+      "name": "ix_contas_a_receber_cnpj",
       "columns": [
-        "uf_cliente"
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_titulo_nf",
+      "columns": [
+        "titulo_nf"
       ],
       "unique": false
     }

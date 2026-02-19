@@ -153,28 +153,6 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
-      "columns": [
-        "nf_devolucao_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "idx_ocorrencia_responsavel",
-      "columns": [
-        "responsavel",
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_ocorrencia_data_abertura",
-      "columns": [
-        "data_abertura"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_ocorrencia_devolucao_status",
       "columns": [
         "status"
@@ -197,6 +175,14 @@
       "unique": false
     },
     {
+      "name": "idx_ocorrencia_categoria",
+      "columns": [
+        "categoria",
+        "subcategoria"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_ocorrencia_devolucao_ativo",
       "columns": [
         "ativo"
@@ -204,10 +190,24 @@
       "unique": false
     },
     {
-      "name": "idx_ocorrencia_categoria",
+      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
       "columns": [
-        "categoria",
-        "subcategoria"
+        "nf_devolucao_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_ocorrencia_responsavel",
+      "columns": [
+        "responsavel",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ocorrencia_data_abertura",
+      "columns": [
+        "data_abertura"
       ],
       "unique": false
     }

@@ -101,6 +101,13 @@
       "unique": false
     },
     {
+      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
+      "columns": [
+        "codigo_pedido_cliente"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_portal_sendas_planilha_modelo_unidade_destino",
       "columns": [
         "unidade_destino"
@@ -113,13 +120,6 @@
         "unidade_destino",
         "codigo_pedido_cliente",
         "codigo_produto_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
-      "columns": [
-        "codigo_pedido_cliente"
       ],
       "unique": false
     }
