@@ -264,19 +264,24 @@ except Exception as e:
 
 ### Preparar Extrato ANTES de Reconciliar (OBRIGATORIO)
 
-**SEMPRE** usar `_preparar_extrato_para_reconciliacao()` ANTES de `_executar_reconcile()`.
-Este metodo faz TUDO em UM ciclo draft→write→post:
+**SEMPRE** usar metodo consolidado ANTES de reconciliar. Dois metodos disponiveis:
+- `baixa_pagamentos_service.preparar_extrato_para_reconciliacao(move_id, stmt_line_id, partner_id, rotulo)` — publico, IDs raw (usado em comprovantes)
+- `extrato_conciliacao_service._preparar_extrato_para_reconciliacao(item, partner_id, partner_name)` — privado, ExtratoItem
 
 ```python
-# 1. ANTES de reconciliar: preparar extrato (conta + partner + rotulo)
+# Fluxo extrato_conciliacao_service (ExtratoItem):
 p_id, p_name = self._extrair_partner_dados(titulo_odoo)
 self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
-
-# 2. Reconciliar (POR ULTIMO!)
 self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+
+# Fluxo comprovante_lancamento_service (IDs raw):
+rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(valor, nome, data)
+baixa_service.preparar_extrato_para_reconciliacao(move_id, stmt_line_id, partner_id, rotulo)
+debit_line = baixa_service.buscar_linha_debito_extrato(move_id)
+baixa_service.reconciliar(credit_line_id, debit_line)
 ```
 
-**Ordem DENTRO de `_preparar_extrato_para_reconciliacao()`:**
+**Ordem DENTRO do metodo consolidado:**
 1. `button_draft`
 2. Write `partner_id` + `payment_ref` na statement_line (pode regenerar move_lines!)
 3. Write `name` nas move_lines (re-busca IDs!)
@@ -284,6 +289,7 @@ self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
 5. `action_post`
 
 > **GOTCHA CRITICO**: account_id DEVE ser ULTIMO write. Write na statement_line regenera move_lines, revertendo account_id.
+> NUNCA fazer as 3 operacoes em chamadas separadas (cada uma faz draft→post, causando O11/O12).
 > `_atualizar_campos_extrato()` esta **DEPRECADO** — NAO usar.
 > Ver [erros-comuns.md](references/erros-comuns.md) Erro 11 e Erro 12.
 

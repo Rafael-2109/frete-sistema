@@ -311,7 +311,10 @@ Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para
 REGENERAR as `account.move.line` associadas. Se `account_id` foi escrito ANTES, sera REVERTIDO.
 Por isso account_id DEVE ser o ULTIMO write antes de action_post.
 
-**REGRA**: Usar `_preparar_extrato_para_reconciliacao()` que faz TUDO em UM ciclo draft→write→post, ANTES do reconcile.
+**REGRA**: Usar metodo consolidado que faz TUDO em UM ciclo draft→write→post, ANTES do reconcile:
+- `baixa_pagamentos_service.preparar_extrato_para_reconciliacao()` (publico, IDs raw)
+- `extrato_conciliacao_service._preparar_extrato_para_reconciliacao()` (privado, ExtratoItem)
+NUNCA fazer as 3 operacoes em chamadas separadas.
 
 ---
 

@@ -55,7 +55,7 @@ extrato_matching_service.py:46 vs pagamento_matching_service.py:69.
 Atraso > 10 dias garante revisao manual (penalidade -11, score max 89 < 90).
 
 ### TRANSITORIA (22199) -> PENDENTES (26868) antes de reconciliar
-Extrato Odoo usa conta TRANSITORIA. Trocar para PENDENTES via `_safe_write_statement_line()` ANTES de reconciliar. Sem troca: reconciliacao silenciosamente errada.
+Extrato Odoo usa conta TRANSITORIA. Usar `preparar_extrato_para_reconciliacao()` (em `baixa_pagamentos_service.py`, publico) ou `_preparar_extrato_para_reconciliacao()` (em `extrato_conciliacao_service.py`, privado) ANTES de reconciliar. Sem troca: reconciliacao silenciosamente errada.
 
 ### Write-off wizard ja posta E reconcilia
 Wizard `account.payment.register` com juros: cria + posta + reconcilia automaticamente.
@@ -99,8 +99,8 @@ Para raiz: formatar como "33.652.456" (8 digitos com pontos).
 ### ConciliacaoSyncService usa flush(), NAO commit()
 O CALLER controla o commit. Adicionar commit() dentro quebra atomicidade.
 
-### Constantes duplicadas entre services
-`CONTA_TRANSITORIA` e `CONTA_PAGAMENTOS_PENDENTES` definidas em baixa_pagamentos_service E extrato_conciliacao_service. Manter sincronizadas.
+### Constantes centralizadas em constants.py
+`CONTA_TRANSITORIA` e `CONTA_PAGAMENTOS_PENDENTES` definidas em `app/financeiro/constants.py`. Importar de la, NAO definir localmente.
 
 ---
 

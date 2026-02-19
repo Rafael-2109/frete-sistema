@@ -229,7 +229,9 @@ if match:
 
 Para boletos, o Odoo NAO preenche automaticamente 3 campos. **TODOS devem ser escritos ANTES do reconcile.**
 
-**Usar `_preparar_extrato_para_reconciliacao()`** que faz tudo em UM ciclo draft→write→post:
+Usar metodo consolidado que faz tudo em UM ciclo draft→write→post:
+- `baixa_pagamentos_service.preparar_extrato_para_reconciliacao(move_id, stmt_line_id, partner_id, rotulo)` — publico, IDs raw
+- `extrato_conciliacao_service._preparar_extrato_para_reconciliacao(item, partner_id, partner_name)` — privado, ExtratoItem
 
 | Ordem | O que | GOTCHA |
 |-------|-------|--------|
@@ -242,6 +244,7 @@ Para boletos, o Odoo NAO preenche automaticamente 3 campos. **TODOS devem ser es
 
 **GOTCHA O12:** Write na statement_line faz Odoo REGENERAR move_lines, revertendo account_id se escrito antes.
 **GOTCHA O11:** `button_draft` em move reconciliado DESFAZ a reconciliacao. Reconcile SEMPRE por ultimo.
+NUNCA fazer as 3 operacoes em chamadas separadas — usar metodo consolidado.
 
 `_atualizar_campos_extrato()` esta **DEPRECADO** — NAO usar.
 

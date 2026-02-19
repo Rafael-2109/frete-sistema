@@ -412,8 +412,9 @@ Escrever em `/tmp/subagent-findings/dev-odoo-{contexto}.md` com:
 
 Ao criar/modificar service que reconcilia payment ↔ extrato:
 
-**Usar `_preparar_extrato_para_reconciliacao(item, partner_id, partner_name)`** ANTES de reconciliar.
-Faz TUDO em UM ciclo draft→write→post:
+Usar metodo consolidado que faz TUDO em UM ciclo draft→write→post ANTES de reconciliar:
+- `baixa_pagamentos_service.preparar_extrato_para_reconciliacao(move_id, stmt_line_id, partner_id, rotulo)` — publico, IDs raw
+- `extrato_conciliacao_service._preparar_extrato_para_reconciliacao(item, partner_id, partner_name)` — privado, ExtratoItem
 
 - [ ] 1. `button_draft` no move do extrato
 - [ ] 2. Write `partner_id` + `payment_ref` na statement_line (pode regenerar move_lines!)
@@ -427,5 +428,6 @@ Faz TUDO em UM ciclo draft→write→post:
 **GOTCHA O12:** Write na `account.bank.statement.line` faz Odoo REGENERAR `account.move.line`, revertendo `account_id` se escrito antes. Por isso account_id DEVE ser ULTIMO.
 
 **GOTCHA O11:** `button_draft` em move reconciliado DESFAZ a reconciliacao. NUNCA chamar `_atualizar_campos_extrato()` apos reconcile — metodo **DEPRECADO**.
+NUNCA fazer as 3 operacoes (trocar conta, atualizar partner, atualizar rotulo) em chamadas separadas — cada uma faz seu proprio ciclo draft→post, causando O11/O12.
 
 **Ref:** `app/financeiro/CLAUDE.md` (O11, O12) e `.claude/references/odoo/GOTCHAS.md`

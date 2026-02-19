@@ -265,7 +265,10 @@ class BaixaPagamentosService:
 
     def buscar_linha_debito_extrato(self, move_id: int) -> Optional[int]:
         """
-        Busca a linha de DÉBITO do extrato (conta TRANSITÓRIA).
+        Busca a linha de DÉBITO do extrato (conta TRANSITÓRIA ou PENDENTES).
+
+        Prefere linhas na conta TRANSITÓRIA (22199) ou PENDENTES (26868).
+        Após preparar_extrato_para_reconciliacao(), a conta já pode ser PENDENTES.
 
         Args:
             move_id: ID do account.move do extrato

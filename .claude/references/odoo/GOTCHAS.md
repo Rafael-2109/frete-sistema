@@ -191,47 +191,42 @@ Para boletos bancarios, o Odoo **NAO** auto-preenche 3 campos do extrato porque 
 
 **Rotulo padrao:** `"Pagamento de fornecedor R$ {valor_br} - {FORNECEDOR} - {DD/MM/YYYY}"`
 
-### Regra: SEMPRE Corrigir ao Reconciliar com Extrato
+### Regra: SEMPRE Usar preparar_extrato_para_reconciliacao() (corrigido 2026-02-19)
+
+**NUNCA** fazer as operacoes em chamadas separadas (bug O11/O12). Usar metodo consolidado:
 
 ```python
-from app.financeiro.services.baixa_pagamentos_service import (
-    BaixaPagamentosService, CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES
-)
+from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
 
 baixa_service = BaixaPagamentosService()
 
-# 1. ANTES de reconciliar: trocar conta TRANSITORIA → PENDENTES
-baixa_service.trocar_conta_move_line_extrato(
-    move_id=extrato_move_id,
-    conta_origem=CONTA_TRANSITORIA,       # 22199
-    conta_destino=CONTA_PAGAMENTOS_PENDENTES,  # 26868
-)
-
-# 2. Buscar linha de debito do extrato (agora na conta PENDENTES)
-debit_line_extrato = baixa_service.buscar_linha_debito_extrato(extrato_move_id)
-
-# 3. Reconciliar normalmente
-baixa_service.reconciliar(payment_credit_line_id, debit_line_extrato)
-
-# 4. DEPOIS: atualizar partner_id
-baixa_service.atualizar_statement_line_partner(statement_line_id, partner_id)
-
-# 5. DEPOIS: atualizar rotulo
+# 1. ANTES de reconciliar: preparar extrato (conta + partner + rotulo em UM ciclo)
 rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
     valor=float(valor_pago),
     nome_fornecedor=nome_parceiro,
     data_pagamento=data_pagamento,
 )
-baixa_service.atualizar_rotulo_extrato(extrato_move_id, statement_line_id, rotulo)
+baixa_service.preparar_extrato_para_reconciliacao(
+    move_id=extrato_move_id,
+    statement_line_id=statement_line_id,
+    partner_id=partner_id,
+    rotulo=rotulo,
+)
+
+# 2. Buscar linha de debito do extrato (agora na conta PENDENTES)
+debit_line_extrato = baixa_service.buscar_linha_debito_extrato(extrato_move_id)
+
+# 3. Reconciliar POR ULTIMO
+baixa_service.reconciliar(payment_credit_line_id, debit_line_extrato)
 ```
 
 ### Services que JA Implementam
 
-| Service | Metodos / Local |
-|---------|-----------------|
-| `baixa_pagamentos_service.py` | Metodos publicos: `trocar_conta_move_line_extrato()`, `atualizar_statement_line_partner()`, `atualizar_rotulo_extrato()`, `formatar_rotulo_pagamento()` (estatico) |
-| `comprovante_lancamento_service.py` | Passos 5a-5e em `lancar_no_odoo()` |
-| `extrato_conciliacao_service.py` | Metodos privados: `_trocar_conta_extrato()`, `_atualizar_campos_extrato()`, `_extrair_partner_dados()` |
+| Service | Metodo Consolidado |
+|---------|-------------------|
+| `baixa_pagamentos_service.py` | `preparar_extrato_para_reconciliacao()` (publico, IDs raw) + helpers legados (`trocar_conta_move_line_extrato`, `atualizar_statement_line_partner`, `atualizar_rotulo_extrato`) |
+| `comprovante_lancamento_service.py` | Usa `preparar_extrato_para_reconciliacao()` em `lancar_no_odoo()` e `_reconciliar_grupo_com_extrato()` |
+| `extrato_conciliacao_service.py` | `_preparar_extrato_para_reconciliacao()` (privado, opera em ExtratoItem) |
 | `vincular_extrato_fatura_excel.py` (script) | `batch_write_partner_statement_lines()`, `batch_write_conta_pendentes()`, `ajustar_name_linha_extrato()` |
 
 ### Services que NAO Precisam (referencia)
