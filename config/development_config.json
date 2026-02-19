@@ -17,12 +17,11 @@
     "timeout_seconds": 120
   },
   "claude_api": {
-    "model": "claude-sonnet-4-20250514",
+    "model": "claude-sonnet-4-6",
     "max_tokens": 8192,
     "temperature_balanced": 0.7,
     "temperature_precision": 0.1,
     "temperature_creative": 0.9,
-    "top_p": 0.95,
     "timeout_seconds": 120,
     "retry_attempts": 3,
     "max_output_tokens": 8192

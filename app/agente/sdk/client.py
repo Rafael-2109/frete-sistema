@@ -453,9 +453,6 @@ Nunca invente informações."""
         image_files: Optional[List[dict]] = None,
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
-        # LEGADO: aceitar pooled_client e thinking_enabled para compatibilidade
-        pooled_client: Any = None,
-        thinking_enabled: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando query() + resume.
@@ -470,16 +467,10 @@ Nunca invente informações."""
             image_files: Lista de imagens em formato Vision API (FEAT-032)
             sdk_session_id: Session ID do SDK para resume (do DB)
             can_use_tool: Callback de permissão
-            pooled_client: LEGADO — ignorado (mantido para compatibilidade)
-            thinking_enabled: LEGADO — backward compat (convertido para effort_level)
 
         Yields:
             StreamEvent com tipo e conteúdo
         """
-        # Backward compat: thinking_enabled → effort_level
-        if effort_level == "off" and thinking_enabled:
-            effort_level = "high"
-
         async for event in self._stream_response(
             prompt=prompt,
             user_name=user_name,

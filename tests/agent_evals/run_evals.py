@@ -165,7 +165,7 @@ def grade_model(response_text: str, grading_config: dict) -> tuple[bool, float, 
 
         client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         evaluation = client.messages.create(
-            model="claude-haiku-4-5-20250514",
+            model="claude-haiku-4-5-20251001",
             max_tokens=200,
             messages=[{
                 "role": "user",

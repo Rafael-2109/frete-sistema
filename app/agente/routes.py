@@ -130,12 +130,7 @@ def api_chat():
         message = data['message'].strip()
         session_id = data.get('session_id')  # Nosso session_id (não do SDK)
         model = data.get('model')
-        # Effort level com backward compat para clients antigos
-        effort_level = data.get('effort_level', None)
-        if effort_level is None:
-            # Backward compat: clients antigos enviam thinking_enabled
-            thinking_enabled = data.get('thinking_enabled', False)
-            effort_level = 'high' if thinking_enabled else 'off'
+        effort_level = data.get('effort_level', 'off')
         plan_mode = data.get('plan_mode', False)
         files = data.get('files', [])
 
