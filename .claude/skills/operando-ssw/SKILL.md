@@ -1,7 +1,7 @@
 ---
 name: operando-ssw
 description: |
-  Executa operacoes de escrita no SSW via Playwright. Cadastra unidades (401), cidades atendidas (402), fornecedores (478), transportadoras (485) e comissoes (408). Requer --dry-run na primeira execucao. Usa ssw_defaults.json para valores padrao CarVia.
+  Executa operacoes de escrita no SSW via Playwright. Cadastra unidades (401), cidades atendidas (402), fornecedores (478), transportadoras (485) e comissoes (408). Cota frete (002). Requer --dry-run na primeira execucao. Usa ssw_defaults.json para valores padrao CarVia.
 
   USAR QUANDO:
   - Cadastrar unidade: "cadastre unidade CGR no SSW", "criar unidade parceira"
@@ -41,7 +41,6 @@ decision_tree: |
     → Se coletar=S: perguntar CEP origem (local de coleta)
     → cotar_frete_ssw_002.py --cnpj-pagador X --cep-destino X --peso X --valor X [--coletar N] [--entregar S] --dry-run
     → Exibir parametros_assumidos antes de confirmar
-    → Ver SCRIPTS.md secao "Workflow do Agente" para fluxo completo
   Consultar/navegar SSW (sem alterar)?
     → NÃO usar esta skill. Usar **acessando-ssw**
 allowed-tools: Read, Bash, Glob, Grep
@@ -76,27 +75,40 @@ Agente Web
 ```
 
 Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
-Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_campos()` → `montar_campos()` → loop FIELD_MAP → `gerar_saida()`.
+
+**Padrao interno**: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_campos()` → `montar_campos()` → loop FIELD_MAP → `gerar_saida()`.
 
 ---
 
-## Scripts — Referencia Detalhada
-
-**Para parametros completos, FIELD_MAP, limites e gotchas**: LER `SCRIPTS.md`
+## Scripts
 
 | # | Script | Opcao | Proposito |
 |---|--------|-------|-----------|
 | 0 | `ssw_common.py` | — | Funcoes Playwright compartilhadas (login, popup, campos) |
 | 1 | `cadastrar_unidade_401.py` | 401 | Cadastrar unidade operacional (31 campos) |
 | 2 | `cadastrar_cidades_402.py` | 402 | Cadastrar 1-3 cidades visiveis na grid (ATU limitado) |
-| 3 | `exportar_cidades_402.py` | 402 | Exportar CSV de cidades atendidas (passo 1 do workflow CSV) |
+| 3 | `exportar_cidades_402.py` | 402 | Exportar CSV de cidades atendidas (passo 1 workflow CSV) |
 | 4 | `importar_cidades_402.py` | 402 | Importar cidades via CSV (PREFERIDO para bulk) |
 | 5 | `cadastrar_fornecedor_478.py` | 478 | Cadastrar fornecedor (12 campos, prerequisito 485/408) |
 | 6 | `cadastrar_transportadora_485.py` | 485 | Cadastrar transportadora (3 campos) |
 | 7 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos, geral) |
-| 8 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, importacao em lote) |
-| 9 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW via Playwright |
-| 10 | `cotar_frete_ssw_002.py` | 002 | Cotar frete no SSW (simular proposta com calcula('S')) |
+| 8 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, lote) |
+| 9 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW |
+| 10 | `cotar_frete_ssw_002.py` | 002 | Cotar frete no SSW (simular proposta) |
+
+---
+
+## References (carregar sob demanda)
+
+| Quando o agente precisa de... | Ler |
+|-------------------------------|-----|
+| Cadastrar unidade/cidade/fornecedor/transportadora (401, 402, 478, 485) | [CADASTROS.md](references/CADASTROS.md) |
+| Criar comissao, gerar/importar CSV 408 | [COMISSOES.md](references/COMISSOES.md) |
+| Cotar frete na 002 (params, workflow, gotchas) | [COTACAO.md](references/COTACAO.md) |
+| Funcoes ssw_common, defaults, batch, mapeamento | [SSW_COMMON.md](references/SSW_COMMON.md) |
+| Cadastrar unidade passo-a-passo | `POP-A02-cadastrar-unidade-parceira.md` |
+| Cadastrar cidades passo-a-passo | `POP-A03-cadastrar-cidades.md` |
+| Implantar rota completa | `POP-A10-implantar-nova-rota.md` |
 
 ---
 
@@ -110,14 +122,3 @@ Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_
 6. **408** — Cadastrar comissao de unidade
 7. **420** — Cadastrar tabelas de preco (futuro)
 8. **002** — Verificar cotacao (`cotar_frete_ssw_002.py`)
-
----
-
-## References (sob demanda)
-
-| Gatilho | Reference a Ler |
-|---------|-----------------|
-| Cadastrar unidade passo-a-passo | `POP-A02-cadastrar-unidade-parceira.md` |
-| Cadastrar cidades passo-a-passo | `POP-A03-cadastrar-cidades.md` |
-| Implantar rota completa | `POP-A10-implantar-nova-rota.md` |
-| FIELD_MAP, limites, erros SSW | `SCRIPTS.md` |
