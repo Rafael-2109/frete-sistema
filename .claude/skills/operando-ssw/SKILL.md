@@ -19,10 +19,11 @@ description: |
 decision_tree: |
   Cadastrar unidade parceira (tipo T)?
     → cadastrar_unidade_401.py --sigla X --tipo T --razao-social "..." --dry-run
-  Importar cidades em massa via CSV (>5 cidades)?
-    → importar_cidades_402.py --csv /tmp/cidades.csv --dry-run
-  Cadastrar poucas cidades na grid (<5)?
+  Alterar/importar cidades na 402 (qualquer quantidade)?
+    → PREFERIR CSV: exportar_cidades_402.py --uf XX → modificar → importar_cidades_402.py --csv /tmp/cidades.csv --dry-run
+  Cadastrar 1-3 cidades VISIVEIS na grid 402?
     → cadastrar_cidades_402.py --uf XX --unidade XXX --cidades '[...]' --dry-run
+    (LIMITACAO: so funciona com cidades no viewport da virtual scroll)
   Cadastrar/ativar fornecedor (478)?
     → cadastrar_fornecedor_478.py --cnpj X --nome "..." --especialidade TRANSPORTADORA --dry-run
   Cadastrar transportadora (485)?
@@ -79,13 +80,14 @@ Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_
 |---|--------|-------|-----------|
 | 0 | `ssw_common.py` | — | Funcoes Playwright compartilhadas (login, popup, campos) |
 | 1 | `cadastrar_unidade_401.py` | 401 | Cadastrar unidade operacional (31 campos) |
-| 2 | `cadastrar_cidades_402.py` | 402 | Cadastrar cidades na grid (<5 cidades) |
-| 3 | `importar_cidades_402.py` | 402 | Importar cidades via CSV (>5 cidades) |
-| 4 | `cadastrar_fornecedor_478.py` | 478 | Cadastrar fornecedor (12 campos, prerequisito 485/408) |
-| 5 | `cadastrar_transportadora_485.py` | 485 | Cadastrar transportadora (3 campos) |
-| 6 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos, geral) |
-| 7 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, importacao em lote) |
-| 8 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW via Playwright |
+| 2 | `cadastrar_cidades_402.py` | 402 | Cadastrar 1-3 cidades visiveis na grid (ATU limitado) |
+| 3 | `exportar_cidades_402.py` | 402 | Exportar CSV de cidades atendidas (passo 1 do workflow CSV) |
+| 4 | `importar_cidades_402.py` | 402 | Importar cidades via CSV (PREFERIDO para bulk) |
+| 5 | `cadastrar_fornecedor_478.py` | 478 | Cadastrar fornecedor (12 campos, prerequisito 485/408) |
+| 6 | `cadastrar_transportadora_485.py` | 485 | Cadastrar transportadora (3 campos) |
+| 7 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos, geral) |
+| 8 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, importacao em lote) |
+| 9 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW via Playwright |
 
 ---
 

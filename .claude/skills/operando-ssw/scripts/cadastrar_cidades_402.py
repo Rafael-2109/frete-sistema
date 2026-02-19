@@ -2,6 +2,11 @@
 """
 cadastrar_cidades_402.py — Cadastra cidades atendidas no SSW (opcao 402).
 
+LIMITACAO: SSW 402 usa virtual scroll (~90 cidades no DOM de 400+ por UF).
+Cidades fora do viewport NAO podem ser alteradas via ATU — hidden inputs
+injetados sao ignorados pelo servidor. Para bulk (>3 cidades) ou cidades
+fora do viewport, PREFERIR importar_cidades_402.py (workflow CSV).
+
 Fluxo:
   1. Login SSW
   2. Abre opcao 402 (popup)
@@ -214,32 +219,29 @@ async def encontrar_cidade_na_grid(popup, cidade_nome, html_response=None):
     if result:
         return result
 
-    # Estrategia 2: Regex no XML bruto (fallback)
+    # Estrategia 2: Regex no XML bruto (fallback para lazy rendering)
     # O HTML interceptado usa XML customizado: <r><f0>UF</f0><f1>CIDADE</f1>...<f20>seq</f20></r>
-    # cid = (rid * 17) onde rid e a posicao da linha (0-based)
+    # rid = posicao ordinal da <r> no XML (0-based)
+    # cid = rid * 17 (formula confirmada empiricamente)
     if html_response:
-        # Buscar <r>...<f1>CIDADE</f1>... e extrair seq de <f20>
-        pattern = re.compile(
-            rf'<r>.*?<f1>{re.escape(cidade_upper)}</f1>.*?<f20>(\d+)</f20>.*?</r>',
-            re.IGNORECASE | re.DOTALL,
-        )
-        match = pattern.search(html_response)
-        if match:
-            seq = int(match.group(1))
+        # Parsear TODAS as linhas <r> para obter rid pela posicao ordinal
+        all_rows = re.findall(r'<r>(.*?)</r>', html_response, re.DOTALL)
+        for rid, row_xml in enumerate(all_rows):
+            cidade_match = re.search(r'<f1>(.*?)</f1>', row_xml)
+            if not cidade_match:
+                continue
+            cidade_xml = cidade_match.group(1).strip().upper()
+            if cidade_xml != cidade_upper:
+                continue
+
+            cid = rid * 17
             # Extrair valores atuais dos campos f3-f16
-            row_match = re.search(
-                rf'<r>(.*?<f1>{re.escape(cidade_upper)}</f1>.*?)</r>',
-                html_response, re.IGNORECASE | re.DOTALL,
-            )
             valores = {}
-            if row_match:
-                row_xml = row_match.group(1)
-                for i in range(3, 17):
-                    fm = re.search(rf'<f{i}>(.*?)</f{i}>', row_xml)
-                    if fm:
-                        valores[f"col_{i}"] = fm.group(1)
-            # cid nao esta no XML — sera resolvido via DOM apos injecao
-            return {"cid": -1, "seq": seq, "rid": -1, "valores_atuais": valores, "from_xml": True}
+            for i in range(3, 17):
+                fm = re.search(rf'<f{i}>(.*?)</f{i}>', row_xml)
+                if fm:
+                    valores[f"col_{i}"] = fm.group(1)
+            return {"cid": cid, "rid": rid, "valores_atuais": valores, "from_xml": True}
 
     return None
 
@@ -465,34 +467,32 @@ async def cadastrar_cidades(args):
                 valores_atuais = cidade_info.get("valores_atuais", {})
                 match_parcial = cidade_info.get("match_parcial", False)
 
-                # Se veio do XML (fallback), o cid=-1 e precisa resolver no DOM
-                if cidade_info.get("from_xml") and cid == -1:
-                    # Buscar novamente no DOM (agora deve estar renderizado)
+                # Se veio do XML (lazy rendering), injetar inputs hidden no DOM
+                if cidade_info.get("from_xml"):
+                    # Tentar encontrar no DOM primeiro (pode ter sido renderizado)
                     dom_info = await popup.evaluate(f"""() => {{
-                        const trs = document.querySelectorAll('tr[cid]');
-                        for (const tr of trs) {{
-                            const divs = tr.querySelectorAll('div.srdvl, div.srdvr');
-                            for (const d of divs) {{
-                                if (d.textContent.trim().toUpperCase() === '{cidade_nome}') {{
-                                    return {{
-                                        cid: parseInt(tr.getAttribute('cid')),
-                                        rid: parseInt(tr.getAttribute('rid'))
-                                    }};
+                        const tr = document.querySelector('tr[cid="{cid}"]');
+                        if (tr) return {{ found: true }};
+                        return {{ found: false }};
+                    }}""")
+
+                    if not dom_info.get("found"):
+                        # Cidade fora do viewport virtual — injetar inputs hidden
+                        # O ATU serializa todos os inputs do form, incluindo hidden
+                        await popup.evaluate(f"""() => {{
+                            const form = document.querySelector('form') || document.body;
+                            for (let offset = 1; offset <= 14; offset++) {{
+                                const id = String({cid} + offset);
+                                if (!document.getElementById(id)) {{
+                                    const inp = document.createElement('input');
+                                    inp.type = 'hidden';
+                                    inp.id = id;
+                                    inp.setAttribute('col', String(offset + 2));
+                                    inp.setAttribute('rid', String({cidade_info.get("rid", 0)}));
+                                    form.appendChild(inp);
                                 }}
                             }}
-                        }}
-                        return null;
-                    }}""")
-                    if dom_info:
-                        cid = dom_info["cid"]
-                        cidade_info["rid"] = dom_info["rid"]
-                    else:
-                        resultados.append({
-                            "cidade": cidade_nome,
-                            "sucesso": False,
-                            "erro": f"Cidade '{cidade_nome}' encontrada no XML mas nao no DOM renderizado",
-                        })
-                        continue
+                        }}""")
 
                 # Verificar se cidade ja esta configurada (tem unidade preenchida)
                 unidade_atual = valores_atuais.get("col_3", "")

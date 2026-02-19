@@ -66,7 +66,7 @@ python .claude/skills/operando-ssw/scripts/cadastrar_unidade_401.py \
 
 ## cadastrar_cidades_402.py
 
-Cadastra cidades individualmente na grid da 402. Usar para poucas cidades (<5).
+Cadastra cidades individualmente na grid da 402. Usar SOMENTE para 1-3 cidades que estejam no viewport.
 
 ```bash
 python .claude/skills/operando-ssw/scripts/cadastrar_cidades_402.py \
@@ -84,11 +84,54 @@ python .claude/skills/operando-ssw/scripts/cadastrar_cidades_402.py \
 Campos obrigatorios por cidade: `cidade`, `polo` (P/R/I). `prazo` recomendado.
 Demais campos usam defaults do ssw_defaults.json se omitidos.
 
+**LIMITACAO CRITICA**: SSW 402 usa **virtual scroll** — apenas ~90 cidades existem no DOM por vez
+(de 400+ por UF). Cidades fora do viewport NAO podem ser alteradas via ATU.
+A injecao de hidden inputs (Estrategia 2/XML) localiza a cidade mas o **ATU falha** no submit
+("Erro ao processar a requisição"). **Para >3 cidades ou cidades fora do viewport, USAR `importar_cidades_402.py`**.
+
+---
+
+## exportar_cidades_402.py
+
+Exporta CSV completo de cidades atendidas de uma UF na 402. Passo 1 do workflow CSV (exportar → modificar → importar).
+
+```bash
+python .claude/skills/operando-ssw/scripts/exportar_cidades_402.py \
+  --uf BA [--output /tmp/ba_402_export.csv] [--dry-run]
+```
+
+| Parametro | Obrigatorio | Descricao |
+|-----------|-------------|-----------|
+| --uf | Sim | UF para exportar (ex: BA, SP, MS) |
+| --output | Nao | Caminho do CSV (default: /tmp/{uf}_402_export.csv) |
+| --dry-run | -- | Mostra o que seria exportado sem executar |
+
+**Mecanismo**: Abre 402, preenche UF, chama `_MOD_CSV` na tela INICIAL (ANTES de VIS_UF), captura CSV via 3 estrategias (download handler, response interceptor, JS variable).
+
+**CRITICO**: `_MOD_CSV` so funciona na tela INICIAL. Apos VIS_UF o botao CSV desaparece.
+
+**Retorno JSON**:
+```json
+{
+  "sucesso": true,
+  "arquivo": "/tmp/ba_402_export.csv",
+  "uf": "BA",
+  "total_linhas": 417,
+  "total_colunas": 45,
+  "cidades_com_unidade": 388,
+  "cidades_sem_unidade": 29,
+  "unidades_encontradas": ["BPS", "EUN", "SSA", "VCQ", "VDC"],
+  "amostra": "BA;ABAIRA;VCQ;I;A;..."
+}
+```
+
+**CSV exportado**: 45 colunas, separador `;`, encoding ISO-8859-1. Preserva formato exato do SSW (feriados `00/00`, sabado ` `, trailing `;`).
+
 ---
 
 ## importar_cidades_402.py
 
-Importa cidades atendidas via CSV na opcao 402. Metodo preferido para bulk (>5 cidades).
+Importa cidades atendidas via CSV na opcao 402. **Metodo PREFERIDO para qualquer alteracao bulk.**
 
 ```bash
 python .claude/skills/operando-ssw/scripts/importar_cidades_402.py \
@@ -104,6 +147,23 @@ python .claude/skills/operando-ssw/scripts/importar_cidades_402.py \
 Colunas essenciais: UF, CIDADE, UNIDADE, POLO, TIPO_FRETE, RESTRITA, COLETA, ENTREGA, PRAZO_ENTREGA.
 
 **CRITICO**: A tela de importacao DEVE ser popup nativo (NAO usar `createNewDoc` override).
+
+### Workflow recomendado: Exportar → Modificar → Importar
+
+Para alterar cidades existentes (mudar unidade, polo, prazo), o fluxo mais confiavel e:
+
+1. **Exportar CSV atual do SSW**: `exportar_cidades_402.py --uf XX`
+   - CSV exportado preserva todos 45 campos exatamente como SSW espera
+2. **Modificar CSV com Python**:
+   - Ler CSV (encoding ISO-8859-1, separador `;`)
+   - Alterar somente campos necessarios (UNIDADE, POLO, PRAZO, etc.)
+   - Preservar todos os demais campos (feriados, distancias, pracas) intactos
+   - Pode filtrar para incluir somente cidades alteradas (reduz risco)
+3. **Importar CSV modificado**: `importar_cidades_402.py --csv /tmp/modificado.csv`
+   - SSW atualiza cidades existentes ("Alteracoes: N") e adiciona novas ("Inclusoes: N")
+
+**IMPORTANTE**: Gerar CSV do zero (sem exportar primeiro) e fragil — formatos de feriado
+(`00/00` vs vazio), sabado (espaco vs vazio) e trailing `;` causam 0 matches na importacao.
 
 ---
 
@@ -186,6 +246,11 @@ python .claude/skills/operando-ssw/scripts/cadastrar_transportadora_485.py \
 **Fluxo SSW**: CNPJ → `ajaxEnvia('PES', 0)` → preencher → `ajaxEnvia('INC', 0)`
 
 **Deteccao de existencia**: Apos PES, checar se `nome` esta preenchido no DOM. Se sim, transportadora ja existe.
+
+**LIMITACAO**: Se o CNPJ raiz tem multiplas filiais cadastradas, PES pode retornar uma **lista**
+em vez do formulario individual. Nesse caso, o script da timeout ("Timeout aguardando form 485 apos PES")
+e o screenshot mostra a listagem. **Workaround**: verificar visualmente no screenshot se a transportadora
+com a sigla desejada ja existe na lista.
 
 ---
 
@@ -366,7 +431,7 @@ Para registrar N transportadoras em lote:
 | VIX | UNI BRASIL | 42769176000152 |
 | OAL, LDB, MGF, PVH | TRANSPEROLA | 44433407000188 |
 | PAU | MONTENEGRO | 22188831000252 |
-| VDC, EUN, IOS, BPS, FEI, TXF | REIS ARAGAO | 17706435000230 |
+| VDC, EUN, IOS, BPS, FEI, TXF, VCQ | REIS ARAGAO | 17706435000744 (VCQ) / 17706435000230 (demais) |
 | MAO | ACOLOGIS | 40272996000109 |
 | GIG | TRANSMENEZES | 20341933000150 |
 
@@ -388,3 +453,7 @@ Para registrar N transportadoras em lote:
 10. **"Nao inclusas" na 408 = valores identicos**: SSW compara dados existentes com CSV. Se iguais → "nao inclusas". Se diferentes → "alteradas" (sobrescreve). NAO precisa excluir para atualizar.
 11. **Apostrofos em nomes de cidade**: SSW usa espaco onde IBGE usa apostrofo. `D'OESTE` → `D OESTE`, `D'AGUA` → `D AGUA`, `GRAO-PARA` → `GRAO PARA`. O script `gerar_csv_comissao_408.py` normaliza automaticamente (apostrofo e hifen → espaco). Excecoes SSW-especificas (ex: `OLHO-D AGUA DO BORGES`) requerem correcao manual.
 12. **JANUARIO CICCO/RN**: Cidade nao existe no cadastro SSW (402). Ignorar na importacao.
+13. **402 ATU com hidden inputs NAO funciona**: Injetar `<input type="hidden">` para cidades fora do virtual scroll e submeter via ATU resulta em "Erro ao processar a requisicao". O SSW nao reconhece inputs injetados. Usar CSV import (exportar → modificar → importar) em vez de ATU para cidades fora do viewport.
+14. **402 _MOD_CSV deve ser chamado ANTES de VIS_UF**: O botao CSV esta na tela INICIAL da 402. Apos VIS_UF, a tela muda e o botao desaparece. Para exportar: preencher UF → `_MOD_CSV` (sem VIS_UF antes).
+15. **402 CSV formato exato**: Feriados usam `00/00` (NAO vazio), sabado usa ` ` (espaco, NAO vazio), trailing `;` apos ultimo campo. CSV gerado do zero sem esses detalhes resulta em 0 matches na importacao.
+16. **485 timeout com multiplas filiais**: Se CNPJ raiz tem multiplas filiais na 485, PES retorna lista em vez de formulario. Script da timeout. Verificar screenshot para confirmar existencia.
