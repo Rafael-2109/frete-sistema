@@ -25,6 +25,30 @@
                     </p>
                 </div>
                 <div class="fin-header__actions d-flex gap-2 flex-wrap">
+                    {# Dropdown Sincronizar com Odoo #}
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-success dropdown-toggle" type="button"
+                                id="btn-sync-odoo" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-sync me-1"></i>Sincronizar Odoo
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <button class="dropdown-item" onclick="sincronizarCompleto()">
+                                    <i class="fas fa-sync-alt me-2 text-success"></i>Sincronizacao Completa
+                                    <br><small class="text-muted ms-4">Importar tudo + revalidar conciliacao</small>
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">Importar por Journal</h6>
+                            </li>
+                            <li id="sync-journals-loading">
+                                <span class="dropdown-item-text text-muted">
+                                    <i class="fas fa-spinner fa-spin me-1"></i> Carregando journals...
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
                     <button class="btn btn-sm btn-primary" id="btn-executar-matching" onclick="executarMatching(false)">
                         <i class="fas fa-magic me-1"></i>Executar Matching
                     </button>
@@ -504,6 +528,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentModalItemId = null;
     let multiNfSelecionados = {};  // { tituloId: {valor_alocado, ...} }
 
+    const API_SYNC_COMPLETO = '{{ url_for("financeiro.extrato_sincronizar_completo") }}';
+    const API_STATEMENTS = '{{ url_for("financeiro.extrato_api_statements") }}';
     const API_ITENS = '{{ url_for("financeiro.extrato_api_itens") }}';
     const API_APROVAR_ITEM = '{{ url_for("financeiro.extrato_aprovar_item") }}';
     const API_CONCILIAR_ITEM = '{{ url_for("financeiro.extrato_conciliar_item") }}';
@@ -1727,6 +1753,117 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (err) {
             alert('Erro de conexao: ' + err.message);
+        }
+    };
+
+    // =========================================================================
+    // SINCRONIZAR COM ODOO
+    // =========================================================================
+    carregarJournalsDropdown();
+
+    async function carregarJournalsDropdown() {
+        try {
+            const resp = await fetch(API_STATEMENTS);
+            const data = await resp.json();
+
+            const loadingEl = document.getElementById('sync-journals-loading');
+            if (!loadingEl) return;
+
+            if (data.success && data.journals && data.journals.length > 0) {
+                const parent = loadingEl.parentNode;
+                loadingEl.remove();
+
+                data.journals.forEach(function(j) {
+                    const li = document.createElement('li');
+                    const btn = document.createElement('button');
+                    btn.className = 'dropdown-item';
+                    btn.innerHTML = '<i class="fas fa-university me-2"></i>' + escHtml(j.code) +
+                        ' <small class="text-muted">(' + escHtml(j.name) + ')</small>';
+                    btn.onclick = function() { sincronizarJournal(j.code); };
+                    li.appendChild(btn);
+                    parent.appendChild(li);
+                });
+            } else {
+                loadingEl.innerHTML = '<span class="dropdown-item-text text-muted">Nenhum journal encontrado</span>';
+            }
+        } catch (err) {
+            const loadingEl = document.getElementById('sync-journals-loading');
+            if (loadingEl) {
+                loadingEl.innerHTML = '<span class="dropdown-item-text text-danger">Erro ao carregar journals</span>';
+            }
+        }
+    }
+
+    window.sincronizarCompleto = async function() {
+        if (!confirm('Executar sincronizacao COMPLETA com Odoo?\n\n' +
+            '1. Importar TODAS as linhas faltantes de TODOS os journals\n' +
+            '2. Revalidar status de conciliacao no Odoo\n' +
+            '3. Resolver favorecidos/pagadores\n\n' +
+            'Isso pode levar alguns minutos.')) return;
+
+        const btn = document.getElementById('btn-sync-odoo');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizando...';
+
+        try {
+            const resp = await fetchRetry(API_SYNC_COMPLETO, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ dias_retroativos: 30 })
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                const r = data.resumo || {};
+                alert('Sincronizacao completa!\n\n' +
+                    'Importados: ' + (r.importados || 0) + ' linhas novas\n' +
+                    'Revalidados: ' + (r.revalidados || 0) + ' conciliacoes\n' +
+                    'Resolvidos: ' + (r.resolvidos || 0) + ' favorecidos/pagadores\n' +
+                    'Lotes novos: ' + (r.lotes_novos || 0));
+                recarregarTabela();
+            } else {
+                alert('Erro na sincronizacao: ' + (data.error || 'Erro desconhecido'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    };
+
+    window.sincronizarJournal = async function(journalCode) {
+        if (!confirm('Importar linhas faltantes do journal ' + journalCode + '?')) return;
+
+        const btn = document.getElementById('btn-sync-odoo');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>' + journalCode + '...';
+
+        try {
+            const resp = await fetchRetry(API_SYNC_COMPLETO, {
+                method: 'POST',
+                headers: getCsrfHeaders(),
+                body: JSON.stringify({ journal_code: journalCode, dias_retroativos: 30 })
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                const r = data.resumo || {};
+                alert('Sincronizacao ' + journalCode + ' concluida!\n\n' +
+                    'Importados: ' + (r.importados || 0) + ' linhas novas\n' +
+                    'Revalidados: ' + (r.revalidados || 0) + ' conciliacoes\n' +
+                    'Resolvidos: ' + (r.resolvidos || 0) + ' favorecidos/pagadores');
+                recarregarTabela();
+            } else {
+                alert('Erro: ' + (data.error || 'Erro desconhecido'));
+            }
+        } catch (err) {
+            alert('Erro de conexao: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
         }
     };
 

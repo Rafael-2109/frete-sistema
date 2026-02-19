@@ -160,13 +160,25 @@ class ExtratoService:
         db.session.add(lote)
         db.session.flush()
 
+        # Buscar IDs já importados para este journal (evita desperdiçar slots do limit)
+        imported_ids = [r[0] for r in db.session.query(
+            ExtratoItem.statement_line_id
+        ).filter(
+            ExtratoItem.journal_code == journal_code,
+            ExtratoItem.statement_line_id.isnot(None)
+        ).all()]
+
+        if imported_ids:
+            logger.info(f"Excluindo {len(imported_ids)} linhas já importadas da query Odoo")
+
         # Buscar linhas não conciliadas
         linhas = self._buscar_linhas_extrato(
             journal_id=journal_id,
             data_inicio=data_inicio,
             data_fim=data_fim,
             limit=limit,
-            tipo_transacao=tipo_transacao
+            tipo_transacao=tipo_transacao,
+            exclude_ids=imported_ids if imported_ids else None
         )
 
         logger.info(f"Linhas encontradas: {len(linhas)}")
@@ -225,7 +237,8 @@ class ExtratoService:
         data_inicio: Optional[date] = None,
         data_fim: Optional[date] = None,
         limit: int = 500,
-        tipo_transacao: str = 'entrada'
+        tipo_transacao: str = 'entrada',
+        exclude_ids: Optional[List[int]] = None
     ) -> List[Dict]:
         """
         Busca linhas de extrato não conciliadas.
@@ -240,10 +253,15 @@ class ExtratoService:
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
+            exclude_ids: IDs de statement_line já importados (excluídos da query Odoo)
         """
         domain = [
             ['journal_id', '=', journal_id],
         ]
+
+        # Excluir linhas já importadas para não desperdiçar slots do limit
+        if exclude_ids:
+            domain.append(['id', 'not in', exclude_ids])
 
         # Filtro por tipo de transação
         if tipo_transacao == 'entrada':
@@ -821,13 +839,19 @@ class ExtratoService:
             ExtratoLote criado
         """
         # Verificar se já foi importado (por statement_id + tipo_transacao)
+        # Permitir re-importação: _processar_linha() já deduplica por statement_line_id
         lote_existente = ExtratoLote.query.filter_by(
             statement_id=statement_id,
             tipo_transacao=tipo_transacao
         ).first()
-        if lote_existente:
+        is_reimport = lote_existente is not None
+
+        if is_reimport:
             tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else 'pagamentos'
-            raise ValueError(f"Statement {statement_id} ({tipo_label}) já foi importado (Lote {lote_existente.id})")
+            logger.info(
+                f"Statement {statement_id} ({tipo_label}) já importado (Lote {lote_existente.id}). "
+                f"Re-importando linhas faltantes."
+            )
 
         # Buscar dados do statement no Odoo
         statements = self.connection.search_read(
@@ -883,8 +907,27 @@ class ExtratoService:
         db.session.add(lote)
         db.session.flush()
 
-        # Buscar linhas não conciliadas do statement
-        linhas = self._buscar_linhas_statement(statement_id, tipo_transacao=tipo_transacao)
+        # Buscar IDs já importados deste statement para eficiência na re-importação
+        imported_ids = [r[0] for r in db.session.query(
+            ExtratoItem.statement_line_id
+        ).filter(
+            ExtratoItem.statement_line_id.isnot(None)
+        ).all()] if is_reimport else None
+
+        if imported_ids:
+            logger.info(f"Excluindo {len(imported_ids)} linhas já importadas da query Odoo")
+
+        # Buscar linhas do statement
+        linhas = self._buscar_linhas_statement(
+            statement_id,
+            tipo_transacao=tipo_transacao,
+            exclude_ids=imported_ids
+        )
+
+        # Se re-importação e nenhuma linha nova, retornar lote existente com 0 novas
+        if is_reimport and not linhas:
+            logger.info(f"Nenhuma linha nova encontrada na re-importação do statement {statement_id}")
+            return lote
 
         tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else (
             'pagamentos' if tipo_transacao == 'saida' else 'transações'
@@ -936,16 +979,26 @@ class ExtratoService:
 
         return lote
 
-    def _buscar_linhas_statement(self, statement_id: int, tipo_transacao: str = 'entrada') -> List[Dict]:
+    def _buscar_linhas_statement(
+        self,
+        statement_id: int,
+        tipo_transacao: str = 'entrada',
+        exclude_ids: Optional[List[int]] = None
+    ) -> List[Dict]:
         """
         Busca linhas de um statement específico (conciliadas e não-conciliadas).
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
+            exclude_ids: IDs de statement_line já importados (excluídos da query Odoo)
         """
         domain = [
             ['statement_id', '=', statement_id],
         ]
+
+        # Excluir linhas já importadas
+        if exclude_ids:
+            domain.append(['id', 'not in', exclude_ids])
 
         # Filtro por tipo de transação
         if tipo_transacao == 'entrada':

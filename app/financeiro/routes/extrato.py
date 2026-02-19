@@ -428,6 +428,129 @@ def extrato_api_statements():
 
 
 # =============================================================================
+# SINCRONIZAÇÃO COMPLETA COM ODOO (sob demanda)
+# =============================================================================
+
+@financeiro_bp.route('/extrato/sincronizar-completo', methods=['POST'])
+@login_required
+def extrato_sincronizar_completo():
+    """
+    Sincronização completa sob demanda:
+    1. Importa TODAS as linhas faltantes de TODOS os journals (ou journal específico)
+    2. Revalida status de conciliação via Odoo (is_reconciled)
+    3. Executa pipeline de resolução de favorecido/pagador nos novos itens
+
+    Body JSON (opcional):
+    - journal_code: Código do journal (None = todos)
+    - dias_retroativos: Dias para trás na importação (default 30)
+    """
+    data = request.get_json() or {}
+    journal_code = data.get('journal_code')  # None = todos
+    dias_retroativos = data.get('dias_retroativos', 30)
+
+    resultado = {
+        'etapa_1_importacao': None,
+        'etapa_2_revalidacao': None,
+        'etapa_3_resolucao': None,
+    }
+
+    try:
+        # --- Etapa 1: Importar linhas faltantes ---
+        logger.info(f"[SYNC_COMPLETA] Etapa 1: Importando linhas faltantes (journal={journal_code or 'TODOS'}, dias={dias_retroativos})")
+
+        from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService
+        sync_service = SincronizacaoExtratosService()
+
+        journals_param = [journal_code] if journal_code else None
+        import_result = sync_service.importar_extratos_automatico(
+            journals=journals_param,
+            dias_retroativos=dias_retroativos,
+            limite=2000  # Limite maior para sync completa
+        )
+        resultado['etapa_1_importacao'] = import_result
+
+        # Coletar IDs de lotes criados para resolução posterior
+        lote_ids_novos = []
+        if import_result.get('success') and import_result.get('stats'):
+            for chave, detalhe in import_result['stats'].get('detalhes_por_journal', {}).items():
+                lote_id = detalhe.get('lote_id')
+                importados = detalhe.get('importados', 0)
+                if lote_id and importados > 0:
+                    lote_ids_novos.append(lote_id)
+
+        logger.info(f"[SYNC_COMPLETA] Etapa 1 concluída: {import_result.get('stats', {}).get('total_importados', 0)} importados, {len(lote_ids_novos)} lotes novos")
+
+        # --- Etapa 2: Revalidar conciliação via Odoo ---
+        logger.info("[SYNC_COMPLETA] Etapa 2: Revalidando conciliação via Odoo")
+
+        reval_result = sync_service.revalidar_todos_extratos_via_odoo(batch_size=500)
+        resultado['etapa_2_revalidacao'] = reval_result
+
+        reval_stats = reval_result.get('stats', {})
+        logger.info(
+            f"[SYNC_COMPLETA] Etapa 2 concluída: "
+            f"{reval_stats.get('atualizados', 0)} atualizados, "
+            f"{reval_stats.get('conciliados_no_odoo', 0)} conciliados no Odoo"
+        )
+
+        # --- Etapa 3: Resolver favorecidos/pagadores nos novos lotes ---
+        resolucao_stats = {'lotes_processados': 0, 'total_resolvidos': 0, 'erros': 0}
+        if lote_ids_novos:
+            logger.info(f"[SYNC_COMPLETA] Etapa 3: Resolvendo favorecidos/pagadores em {len(lote_ids_novos)} lotes")
+
+            service = ExtratoService()
+            for lote_id in lote_ids_novos:
+                try:
+                    lote_obj = db.session.get(ExtratoLote, lote_id)
+                    if not lote_obj:
+                        continue
+
+                    if lote_obj.tipo_transacao == 'saida':
+                        from app.financeiro.services.favorecido_resolver_service import FavorecidoResolverService
+                        resolver = FavorecidoResolverService(connection=service._connection)
+                        stats = resolver.resolver_lote(lote_id)
+                        resolucao_stats['total_resolvidos'] += stats.get('resolvidos', 0)
+                    else:
+                        from app.financeiro.services.recebimento_resolver_service import RecebimentoResolverService
+                        resolver = RecebimentoResolverService(connection=service._connection)
+                        stats = resolver.resolver_lote(lote_id)
+                        resolucao_stats['total_resolvidos'] += stats.get('resolvidos', 0)
+
+                    resolucao_stats['lotes_processados'] += 1
+
+                except Exception as e_resolver:
+                    logger.warning(f"[SYNC_COMPLETA] Erro ao resolver lote {lote_id}: {e_resolver}")
+                    resolucao_stats['erros'] += 1
+
+        resultado['etapa_3_resolucao'] = resolucao_stats
+        logger.info(f"[SYNC_COMPLETA] Etapa 3 concluída: {resolucao_stats}")
+
+        # --- Resumo ---
+        total_importados = import_result.get('stats', {}).get('total_importados', 0)
+        total_revalidados = reval_stats.get('atualizados', 0)
+        total_resolvidos = resolucao_stats.get('total_resolvidos', 0)
+
+        return jsonify({
+            'success': True,
+            'resumo': {
+                'importados': total_importados,
+                'revalidados': total_revalidados,
+                'resolvidos': total_resolvidos,
+                'lotes_novos': len(lote_ids_novos),
+            },
+            'detalhes': resultado
+        })
+
+    except Exception as e:
+        logger.error(f"[SYNC_COMPLETA] Erro geral: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'detalhes': resultado
+        }), 500
+
+
+# =============================================================================
 # IMPORTAÇÃO
 # =============================================================================
 

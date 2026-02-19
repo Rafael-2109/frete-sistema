@@ -536,12 +536,12 @@ class SincronizacaoExtratosService:
 
             # Buscar linhas de extrato CONCILIADAS que foram modificadas recentemente
             # Essas são as linhas que foram reconciliadas no Odoo
+            # Inclui ENTRADAS e SAÍDAS (sem filtro de amount)
             linhas_conciliadas = conn.search_read(
                 'account.bank.statement.line',
                 [
                     ['write_date', '>=', data_corte_str],
                     ['is_reconciled', '=', True],  # Conciliadas no Odoo
-                    ['amount', '>', 0]  # Apenas recebimentos (entradas)
                 ],
                 fields=['id', 'date', 'amount', 'payment_ref', 'is_reconciled', 'write_date'],
                 limit=limite
@@ -887,8 +887,20 @@ class SincronizacaoExtratosService:
 
         if journals is None:
             # Configurável via variável de ambiente
-            journals_env = os.environ.get('JOURNALS_EXTRATO', 'GRA1')
-            journals = [j.strip() for j in journals_env.split(',')]
+            journals_env = os.environ.get('JOURNALS_EXTRATO', '')
+            if journals_env.strip():
+                journals = [j.strip() for j in journals_env.split(',')]
+            else:
+                # Auto-descobrir todos os journals bancários do Odoo
+                try:
+                    from app.financeiro.services.extrato_service import ExtratoService
+                    svc = ExtratoService()
+                    journals_odoo = svc.listar_journals_disponiveis(tipo_transacao='ambos')
+                    journals = [j['code'] for j in journals_odoo if j.get('code')]
+                    logger.info(f"[IMPORT_EXTRATOS_AUTO] Journals auto-descobertos: {journals}")
+                except Exception as e:
+                    logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro ao auto-descobrir journals: {e}. Usando fallback GRA1.")
+                    journals = ['GRA1']
 
         stats = {
             'inicio': agora_utc_naive().isoformat(),
