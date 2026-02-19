@@ -205,6 +205,18 @@ def processar_transfer_fb_cd_job(recebimento_id):
             transfer_status='processando',
         )
 
+        # Setar transfer_status no DB (nao so Redis) para detectar stale se job morrer
+        try:
+            from app import db
+            recebimento.transfer_status = 'processando'
+            db.session.commit()
+        except Exception as e_db:
+            logger.warning(f"[Job Transfer] Nao conseguiu setar transfer_status no DB: {e_db}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
         try:
             service = RecebimentoLfOdooService()
             resultado = service.processar_transfer_only(recebimento_id)
@@ -250,4 +262,17 @@ def processar_transfer_fb_cd_job(recebimento_id):
                 transfer_status='erro',
                 status='processado',
             )
+            # Atualizar transfer_status no DB (nao so Redis)
+            try:
+                from app import db
+                rec = RecebimentoLf.query.get(recebimento_id)
+                if rec and rec.transfer_status != 'erro':
+                    rec.transfer_status = 'erro'
+                    rec.transfer_erro_mensagem = str(e)[:500]
+                    db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
             return {'status': 'erro', 'mensagem': str(e)[:500]}

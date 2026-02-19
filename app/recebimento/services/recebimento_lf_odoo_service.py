@@ -128,7 +128,9 @@ class RecebimentoLfOdooService:
     PAYMENT_PROVIDER_ID_CD = 30    # Transferencia Bancaria CD (company_id=4) — discovery 2026-02-13
 
     # CFOPs de retorno (nao transferir para CD)
-    CFOPS_RETORNO = ('1902', '5902')
+    # 1902/5902: retorno de insumos/embalagens
+    # 1903/5903: retorno de industrializacao
+    CFOPS_RETORNO = ('1902', '5902', '1903', '5903')
 
     # Fire and Poll — parametros
     FIRE_TIMEOUT = 60       # Timeout curto para disparar acao (60s)
@@ -315,8 +317,8 @@ class RecebimentoLfOdooService:
             f"etapa_atual={rec.etapa_atual}, transfer_status={rec.transfer_status}"
         )
 
-        # Reset etapa para 18 se estava em erro apos etapa 18
-        if rec.etapa_atual >= 19 and rec.transfer_status == 'erro':
+        # Reset etapa para 18 se estava em erro/processando(stale) apos etapa 18
+        if rec.etapa_atual >= 19 and rec.transfer_status in ('erro', 'pendente', 'processando'):
             self._safe_update(etapa_atual=18, transfer_status='pendente', transfer_erro_mensagem=None)
 
         try:
@@ -1860,6 +1862,11 @@ class RecebimentoLfOdooService:
             f"  {len(lotes_transfer)} lotes de produto acabado para transferir ao CD"
         )
 
+        # Pre-validar peso liquido dos produtos (fail fast antes de criar picking)
+        # O Odoo (modulo CIEL IT) valida weight > 0 para liberar faturamento.
+        # Sem esta validacao, o erro surge como Fault opaco em button_validate.
+        self._validar_peso_liquido_produtos(odoo, rec, lotes_transfer)
+
         # Armazenar IDs dos lotes para uso nas etapas seguintes
         # (nao salva em DB — cada etapa re-busca do banco)
         self._transfer_lote_ids = [lt.id for lt in lotes_transfer]
@@ -1889,6 +1896,61 @@ class RecebimentoLfOdooService:
         self._checkpoint(
             etapa=19, transfer_status='processando',
             msg=f'{len(lotes_transfer)} produtos para CD'
+        )
+
+    def _validar_peso_liquido_produtos(self, odoo, rec, lotes_transfer):
+        """
+        Valida que todos os produtos de transferencia possuem peso liquido (weight > 0).
+
+        O modulo CIEL IT do Odoo exige weight preenchido para liberar faturamento.
+        Sem esta validacao, o erro aparece como Fault opaco no button_validate:
+            Fault 2: 'Voce deve informar o Peso Liquido para liberar o faturamento.'
+
+        Args:
+            odoo: Conexao Odoo
+            rec: RecebimentoLf
+            lotes_transfer: Lista de RecebimentoLfLote para transferir
+
+        Raises:
+            ValueError se algum produto nao tem peso liquido
+        """
+        product_ids = list({lt.odoo_product_id for lt in lotes_transfer if lt.odoo_product_id})
+        if not product_ids:
+            return
+
+        try:
+            products = odoo.execute_kw(
+                'product.product', 'read',
+                [product_ids],
+                {'fields': ['id', 'name', 'default_code', 'weight']}
+            )
+        except Exception as e:
+            logger.warning(
+                f"  [RecLF {rec.id}] Nao foi possivel validar peso liquido: {e}. "
+                "Prosseguindo sem validacao."
+            )
+            return
+
+        sem_peso = []
+        for prod in products:
+            weight = prod.get('weight', 0)
+            if not weight or float(weight) <= 0:
+                nome = prod.get('default_code') or prod.get('name') or f"ID={prod['id']}"
+                sem_peso.append(nome)
+
+        if sem_peso:
+            msg = (
+                f"Produtos sem Peso Liquido no Odoo (weight=0): "
+                f"[{', '.join(sem_peso)}]. "
+                "O CIEL IT exige peso preenchido para liberar faturamento da transferencia. "
+                "Preencha o campo 'Peso Liquido' destes produtos no Odoo antes de prosseguir."
+            )
+            logger.error(f"  [RecLF {rec.id}] {msg}")
+            raise ValueError(msg)
+
+        logger.info(
+            f"  Validacao de peso liquido OK: "
+            f"{len(product_ids)} produtos com weight > 0"
         )
 
     def _get_transfer_lotes(self):
@@ -2345,7 +2407,56 @@ class RecebimentoLfOdooService:
                 return p[0]
             return None
 
-        result = self._fire_and_poll(odoo, fire_validar, poll_validar, 'Validar Saida FB')
+        try:
+            result = self._fire_and_poll(odoo, fire_validar, poll_validar, 'Validar Saida FB')
+        except Exception as e:
+            error_str = str(e)
+            is_peso_fault = 'Peso Liquido' in error_str or 'peso liquido' in error_str.lower()
+
+            if is_peso_fault:
+                # Idempotencia: O Odoo (CIEL IT) pode emitir Fault de Peso Liquido
+                # em hook pos-validacao, MAS a validacao do picking ja commitou.
+                # Verificar se picking ja transitou para done apesar do Fault.
+                logger.warning(
+                    f"  Fault 'Peso Liquido' capturado. "
+                    f"Verificando se picking {picking_id} ja esta done..."
+                )
+                check = poll_validar()
+                if check:
+                    logger.warning(
+                        f"  Picking {picking_id} JA esta done apesar do Fault. "
+                        "Continuando (idempotencia)."
+                    )
+                    result = check
+                else:
+                    # Picking NAO esta done — erro real
+                    # Enriquecer mensagem com lista de produtos sem peso
+                    lotes_transfer = self._get_transfer_lotes()
+                    product_ids = list({lt.odoo_product_id for lt in lotes_transfer if lt.odoo_product_id})
+                    nomes_sem_peso = []
+                    try:
+                        products = odoo.execute_kw(
+                            'product.product', 'read',
+                            [product_ids],
+                            {'fields': ['id', 'name', 'default_code', 'weight']}
+                        )
+                        for prod in products:
+                            w = prod.get('weight', 0)
+                            if not w or float(w) <= 0:
+                                nome = prod.get('default_code') or prod.get('name') or f"ID={prod['id']}"
+                                nomes_sem_peso.append(nome)
+                    except Exception:
+                        pass
+
+                    if nomes_sem_peso:
+                        raise ValueError(
+                            f"Peso Liquido ausente nos produtos: [{', '.join(nomes_sem_peso)}]. "
+                            "Preencha no Odoo e retente."
+                        ) from e
+                    raise
+            else:
+                raise
+
         final_name = result.get('name', picking_name) if isinstance(result, dict) else picking_name
         logger.info(f"  Picking saida FB {final_name} validado (state=done)")
 

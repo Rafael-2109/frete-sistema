@@ -275,6 +275,19 @@ function escapeHtml(text) {
 let pollingInterval = null;
 let pollingRecebimentoId = null;
 
+/**
+ * Detecta se transfer_status='processando' esta stale (>30min sem atualizacao).
+ * Indica que o job morreu (deploy, OOM, timeout) sem atualizar o status.
+ */
+function _isTransferStale(r) {
+    if (r.transfer_status !== 'processando') return false;
+    if (!r.atualizado_em) return true; // Sem timestamp = stale
+    const updatedAt = new Date(r.atualizado_em);
+    const now = new Date();
+    const diffMin = (now - updatedAt) / (1000 * 60);
+    return diffMin > 30;
+}
+
 // =====================================================
 // CARREGAR RECEBIMENTOS
 // =====================================================
@@ -337,11 +350,14 @@ function renderRecebimentos(recebimentos) {
                 ? '<span class="badge bg-success fase-badge">FB OK</span>'
                 : '';
 
-        // Transfer badge
+        // Transfer badge (detectar stale = processando >30min)
+        const isStale = _isTransferStale(r);
         const transferLabels = {
             'sem_transferencia': '<span class="badge badge-transfer-sem badge-status ms-1">Sem Transfer.</span>',
             'pendente': '<span class="badge badge-transfer-pendente badge-status ms-1">Transfer. Pendente</span>',
-            'processando': '<span class="badge badge-transfer-processando badge-status ms-1">Transferindo...</span>',
+            'processando': isStale
+                ? '<span class="badge badge-transfer-erro badge-status ms-1" title="Job travado >30min">Transfer. Travada</span>'
+                : '<span class="badge badge-transfer-processando badge-status ms-1">Transferindo...</span>',
             'concluido': '<span class="badge badge-transfer-concluido badge-status ms-1">CD OK</span>',
             'erro': '<span class="badge badge-transfer-erro badge-status ms-1">Transfer. Erro</span>',
         };
@@ -353,7 +369,7 @@ function renderRecebimentos(recebimentos) {
                 <i class="fas fa-redo"></i>
             </button>`;
         }
-        if (r.transfer_status === 'erro') {
+        if (r.transfer_status === 'erro' || _isTransferStale(r)) {
             acoes += `<button class="btn btn-outline-info btn-action me-1" onclick="retryTransfer(${r.id})" title="Retentar Transferencia">
                 <i class="fas fa-exchange-alt"></i>
             </button>`;
@@ -527,6 +543,23 @@ function verDetalhes(recebimentoId) {
                     <div class="alert alert-warning small py-2">
                         <strong>Erro Transfer.:</strong><br>
                         <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.8rem;">${escapeHtml(recebimento.transfer_erro_mensagem)}</pre>
+                    </div>
+                    <button class="btn btn-outline-info btn-sm" onclick="retryTransfer(${recebimento.id})">
+                        <i class="fas fa-redo me-1"></i> Retentar Transferencia
+                    </button>
+            `;
+        }
+
+        // Stale: transfer_status='processando' >30min (job morto por deploy/OOM)
+        if (_isTransferStale(recebimento)) {
+            const updatedAt = recebimento.atualizado_em
+                ? new Date(recebimento.atualizado_em).toLocaleString('pt-BR')
+                : 'desconhecido';
+            html += `
+                    <div class="alert alert-danger small py-2">
+                        <strong><i class="fas fa-exclamation-triangle me-1"></i>Transferencia Travada</strong><br>
+                        Status "processando" sem atualizacao desde ${updatedAt}.<br>
+                        <small class="text-muted">Provavel causa: job morto por deploy ou timeout externo.</small>
                     </div>
                     <button class="btn btn-outline-info btn-sm" onclick="retryTransfer(${recebimento.id})">
                         <i class="fas fa-redo me-1"></i> Retentar Transferencia

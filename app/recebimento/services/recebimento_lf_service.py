@@ -1038,10 +1038,28 @@ class RecebimentoLfService:
                 )
 
             if recebimento.transfer_status not in ('erro', None, 'pendente'):
-                raise ValueError(
-                    f"Transfer status atual: {recebimento.transfer_status}. "
-                    "Retry so e possivel quando transfer_status='erro'."
-                )
+                if recebimento.transfer_status == 'processando':
+                    # Detectar stale: permitir retry se >30min sem atualizacao
+                    # (job morto por deploy, OOM, timeout externo)
+                    threshold = agora_utc_naive() - timedelta(minutes=30)
+                    if recebimento.atualizado_em and recebimento.atualizado_em < threshold:
+                        logger.warning(
+                            f"Transfer stale detectado: recebimento {recebimento_id} "
+                            f"em 'processando' ha mais de 30min "
+                            f"(atualizado_em={recebimento.atualizado_em}). "
+                            "Permitindo retry."
+                        )
+                    else:
+                        raise ValueError(
+                            f"Transferencia em processamento ativo "
+                            f"(atualizado_em={recebimento.atualizado_em}). "
+                            "Aguarde 30min para retry."
+                        )
+                else:
+                    raise ValueError(
+                        f"Transfer status atual: {recebimento.transfer_status}. "
+                        "Retry so e possivel quando transfer_status='erro'."
+                    )
 
             # Reset transfer
             recebimento.transfer_status = 'pendente'
