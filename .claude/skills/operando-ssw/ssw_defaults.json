@@ -83,5 +83,16 @@
     "valor_suframa": "0,00",
     "valor_coleta_entrega": "0,00",
     "praca_comercial": ""
+  },
+  "opcao_002": {
+    "frete": "CIF",
+    "coletar": "S",
+    "entregar": "S",
+    "contribuinte": "S",
+    "_nota_frete": "CIF = emitente paga frete. FOB = destinatario paga",
+    "_nota_coletar": "S = CarVia coleta no cliente. N = cliente entrega na CarVia",
+    "_nota_entregar": "S = CarVia entrega no destino. N = destinatario retira",
+    "_nota_contribuinte": "S = destinatario contribuinte ICMS. N = nao contribuinte",
+    "_nota_cep_origem": "Quando coletar=N, script usa CEP CarVia (endereco_fiscal.cep) automaticamente"
   }
 }

@@ -11,11 +11,12 @@ description: |
   - Criar comissao: "vincular unidade a transportadora", "criar comissao 408"
   - Gerar CSVs comissao por cidade: "gerar CSV 408 por cidade", "importar precos por cidade"
   - Importar CSVs comissao por cidade: "importar comissao por cidade no SSW", "importar CSV 408"
+  - Cotar frete no SSW: "cotar frete na 002", "simular frete SSW", "cotacao SSW"
   - Implantar rota: "POP-A10", "nova rota completa"
 
   NAO USAR QUANDO:
   - Consultar/navegar SSW sem alterar → usar **acessando-ssw**
-  - Cotacao de frete → usar **cotando-frete**
+  - Cotacao de frete INTERNA (sistema local) → usar **cotando-frete**
 decision_tree: |
   Cadastrar unidade parceira (tipo T)?
     → cadastrar_unidade_401.py --sigla X --tipo T --razao-social "..." --dry-run
@@ -34,6 +35,13 @@ decision_tree: |
     → gerar_csv_comissao_408.py --excel /tmp/backup_vinculos.xlsx [--unidades BVH,CGR] --dry-run
   Importar CSVs comissao por cidade no SSW (408)?
     → importar_comissao_cidade_408.py --csv-dir /tmp/ssw_408_csvs/ [--unidades BVH,CGR] --dry-run
+  Cotar frete no SSW (002)?
+    → Perguntar: CNPJ pagador, CEP destino, peso, valor, coletar(S/N), entregar(S/N)
+    → Se coletar=N: script auto-resolve CEP origem = CEP CarVia (06530581)
+    → Se coletar=S: perguntar CEP origem (local de coleta)
+    → cotar_frete_ssw_002.py --cnpj-pagador X --cep-destino X --peso X --valor X [--coletar N] [--entregar S] --dry-run
+    → Exibir parametros_assumidos antes de confirmar
+    → Ver SCRIPTS.md secao "Workflow do Agente" para fluxo completo
   Consultar/navegar SSW (sem alterar)?
     → NÃO usar esta skill. Usar **acessando-ssw**
 allowed-tools: Read, Bash, Glob, Grep
@@ -88,6 +96,7 @@ Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_
 | 7 | `criar_comissao_408.py` | 408 | Criar comissao unidade↔transportadora (5 campos, geral) |
 | 8 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, importacao em lote) |
 | 9 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW via Playwright |
+| 10 | `cotar_frete_ssw_002.py` | 002 | Cotar frete no SSW (simular proposta com calcula('S')) |
 
 ---
 
@@ -100,7 +109,7 @@ Padrao interno: `FIELD_MAP` → `FIELD_LIMITS` → `VALID_OPTIONS` → `validar_
 5. **485** — Cadastrar transportadora
 6. **408** — Cadastrar comissao de unidade
 7. **420** — Cadastrar tabelas de preco (futuro)
-8. **002** — Verificar cotacao (futuro)
+8. **002** — Verificar cotacao (`cotar_frete_ssw_002.py`)
 
 ---
 
