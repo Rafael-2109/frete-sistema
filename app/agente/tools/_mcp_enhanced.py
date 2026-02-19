@@ -1,7 +1,7 @@
 """
 Enhanced MCP Server Factory — Suporte a outputSchema + structuredContent.
 
-O wrapper `claude_agent_sdk.create_sdk_mcp_server` (v0.1.37) NÃO suporta:
+O wrapper `claude_agent_sdk.create_sdk_mcp_server` (v0.1.38) NÃO suporta:
 - `outputSchema` no Tool (MCP spec 2025-06-18)
 - `structuredContent` no CallToolResult (MCP spec 2025-06-18)
 

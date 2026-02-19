@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.37 | Wrapper MCP (in-process) |
+| `claude-agent-sdk` | 0.1.38 | Wrapper MCP (in-process) |
 | `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
 
 ---

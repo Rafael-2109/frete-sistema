@@ -100,7 +100,8 @@
       "WebFetch(domain:docs.voyageai.com)",
       "Skill(skill-creator)",
       "Skill(executando-odoo-financeiro)",
-      "mcp__render__get_deploy"
+      "mcp__render__get_deploy",
+      "Bash(/dev/null:*)"
     ],
     "deny": []
   },
