@@ -421,6 +421,10 @@ class SincronizacaoContasAPagarService:
             if parcela_paga and conta.status_sistema == 'PENDENTE':
                 conta.status_sistema = 'PAGO'
 
+            # FIX G3: Fallback metodo_baixa='ODOO_DIRETO' quando sync marca como pago
+            if parcela_paga and not conta.metodo_baixa:
+                conta.metodo_baixa = 'ODOO_DIRETO'
+
             self.estatisticas['atualizados'] += 1
         else:
             # Criar novo registro
@@ -441,6 +445,7 @@ class SincronizacaoContasAPagarService:
                 parcela_paga=parcela_paga,
                 reconciliado=reconciliado,
                 status_sistema='PAGO' if parcela_paga else 'PENDENTE',
+                metodo_baixa='ODOO_DIRETO' if parcela_paga else None,
                 odoo_write_date=agora_utc_naive(),
                 ultima_sincronizacao=agora_utc_naive(),
                 criado_por='Sistema Odoo'

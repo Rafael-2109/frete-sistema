@@ -345,6 +345,10 @@ class ContasAReceber(db.Model):
     parcela_paga = db.Column(db.Boolean, default=False)  # l10n_br_paga
     status_pagamento_odoo = db.Column(db.String(50), nullable=True)  # x_studio_status_de_pagamento
 
+    # Rastreio de como o titulo foi baixado
+    # Valores: CNAB, EXCEL, COMPROVANTE, EXTRATO, ODOO_DIRETO
+    metodo_baixa = db.Column(db.String(30), nullable=True, index=True)
+
     # =========================================================================
     # CAMPOS CALCULADOS
     # =========================================================================
@@ -526,6 +530,7 @@ class ContasAReceber(db.Model):
             'valor_titulo': self.valor_titulo,
             'tipo_titulo': self.tipo_titulo,
             'parcela_paga': self.parcela_paga,
+            'metodo_baixa': self.metodo_baixa,
             'liberacao_prevista_antecipacao': self.liberacao_prevista_antecipacao.isoformat() if self.liberacao_prevista_antecipacao else None,
             'confirmacao_tipo': self.confirmacao_tipo.tipo if self.confirmacao_tipo else None,
             'forma_confirmacao_tipo': self.forma_confirmacao_tipo.tipo if self.forma_confirmacao_tipo else None,
@@ -2222,6 +2227,10 @@ class ContasAPagar(db.Model):
     # CONTESTADO: Em contestação
     status_sistema = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
 
+    # Rastreio de como o titulo foi baixado
+    # Valores: CNAB, EXCEL, COMPROVANTE, EXTRATO, ODOO_DIRETO
+    metodo_baixa = db.Column(db.String(30), nullable=True, index=True)
+
     # Data programada para pagamento (definido pelo usuário)
     data_programada = db.Column(db.Date, nullable=True)
 
@@ -2314,6 +2323,7 @@ class ContasAPagar(db.Model):
             'parcela_paga': self.parcela_paga,
             'reconciliado': self.reconciliado,
             'status_sistema': self.status_sistema,
+            'metodo_baixa': self.metodo_baixa,
             'data_programada': self.data_programada.isoformat() if self.data_programada else None,
             # Calculados
             'dias_vencidos': self.dias_vencidos,

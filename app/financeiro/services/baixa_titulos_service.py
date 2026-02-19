@@ -19,6 +19,7 @@ Data: 2025-12-10
 """
 
 import logging
+import re
 from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
 
@@ -162,6 +163,15 @@ class BaixaTitulosService:
             try:
                 self._processar_item(item)
                 self.estatisticas['sucesso'] += 1
+
+                # FIX G1: Vincular ExtratoItem correspondente (non-blocking)
+                try:
+                    extrato_id = self._vincular_extrato_item(item)
+                    if extrato_id:
+                        logger.info(f"  [G1] ExtratoItem {extrato_id} vinculado e CONCILIADO")
+                except Exception as e_extrato:
+                    logger.warning(f"  [G1] Vinculacao extrato falhou (non-blocking): {e_extrato}")
+
             except Exception as e:
                 logger.error(f"Erro no item {item.id}: {e}")
                 item.status = 'ERRO'
@@ -531,6 +541,41 @@ class BaixaTitulosService:
                 f"[DESCONTO_EMBUTIDO: R$ {desconto_excel:.2f} não lançado - "
                 f"já embutido no saldo (sem bug ano 2000)]"
             )
+
+        # =================================================================
+        # FIX G2+G3: Atualizar parcela_paga + metodo_baixa local imediato
+        # =================================================================
+        try:
+            saldo_depois = item.saldo_depois or 0
+            if saldo_depois <= 0.01:
+                from app.financeiro.models import ContasAReceber
+                from app.financeiro.parcela_utils import parcela_to_str
+                from app.financeiro.constants import EMPRESA_MAP
+
+                empresa = None
+                for nome, codigo in EMPRESA_MAP.items():
+                    if company_name and nome.upper() in company_name.upper():
+                        empresa = codigo
+                        break
+
+                if empresa:
+                    titulo_local = ContasAReceber.query.filter_by(
+                        empresa=empresa,
+                        titulo_nf=str(item.nf_excel),
+                        parcela=parcela_to_str(item.parcela_excel),
+                    ).first()
+                    if titulo_local and not titulo_local.parcela_paga:
+                        titulo_local.parcela_paga = True
+                        titulo_local.status_pagamento_odoo = 'PAGO_BAIXA_EXCEL'
+                        titulo_local.metodo_baixa = 'EXCEL'
+                        logger.info(
+                            f"  [G2/G3] ContasAReceber #{titulo_local.id} marcada paga "
+                            f"(metodo_baixa=EXCEL)"
+                        )
+                    elif titulo_local and titulo_local.parcela_paga and not titulo_local.metodo_baixa:
+                        titulo_local.metodo_baixa = 'EXCEL'
+        except Exception as e_g2:
+            logger.warning(f"  [G2/G3] Falha ao atualizar titulo local (non-blocking): {e_g2}")
 
         # Log de conclusao
         pagamentos_criados = []
@@ -1707,3 +1752,156 @@ class BaixaTitulosService:
         except Exception as e:
             logger.warning(f"Erro ao verificar desconto existente: {e}")
             return False
+
+    # =========================================================================
+    # FIX G1: VINCULAR ExtratoItem AO BAIXAR VIA EXCEL
+    # =========================================================================
+
+    def _vincular_extrato_item(self, item: BaixaTituloItem) -> Optional[int]:
+        """
+        Tenta vincular ExtratoItem correspondente apos baixa bem-sucedida.
+
+        NON-BLOCKING: Falhas aqui nao afetam a baixa (ja concluida).
+
+        Matching em 3 fases (mesmo padrao do CNAB processor):
+        1. ExtratoItem ja tem titulo vinculado (titulo_receber_id)
+        2. Data + Valor + CNPJ exato / raiz
+        3. Data + Valor unico candidato
+
+        Returns:
+            ID do ExtratoItem vinculado ou None
+        """
+        if item.status != 'SUCESSO' or not item.valor_excel:
+            return None
+
+        from app.financeiro.models import ExtratoItem, ExtratoLote, ContasAReceber
+        from app.financeiro.parcela_utils import parcela_to_str
+
+        # 1. Buscar ContasAReceber local
+        parcela_str = parcela_to_str(item.parcela_excel)
+        conta = ContasAReceber.query.filter(
+            ContasAReceber.titulo_nf == str(item.nf_excel),
+            ContasAReceber.parcela == parcela_str,
+        ).first()
+
+        cnpj_limpo = None
+        if conta and conta.cnpj:
+            cnpj_limpo = re.sub(r'\D', '', conta.cnpj)
+
+        # Base query: extratos de entrada, nao conciliados
+        base_filter = [
+            ExtratoItem.status != 'CONCILIADO',
+            ExtratoLote.tipo_transacao == 'entrada',
+        ]
+
+        # FASE 1: ExtratoItem ja tem mesmo titulo vinculado
+        if conta:
+            extrato = (
+                ExtratoItem.query
+                .join(ExtratoLote)
+                .filter(
+                    ExtratoItem.titulo_receber_id == conta.id,
+                    *base_filter,
+                )
+                .first()
+            )
+            if extrato:
+                return self._marcar_extrato_conciliado(extrato, item, conta)
+
+        # FASE 2: Data + Valor + CNPJ
+        tolerancia = 0.02
+        valor_principal = item.valor_excel
+        juros_excel = getattr(item, 'juros_excel', 0) or 0
+        valores_tentativa = [valor_principal]
+        if juros_excel > 0:
+            valores_tentativa.append(valor_principal + juros_excel)
+
+        for valor in valores_tentativa:
+            query_base = (
+                ExtratoItem.query
+                .join(ExtratoLote)
+                .filter(
+                    ExtratoItem.data_transacao == item.data_excel,
+                    ExtratoItem.valor.between(valor - tolerancia, valor + tolerancia),
+                    *base_filter,
+                )
+            )
+
+            if cnpj_limpo and len(cnpj_limpo) >= 8:
+                # CNPJ exato
+                extrato = query_base.filter(
+                    db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g') == cnpj_limpo
+                ).first()
+                if extrato:
+                    return self._marcar_extrato_conciliado(extrato, item, conta)
+
+                # CNPJ raiz (8 digitos)
+                raiz = cnpj_limpo[:8]
+                extrato = query_base.filter(
+                    db.func.left(
+                        db.func.regexp_replace(ExtratoItem.cnpj_pagador, '[^0-9]', '', 'g'), 8
+                    ) == raiz
+                ).first()
+                if extrato:
+                    return self._marcar_extrato_conciliado(extrato, item, conta)
+
+        # FASE 3: Data + Valor unico candidato
+        for valor in valores_tentativa:
+            candidatos = (
+                ExtratoItem.query
+                .join(ExtratoLote)
+                .filter(
+                    ExtratoItem.data_transacao == item.data_excel,
+                    ExtratoItem.valor.between(valor - tolerancia, valor + tolerancia),
+                    *base_filter,
+                )
+                .all()
+            )
+            if len(candidatos) == 1:
+                return self._marcar_extrato_conciliado(candidatos[0], item, conta)
+            elif len(candidatos) > 1:
+                logger.warning(
+                    f"  [G1] {len(candidatos)} ExtratoItems candidatos para "
+                    f"NF {item.nf_excel} P{item.parcela_excel} - nao vinculando"
+                )
+
+        logger.info(f"  [G1] Nenhum ExtratoItem encontrado para NF {item.nf_excel} P{item.parcela_excel}")
+        return None
+
+    def _marcar_extrato_conciliado(
+        self, extrato, item: BaixaTituloItem, conta=None
+    ) -> Optional[int]:
+        """Marca ExtratoItem como CONCILIADO apos baixa via Excel."""
+        # Verificar se ja conciliado (race condition)
+        if extrato.status == 'CONCILIADO':
+            return None
+
+        # Preencher dados do titulo
+        if conta:
+            extrato.titulo_receber_id = conta.id
+            extrato.titulo_nf = conta.titulo_nf
+            extrato.titulo_parcela = conta.parcela_int
+            extrato.titulo_valor = float(conta.valor_titulo) if conta.valor_titulo else None
+            extrato.titulo_cliente = conta.raz_social_red or conta.raz_social
+            extrato.titulo_cnpj = conta.cnpj
+            extrato.titulo_vencimento = conta.vencimento
+        else:
+            extrato.titulo_nf = str(item.nf_excel)
+            extrato.titulo_parcela = item.parcela_excel
+
+        extrato.status_match = 'MATCH_ENCONTRADO'
+        extrato.match_criterio = 'VIA_BAIXA_EXCEL'
+        extrato.match_score = 95
+        extrato.status = 'CONCILIADO'
+        extrato.aprovado = True
+        extrato.aprovado_em = agora_utc_naive()
+        extrato.processado_em = agora_utc_naive()
+        extrato.payment_id = item.payment_odoo_id
+        extrato.mensagem = (
+            f"[BAIXA_AUTO] Vinculado via baixa Excel - "
+            f"NF {item.nf_excel} P{item.parcela_excel} - "
+            f"Lote #{item.lote_id}"
+        )
+
+        db.session.flush()
+        return extrato.id

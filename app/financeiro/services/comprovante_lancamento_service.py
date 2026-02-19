@@ -271,6 +271,28 @@ class ComprovanteLancamentoService:
             # 7. Marcar comprovante como reconciliado
             comp.odoo_is_reconciled = True
 
+            # FIX G2/G3: Atualizar ContasAPagar local imediato
+            try:
+                if lanc.odoo_move_line_id:
+                    from app.financeiro.models import ContasAPagar
+                    titulo_local = ContasAPagar.query.filter_by(
+                        odoo_line_id=lanc.odoo_move_line_id
+                    ).first()
+                    if titulo_local and not titulo_local.parcela_paga:
+                        titulo_local.parcela_paga = True
+                        titulo_local.reconciliado = True
+                        titulo_local.metodo_baixa = 'COMPROVANTE'
+                        if titulo_local.status_sistema == 'PENDENTE':
+                            titulo_local.status_sistema = 'PAGO'
+                        logger.info(
+                            f"  [G2/G3] ContasAPagar #{titulo_local.id} marcada paga "
+                            f"(metodo_baixa=COMPROVANTE)"
+                        )
+                    elif titulo_local and titulo_local.parcela_paga and not titulo_local.metodo_baixa:
+                        titulo_local.metodo_baixa = 'COMPROVANTE'
+            except Exception as e_g2:
+                logger.warning(f"  [G2/G3] Falha ao atualizar titulo local: {e_g2}")
+
             # 8. Sincronizar com extrato (se existir) — NÃO-BLOQUEANTE
             try:
                 from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
@@ -638,6 +660,24 @@ class ComprovanteLancamentoService:
             lanc.lancado_por = usuario
             lanc.erro_lancamento = None
 
+            # FIX G2/G3: Atualizar ContasAPagar local imediato
+            try:
+                if lanc.odoo_move_line_id:
+                    from app.financeiro.models import ContasAPagar
+                    titulo_local = ContasAPagar.query.filter_by(
+                        odoo_line_id=lanc.odoo_move_line_id
+                    ).first()
+                    if titulo_local and not titulo_local.parcela_paga:
+                        titulo_local.parcela_paga = True
+                        titulo_local.reconciliado = True
+                        titulo_local.metodo_baixa = 'COMPROVANTE'
+                        if titulo_local.status_sistema == 'PENDENTE':
+                            titulo_local.status_sistema = 'PAGO'
+                    elif titulo_local and titulo_local.parcela_paga and not titulo_local.metodo_baixa:
+                        titulo_local.metodo_baixa = 'COMPROVANTE'
+            except Exception as e_g2:
+                logger.warning(f"  [G2/G3] Falha titulo local (non-blocking): {e_g2}")
+
             db.session.flush()
 
             logger.info(
@@ -903,6 +943,24 @@ class ComprovanteLancamentoService:
         lanc.lancado_por = usuario
         lanc.erro_lancamento = None
         comp.odoo_is_reconciled = True
+
+        # FIX G2/G3: Atualizar ContasAPagar local imediato
+        try:
+            if lanc.odoo_move_line_id:
+                from app.financeiro.models import ContasAPagar
+                titulo_local = ContasAPagar.query.filter_by(
+                    odoo_line_id=lanc.odoo_move_line_id
+                ).first()
+                if titulo_local and not titulo_local.parcela_paga:
+                    titulo_local.parcela_paga = True
+                    titulo_local.reconciliado = True
+                    titulo_local.metodo_baixa = 'COMPROVANTE'
+                    if titulo_local.status_sistema == 'PENDENTE':
+                        titulo_local.status_sistema = 'PAGO'
+                elif titulo_local and titulo_local.parcela_paga and not titulo_local.metodo_baixa:
+                    titulo_local.metodo_baixa = 'COMPROVANTE'
+        except Exception as e_g2:
+            logger.warning(f"  [G2/G3] Falha titulo local (non-blocking): {e_g2}")
 
         # Sincronizar com extrato (se existir) — NÃO-BLOQUEANTE
         try:

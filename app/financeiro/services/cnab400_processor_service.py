@@ -332,6 +332,8 @@ class Cnab400ProcessorService:
             # Atualizar título
             titulo.parcela_paga = True
             titulo.status_pagamento_odoo = 'PAGO_CNAB'
+            if not titulo.metodo_baixa:
+                titulo.metodo_baixa = 'CNAB'
 
             # Construir observação
             obs_parts = [
@@ -1100,6 +1102,8 @@ class Cnab400ProcessorService:
             if not titulo.parcela_paga:
                 titulo.parcela_paga = True
                 titulo.status_pagamento_odoo = 'PAGO_CNAB_AUTO'
+                if not titulo.metodo_baixa:
+                    titulo.metodo_baixa = 'CNAB'
 
                 # Observação para auditoria
                 obs_parts = [
@@ -1192,6 +1196,8 @@ class Cnab400ProcessorService:
             if titulo and not titulo.parcela_paga:
                 titulo.parcela_paga = True
                 titulo.status_pagamento_odoo = 'PAGO_CNAB'
+                if not titulo.metodo_baixa:
+                    titulo.metodo_baixa = 'CNAB'
 
                 # Construir observação detalhada
                 obs_parts = [

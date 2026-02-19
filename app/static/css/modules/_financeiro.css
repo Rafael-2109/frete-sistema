@@ -1131,6 +1131,75 @@
       --_badge-color: hsl(145 40% 80%);
   }
 
+  /* ── Badges de método de baixa (metodo_baixa) ── */
+  .badge-metodo-cnab {
+      background: hsl(270 50% 92%);
+      color: hsl(270 50% 35%);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.15em 0.4em;
+      letter-spacing: 0.3px;
+  }
+  .badge-metodo-excel {
+      background: hsl(145 45% 90%);
+      color: hsl(145 50% 30%);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.15em 0.4em;
+      letter-spacing: 0.3px;
+  }
+  .badge-metodo-comprovante {
+      background: hsl(240 40% 92%);
+      color: hsl(240 40% 35%);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.15em 0.4em;
+      letter-spacing: 0.3px;
+  }
+  .badge-metodo-extrato {
+      background: hsl(180 40% 90%);
+      color: hsl(180 50% 30%);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.15em 0.4em;
+      letter-spacing: 0.3px;
+  }
+  .badge-metodo-odoo_direto {
+      background: hsl(210 20% 90%);
+      color: hsl(210 25% 35%);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.15em 0.4em;
+      letter-spacing: 0.3px;
+  }
+
+  /* Dark mode para badges de método de baixa */
+  [data-bs-theme="dark"] .badge-metodo-cnab,
+  [data-theme="dark"] .badge-metodo-cnab {
+      background: hsl(270 40% 25%);
+      color: hsl(270 60% 85%);
+  }
+  [data-bs-theme="dark"] .badge-metodo-excel,
+  [data-theme="dark"] .badge-metodo-excel {
+      background: hsl(145 30% 25%);
+      color: hsl(145 50% 85%);
+  }
+  [data-bs-theme="dark"] .badge-metodo-comprovante,
+  [data-theme="dark"] .badge-metodo-comprovante {
+      background: hsl(240 40% 30%);
+      color: hsl(240 40% 85%);
+  }
+  [data-bs-theme="dark"] .badge-metodo-extrato,
+  [data-theme="dark"] .badge-metodo-extrato {
+      background: hsl(180 40% 25%);
+      color: hsl(180 60% 85%);
+  }
+  [data-bs-theme="dark"] .badge-metodo-odoo_direto,
+  [data-theme="dark"] .badge-metodo-odoo_direto {
+      background: hsl(210 15% 30%);
+      color: hsl(210 15% 80%);
+  }
+
   /* Container para conciliado externo sem título vinculado */
   .fin-titulo-candidato--conciliado-externo {
       border: 1px dashed var(--border);

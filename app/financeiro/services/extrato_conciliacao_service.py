@@ -495,6 +495,20 @@ class ExtratoConciliacaoService:
         item.processado_em = agora_utc_naive()
         item.mensagem = f"Conciliado: Saldo {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
 
+        # FIX G2/G3: Atualizar ContasAReceber local imediato
+        try:
+            if titulo and not titulo.parcela_paga:
+                saldo_depois = item.titulo_saldo_depois or 0
+                if saldo_depois <= 0.01:
+                    titulo.parcela_paga = True
+                    titulo.status_pagamento_odoo = 'PAGO_EXTRATO'
+                    titulo.metodo_baixa = 'EXTRATO'
+                    logger.info(f"  [G2/G3] ContasAReceber #{titulo.id} marcada paga (metodo_baixa=EXTRATO)")
+            elif titulo and titulo.parcela_paga and not titulo.metodo_baixa:
+                titulo.metodo_baixa = 'EXTRATO'
+        except Exception as e_g2:
+            logger.warning(f"  [G2/G3] Falha titulo local (non-blocking): {e_g2}")
+
         # Sincronizar com comprovantes (se existir) — NÃO-BLOQUEANTE
         try:
             from app.financeiro.services.conciliacao_sync_service import ConciliacaoSyncService
@@ -787,6 +801,22 @@ class ExtratoConciliacaoService:
             f"Pagamento conciliado: {payment_name}, "
             f"Saldo {item.titulo_saldo_antes:.2f} -> {item.titulo_saldo_depois}"
         )
+
+        # FIX G2/G3: Atualizar ContasAPagar local imediato
+        try:
+            if titulo_local and not titulo_local.parcela_paga:
+                saldo_depois = item.titulo_saldo_depois or 0
+                if saldo_depois <= 0.01:
+                    titulo_local.parcela_paga = True
+                    titulo_local.reconciliado = True
+                    titulo_local.metodo_baixa = 'EXTRATO'
+                    if titulo_local.status_sistema == 'PENDENTE':
+                        titulo_local.status_sistema = 'PAGO'
+                    logger.info(f"  [G2/G3] ContasAPagar #{titulo_local.id} marcada paga (metodo_baixa=EXTRATO)")
+            elif titulo_local and titulo_local.parcela_paga and not titulo_local.metodo_baixa:
+                titulo_local.metodo_baixa = 'EXTRATO'
+        except Exception as e_g2:
+            logger.warning(f"  [G2/G3] Falha titulo local (non-blocking): {e_g2}")
 
         # Sincronizar com comprovantes (se existir) — NÃO-BLOQUEANTE
         try:
@@ -2759,6 +2789,48 @@ class ExtratoConciliacaoService:
         if todos_ok:
             item.status = 'CONCILIADO'
             item.mensagem = f"Todos os {len(vinculos)} títulos conciliados"
+
+            # FIX G2/G3: Atualizar títulos locais imediato (M:N)
+            try:
+                for vinculo in vinculos:
+                    if vinculo.status != 'CONCILIADO':
+                        continue
+
+                    titulo_mn = None
+                    tipo_mn = None
+                    if vinculo.titulo_receber_id:
+                        titulo_mn = db.session.get(ContasAReceber, vinculo.titulo_receber_id)
+                        tipo_mn = 'receber'
+                    elif vinculo.titulo_pagar_id:
+                        titulo_mn = db.session.get(ContasAPagar, vinculo.titulo_pagar_id)
+                        tipo_mn = 'pagar'
+
+                    if not titulo_mn:
+                        continue
+
+                    # Guard: só marcar pago se saldo zerado
+                    saldo_atual = getattr(titulo_mn, 'saldo_total', None) or getattr(titulo_mn, 'valor_titulo', 0)
+                    saldo_alocado = vinculo.valor_alocado or 0
+                    saldo_depois = max(0, float(saldo_atual or 0) - float(saldo_alocado))
+
+                    if saldo_depois <= 0.01:
+                        titulo_mn.parcela_paga = True
+                        if not titulo_mn.metodo_baixa:
+                            titulo_mn.metodo_baixa = 'EXTRATO'
+
+                        if tipo_mn == 'receber':
+                            titulo_mn.status_pagamento_odoo = 'PAGO_EXTRATO'
+                        else:
+                            titulo_mn.reconciliado = True
+                            titulo_mn.status_sistema = 'PAGO'
+
+                        logger.info(
+                            f"  [G2/G3] {tipo_mn} #{titulo_mn.id} marcada paga "
+                            f"(metodo_baixa=EXTRATO, saldo_depois={saldo_depois:.2f})"
+                        )
+            except Exception as e:
+                logger.warning(f"  [G2/G3] Erro ao atualizar títulos locais M:N: {e}")
+
         elif total_conciliados > 0:
             item.status = 'PARCIAL'
             item.mensagem = f"{total_conciliados}/{len(vinculos)} títulos conciliados"

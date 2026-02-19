@@ -203,6 +203,9 @@
                             <td class="text-center">
                                 {% if conta.parcela_paga %}
                                 <span class="fin-badge fin-badge--success">Pago</span>
+                                {% if conta.metodo_baixa %}
+                                <br><span class="badge badge-metodo-{{ conta.metodo_baixa|lower }}" title="Baixado via {{ conta.metodo_baixa }}">{{ conta.metodo_baixa }}</span>
+                                {% endif %}
                                 {% elif conta.vencimento and conta.vencimento < hoje %}
                                 <span class="fin-badge fin-badge--danger">Vencido</span>
                                 {% elif conta.vencimento == hoje %}

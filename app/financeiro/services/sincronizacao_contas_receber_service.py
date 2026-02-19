@@ -298,6 +298,7 @@ class SincronizacaoContasReceberService:
             tipo_titulo=row.get('payment_provider_id_nome'),
             parcela_paga=bool(row.get('l10n_br_paga')),
             status_pagamento_odoo=row.get('x_studio_status_de_pagamento'),
+            metodo_baixa='ODOO_DIRETO' if bool(row.get('l10n_br_paga')) else None,
             odoo_write_date=odoo_write_date,
             ultima_sincronizacao=agora_utc_naive(),
             criado_por='Sistema Odoo'
@@ -398,6 +399,10 @@ class SincronizacaoContasReceberService:
         conta.odoo_write_date = odoo_write_date
         conta.ultima_sincronizacao = agora_utc_naive()
         conta.atualizado_por = 'Sistema Odoo'
+
+        # FIX G3: Fallback metodo_baixa='ODOO_DIRETO' para transição parcela_paga False→True
+        if 'parcela_paga' in alteracoes and conta.parcela_paga and not conta.metodo_baixa:
+            conta.metodo_baixa = 'ODOO_DIRETO'
 
         if alteracoes:
             logger.debug(f"   📝 {conta.titulo_nf}-{conta.parcela}: {', '.join(alteracoes)}")

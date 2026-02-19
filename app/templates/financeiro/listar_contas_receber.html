@@ -536,6 +536,9 @@
                                   title="Ver abatimentos e baixas">
                                 PAGO <i class="fas fa-balance-scale ms-1"></i>
                             </span>
+                            {% if conta.metodo_baixa %}
+                            <br><span class="badge badge-metodo-{{ conta.metodo_baixa|lower }}" title="Baixado via {{ conta.metodo_baixa }}">{{ conta.metodo_baixa }}</span>
+                            {% endif %}
                         {% elif conta.vencimento and conta.vencimento < hoje %}
                             <span class="badge bg-danger badge-clicavel" style="cursor: pointer;"
                                   onclick="abrirModalComparativo({{ conta.id }})"
