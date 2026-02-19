@@ -703,19 +703,32 @@ class ValidacaoRecebimentoJob:
             logger.debug(f"DFE {dfe_id}: REPROCESSAR (status={validacao.status})")
             return True
 
-        # 5. BLOQUEADO - verificar se divergências foram resolvidas
+        # 5. BLOQUEADO - verificar se divergências foram resolvidas ou se POs apareceram
         if validacao.status == 'bloqueado':
             divergencias_pendentes = DivergenciaNfPo.query.filter(
                 DivergenciaNfPo.validacao_id == validacao.id,
                 DivergenciaNfPo.status == 'pendente'
-            ).count()
+            ).all()
 
-            if divergencias_pendentes == 0:
+            if len(divergencias_pendentes) == 0:
                 logger.info(f"DFE {dfe_id}: REPROCESSAR (divergências resolvidas)")
                 return True
-            else:
-                logger.debug(f"DFE {dfe_id}: SKIP ({divergencias_pendentes} divergências pendentes)")
+
+            # Separar divergências por tipo
+            divs_sem_po = [d for d in divergencias_pendentes if d.tipo_divergencia == 'sem_po']
+            divs_outros = [d for d in divergencias_pendentes if d.tipo_divergencia != 'sem_po']
+
+            # Se há divergências de OUTROS tipos (preco, quantidade, etc), SKIP — exigem ação humana
+            if divs_outros:
+                logger.debug(f"DFE {dfe_id}: SKIP ({len(divs_outros)} divergências não-sem_po pendentes)")
                 return False
+
+            # TODAS pendentes são "sem_po" — verificar se POs apareceram desde a última validação
+            if divs_sem_po and self._pos_apareceram_para_divergencias(divs_sem_po, dfe_id):
+                return True
+
+            logger.debug(f"DFE {dfe_id}: SKIP ({len(divs_sem_po)} divergências sem_po, POs ainda não disponíveis)")
+            return False
 
         # 6. Consolidado - não reprocessar
         if validacao.status == 'consolidado':
@@ -724,6 +737,40 @@ class ValidacaoRecebimentoJob:
 
         # DEFAULT: Skip por segurança (status desconhecido)
         logger.debug(f"DFE {dfe_id}: SKIP (status={validacao.status} - default)")
+        return False
+
+    def _pos_apareceram_para_divergencias(self, divs_sem_po: list, dfe_id: int) -> bool:
+        """
+        Verifica se POs apareceram na tabela local pedido_compras para divergências sem_po.
+        Reutiliza o padrão de query de _buscar_pos_fornecedor_local() do service.
+
+        Retorna True se pelo menos 1 PO novo foi encontrado para qualquer divergência.
+        """
+        from app.manufatura.models import PedidoCompras
+
+        for div in divs_sem_po:
+            cnpj = div.cnpj_fornecedor
+            cod_produto = div.cod_produto_interno
+            if not cnpj or not cod_produto:
+                continue
+
+            cnpj_limpo = ''.join(c for c in cnpj if c.isdigit())
+
+            existe_po = PedidoCompras.query.filter(
+                db.func.regexp_replace(PedidoCompras.cnpj_fornecedor, '[^0-9]', '', 'g') == cnpj_limpo,
+                PedidoCompras.cod_produto == cod_produto,
+                PedidoCompras.status_odoo.in_(['purchase', 'done']),
+                db.or_(PedidoCompras.dfe_id.is_(None), PedidoCompras.dfe_id == ''),
+                (PedidoCompras.qtd_produto_pedido - db.func.coalesce(PedidoCompras.qtd_recebida, 0)) > 0
+            ).first()
+
+            if existe_po:
+                logger.info(
+                    f"DFE {dfe_id}: REPROCESSAR (PO {existe_po.num_pedido} apareceu "
+                    f"para produto {cod_produto} que tinha divergência sem_po)"
+                )
+                return True
+
         return False
 
     def _buscar_dfes_pendentes(self, minutos_janela: int) -> List[Dict]:

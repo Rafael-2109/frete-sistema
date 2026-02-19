@@ -16,8 +16,7 @@ Referência:
 """
 
 import logging
-import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, Any, List, Set
 
 from app import db
@@ -158,49 +157,6 @@ class PoChangesDetectorService:
             'dfes_marcados': dfes_marcados,
             'validacoes_afetadas': len(validacao_ids_afetados)
         }
-
-    def verificar_dfe_precisa_revalidar(self, validacao: ValidacaoNfPoDfe) -> bool:
-        """
-        Verifica se um DFE específico precisa ser revalidado.
-
-        Usado pelo job de validação para decidir skip/reprocess.
-
-        Args:
-            validacao: Instância de ValidacaoNfPoDfe
-
-        Returns:
-            True se deve revalidar, False se pode skip
-        """
-        # Status que sempre precisam reprocessar
-        if validacao.status in ('pendente', 'erro', 'validando'):
-            return True
-
-        # Finalizado no Odoo - nunca reprocessa
-        if validacao.status == 'finalizado_odoo':
-            return False
-
-        # Flag de PO modificada - reprocessar
-        if validacao.po_modificada_apos_validacao:
-            return True
-
-        # Aprovado sem modificação - pode skip
-        if validacao.status == 'aprovado':
-            return False
-
-        # Bloqueado - verificar se divergências foram resolvidas
-        if validacao.status == 'bloqueado':
-            from app.recebimento.models import DivergenciaNfPo
-
-            divergencias_pendentes = DivergenciaNfPo.query.filter(
-                DivergenciaNfPo.validacao_id == validacao.id,
-                DivergenciaNfPo.status == 'pendente'
-            ).count()
-
-            # Se todas divergências foram resolvidas, reprocessar
-            return divergencias_pendentes == 0
-
-        # Default: reprocessar para garantir
-        return True
 
     def extrair_pos_usadas(self, validacao_id: int) -> List[Dict[str, Any]]:
         """
