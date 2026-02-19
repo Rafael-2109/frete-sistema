@@ -20,7 +20,7 @@ decision_tree: |
   Cadastrar unidade parceira (tipo T)?
     → cadastrar_unidade_401.py --sigla X --tipo T --razao-social "..." --dry-run
   Alterar/importar cidades na 402 (qualquer quantidade)?
-    → PREFERIR CSV: exportar_cidades_402.py --uf XX → modificar → importar_cidades_402.py --csv /tmp/cidades.csv --dry-run
+    → PREFERIR CSV: exportar_cidades_402.py --uf XX → modificar → importar_cidades_402.py --csv /tmp/cidades.csv --dry-run [--timeout 30]
   Cadastrar 1-3 cidades VISIVEIS na grid 402?
     → cadastrar_cidades_402.py --uf XX --unidade XXX --cidades '[...]' --dry-run
     (LIMITACAO: so funciona com cidades no viewport da virtual scroll)

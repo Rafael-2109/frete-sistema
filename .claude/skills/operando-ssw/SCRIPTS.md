@@ -136,17 +136,42 @@ Importa cidades atendidas via CSV na opcao 402. **Metodo PREFERIDO para qualquer
 ```bash
 python .claude/skills/operando-ssw/scripts/importar_cidades_402.py \
   --csv /tmp/cidades_cgr.csv --dry-run
+
+python .claude/skills/operando-ssw/scripts/importar_cidades_402.py \
+  --csv /tmp/cidades_cgr.csv --timeout 30
 ```
 
 | Parametro | Obrigatorio | Descricao |
 |-----------|-------------|-----------|
 | --csv | Sim | Caminho do CSV (formato 402, separador `;`, ISO-8859-1) |
 | --dry-run | -- | Valida CSV sem importar |
+| --timeout | -- | Timeout em segundos apos IMPORTA2 (default: 20). Aumentar para CSVs grandes |
 
 **Formato CSV**: 45 colunas, separador `;`, encoding ISO-8859-1.
 Colunas essenciais: UF, CIDADE, UNIDADE, POLO, TIPO_FRETE, RESTRITA, COLETA, ENTREGA, PRAZO_ENTREGA.
 
-**CRITICO**: A tela de importacao DEVE ser popup nativo (NAO usar `createNewDoc` override).
+**CRITICO — PRACA_COMERCIAL**: Para INCLUIR cidades novas (sem UNIDADE existente no SSW),
+o CSV DEVE ter o campo PRACA_COMERCIAL (indice 15) = UNIDADE + POLO (ex: "SSAI", "JPAI").
+Sem este campo, cidades sem UNIDADE sao silenciosamente ignoradas pelo SSW.
+
+**FIX MULTIPART**: Playwright `set_input_files()` registra arquivo no DOM, mas `ajaxEnvia('IMPORTA2')`
+envia body vazio no POST multipart para ssw0475. Script intercepta via `page.route()` e reconstroi
+o body com bytes reais do CSV.
+
+### Retorno
+
+```json
+{
+  "sucesso": true,
+  "resposta": "Processamento concluido. Inclusoes: 2 Alteracoes: 15 Nao inclusas: 3",
+  "inclusoes": 2,
+  "alteracoes": 15,
+  "nao_inclusas": 3
+}
+```
+
+**Contadores SSW**: Inclusoes = cidades novas adicionadas. Alteracoes = cidades existentes atualizadas.
+Nao inclusas = cidades com valores IDENTICOS ao SSW (NAO significa "nao sobrescreve").
 
 ### Workflow recomendado: Exportar → Modificar → Importar
 
