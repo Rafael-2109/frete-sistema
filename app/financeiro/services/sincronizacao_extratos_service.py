@@ -14,7 +14,7 @@ Scheduler:
     Recomendado executar após SincronizacaoBaixasService (cada 60-120 min)
 """
 
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from typing import Dict, Any, List, Optional
 import logging
 
@@ -860,6 +860,8 @@ class SincronizacaoExtratosService:
         self,
         journals: List[str] = None,
         dias_retroativos: int = 7,
+        data_inicio: Optional[date] = None,
+        data_fim: Optional[date] = None,
         limite: int = 500
     ) -> Dict[str, Any]:
         """
@@ -876,7 +878,9 @@ class SincronizacaoExtratosService:
         Args:
             journals: Lista de códigos de journal (GRA1, SIC, BRAD, etc.)
                       Se None, usa ['GRA1'] como padrão
-            dias_retroativos: Quantos dias para trás buscar (default: 7)
+            dias_retroativos: Quantos dias para trás buscar (default: 7, ignorado se data_inicio)
+            data_inicio: Data início explícita (sobrepõe dias_retroativos)
+            data_fim: Data fim explícita (default: hoje)
             limite: Limite de registros por journal (default: 500)
 
         Returns:
@@ -911,13 +915,15 @@ class SincronizacaoExtratosService:
             'detalhes_por_journal': {}
         }
 
-        logger.info(f"[IMPORT_EXTRATOS_AUTO] Iniciando importação automática: journals={journals}, dias={dias_retroativos}")
+        logger.info(f"[IMPORT_EXTRATOS_AUTO] Iniciando importação automática: journals={journals}, dias={dias_retroativos}, data_inicio={data_inicio}, data_fim={data_fim}")
 
         try:
             from app.financeiro.services.extrato_service import ExtratoService
 
-            data_inicio = date.today() - timedelta(days=dias_retroativos)
-            data_fim = date.today()
+            if data_inicio is None:
+                data_inicio = date.today() - timedelta(days=dias_retroativos)
+            if data_fim is None:
+                data_fim = date.today()
 
             for journal_code in journals:
                 for tipo in ['entrada', 'saida']:

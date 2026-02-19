@@ -442,11 +442,15 @@ def extrato_sincronizar_completo():
 
     Body JSON (opcional):
     - journal_code: Código do journal (None = todos)
-    - dias_retroativos: Dias para trás na importação (default 30)
+    - dias_retroativos: Dias para trás na importação (default 30, ignorado se data_inicio presente)
+    - data_inicio: Data início no formato YYYY-MM-DD (opcional)
+    - data_fim: Data fim no formato YYYY-MM-DD (opcional, default=hoje)
     """
     data = request.get_json() or {}
     journal_code = data.get('journal_code')  # None = todos
     dias_retroativos = data.get('dias_retroativos', 30)
+    data_inicio_str = data.get('data_inicio')  # YYYY-MM-DD
+    data_fim_str = data.get('data_fim')  # YYYY-MM-DD
 
     resultado = {
         'etapa_1_importacao': None,
@@ -455,8 +459,17 @@ def extrato_sincronizar_completo():
     }
 
     try:
+        # Converter datas se fornecidas
+        data_inicio_param = None
+        data_fim_param = None
+        if data_inicio_str:
+            from datetime import datetime as dt
+            data_inicio_param = dt.strptime(data_inicio_str, '%Y-%m-%d').date()
+            data_fim_param = dt.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+
         # --- Etapa 1: Importar linhas faltantes ---
-        logger.info(f"[SYNC_COMPLETA] Etapa 1: Importando linhas faltantes (journal={journal_code or 'TODOS'}, dias={dias_retroativos})")
+        log_periodo = f"de={data_inicio_str} ate={data_fim_str}" if data_inicio_str else f"dias={dias_retroativos}"
+        logger.info(f"[SYNC_COMPLETA] Etapa 1: Importando linhas faltantes (journal={journal_code or 'TODOS'}, {log_periodo})")
 
         from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService
         sync_service = SincronizacaoExtratosService()
@@ -465,6 +478,8 @@ def extrato_sincronizar_completo():
         import_result = sync_service.importar_extratos_automatico(
             journals=journals_param,
             dias_retroativos=dias_retroativos,
+            data_inicio=data_inicio_param,
+            data_fim=data_fim_param,
             limite=2000  # Limite maior para sync completa
         )
         resultado['etapa_1_importacao'] = import_result

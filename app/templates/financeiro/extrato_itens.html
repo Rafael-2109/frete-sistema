@@ -31,7 +31,25 @@
                                 id="btn-sync-odoo" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-sync me-1"></i>Sincronizar Odoo
                         </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
+                        <ul class="dropdown-menu dropdown-menu-end" style="min-width: 280px;">
+                            <li>
+                                <div class="px-3 py-2" onclick="event.stopPropagation()">
+                                    <label class="form-label mb-1 small fw-semibold">Periodo</label>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <div class="flex-fill">
+                                            <input type="date" class="form-control form-control-sm" id="sync-data-inicio"
+                                                   title="Data inicio">
+                                        </div>
+                                        <span class="text-muted small">ate</span>
+                                        <div class="flex-fill">
+                                            <input type="date" class="form-control form-control-sm" id="sync-data-fim"
+                                                   title="Data fim">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Vazio = ultimos 30 dias</small>
+                                </div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <button class="dropdown-item" onclick="sincronizarCompleto()">
                                     <i class="fas fa-sync-alt me-2 text-success"></i>Sincronizacao Completa
@@ -1794,11 +1812,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    /**
+     * Le as datas de periodo do dropdown de sincronizacao.
+     * Retorna objeto com data_inicio e data_fim (strings YYYY-MM-DD ou null).
+     */
+    function getSyncDatas() {
+        const inicio = document.getElementById('sync-data-inicio')?.value || '';
+        const fim = document.getElementById('sync-data-fim')?.value || '';
+        return {
+            data_inicio: inicio || null,
+            data_fim: fim || null
+        };
+    }
+
     window.sincronizarCompleto = async function() {
+        const datas = getSyncDatas();
+        const periodoMsg = datas.data_inicio
+            ? '\nPeriodo: ' + datas.data_inicio + ' ate ' + (datas.data_fim || 'hoje')
+            : '\nPeriodo: ultimos 30 dias';
+
         if (!confirm('Executar sincronizacao COMPLETA com Odoo?\n\n' +
             '1. Importar TODAS as linhas faltantes de TODOS os journals\n' +
             '2. Revalidar status de conciliacao no Odoo\n' +
-            '3. Resolver favorecidos/pagadores\n\n' +
+            '3. Resolver favorecidos/pagadores' +
+            periodoMsg + '\n\n' +
             'Isso pode levar alguns minutos.')) return;
 
         const btn = document.getElementById('btn-sync-odoo');
@@ -1807,10 +1844,14 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sincronizando...';
 
         try {
+            const payload = { dias_retroativos: 30 };
+            if (datas.data_inicio) payload.data_inicio = datas.data_inicio;
+            if (datas.data_fim) payload.data_fim = datas.data_fim;
+
             const resp = await fetchRetry(API_SYNC_COMPLETO, {
                 method: 'POST',
                 headers: getCsrfHeaders(),
-                body: JSON.stringify({ dias_retroativos: 30 })
+                body: JSON.stringify(payload)
             });
             const data = await resp.json();
 
@@ -1834,7 +1875,12 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     window.sincronizarJournal = async function(journalCode) {
-        if (!confirm('Importar linhas faltantes do journal ' + journalCode + '?')) return;
+        const datas = getSyncDatas();
+        const periodoMsg = datas.data_inicio
+            ? '\nPeriodo: ' + datas.data_inicio + ' ate ' + (datas.data_fim || 'hoje')
+            : '\nPeriodo: ultimos 30 dias';
+
+        if (!confirm('Importar linhas faltantes do journal ' + journalCode + '?' + periodoMsg)) return;
 
         const btn = document.getElementById('btn-sync-odoo');
         const textoOriginal = btn.innerHTML;
@@ -1842,10 +1888,14 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>' + journalCode + '...';
 
         try {
+            const payload = { journal_code: journalCode, dias_retroativos: 30 };
+            if (datas.data_inicio) payload.data_inicio = datas.data_inicio;
+            if (datas.data_fim) payload.data_fim = datas.data_fim;
+
             const resp = await fetchRetry(API_SYNC_COMPLETO, {
                 method: 'POST',
                 headers: getCsrfHeaders(),
-                body: JSON.stringify({ journal_code: journalCode, dias_retroativos: 30 })
+                body: JSON.stringify(payload)
             });
             const data = await resp.json();
 

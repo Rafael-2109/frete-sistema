@@ -160,25 +160,13 @@ class ExtratoService:
         db.session.add(lote)
         db.session.flush()
 
-        # Buscar IDs já importados para este journal (evita desperdiçar slots do limit)
-        imported_ids = [r[0] for r in db.session.query(
-            ExtratoItem.statement_line_id
-        ).filter(
-            ExtratoItem.journal_code == journal_code,
-            ExtratoItem.statement_line_id.isnot(None)
-        ).all()]
-
-        if imported_ids:
-            logger.info(f"Excluindo {len(imported_ids)} linhas já importadas da query Odoo")
-
-        # Buscar linhas não conciliadas
+        # Buscar linhas do Odoo (duplicatas filtradas em _processar_linha via statement_line_id indexado)
         linhas = self._buscar_linhas_extrato(
             journal_id=journal_id,
             data_inicio=data_inicio,
             data_fim=data_fim,
             limit=limit,
             tipo_transacao=tipo_transacao,
-            exclude_ids=imported_ids if imported_ids else None
         )
 
         logger.info(f"Linhas encontradas: {len(linhas)}")
@@ -238,10 +226,9 @@ class ExtratoService:
         data_fim: Optional[date] = None,
         limit: int = 500,
         tipo_transacao: str = 'entrada',
-        exclude_ids: Optional[List[int]] = None
     ) -> List[Dict]:
         """
-        Busca linhas de extrato não conciliadas.
+        Busca linhas de extrato do Odoo.
 
         Critérios:
         - journal_id específico
@@ -250,18 +237,14 @@ class ExtratoService:
         NOTA: Importa tanto linhas não-conciliadas quanto já-conciliadas no Odoo.
         Linhas já conciliadas são marcadas CONCILIADO e vinculadas ao comprovante
         automaticamente em _processar_linha().
+        Duplicatas são filtradas em _processar_linha() via statement_line_id (indexado).
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
-            exclude_ids: IDs de statement_line já importados (excluídos da query Odoo)
         """
         domain = [
             ['journal_id', '=', journal_id],
         ]
-
-        # Excluir linhas já importadas para não desperdiçar slots do limit
-        if exclude_ids:
-            domain.append(['id', 'not in', exclude_ids])
 
         # Filtro por tipo de transação
         if tipo_transacao == 'entrada':
@@ -907,21 +890,10 @@ class ExtratoService:
         db.session.add(lote)
         db.session.flush()
 
-        # Buscar IDs já importados deste statement para eficiência na re-importação
-        imported_ids = [r[0] for r in db.session.query(
-            ExtratoItem.statement_line_id
-        ).filter(
-            ExtratoItem.statement_line_id.isnot(None)
-        ).all()] if is_reimport else None
-
-        if imported_ids:
-            logger.info(f"Excluindo {len(imported_ids)} linhas já importadas da query Odoo")
-
-        # Buscar linhas do statement
+        # Buscar linhas do statement (duplicatas filtradas em _processar_linha via statement_line_id indexado)
         linhas = self._buscar_linhas_statement(
             statement_id,
             tipo_transacao=tipo_transacao,
-            exclude_ids=imported_ids
         )
 
         # Se re-importação e nenhuma linha nova, retornar lote existente com 0 novas
@@ -983,22 +955,17 @@ class ExtratoService:
         self,
         statement_id: int,
         tipo_transacao: str = 'entrada',
-        exclude_ids: Optional[List[int]] = None
     ) -> List[Dict]:
         """
         Busca linhas de um statement específico (conciliadas e não-conciliadas).
+        Duplicatas são filtradas em _processar_linha() via statement_line_id (indexado).
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
-            exclude_ids: IDs de statement_line já importados (excluídos da query Odoo)
         """
         domain = [
             ['statement_id', '=', statement_id],
         ]
-
-        # Excluir linhas já importadas
-        if exclude_ids:
-            domain.append(['id', 'not in', exclude_ids])
 
         # Filtro por tipo de transação
         if tipo_transacao == 'entrada':
