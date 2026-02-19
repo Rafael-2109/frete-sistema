@@ -285,8 +285,11 @@ class BaixaPagamentosService:
         )
 
         for linha in linhas:
-            # Preferir linha na conta transitória
-            if linha.get('account_id') and linha['account_id'][0] == CONTA_TRANSITORIA:
+            # Preferir linha na conta transitória OU pendentes
+            # (após preparar_extrato_para_reconciliacao, a conta já pode ser PENDENTES)
+            if linha.get('account_id') and linha['account_id'][0] in (
+                CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES
+            ):
                 return linha['id']
 
         # Se não encontrar na transitória, retornar qualquer uma não reconciliada
@@ -887,6 +890,133 @@ class BaixaPagamentosService:
                 data_str = str(data_pagamento)
 
         return f"Pagamento de fornecedor R$ {valor_formatado} - {nome_fornecedor} - {data_str}"
+
+    def preparar_extrato_para_reconciliacao(
+        self, move_id: int, statement_line_id: int,
+        partner_id: int, rotulo: str, conta_destino: int = None,
+    ) -> bool:
+        """
+        Prepara o extrato para reconciliação: TODAS as escritas em UM ciclo draft→write→post.
+
+        DEVE ser chamado ANTES de reconciliar() porque button_draft em um move
+        com linhas reconciliadas REMOVE a reconciliação (comportamento Odoo 17 — bug O11).
+
+        Consolida trocar_conta + atualizar_partner + atualizar_rotulo em uma operação:
+        1. button_draft no move do extrato (UMA vez)
+        2. write partner_id + payment_ref na statement_line
+        3. write name nas move_lines (re-busca IDs pois Odoo regenera após write na stmt_line)
+        4. write account_id: TRANSITÓRIA → conta_destino (ÚLTIMO! Odoo reseta ao regenerar lines)
+        5. action_post no move (UMA vez)
+
+        GOTCHA CRÍTICO (O12): account_id DEVE ser o ÚLTIMO write antes de action_post.
+        Escrever na statement_line (partner_id, payment_ref) faz o Odoo regenerar as
+        move_lines associadas, revertendo qualquer account_id já escrito.
+
+        Padrão idêntico a extrato_conciliacao_service._preparar_extrato_para_reconciliacao(),
+        mas operando em IDs raw (sem dependência de ExtratoItem).
+
+        Args:
+            move_id: ID do account.move do extrato
+            statement_line_id: ID da account.bank.statement.line
+            partner_id: ID do res.partner (fornecedor)
+            rotulo: Texto do rótulo formatado
+            conta_destino: Conta destino para a move_line (default: PENDENTES 26868)
+
+        Returns:
+            True se preparou com sucesso, False se falhou
+        """
+        if not move_id:
+            return False
+
+        if conta_destino is None:
+            conta_destino = CONTA_PAGAMENTOS_PENDENTES
+
+        try:
+            # 1. button_draft (UMA vez para todos os writes)
+            self.connection.execute_kw(
+                'account.move', 'button_draft', [[move_id]]
+            )
+
+            try:
+                # 2. Atualizar partner_id + payment_ref na statement_line (PRIMEIRO)
+                # NOTA: Este write pode fazer o Odoo regenerar as move_lines,
+                # por isso account_id é escrito POR ÚLTIMO.
+                if statement_line_id and partner_id:
+                    vals = {'partner_id': partner_id}
+                    if rotulo:
+                        vals['payment_ref'] = rotulo
+
+                    self.connection.execute_kw(
+                        'account.bank.statement.line', 'write',
+                        [[statement_line_id], vals]
+                    )
+                    logger.info(
+                        f"  Partner + rótulo atualizados: statement_line "
+                        f"{statement_line_id} → partner_id={partner_id}"
+                    )
+
+                # 3. Atualizar name de TODAS as move_lines do move
+                # Re-busca IDs pois Odoo pode ter regenerado lines após write na stmt_line
+                if rotulo:
+                    all_lines = self.connection.search_read(
+                        'account.move.line',
+                        [['move_id', '=', move_id]],
+                        fields=['id'],
+                    )
+                    if all_lines:
+                        line_ids = [l['id'] for l in all_lines]
+                        self.connection.execute_kw(
+                            'account.move.line', 'write',
+                            [line_ids, {'name': rotulo}]
+                        )
+                    logger.info(f"  Rótulo atualizado: {rotulo[:60]}...")
+
+                # 4. Trocar account_id na move_line (ÚLTIMO antes de post!)
+                # GOTCHA O12: Deve ser ÚLTIMO write. Odoo regenera lines ao escrever
+                # na statement_line, revertendo account_id se escrito antes.
+                # Re-busca a linha (IDs podem ter mudado após passo 2).
+                linhas = self.connection.search_read(
+                    'account.move.line',
+                    [
+                        ['move_id', '=', move_id],
+                        ['account_id', 'in', [CONTA_TRANSITORIA, CONTA_PAGAMENTOS_PENDENTES]],
+                    ],
+                    fields=['id', 'account_id'],
+                    limit=1
+                )
+                if linhas:
+                    line_id = linhas[0]['id']
+                    conta_atual = linhas[0]['account_id']
+                    if isinstance(conta_atual, (list, tuple)):
+                        conta_atual = conta_atual[0]
+
+                    if conta_atual != conta_destino:
+                        self.connection.execute_kw(
+                            'account.move.line', 'write',
+                            [[line_id], {'account_id': conta_destino}]
+                        )
+                        logger.info(
+                            f"  Conta atualizada: move_line {line_id}, "
+                            f"{conta_atual} → {conta_destino}"
+                        )
+                    else:
+                        logger.info(f"  Conta já é {conta_destino}, nada a trocar")
+                else:
+                    logger.warning(
+                        f"  Linha TRANSITÓRIA/PENDENTES não encontrada no move {move_id}"
+                    )
+
+            finally:
+                # 5. action_post (SEMPRE, mesmo se write falhou)
+                self.connection.execute_kw(
+                    'account.move', 'action_post', [[move_id]]
+                )
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"  Falha ao preparar extrato para reconciliação: {e}")
+            return False
 
     # =========================================================================
     # SNAPSHOT
