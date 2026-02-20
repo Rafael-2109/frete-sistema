@@ -49,4 +49,3 @@ from app.financeiro.routes import exportacao
 from app.financeiro.routes import dashboard
 from app.financeiro.routes import comprovantes
 from app.financeiro.routes import comprovante_match
-from app.financeiro.routes import correcao_conciliacao  # TEMPORARIO - remover após correção

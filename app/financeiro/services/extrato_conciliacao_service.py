@@ -254,22 +254,21 @@ class ExtratoConciliacaoService:
                 # em UM ciclo draft→write→post (ANTES de reconciliar!)
                 # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
                 p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                prep_ok = self._preparar_extrato_para_reconciliacao(
+                fresh_credit_id = self._preparar_extrato_para_reconciliacao(
                     item, p_id, p_name, conta_destino=payment_account_id
                 )
-                if not prep_ok:
-                    logger.warning(
-                        f"  ⚠️ Falha ao preparar extrato (move {item.move_id}). "
-                        f"Reconciliação pode falhar."
+                if not fresh_credit_id:
+                    raise ValueError(
+                        f"Falha ao preparar extrato para reconciliação (move {item.move_id})"
                     )
 
                 # Executar reconciliação: linha payment <-> linha EXTRATO (POR ÚLTIMO!)
                 logger.info(
                     f"  Reconciliando: "
                     f"payment_line={payment_pendente_line_id} (conta={payment_account_id}) <-> "
-                    f"extrato_line={item.credit_line_id}"
+                    f"extrato_line={fresh_credit_id}"
                 )
-                self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+                self._executar_reconcile(payment_pendente_line_id, fresh_credit_id)
 
                 # Buscar partial_reconcile criado na linha do payment
                 item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
@@ -335,6 +334,11 @@ class ExtratoConciliacaoService:
             # Verificar se extrato e título são da mesma empresa
             company_id_extrato = self._buscar_company_linha_credito(item.credit_line_id)
 
+            # FIX GAP-8: Flag para rastrear se extrato foi reconciliado.
+            # "Mesma empresa" reconcilia direto (ou raise).
+            # "Empresas diferentes" precisa buscar linha PENDENTES.
+            extrato_reconciliado = True  # Otimista; desligado se falhar
+
             if titulo_company_id == company_id_extrato:
                 # =====================================================================
                 # MESMA EMPRESA: Reconciliar diretamente
@@ -345,19 +349,18 @@ class ExtratoConciliacaoService:
                 # em UM ciclo draft→write→post (ANTES de reconciliar!)
                 # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
                 p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                prep_ok = self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
-                if not prep_ok:
-                    logger.warning(
-                        f"  ⚠️ Falha ao preparar extrato (move {item.move_id}). "
-                        f"Reconciliação direta pode falhar."
+                fresh_credit_id = self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
+                if not fresh_credit_id:
+                    raise ValueError(
+                        f"Falha ao preparar extrato para reconciliação (move {item.move_id})"
                     )
 
                 # Executar reconciliação DIRETA (POR ÚLTIMO!)
                 logger.info(
                     f"  Reconciliando DIRETO: "
-                    f"credit_line={item.credit_line_id} <-> titulo={titulo_odoo_id}"
+                    f"credit_line={fresh_credit_id} <-> titulo={titulo_odoo_id}"
                 )
-                self._executar_reconcile(item.credit_line_id, titulo_odoo_id)
+                self._executar_reconcile(fresh_credit_id, titulo_odoo_id)
 
                 item.partial_reconcile_id = self._buscar_partial_reconcile(titulo_odoo_id)
 
@@ -442,6 +445,7 @@ class ExtratoConciliacaoService:
                         logger.info(f"  Título reconciliado com payment")
 
                 # Buscar linha PENDENTES do payment e reconciliar com extrato (SEMPRE - com ou sem juros)
+                extrato_reconciliado = False
                 payment_pendente_line = self._buscar_linha_pendentes_payment(payment_id)
                 if payment_pendente_line:
                     payment_pendente_line_id = payment_pendente_line['id']
@@ -450,21 +454,21 @@ class ExtratoConciliacaoService:
                     # em UM ciclo draft→write→post (ANTES de reconciliar!)
                     # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
                     p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                    prep_ok = self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
-                    if not prep_ok:
+                    fresh_credit_id = self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
+                    if not fresh_credit_id:
                         logger.warning(
-                            f"  ⚠️ Falha ao preparar extrato (move {item.move_id}). "
-                            f"Reconciliação extrato pode falhar."
+                            f"  Falha ao preparar extrato para reconciliação (move {item.move_id})"
                         )
+                    else:
+                        # Reconciliar extrato (POR ÚLTIMO!)
+                        logger.info(
+                            f"  Reconciliando extrato: "
+                            f"payment_line={payment_pendente_line_id} <-> extrato_line={fresh_credit_id}"
+                        )
+                        self._executar_reconcile(payment_pendente_line_id, fresh_credit_id)
 
-                    # Reconciliar extrato (POR ÚLTIMO!)
-                    logger.info(
-                        f"  Reconciliando extrato: "
-                        f"payment_line={payment_pendente_line_id} <-> extrato_line={item.credit_line_id}"
-                    )
-                    self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
-
-                    item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
+                        item.partial_reconcile_id = self._buscar_partial_reconcile_linha(payment_pendente_line_id)
+                        extrato_reconciliado = True
                 else:
                     logger.warning(f"  Linha PENDENTES não encontrada - extrato não conciliado")
 
@@ -490,10 +494,20 @@ class ExtratoConciliacaoService:
             if isinstance(full_rec, (list, tuple)) and len(full_rec) > 0:
                 item.full_reconcile_id = full_rec[0]
 
-        # Atualizar status
-        item.status = 'CONCILIADO'
-        item.processado_em = agora_utc_naive()
-        item.mensagem = f"Conciliado: Saldo {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
+        # FIX GAP-8: Só marcar CONCILIADO se extrato FOI reconciliado no Odoo.
+        # extrato_reconciliado inicializado True antes do if/else (mesma empresa
+        # reconcilia direto ou raise; empresas diferentes define False se falhar).
+        if extrato_reconciliado:
+            item.status = 'CONCILIADO'
+            item.processado_em = agora_utc_naive()
+            item.mensagem = f"Conciliado: Saldo {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
+        else:
+            item.status = 'TITULO_BAIXADO'
+            item.processado_em = agora_utc_naive()
+            item.mensagem = (
+                f"Título baixado, mas extrato NÃO reconciliado no Odoo. "
+                f"Saldo {item.titulo_saldo_antes} -> {item.titulo_saldo_depois}"
+            )
 
         # FIX G2/G3: Atualizar ContasAReceber local imediato
         try:
@@ -721,75 +735,42 @@ class ExtratoConciliacaoService:
                     )
 
         # Reconciliar payment com extrato (se credit_line_id disponível)
+        # FIX GAP-2: Usar _preparar_extrato_para_reconciliacao() que faz TODAS as
+        # escritas (partner, rótulo, account_id) em UM ciclo draft→write→post.
+        # ANTES: 3 chamadas separadas (atualizar_partner, atualizar_rotulo,
+        # trocar_conta), cada uma com draft/write/post próprio → viola O11/O12.
+        extrato_reconciliado = False
         if credit_line_id and item.move_id:
-            from app.financeiro.services.baixa_pagamentos_service import (
-                CONTA_TRANSITORIA as BP_CONTA_TRANSITORIA,
-                CONTA_PAGAMENTOS_PENDENTES as BP_CONTA_PENDENTES,
-                BaixaPagamentosService,
+            fresh_credit_id = self._preparar_extrato_para_reconciliacao(
+                item, partner_id_num, partner_name,
+                conta_destino=CONTA_PAGAMENTOS_PENDENTES,
             )
-
-            # ORDEM CORRETA PER GOTCHA O12:
-            # 1. Partner + rótulo (writes na statement_line, podem regenerar move_lines)
-            # 2. Trocar conta (ÚLTIMO write — account_id não será revertido)
-            # 3. Buscar IDs frescos
-            # 4. Reconciliar
-
-            # 1a. Atualizar partner_id do statement line
-            if item.statement_line_id:
-                baixa_pag_service.atualizar_statement_line_partner(
-                    statement_line_id=item.statement_line_id,
-                    partner_id=partner_id_num,
-                )
-
-            # 1b. Atualizar rótulo do extrato
-            rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
-                valor=valor_extrato,
-                nome_fornecedor=partner_name or '',
-                data_pagamento=item.data_transacao,
-            )
-            if item.statement_line_id:
-                baixa_pag_service.atualizar_rotulo_extrato(
-                    move_id=item.move_id,
-                    statement_line_id=item.statement_line_id,
-                    rotulo=rotulo,
-                )
-
-            # 2. Trocar conta: TRANSITÓRIA → PENDENTES (ÚLTIMO write per O12)
-            baixa_pag_service.trocar_conta_move_line_extrato(
-                move_id=item.move_id,
-                conta_origem=BP_CONTA_TRANSITORIA,
-                conta_destino=BP_CONTA_PENDENTES,
-            )
-
-            # 3. Buscar linha de débito do extrato (IDs frescos pós-writes)
-            debit_line_extrato = baixa_pag_service.buscar_linha_debito_extrato(
-                item.move_id
-            )
-            if debit_line_extrato:
-                # Atualizar credit_line_id do item (pode ter sido regenerado)
-                item.credit_line_id = debit_line_extrato
-
-                # 4. Reconciliar payment com extrato
-                baixa_pag_service.reconciliar(credit_line_id, debit_line_extrato)
+            if fresh_credit_id:
+                # Reconciliar payment (PENDENTES) com extrato (PENDENTES)
+                self._executar_reconcile(credit_line_id, fresh_credit_id)
                 logger.info("  Reconciliado: payment ↔ extrato")
+                extrato_reconciliado = True
 
                 # Buscar full_reconcile_id do extrato
                 linha_ext = self.connection.search_read(
                     'account.move.line',
-                    [['id', '=', debit_line_extrato]],
+                    [['id', '=', fresh_credit_id]],
                     fields=['full_reconcile_id'],
                     limit=1,
                 )
                 if linha_ext and linha_ext[0].get('full_reconcile_id'):
                     full_rec_ext = linha_ext[0]['full_reconcile_id']
-                    # Salvar como partial_reconcile_id para referência
                     item.partial_reconcile_id = (
                         full_rec_ext[0] if isinstance(full_rec_ext, (list, tuple)) else full_rec_ext
                     )
             else:
                 logger.warning(
-                    f"  Linha débito extrato não encontrada para move_id={item.move_id}"
+                    f"  Falha ao preparar extrato para reconciliação (move_id={item.move_id})"
                 )
+        else:
+            logger.warning(
+                f"  Extrato não reconciliado: credit_line_id={credit_line_id}, move_id={item.move_id}"
+            )
 
         # Capturar snapshot DEPOIS
         snapshot_depois = self._capturar_snapshot(titulo_odoo_id)
@@ -803,12 +784,22 @@ class ExtratoConciliacaoService:
             if titulo_atualizado else None
         )
 
-        # Atualizar status
-        item.status = 'CONCILIADO'
-        item.processado_em = agora_utc_naive()
-        item.mensagem = (
-            f"Pagamento conciliado: {payment_name}, "
-            f"Saldo {item.titulo_saldo_antes:.2f} -> {item.titulo_saldo_depois}"
+        # FIX GAP-7: Só marcar CONCILIADO se extrato FOI reconciliado no Odoo.
+        # Título foi baixado (payment criado + reconciliado com título), mas se
+        # extrato não foi reconciliado, usar TITULO_BAIXADO para indicar pendência.
+        if extrato_reconciliado:
+            item.status = 'CONCILIADO'
+            item.processado_em = agora_utc_naive()
+            item.mensagem = (
+                f"Pagamento conciliado: {payment_name}, "
+                f"Saldo {item.titulo_saldo_antes:.2f} -> {item.titulo_saldo_depois}"
+            )
+        else:
+            item.status = 'TITULO_BAIXADO'
+            item.processado_em = agora_utc_naive()
+            item.mensagem = (
+                f"Título baixado ({payment_name}), mas extrato NÃO reconciliado no Odoo. "
+                f"Saldo {item.titulo_saldo_antes:.2f} -> {item.titulo_saldo_depois}"
         )
 
         # FIX G2/G3: Atualizar ContasAPagar local imediato
@@ -1086,15 +1077,16 @@ class ExtratoConciliacaoService:
                     # em UM ciclo draft→write→post (ANTES de reconciliar!)
                     # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
                     p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                    prep_ok = self._preparar_extrato_para_reconciliacao(
+                    fresh_credit_id = self._preparar_extrato_para_reconciliacao(
                         item, p_id, p_name, conta_destino=payment_account_id
                     )
-                    if not prep_ok:
+                    if not fresh_credit_id:
                         logger.warning(
                             f"  ⚠️ Falha ao preparar extrato (move {item.move_id})"
                         )
 
                     # Buscar linha DEBIT do extrato (counterpart, agora na conta destino)
+                    # NOTA: Este caller usa debit_line_extrato, não fresh_credit_id
                     baixa_pag_service = self._get_baixa_pagamentos_service()
                     debit_line_extrato = baixa_pag_service.buscar_linha_debito_extrato(
                         item.move_id
@@ -1702,7 +1694,7 @@ class ExtratoConciliacaoService:
     def _preparar_extrato_para_reconciliacao(
         self, item: ExtratoItem, partner_id: int, partner_name: str,
         conta_destino: int = None
-    ) -> bool:
+    ) -> Optional[int]:
         """
         Prepara o extrato para reconciliação: TODAS as escritas em UM ciclo draft→write→post.
 
@@ -1727,10 +1719,11 @@ class ExtratoConciliacaoService:
             conta_destino: Conta destino para a move_line (default: PENDENTES 26868)
 
         Returns:
-            True se preparou com sucesso, False se falhou
+            Fresh credit_line_id (int) on success, None on failure.
+            Also updates item.credit_line_id as side-effect for DB persistence.
         """
         if not item.move_id:
-            return False
+            return None
 
         if conta_destino is None:
             conta_destino = CONTA_PAGAMENTOS_PENDENTES
@@ -1816,9 +1809,32 @@ class ExtratoConciliacaoService:
                     else:
                         logger.info(f"  Conta já é {conta_destino}, nada a trocar")
                 else:
+                    # Fallback: buscar por credit > 0 (critério original de _buscar_linha_credito)
                     logger.warning(
-                        f"  Linha TRANSITÓRIA/PENDENTES não encontrada no move {item.move_id}"
+                        f"  Linha TRANSITÓRIA/PENDENTES não encontrada no move {item.move_id}. "
+                        f"Tentando fallback por credit > 0..."
                     )
+                    fallback_linhas = self.connection.search_read(
+                        'account.move.line',
+                        [
+                            ['move_id', '=', item.move_id],
+                            ['credit', '>', 0],
+                        ],
+                        fields=['id', 'account_id'],
+                        limit=1
+                    )
+                    if fallback_linhas:
+                        line_id = fallback_linhas[0]['id']
+                        item.credit_line_id = line_id
+                        logger.warning(
+                            f"  Fallback encontrou credit_line_id={line_id} "
+                            f"(account_id={fallback_linhas[0].get('account_id')})"
+                        )
+                    else:
+                        logger.warning(
+                            f"  Nenhuma linha credit > 0 encontrada no move {item.move_id}. "
+                            f"credit_line_id pode estar stale!"
+                        )
 
             finally:
                 # 5. action_post (SEMPRE, mesmo se write falhou)
@@ -1826,11 +1842,11 @@ class ExtratoConciliacaoService:
                     'account.move', 'action_post', [[item.move_id]]
                 )
 
-            return True
+            return item.credit_line_id
 
         except Exception as e:
             logger.warning(f"  Falha ao preparar extrato para reconciliação: {e}")
-            return False
+            return None
 
     def _atualizar_campos_extrato(
         self, item: ExtratoItem, partner_id: int, partner_name: str
@@ -2453,6 +2469,55 @@ class ExtratoConciliacaoService:
 
         return linhas[0] if linhas else None
 
+    def _buscar_linha_pendentes_payment_geral(
+        self, payment_id: int, tipo: str = 'receber'
+    ) -> Optional[Dict]:
+        """
+        Busca a linha na conta PAGAMENTOS PENDENTES do payment (inbound ou outbound).
+
+        Para inbound (receivable): busca DEBIT > 0 em PENDENTES.
+        Para outbound (payable): busca CREDIT > 0 em PENDENTES.
+
+        Esta é a linha que será reconciliada com o EXTRATO.
+
+        Args:
+            payment_id: ID do account.payment
+            tipo: 'receber' (inbound → debit) ou 'pagar' (outbound → credit)
+
+        Returns:
+            Dict com dados da linha ou None
+        """
+        payment = self.connection.search_read(
+            'account.payment',
+            [['id', '=', payment_id]],
+            fields=['move_id'],
+            limit=1
+        )
+        if not payment or not payment[0].get('move_id'):
+            return None
+
+        move_id = payment[0]['move_id']
+        move_id_num = move_id[0] if isinstance(move_id, (list, tuple)) else move_id
+
+        # Inbound: DEBIT em PENDENTES. Outbound: CREDIT em PENDENTES.
+        if tipo == 'pagar':
+            filtro_valor = ['credit', '>', 0]
+        else:
+            filtro_valor = ['debit', '>', 0]
+
+        linhas = self.connection.search_read(
+            'account.move.line',
+            [
+                ['move_id', '=', move_id_num],
+                ['account_id', '=', CONTA_PAGAMENTOS_PENDENTES],
+                filtro_valor,
+                ['reconciled', '=', False],
+            ],
+            fields=['id', 'name', 'debit', 'credit', 'amount_residual', 'account_id']
+        )
+
+        return linhas[0] if linhas else None
+
     def _verificar_linha_extrato_reconciliada(self, credit_line_id: int) -> Optional[Dict]:
         """
         Verifica se a linha de crédito do extrato já está reconciliada no Odoo.
@@ -2609,8 +2674,8 @@ class ExtratoConciliacaoService:
                     f"conta={payment_account_id}"
                 )
                 logger.info(
-                    f"  Reconciliando: payment_line={payment_pendente_line_id} <-> "
-                    f"extrato_line={item.credit_line_id}"
+                    f"  Tentando reconciliar: payment_line={payment_pendente_line_id} <-> "
+                    f"extrato move={item.move_id}"
                 )
 
                 try:
@@ -2618,16 +2683,16 @@ class ExtratoConciliacaoService:
                     # em UM ciclo draft→write→post (ANTES de reconciliar!)
                     # button_draft em move reconciliado REMOVE reconciliação (Odoo 17)
                     p_id, p_name = self._extrair_partner_dados(titulo_odoo)
-                    prep_ok = self._preparar_extrato_para_reconciliacao(
+                    fresh_credit_id = self._preparar_extrato_para_reconciliacao(
                         item, p_id, p_name, conta_destino=payment_account_id
                     )
-                    if not prep_ok:
-                        logger.warning(
-                            f"  ⚠️ Falha ao preparar extrato (move {item.move_id})"
+                    if not fresh_credit_id:
+                        raise ValueError(
+                            f"Falha ao preparar extrato (move {item.move_id})"
                         )
 
                     # Executar reconciliação no Odoo (POR ÚLTIMO!)
-                    self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+                    self._executar_reconcile(payment_pendente_line_id, fresh_credit_id)
 
                     # Buscar partial_reconcile criado
                     item.partial_reconcile_id = self._buscar_partial_reconcile_linha(
@@ -2746,6 +2811,116 @@ class ExtratoConciliacaoService:
     # MÉTODOS PARA MÚLTIPLOS TÍTULOS (M:N)
     # =========================================================================
 
+    def _reconciliar_extrato_mn(
+        self, item: ExtratoItem, vinculos: list
+    ) -> bool:
+        """
+        Reconcilia o extrato com os payments criados durante processamento M:N.
+
+        FIX GAP-1: Antes, _conciliar_titulo_individual() criava payments e
+        reconciliava cada um com seu título, mas NUNCA reconciliava o extrato.
+        O extrato ficava com is_reconciled=False no Odoo.
+
+        Algoritmo:
+        1. Coletar payment_ids dos vínculos que criaram payments
+        2. Determinar tipo (receber/pagar) para buscar linha correta
+        3. Buscar partner_id de um dos payments (para preparar extrato)
+        4. Preparar extrato (1 ciclo draft→write→post)
+        5. Buscar linhas PENDENTES de cada payment
+        6. Reconciliar TODAS as linhas PENDENTES + linha do extrato
+
+        Args:
+            item: ExtratoItem com move_id e statement_line_id
+            vinculos: Lista de ExtratoItemTitulo processados
+
+        Returns:
+            True se extrato reconciliado com sucesso
+        """
+        # 1. Coletar payment_ids de vínculos que criaram payments
+        payment_ids = [
+            v.payment_id for v in vinculos
+            if v.payment_id and v.status == 'CONCILIADO'
+        ]
+
+        if not payment_ids:
+            logger.info("  M:N: Nenhum payment criado - extrato não reconciliado")
+            return False
+
+        logger.info(
+            f"  M:N: Reconciliando extrato com {len(payment_ids)} payments: {payment_ids}"
+        )
+
+        # 2. Determinar tipo pelo primeiro vínculo com payment
+        vinculo_ref = next(
+            (v for v in vinculos if v.payment_id and v.status == 'CONCILIADO'),
+            None,
+        )
+        if not vinculo_ref:
+            return False
+
+        tipo = 'receber' if vinculo_ref.titulo_receber_id else 'pagar'
+
+        # 3. Buscar partner_id de um dos payments (para preparar extrato)
+        payment_data = self.connection.search_read(
+            'account.payment',
+            [['id', '=', payment_ids[0]]],
+            fields=['partner_id'],
+            limit=1,
+        )
+        if not payment_data or not payment_data[0].get('partner_id'):
+            logger.warning("  M:N: Não foi possível obter partner do payment")
+            return False
+
+        partner = payment_data[0]['partner_id']
+        partner_id = partner[0] if isinstance(partner, (list, tuple)) else partner
+        partner_name = partner[1] if isinstance(partner, (list, tuple)) else ''
+
+        # 4. Preparar extrato (1 ciclo draft→write→post)
+        fresh_credit_id = self._preparar_extrato_para_reconciliacao(
+            item, partner_id, partner_name,
+        )
+        if not fresh_credit_id:
+            logger.warning("  M:N: Falha ao preparar extrato para reconciliação")
+            return False
+
+        # 5. Buscar linhas PENDENTES de cada payment
+        pendentes_ids = []
+        for pid in payment_ids:
+            line = self._buscar_linha_pendentes_payment_geral(pid, tipo)
+            if line:
+                pendentes_ids.append(line['id'])
+            else:
+                logger.warning(
+                    f"  M:N: Linha PENDENTES não encontrada para payment {pid}"
+                )
+
+        if not pendentes_ids:
+            logger.warning("  M:N: Nenhuma linha PENDENTES encontrada")
+            return False
+
+        # 6. Reconciliar: TODAS as linhas PENDENTES + linha do extrato
+        ids_reconciliar = pendentes_ids + [fresh_credit_id]
+        logger.info(
+            f"  M:N: Reconciliando {len(pendentes_ids)} linhas PENDENTES + "
+            f"extrato (fresh_credit_id={fresh_credit_id})"
+        )
+
+        try:
+            self.connection.execute_kw(
+                'account.move.line',
+                'reconcile',
+                [ids_reconciliar]
+            )
+        except Exception as e:
+            if "cannot marshal None" not in str(e):
+                raise
+        logger.info("  M:N: Extrato reconciliado com sucesso")
+
+        # Buscar partial_reconcile do extrato
+        item.partial_reconcile_id = self._buscar_partial_reconcile_linha(fresh_credit_id)
+
+        return True
+
     def _conciliar_multiplos_titulos(self, item: ExtratoItem) -> Dict:
         """
         Concilia múltiplos títulos vinculados a um item de extrato.
@@ -2811,12 +2986,34 @@ class ExtratoConciliacaoService:
 
             db.session.flush()  # Salvar progresso de cada vínculo
 
+        # =====================================================================
+        # FIX GAP-1: Reconciliar extrato com payments criados (M:N)
+        # ANTES: _conciliar_titulo_individual() criava payments e reconciliava
+        # títulos, mas NUNCA reconciliava o extrato no Odoo.
+        # AGORA: Após processar todos os títulos, reconciliar o extrato em
+        # UM ciclo de preparação + reconcile.
+        # =====================================================================
+        extrato_reconciliado = False
+        if total_conciliados > 0 and item.move_id:
+            try:
+                extrato_reconciliado = self._reconciliar_extrato_mn(item, vinculos)
+            except Exception as e:
+                logger.warning(f"  M:N: Erro ao reconciliar extrato: {e}")
+
         # Determinar status final do item
         todos_ok = all(v.status == 'CONCILIADO' for v in vinculos)
 
         if todos_ok:
-            item.status = 'CONCILIADO'
-            item.mensagem = f"Todos os {len(vinculos)} títulos conciliados"
+            if extrato_reconciliado:
+                item.status = 'CONCILIADO'
+                item.mensagem = f"Todos os {len(vinculos)} títulos conciliados + extrato reconciliado"
+            else:
+                # Títulos OK mas extrato NÃO reconciliado no Odoo
+                item.status = 'TITULO_BAIXADO'
+                item.mensagem = (
+                    f"Todos os {len(vinculos)} títulos conciliados, "
+                    f"mas extrato NÃO reconciliado no Odoo"
+                )
 
             # FIX G2/G3: Atualizar títulos locais imediato (M:N)
             try:

@@ -1121,14 +1121,74 @@ class BaixaPagamentosService:
                     item.full_reconcile_titulo_id = full_rec[0] if isinstance(full_rec, (list, tuple)) else full_rec
 
         # 7. Reconciliar payment com extrato (se houver linha de extrato)
+        # FIX GAP-3: ANTES: reconciliava direto SEM preparar extrato.
+        # Conta podia estar TRANSITÓRIA em vez de PENDENTES → erro contábil.
+        # AGORA: preparar extrato (trocar conta + partner + rótulo em 1 ciclo)
+        # ANTES de reconciliar.
         if item.debit_line_id_extrato and item.credit_line_id_payment:
-            self.reconciliar(item.credit_line_id_payment, item.debit_line_id_extrato)
-            logger.info(f"  Reconciliado payment com extrato")
-
-            # Buscar full_reconcile_id do extrato
-            linha_extrato = self.connection.search_read(
+            # Obter move_id do extrato a partir da move_line
+            linha_ext_info = self.connection.search_read(
                 'account.move.line',
                 [['id', '=', item.debit_line_id_extrato]],
+                fields=['move_id'],
+                limit=1
+            )
+            move_id_extrato = None
+            statement_line_id = None
+
+            if linha_ext_info and linha_ext_info[0].get('move_id'):
+                move_id_raw = linha_ext_info[0]['move_id']
+                move_id_extrato = move_id_raw[0] if isinstance(move_id_raw, (list, tuple)) else move_id_raw
+
+                # Obter statement_line_id do move
+                stmt_lines = self.connection.search_read(
+                    'account.bank.statement.line',
+                    [['move_id', '=', move_id_extrato]],
+                    fields=['id'],
+                    limit=1
+                )
+                statement_line_id = stmt_lines[0]['id'] if stmt_lines else None
+
+            if move_id_extrato:
+                # Preparar extrato: trocar conta TRANSITÓRIA → PENDENTES em 1 ciclo
+                partner_name = titulo['partner_id'][1] if titulo.get('partner_id') else ''
+                rotulo = self.formatar_rotulo_pagamento(
+                    valor=item.valor,
+                    nome_fornecedor=partner_name or item.nome_beneficiario or '',
+                    data_pagamento=item.data_transacao,
+                )
+                self.preparar_extrato_para_reconciliacao(
+                    move_id=move_id_extrato,
+                    statement_line_id=statement_line_id,
+                    partner_id=partner_id,
+                    rotulo=rotulo,
+                )
+
+                # Re-buscar debit_line fresca (IDs podem ter sido regenerados)
+                fresh_debit = self.buscar_linha_debito_extrato(move_id_extrato)
+                if fresh_debit:
+                    item.debit_line_id_extrato = fresh_debit
+                    self.reconciliar(item.credit_line_id_payment, fresh_debit)
+                    logger.info(f"  Reconciliado payment com extrato (preparado)")
+                else:
+                    logger.warning(
+                        f"  Linha débito extrato não encontrada após preparar "
+                        f"(move_id={move_id_extrato})"
+                    )
+            else:
+                # Fallback: reconciliar direto (sem preparar - melhor que nada)
+                logger.warning(
+                    f"  move_id do extrato não encontrado para debit_line {item.debit_line_id_extrato}. "
+                    f"Reconciliando direto..."
+                )
+                self.reconciliar(item.credit_line_id_payment, item.debit_line_id_extrato)
+                logger.info(f"  Reconciliado payment com extrato (sem preparar)")
+
+            # Buscar full_reconcile_id do extrato
+            debit_id = item.debit_line_id_extrato
+            linha_extrato = self.connection.search_read(
+                'account.move.line',
+                [['id', '=', debit_id]],
                 fields=['full_reconcile_id'],
                 limit=1
             )

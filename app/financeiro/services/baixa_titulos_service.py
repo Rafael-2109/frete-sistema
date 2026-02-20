@@ -1871,7 +1871,13 @@ class BaixaTitulosService:
     def _marcar_extrato_conciliado(
         self, extrato, item: BaixaTituloItem, conta=None
     ) -> Optional[int]:
-        """Marca ExtratoItem como CONCILIADO apos baixa via Excel."""
+        """
+        Marca ExtratoItem como CONCILIADO apos baixa via Excel.
+
+        FIX GAP-4: Alem de marcar localmente, tenta reconciliar o extrato no Odoo.
+        Se a reconciliacao Odoo falhar (conexao indisponivel, etc.), marca localmente
+        com status TITULO_BAIXADO para indicar que extrato nao foi reconciliado.
+        """
         # Verificar se ja conciliado (race condition)
         if extrato.status == 'CONCILIADO':
             return None
@@ -1892,16 +1898,147 @@ class BaixaTitulosService:
         extrato.status_match = 'MATCH_ENCONTRADO'
         extrato.match_criterio = 'VIA_BAIXA_EXCEL'
         extrato.match_score = 95
-        extrato.status = 'CONCILIADO'
         extrato.aprovado = True
         extrato.aprovado_em = agora_utc_naive()
         extrato.processado_em = agora_utc_naive()
         extrato.payment_id = item.payment_odoo_id
-        extrato.mensagem = (
-            f"[BAIXA_AUTO] Vinculado via baixa Excel - "
-            f"NF {item.nf_excel} P{item.parcela_excel} - "
-            f"Lote #{item.lote_id}"
-        )
+
+        # FIX GAP-4: Tentar reconciliar extrato no Odoo
+        # Condicional: só executa se temos conexão Odoo, payment_id, e move_id do extrato
+        odoo_reconciliado = False
+        if item.payment_odoo_id and extrato.move_id and extrato.statement_line_id:
+            try:
+                odoo_reconciliado = self._reconciliar_extrato_odoo(
+                    extrato, item.payment_odoo_id
+                )
+            except Exception as e:
+                logger.warning(
+                    f"  [GAP-4] Falha ao reconciliar extrato {extrato.id} no Odoo: {e}"
+                )
+
+        if odoo_reconciliado:
+            extrato.status = 'CONCILIADO'
+            extrato.mensagem = (
+                f"[BAIXA_AUTO] Vinculado via baixa Excel + extrato reconciliado no Odoo - "
+                f"NF {item.nf_excel} P{item.parcela_excel} - "
+                f"Lote #{item.lote_id}"
+            )
+        else:
+            # Título baixado mas extrato NÃO reconciliado no Odoo
+            extrato.status = 'TITULO_BAIXADO'
+            extrato.mensagem = (
+                f"[BAIXA_AUTO] Vinculado via baixa Excel (extrato pendente Odoo) - "
+                f"NF {item.nf_excel} P{item.parcela_excel} - "
+                f"Lote #{item.lote_id}"
+            )
 
         db.session.flush()
         return extrato.id
+
+    def _reconciliar_extrato_odoo(
+        self, extrato, payment_id: int
+    ) -> bool:
+        """
+        Reconcilia extrato no Odoo apos baixa via Excel.
+
+        FIX GAP-4: Busca a linha PENDENTES do payment e reconcilia com o extrato.
+
+        Args:
+            extrato: ExtratoItem com move_id e statement_line_id
+            payment_id: ID do account.payment no Odoo
+
+        Returns:
+            True se reconciliou com sucesso
+        """
+        from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
+        from app.financeiro.constants import CONTA_PAGAMENTOS_PENDENTES
+
+        # Buscar partner_id do payment
+        payment_data = self.connection.search_read(
+            'account.payment',
+            [['id', '=', payment_id]],
+            fields=['partner_id', 'move_id'],
+            limit=1
+        )
+        if not payment_data:
+            logger.warning(f"  [GAP-4] Payment {payment_id} não encontrado no Odoo")
+            return False
+
+        partner = payment_data[0].get('partner_id')
+        partner_id = partner[0] if isinstance(partner, (list, tuple)) else partner
+        partner_name = partner[1] if isinstance(partner, (list, tuple)) else ''
+
+        # Buscar linha PENDENTES do payment (para receber: DEBIT em PENDENTES)
+        pay_move = payment_data[0].get('move_id')
+        pay_move_id = pay_move[0] if isinstance(pay_move, (list, tuple)) else pay_move
+
+        pendentes_lines = self.connection.search_read(
+            'account.move.line',
+            [
+                ['move_id', '=', pay_move_id],
+                ['account_id', '=', CONTA_PAGAMENTOS_PENDENTES],
+                ['debit', '>', 0],
+                ['reconciled', '=', False],
+            ],
+            fields=['id'],
+            limit=1,
+        )
+        if not pendentes_lines:
+            logger.warning(f"  [GAP-4] Linha PENDENTES não encontrada para payment {payment_id}")
+            return False
+
+        pendentes_line_id = pendentes_lines[0]['id']
+
+        # Preparar extrato: trocar conta + partner + rótulo em 1 ciclo
+        baixa_pag = BaixaPagamentosService(connection=self.connection)
+        rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+            valor=abs(float(extrato.valor)),
+            nome_fornecedor=partner_name or '',
+            data_pagamento=extrato.data_transacao,
+        )
+        preparado = baixa_pag.preparar_extrato_para_reconciliacao(
+            move_id=extrato.move_id,
+            statement_line_id=extrato.statement_line_id,
+            partner_id=partner_id,
+            rotulo=rotulo,
+        )
+        if not preparado:
+            logger.warning(f"  [GAP-4] Falha ao preparar extrato {extrato.id}")
+            return False
+
+        # Buscar linha fresca do extrato (IDs podem ter sido regenerados)
+        fresh_line = baixa_pag.buscar_linha_debito_extrato(extrato.move_id)
+        if not fresh_line:
+            # Fallback: buscar credit > 0 para entrada
+            linhas_credit = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', extrato.move_id],
+                    ['credit', '>', 0],
+                    ['reconciled', '=', False],
+                ],
+                fields=['id'],
+                limit=1,
+            )
+            fresh_line = linhas_credit[0]['id'] if linhas_credit else None
+
+        if not fresh_line:
+            logger.warning(f"  [GAP-4] Linha do extrato não encontrada após preparar")
+            return False
+
+        # Reconciliar
+        try:
+            self.connection.execute_kw(
+                'account.move.line',
+                'reconcile',
+                [[pendentes_line_id, fresh_line]]
+            )
+        except Exception as e:
+            if "cannot marshal None" not in str(e):
+                raise
+
+        logger.info(
+            f"  [GAP-4] Extrato {extrato.id} reconciliado no Odoo: "
+            f"payment_line={pendentes_line_id} <-> extrato_line={fresh_line}"
+        )
+        return True
