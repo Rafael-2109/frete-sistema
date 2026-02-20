@@ -25,7 +25,20 @@ def setup_logging():
     logger = logging.getLogger('sistema_fretes')
     logger.setLevel(logging.INFO)
     logger.addHandler(console_handler)
-    
+
+    # Capturar logs dos modulos app.* (routes, services, workers)
+    # Sem isso, loggers com getLogger(__name__) propagam para root (default WARNING)
+    # e INFO/DEBUG sao descartados silenciosamente em producao
+    app_logger = logging.getLogger('app')
+    app_logger.setLevel(logging.INFO)
+    if not app_logger.handlers:
+        app_logger.addHandler(console_handler)
+
+    # Reduzir verbosidade de libs externas que ficam em INFO
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('xmlrpc').setLevel(logging.WARNING)
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
     return logger
 
 # Logger global

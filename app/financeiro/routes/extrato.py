@@ -545,13 +545,23 @@ def extrato_sincronizar_completo():
         total_revalidados = reval_stats.get('atualizados', 0)
         total_resolvidos = resolucao_stats.get('total_resolvidos', 0)
 
+        import_success = import_result.get('success', False)
+        total_erros_import = import_result.get('stats', {}).get('total_erros', 0)
+        warning_msg = None
+        if not import_success:
+            warning_msg = import_result.get('error', 'Erro na importacao')
+        elif total_erros_import > 0:
+            warning_msg = f"{total_erros_import} journal(s) com erro durante importacao"
+
         return jsonify({
-            'success': True,
+            'success': import_success or total_importados > 0,
+            'warning': warning_msg,
             'resumo': {
                 'importados': total_importados,
                 'revalidados': total_revalidados,
                 'resolvidos': total_resolvidos,
                 'lotes_novos': len(lote_ids_novos),
+                'erros_importacao': total_erros_import,
             },
             'detalhes': resultado
         })

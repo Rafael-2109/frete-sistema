@@ -160,8 +160,8 @@ class ExtratoService:
         db.session.add(lote)
         db.session.flush()
 
-        # Buscar linhas do Odoo (duplicatas filtradas em _processar_linha via statement_line_id indexado)
-        linhas = self._buscar_linhas_extrato(
+        # Buscar linhas do Odoo SEM exclude_ids (evita NOT IN gigante no XML-RPC)
+        linhas_odoo = self._buscar_linhas_extrato(
             journal_id=journal_id,
             data_inicio=data_inicio,
             data_fim=data_fim,
@@ -169,7 +169,23 @@ class ExtratoService:
             tipo_transacao=tipo_transacao,
         )
 
-        logger.info(f"Linhas encontradas: {len(linhas)}")
+        # Filtrar localmente: batch check dos IDs já importados
+        if linhas_odoo:
+            ids_retornados = [linha['id'] for linha in linhas_odoo]
+            ids_ja_importados = set(r[0] for r in db.session.query(
+                ExtratoItem.statement_line_id
+            ).filter(
+                ExtratoItem.statement_line_id.in_(ids_retornados)
+            ).all())
+
+            linhas = [l for l in linhas_odoo if l['id'] not in ids_ja_importados]
+            qtd_ignoradas = len(linhas_odoo) - len(linhas)
+            if qtd_ignoradas:
+                logger.info(f"{qtd_ignoradas} linhas já importadas filtradas localmente")
+        else:
+            linhas = []
+
+        logger.info(f"Linhas encontradas no Odoo: {len(linhas_odoo if linhas_odoo else [])}, novas: {len(linhas)}")
 
         # OTIMIZAÇÃO: Buscar todas as linhas de crédito em batch
         move_ids = [
@@ -209,8 +225,189 @@ class ExtratoService:
 
         return lote
 
+    def importar_extratos_por_data(
+        self,
+        data_inicio: date,
+        data_fim: date,
+        limit: int = 500,
+        criado_por: str = 'SCHEDULER_AUTO',
+        tipo_transacao: str = 'entrada',
+    ) -> List[ExtratoLote]:
+        """
+        Importa extratos do Odoo SEM filtro de journal — apenas por data e tipo.
+
+        Estratégia: buscar TUDO do Odoo por período, filtrar duplicados localmente,
+        agrupar por journal e criar um lote por journal.
+
+        Isso garante que journals de TODAS as empresas (FB, LF, etc.) sejam importados.
+
+        Args:
+            data_inicio: Data inicial
+            data_fim: Data final
+            limit: Limite de linhas da query Odoo
+            criado_por: Identificador de quem criou
+            tipo_transacao: 'entrada', 'saida' ou 'ambos'
+
+        Returns:
+            Lista de ExtratoLote criados (um por journal com dados novos)
+        """
+        from collections import defaultdict
+
+        tipo_label = 'recebimentos' if tipo_transacao == 'entrada' else (
+            'pagamentos' if tipo_transacao == 'saida' else 'transações'
+        )
+        logger.info(
+            f"[IMPORT_BULK] Buscando {tipo_label} do Odoo: "
+            f"{data_inicio} a {data_fim}, sem filtro de journal"
+        )
+
+        # 1. Buscar do Odoo SEM filtro de journal
+        linhas_odoo = self._buscar_linhas_extrato(
+            journal_id=None,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            limit=limit,
+            tipo_transacao=tipo_transacao,
+        )
+
+        if not linhas_odoo:
+            logger.info(f"[IMPORT_BULK] Nenhuma linha encontrada no Odoo para {tipo_label}")
+            return []
+
+        logger.info(f"[IMPORT_BULK] {len(linhas_odoo)} linhas encontradas no Odoo")
+
+        # 2. Filtrar localmente: remover já importados
+        ids_retornados = [linha['id'] for linha in linhas_odoo]
+        ids_ja_importados = set(r[0] for r in db.session.query(
+            ExtratoItem.statement_line_id
+        ).filter(
+            ExtratoItem.statement_line_id.in_(ids_retornados)
+        ).all())
+
+        linhas_novas = [l for l in linhas_odoo if l['id'] not in ids_ja_importados]
+        qtd_filtradas = len(linhas_odoo) - len(linhas_novas)
+        if qtd_filtradas:
+            logger.info(f"[IMPORT_BULK] {qtd_filtradas} linhas já importadas filtradas localmente")
+
+        if not linhas_novas:
+            logger.info(f"[IMPORT_BULK] Todas as linhas já estavam importadas")
+            return []
+
+        # 3. Agrupar por journal_id
+        por_journal = defaultdict(list)
+        for linha in linhas_novas:
+            jid = self._extrair_id(linha.get('journal_id'))
+            por_journal[jid].append(linha)
+
+        logger.info(f"[IMPORT_BULK] {len(linhas_novas)} linhas novas em {len(por_journal)} journals")
+
+        # 4. Resolver journal_code/name para cada journal_id (uma única query)
+        journal_ids = list(por_journal.keys())
+        journal_map = {}
+        try:
+            journals_info = self.connection.search_read(
+                'account.journal',
+                [['id', 'in', journal_ids]],
+                fields=['id', 'name', 'code', 'company_id']
+            )
+            for j in journals_info:
+                company_name = ''
+                if j.get('company_id'):
+                    cid = j['company_id'][0] if isinstance(j['company_id'], (list, tuple)) else j['company_id']
+                    cname = j['company_id'][1] if isinstance(j['company_id'], (list, tuple)) and len(j['company_id']) > 1 else ''
+                    company_name = f" ({cname})" if cname else f" (empresa {cid})"
+                journal_map[j['id']] = {
+                    'code': j.get('code', f'J{j["id"]}'),
+                    'name': j.get('name', f'Journal {j["id"]}'),
+                    'company_name': company_name,
+                }
+        except Exception as e:
+            logger.warning(f"[IMPORT_BULK] Erro ao resolver journals: {e}. Usando dados da linha.")
+            for jid in journal_ids:
+                journal_map[jid] = {'code': f'J{jid}', 'name': f'Journal {jid}', 'company_name': ''}
+
+        # 5. Para cada journal, criar lote + processar itens
+        lotes = []
+        self.estatisticas = {'importados': 0, 'com_cnpj': 0, 'sem_cnpj': 0, 'erros': 0}
+
+        for jid, linhas in por_journal.items():
+            jinfo = journal_map.get(jid, {'code': f'J{jid}', 'name': f'Journal {jid}', 'company_name': ''})
+            journal_code = jinfo['code']
+            journal_name = jinfo['name']
+
+            nome_lote = (
+                f"Importação {journal_code}{jinfo['company_name']} "
+                f"({tipo_label}) {agora_utc_naive().strftime('%Y-%m-%d %H:%M')}"
+            )
+
+            lote = ExtratoLote(
+                nome=nome_lote,
+                journal_code=journal_code,
+                journal_id=jid,
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+                status='IMPORTADO',
+                tipo_transacao=tipo_transacao,
+                criado_por=criado_por,
+            )
+            db.session.add(lote)
+            db.session.flush()
+
+            # Credit lines em batch
+            move_ids = [
+                self._extrair_id(l.get('move_id'))
+                for l in linhas if l.get('move_id')
+            ]
+            credit_cache = self._buscar_linhas_credito_batch(move_ids) if move_ids else {}
+
+            valor_total = 0
+            importados_journal = 0
+
+            for linha in linhas:
+                try:
+                    item = self._processar_linha(
+                        lote.id, linha, journal_code, journal_name,
+                        credit_lines_cache=credit_cache
+                    )
+                    if item:
+                        valor_total += item.valor
+                        importados_journal += 1
+                        self.estatisticas['importados'] += 1
+                        if item.cnpj_pagador:
+                            self.estatisticas['com_cnpj'] += 1
+                        else:
+                            self.estatisticas['sem_cnpj'] += 1
+                except Exception as e:
+                    logger.error(f"[IMPORT_BULK] Erro ao processar linha {linha.get('id')}: {e}")
+                    self.estatisticas['erros'] += 1
+
+            lote.total_linhas = importados_journal
+            lote.valor_total = valor_total
+            lotes.append(lote)
+
+            logger.info(
+                f"[IMPORT_BULK] Journal {journal_code}{jinfo['company_name']}: "
+                f"{importados_journal} linhas importadas"
+            )
+
+        db.session.commit()
+
+        logger.info(
+            f"[IMPORT_BULK] Concluído: {len(lotes)} lotes, "
+            f"{self.estatisticas['importados']} importados, "
+            f"{self.estatisticas['erros']} erros"
+        )
+
+        return lotes
+
     def _buscar_journal(self, journal_code: str) -> Optional[Dict]:
-        """Busca journal pelo código."""
+        """
+        Busca journal pelo código. Retorna o primeiro encontrado.
+
+        NOTA: Este método é usado apenas pelo fluxo de importação manual (web UI).
+        O fluxo automático (scheduler) usa importar_extratos_por_data() que não
+        depende de resolução de journal.
+        """
         journals = self.connection.search_read(
             'account.journal',
             [['code', '=', journal_code]],
@@ -221,7 +418,7 @@ class ExtratoService:
 
     def _buscar_linhas_extrato(
         self,
-        journal_id: int,
+        journal_id: Optional[int] = None,
         data_inicio: Optional[date] = None,
         data_fim: Optional[date] = None,
         limit: int = 500,
@@ -231,20 +428,23 @@ class ExtratoService:
         Busca linhas de extrato do Odoo.
 
         Critérios:
-        - journal_id específico
+        - journal_id (opcional — quando None, busca de TODOS os journals bancários)
         - tipo_transacao: 'entrada' (amount > 0), 'saida' (amount < 0), 'ambos'
 
         NOTA: Importa tanto linhas não-conciliadas quanto já-conciliadas no Odoo.
         Linhas já conciliadas são marcadas CONCILIADO e vinculadas ao comprovante
         automaticamente em _processar_linha().
-        Duplicatas são filtradas em _processar_linha() via statement_line_id (indexado).
+        Duplicatas são filtradas localmente em importar_extrato() via batch check
+        e como safety net em _processar_linha() via statement_line_id (indexado).
 
         Args:
+            journal_id: ID do journal no Odoo. Se None, busca de todos os journals.
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'
         """
-        domain = [
-            ['journal_id', '=', journal_id],
-        ]
+        domain = []
+
+        if journal_id:
+            domain.append(['journal_id', '=', journal_id])
 
         # Filtro por tipo de transação
         if tipo_transacao == 'entrada':
@@ -890,11 +1090,27 @@ class ExtratoService:
         db.session.add(lote)
         db.session.flush()
 
-        # Buscar linhas do statement (duplicatas filtradas em _processar_linha via statement_line_id indexado)
-        linhas = self._buscar_linhas_statement(
+        # Buscar linhas do statement no Odoo SEM exclude_ids (evita NOT IN gigante no XML-RPC)
+        linhas_odoo = self._buscar_linhas_statement(
             statement_id,
             tipo_transacao=tipo_transacao,
         )
+
+        # Para re-importação: filtrar localmente as já importadas
+        if is_reimport and linhas_odoo:
+            ids_retornados = [linha['id'] for linha in linhas_odoo]
+            ids_ja_importados = set(r[0] for r in db.session.query(
+                ExtratoItem.statement_line_id
+            ).filter(
+                ExtratoItem.statement_line_id.in_(ids_retornados)
+            ).all())
+
+            linhas = [l for l in linhas_odoo if l['id'] not in ids_ja_importados]
+            qtd_ignoradas = len(linhas_odoo) - len(linhas)
+            if qtd_ignoradas:
+                logger.info(f"{qtd_ignoradas} linhas já importadas filtradas localmente (re-import)")
+        else:
+            linhas = linhas_odoo if linhas_odoo else []
 
         # Se re-importação e nenhuma linha nova, retornar lote existente com 0 novas
         if is_reimport and not linhas:
@@ -958,7 +1174,8 @@ class ExtratoService:
     ) -> List[Dict]:
         """
         Busca linhas de um statement específico (conciliadas e não-conciliadas).
-        Duplicatas são filtradas em _processar_linha() via statement_line_id (indexado).
+        Duplicatas são filtradas localmente em importar_statement() via batch check
+        e como safety net em _processar_linha() via statement_line_id (indexado).
 
         Args:
             tipo_transacao: 'entrada' (recebimentos), 'saida' (pagamentos), 'ambos'

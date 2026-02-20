@@ -12,6 +12,7 @@
 3. **NUNCA mantenha lixo** — codigo substituido DEVE ser removido
 4. **DADOS DE PRODUCAO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
 5. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
+6. **QUALIDADE > VELOCIDADE**: Sempre opte por pesquisar demais do que ser rápido mas não verificar algo importante.
 
 ### ANTES DE PROPOR NOVOS ARQUIVOS:
 1. **LER** o INDICE DE REFERENCIAS abaixo

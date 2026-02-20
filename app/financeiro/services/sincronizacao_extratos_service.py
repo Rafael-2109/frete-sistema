@@ -867,76 +867,84 @@ class SincronizacaoExtratosService:
         """
         Importa extratos novos do Odoo para o sistema local automaticamente.
 
-        Este método é usado pelo scheduler para importar novos extratos que
-        existem no Odoo mas ainda não foram importados no sistema local.
+        Estratégia: busca TODAS as linhas do Odoo por data (sem filtro de journal),
+        filtra duplicados localmente, agrupa por journal e cria lotes.
+        Isso garante importação de TODOS os journals de TODAS as empresas.
 
-        Fluxo:
-        1. Para cada journal configurado, busca statement lines não conciliadas
-        2. Filtra as que já existem localmente (via statement_line_id)
-        3. Importa as novas via ExtratoService.importar_extrato()
+        Quando `journals` é fornecido (ex: rota manual com journal_code específico),
+        usa importar_extrato() per-journal para manter compatibilidade.
 
         Args:
-            journals: Lista de códigos de journal (GRA1, SIC, BRAD, etc.)
-                      Se None, usa ['GRA1'] como padrão
+            journals: Lista de códigos de journal para filtrar (None = todos, recomendado)
             dias_retroativos: Quantos dias para trás buscar (default: 7, ignorado se data_inicio)
             data_inicio: Data início explícita (sobrepõe dias_retroativos)
             data_fim: Data fim explícita (default: hoje)
-            limite: Limite de registros por journal (default: 500)
+            limite: Limite de registros por query Odoo (default: 500)
 
         Returns:
             Dict com estatísticas de importação
         """
-        import os
-        from datetime import date
-
-        if journals is None:
-            # Configurável via variável de ambiente
-            journals_env = os.environ.get('JOURNALS_EXTRATO', '')
-            if journals_env.strip():
-                journals = [j.strip() for j in journals_env.split(',')]
-            else:
-                # Auto-descobrir todos os journals bancários do Odoo
-                try:
-                    from app.financeiro.services.extrato_service import ExtratoService
-                    svc = ExtratoService()
-                    journals_odoo = svc.listar_journals_disponiveis(tipo_transacao='ambos')
-                    journals = [j['code'] for j in journals_odoo if j.get('code')]
-                    logger.info(f"[IMPORT_EXTRATOS_AUTO] Journals auto-descobertos: {journals}")
-                except Exception as e:
-                    logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro ao auto-descobrir journals: {e}. Usando fallback GRA1.")
-                    journals = ['GRA1']
+        from datetime import date as date_cls
 
         stats = {
             'inicio': agora_utc_naive().isoformat(),
             'journals_processados': 0,
             'total_importados': 0,
-            'total_ja_existentes': 0,
             'total_erros': 0,
             'detalhes_por_journal': {}
         }
 
-        logger.info(f"[IMPORT_EXTRATOS_AUTO] Iniciando importação automática: journals={journals}, dias={dias_retroativos}, data_inicio={data_inicio}, data_fim={data_fim}")
+        if data_inicio is None:
+            data_inicio = date_cls.today() - timedelta(days=dias_retroativos)
+        if data_fim is None:
+            data_fim = date_cls.today()
+
+        filtro_journal = f", journals={journals}" if journals else ""
+        logger.info(
+            f"[IMPORT_EXTRATOS_AUTO] Iniciando importação automática: "
+            f"data_inicio={data_inicio}, data_fim={data_fim}, limite={limite}{filtro_journal}"
+        )
 
         try:
             from app.financeiro.services.extrato_service import ExtratoService
 
-            if data_inicio is None:
-                data_inicio = date.today() - timedelta(days=dias_retroativos)
-            if data_fim is None:
-                data_fim = date.today()
+            for tipo in ['entrada', 'saida']:
+                tipo_label = 'recebimentos' if tipo == 'entrada' else 'pagamentos'
 
-            for journal_code in journals:
-                for tipo in ['entrada', 'saida']:
-                    chave_detalhe = f"{journal_code}_{tipo}"
-                    try:
-                        tipo_label = 'recebimentos' if tipo == 'entrada' else 'pagamentos'
-                        logger.info(f"[IMPORT_EXTRATOS_AUTO] Processando journal: {journal_code} ({tipo_label})")
+                try:
+                    extrato_service = ExtratoService()
 
-                        extrato_service = ExtratoService()
-
-                        # Importar extrato usando o service existente
-                        lote = extrato_service.importar_extrato(
-                            journal_code=journal_code,
+                    if journals:
+                        # Rota manual com journal específico: importar per-journal
+                        logger.info(f"[IMPORT_EXTRATOS_AUTO] Buscando {tipo_label} de journals={journals}")
+                        for journal_code in journals:
+                            try:
+                                lote = extrato_service.importar_extrato(
+                                    journal_code=journal_code,
+                                    data_inicio=data_inicio,
+                                    data_fim=data_fim,
+                                    limit=limite,
+                                    criado_por='SYNC_SOB_DEMANDA',
+                                    tipo_transacao=tipo,
+                                )
+                                chave = f"{journal_code}_{tipo}"
+                                stats['journals_processados'] += 1
+                                stats['total_importados'] += extrato_service.estatisticas.get('importados', 0)
+                                stats['detalhes_por_journal'][chave] = {
+                                    'lote_id': lote.id if lote else None,
+                                    'journal_id': lote.journal_id if lote else None,
+                                    'tipo_transacao': tipo,
+                                    'importados': extrato_service.estatisticas.get('importados', 0),
+                                }
+                            except Exception as e:
+                                db.session.rollback()
+                                logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro journal {journal_code} ({tipo}): {e}")
+                                stats['total_erros'] += 1
+                                stats['detalhes_por_journal'][f'{journal_code}_{tipo}'] = {'erro': str(e)}
+                    else:
+                        # Scheduler automático: buscar TUDO sem filtro de journal
+                        logger.info(f"[IMPORT_EXTRATOS_AUTO] Buscando {tipo_label} de TODOS os journals...")
+                        lotes = extrato_service.importar_extratos_por_data(
                             data_inicio=data_inicio,
                             data_fim=data_fim,
                             limit=limite,
@@ -944,34 +952,36 @@ class SincronizacaoExtratosService:
                             tipo_transacao=tipo,
                         )
 
-                        stats['journals_processados'] += 1
+                        for lote in lotes:
+                            chave = f"{lote.journal_code}_{tipo}"
+                            stats['journals_processados'] += 1
+                            stats['detalhes_por_journal'][chave] = {
+                                'lote_id': lote.id,
+                                'journal_id': lote.journal_id,
+                                'tipo_transacao': tipo,
+                                'importados': lote.total_linhas or 0,
+                            }
+
                         stats['total_importados'] += extrato_service.estatisticas.get('importados', 0)
-                        stats['detalhes_por_journal'][chave_detalhe] = {
-                            'lote_id': lote.id if lote else None,
-                            'tipo_transacao': tipo,
-                            'importados': extrato_service.estatisticas.get('importados', 0),
-                            'com_cnpj': extrato_service.estatisticas.get('com_cnpj', 0),
-                            'sem_cnpj': extrato_service.estatisticas.get('sem_cnpj', 0),
-                            'erros': extrato_service.estatisticas.get('erros', 0)
-                        }
+                        stats['total_erros'] += extrato_service.estatisticas.get('erros', 0)
 
-                        logger.info(
-                            f"[IMPORT_EXTRATOS_AUTO] Journal {journal_code} ({tipo_label}): "
-                            f"{extrato_service.estatisticas.get('importados', 0)} importados"
-                        )
+                    logger.info(
+                        f"[IMPORT_EXTRATOS_AUTO] {tipo_label}: "
+                        f"{stats['total_importados']} importados total"
+                    )
 
-                    except Exception as e:
-                        logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro no journal {journal_code} ({tipo}): {e}")
-                        stats['total_erros'] += 1
-                        stats['detalhes_por_journal'][chave_detalhe] = {
-                            'tipo_transacao': tipo,
-                            'erro': str(e)
-                        }
-
-            db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"[IMPORT_EXTRATOS_AUTO] Erro ao importar {tipo_label}: {e}")
+                    stats['total_erros'] += 1
+                    stats['detalhes_por_journal'][f'ERRO_{tipo}'] = {'erro': str(e)}
 
             stats['fim'] = agora_utc_naive().isoformat()
-            logger.info(f"[IMPORT_EXTRATOS_AUTO] Importação concluída: {stats['total_importados']} extratos importados")
+            logger.info(
+                f"[IMPORT_EXTRATOS_AUTO] Importação concluída: "
+                f"{stats['total_importados']} extratos importados, "
+                f"{stats['journals_processados']} journals"
+            )
 
             return {
                 'success': True,

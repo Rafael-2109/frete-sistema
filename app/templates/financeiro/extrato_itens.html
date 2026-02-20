@@ -1857,14 +1857,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (data.success) {
                 const r = data.resumo || {};
-                alert('Sincronizacao completa!\n\n' +
+                let msg = 'Sincronizacao completa!\n\n' +
                     'Importados: ' + (r.importados || 0) + ' linhas novas\n' +
                     'Revalidados: ' + (r.revalidados || 0) + ' conciliacoes\n' +
                     'Resolvidos: ' + (r.resolvidos || 0) + ' favorecidos/pagadores\n' +
-                    'Lotes novos: ' + (r.lotes_novos || 0));
+                    'Lotes novos: ' + (r.lotes_novos || 0);
+                if (r.erros_importacao > 0) {
+                    msg += '\n\nErros: ' + r.erros_importacao + ' journal(s) com erro';
+                }
+                if (data.warning) {
+                    msg += '\n\nAviso: ' + data.warning;
+                }
+                alert(msg);
                 recarregarTabela();
             } else {
-                alert('Erro na sincronizacao: ' + (data.error || 'Erro desconhecido'));
+                alert('Erro na sincronizacao: ' + (data.error || data.warning || 'Erro desconhecido'));
             }
         } catch (err) {
             alert('Erro de conexao: ' + err.message);
