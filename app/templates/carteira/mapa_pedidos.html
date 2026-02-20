@@ -1356,6 +1356,15 @@
             pedagioMarkers.forEach(marker => marker.setMap(null));
             pedagioMarkers = [];
 
+            // Ocultar TODOS os marcadores originais de clientes (serão substituídos
+            // por marcadores verdes numerados para os na rota; os fora da rota somem)
+            // Mantém apenas o marcador do CD visível
+            markers.forEach(marker => {
+                if (marker.clienteData) {
+                    marker.setMap(null);
+                }
+            });
+
             // Decodificar polyline
             const path = google.maps.geometry.encoding.decodePath(rota.polyline);
 

@@ -9,7 +9,7 @@ import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.producao.models import CadastroPalletizacao
@@ -156,9 +156,10 @@ class MapaService:
         Cada cliente pode ter múltiplos pedidos.
 
         FONTE DE DADOS:
-        - Valores (valor_saldo, peso, pallet): Separacao (sincronizado_nf=False)
+        - Valores (valor_saldo, peso, pallet): Separacao (sincronizado_nf=False OU nf_cd=True)
           Motivo: CarteiraPrincipal.qtd_saldo_produto_pedido é zerada após separação,
           resultando em valor 0 e peso 0 se calculado a partir dela.
+          NFs que voltaram ao CD (nf_cd=True) devem ser incluídas pois representam saldo pendente.
         - Endereço de entrega: CarteiraPrincipal (campos cep_endereco_ent, rua_endereco_ent, etc.)
           Motivo: Separacao não possui campos detalhados de endereço de entrega.
 
@@ -170,9 +171,14 @@ class MapaService:
         """
         try:
             # 1. Buscar separações ativas (fonte de verdade para valores)
+            # Inclui NFs que voltaram ao CD (nf_cd=True) — padrão busca_dados.py:100-107
             separacoes = Separacao.query.filter(
                 Separacao.num_pedido.in_(pedido_ids),
-                Separacao.sincronizado_nf == False
+                Separacao.qtd_saldo > 0,
+                or_(
+                    Separacao.sincronizado_nf == False,  # Não faturadas
+                    Separacao.nf_cd == True               # NFs que voltaram ao CD
+                )
             ).all()
 
             if not separacoes:
