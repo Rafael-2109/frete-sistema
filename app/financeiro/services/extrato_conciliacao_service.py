@@ -1197,8 +1197,16 @@ class ExtratoConciliacaoService:
         item.titulo_saldo_antes = 0
         item.titulo_saldo_depois = 0
 
-        # Atualizar status
-        item.status = 'CONCILIADO'
+        # Atualizar status — CONCILIADO somente se Odoo confirmou reconciliacao
+        if extrato_reconciliado:
+            item.status = 'CONCILIADO'
+            item.aprovado = True
+            item.aprovado_em = agora_utc_naive()
+            item.aprovado_por = 'CONCILIACAO_ODOO'
+        else:
+            # Titulo quitado mas extrato NAO reconciliado no Odoo
+            item.status = 'APROVADO'
+
         item.processado_em = agora_utc_naive()
         item.mensagem = mensagem_resultado
 
@@ -2692,8 +2700,16 @@ class ExtratoConciliacaoService:
         item.titulo_saldo_antes = 0
         item.titulo_saldo_depois = 0
 
-        # Atualizar status
-        item.status = 'CONCILIADO'
+        # Atualizar status — CONCILIADO somente se Odoo confirmou reconciliacao
+        if extrato_reconciliado:
+            item.status = 'CONCILIADO'
+            item.aprovado = True
+            item.aprovado_em = agora_utc_naive()
+            item.aprovado_por = 'CONCILIACAO_ODOO'
+        else:
+            # Titulo quitado mas extrato NAO reconciliado no Odoo
+            item.status = 'APROVADO'
+
         item.processado_em = agora_utc_naive()
         item.mensagem = mensagem_resultado
 

@@ -180,7 +180,8 @@ def extrato_aprovar_itens():
 
     itens = ExtratoItem.query.filter(
         ExtratoItem.id.in_(item_ids),
-        ExtratoItem.aprovado == False
+        ExtratoItem.aprovado == False,
+        ExtratoItem.status != 'CONCILIADO'
     ).all()
 
     aprovados = 0
@@ -1381,6 +1382,13 @@ def extrato_aprovar_item():
 
     item = ExtratoItem.query.get_or_404(item_id)
 
+    # CONCILIADO e terminal — nao pode ser sobrescrito por aprovacao
+    if item.status == 'CONCILIADO':
+        return jsonify({
+            'success': False,
+            'error': 'Item já está CONCILIADO — status terminal'
+        }), 409
+
     # Verificar se tem título vinculado (1:1 via FK OU M:N via tabela associativa)
     if aprovar and not item.titulo_receber_id and not item.titulo_pagar_id and not item.tem_multiplos_titulos:
         return jsonify({
@@ -1411,11 +1419,12 @@ def extrato_aprovar_todos():
     if not lote_id:
         return jsonify({'success': False, 'error': 'lote_id é obrigatório'}), 400
 
-    # Buscar itens com match único não aprovados
-    itens = ExtratoItem.query.filter_by(
-        lote_id=lote_id,
-        status_match='MATCH_ENCONTRADO',
-        aprovado=False
+    # Buscar itens com match único não aprovados (excluir CONCILIADO — terminal)
+    itens = ExtratoItem.query.filter(
+        ExtratoItem.lote_id == lote_id,
+        ExtratoItem.status_match == 'MATCH_ENCONTRADO',
+        ExtratoItem.aprovado == False,
+        ExtratoItem.status != 'CONCILIADO'
     ).all()
 
     aprovados = 0
@@ -1664,6 +1673,13 @@ def extrato_conciliar_item():
     item_id = data.get('item_id')
 
     item = ExtratoItem.query.get_or_404(item_id)
+
+    # CONCILIADO e terminal — nao permitir re-conciliacao
+    if item.status == 'CONCILIADO':
+        return jsonify({
+            'success': False,
+            'error': 'Item já está CONCILIADO — status terminal'
+        }), 409
 
     if not item.aprovado:
         return jsonify({

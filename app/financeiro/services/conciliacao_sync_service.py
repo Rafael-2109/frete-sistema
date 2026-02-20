@@ -99,8 +99,11 @@ class ConciliacaoSyncService:
             status='LANCADO',
         ).order_by(LancamentoComprovante.lancado_em.desc()).first()
 
-        # Atualizar ExtratoItem
+        # Atualizar ExtratoItem — CONCILIADO implica aprovado=True (invariante)
         extrato_item.status = 'CONCILIADO'
+        extrato_item.aprovado = True
+        extrato_item.aprovado_em = agora_utc_naive()
+        extrato_item.aprovado_por = 'SYNC_COMPROVANTE'
         extrato_item.processado_em = agora_utc_naive()
         extrato_item.mensagem = f"Conciliado via comprovante #{comp.id}"
 

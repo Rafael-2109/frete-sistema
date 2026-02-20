@@ -151,8 +151,11 @@ class SincronizacaoExtratosService:
                 ).first()
 
                 if cnab_item:
-                    # Pago via CNAB
+                    # Pago via CNAB — CONCILIADO implica aprovado=True (invariante)
                     extrato.status = 'CONCILIADO'
+                    extrato.aprovado = True
+                    extrato.aprovado_em = agora_utc_naive()
+                    extrato.aprovado_por = 'SYNC_AUTO_CNAB'
                     extrato.status_match = 'MATCH_ENCONTRADO'
                     extrato.match_criterio = f'SYNC_AUTO_CNAB_LOTE_{cnab_item.lote_id}'
                     extrato.mensagem = (
@@ -167,8 +170,11 @@ class SincronizacaoExtratosService:
 
                     return 'cnab'
                 else:
-                    # Pago de outra forma (Odoo direto, manual)
+                    # Pago de outra forma (Odoo direto, manual) — CONCILIADO implica aprovado=True
                     extrato.status = 'CONCILIADO'
+                    extrato.aprovado = True
+                    extrato.aprovado_em = agora_utc_naive()
+                    extrato.aprovado_por = 'SYNC_AUTO_TITULO_PAGO'
                     extrato.status_match = 'MATCH_ENCONTRADO'
                     extrato.match_criterio = 'SYNC_AUTO_TITULO_PAGO'
                     extrato.mensagem = (
@@ -569,8 +575,11 @@ class SincronizacaoExtratosService:
                         stats['ja_conciliados'] += 1
                         continue
 
-                    # Atualizar status para CONCILIADO
+                    # Atualizar status para CONCILIADO — implica aprovado=True (invariante)
                     extrato.status = 'CONCILIADO'
+                    extrato.aprovado = True
+                    extrato.aprovado_em = agora_utc_naive()
+                    extrato.aprovado_por = 'SYNC_ODOO_WRITE_DATE'
                     extrato.status_match = 'MATCH_ENCONTRADO'
                     extrato.match_criterio = 'SYNC_ODOO_WRITE_DATE'
                     extrato.mensagem = (
@@ -806,7 +815,11 @@ class SincronizacaoExtratosService:
                             stats['conciliados_no_odoo'] += 1
 
                             if extrato.status != 'CONCILIADO':
+                                # CONCILIADO implica aprovado=True (invariante)
                                 extrato.status = 'CONCILIADO'
+                                extrato.aprovado = True
+                                extrato.aprovado_em = agora_utc_naive()
+                                extrato.aprovado_por = 'SYNC_ODOO_REVALIDACAO'
                                 extrato.status_match = 'MATCH_ENCONTRADO'
                                 extrato.match_criterio = 'SYNC_ODOO_FULL_REVALIDACAO'
                                 extrato.mensagem = (
