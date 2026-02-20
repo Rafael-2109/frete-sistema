@@ -97,16 +97,16 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_fiscal_dfe_status",
+      "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
       "columns": [
-        "status"
+        "cnpj_fornecedor"
       ],
       "unique": false
     },
     {
-      "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
+      "name": "ix_validacao_fiscal_dfe_status",
       "columns": [
-        "cnpj_fornecedor"
+        "status"
       ],
       "unique": false
     },

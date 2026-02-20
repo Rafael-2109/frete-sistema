@@ -240,13 +240,6 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_conta_receber_nf",
       "columns": [
         "titulo_nf"
@@ -271,6 +264,13 @@
       "name": "ix_contas_a_receber_titulo_nf",
       "columns": [
         "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_vencimento",
+      "columns": [
+        "vencimento"
       ],
       "unique": false
     }

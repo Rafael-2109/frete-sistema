@@ -236,14 +236,6 @@
       "unique": false
     },
     {
-      "name": "idx_sep_falta_pgto_sync",
-      "columns": [
-        "falta_pagamento",
-        "sincronizado_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_nf",
       "columns": [
         "numero_nf",
@@ -252,9 +244,16 @@
       "unique": false
     },
     {
-      "name": "idx_sep_lote_sync",
+      "name": "idx_sep_num_pedido",
       "columns": [
-        "separacao_lote_id",
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_falta_pgto_sync",
+      "columns": [
+        "falta_pagamento",
         "sincronizado_nf"
       ],
       "unique": false
@@ -268,9 +267,9 @@
       "unique": false
     },
     {
-      "name": "idx_sep_falta_item_sync",
+      "name": "idx_sep_lote_sync",
       "columns": [
-        "falta_item",
+        "separacao_lote_id",
         "sincronizado_nf"
       ],
       "unique": false
@@ -284,9 +283,16 @@
       "unique": false
     },
     {
-      "name": "idx_sep_lote_status",
+      "name": "idx_sep_falta_item_sync",
       "columns": [
-        "separacao_lote_id",
+        "falta_item",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_status",
+      "columns": [
         "status"
       ],
       "unique": false
@@ -299,16 +305,17 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "idx_sep_lote_status",
       "columns": [
-        "separacao_lote_id"
+        "separacao_lote_id",
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_sep_num_pedido",
+      "name": "idx_sep_nf_cd",
       "columns": [
-        "num_pedido"
+        "nf_cd"
       ],
       "unique": false
     },
@@ -330,13 +337,6 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_produto_qtd_sync",
       "columns": [
         "cod_produto",
@@ -345,9 +345,9 @@
       "unique": false
     },
     {
-      "name": "idx_sep_nf_cd",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "nf_cd"
+        "separacao_lote_id"
       ],
       "unique": false
     },

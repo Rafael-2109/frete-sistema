@@ -68,9 +68,9 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
+      "name": "ix_portal_sendas_produto_depara_cnpj_cliente",
       "columns": [
-        "codigo_sendas"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -82,16 +82,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_produto_depara_ativo",
+      "name": "ix_portal_sendas_produto_depara_codigo_sendas",
       "columns": [
-        "ativo"
+        "codigo_sendas"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_produto_depara_cnpj_cliente",
+      "name": "ix_portal_sendas_produto_depara_ativo",
       "columns": [
-        "cnpj_cliente"
+        "ativo"
       ],
       "unique": false
     }
