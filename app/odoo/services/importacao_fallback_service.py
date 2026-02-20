@@ -541,15 +541,15 @@ class ImportacaoFallbackService:
         """
         Processa a importação de uma NF específica para o sistema local.
 
-        FLUXO COMPLETO:
-        1. Insere em FaturamentoProduto
-        2. Insere em RelatorioFaturamentoImportado
-        3. Atualiza saldos na CarteiraPrincipal
-        4. Processa match com Separacao/Embarque via ProcessadorFaturamento
+        FLUXO COMPLETO (alinhado com faturamento_service.sincronizar_faturamento_incremental):
+        1. Busca TODOS os dados do Odoo (NF, parceiro, produtos em batch)
+        2. Insere em FaturamentoProduto com TODOS os campos (status mapeado, municipio, vendedor, etc.)
+        3. Insere em RelatorioFaturamentoImportado (necessário para ProcessadorFaturamento)
+        4. Atualiza saldos na CarteiraPrincipal via _atualizar_saldos_carteira()
+        5. Processa match com Separacao/Embarque via ProcessadorFaturamento
         """
         try:
             from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
-            from app.odoo.utils.carteira_mapper import CarteiraMapper
 
             numero_nf = nf_dados.get('numero_nf')
             move_id = nf_dados.get('id')
@@ -559,25 +559,106 @@ class ImportacaoFallbackService:
             # Verificar se NF já existe no sistema
             nf_existente = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).first()
             if nf_existente:
-                logger.info(f"⚠️ NF {numero_nf} já existe no sistema")
+                logger.info(f"⚠️ NF {numero_nf} já existe no sistema (status={nf_existente.status_nf})")
                 return {
                     'sucesso': True,
-                    'mensagem': f'NF {numero_nf} já existe no sistema',
+                    'mensagem': f'NF {numero_nf} já existe no sistema (status: {nf_existente.status_nf})',
                     'itens_importados': 0
                 }
 
-            # Buscar linhas detalhadas da NF
+            # ============================================================
+            # FASE 1: Buscar TODOS os dados do Odoo
+            # ============================================================
+
+            # 1a. Dados completos da NF (move) — inclui vendedor, equipe, incoterm
+            nf_completa = self.connection.search_read(
+                'account.move',
+                [('id', '=', move_id)],
+                fields=[
+                    'partner_id', 'l10n_br_numero_nota_fiscal', 'invoice_date',
+                    'invoice_origin', 'l10n_br_total_nfe', 'state',
+                    'invoice_user_id', 'team_id', 'invoice_incoterm_id'
+                ],
+                limit=1
+            )
+
+            if not nf_completa:
+                return {
+                    'sucesso': False,
+                    'mensagem': f'NF {numero_nf} não encontrada no Odoo',
+                    'itens_importados': 0
+                }
+
+            nf_info = nf_completa[0]
+            origem = nf_info.get('invoice_origin', '')
+
+            # Mapear status do Odoo → status do sistema (mesma lógica de faturamento_service._mapear_status)
+            status_nf = self.faturamento_service._mapear_status(nf_info.get('state', ''))
+
+            # Extrair vendedor/equipe/incoterm de campos many2one [id, name]
+            vendedor = ''
+            m2o = nf_info.get('invoice_user_id')
+            if m2o and isinstance(m2o, list) and len(m2o) > 1:
+                vendedor = m2o[1] or ''
+
+            equipe_vendas = ''
+            m2o = nf_info.get('team_id')
+            if m2o and isinstance(m2o, list) and len(m2o) > 1:
+                equipe_vendas = m2o[1] or ''
+
+            incoterm = ''
+            m2o = nf_info.get('invoice_incoterm_id')
+            if m2o and isinstance(m2o, list) and len(m2o) > 1:
+                incoterm = m2o[1] or ''
+
+            # 1b. Dados do parceiro (cliente) — inclui município e UF
+            cliente_info = {
+                'cnpj_cliente': '', 'nome_cliente': '',
+                'municipio': '', 'estado': ''
+            }
+
+            if nf_info.get('partner_id'):
+                partner_id = nf_info['partner_id'][0] if isinstance(nf_info['partner_id'], list) else nf_info['partner_id']
+                try:
+                    parceiro = self.connection.read(
+                        'res.partner', [partner_id],
+                        ['name', 'l10n_br_cnpj', 'l10n_br_municipio_id', 'state_id']
+                    )
+                    if parceiro:
+                        p = parceiro[0]
+                        cliente_info['cnpj_cliente'] = (p.get('l10n_br_cnpj') or '').strip()
+                        cliente_info['nome_cliente'] = (p.get('name') or '').strip()
+
+                        # Município: many2one → [id, "Cidade (UF)"]
+                        # Mesma lógica de parse que faturamento_mapper (linhas 289-296)
+                        mun_raw = p.get('l10n_br_municipio_id')
+                        if mun_raw and isinstance(mun_raw, list) and len(mun_raw) > 1:
+                            nome_mun = mun_raw[1] or ''
+                            if '(' in nome_mun and ')' in nome_mun:
+                                partes = nome_mun.split('(')
+                                cliente_info['municipio'] = partes[0].strip()
+                                cliente_info['estado'] = partes[1].replace(')', '').strip()
+                            else:
+                                cliente_info['municipio'] = nome_mun.strip()
+
+                        # Fallback UF via state_id se município não tinha "(UF)"
+                        if not cliente_info['estado']:
+                            state_raw = p.get('state_id')
+                            if state_raw and isinstance(state_raw, list) and len(state_raw) > 1:
+                                uf_name = state_raw[1] or ''
+                                if len(uf_name) == 2:
+                                    cliente_info['estado'] = uf_name
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao buscar dados do parceiro {partner_id}: {e}")
+
+            # 1c. Linhas de produto da NF
             linhas = self.connection.search_read(
                 'account.move.line',
                 [
                     ('move_id', '=', move_id),
                     ('product_id', '!=', False)
                 ],
-                fields=[
-                    'product_id', 'quantity', 'price_unit', 'price_total',
-                    'l10n_br_icms_valor', 'l10n_br_icmsst_valor',
-                    'l10n_br_pis_valor', 'l10n_br_cofins_valor'
-                ]
+                fields=['product_id', 'quantity', 'price_unit', 'price_total']
             )
 
             if not linhas:
@@ -588,136 +669,148 @@ class ImportacaoFallbackService:
                     'itens_importados': 0
                 }
 
-            # Buscar dados adicionais da NF
-            nf_completa = self.connection.search_read(
-                'account.move',
-                [('id', '=', move_id)],
-                fields=[
-                    'partner_id', 'l10n_br_numero_nota_fiscal', 'invoice_date',
-                    'invoice_origin', 'l10n_br_total_nfe', 'state'
-                ],
-                limit=1
-            )
+            # 1d. Buscar códigos e pesos de TODOS os produtos em BATCH (elimina N+1)
+            product_ids = set()
+            for linha in linhas:
+                pid = linha.get('product_id')
+                if isinstance(pid, list):
+                    product_ids.add(pid[0])
+                elif pid:
+                    product_ids.add(pid)
 
-            if not nf_completa:
-                return {
-                    'sucesso': False,
-                    'mensagem': f'NF {numero_nf} não encontrada para importação',
-                    'itens_importados': 0
-                }
+            produtos_cache = {}  # {product_id: {'default_code': str, 'weight': float}}
+            if product_ids:
+                try:
+                    produtos_odoo = self.connection.read(
+                        'product.product', list(product_ids), ['default_code', 'weight']
+                    )
+                    for p in (produtos_odoo or []):
+                        produtos_cache[p['id']] = {
+                            'default_code': p.get('default_code') or '',
+                            'weight': float(p.get('weight') or 0)
+                        }
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao buscar produtos em batch: {e}")
 
-            nf_info = nf_completa[0]
-            origem = nf_info.get('invoice_origin', '')
-
-            # Mapear dados do cliente
-            mapper = CarteiraMapper()
-            cliente_info = {}
-
-            if nf_info.get('partner_id'):
-                partner_id = nf_info['partner_id'][0] if isinstance(nf_info['partner_id'], list) else nf_info['partner_id']
-                cliente_info = mapper._buscar_dados_parceiro(partner_id) or {}
-
-            # Importar cada linha - coletar cod_produto para atualização de saldos
+            # ============================================================
+            # FASE 2: Gravar FaturamentoProduto (todos os campos)
+            # ============================================================
             itens_importados = 0
             produtos_importados = set()
             valor_total_nf = 0
+            peso_total_nf = 0
 
             for linha in linhas:
                 try:
                     product_id = linha.get('product_id')
                     if isinstance(product_id, list):
                         prod_id = product_id[0]
-                        prod_nome = product_id[1]
+                        prod_nome = product_id[1] or ''
                     else:
                         prod_id = product_id
                         prod_nome = ''
 
-                    # Buscar código do produto
-                    produto_info = self.connection.read(
-                        'product.product',
-                        [prod_id],
-                        ['default_code']
-                    )
+                    prod_info = produtos_cache.get(prod_id, {})
+                    cod_produto = prod_info.get('default_code', '')
+                    peso_unitario = prod_info.get('weight', 0)
+                    qtd = float(linha.get('quantity', 0) or 0)
+                    peso_linha = peso_unitario * qtd
 
-                    cod_produto = produto_info[0].get('default_code', '') if produto_info else ''
-
-                    # Criar registro de faturamento
                     faturamento = FaturamentoProduto(
                         numero_nf=numero_nf,
+                        data_fatura=nf_info.get('invoice_date'),
+                        cnpj_cliente=cliente_info['cnpj_cliente'],
+                        nome_cliente=cliente_info['nome_cliente'],
+                        municipio=cliente_info['municipio'],
+                        estado=cliente_info['estado'],
+                        vendedor=vendedor,
+                        equipe_vendas=equipe_vendas,
+                        incoterm=incoterm,
                         cod_produto=cod_produto,
-                        nome_produto=prod_nome[:255] if prod_nome else '',
-                        qtd_produto_faturado=linha.get('quantity', 0),
-                        preco_produto=linha.get('price_unit', 0),
-                        valor_total=linha.get('price_total', 0),
-                        data_nf=nf_info.get('invoice_date'),
+                        nome_produto=prod_nome[:200] if prod_nome else '',
+                        qtd_produto_faturado=qtd,
+                        preco_produto_faturado=linha.get('price_unit', 0),
+                        valor_produto_faturado=linha.get('price_total', 0),
+                        peso_unitario_produto=peso_unitario,
+                        peso_total=peso_linha,
                         origem=origem,
-                        cnpj_cpf=cliente_info.get('cnpj', ''),
-                        raz_social=cliente_info.get('razao_social', ''),
-                        status_nf='Ativa',
-                        icms=linha.get('l10n_br_icms_valor', 0),
-                        icms_st=linha.get('l10n_br_icmsst_valor', 0),
-                        pis=linha.get('l10n_br_pis_valor', 0),
-                        cofins=linha.get('l10n_br_cofins_valor', 0)
+                        status_nf=status_nf,
+                        created_by='Fallback Import',
                     )
 
                     db.session.add(faturamento)
                     itens_importados += 1
-                    produtos_importados.add(cod_produto)
+                    if cod_produto:
+                        produtos_importados.add(cod_produto)
                     valor_total_nf += float(linha.get('price_total', 0) or 0)
+                    peso_total_nf += peso_linha
 
                 except Exception as e:
                     logger.error(f"❌ Erro ao importar linha da NF {numero_nf}: {e}")
 
-            # Inserir em RelatorioFaturamentoImportado (necessário para ProcessadorFaturamento)
+            # ============================================================
+            # FASE 3: Gravar RelatorioFaturamentoImportado (todos os campos)
+            # ============================================================
             relatorio_existente = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
             if not relatorio_existente:
                 relatorio = RelatorioFaturamentoImportado(
                     numero_nf=numero_nf,
                     data_fatura=nf_info.get('invoice_date'),
-                    cnpj_cliente=cliente_info.get('cnpj', ''),
-                    nome_cliente=cliente_info.get('razao_social', ''),
+                    cnpj_cliente=cliente_info['cnpj_cliente'],
+                    nome_cliente=cliente_info['nome_cliente'],
+                    municipio=cliente_info['municipio'],
+                    estado=cliente_info['estado'],
                     valor_total=valor_total_nf,
+                    peso_bruto=peso_total_nf,
                     origem=origem,
+                    vendedor=vendedor,
+                    equipe_vendas=equipe_vendas,
+                    incoterm=incoterm,
                     ativo=True
                 )
                 db.session.add(relatorio)
                 logger.info(f"📋 RelatorioFaturamentoImportado criado para NF {numero_nf}")
 
+            # P5: Commit ANTES do processamento longo (libera conexão DB)
             db.session.commit()
-            logger.info(f"✅ NF {numero_nf} importada: {itens_importados} itens")
+            logger.info(f"✅ NF {numero_nf} importada: {itens_importados} itens (status={status_nf})")
 
             # ============================================================
-            # PROCESSAMENTO COMPLETO: Atualizar saldos e sincronizar
+            # FASE 4: Pós-processamento (saldos + matching)
             # ============================================================
             try:
-                # 1. Atualizar saldos na CarteiraPrincipal
+                # 4a. Atualizar saldos na CarteiraPrincipal
                 if origem and produtos_importados:
                     logger.info(f"📊 Atualizando saldos da carteira para pedido {origem}...")
                     pedidos_afetados = {origem: produtos_importados}
                     self.faturamento_service._atualizar_saldos_carteira(pedidos_afetados)
                     logger.info(f"✅ Saldos atualizados para {len(produtos_importados)} produtos")
 
-                # 2. Processar match com Separacao e Embarque
+                # 4b. Processar match com Separacao/Embarque via ProcessadorFaturamento
                 logger.info(f"🔄 Processando match com Separacao/Embarque...")
                 from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
                 processador = ProcessadorFaturamento()
                 resultado_proc = processador.processar_nfs_importadas(
                     usuario='Fallback Import',
-                    limpar_inconsistencias=False,
                     nfs_especificas=[numero_nf]
                 )
 
                 if resultado_proc:
-                    logger.info(f"✅ Processamento completo: {resultado_proc.get('processadas', 0)} NFs, "
-                              f"{resultado_proc.get('movimentacoes_criadas', 0)} movimentações")
+                    logger.info(
+                        f"✅ Processamento completo: {resultado_proc.get('processadas', 0)} NFs, "
+                        f"{resultado_proc.get('movimentacoes_criadas', 0)} movimentações"
+                    )
 
             except Exception as e:
-                logger.warning(f"⚠️ Processamento pós-importação falhou (NF foi importada): {e}")
-                # NF foi importada, processamento pode ser feito depois pela sincronização regular
+                logger.warning(
+                    f"⚠️ Processamento pós-importação falhou (NF já importada, "
+                    f"será processada na sync regular): {e}"
+                )
 
             return {
                 'sucesso': True,
-                'mensagem': f'NF {numero_nf} importada e processada com sucesso',
+                'mensagem': f'NF {numero_nf} importada e processada com sucesso '
+                            f'({itens_importados} itens, status={status_nf})',
                 'itens_importados': itens_importados
             }
 

@@ -718,8 +718,12 @@ class ValidacaoRecebimentoJob:
             divs_sem_po = [d for d in divergencias_pendentes if d.tipo_divergencia == 'sem_po']
             divs_outros = [d for d in divergencias_pendentes if d.tipo_divergencia != 'sem_po']
 
-            # Se há divergências de OUTROS tipos (preco, quantidade, etc), SKIP — exigem ação humana
+            # Se há divergências de OUTROS tipos (preco, quantidade, etc),
+            # verificar se POs do fornecedor foram modificadas após última validação.
+            # Se sim, reprocessar (PO pode ter sido corrigida no Odoo).
             if divs_outros:
+                if self._pos_fornecedor_modificadas_apos_validacao(validacao, dfe_id):
+                    return True
                 logger.debug(f"DFE {dfe_id}: SKIP ({len(divs_outros)} divergências não-sem_po pendentes)")
                 return False
 
@@ -770,6 +774,38 @@ class ValidacaoRecebimentoJob:
                     f"para produto {cod_produto} que tinha divergência sem_po)"
                 )
                 return True
+
+        return False
+
+    def _pos_fornecedor_modificadas_apos_validacao(self, validacao, dfe_id: int) -> bool:
+        """
+        Verifica se POs do fornecedor foram modificadas após a última validação.
+        Usado para DFEs bloqueados com divergências de preço/qtd/data.
+        Se a PO foi corrigida no Odoo, o DFE deve ser reprocessado.
+        """
+        from app.manufatura.models import PedidoCompras
+
+        if not validacao.validado_em or not validacao.cnpj_fornecedor:
+            return False
+
+        cnpj_limpo = ''.join(c for c in validacao.cnpj_fornecedor if c.isdigit())
+        if not cnpj_limpo:
+            return False
+
+        po_modificada = PedidoCompras.query.filter(
+            db.func.regexp_replace(
+                PedidoCompras.cnpj_fornecedor, '[^0-9]', '', 'g'
+            ) == cnpj_limpo,
+            PedidoCompras.atualizado_em > validacao.validado_em,
+            PedidoCompras.status_odoo.in_(['purchase', 'done'])
+        ).first()
+
+        if po_modificada:
+            logger.info(
+                f"DFE {dfe_id}: REPROCESSAR (PO {po_modificada.num_pedido} "
+                f"modificada após validação em {validacao.validado_em})"
+            )
+            return True
 
         return False
 

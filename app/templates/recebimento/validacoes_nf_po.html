@@ -348,6 +348,11 @@
                                         title="Reverter">
                                     <i class="fas fa-undo"></i>
                                 </button>
+                                {% elif item.status == 'bloqueado' %}
+                                <button class="btn btn-sm btn-outline-primary" onclick="validarNf({{ item.odoo_dfe_id }})"
+                                        title="Revalidar NF">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
                                 {% elif item.status == 'finalizado_odoo' %}
                                 <span class="text-muted" title="DFE finalizado - nao requer acao">
                                     <i class="fas fa-check-double"></i>

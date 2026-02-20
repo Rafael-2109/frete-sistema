@@ -519,8 +519,12 @@ class DeparaService:
         self, cnpj: str, cod_prod_forn: str
     ) -> Dict[str, Any]:
         """
-        Busca DFEs com divergencias 'sem_depara' pendentes e dispara revalidacao.
+        Busca DFEs com divergencias pendentes para este fornecedor/produto e dispara revalidacao.
         Chamado apos criar/atualizar/reativar De-Para.
+
+        Cobre TODOS os tipos de divergencia (sem_depara, preco, quantidade, etc.)
+        porque qualquer mudanca no De-Para (fator, UM, produto interno) pode
+        resolver divergencias que foram geradas com o mapeamento anterior.
 
         Args:
             cnpj: CNPJ do fornecedor
@@ -537,7 +541,6 @@ class DeparaService:
         divergencias = DivergenciaNfPo.query.filter_by(
             cnpj_fornecedor=cnpj_limpo,
             cod_produto_fornecedor=cod_prod_forn,
-            tipo_divergencia='sem_depara',
             status='pendente'
         ).all()
 

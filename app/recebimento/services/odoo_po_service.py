@@ -114,7 +114,7 @@ def _marcar_dfes_afetados_por_pos(po_ids: list) -> int:
         dfes_marcados = 0
         for val_id in validacao_ids:
             validacao = ValidacaoNfPoDfe.query.get(val_id)
-            if validacao and validacao.status == 'aprovado':
+            if validacao and validacao.status in ('aprovado', 'bloqueado'):
                 if not validacao.po_modificada_apos_validacao:
                     validacao.po_modificada_apos_validacao = True
                     validacao.atualizado_em = agora_utc_naive()

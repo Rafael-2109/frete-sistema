@@ -132,8 +132,8 @@ class PoChangesDetectorService:
             if not validacao:
                 continue
 
-            # Só marca se status é 'aprovado' (outros status já serão reprocessados)
-            if validacao.status == 'aprovado':
+            # Marca se status é 'aprovado' ou 'bloqueado' (outros status já serão reprocessados)
+            if validacao.status in ('aprovado', 'bloqueado'):
                 if not validacao.po_modificada_apos_validacao:
                     validacao.po_modificada_apos_validacao = True
                     validacao.atualizado_em = agora_utc_naive()
