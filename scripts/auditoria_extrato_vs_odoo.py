@@ -588,6 +588,9 @@ def fase_c():
     odoo_reconciles_partial = dados['odoo_reconciles']['partial_reconciles']
     odoo_reconciles_full = dados['odoo_reconciles']['full_reconciles']
 
+    # Indice de move_lines agrupadas por move_id (para Cat 10)
+    odoo_ml_por_move_id = dados['odoo_move_lines'].get('indice_por_move_id', {})
+
     print(f"\n  Sistema: {len(sistema_data)} registros")
     print(f"  Odoo lines: {len(odoo_lines)} registros")
     print(f"  Odoo move lines: {len(odoo_move_lines)} registros")
@@ -807,17 +810,43 @@ def fase_c():
                 item_divergente = True
 
         # --- Cat 10: MOVE_LINE_NAO_RECONCILIADA ---
-        if item.get('status') == 'CONCILIADO' and item.get('credit_line_id') and odoo_line:
-            cl_id = str(item['credit_line_id'])
-            ml = odoo_move_lines.get(cl_id)
-            if ml and not ml.get('reconciled', False):
+        # Verifica se ALGUMA move line do move esta reconciliada.
+        # No Odoo, o move de um statement line gera 2 move lines:
+        #   - Linha do BANCO (conta de liquidez) → NUNCA reconciliada
+        #   - Linha TRANSITORIA (conta PAG/REC PENDENTES) → reconciliada via payment
+        # O credit_line_id salvo no sistema aponta para a linha do BANCO (credit>0),
+        # entao verificar apenas ela gera falso positivo.
+        # A verificacao correta: checar se a linha transitoria foi reconciliada.
+        if item.get('status') == 'CONCILIADO' and item.get('move_id') and odoo_line:
+            move_id_str = str(item['move_id'])
+            ml_ids = odoo_ml_por_move_id.get(move_id_str, [])
+
+            # Verificar se ALGUMA move line desse move tem reconciled=True
+            alguma_reconciliada = False
+            detalhes_mls = []
+            for ml_id in ml_ids:
+                ml = odoo_move_lines.get(str(ml_id))
+                if ml:
+                    detalhes_mls.append({
+                        'ml_id': ml_id,
+                        'account_id': ml.get('account_id'),
+                        'account_id_name': ml.get('account_id_name'),
+                        'reconciled': ml.get('reconciled'),
+                        'amount_residual': ml.get('amount_residual'),
+                        'full_reconcile_id': ml.get('full_reconcile_id'),
+                        'debit': ml.get('debit'),
+                        'credit': ml.get('credit'),
+                    })
+                    if ml.get('reconciled'):
+                        alguma_reconciliada = True
+
+            if not alguma_reconciliada:
                 divergencias['MOVE_LINE_NAO_RECONCILIADA'].append({
                     'extrato_item_id': item['id'],
                     'statement_line_id': item.get('statement_line_id'),
-                    'credit_line_id': item['credit_line_id'],
-                    'move_line_reconciled': ml.get('reconciled'),
-                    'move_line_amount_residual': ml.get('amount_residual'),
-                    'full_reconcile_id_ml': ml.get('full_reconcile_id'),
+                    'move_id': item['move_id'],
+                    'credit_line_id': item.get('credit_line_id'),
+                    'move_lines': detalhes_mls,
                     'status_local': item.get('status'),
                     'journal_code': jcode,
                 })
@@ -875,7 +904,7 @@ def fase_c():
 
     relatorio = {
         'gerado_em': datetime.now().isoformat(),
-        'versao': 'v2.0 — bidirecional + deep',
+        'versao': 'v2.1 — bidirecional + deep (fix Cat10 transitional account)',
         'estatisticas': {
             'total_sistema_processado': stats['total_sistema_processado'],
             'total_odoo_lines': len(odoo_lines),
@@ -1004,7 +1033,7 @@ def _gerar_resumo(relatorio, divergencias, stats, cobertura):
         ('CONCILIADO_LOCAL_NAO_RECONCILIADO_ODOO', 'CRITICA',
          'Sistema diz CONCILIADO mas Odoo is_reconciled=False'),
         ('MOVE_LINE_NAO_RECONCILIADA', 'CRITICA',
-         'CONCILIADO mas credit_line_id tem reconciled=False no Odoo'),
+         'CONCILIADO mas NENHUMA move line do move tem reconciled=True no Odoo'),
         ('PAYMENT_INEXISTENTE', 'CRITICA',
          'payment_id no sistema mas payment NAO existe no Odoo'),
         ('ORFAO_LOCAL', 'ALTA',
@@ -1094,10 +1123,12 @@ def _gerar_resumo(relatorio, divergencias, stats, cobertura):
 
         elif cat == 'MOVE_LINE_NAO_RECONCILIADA':
             for d in items[:max_detalhe]:
+                n_mls = len(d.get('move_lines', []))
                 L.append(f"  ID={d['extrato_item_id']:>6} | "
                          f"line={d['statement_line_id']:>8} | "
-                         f"credit_line={d['credit_line_id']:>8} | "
-                         f"residual={d.get('move_line_amount_residual', '?')}")
+                         f"move={d.get('move_id', '?'):>8} | "
+                         f"mls={n_mls} | "
+                         f"journal={d.get('journal_code', '?')}")
             if len(items) > max_detalhe:
                 L.append(f"  ... e mais {len(items) - max_detalhe} (ver JSON)")
 

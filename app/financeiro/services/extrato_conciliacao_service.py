@@ -722,45 +722,54 @@ class ExtratoConciliacaoService:
 
         # Reconciliar payment com extrato (se credit_line_id disponível)
         if credit_line_id and item.move_id:
-            # Trocar conta: TRANSITÓRIA → PENDENTES
             from app.financeiro.services.baixa_pagamentos_service import (
                 CONTA_TRANSITORIA as BP_CONTA_TRANSITORIA,
                 CONTA_PAGAMENTOS_PENDENTES as BP_CONTA_PENDENTES,
+                BaixaPagamentosService,
             )
+
+            # ORDEM CORRETA PER GOTCHA O12:
+            # 1. Partner + rótulo (writes na statement_line, podem regenerar move_lines)
+            # 2. Trocar conta (ÚLTIMO write — account_id não será revertido)
+            # 3. Buscar IDs frescos
+            # 4. Reconciliar
+
+            # 1a. Atualizar partner_id do statement line
+            if item.statement_line_id:
+                baixa_pag_service.atualizar_statement_line_partner(
+                    statement_line_id=item.statement_line_id,
+                    partner_id=partner_id_num,
+                )
+
+            # 1b. Atualizar rótulo do extrato
+            rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
+                valor=valor_extrato,
+                nome_fornecedor=partner_name or '',
+                data_pagamento=item.data_transacao,
+            )
+            if item.statement_line_id:
+                baixa_pag_service.atualizar_rotulo_extrato(
+                    move_id=item.move_id,
+                    statement_line_id=item.statement_line_id,
+                    rotulo=rotulo,
+                )
+
+            # 2. Trocar conta: TRANSITÓRIA → PENDENTES (ÚLTIMO write per O12)
             baixa_pag_service.trocar_conta_move_line_extrato(
                 move_id=item.move_id,
                 conta_origem=BP_CONTA_TRANSITORIA,
                 conta_destino=BP_CONTA_PENDENTES,
             )
 
-            # Buscar linha de débito do extrato (agora na conta PENDENTES)
+            # 3. Buscar linha de débito do extrato (IDs frescos pós-writes)
             debit_line_extrato = baixa_pag_service.buscar_linha_debito_extrato(
                 item.move_id
             )
             if debit_line_extrato:
-                # Atualizar partner_id do statement line
-                if item.statement_line_id:
-                    baixa_pag_service.atualizar_statement_line_partner(
-                        statement_line_id=item.statement_line_id,
-                        partner_id=partner_id_num,
-                    )
+                # Atualizar credit_line_id do item (pode ter sido regenerado)
+                item.credit_line_id = debit_line_extrato
 
-                # Atualizar rótulo do extrato
-                from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
-                rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(
-                    valor=valor_extrato,
-                    nome_fornecedor=partner_name or '',
-                    data_pagamento=item.data_transacao,
-                )
-
-                if item.statement_line_id:
-                    baixa_pag_service.atualizar_rotulo_extrato(
-                        move_id=item.move_id,
-                        statement_line_id=item.statement_line_id,
-                        rotulo=rotulo,
-                    )
-
-                # Reconciliar payment com extrato
+                # 4. Reconciliar payment com extrato
                 baixa_pag_service.reconciliar(credit_line_id, debit_line_extrato)
                 logger.info("  Reconciliado: payment ↔ extrato")
 
@@ -1788,6 +1797,9 @@ class ExtratoConciliacaoService:
                 )
                 if linhas:
                     line_id = linhas[0]['id']
+                    # Atualizar credit_line_id com ID potencialmente regenerado
+                    # (Odoo deleta e recria move_lines ao escrever na statement_line)
+                    item.credit_line_id = line_id
                     conta_atual = linhas[0]['account_id']
                     if isinstance(conta_atual, (list, tuple)):
                         conta_atual = conta_atual[0]

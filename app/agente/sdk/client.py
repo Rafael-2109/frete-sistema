@@ -606,16 +606,13 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao carregar agents customizados: {e}")
 
-        # Adaptive Thinking via --effort flag
-        # O CLI v2.1.39+ aceita --effort <low|medium|high|max> e traduz para
-        # thinking: {type: "adaptive"} + output_config: {effort: ...} na API.
-        # extra_args é passado como flags CLI pelo subprocess_cli.py:291-298.
+        # Adaptive Thinking via campo nativo `effort` do ClaudeAgentOptions
+        # SDK 0.1.36+: `effort` é campo typed no dataclass (Literal["low"|"medium"|"high"|"max"])
+        # Substitui o workaround anterior via extra_args["effort"] → --effort CLI flag.
         # Opus 4.6: suporta todos os níveis (low/medium/high/max)
-        # Sonnet 4.5/Haiku: suportam low/medium/high (max → fallback para high no CLI)
+        # Sonnet 4.6/Haiku: suportam low/medium/high (max → fallback para high no CLI)
         if effort_level and effort_level != "off":
-            if "extra_args" not in options_dict:
-                options_dict["extra_args"] = {}
-            options_dict["extra_args"]["effort"] = effort_level
+            options_dict["effort"] = effort_level
             logger.info(f"[AGENT_CLIENT] Effort level: {effort_level}")
 
         # Callback de permissão
@@ -637,13 +634,14 @@ Nunca invente informações."""
             options_dict["max_budget_usd"] = MAX_BUDGET_USD
             logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
 
-        # Extended Context (1M tokens) — Sonnet e Opus 4.6+
+        # Extended Context (1M tokens) — Sonnet 4.5+/4.6 e Opus 4.6+
+        # Sonnet 4.6 confirmado com 1M context (CLI 2.1.49 release notes)
         if USE_EXTENDED_CONTEXT:
             current_model = str(options_dict.get("model", self.settings.model)).lower()
             supports_extended = (
-                "sonnet" in current_model
-                or "opus-4-6" in current_model
-                or "opus_4_6" in current_model
+                "sonnet" in current_model          # Sonnet 4.5, Sonnet 4.6
+                or "opus-4-6" in current_model     # Opus 4.6 (hyphen)
+                or "opus_4_6" in current_model     # Opus 4.6 (underscore)
             )
             if supports_extended:
                 betas = options_dict.get("betas", [])
@@ -653,7 +651,7 @@ Nunca invente informações."""
             else:
                 logger.warning(
                     f"[AGENT_CLIENT] Extended Context IGNORADO — "
-                    f"modelo '{current_model}' não suportado (Sonnet ou Opus 4.6+)"
+                    f"modelo '{current_model}' não suportado (Sonnet 4.5+/4.6 ou Opus 4.6+)"
                 )
 
         # Context Clearing automático
@@ -863,6 +861,7 @@ Nunca invente informações."""
                 P3-2: Expanded Hooks.
                 Executado pelo SDK quando a sessão termina (após ResultMessage).
                 Loga: session_id, duração, indicador de stop_hook_active.
+                CLI 2.1.47+: inclui last_assistant_message para audit trail.
 
                 Quando USE_EXPANDED_HOOKS=false, retorna {} silenciosamente (noop).
                 """
@@ -875,10 +874,18 @@ Nunca invente informações."""
                     session_id = hook_input.get('session_id', 'unknown')
                     stop_active = hook_input.get('stop_hook_active', False)
 
+                    # CLI 2.1.47+: last_assistant_message disponível em runtime
+                    # (não tipado no SDK 0.1.39, mas enviado pelo CLI como campo extra)
+                    last_msg = hook_input.get('last_assistant_message', None)
+                    last_msg_preview = ""
+                    if last_msg and isinstance(last_msg, str):
+                        last_msg_preview = f" | last_msg={last_msg[:80]}..."
+
                     logger.info(
                         f"[HOOK:Stop] Sessão encerrada: "
                         f"session={session_id[:12]}... | "
                         f"stop_hook_active={stop_active}"
+                        f"{last_msg_preview}"
                     )
 
                     return {}

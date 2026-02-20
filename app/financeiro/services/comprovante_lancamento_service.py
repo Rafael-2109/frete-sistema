@@ -201,7 +201,20 @@ class ComprovanteLancamentoService:
 
             # 4. Reconciliar payment com título
             if debit_line_id and lanc.odoo_move_line_id:
-                if usou_writeoff:
+                # Validar empresa: payment e título devem ser da mesma empresa
+                titulo_company = titulo_check.get('company_id')
+                titulo_company_id = (
+                    titulo_company[0] if isinstance(titulo_company, (list, tuple))
+                    else titulo_company
+                )
+
+                if titulo_company_id != lanc.odoo_company_id:
+                    logger.warning(
+                        f"  CONFLITO DE EMPRESA: payment na empresa {lanc.odoo_company_id}, "
+                        f"título na empresa {titulo_company_id}. Reconciliação título ignorada "
+                        f"(será reconciliado via conciliação de extrato)."
+                    )
+                elif usou_writeoff:
                     # Wizard já reconciliou o título automaticamente
                     logger.info("  Write-Off: reconciliação título feita pelo wizard")
                 else:
