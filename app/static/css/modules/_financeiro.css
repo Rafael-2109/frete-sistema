@@ -1033,6 +1033,29 @@
       --_badge-color: hsl(270 60% 70%);
   }
 
+  /* Título baixado - amber/laranja: título OK mas extrato pendente Odoo */
+  .badge-titulo-baixado {
+      --_badge-bg: hsl(35 90% 90%);
+      --_badge-color: hsl(35 80% 30%);
+      --_badge-border: hsl(35 60% 70%);
+      background: var(--_badge-bg);
+      color: var(--_badge-color);
+      border: 1px solid var(--_badge-border);
+  }
+
+  [data-bs-theme="light"] .badge-titulo-baixado,
+  [data-theme="light"] .badge-titulo-baixado {
+      --_badge-bg: hsl(35 90% 85%);
+      --_badge-color: hsl(35 80% 25%);
+  }
+
+  [data-bs-theme="dark"] .badge-titulo-baixado,
+  [data-theme="dark"] .badge-titulo-baixado {
+      --_badge-bg: hsl(35 40% 18%);
+      --_badge-color: hsl(35 80% 70%);
+      --_badge-border: hsl(35 40% 30%);
+  }
+
   /* ── Badges de fonte de conciliação ── */
   .badge-fonte-cnab {
       --_badge-bg: hsl(270 50% 92%);

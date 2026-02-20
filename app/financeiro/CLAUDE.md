@@ -1,7 +1,26 @@
 # Financeiro — Guia de Desenvolvimento
 
+**66 arquivos** | **40K LOC** | **Atualizado**: 20/02/2026
+
+Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
+
 > Campos de tabelas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
 > Gotchas completos (80+): `app/financeiro/GOTCHAS.md`
+
+---
+
+## Estrutura
+
+```
+app/financeiro/
+  ├── routes/       # 18 blueprints (financeiro_bp + cnab400_bp)
+  ├── services/     # 26 services (matching, conciliacao, sync, parsers)
+  ├── workers/      # 8 RQ jobs (batch processing via Redis)
+  ├── parsers/      # 4 parsers (PIX Sicoob, dispatcher)
+  ├── models.py     # 40+ models (117K LOC — MAIOR arquivo do projeto)
+  ├── constants.py  # Contas contabeis, journals, mapeamentos Odoo
+  └── parcela_utils.py  # parcela_to_int/str/odoo (VARCHAR↔INTEGER)
+```
 
 ---
 
@@ -117,10 +136,6 @@ Ordem dentro do metodo consolidado (ambas versoes):
 4. Write `account_id` TRANSITORIA→PENDENTES (**ULTIMO!** re-buscar IDs!)
 5. `action_post`
 
-> Contas juros por empresa: `.claude/skills/executando-odoo-financeiro/references/contas-por-empresa.md`
-> 12 erros comuns: `.claude/skills/executando-odoo-financeiro/references/erros-comuns.md`
-> Gotchas Odoo gerais: `.claude/references/odoo/GOTCHAS.md`
-
 ---
 
 ## Armadilhas de Rota/API
@@ -134,6 +149,7 @@ Corrigido: todas as 10 rotas de pagamentos_baixas.py + responder_pendencia agora
 NAO adicionar @login_required — quebra integracao. Cuidado ao expor campos novos.
 
 ### Resposta JSON: comprovantes = `'sucesso'` (pt), demais = `'success'` (en)
+NAO migrar — frontend depende dos nomes atuais. Manter consistencia DENTRO de cada arquivo.
 
 ### Matching: tipo_transacao='saida' -> PagamentoMatchingService, outros -> ExtratoMatchingService
 
@@ -159,17 +175,60 @@ Para calcular duracao de job em execucao: usar `datetime.now(timezone.utc)`, NAO
 
 ---
 
-## Arquitetura do Modulo
+## Padroes do Modulo
 
-### Constantes centralizadas em `app/financeiro/constants.py` (2026-02-14)
+### Constantes centralizadas em `constants.py`
 Contas contabeis, journals e mapeamentos Odoo em arquivo unico.
 NAO definir constantes Odoo localmente nos services — importar de `constants.py`.
 
-### Context manager `_app_context_safe` em `app/financeiro/workers/utils.py` (2026-02-14)
-Workers usam `from app.financeiro.workers.utils import app_context_safe as _app_context_safe`.
+### Context manager `_app_context_safe` em `workers/utils.py`
+Workers usam `from app.financeiro.workers.utils import app_context_safe`.
 NAO copiar a funcao localmente — importar do modulo compartilhado.
 
-### Resposta JSON: padrao de chaves
-- Comprovantes (`comprovantes.py`, `comprovante_match.py`): `'sucesso'` (portugues)
-- Todos os demais endpoints: `'success'` (ingles)
-NAO migrar — frontend depende dos nomes atuais. Manter consistencia DENTRO de cada arquivo.
+### Imports Odoo sao LAZY
+`get_odoo_connection()` importado DENTRO de metodos (18 services). NAO mover para module-level.
+
+---
+
+## Interdependencias
+
+| Importa de | O que | Cuidado |
+|-----------|-------|---------|
+| `app.odoo.utils.connection` | `get_odoo_connection` | Lazy (dentro de metodos). 18 services usam |
+| `app.faturamento.models` | `FaturamentoProduto` | FK checks + filtro nf_cancelada. 7 arquivos |
+| `app.monitoramento.models` | `EntregaMonitorada` | Delivery tracking. 5 arquivos |
+| `app.embeddings` | `EmbeddingService` | Feature-flagged, lazy. 3 services |
+| `app.portal.workers` | `enqueue_job`, `get_queue` | RQ job queue. 8 workers |
+
+| Exporta para | O que | Cuidado |
+|-------------|-------|---------|
+| `app/__init__.py` | `financeiro_bp`, `cnab400_bp` | Registro de blueprints |
+| `app/scheduler/` | 4 sync services | Sincronizacao incremental (cron jobs) |
+| `app/monitoramento/routes.py` | `PendenciaFinanceiraNF` | Lazy import condicional |
+
+---
+
+## Skills Relacionadas
+
+| Skill | Opera neste modulo? | O que faz |
+|-------|---------------------|-----------|
+| **executando-odoo-financeiro** | Sim | Criar payments, reconciliar extratos, baixar titulos |
+| **rastreando-odoo** | Parcial | Rastrear NFs, auditar reconciliacoes (leitura) |
+| **razao-geral-odoo** | Parcial | Exportar razao geral (account.move.line em massa) |
+| **conciliando-odoo-po** | Nao | Opera em POs, mas compartilha `app.odoo.utils` |
+
+### References da Skill executando-odoo-financeiro
+
+| Arquivo | Conteudo |
+|---------|----------|
+| `SKILL.md` | Decision tree, fluxos, exemplos de codigo |
+| `references/erros-comuns.md` | 12 erros comuns com solucoes (Erro 1-12) |
+| `references/fluxo-recebimento.md` | Fluxo completo: identificar → criar payment → preparar extrato → reconciliar |
+| `references/contas-por-empresa.md` | IDs de contas de juros por company_id |
+
+### Outras referencias
+
+| Referencia | Conteudo |
+|-----------|----------|
+| `app/financeiro/GOTCHAS.md` | 80+ gotchas detalhados (versao expandida dos A1-A10 acima) |
+| `.claude/references/odoo/GOTCHAS.md` | Gotchas Odoo gerais (timeout, conexao, circuit breaker) |

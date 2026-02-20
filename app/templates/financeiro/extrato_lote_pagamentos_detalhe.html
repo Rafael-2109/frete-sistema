@@ -150,6 +150,13 @@
                                        class="btn btn-outline-secondary {{ 'active' if request.args.get('status_match') == 'PENDENTE' }}">
                                         Pendentes
                                     </a>
+                                    {% if stats.titulo_baixado > 0 %}
+                                    <a href="{{ url_for('financeiro.extrato_lote_pagamentos_detalhe', lote_id=lote.id, status='TITULO_BAIXADO', per_page=per_page, cnpj=filtro_cnpj, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}"
+                                       class="btn btn-outline-warning {{ 'active' if request.args.get('status') == 'TITULO_BAIXADO' }}"
+                                       title="Título baixado mas extrato não reconciliado no Odoo">
+                                        Tít. Baixado ({{ stats.titulo_baixado }})
+                                    </a>
+                                    {% endif %}
                                 </div>
                             </div>
 
@@ -213,7 +220,8 @@
             {% for item in itens %}
             <div class="fin-item-card
                 {{ 'fin-item-card--conciliado' if item.status == 'CONCILIADO' }}
-                {{ 'fin-item-card--aprovado' if item.aprovado and item.status != 'CONCILIADO' }}
+                {{ 'fin-item-card--titulo-baixado' if item.status == 'TITULO_BAIXADO' }}
+                {{ 'fin-item-card--aprovado' if item.aprovado and item.status not in ('CONCILIADO', 'TITULO_BAIXADO') }}
                 {{ 'fin-item-card--match' if item.status_match == 'MATCH_ENCONTRADO' and not item.aprovado }}
                 {{ 'fin-item-card--multiplos' if item.status_match == 'MULTIPLOS_MATCHES' }}
                 {{ 'fin-item-card--sem-match' if item.status_match == 'SEM_MATCH' }}"
@@ -238,6 +246,10 @@
                                     <i class="fas {{ fonte.icone }} me-1"></i>{{ fonte.label }}
                                 </span>
                                 {% endif %}
+                                {% elif item.status == 'TITULO_BAIXADO' %}
+                                <span class="badge badge-titulo-baixado" title="{{ item.mensagem }}">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>TÍTULO BAIXADO
+                                </span>
                                 {% elif item.aprovado %}
                                 <span class="badge bg-primary">APROVADO</span>
                                 {% elif item.status_match == 'MATCH_ENCONTRADO' %}

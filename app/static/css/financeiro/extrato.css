@@ -1033,6 +1033,18 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
     opacity: 0.85;
 }
 
+.fin-item-card--titulo-baixado {
+    border-left-color: hsl(35 80% 50%);
+    background: hsl(35 60% 96%);
+    opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .fin-item-card--titulo-baixado,
+[data-theme="dark"] .fin-item-card--titulo-baixado {
+    background: hsl(35 20% 12%);
+    border-left-color: hsl(35 60% 45%);
+}
+
 .fin-item-card__body {
     padding: 1.25rem;
 }
@@ -2410,6 +2422,12 @@ input[type="date"].fin-input::-webkit-calendar-picker-indicator {
     border-left-color: var(--bs-info);
     background: var(--fin-conciliado-bg);
     opacity: 0.85;
+}
+
+.fin-item-card--titulo-baixado {
+    border-left-color: hsl(35 80% 50%);
+    background: hsl(35 60% 96%);
+    opacity: 0.9;
 }
 
 /* === SECTION HEADER (dentro do item card) === */

@@ -1157,24 +1157,30 @@ class BaixaPagamentosService:
                     nome_fornecedor=partner_name or item.nome_beneficiario or '',
                     data_pagamento=item.data_transacao,
                 )
-                self.preparar_extrato_para_reconciliacao(
+                preparado = self.preparar_extrato_para_reconciliacao(
                     move_id=move_id_extrato,
                     statement_line_id=statement_line_id,
                     partner_id=partner_id,
                     rotulo=rotulo,
                 )
 
-                # Re-buscar debit_line fresca (IDs podem ter sido regenerados)
-                fresh_debit = self.buscar_linha_debito_extrato(move_id_extrato)
-                if fresh_debit:
-                    item.debit_line_id_extrato = fresh_debit
-                    self.reconciliar(item.credit_line_id_payment, fresh_debit)
-                    logger.info(f"  Reconciliado payment com extrato (preparado)")
-                else:
+                if not preparado:
                     logger.warning(
-                        f"  Linha débito extrato não encontrada após preparar "
-                        f"(move_id={move_id_extrato})"
+                        f"  [GAP-3] Falha ao preparar extrato (move_id={move_id_extrato}). "
+                        f"Reconciliação de extrato ignorada para evitar conta incorreta."
                     )
+                else:
+                    # Re-buscar debit_line fresca (IDs podem ter sido regenerados)
+                    fresh_debit = self.buscar_linha_debito_extrato(move_id_extrato)
+                    if fresh_debit:
+                        item.debit_line_id_extrato = fresh_debit
+                        self.reconciliar(item.credit_line_id_payment, fresh_debit)
+                        logger.info(f"  Reconciliado payment com extrato (preparado)")
+                    else:
+                        logger.warning(
+                            f"  Linha débito extrato não encontrada após preparar "
+                            f"(move_id={move_id_extrato})"
+                        )
             else:
                 # Fallback: reconciliar direto (sem preparar - melhor que nada)
                 logger.warning(

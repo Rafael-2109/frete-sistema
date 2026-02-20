@@ -805,6 +805,7 @@ def extrato_lote_detalhe(lote_id):
         func.sum(case((and_(ExtratoItem.status_match == 'MATCH_CNAB_PENDENTE', _nao_conciliado), 1), else_=0)).label('via_cnab'),
         func.sum(case((and_(ExtratoItem.aprovado == True, _nao_conciliado), 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
+        func.sum(case((ExtratoItem.status == 'TITULO_BAIXADO', 1), else_=0)).label('titulo_baixado'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
 
     # com_match inclui MATCH_ENCONTRADO e MULTIPLOS_VINCULADOS (ambos prontos para aprovar)
@@ -820,6 +821,7 @@ def extrato_lote_detalhe(lote_id):
         'via_cnab': stats_query.via_cnab or 0 if stats_query else 0,
         'aprovados': stats_query.aprovados or 0 if stats_query else 0,
         'conciliados': stats_query.conciliados or 0 if stats_query else 0,
+        'titulo_baixado': stats_query.titulo_baixado or 0 if stats_query else 0,
     }
 
     return render_template(
@@ -1034,6 +1036,7 @@ def extrato_lote_pagamentos_detalhe(lote_id):
         func.sum(case((and_(ExtratoItem.status_match == 'PENDENTE', _nao_conciliado), 1), else_=0)).label('pendentes'),
         func.sum(case((and_(ExtratoItem.aprovado == True, _nao_conciliado), 1), else_=0)).label('aprovados'),
         func.sum(case((ExtratoItem.status == 'CONCILIADO', 1), else_=0)).label('conciliados'),
+        func.sum(case((ExtratoItem.status == 'TITULO_BAIXADO', 1), else_=0)).label('titulo_baixado'),
     ).filter(ExtratoItem.lote_id == lote_id).first()
 
     # com_match inclui MATCH_ENCONTRADO e MULTIPLOS_VINCULADOS (ambos prontos para aprovar)
@@ -1048,6 +1051,7 @@ def extrato_lote_pagamentos_detalhe(lote_id):
         'pendentes': stats_query.pendentes or 0 if stats_query else 0,
         'aprovados': stats_query.aprovados or 0 if stats_query else 0,
         'conciliados': stats_query.conciliados or 0 if stats_query else 0,
+        'titulo_baixado': stats_query.titulo_baixado or 0 if stats_query else 0,
     }
 
     # Cross-reference: buscar comprovantes vinculados por statement_line_id

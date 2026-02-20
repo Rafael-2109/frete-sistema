@@ -292,10 +292,14 @@ Boletos tem `payment_ref` generico que o Odoo nao consegue mapear.
 ### Solucao
 Atualizar MANUALMENTE os 3 campos via API:
 
-1. **ANTES de reconciliar**: Trocar conta 22199 → 26868
-2. **DEPOIS de reconciliar**: Atualizar partner_id e rotulo
+**TUDO ANTES de reconciliar**, em 1 ciclo consolidado via `preparar_extrato_para_reconciliacao()`:
+draft → write partner+rotulo → write name → write account_id (ULTIMO) → post → reconcile
 
-Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para codigo completo.
+**Metodos disponiveis:**
+- `baixa_pagamentos_service.preparar_extrato_para_reconciliacao()` (publico, IDs raw)
+- `extrato_conciliacao_service._preparar_extrato_para_reconciliacao()` (privado, ExtratoItem)
+
+NUNCA fazer as 3 operacoes em chamadas separadas (cada uma faz draft→post, causando O11/O12).
 
 ### Checklist Atualizado (corrigido 2026-02-18)
 

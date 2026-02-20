@@ -241,18 +241,21 @@ class ComprovanteLancamentoService:
                     nome_fornecedor=lanc.odoo_partner_name or '',
                     data_pagamento=comp.data_pagamento,
                 )
-                self.baixa_service.preparar_extrato_para_reconciliacao(
+                preparado = self.baixa_service.preparar_extrato_para_reconciliacao(
                     move_id=comp.odoo_move_id,
                     statement_line_id=comp.odoo_statement_line_id,
                     partner_id=lanc.odoo_partner_id,
                     rotulo=rotulo,
                 )
 
-                # 5b. Buscar linha de débito do extrato (agora na conta PENDENTES)
-                debit_line_extrato = self.baixa_service.buscar_linha_debito_extrato(
+                if not preparado:
+                    logger.warning(
+                        f"  Falha ao preparar extrato (move_id={comp.odoo_move_id}). "
+                        f"Reconciliação de extrato ignorada para evitar conta incorreta."
+                    )
+                elif (debit_line_extrato := self.baixa_service.buscar_linha_debito_extrato(
                     comp.odoo_move_id
-                )
-                if debit_line_extrato:
+                )):
                     # 5c. Reconciliar payment com extrato (POR ÚLTIMO)
                     self.baixa_service.reconciliar(credit_line_id, debit_line_extrato)
                     logger.info("  Reconciliado: payment ↔ extrato")
@@ -758,12 +761,19 @@ class ComprovanteLancamentoService:
                 rotulo = f"{rotulo} [{nfs_lista}]"
 
             partner_id = lancamentos[0].odoo_partner_id if lancamentos else None
-            self.baixa_service.preparar_extrato_para_reconciliacao(
+            preparado = self.baixa_service.preparar_extrato_para_reconciliacao(
                 move_id=comp.odoo_move_id,
                 statement_line_id=comp.odoo_statement_line_id,
                 partner_id=partner_id,
                 rotulo=rotulo,
             )
+
+            if not preparado:
+                logger.warning(
+                    f"  Falha ao preparar extrato (move_id={comp.odoo_move_id}). "
+                    f"Reconciliação de extrato ignorada para evitar conta incorreta."
+                )
+                return {'sucesso': False, 'erro': 'Falha ao preparar extrato'}
 
             # 5. Buscar linha de débito do extrato (agora na conta PENDENTES)
             debit_line_extrato = self.baixa_service.buscar_linha_debito_extrato(

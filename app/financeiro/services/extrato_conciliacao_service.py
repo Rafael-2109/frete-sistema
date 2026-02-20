@@ -2898,7 +2898,21 @@ class ExtratoConciliacaoService:
             logger.warning("  M:N: Nenhuma linha PENDENTES encontrada")
             return False
 
-        # 6. Reconciliar: TODAS as linhas PENDENTES + linha do extrato
+        # 6. Validar soma dos valores alocados vs valor do extrato
+        soma_alocado = sum(
+            float(v.valor_alocado or 0)
+            for v in vinculos
+            if v.payment_id and v.status == 'CONCILIADO'
+        )
+        valor_extrato = abs(float(item.valor or 0))
+        if abs(soma_alocado - valor_extrato) > 0.01:
+            logger.warning(
+                f"  M:N: Soma dos valores alocados ({soma_alocado:.2f}) difere do "
+                f"valor do extrato ({valor_extrato:.2f}). Diferença: "
+                f"{abs(soma_alocado - valor_extrato):.2f}. Reconciliação pode falhar."
+            )
+
+        # 7. Reconciliar: TODAS as linhas PENDENTES + linha do extrato
         ids_reconciliar = pendentes_ids + [fresh_credit_id]
         logger.info(
             f"  M:N: Reconciliando {len(pendentes_ids)} linhas PENDENTES + "

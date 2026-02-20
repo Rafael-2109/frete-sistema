@@ -223,16 +223,35 @@ except Exception as e:
     print("Reconciliacao realizada (erro None ignorado)")
 ```
 
-### 3.3 Corrigir Campos do Extrato (OBRIGATORIO)
+### 3.3 Preparar Extrato ANTES de Reconciliar (OBRIGATORIO)
 
-Apos reconciliar, os 3 campos do extrato ficam incorretos para boletos.
-**Sempre** executar:
+Para boletos, os 3 campos do extrato (conta, partner, rotulo) precisam ser corrigidos **ANTES** de reconciliar.
+**SEMPRE** usar o metodo consolidado que faz tudo em 1 ciclo draft→write→post:
 
-1. Trocar conta TRANSITORIA → PENDENTES (ANTES de reconciliar, no passo 3.2)
-2. Atualizar partner_id da statement line
-3. Atualizar rotulo (payment_ref + name)
+```python
+# Fluxo via baixa_pagamentos_service (IDs raw):
+rotulo = BaixaPagamentosService.formatar_rotulo_pagamento(valor, nome, data)
+baixa_service.preparar_extrato_para_reconciliacao(move_id, stmt_line_id, partner_id, rotulo)
+debit_line = baixa_service.buscar_linha_debito_extrato(move_id)
+baixa_service.reconciliar(credit_line_id, debit_line)
 
-Ver `.claude/references/odoo/GOTCHAS.md` secao "Extrato Bancario: 3 Campos" para codigo completo.
+# Fluxo via extrato_conciliacao_service (ExtratoItem):
+p_id, p_name = self._extrair_partner_dados(titulo_odoo)
+self._preparar_extrato_para_reconciliacao(item, p_id, p_name)
+self._executar_reconcile(payment_pendente_line_id, item.credit_line_id)
+```
+
+**Ordem DENTRO do metodo consolidado:**
+1. `button_draft` no move do extrato
+2. Write `partner_id` + `payment_ref` na statement_line (pode regenerar move_lines!)
+3. Write `name` nas move_lines (re-busca IDs!)
+4. Write `account_id` TRANSITORIA → PENDENTES (**ULTIMO!** re-busca IDs!)
+5. `action_post` no move
+
+> **GOTCHA CRITICO**: `account_id` DEVE ser ULTIMO write. Write na statement_line regenera move_lines, revertendo account_id.
+> NUNCA fazer as 3 operacoes em chamadas separadas (cada uma faz draft→post, causando O11/O12).
+> `_atualizar_campos_extrato()` esta **DEPRECADO** — NAO usar.
+> Ver `app/financeiro/CLAUDE.md` gotchas O11 e O12.
 
 ## Passo 4: Verificar Resultado
 

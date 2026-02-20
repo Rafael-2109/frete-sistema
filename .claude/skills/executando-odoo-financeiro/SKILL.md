@@ -52,7 +52,7 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
 1. **Pagamento SEM juros**: `_criar_pagamento()` → `action_post` → reconcile manual
 2. **Pagamento COM juros** (valor_extrato > saldo_titulo): Wizard `account.payment.register` com `writeoff_account_id`
 3. **APOS criar payment**: SEMPRE reconciliar com extrato (se extrato existe)
-4. **APOS reconciliar extrato**: SEMPRE corrigir 3 campos (conta, partner, rotulo)
+4. **ANTES de reconciliar extrato**: SEMPRE preparar via `preparar_extrato_para_reconciliacao()` (corrige conta, partner, rotulo em 1 ciclo consolidado)
 5. **Registros JA reconciliados**: Fluxo CORRETIVO (7 passos) — NUNCA editar direto
 
 ## Operacoes Suportadas
@@ -62,7 +62,7 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
 | Criar pagamento simples | `_criar_pagamento()` | Payment draft → precisa postar |
 | Criar pagamento com juros | `_criar_pagamento_com_writeoff_juros()` | Payment posted + reconciliado |
 | Reconciliar titulo | `reconcile()` em `account.move.line` | Full/Partial reconcile |
-| Reconciliar extrato | `reconcile()` linha transitoria <-> payment | is_reconciled=True |
+| Reconciliar extrato | `preparar_extrato()` + `reconcile()` linha PENDENTES <-> payment | is_reconciled=True |
 
 ## Error Handling
 
@@ -72,7 +72,7 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
 | Reconciliacao parcial (nao full) | Valores divergentes titulo vs payment | Verificar saldo residual, pode precisar write-off |
 | Wizard `account.payment.register` falha | Titulo ja reconciliado ou sem saldo | Verificar `amount_residual > 0` antes de criar wizard |
 | Fluxo corretivo (7 passos) falha no passo 3 | Extrato tem outros vinculos | Desconciliar TODOS os vinculos antes de editar |
-| `is_reconciled` ainda False apos reconciliar | Linha transitoria nao encontrada (conta 26868) | Buscar TODAS as linhas do payment, filtrar por conta transitoria |
+| `is_reconciled` ainda False apos reconciliar | Linha PENDENTES nao encontrada (conta 26868) | Buscar TODAS as linhas do payment, filtrar por conta PENDENTES (26868) |
 | Payment duplicado | Ja existe payment para mesmo titulo+extrato | Verificar payments existentes antes de criar novo |
 
 ---
@@ -98,9 +98,10 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 3. RECONCILIAR EXTRATO                                              │
+│ 3. PREPARAR + RECONCILIAR EXTRATO                                    │
+│    → preparar_extrato_para_reconciliacao() (conta, partner, rotulo)│
 │    → Buscar linha PENDENTES (conta 26868) do payment               │
-│    → Buscar linha TRANSITORIA (conta 22199) do extrato             │
+│    → Buscar linha PENDENTES do extrato (apos preparar)             │
 │    → Executar reconcile() entre as duas linhas                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -226,41 +227,8 @@ except Exception as e:
 
 ### Reconciliar Extrato com Payment
 
-```python
-# Buscar linha PENDENTES do payment
-payment_move_id = 474858  # Move do payment criado
-linhas = odoo.search_read(
-    'account.move.line',
-    [
-        ['move_id', '=', payment_move_id],
-        ['account_id', '=', 26868],  # PENDENTES
-    ],
-    ['id', 'debit', 'reconciled'],
-    limit=5
-)
-
-payment_line_id = None
-for l in linhas:
-    if l['debit'] > 0 and not l['reconciled']:
-        payment_line_id = l['id']
-        break
-
-# Linha do extrato (transitoria)
-extrato_line_id = 2968184  # account.move.line do extrato (conta TRANSITORIA)
-
-# Reconciliar
-try:
-    odoo.execute_kw(
-        'account.move.line',
-        'reconcile',
-        [[payment_line_id, extrato_line_id]],
-        {}
-    )
-except Exception as e:
-    if "cannot marshal None" not in str(e):
-        raise
-    # Erro "cannot marshal None" = SUCESSO!
-```
+> **IMPORTANTE**: ANTES de reconciliar, SEMPRE preparar o extrato via metodo consolidado.
+> Ver secao "Preparar Extrato ANTES de Reconciliar" abaixo para o fluxo completo e correto.
 
 ### Preparar Extrato ANTES de Reconciliar (OBRIGATORIO)
 

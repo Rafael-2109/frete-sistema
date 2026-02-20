@@ -999,7 +999,7 @@ class FreteBot(ActivityHandler):
             if member.id != turn_context.activity.recipient.id:
                 await turn_context.send_activity(
                     "Ola! Sou o Agente Logistico da Nacom Goya. "
-                    "Mencione-me com @bot e sua pergunta para consultar "
+                    "Mencione-me com @Agente Logistico e sua pergunta para consultar "
                     "pedidos, estoque, entregas e mais."
                 )
 

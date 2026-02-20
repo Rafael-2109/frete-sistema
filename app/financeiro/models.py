@@ -1400,7 +1400,11 @@ class ExtratoItem(db.Model):
     aprovado_em = db.Column(db.DateTime, nullable=True)
     aprovado_por = db.Column(db.String(100), nullable=True)
 
-    # Status geral: PENDENTE, MATCH_ENCONTRADO, SEM_MATCH, APROVADO, CONCILIANDO, CONCILIADO, ERRO
+    # Status geral: PENDENTE, MATCH_ENCONTRADO, SEM_MATCH, APROVADO, CONCILIANDO,
+    #   CONCILIADO, TITULO_BAIXADO, ERRO
+    # TITULO_BAIXADO: título foi baixado (payment criado + reconciliado com título),
+    #   mas extrato NÃO foi reconciliado no Odoo. Pendente de retry via
+    #   scripts/retry_reconciliacao_extrato_odoo.py
     status = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
 
     # Mensagem de erro ou observação
