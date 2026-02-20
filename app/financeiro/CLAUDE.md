@@ -230,5 +230,7 @@ NAO copiar a funcao localmente — importar do modulo compartilhado.
 
 | Referencia | Conteudo |
 |-----------|----------|
-| `app/financeiro/GOTCHAS.md` | 80+ gotchas detalhados (versao expandida dos A1-A10 acima) |
+| `app/financeiro/GOTCHAS.md` | 80+ gotchas detalhados (versao expandida dos A1-A10 acima, inclui O11/O12) |
 | `.claude/references/odoo/GOTCHAS.md` | Gotchas Odoo gerais (timeout, conexao, circuit breaker) |
+| `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` | Wizard vs API: por que NAO usamos bank rec widget nativo |
+| `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` | Teste via UI, 3 cenarios multi-company |

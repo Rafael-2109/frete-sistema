@@ -57,6 +57,25 @@ Atraso > 10 dias garante revisao manual (penalidade -11, score max 89 < 90).
 ### TRANSITORIA (22199) -> PENDENTES (26868) antes de reconciliar
 Extrato Odoo usa conta TRANSITORIA. Usar `preparar_extrato_para_reconciliacao()` (em `baixa_pagamentos_service.py`, publico) ou `_preparar_extrato_para_reconciliacao()` (em `extrato_conciliacao_service.py`, privado) ANTES de reconciliar. Sem troca: reconciliacao silenciosamente errada.
 
+### O11: button_draft REMOVE reconciliacao existente
+Chamar `button_draft` em move com linhas reconciliadas DESFAZ a reconciliacao.
+Ordem correta: TODAS as escritas (conta, partner, rotulo) ANTES do reconcile.
+Reconcile SEMPRE por ULTIMO. Usar metodo consolidado:
+- `baixa_pagamentos_service.preparar_extrato_para_reconciliacao()` — publico, IDs raw (comprovantes)
+- `extrato_conciliacao_service._preparar_extrato_para_reconciliacao()` — privado, ExtratoItem
+NUNCA fazer as 3 operacoes (trocar conta, atualizar partner, atualizar rotulo) em chamadas separadas.
+`_atualizar_campos_extrato()` esta DEPRECADO — NAO chamar apos reconcile.
+
+### O12: account_id DEVE ser ULTIMO write antes de action_post
+Escrever em `account.bank.statement.line` (partner_id, payment_ref) faz Odoo REGENERAR
+as `account.move.line` associadas, revertendo qualquer `account_id` ja escrito.
+Ordem dentro do metodo consolidado (ambas versoes):
+1. `button_draft`
+2. Write `partner_id` + `payment_ref` na statement_line (regenera lines!)
+3. Write `name` nas move_lines (re-buscar IDs!)
+4. Write `account_id` TRANSITORIA→PENDENTES (**ULTIMO!** re-buscar IDs!)
+5. `action_post`
+
 ### Write-off wizard ja posta E reconcilia
 Wizard `account.payment.register` com juros: cria + posta + reconcilia automaticamente.
 NAO chamar `action_post()` nem `reconcile()` depois — causa double-posting.

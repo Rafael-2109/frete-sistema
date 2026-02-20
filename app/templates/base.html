@@ -412,8 +412,8 @@
               <li><a class="dropdown-item" href="{{ url_for('financeiro.importar_pendencias') }}">
                   <i class="fas fa-file-import"></i> Pendências Financeiras
                 </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_relatorios') }}">
-                  <i class="fas fa-file-upload"></i> Relatório de Faturamento
+              <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_faturamento_produtos') }}">
+                  <i class="fas fa-file-upload"></i> Faturamento por Produto
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('tagplus.pagina_importacao') }}">
                   <i class="fas fa-sync"></i> TagPlus
@@ -479,7 +479,7 @@
               <li>
                 <h6 class="dropdown-header">💰 Faturamento</h6>
               </li>
-              <li><a class="dropdown-item" href="{{ url_for('faturamento.dashboard_faturamento') }}">
+              <li><a class="dropdown-item" href="{{ url_for('faturamento.listar_faturamento_produtos') }}">
                   <i class="fas fa-receipt"></i> Faturamento por Produto
                 </a></li>
 

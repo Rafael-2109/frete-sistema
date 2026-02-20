@@ -37,6 +37,8 @@
 | Padroes avancados (auditoria, batch, locks) | [odoo/PADROES_AVANCADOS.md](odoo/PADROES_AVANCADOS.md) |
 | Pipeline Recebimento (Fases 1-4) | [odoo/PIPELINE_RECEBIMENTO.md](odoo/PIPELINE_RECEBIMENTO.md) |
 | Conversao de unidades (UoM) | [odoo/CONVERSAO_UOM.md](odoo/CONVERSAO_UOM.md) |
+| Wizard vs API (reconciliacao extrato) | `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` |
+| Analise multi-company extrato (teste UI) | `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` |
 
 ---
 

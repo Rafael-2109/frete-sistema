@@ -169,6 +169,16 @@ def post_fork(server, worker):
     except Exception as e:
         print(f"⚠️ Erro ao registrar tipos no worker {worker.pid}: {e}")
 
+    # Pre-importar cysignals na main thread do worker (ANTES de criar threads gthread).
+    # cysignals.init_cysignals() usa signal.signal() que SO funciona na main thread.
+    # Sem isso, o primeiro import de tesserocr (OCR comprovantes) em uma thread gthread
+    # falha com "signal only works in main thread of the main interpreter".
+    try:
+        import cysignals  # noqa: F401
+        print(f"✅ cysignals pre-importado no worker {worker.pid}")
+    except ImportError:
+        pass  # tesserocr/cysignals nao instalado neste ambiente
+
 def worker_exit(server, worker):
     """Marca tasks running como interrupted quando worker sai (max_requests/graceful shutdown)."""
     try:
