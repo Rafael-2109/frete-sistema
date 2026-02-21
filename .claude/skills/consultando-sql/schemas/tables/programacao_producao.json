@@ -75,10 +75,9 @@
       "unique": false
     },
     {
-      "name": "idx_programacao_data_linha",
+      "name": "ix_programacao_producao_cod_produto",
       "columns": [
-        "data_programacao",
-        "linha_producao"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -91,9 +90,10 @@
       "unique": false
     },
     {
-      "name": "ix_programacao_producao_cod_produto",
+      "name": "idx_programacao_data_linha",
       "columns": [
-        "cod_produto"
+        "data_programacao",
+        "linha_producao"
       ],
       "unique": false
     }

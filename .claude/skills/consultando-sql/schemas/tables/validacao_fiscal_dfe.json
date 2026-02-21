@@ -83,9 +83,9 @@
   ],
   "indices": [
     {
-      "name": "ix_validacao_fiscal_dfe_cnpj_empresa_compradora",
+      "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
       "columns": [
-        "cnpj_empresa_compradora"
+        "cnpj_fornecedor"
       ],
       "unique": false
     },
@@ -97,25 +97,25 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_fiscal_dfe_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
-      "columns": [
-        "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_validacao_fiscal_dfe_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_validacao_fiscal_dfe_cnpj_empresa_compradora",
+      "columns": [
+        "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_fiscal_dfe_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
     }
   ]
 }

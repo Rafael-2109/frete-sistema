@@ -131,6 +131,13 @@
       "unique": false
     },
     {
+      "name": "ix_cadastro_palletizacao_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_cadastro_palletizacao_tipo_embalagem",
       "columns": [
         "tipo_embalagem"
@@ -143,13 +150,6 @@
         "linha_producao"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_cadastro_palletizacao_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": true
     },
     {
       "name": "ix_cadastro_palletizacao_tipo_materia_prima",

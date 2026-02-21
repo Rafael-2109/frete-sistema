@@ -120,13 +120,6 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
         "tipo_divergencia"
@@ -151,6 +144,13 @@
       "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
       "columns": [
         "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
       ],
       "unique": false
     }

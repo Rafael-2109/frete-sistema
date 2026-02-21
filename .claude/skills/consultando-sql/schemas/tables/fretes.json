@@ -307,16 +307,16 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_odoo_dfe_id",
+      "name": "ix_fretes_cnpj_cliente",
       "columns": [
-        "odoo_dfe_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_fretes_cnpj_cliente",
+      "name": "ix_fretes_odoo_dfe_id",
       "columns": [
-        "cnpj_cliente"
+        "odoo_dfe_id"
       ],
       "unique": false
     },

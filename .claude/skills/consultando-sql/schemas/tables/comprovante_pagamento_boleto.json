@@ -186,27 +186,6 @@
   ],
   "indices": [
     {
-      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
-      "columns": [
-        "ofx_fitid"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_odoo_statement_line",
-      "columns": [
-        "odoo_statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_beneficiario_cnpj",
-      "columns": [
-        "beneficiario_cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
       "columns": [
         "odoo_statement_line_id"
@@ -214,9 +193,9 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
+      "name": "idx_comp_pagador_cnpj",
       "columns": [
-        "ofx_checknum"
+        "pagador_cnpj_cpf"
       ],
       "unique": false
     },
@@ -228,9 +207,9 @@
       "unique": false
     },
     {
-      "name": "idx_comp_pagador_cnpj",
+      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
-        "pagador_cnpj_cpf"
+        "ofx_checknum"
       ],
       "unique": false
     },
@@ -256,11 +235,11 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "name": "idx_comp_beneficiario_cnpj",
       "columns": [
-        "numero_agendamento"
+        "beneficiario_cnpj_cpf"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "idx_comp_ofx_checknum",
@@ -268,6 +247,27 @@
         "ofx_checknum"
       ],
       "unique": false
+    },
+    {
+      "name": "idx_comp_odoo_statement_line",
+      "columns": [
+        "odoo_statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "columns": [
+        "ofx_fitid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "columns": [
+        "numero_agendamento"
+      ],
+      "unique": true
     }
   ]
 }

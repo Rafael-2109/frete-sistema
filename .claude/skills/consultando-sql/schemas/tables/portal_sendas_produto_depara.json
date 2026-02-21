@@ -75,13 +75,6 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_produto_depara_codigo_nosso",
-      "columns": [
-        "codigo_nosso"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_portal_sendas_produto_depara_ativo",
       "columns": [
         "ativo"
@@ -92,6 +85,13 @@
       "name": "ix_portal_sendas_produto_depara_codigo_sendas",
       "columns": [
         "codigo_sendas"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_produto_depara_codigo_nosso",
+      "columns": [
+        "codigo_nosso"
       ],
       "unique": false
     }

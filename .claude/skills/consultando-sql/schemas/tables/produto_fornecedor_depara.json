@@ -104,16 +104,16 @@
       "unique": false
     },
     {
-      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
+      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
       "columns": [
-        "cod_produto_interno"
+        "cnpj_fornecedor"
       ],
       "unique": false
     },
     {
-      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
+      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
       "columns": [
-        "cnpj_fornecedor"
+        "cod_produto_interno"
       ],
       "unique": false
     }

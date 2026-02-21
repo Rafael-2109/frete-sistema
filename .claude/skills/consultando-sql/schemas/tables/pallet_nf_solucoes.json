@@ -155,24 +155,17 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
-      "columns": [
-        "odoo_picking_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_solucao_tipo_vinculacao",
       "columns": [
         "tipo",
         "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
       ],
       "unique": false
     },
@@ -191,9 +184,17 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "name": "idx_nf_solucao_emitente",
       "columns": [
-        "nf_remessa_id"
+        "cnpj_emitente",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "columns": [
+        "numero_nf_solucao"
       ],
       "unique": false
     },
@@ -206,17 +207,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
       "columns": [
-        "numero_nf_solucao"
+        "cnpj_emitente"
       ],
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_emitente",
+      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
       "columns": [
-        "cnpj_emitente",
-        "tipo"
+        "odoo_picking_id"
       ],
       "unique": false
     }

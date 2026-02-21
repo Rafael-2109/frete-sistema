@@ -246,20 +246,6 @@
   ],
   "indices": [
     {
-      "name": "ix_movimentacao_estoque_ordem_producao",
-      "columns": [
-        "ordem_producao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_movimentacao_tipo_data",
       "columns": [
         "tipo_movimentacao",
@@ -268,16 +254,23 @@
       "unique": false
     },
     {
-      "name": "idx_movimentacao_nf",
+      "name": "ix_movimentacao_estoque_cnpj_destinatario",
       "columns": [
-        "numero_nf"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cnpj_destinatario",
+      "name": "ix_movimentacao_estoque_cod_produto",
       "columns": [
-        "cnpj_destinatario"
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },
@@ -450,9 +443,9 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cod_produto",
+      "name": "ix_movimentacao_estoque_producao_pai_id",
       "columns": [
-        "cod_produto"
+        "producao_pai_id"
       ],
       "unique": false
     },
@@ -460,13 +453,6 @@
       "name": "ix_movimentacao_estoque_ativo",
       "columns": [
         "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_producao_pai_id",
-      "columns": [
-        "producao_pai_id"
       ],
       "unique": false
     },
@@ -482,6 +468,20 @@
       "columns": [
         "cod_produto",
         "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_ordem_producao",
+      "columns": [
+        "ordem_producao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
       ],
       "unique": false
     }

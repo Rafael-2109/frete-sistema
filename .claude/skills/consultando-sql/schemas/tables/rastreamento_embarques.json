@@ -112,16 +112,16 @@
   ],
   "indices": [
     {
-      "name": "ix_rastreamento_embarques_token_acesso",
+      "name": "ix_rastreamento_embarques_embarque_id",
       "columns": [
-        "token_acesso"
+        "embarque_id"
       ],
       "unique": true
     },
     {
-      "name": "ix_rastreamento_embarques_embarque_id",
+      "name": "ix_rastreamento_embarques_token_acesso",
       "columns": [
-        "embarque_id"
+        "token_acesso"
       ],
       "unique": true
     }

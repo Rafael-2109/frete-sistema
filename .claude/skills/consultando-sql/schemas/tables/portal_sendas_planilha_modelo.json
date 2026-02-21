@@ -94,16 +94,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sendas_planilha_modelo_codigo_produto_cliente",
+      "name": "ix_portal_sendas_planilha_modelo_unidade_destino",
       "columns": [
-        "codigo_produto_cliente"
+        "unidade_destino"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
+      "name": "ix_portal_sendas_planilha_modelo_codigo_produto_cliente",
       "columns": [
-        "codigo_pedido_cliente"
+        "codigo_produto_cliente"
       ],
       "unique": false
     },
@@ -117,9 +117,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_planilha_modelo_unidade_destino",
+      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
       "columns": [
-        "unidade_destino"
+        "codigo_pedido_cliente"
       ],
       "unique": false
     }
