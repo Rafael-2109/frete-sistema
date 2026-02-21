@@ -675,9 +675,6 @@ class NFDService:
             responsavel='INDEFINIDO',
             origem='INDEFINIDO',
 
-            # Descrição automática
-            descricao_comercial=f'NFD importada automaticamente do Odoo. Cliente: {nfd.nome_emitente or "N/A"}',
-
             # Auditoria
             criado_em=agora_utc_naive(),
             criado_por='Sistema Odoo',

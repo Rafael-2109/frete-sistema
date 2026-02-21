@@ -727,9 +727,6 @@ class ReversaoService:
             responsavel='INDEFINIDO',
             origem='INDEFINIDO',
 
-            # Descricao automatica
-            descricao_comercial=f'NF revertida importada do Odoo. Cliente: {nfd.nome_emitente or "N/A"}',
-
             # Auditoria
             criado_em=agora_utc_naive(),
             criado_por='Sistema Odoo - Reversao',

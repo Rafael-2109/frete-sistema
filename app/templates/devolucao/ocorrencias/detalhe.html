@@ -327,13 +327,19 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">Secao Comercial</h6>
-                    <button type="button" class="btn btn-sm btn-primary" onclick="salvarComercial()">
-                        Salvar Alteracoes
-                    </button>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="abrirCadastrosCom('categorias')">
+                            Cadastros
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="salvarComercial()">
+                            Salvar Alteracoes
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <form id="form-comercial">
                         <div class="row">
+                            <!-- Status -->
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Status</label>
                                 <select class="form-select" name="status" id="status_comercial">
@@ -344,51 +350,9 @@
                                     {% endfor %}
                                 </select>
                             </div>
+
+                            <!-- Momento da Devolucao -->
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">Categoria</label>
-                                <select class="form-select" name="categoria">
-                                    <option value="">Selecione...</option>
-                                    {% for valor, descricao in opcoes_categoria %}
-                                    <option value="{{ valor }}" {% if ocorrencia.categoria == valor %}selected{% endif %}>
-                                        {{ descricao }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Subcategoria</label>
-                                <select class="form-select" name="subcategoria">
-                                    <option value="">Selecione...</option>
-                                    {% for valor, descricao in opcoes_subcategoria %}
-                                    <option value="{{ valor }}" {% if ocorrencia.subcategoria == valor %}selected{% endif %}>
-                                        {{ descricao }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Responsavel</label>
-                                <select class="form-select" name="responsavel">
-                                    {% for valor, descricao in opcoes_responsavel %}
-                                    <option value="{{ valor }}" {% if ocorrencia.responsavel == valor %}selected{% endif %}>
-                                        {{ descricao }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Origem</label>
-                                <select class="form-select" name="origem">
-                                    {% for valor, descricao in opcoes_origem %}
-                                    <option value="{{ valor }}" {% if ocorrencia.origem == valor %}selected{% endif %}>
-                                        {{ descricao }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Momento da Devolucao</label>
                                 <select class="form-select" name="momento_devolucao">
                                     {% for valor, descricao in opcoes_momento_devolucao %}
@@ -398,12 +362,136 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Autorizado Por</label>
-                                <input type="text" class="form-control" name="autorizado_por"
-                                       value="{{ ocorrencia.autorizado_por or '' }}">
+
+                            <!-- Responsavel (SELECT do banco) -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">
+                                    Responsavel
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('responsaveis')" title="Gerenciar">+</button>
+                                </label>
+                                <select class="form-select" name="responsavel_id">
+                                    <option value="">Selecione...</option>
+                                    {% for item in opcoes_responsavel %}
+                                    <option value="{{ item.id }}" {% if ocorrencia.responsavel_id == item.id %}selected{% endif %}>
+                                        {{ item.descricao }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Origem (SELECT do banco) -->
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">
+                                    Origem
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('origens')" title="Gerenciar">+</button>
+                                </label>
+                                <select class="form-select" name="origem_id">
+                                    <option value="">Selecione...</option>
+                                    {% for item in opcoes_origem %}
+                                    <option value="{{ item.id }}" {% if ocorrencia.origem_id == item.id %}selected{% endif %}>
+                                        {{ item.descricao }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
                             </div>
                         </div>
+
+                        <div class="row">
+                            <!-- Categorias (multi-select com rows dinamicas) -->
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">
+                                    Categorias
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('categorias')" title="Gerenciar">+</button>
+                                </label>
+                                <div id="grupo-categorias">
+                                    {% if ocorrencia.categorias %}
+                                        {% for cat in ocorrencia.categorias %}
+                                        <div class="categoria-row d-flex gap-2 mb-1">
+                                            <select name="categoria_ids[]" class="form-select form-select-sm categoria-select">
+                                                <option value="">Selecione...</option>
+                                                {% for item in opcoes_categoria %}
+                                                <option value="{{ item.id }}" {% if cat.id == item.id %}selected{% endif %}>
+                                                    {{ item.descricao }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.categoria-row').remove()">X</button>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="categoria-row d-flex gap-2 mb-1">
+                                            <select name="categoria_ids[]" class="form-select form-select-sm categoria-select">
+                                                <option value="">Selecione...</option>
+                                                {% for item in opcoes_categoria %}
+                                                <option value="{{ item.id }}">{{ item.descricao }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.categoria-row').remove()">X</button>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="adicionarCategoria()">
+                                    + Adicionar Categoria
+                                </button>
+                            </div>
+
+                            <!-- Subcategorias (multi-select com rows dinamicas) -->
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">
+                                    Subcategorias
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('subcategorias')" title="Gerenciar">+</button>
+                                </label>
+                                <div id="grupo-subcategorias">
+                                    {% if ocorrencia.subcategorias %}
+                                        {% for sub in ocorrencia.subcategorias %}
+                                        <div class="subcategoria-row d-flex gap-2 mb-1">
+                                            <select name="subcategoria_ids[]" class="form-select form-select-sm subcategoria-select">
+                                                <option value="">Selecione...</option>
+                                                {% for item in opcoes_subcategoria %}
+                                                <option value="{{ item.id }}" {% if sub.id == item.id %}selected{% endif %}>
+                                                    {{ item.descricao }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.subcategoria-row').remove()">X</button>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="subcategoria-row d-flex gap-2 mb-1">
+                                            <select name="subcategoria_ids[]" class="form-select form-select-sm subcategoria-select">
+                                                <option value="">Selecione...</option>
+                                                {% for item in opcoes_subcategoria %}
+                                                <option value="{{ item.id }}">{{ item.descricao }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.subcategoria-row').remove()">X</button>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="adicionarSubcategoria()">
+                                    + Adicionar Subcategoria
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Autorizado Por (SELECT do banco) -->
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">
+                                    Autorizado Por
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('autorizados')" title="Gerenciar">+</button>
+                                </label>
+                                <select class="form-select" name="autorizado_por_id">
+                                    <option value="">Selecione...</option>
+                                    {% for item in opcoes_autorizado %}
+                                    <option value="{{ item.id }}" {% if ocorrencia.autorizado_por_id == item.id %}selected{% endif %}>
+                                        {{ item.descricao }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Descricao Comercial</label>
                             <textarea class="form-control" name="descricao_comercial" rows="3">{{ ocorrencia.descricao_comercial or '' }}</textarea>
@@ -1533,6 +1621,9 @@ const ufOrigemPreset = '{{ entrega.uf if entrega and entrega.uf else (nfd.uf_emi
 const cidadeOrigemPreset = '{{ entrega.municipio if entrega and entrega.municipio else (nfd.municipio_emitente if nfd and nfd.municipio_emitente else "") }}';
 const PREFIXO_CNPJ = '{{ nfd.prefixo_cnpj_emitente or "" }}';
 </script>
-<!-- Script modularizado -->
+<!-- Modal de Cadastros -->
+{% include 'devolucao/ocorrencias/_modal_cadastros.html' %}
+<!-- Scripts -->
+<script src="{{ 'js/devolucao/cadastros-modal.js'|asset_url }}"></script>
 <script src="{{ 'js/devolucao/ocorrencia-detalhe.js'|asset_url }}"></script>
 {% endblock %}

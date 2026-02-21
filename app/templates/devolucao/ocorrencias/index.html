@@ -41,6 +41,9 @@
             <a href="{{ url_for('devolucao.devolucao_ai.pagina_depara') }}" class="btn btn-info me-2">
                 De-Para de Produtos
             </a>
+            <button type="button" class="btn btn-outline-primary me-2" onclick="abrirCadastrosCom('categorias')">
+                <i class="bi bi-gear"></i> Cadastros
+            </button>
             <a href="{{ url_for('monitoramento.listar_entregas') }}" class="btn btn-outline-secondary">
                 Voltar ao Monitoramento
             </a>
@@ -117,9 +120,9 @@
                         <label class="form-label">Categoria</label>
                         <select name="categoria" class="form-select form-select-sm">
                             <option value="">Todas</option>
-                            {% for valor, descricao in opcoes_categoria %}
-                            <option value="{{ valor }}" {% if filtros.categoria == valor %}selected{% endif %}>
-                                {{ descricao }}
+                            {% for cat in opcoes_categoria %}
+                            <option value="{{ cat.codigo }}" {% if filtros.categoria == cat.codigo %}selected{% endif %}>
+                                {{ cat.descricao }}
                             </option>
                             {% endfor %}
                         </select>
@@ -128,9 +131,9 @@
                         <label class="form-label">Responsavel</label>
                         <select name="responsavel" class="form-select form-select-sm">
                             <option value="">Todos</option>
-                            {% for valor, descricao in opcoes_responsavel %}
-                            <option value="{{ valor }}" {% if filtros.responsavel == valor %}selected{% endif %}>
-                                {{ descricao }}
+                            {% for resp in opcoes_responsavel %}
+                            <option value="{{ resp.codigo }}" {% if filtros.responsavel == resp.codigo %}selected{% endif %}>
+                                {{ resp.descricao }}
                             </option>
                             {% endfor %}
                         </select>
@@ -735,4 +738,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<!-- Modal de Cadastros de Ocorrencias -->
+{% include 'devolucao/ocorrencias/_modal_cadastros.html' %}
+<script src="{{ url_for('static', filename='js/devolucao/cadastros-modal.js') }}"></script>
 {% endblock %}

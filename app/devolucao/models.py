@@ -13,7 +13,6 @@ Modelos:
 
 Criado em: 30/12/2024
 """
-from datetime import datetime
 from app import db
 from app.utils.timezone import agora_utc_naive
 
@@ -571,6 +570,194 @@ class NFDevolucaoNFReferenciada(db.Model):
 
 
 # =============================================================================
+# Tabelas Lookup - Opcoes da Area Comercial
+# =============================================================================
+
+class OcorrenciaCategoria(db.Model):
+    """Tabela lookup de categorias de ocorrencia (CRUD via modal)"""
+    __tablename__ = 'ocorrencia_categoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    descricao = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100), default='migration')
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100))
+
+    def __repr__(self):
+        return f'<OcorrenciaCategoria {self.codigo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'descricao': self.descricao,
+            'ativo': self.ativo,
+        }
+
+
+class OcorrenciaSubcategoria(db.Model):
+    """Tabela lookup de subcategorias de ocorrencia (CRUD via modal)"""
+    __tablename__ = 'ocorrencia_subcategoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    descricao = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100), default='migration')
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100))
+
+    def __repr__(self):
+        return f'<OcorrenciaSubcategoria {self.codigo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'descricao': self.descricao,
+            'ativo': self.ativo,
+        }
+
+
+class OcorrenciaResponsavel(db.Model):
+    """Tabela lookup de responsaveis de ocorrencia (CRUD via modal)"""
+    __tablename__ = 'ocorrencia_responsavel'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    descricao = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100), default='migration')
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100))
+
+    def __repr__(self):
+        return f'<OcorrenciaResponsavel {self.codigo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'descricao': self.descricao,
+            'ativo': self.ativo,
+        }
+
+
+class OcorrenciaOrigem(db.Model):
+    """Tabela lookup de origens de ocorrencia (CRUD via modal)"""
+    __tablename__ = 'ocorrencia_origem'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    descricao = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100), default='migration')
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100))
+
+    def __repr__(self):
+        return f'<OcorrenciaOrigem {self.codigo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'descricao': self.descricao,
+            'ativo': self.ativo,
+        }
+
+
+class OcorrenciaAutorizadoPor(db.Model):
+    """Tabela lookup de autorizadores de ocorrencia (CRUD via modal)"""
+    __tablename__ = 'ocorrencia_autorizado_por'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(50), nullable=False, unique=True)
+    descricao = db.Column(db.String(255), nullable=False)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100), default='migration')
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100))
+
+    def __repr__(self):
+        return f'<OcorrenciaAutorizadoPor {self.codigo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'descricao': self.descricao,
+            'ativo': self.ativo,
+        }
+
+
+# =============================================================================
+# Tabelas de Juncao - Categoria e Subcategoria N:M
+# =============================================================================
+
+class OcorrenciaDevolucaoCategoria(db.Model):
+    """Tabela de juncao N:M entre OcorrenciaDevolucao e OcorrenciaCategoria"""
+    __tablename__ = 'ocorrencia_devolucao_categoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ocorrencia_devolucao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_devolucao.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    categoria_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_categoria.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('ocorrencia_devolucao_id', 'categoria_id', name='uq_odc_ocorrencia_categoria'),
+    )
+
+    categoria = db.relationship('OcorrenciaCategoria')
+
+
+class OcorrenciaDevolucaoSubcategoria(db.Model):
+    """Tabela de juncao N:M entre OcorrenciaDevolucao e OcorrenciaSubcategoria"""
+    __tablename__ = 'ocorrencia_devolucao_subcategoria'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ocorrencia_devolucao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_devolucao.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    subcategoria_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_subcategoria.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('ocorrencia_devolucao_id', 'subcategoria_id', name='uq_ods_ocorrencia_subcategoria'),
+    )
+
+    subcategoria = db.relationship('OcorrenciaSubcategoria')
+
+
+# =============================================================================
 # OcorrenciaDevolucao - Tratativas Comercial/Logistica
 # =============================================================================
 
@@ -716,6 +903,28 @@ class OcorrenciaDevolucao(db.Model):
     desfecho = db.Column(db.Text, nullable=True)
 
     # =========================================================================
+    # FK PARA TABELAS LOOKUP (novos campos normalizados)
+    # =========================================================================
+    responsavel_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_responsavel.id'),
+        nullable=True,
+        index=True
+    )
+    origem_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_origem.id'),
+        nullable=True,
+        index=True
+    )
+    autorizado_por_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_autorizado_por.id'),
+        nullable=True,
+        index=True
+    )
+
+    # =========================================================================
     # TIMESTAMPS
     # =========================================================================
     data_abertura = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
@@ -741,6 +950,37 @@ class OcorrenciaDevolucao(db.Model):
     transportadora_retorno = db.relationship(
         'Transportadora',
         backref='ocorrencias_retorno'
+    )
+
+    # Relacionamentos N:M via tabelas de juncao
+    categorias = db.relationship(
+        'OcorrenciaCategoria',
+        secondary='ocorrencia_devolucao_categoria',
+        backref=db.backref('ocorrencias', lazy='dynamic'),
+        lazy='selectin'
+    )
+    subcategorias = db.relationship(
+        'OcorrenciaSubcategoria',
+        secondary='ocorrencia_devolucao_subcategoria',
+        backref=db.backref('ocorrencias', lazy='dynamic'),
+        lazy='selectin'
+    )
+
+    # Relacionamentos FK para lookup tables
+    responsavel_ref = db.relationship(
+        'OcorrenciaResponsavel',
+        foreign_keys=[responsavel_id],
+        lazy='selectin'
+    )
+    origem_ref = db.relationship(
+        'OcorrenciaOrigem',
+        foreign_keys=[origem_id],
+        lazy='selectin'
+    )
+    autorizado_por_ref = db.relationship(
+        'OcorrenciaAutorizadoPor',
+        foreign_keys=[autorizado_por_id],
+        lazy='selectin'
     )
 
     # =========================================================================
@@ -790,6 +1030,7 @@ class OcorrenciaDevolucao(db.Model):
             'localizacao_atual': self.localizacao_atual,
             'transportadora_retorno_nome': self.transportadora_retorno_nome,
             'data_previsao_retorno': self.data_previsao_retorno.isoformat() if self.data_previsao_retorno else None,
+            # Campos varchar legados (cache denormalizado)
             'categoria': self.categoria,
             'subcategoria': self.subcategoria,
             'descricao_comercial': self.descricao_comercial,
@@ -800,6 +1041,15 @@ class OcorrenciaDevolucao(db.Model):
             'resolvido_por': self.resolvido_por,
             'data_abertura': self.data_abertura.isoformat() if self.data_abertura else None,
             'data_resolucao': self.data_resolucao.isoformat() if self.data_resolucao else None,
+            # Novos campos normalizados
+            'responsavel_id': self.responsavel_id,
+            'origem_id': self.origem_id,
+            'autorizado_por_id': self.autorizado_por_id,
+            'categorias': [c.to_dict() for c in self.categorias] if self.categorias else [],
+            'subcategorias': [s.to_dict() for s in self.subcategorias] if self.subcategorias else [],
+            'responsavel_ref': self.responsavel_ref.to_dict() if self.responsavel_ref else None,
+            'origem_ref': self.origem_ref.to_dict() if self.origem_ref else None,
+            'autorizado_por_ref': self.autorizado_por_ref.to_dict() if self.autorizado_por_ref else None,
         }
 
 

@@ -277,9 +277,6 @@ class MonitoramentoSyncService:
         }
         localizacao = localizacao_map.get(entrega.status_finalizacao, 'INDEFINIDO')
 
-        # Descricao comercial
-        descricao = f'Devolucao originada do monitoramento. Status: {entrega.status_finalizacao}. Cliente: {getattr(entrega, "cliente", "N/A")}'
-
         ocorrencia = OcorrenciaDevolucao(
             nf_devolucao_id=nfd.id,
             numero_ocorrencia=OcorrenciaDevolucao.gerar_numero_ocorrencia(),
@@ -292,9 +289,6 @@ class MonitoramentoSyncService:
             status='ABERTA',
             responsavel='INDEFINIDO',
             origem='INDEFINIDO',
-
-            # Descricao
-            descricao_comercial=descricao,
 
             # Auditoria
             criado_em=agora_utc_naive(),

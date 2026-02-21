@@ -14,7 +14,10 @@ from app import db
 from app.devolucao.models import (
     NFDevolucao, NFDevolucaoLinha, OcorrenciaDevolucao,
     FreteDevolucao, AnexoOcorrencia, DescarteDevolucao,
-    NFDevolucaoNFReferenciada
+    NFDevolucaoNFReferenciada,
+    OcorrenciaCategoria, OcorrenciaSubcategoria,
+    OcorrenciaResponsavel, OcorrenciaOrigem, OcorrenciaAutorizadoPor,
+    OcorrenciaDevolucaoCategoria, OcorrenciaDevolucaoSubcategoria
 )
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.timezone import agora_utc_naive
@@ -275,8 +278,8 @@ def index():
         },
         opcoes_status=OcorrenciaDevolucao.STATUS_OCORRENCIA,
         opcoes_destino=OcorrenciaDevolucao.DESTINOS,
-        opcoes_categoria=OcorrenciaDevolucao.CATEGORIAS,
-        opcoes_responsavel=OcorrenciaDevolucao.RESPONSAVEIS,
+        opcoes_categoria=OcorrenciaCategoria.query.filter_by(ativo=True).order_by(OcorrenciaCategoria.descricao).all(),
+        opcoes_responsavel=OcorrenciaResponsavel.query.filter_by(ativo=True).order_by(OcorrenciaResponsavel.descricao).all(),
         lista_transportadoras=lista_transportadoras,
         lista_transportadoras_retorno=lista_transportadoras_retorno
     )
@@ -396,10 +399,11 @@ def detalhe(ocorrencia_id):
         opcoes_status=OcorrenciaDevolucao.STATUS_OCORRENCIA,
         opcoes_destino=OcorrenciaDevolucao.DESTINOS,
         opcoes_localizacao=OcorrenciaDevolucao.LOCALIZACOES,
-        opcoes_categoria=OcorrenciaDevolucao.CATEGORIAS,
-        opcoes_subcategoria=OcorrenciaDevolucao.SUBCATEGORIAS,
-        opcoes_responsavel=OcorrenciaDevolucao.RESPONSAVEIS,
-        opcoes_origem=OcorrenciaDevolucao.ORIGENS,
+        opcoes_categoria=OcorrenciaCategoria.query.filter_by(ativo=True).order_by(OcorrenciaCategoria.descricao).all(),
+        opcoes_subcategoria=OcorrenciaSubcategoria.query.filter_by(ativo=True).order_by(OcorrenciaSubcategoria.descricao).all(),
+        opcoes_responsavel=OcorrenciaResponsavel.query.filter_by(ativo=True).order_by(OcorrenciaResponsavel.descricao).all(),
+        opcoes_origem=OcorrenciaOrigem.query.filter_by(ativo=True).order_by(OcorrenciaOrigem.descricao).all(),
+        opcoes_autorizado=OcorrenciaAutorizadoPor.query.filter_by(ativo=True).order_by(OcorrenciaAutorizadoPor.descricao).all(),
         opcoes_momento_devolucao=OcorrenciaDevolucao.MOMENTOS_DEVOLUCAO
     )
 
@@ -490,37 +494,123 @@ def api_atualizar_comercial(ocorrencia_id):
     """
     Atualiza secao Comercial da ocorrencia
 
-    Body JSON:
+    Body JSON (novo formato com IDs normalizados):
     {
-        "categoria": "QUALIDADE",
-        "subcategoria": "AVARIA_TRANSPORTE",
+        "categoria_ids": [1, 3],
+        "subcategoria_ids": [2, 5],
+        "responsavel_id": 4,
+        "origem_id": 2,
+        "autorizado_por_id": 1,
         "descricao_comercial": "...",
-        "responsavel": "TRANSPORTADORA",
         "status": "EM_ANALISE",
-        "origem": "TRANSPORTE",
-        "autorizado_por": "Joao",
+        "momento_devolucao": "ATO_ENTREGA",
         "desfecho": "..."
     }
     """
     try:
-        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id) if ocorrencia_id else None
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
         data = request.get_json()
 
-        # Atualizar campos comerciais
-        if 'categoria' in data:
-            ocorrencia.categoria = data['categoria']
+        # =====================================================================
+        # Categorias (N:M via junction table)
+        # =====================================================================
+        if 'categoria_ids' in data:
+            cat_ids = [int(cid) for cid in data['categoria_ids'] if cid]
 
-        if 'subcategoria' in data:
-            ocorrencia.subcategoria = data['subcategoria']
+            # Delete existing
+            OcorrenciaDevolucaoCategoria.query.filter_by(
+                ocorrencia_devolucao_id=ocorrencia_id
+            ).delete()
 
+            # Insert new
+            for cid in cat_ids:
+                db.session.add(OcorrenciaDevolucaoCategoria(
+                    ocorrencia_devolucao_id=ocorrencia_id,
+                    categoria_id=cid
+                ))
+
+            # Sync com coluna varchar cache (primeira categoria para filtros)
+            if cat_ids:
+                primeira_cat = db.session.get(OcorrenciaCategoria, cat_ids[0])
+                ocorrencia.categoria = primeira_cat.codigo if primeira_cat else None
+            else:
+                ocorrencia.categoria = None
+
+        # =====================================================================
+        # Subcategorias (N:M via junction table)
+        # =====================================================================
+        if 'subcategoria_ids' in data:
+            sub_ids = [int(sid) for sid in data['subcategoria_ids'] if sid]
+
+            # Delete existing
+            OcorrenciaDevolucaoSubcategoria.query.filter_by(
+                ocorrencia_devolucao_id=ocorrencia_id
+            ).delete()
+
+            # Insert new
+            for sid in sub_ids:
+                db.session.add(OcorrenciaDevolucaoSubcategoria(
+                    ocorrencia_devolucao_id=ocorrencia_id,
+                    subcategoria_id=sid
+                ))
+
+            # Sync com coluna varchar cache
+            if sub_ids:
+                primeira_sub = db.session.get(OcorrenciaSubcategoria, sub_ids[0])
+                ocorrencia.subcategoria = primeira_sub.codigo if primeira_sub else None
+            else:
+                ocorrencia.subcategoria = None
+
+        # =====================================================================
+        # Responsavel (FK direto)
+        # =====================================================================
+        if 'responsavel_id' in data:
+            rid = data['responsavel_id']
+            ocorrencia.responsavel_id = int(rid) if rid else None
+
+            # Sync com coluna varchar cache
+            if rid:
+                resp_ref = db.session.get(OcorrenciaResponsavel, int(rid))
+                ocorrencia.responsavel = resp_ref.codigo if resp_ref else None
+            else:
+                ocorrencia.responsavel = None
+
+        # =====================================================================
+        # Origem (FK direto)
+        # =====================================================================
+        if 'origem_id' in data:
+            oid = data['origem_id']
+            ocorrencia.origem_id = int(oid) if oid else None
+
+            # Sync com coluna varchar cache
+            if oid:
+                orig_ref = db.session.get(OcorrenciaOrigem, int(oid))
+                ocorrencia.origem = orig_ref.codigo if orig_ref else None
+            else:
+                ocorrencia.origem = None
+
+        # =====================================================================
+        # Autorizado Por (FK direto)
+        # =====================================================================
+        if 'autorizado_por_id' in data:
+            aid = data['autorizado_por_id']
+            ocorrencia.autorizado_por_id = int(aid) if aid else None
+
+            # Sync com coluna varchar cache
+            if aid:
+                aut_ref = db.session.get(OcorrenciaAutorizadoPor, int(aid))
+                ocorrencia.autorizado_por = aut_ref.descricao if aut_ref else None
+            else:
+                ocorrencia.autorizado_por = None
+
+        # =====================================================================
+        # Campos texto simples (mantidos como antes)
+        # =====================================================================
         if 'descricao_comercial' in data:
             ocorrencia.descricao_comercial = data['descricao_comercial']
-
-        if 'responsavel' in data:
-            ocorrencia.responsavel = data['responsavel']
 
         if 'status' in data:
             status_anterior = ocorrencia.status
@@ -535,14 +625,8 @@ def api_atualizar_comercial(ocorrencia_id):
             if data['status'] == 'EM_ANALISE' and status_anterior == 'ABERTA':
                 ocorrencia.data_acao_comercial = agora_utc_naive()
 
-        if 'origem' in data:
-            ocorrencia.origem = data['origem']
-
         if 'momento_devolucao' in data:
             ocorrencia.momento_devolucao = data['momento_devolucao']
-
-        if 'autorizado_por' in data:
-            ocorrencia.autorizado_por = data['autorizado_por']
 
         if 'desfecho' in data:
             ocorrencia.desfecho = data['desfecho']

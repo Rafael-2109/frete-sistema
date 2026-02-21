@@ -1,0 +1,88 @@
+<!-- Modal de Cadastros de Ocorrencias -->
+<div class="modal fade" id="modal-cadastros-ocorrencia" tabindex="-1" aria-labelledby="modalCadastrosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalCadastrosLabel">Cadastros de Ocorrencias</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Abas -->
+                <ul class="nav nav-tabs mb-3" id="cadastrosTabList" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tab-categorias" data-bs-toggle="tab"
+                                data-bs-target="#pane-categorias" type="button" role="tab"
+                                data-tipo="categorias">
+                            Categorias
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-subcategorias" data-bs-toggle="tab"
+                                data-bs-target="#pane-subcategorias" type="button" role="tab"
+                                data-tipo="subcategorias">
+                            Subcategorias
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-responsaveis" data-bs-toggle="tab"
+                                data-bs-target="#pane-responsaveis" type="button" role="tab"
+                                data-tipo="responsaveis">
+                            Responsaveis
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-origens" data-bs-toggle="tab"
+                                data-bs-target="#pane-origens" type="button" role="tab"
+                                data-tipo="origens">
+                            Origens
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-autorizados" data-bs-toggle="tab"
+                                data-bs-target="#pane-autorizados" type="button" role="tab"
+                                data-tipo="autorizados">
+                            Autorizados
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Conteudo das Abas -->
+                <div class="tab-content" id="cadastrosTabContent">
+                    {% for tipo in ['categorias', 'subcategorias', 'responsaveis', 'origens', 'autorizados'] %}
+                    <div class="tab-pane fade {% if tipo == 'categorias' %}show active{% endif %}"
+                         id="pane-{{ tipo }}" role="tabpanel">
+
+                        <!-- Form adicionar -->
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control form-control-sm"
+                                   id="input-novo-{{ tipo }}" placeholder="Nova descricao...">
+                            <button class="btn btn-sm btn-primary" type="button"
+                                    onclick="salvarCadastro('{{ tipo }}')">
+                                Adicionar
+                            </button>
+                        </div>
+
+                        <!-- Tabela de itens -->
+                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Descricao</th>
+                                        <th style="width: 120px;">Acoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-{{ tipo }}">
+                                    <tr><td colspan="2" class="text-center text-muted">Carregando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>

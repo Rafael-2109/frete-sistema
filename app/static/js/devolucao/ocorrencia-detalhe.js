@@ -456,7 +456,32 @@ function salvarLogistica() {
 function salvarComercial() {
     const form = document.getElementById('form-comercial');
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
+
+    // Campos simples (exceto arrays)
+    const data = {};
+    data.status = formData.get('status') || '';
+    data.momento_devolucao = formData.get('momento_devolucao') || '';
+    data.descricao_comercial = formData.get('descricao_comercial') || '';
+    data.desfecho = formData.get('desfecho') || '';
+
+    // FK campos (inteiros ou null)
+    const responsavelId = formData.get('responsavel_id');
+    data.responsavel_id = responsavelId ? parseInt(responsavelId) : null;
+
+    const origemId = formData.get('origem_id');
+    data.origem_id = origemId ? parseInt(origemId) : null;
+
+    const autorizadoPorId = formData.get('autorizado_por_id');
+    data.autorizado_por_id = autorizadoPorId ? parseInt(autorizadoPorId) : null;
+
+    // Multi-select: coletar arrays de IDs (ignorar vazios)
+    data.categoria_ids = formData.getAll('categoria_ids[]')
+        .filter(v => v !== '')
+        .map(v => parseInt(v));
+
+    data.subcategoria_ids = formData.getAll('subcategoria_ids[]')
+        .filter(v => v !== '')
+        .map(v => parseInt(v));
 
     fetch(`/devolucao/ocorrencias/api/${ocorrenciaId}/comercial`, {
         method: 'PUT',
@@ -483,6 +508,32 @@ function salvarComercial() {
         console.error('Erro:', error);
         alert('Erro ao salvar. Tente novamente.');
     });
+}
+
+// =========================================================================
+// Rows dinamicas para Categorias e Subcategorias
+// =========================================================================
+function adicionarCategoria() {
+    const grupo = document.getElementById('grupo-categorias');
+    // Clonar o template da primeira row de categoria
+    const primeiraRow = grupo.querySelector('.categoria-row');
+    if (!primeiraRow) return;
+
+    const novaRow = primeiraRow.cloneNode(true);
+    const select = novaRow.querySelector('select');
+    select.value = ''; // Resetar seleção
+    grupo.appendChild(novaRow);
+}
+
+function adicionarSubcategoria() {
+    const grupo = document.getElementById('grupo-subcategorias');
+    const primeiraRow = grupo.querySelector('.subcategoria-row');
+    if (!primeiraRow) return;
+
+    const novaRow = primeiraRow.cloneNode(true);
+    const select = novaRow.querySelector('select');
+    select.value = '';
+    grupo.appendChild(novaRow);
 }
 
 // =========================================================================
