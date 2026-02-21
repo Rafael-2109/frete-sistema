@@ -20,7 +20,7 @@ Padrão "detach-first" para evitar SSL timeout (limite 30s no Render):
 
 FLUXOS:
 - ContasAPagar: Usa odoo_line_id (FK direta) para consultar em chunks
-- ContasAReceber: Match por (empresa, titulo_nf, parcela) via x_studio_nf_e
+- ContasAReceber: Usa odoo_line_id (quando disponível) + fallback por (empresa, titulo_nf, parcela)
 
 Executar:
     source .venv/bin/activate
@@ -228,16 +228,22 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
     """
     Backfill para contas_a_receber.
 
-    Padrão detach-first:
-    - Fase 1: Lê DB → plain dicts → close
-    - Fase 2: Odoo API (sem DB aberto)
-    - Fase 3: Updates atômicos por batch
+    Duas estratégias:
+    - Path A: Registros COM odoo_line_id → lookup direto por ID (O(1), como ContasAPagar)
+    - Path B: Registros SEM odoo_line_id → match por (empresa, titulo_nf, parcela)
+
+    Padrão detach-first em ambos os paths.
 
     Returns:
         dict com estatísticas
     """
     stats = {
         'total_verificados': 0,
+        'path_a_total': 0,
+        'path_a_atualizados': 0,
+        'path_a_em_aberto': 0,
+        'path_b_total': 0,
+        'path_b_atualizados': 0,
         'atualizados': 0,
         'sem_match_odoo': 0,
         'ja_em_aberto': 0,
@@ -256,7 +262,7 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
     titulos_raw = db.session.query(
         ContasAReceber.id, ContasAReceber.empresa,
         ContasAReceber.titulo_nf, ContasAReceber.parcela,
-        ContasAReceber.metodo_baixa
+        ContasAReceber.metodo_baixa, ContasAReceber.odoo_line_id
     ).filter(
         ContasAReceber.parcela_paga == False
     ).all()
@@ -268,95 +274,160 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
         db.session.close()
         return stats
 
-    # Extrair para plain dicts
-    # {(empresa, titulo_nf, parcela): [{id, metodo_baixa}]}
-    titulos_por_chave = {}
-    por_empresa = {}
-    for row_id, empresa, titulo_nf, parcela, met_baixa in titulos_raw:
-        chave = (empresa, titulo_nf, parcela)
-        titulos_por_chave.setdefault(chave, []).append({
-            'id': row_id,
-            'metodo_baixa': met_baixa,
-        })
-        por_empresa.setdefault(empresa, set()).add(titulo_nf)
+    # Separar em dois grupos
+    # Path A: com odoo_line_id → lookup direto
+    titulos_com_line_id = {}  # {odoo_line_id: {id, metodo_baixa}}
+    # Path B: sem odoo_line_id → match por chave composta
+    titulos_por_chave = {}    # {(empresa, titulo_nf, parcela): [{id, metodo_baixa}]}
+    por_empresa = {}          # {empresa: set(titulo_nf)}
+
+    for row_id, empresa, titulo_nf, parcela, met_baixa, odoo_line_id in titulos_raw:
+        if odoo_line_id:
+            titulos_com_line_id[odoo_line_id] = {
+                'id': row_id,
+                'metodo_baixa': met_baixa,
+            }
+        else:
+            chave = (empresa, titulo_nf, parcela)
+            titulos_por_chave.setdefault(chave, []).append({
+                'id': row_id,
+                'metodo_baixa': met_baixa,
+            })
+            por_empresa.setdefault(empresa, set()).add(titulo_nf)
+
+    stats['path_a_total'] = len(titulos_com_line_id)
+    stats['path_b_total'] = stats['total_verificados'] - stats['path_a_total']
+    logger.info(f"  Path A (com odoo_line_id): {stats['path_a_total']}")
+    logger.info(f"  Path B (sem odoo_line_id): {stats['path_b_total']}")
 
     # Fechar session
     db.session.close()
 
-    # =========================================================================
-    # FASE 2: Consultar Odoo API (sem conexão DB aberta)
-    # =========================================================================
-    logger.info("\n[FASE 2] Consultando Odoo...")
-
-    CHUNK_SIZE = 100
     updates_pendentes = []
-    matched_ids = set()
 
-    for empresa_cod, nfs_set in por_empresa.items():
-        empresa_nome = EMPRESA_CODIGO_PARA_NOME.get(empresa_cod)
-        if not empresa_nome:
-            logger.warning(f"  Empresa {empresa_cod}: sem mapeamento, pulando")
-            continue
+    # =========================================================================
+    # FASE 2A: Path A — Consultar Odoo por IDs diretos (rápido)
+    # =========================================================================
+    if titulos_com_line_id:
+        logger.info("\n[FASE 2A] Consultando Odoo por odoo_line_id...")
 
-        nfs_unicas = list(nfs_set)
-        logger.info(
-            f"\n  Empresa {empresa_cod} ({empresa_nome}): {len(nfs_unicas)} NFs únicas"
-        )
+        line_ids = list(titulos_com_line_id.keys())
+        CHUNK_SIZE = 200
 
-        for i in range(0, len(nfs_unicas), CHUNK_SIZE):
-            chunk_nfs = nfs_unicas[i:i + CHUNK_SIZE]
+        for i in range(0, len(line_ids), CHUNK_SIZE):
+            chunk = line_ids[i:i + CHUNK_SIZE]
+            logger.info(f"  Chunk {i // CHUNK_SIZE + 1}/{(len(line_ids) - 1) // CHUNK_SIZE + 1}: {len(chunk)} IDs")
 
             try:
                 dados_odoo = connection.search_read(
                     'account.move.line',
-                    [
-                        ['x_studio_nf_e', 'in', chunk_nfs],
-                        ['account_type', '=', 'asset_receivable'],
-                        ['parent_state', '=', 'posted'],
-                    ],
-                    fields=[
-                        'id', 'x_studio_nf_e', 'l10n_br_cobranca_parcela',
-                        'l10n_br_paga', 'balance', 'company_id',
-                    ],
-                    limit=len(chunk_nfs) * 5
+                    [['id', 'in', chunk]],
+                    fields=['id', 'l10n_br_paga', 'balance'],
+                    limit=len(chunk)
                 ) or []
             except Exception as e:
                 logger.error(f"  ERRO Odoo (chunk {i}): {e}")
-                stats['erros'] += len(chunk_nfs)
+                stats['erros'] += len(chunk)
                 continue
 
-            for rec in dados_odoo:
-                nf = str(rec.get('x_studio_nf_e') or '').strip()
-                if not nf:
+            odoo_por_id = {r['id']: r for r in dados_odoo}
+
+            for line_id in chunk:
+                odoo_rec = odoo_por_id.get(line_id)
+                titulo_info = titulos_com_line_id[line_id]
+
+                if not odoo_rec:
+                    stats['sem_match_odoo'] += 1
                     continue
 
-                parcela = parcela_to_str(rec.get('l10n_br_cobranca_parcela')) or '1'
-                company_nome = rec.get('company_id', [None, ''])[1] or ''
+                paga = bool(odoo_rec.get('l10n_br_paga'))
+                balance = float(odoo_rec.get('balance', 0) or 0)
 
-                rec_empresa = _mapear_empresa(company_nome)
-                if rec_empresa != empresa_cod:
-                    continue
-
-                paga = bool(rec.get('l10n_br_paga'))
-                balance = float(rec.get('balance', 0) or 0)
-
-                if not (paga or balance <= 0):
-                    continue
-
-                chave = (empresa_cod, nf, parcela)
-                titulos_locais = titulos_por_chave.get(chave, [])
-
-                for titulo_info in titulos_locais:
-                    if titulo_info['id'] in matched_ids:
-                        continue
-                    matched_ids.add(titulo_info['id'])
-
+                if paga or balance <= 0:
                     updates_pendentes.append({
                         'id': titulo_info['id'],
                         'metodo_baixa': titulo_info['metodo_baixa'] or 'ODOO_DIRETO',
                     })
-                    stats['atualizados'] += 1
+                    stats['path_a_atualizados'] += 1
+                else:
+                    stats['path_a_em_aberto'] += 1
 
+    # =========================================================================
+    # FASE 2B: Path B — Consultar Odoo por NF/parcela (fallback)
+    # =========================================================================
+    if titulos_por_chave:
+        logger.info("\n[FASE 2B] Consultando Odoo por NF/parcela (fallback)...")
+
+        CHUNK_SIZE = 100
+        matched_ids = set()
+
+        for empresa_cod, nfs_set in por_empresa.items():
+            empresa_nome = EMPRESA_CODIGO_PARA_NOME.get(empresa_cod)
+            if not empresa_nome:
+                logger.warning(f"  Empresa {empresa_cod}: sem mapeamento, pulando")
+                continue
+
+            nfs_unicas = list(nfs_set)
+            logger.info(
+                f"\n  Empresa {empresa_cod} ({empresa_nome}): {len(nfs_unicas)} NFs únicas"
+            )
+
+            for i in range(0, len(nfs_unicas), CHUNK_SIZE):
+                chunk_nfs = nfs_unicas[i:i + CHUNK_SIZE]
+
+                try:
+                    dados_odoo = connection.search_read(
+                        'account.move.line',
+                        [
+                            ['x_studio_nf_e', 'in', chunk_nfs],
+                            ['account_type', '=', 'asset_receivable'],
+                            ['parent_state', '=', 'posted'],
+                        ],
+                        fields=[
+                            'id', 'x_studio_nf_e', 'l10n_br_cobranca_parcela',
+                            'l10n_br_paga', 'balance', 'company_id',
+                        ],
+                        limit=len(chunk_nfs) * 5
+                    ) or []
+                except Exception as e:
+                    logger.error(f"  ERRO Odoo (chunk {i}): {e}")
+                    stats['erros'] += len(chunk_nfs)
+                    continue
+
+                for rec in dados_odoo:
+                    nf = str(rec.get('x_studio_nf_e') or '').strip()
+                    if not nf:
+                        continue
+
+                    parcela = parcela_to_str(rec.get('l10n_br_cobranca_parcela')) or '1'
+                    company_nome = rec.get('company_id', [None, ''])[1] or ''
+
+                    rec_empresa = _mapear_empresa(company_nome)
+                    if rec_empresa != empresa_cod:
+                        continue
+
+                    paga = bool(rec.get('l10n_br_paga'))
+                    balance = float(rec.get('balance', 0) or 0)
+
+                    if not (paga or balance <= 0):
+                        continue
+
+                    chave = (empresa_cod, nf, parcela)
+                    titulos_locais = titulos_por_chave.get(chave, [])
+
+                    for titulo_info in titulos_locais:
+                        if titulo_info['id'] in matched_ids:
+                            continue
+                        matched_ids.add(titulo_info['id'])
+
+                        updates_pendentes.append({
+                            'id': titulo_info['id'],
+                            'metodo_baixa': titulo_info['metodo_baixa'] or 'ODOO_DIRETO',
+                        })
+                        stats['path_b_atualizados'] += 1
+
+    stats['atualizados'] = stats['path_a_atualizados'] + stats['path_b_atualizados']
+    stats['ja_em_aberto'] = stats['path_a_em_aberto']
     logger.info(f"\n  Total updates coletados: {len(updates_pendentes)}")
 
     # =========================================================================
@@ -397,13 +468,15 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
         logger.info("\n[FASE 3] DRY-RUN — nenhum update aplicado")
 
     # Contar títulos sem match
-    stats['sem_match_odoo'] = stats['total_verificados'] - stats['atualizados'] - stats['ja_em_aberto']
+    stats['sem_match_odoo'] += stats['total_verificados'] - stats['atualizados'] - stats['ja_em_aberto'] - stats['sem_match_odoo']
 
     logger.info(f"\nRESUMO CONTAS A RECEBER:")
-    logger.info(f"  Verificados:    {stats['total_verificados']}")
-    logger.info(f"  Atualizados:    {stats['atualizados']}")
-    logger.info(f"  Sem match Odoo: {stats['sem_match_odoo']}")
-    logger.info(f"  Erros:          {stats['erros']}")
+    logger.info(f"  Verificados:      {stats['total_verificados']}")
+    logger.info(f"  Path A (line_id): {stats['path_a_total']} → {stats['path_a_atualizados']} atualizados, {stats['path_a_em_aberto']} em aberto")
+    logger.info(f"  Path B (NF):      {stats['path_b_total']} → {stats['path_b_atualizados']} atualizados")
+    logger.info(f"  Total atualiz.:   {stats['atualizados']}")
+    logger.info(f"  Sem match Odoo:   {stats['sem_match_odoo']}")
+    logger.info(f"  Erros:            {stats['erros']}")
 
     return stats
 
@@ -497,10 +570,12 @@ def main():
 
         if stats_receber:
             print(f"\nCONTAS A RECEBER:")
-            print(f"  Verificados:    {stats_receber['total_verificados']}")
-            print(f"  Atualizados:    {stats_receber['atualizados']}")
-            print(f"  Sem match Odoo: {stats_receber['sem_match_odoo']}")
-            print(f"  Erros:          {stats_receber['erros']}")
+            print(f"  Verificados:      {stats_receber['total_verificados']}")
+            print(f"  Path A (line_id): {stats_receber['path_a_total']} → {stats_receber['path_a_atualizados']} atualizados, {stats_receber['path_a_em_aberto']} em aberto")
+            print(f"  Path B (NF):      {stats_receber['path_b_total']} → {stats_receber['path_b_atualizados']} atualizados")
+            print(f"  Total atualiz.:   {stats_receber['atualizados']}")
+            print(f"  Sem match Odoo:   {stats_receber['sem_match_odoo']}")
+            print(f"  Erros:            {stats_receber['erros']}")
 
         total_atualizados = (
             (stats_pagar['atualizados'] if stats_pagar else 0) +
