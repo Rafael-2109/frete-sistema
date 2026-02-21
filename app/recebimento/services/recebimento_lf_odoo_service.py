@@ -137,10 +137,9 @@ class RecebimentoLfOdooService:
     POLL_INTERVAL = 10      # Intervalo entre polls (10s)
     MAX_POLL_TIME = 1800    # Tempo maximo de polling (30 min)
 
-    # Retry NF-e — transmissao SEFAZ (erro transitorio)
-    NFE_RETRY_MAX = 5           # 5 tentativas (procedimento fiscal: retry a cada 2 min, ate 10 min)
-    NFE_RETRY_INTERVAL = 120    # 2 minutos entre tentativas
-    NFE_SCHEMA_ERROR_THRESHOLD = 3  # Apos 3 erros consecutivos de Schema XML, tentar workaround
+    # Playwright NF-e — transmissao via UI Odoo (resolve Schema XML stale)
+    PLAYWRIGHT_MAX_TENTATIVAS = 15     # 15 tentativas
+    PLAYWRIGHT_INTERVALO_RETRY = 120   # 2 minutos entre tentativas (30 min total)
 
     # =================================================================
     # Metodos principais
@@ -2615,27 +2614,25 @@ class RecebimentoLfOdooService:
 
     def _step_23_transmitir_nfe_transferencia(self, odoo):
         """
-        Etapa 23: Confirmar invoice e transmitir NF-e para SEFAZ.
+        Etapa 23: Transmitir NF-e de transferencia para SEFAZ via Playwright.
 
-        Fluxo correto (confirmado via botoes do Odoo):
-          1. Se draft → recalcular impostos + action_post → posted
-          2. Se posted + situacao_nf IN ('rascunho', 'excecao_autorizado')
-             → action_gerar_nfe → transmite NF-e → autorizado
-          3. Se situacao_nf == 'autorizado' → ja transmitida, skip
+        Fluxo:
+          0. Guard + idempotencia (autorizado → skip)
+          1. Se draft → action_post via XML-RPC [fire_and_poll] (funciona bem)
+          2. Transmitir via Playwright (UI Odoo): retry 2min × 15 = 30min
+             - Renderizar form view forca recomputacao de campos nfe_infnfe_*
+             - Clicar "Pre Visualizar XML NF-e" + "Transmitir NF-e"
+             - Verificar resultado via XML-RPC (situacao_nf + chave_nf 44 dig)
+          3. Se sucesso → checkpoint + return
+          4. Se falhou → raise ValueError
 
-        Retry automatico (NFE_RETRY_MAX=5, NFE_RETRY_INTERVAL=120s):
-          - Erros transitorios da SEFAZ (ex: "Falha no Schema XML") sao comuns
-          - Procedimento fiscal: retry a cada 2 min, ate ~10 min total
-          - Criterio de sucesso: situacao_nf='autorizado' + chave_nf de 44 digitos
-          - excecao_autorizado SEM chave = rejeicao transitoria (retry)
-
-        Workaround Schema XML (erro SEFAZ 225):
-          - Se "Falha no Schema XML" persistir por NFE_SCHEMA_ERROR_THRESHOLD
-            tentativas consecutivas, tenta action_previsualizar_xml_nfe
-            para forcar re-geracao do XML
-          - Workaround testado: via XML-RPC tem eficacia limitada
-            (funciona melhor via Odoo UI)
-          - Se falhar: erro inclui instrucao para workaround manual
+        Por que Playwright:
+          - O robo CIEL IT cria invoices com campos fiscais stale (nfe_infnfe_*)
+          - As chains @api.depends/@api.compute do l10n_br NAO sao avaliadas
+            na criacao via XML-RPC
+          - Somente a interacao via UI (renderizar form + preview XML) forca a
+            recomputacao completa, corrigindo o Schema XML (erro SEFAZ 225)
+          - Validado com NF-e 93549 (invoice 502614, cstat=100) em 2026-02-21
 
         IMPORTANTE: NAO setar l10n_br_situacao_nf='autorizado' manualmente.
         A transmissao real via SEFAZ e feita por action_gerar_nfe.
@@ -2680,31 +2677,9 @@ class RecebimentoLfOdooService:
             )
             return
 
-        # --- Passo 1: Se draft → postar ---
+        # --- Passo 1: Se draft → postar via XML-RPC ---
+        # action_post funciona bem via XML-RPC, nao precisa de Playwright
         if inv_state == 'draft':
-            # Recalcular impostos (nao critico — try/catch)
-            try:
-                odoo.execute_kw(
-                    'account.move',
-                    'onchange_l10n_br_calcular_imposto',
-                    [[invoice_id]]
-                )
-                logger.info(f"  Recalculo impostos executado")
-            except Exception as e:
-                logger.warning(f"  Recalculo impostos falhou (nao critico): {e}")
-
-            try:
-                odoo.execute_kw(
-                    'account.move',
-                    'onchange_l10n_br_calcular_imposto_btn',
-                    [[invoice_id]],
-                    timeout_override=self.FIRE_TIMEOUT
-                )
-                logger.info(f"  Atualizacao impostos executada")
-            except Exception as e:
-                logger.warning(f"  Atualizacao impostos falhou (nao critico): {e}")
-
-            # action_post [fire_and_poll]
             def fire_post():
                 return odoo.execute_kw(
                     'account.move', 'action_post',
@@ -2730,219 +2705,45 @@ class RecebimentoLfOdooService:
             inv_state = 'posted'
             logger.info(f"  Invoice {inv_name} postada (state=posted)")
 
-            # Re-ler situacao_nf apos post (robo pode ter mudado)
-            inv_refresh = odoo.execute_kw(
-                'account.move', 'read',
-                [[invoice_id]],
-                {'fields': ['l10n_br_situacao_nf']}
-            )
-            situacao_nf = inv_refresh[0].get('l10n_br_situacao_nf') if inv_refresh else situacao_nf
+        # --- Passo 2: Transmitir NF-e via Playwright (UI Odoo) ---
+        # XML-RPC nao consegue forcar recomputacao dos campos nfe_infnfe_* do l10n_br.
+        # Somente a interacao via UI (renderizar form + preview XML) forca a cadeia
+        # completa de @api.compute, corrigindo o Schema XML (erro SEFAZ 225).
+        from app.recebimento.services.playwright_nfe_transmissao import transmitir_nfe_via_playwright
 
-        # --- Passo 2: Se posted + rascunho/excecao → transmitir NF-e com retry ---
-        if inv_state == 'posted' and situacao_nf in ('rascunho', 'excecao_autorizado', False, None):
-            logger.info(
-                f"  Chamando action_gerar_nfe (situacao_nf={situacao_nf})..."
-            )
+        logger.info(f"  [playwright] Iniciando transmissao via UI Odoo...")
+        self._atualizar_redis(
+            rec.id, 6, 23, rec.total_etapas, 'Transmitindo NF-e via UI Odoo...'
+        )
+
+        def redis_cb(tentativa, max_tent, mensagem):
             self._atualizar_redis(
                 rec.id, 6, 23, rec.total_etapas,
-                'Transmitindo NF-e para SEFAZ...'
+                f'NF-e transmissao {tentativa}/{max_tent}: {mensagem}'
             )
 
-            def fire_gerar_nfe():
-                return odoo.execute_kw(
-                    'account.move', 'action_gerar_nfe',
-                    [[invoice_id]],
-                    timeout_override=self.FIRE_TIMEOUT
-                )
+        resultado = transmitir_nfe_via_playwright(
+            invoice_id=invoice_id,
+            odoo=odoo,
+            logger=logger,
+            redis_callback=redis_cb,
+            max_tentativas=self.PLAYWRIGHT_MAX_TENTATIVAS,
+            intervalo_retry=self.PLAYWRIGHT_INTERVALO_RETRY,
+        )
 
-            def poll_nfe_transmitida():
-                inv = odoo.execute_kw(
-                    'account.move', 'read',
-                    [[invoice_id]],
-                    {'fields': ['l10n_br_situacao_nf', 'l10n_br_chave_nf', 'name']}
-                )
-                if not inv:
-                    return None
-                sit = inv[0].get('l10n_br_situacao_nf')
-                chave = inv[0].get('l10n_br_chave_nf')
-                # Sucesso definitivo: autorizado COM chave de 44 digitos
-                if sit == 'autorizado' and chave and len(str(chave)) == 44:
-                    return inv[0]
-                # Sucesso com excecao: excecao_autorizado COM chave
-                if sit == 'excecao_autorizado' and chave and len(str(chave)) == 44:
-                    return inv[0]
-                # Saiu de rascunho mas sem chave → poll retorna None (aguardar mais)
-                return None
-
-            # Primeira tentativa de transmissao
-            # TimeoutError capturado: SEFAZ pode demorar, retry loop trata
-            try:
-                self._fire_and_poll(
-                    odoo, fire_gerar_nfe, poll_nfe_transmitida,
-                    'Transmitir NF-e Transfer',
-                    poll_interval=60, max_poll_time=1800  # 30min, poll a cada 60s
-                )
-            except TimeoutError:
-                logger.warning(
-                    f"  Primeiro fire_and_poll expirou (1800s). "
-                    f"Entrando no retry loop..."
-                )
-
-            # --- Loop de retry para erros transitorios da SEFAZ ---
-            # Procedimento fiscal: verificar status + retry a cada 2 min, ate 30 min total
-            nfe_autorizada = False
-            schema_error_count = 0  # Contador de erros consecutivos de Schema XML
-            workaround_tentado = False
-            for attempt in range(1, self.NFE_RETRY_MAX + 1):
-                # Ler estado atual da invoice (sempre fresco)
-                inv_check = odoo.execute_kw(
-                    'account.move', 'read',
-                    [[invoice_id]],
-                    {'fields': [
-                        'name', 'l10n_br_situacao_nf', 'l10n_br_chave_nf',
-                        'l10n_br_cstat_nf', 'l10n_br_xmotivo_nf',
-                    ]}
-                )
-                if not inv_check:
-                    logger.error(f"  Invoice {invoice_id} nao encontrada durante retry")
-                    break
-
-                check_data = inv_check[0]
-                sit = check_data.get('l10n_br_situacao_nf')
-                chave = check_data.get('l10n_br_chave_nf')
-                cstat = check_data.get('l10n_br_cstat_nf')
-                xmotivo = check_data.get('l10n_br_xmotivo_nf', '')
-                inv_name = check_data.get('name', inv_name)
-
-                # Sucesso: autorizado COM chave de 44 digitos
-                if sit == 'autorizado' and chave and len(str(chave)) == 44:
-                    logger.info(
-                        f"  NF-e {inv_name} autorizada pela SEFAZ "
-                        f"(tentativa {attempt}/{self.NFE_RETRY_MAX}, "
-                        f"chave={chave})"
-                    )
-                    nfe_autorizada = True
-                    break
-
-                # Sucesso com excecao mas COM chave → aceitar com warning
-                if sit == 'excecao_autorizado' and chave and len(str(chave)) == 44:
-                    logger.warning(
-                        f"  NF-e {inv_name} excecao_autorizado COM chave "
-                        f"(tentativa {attempt}/{self.NFE_RETRY_MAX}, "
-                        f"chave={chave}, cstat={cstat}). Aceito com ressalva."
-                    )
-                    nfe_autorizada = True
-                    break
-
-                # Detectar erro persistente de Schema XML (SEFAZ 225)
-                is_schema_error = (
-                    xmotivo and 'schema xml' in str(xmotivo).lower()
-                )
-                if is_schema_error:
-                    schema_error_count += 1
-                else:
-                    schema_error_count = 0
-
-                # Workaround XML Preview: se mesmo erro Schema XML persistir
-                # apos NFE_SCHEMA_ERROR_THRESHOLD tentativas, tentar
-                # action_previsualizar_xml_nfe para forcar re-geracao do XML
-                if (
-                    is_schema_error
-                    and schema_error_count >= self.NFE_SCHEMA_ERROR_THRESHOLD
-                    and not workaround_tentado
-                ):
-                    workaround_tentado = True
-                    logger.warning(
-                        f"  [workaround_xml_preview] Erro Schema XML persistente "
-                        f"({schema_error_count}x consecutivo). "
-                        f"Tentando action_previsualizar_xml_nfe para re-gerar XML..."
-                    )
-                    self._atualizar_redis(
-                        rec.id, 6, 23, rec.total_etapas,
-                        'Erro Schema XML persistente — tentando workaround...'
-                    )
-                    try:
-                        odoo.execute_kw(
-                            'account.move', 'action_previsualizar_xml_nfe',
-                            [[invoice_id]],
-                            timeout_override=self.FIRE_TIMEOUT
-                        )
-                        logger.info(
-                            f"  [workaround_xml_preview] "
-                            f"action_previsualizar_xml_nfe executado"
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"  [workaround_xml_preview] Falhou: {e}"
-                        )
-                    time.sleep(10)
-
-                # Rejeicao transitoria: excecao_autorizado SEM chave, ou rascunho
-                if attempt < self.NFE_RETRY_MAX:
-                    logger.warning(
-                        f"  NF-e {inv_name} nao autorizada "
-                        f"(tentativa {attempt}/{self.NFE_RETRY_MAX}, "
-                        f"situacao={sit}, cstat={cstat}, chave={chave}, "
-                        f"xmotivo={xmotivo}). "
-                        f"Retry em {self.NFE_RETRY_INTERVAL}s..."
-                    )
-                    self._atualizar_redis(
-                        rec.id, 6, 23, rec.total_etapas,
-                        f'NF-e rejeitada, retry {attempt}/{self.NFE_RETRY_MAX} '
-                        f'em {self.NFE_RETRY_INTERVAL}s...'
-                    )
-                    time.sleep(self.NFE_RETRY_INTERVAL)
-
-                    # Re-transmitir (TimeoutError capturado para nao matar o loop)
-                    logger.info(
-                        f"  Re-chamando action_gerar_nfe "
-                        f"(tentativa {attempt + 1}/{self.NFE_RETRY_MAX})..."
-                    )
-                    self._atualizar_redis(
-                        rec.id, 6, 23, rec.total_etapas,
-                        f'Transmitindo NF-e (tentativa {attempt + 1}/{self.NFE_RETRY_MAX})...'
-                    )
-                    try:
-                        self._fire_and_poll(
-                            odoo, fire_gerar_nfe, poll_nfe_transmitida,
-                            f'Transmitir NF-e Transfer (retry {attempt + 1})',
-                            poll_interval=60, max_poll_time=1800
-                        )
-                    except TimeoutError:
-                        logger.warning(
-                            f"  Retry {attempt + 1} fire_and_poll expirou. "
-                            f"Continuando loop..."
-                        )
-                else:
-                    # Ultima tentativa — falhou definitivamente
-                    logger.error(
-                        f"  NF-e {inv_name} NAO autorizada apos "
-                        f"{self.NFE_RETRY_MAX} tentativas (~{self.NFE_RETRY_MAX * self.NFE_RETRY_INTERVAL // 60} min). "
-                        f"situacao={sit}, cstat={cstat}, chave={chave}, "
-                        f"xmotivo={xmotivo}"
-                    )
-
-            if not nfe_autorizada:
-                # Mensagem de erro especifica para Schema XML
-                erro_base = (
-                    f"NF-e transfer {inv_name} nao autorizada apos "
-                    f"{self.NFE_RETRY_MAX} tentativas "
-                    f"(~{self.NFE_RETRY_MAX * self.NFE_RETRY_INTERVAL // 60} min)."
-                )
-                if schema_error_count > 0:
-                    raise ValueError(
-                        f"{erro_base} "
-                        f"Erro SEFAZ persistente: '{xmotivo}' "
-                        f"({schema_error_count}x consecutivo). "
-                        f"Workaround: no Odoo UI, clicar 'Transmitir' e depois "
-                        f"'Pre-visualizar XML NF-e' para forcar re-geracao do XML."
-                    )
-                raise ValueError(
-                    f"{erro_base} Verificar manualmente no Odoo."
-                )
-
-        elif inv_state == 'posted' and situacao_nf == 'autorizado':
-            logger.info(f"  Invoice {inv_name} ja autorizada")
+        if resultado['sucesso']:
+            inv_name = resultado.get('inv_name', inv_name)
+            logger.info(
+                f"  NF-e {inv_name} autorizada via Playwright "
+                f"(tentativa {resultado['tentativa']})"
+            )
+        else:
+            raise ValueError(
+                f"NF-e transfer {inv_name} nao autorizada apos "
+                f"{resultado['tentativas']} tentativas Playwright (~30 min). "
+                f"Ultimo estado: {resultado.get('ultimo_estado', {})}. "
+                f"Verificar manualmente no Odoo."
+            )
 
         self._checkpoint(
             etapa=23,

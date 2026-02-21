@@ -319,6 +319,57 @@ Modos disponiveis:
 
 ---
 
+## NF-e Transfer: Campos Fiscais Stale (l10n_br _compute)
+
+**Impacto:** SEFAZ rejeita NF-e com erro 225 ("Falha no Schema XML")
+**Causa raiz:** O robo CIEL IT cria invoices de transferencia via XML-RPC. Os campos `nfe_infnfe_*` (totais de impostos, CFOP, dados do emitente/destinatario) ficam "stale" porque as chains `@api.depends`/`@api.compute` do modulo l10n_br **NAO sao avaliadas** na criacao via XML-RPC.
+
+### Metodos XML-RPC que NAO Resolvem
+
+| Metodo | Resultado |
+|--------|-----------|
+| `onchange_l10n_br_calcular_imposto` | Recalcula impostos das linhas, mas NAO atualiza nfe_infnfe_* |
+| `onchange_l10n_br_calcular_imposto_btn` | Idem — so toca campos de imposto das linhas |
+| `action_previsualizar_xml_nfe` (via XML-RPC) | NAO forca recomputacao — gera XML com dados stale |
+| `button_draft` + recalc + `action_post` | Recomputa impostos mas nfe_infnfe_* permanece stale |
+
+### Metodo que Funciona: Playwright (UI Odoo)
+
+A interacao via UI — renderizar o form view + clicar "Pre Visualizar XML NF-e" — forca a recomputacao completa. O Odoo web client dispara todos os `@api.compute` ao renderizar o form.
+
+**Validado:** NF-e 93549 (invoice 502614, cstat=100, autorizado) em 21/02/2026.
+
+**Implementacao:** `app/recebimento/services/playwright_nfe_transmissao.py`
+- Login via JSON-RPC (cookie automatico) com fallback form login
+- Retry loop: 15 tentativas × 2 min = 30 min total
+- Verificacao de resultado via XML-RPC (mais confiavel que scraping)
+
+### Navegacao Robusta para Invoice Odoo
+
+A navegacao para o form view usa 3 camadas de protecao:
+
+```python
+# 1. URL minima (sem menu_id/action — menos fragil)
+f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4&model=account.move&view_type=form"
+
+# 2. Fallback: URL completa com IDs de menu/action
+f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4&menu_id=124&action=243&model=account.move&view_type=form"
+
+# 3. Verificacao de conteudo: confirma que a invoice certa carregou
+#    Busca inv_name (ex: "NACOM/2026/0042") no texto da pagina
+```
+
+**IMPORTANTE:** `wait_until='domcontentloaded'` — NUNCA usar `networkidle` com Odoo SPA (long-polling mantém conexão aberta eternamente).
+
+**IMPORTANTE:** `menu_id=124` e `action=243` sao IDs da instancia Nacom Goya. Se o Odoo for reinstalado, esses IDs podem mudar. A URL minima (sem eles) deve funcionar no Odoo 17.
+
+### Scripts de Referencia
+
+- `app/recebimento/services/playwright_nfe_transmissao.py` — Modulo de producao
+- `scripts/remediar_nfe_93549_playwright.py` — Script de validacao original (async)
+
+---
+
 ## Matriz de Erros
 
 | Erro | Causa | Solucao |

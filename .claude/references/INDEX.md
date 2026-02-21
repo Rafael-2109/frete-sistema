@@ -35,7 +35,8 @@
 | GOTCHAS criticos (timeouts, campos inexistentes) | [odoo/GOTCHAS.md](odoo/GOTCHAS.md) |
 | Modelos Odoo (DFe, PO, SO, Stock, Financeiro) | [odoo/MODELOS_CAMPOS.md](odoo/MODELOS_CAMPOS.md) |
 | Padroes avancados (auditoria, batch, locks) | [odoo/PADROES_AVANCADOS.md](odoo/PADROES_AVANCADOS.md) |
-| Pipeline Recebimento (Fases 1-4) | [odoo/PIPELINE_RECEBIMENTO.md](odoo/PIPELINE_RECEBIMENTO.md) |
+| Pipeline Recebimento de Compras (Fases 1-4) | [odoo/PIPELINE_RECEBIMENTO.md](odoo/PIPELINE_RECEBIMENTO.md) |
+| Pipeline Recebimento LF (37 etapas, Playwright NF-e) | [odoo/PIPELINE_RECEBIMENTO_LF.md](odoo/PIPELINE_RECEBIMENTO_LF.md) |
 | Conversao de unidades (UoM) | [odoo/CONVERSAO_UOM.md](odoo/CONVERSAO_UOM.md) |
 | Wizard vs API (reconciliacao extrato) | `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` |
 | Analise multi-company extrato (teste UI) | `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` |

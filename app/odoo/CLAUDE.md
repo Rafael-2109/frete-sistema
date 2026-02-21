@@ -117,6 +117,9 @@ cache_produtos = {p['id']: p for p in produtos}
 | Sem models proprios | Este modulo ESCREVE em 8+ models de outros modulos. NUNCA adicionar model aqui | Todos os services |
 | Imports LAZY obrigatorios | Models de outros modulos importados DENTRO dos metodos (evita circular import) | Todos os services |
 | Ordem de sync | SEMPRE faturamento primeiro, carteira depois. Inverter perde saldos | `sincronizacao_integrada_service.py:70-106` |
+| l10n_br _compute stale via XML-RPC | Campos `nfe_infnfe_*` NAO recomputados quando invoice criada via robo → SEFAZ 225. Somente UI (Playwright) forca recomputacao | `playwright_nfe_transmissao.py`, GOTCHAS.md |
+| Odoo SPA: NUNCA networkidle | Long-polling mantem conexao aberta. Usar `domcontentloaded` + `wait_for_selector` | `playwright_nfe_transmissao.py:444` |
+| IDs de UI frageis | `menu_id=124`, `action=243` mudam se Odoo reinstalar. Preferir URL minima sem eles | IDS_FIXOS.md secao "IDs de UI" |
 
 ---
 
@@ -128,6 +131,7 @@ cache_produtos = {p['id']: p for p in produtos}
 | Gotchas operacionais (timeouts, campos) | `.claude/references/odoo/GOTCHAS.md` |
 | Campos por modelo Odoo | `.claude/references/odoo/MODELOS_CAMPOS.md` |
 | Padroes avancados (auditoria, batch, locks) | `.claude/references/odoo/PADROES_AVANCADOS.md` |
-| Pipeline recebimento (fases 1-4) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
+| Pipeline recebimento de compras (fases 1-4) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
+| Pipeline recebimento LF (37 etapas, Playwright) | `.claude/references/odoo/PIPELINE_RECEBIMENTO_LF.md` |
 | Conversao UoM | `.claude/references/odoo/CONVERSAO_UOM.md` |
 | Campos de tabelas locais | `.claude/skills/consultando-sql/schemas/tables/{tabela}.json` |

@@ -123,6 +123,36 @@ def _obter_operacao_correta(operacao_atual_id, company_destino_id):
 
 ---
 
+## IDs de UI Odoo (Navegacao Web)
+
+> **ATENCAO:** Estes IDs sao da instancia Nacom Goya e podem mudar se o Odoo for atualizado/reinstalado.
+> Preferir URLs sem `menu_id`/`action` quando possivel (Odoo 17 resolve pelo `model` + `view_type`).
+
+| ID | Tipo | Valor | Uso | Fragil? |
+|----|------|-------|-----|---------|
+| `cids` | Company IDs | `1-3-4` | Multi-company (FB=1, SC=3, CD=4) | Medio — muda se companies forem adicionadas |
+| `menu_id` | Menu Faturamento | `124` | Necessario para breadcrumb correto | **Alto** — muda se Odoo reinstalar |
+| `action` | Action Invoices | `243` | Necessario para resolucao de view | **Alto** — muda se Odoo reinstalar |
+
+### URLs de Invoice
+
+```python
+# URL minima (PREFERIR — sem IDs frageis):
+f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4&model=account.move&view_type=form"
+
+# URL completa (fallback — com menu/action para resolucao correta):
+f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4&menu_id=124&action=243&model=account.move&view_type=form"
+```
+
+### Gotcha: networkidle vs domcontentloaded
+
+Odoo SPA mantem long-polling/WebSocket aberto. `networkidle` **NUNCA** resolve.
+Sempre usar `wait_until='domcontentloaded'` + `wait_for_selector('.o_form_view')`.
+
+**Fonte:** `app/recebimento/services/playwright_nfe_transmissao.py`, `scripts/remediar_nfe_93549_playwright.py`
+
+---
+
 ## Como Usar
 
 ```python
