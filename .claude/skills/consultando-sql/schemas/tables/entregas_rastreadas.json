@@ -124,16 +124,16 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_rastreadas_status",
+      "name": "ix_entregas_rastreadas_rastreamento_id",
       "columns": [
-        "status"
+        "rastreamento_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_rastreadas_rastreamento_id",
+      "name": "ix_entregas_rastreadas_status",
       "columns": [
-        "rastreamento_id"
+        "status"
       ],
       "unique": false
     }

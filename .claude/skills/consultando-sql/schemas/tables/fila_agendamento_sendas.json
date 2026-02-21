@@ -84,16 +84,9 @@
   ],
   "indices": [
     {
-      "name": "ix_fila_agendamento_sendas_status",
+      "name": "ix_fila_agendamento_sendas_cnpj",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_fila_agendamento_sendas_data_agendamento",
-      "columns": [
-        "data_agendamento"
+        "cnpj"
       ],
       "unique": false
     },
@@ -107,9 +100,16 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_cnpj",
+      "name": "ix_fila_agendamento_sendas_status",
       "columns": [
-        "cnpj"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fila_agendamento_sendas_data_agendamento",
+      "columns": [
+        "data_agendamento"
       ],
       "unique": false
     }

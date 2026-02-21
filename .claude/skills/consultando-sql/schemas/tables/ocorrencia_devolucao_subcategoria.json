@@ -38,16 +38,16 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_subcategoria_subcategoria_id",
+      "name": "ix_ocorrencia_devolucao_subcategoria_ocorrencia_devolucao_id",
       "columns": [
-        "subcategoria_id"
+        "ocorrencia_devolucao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_ocorrencia_devolucao_subcategoria_ocorrencia_devolucao_id",
+      "name": "ix_ocorrencia_devolucao_subcategoria_subcategoria_id",
       "columns": [
-        "ocorrencia_devolucao_id"
+        "subcategoria_id"
       ],
       "unique": false
     }

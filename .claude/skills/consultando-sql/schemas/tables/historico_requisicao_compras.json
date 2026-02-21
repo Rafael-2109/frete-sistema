@@ -149,16 +149,16 @@
       "unique": false
     },
     {
-      "name": "ix_historico_requisicao_compras_num_requisicao",
+      "name": "ix_historico_requisicao_compras_operacao",
       "columns": [
-        "num_requisicao"
+        "operacao"
       ],
       "unique": false
     },
     {
-      "name": "ix_historico_requisicao_compras_operacao",
+      "name": "ix_historico_requisicao_compras_num_requisicao",
       "columns": [
-        "operacao"
+        "num_requisicao"
       ],
       "unique": false
     },

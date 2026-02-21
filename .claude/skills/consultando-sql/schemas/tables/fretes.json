@@ -293,16 +293,16 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_odoo_invoice_id",
+      "name": "ix_fretes_numero_cte",
       "columns": [
-        "odoo_invoice_id"
+        "numero_cte"
       ],
       "unique": false
     },
     {
-      "name": "ix_fretes_numero_cte",
+      "name": "ix_fretes_odoo_invoice_id",
       "columns": [
-        "numero_cte"
+        "odoo_invoice_id"
       ],
       "unique": false
     },

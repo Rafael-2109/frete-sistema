@@ -230,10 +230,17 @@
   ],
   "indices": [
     {
-      "name": "idx_nfd_cnpj_status",
+      "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
-        "cnpj_emitente",
-        "status"
+        "numero_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_numero_serie",
+      "columns": [
+        "numero_nfd",
+        "serie_nfd"
       ],
       "unique": false
     },
@@ -245,9 +252,24 @@
       "unique": false
     },
     {
+      "name": "idx_nfd_cnpj_status",
+      "columns": [
+        "cnpj_emitente",
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_nfd_data_registro",
       "columns": [
         "data_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_origem_registro",
+      "columns": [
+        "origem_registro"
       ],
       "unique": false
     },
@@ -262,13 +284,6 @@
       "name": "ix_nf_devolucao_numero_nf_venda",
       "columns": [
         "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_origem_registro",
-      "columns": [
-        "origem_registro"
       ],
       "unique": false
     },
@@ -294,16 +309,16 @@
       "unique": true
     },
     {
-      "name": "idx_nfd_odoo_nf_venda",
+      "name": "ix_nf_devolucao_tipo_documento",
       "columns": [
-        "odoo_nf_venda_id"
+        "tipo_documento"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_tipo_documento",
+      "name": "idx_nfd_odoo_nf_venda",
       "columns": [
-        "tipo_documento"
+        "odoo_nf_venda_id"
       ],
       "unique": false
     },
@@ -368,21 +383,6 @@
       "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_numero_nfd",
-      "columns": [
-        "numero_nfd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_numero_serie",
-      "columns": [
-        "numero_nfd",
-        "serie_nfd"
       ],
       "unique": false
     }

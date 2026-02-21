@@ -94,13 +94,6 @@
       "unique": false
     },
     {
-      "name": "idx_depara_nosso_codigo",
-      "columns": [
-        "nosso_codigo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_depara_produto_cliente_prefixo_cnpj",
       "columns": [
         "prefixo_cnpj"
@@ -126,6 +119,13 @@
       "name": "ix_depara_produto_cliente_codigo_cliente",
       "columns": [
         "codigo_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_depara_nosso_codigo",
+      "columns": [
+        "nosso_codigo"
       ],
       "unique": false
     }

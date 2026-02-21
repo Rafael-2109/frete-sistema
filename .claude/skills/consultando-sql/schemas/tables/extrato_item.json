@@ -259,51 +259,9 @@
   ],
   "indices": [
     {
-      "name": "idx_extrato_item_statement_line",
-      "columns": [
-        "statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_favorecido_cnpj",
-      "columns": [
-        "favorecido_cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_categoria_pag",
-      "columns": [
-        "categoria_pagamento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_statement_line_id",
-      "columns": [
-        "statement_line_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_item_odoo_partner",
       "columns": [
         "odoo_partner_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_cnpj_pagador",
-      "columns": [
-        "cnpj_pagador"
       ],
       "unique": false
     },
@@ -322,9 +280,44 @@
       "unique": false
     },
     {
+      "name": "ix_extrato_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_cnpj_pagador",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_extrato_item_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_cnpj",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_favorecido_cnpj",
+      "columns": [
+        "favorecido_cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_statement_line",
+      "columns": [
+        "statement_line_id"
       ],
       "unique": false
     },
@@ -336,9 +329,16 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_item_cnpj",
+      "name": "idx_extrato_item_categoria_pag",
       "columns": [
-        "cnpj_pagador"
+        "categoria_pagamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

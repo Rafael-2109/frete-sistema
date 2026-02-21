@@ -180,20 +180,6 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_origem_id",
-      "columns": [
-        "origem_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_ocorrencia_categoria",
       "columns": [
         "categoria",
@@ -256,6 +242,20 @@
       "columns": [
         "status",
         "destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_origem_id",
+      "columns": [
+        "origem_id"
       ],
       "unique": false
     }

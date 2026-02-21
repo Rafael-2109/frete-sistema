@@ -104,16 +104,16 @@
       "unique": false
     },
     {
-      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
+      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
       "columns": [
-        "cod_produto_fornecedor"
+        "cod_produto_interno"
       ],
       "unique": false
     },
     {
-      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
+      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
       "columns": [
-        "cod_produto_interno"
+        "cod_produto_fornecedor"
       ],
       "unique": false
     }
