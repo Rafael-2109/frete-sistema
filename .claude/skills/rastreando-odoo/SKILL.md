@@ -1,13 +1,13 @@
 ---
 name: rastreando-odoo
-description: |
-  Rastreia fluxos documentais completos no Odoo, executa auditorias financeiras e gerencia conciliacoes bancarias.
-
-  USAR QUANDO:
-  - Rastrear NF de compra/venda: "rastreie NF 12345", "fluxo da nota 54321"
-  - Rastrear pedido de compra: "rastreie PO00789", "fluxo do pedido de compra"
-  - Rastrear pedido de venda: "rastreie VCD123", "fluxo do VFB456"
-  - Rastrear por parceiro: "documentos do Atacadao", "fluxo do fornecedor Vale Sul"
+description: >-
+  Esta skill deve ser usada quando o usuario pede "rastreie NF 12345",
+  "fluxo da nota", "rastreie PO00789", "documentos do Atacadao",
+  "auditoria financeira", "conciliacoes bancarias", ou precisa rastrear
+  fluxos documentais completos no Odoo (NF, PO, SO, pagamentos, extratos).
+  Nao usar para criar pagamento ou reconciliar extrato (usar
+  executando-odoo-financeiro), exportar razao geral (usar razao-geral-odoo),
+  ou criar nova integracao (usar integracao-odoo).
   - Rastrear por CNPJ: "rastreie 18467441000123"
   - Rastrear por chave NF-e: "rastreie 3525..."
   - Ver titulos e conciliacoes: "pagamentos da NF 12345", "titulos do PO00789"

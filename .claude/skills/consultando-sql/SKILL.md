@@ -1,6 +1,16 @@
 ---
 name: consultando-sql
-description: "Executa consultas analiticas SQL no banco de dados via linguagem natural. Use para perguntas ad-hoc sobre rankings, agregacoes, distribuicoes, tendencias, cruzamentos de tabelas. Converte perguntas em SQL, valida com Evaluator-Optimizer, e executa read-only. Cobre 104 tabelas ativas via catalogo dinamico."
+description: >-
+  Esta skill deve ser usada quando o usuario faz perguntas analiticas como
+  "top 10 clientes por valor", "quantos pedidos pendentes por estado?",
+  "distribuicao de frete por transportadora", "valor total de contas a receber
+  vencidas", ou qualquer pergunta que requer agregacoes, rankings, tendencias
+  ou cruzamentos de tabelas. Converte linguagem natural em SQL, valida via
+  Evaluator-Optimizer e executa read-only (max 500 linhas, 104 tabelas ativas).
+  Nao usar para consultar status de pedido especifico (usar gerindo-expedicao),
+  rastrear documentos Odoo (usar rastreando-odoo), exportar dados como Excel
+  (usar exportando-arquivos apos a consulta), ou diagnostico de saude do banco
+  (usar diagnosticando-banco).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

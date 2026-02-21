@@ -1,13 +1,12 @@
 ---
 name: resolvendo-entidades
-description: |
-  Resolve entidades do usuario para identificadores do sistema.
-
-  USAR SEMPRE ANTES de skills que aceitam:
-  - cliente, cnpj, grupo → resolver_grupo.py ou resolver_cliente.py
-  - produto, cod_produto → resolver_produto.py
-  - pedido, num_pedido → resolver_pedido.py
-  - cidade, uf → resolver_cidade.py
+description: >-
+  Esta skill deve ser usada SEMPRE ANTES de invocar skills que aceitam
+  parametro de cliente, produto, pedido ou cidade quando o usuario fornece
+  nome generico em vez de identificador exato. Resolve "Atacadao" para CNPJs,
+  "palmito" para cod_produto, "VCD123" para num_pedido, "Manaus" para
+  codigo IBGE e UF. Nao usar quando o usuario fornece identificador exato
+  (CNPJ completo, cod_produto numerico, num_pedido com prefixo VCD/VFB).
 
   NAO USAR quando usuario fornece ID exato (CNPJ completo, cod_produto, num_pedido).
 allowed-tools: Read, Bash, Glob, Grep

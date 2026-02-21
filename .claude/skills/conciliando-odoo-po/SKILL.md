@@ -1,13 +1,13 @@
 ---
 name: conciliando-odoo-po
-description: |
-  EXECUTA operacoes de conciliacao de Pedidos de Compra (PO) com DFe no Odoo: split, consolidacao, criacao de PO Conciliador, ajuste de saldos.
-
-  USAR QUANDO:
-  - Executar consolidacao de POs: "consolide os POs da NF 12345", "execute split do pedido"
-  - Criar PO Conciliador: "crie PO conciliador", "duplique pedido de compra"
-  - Ajustar saldo de PO: "reduza quantidade do PO", "ajuste saldo"
-  - Reverter consolidacao: "reverta consolidacao", "desfaca split"
+description: >-
+  Esta skill deve ser usada quando o usuario precisa "consolide os POs da NF",
+  "execute split do pedido", "crie PO conciliador", "reduza quantidade do PO",
+  "reverta consolidacao", ou executar operacoes de Fase 3 do recebimento
+  (split, consolidacao, ajuste de saldos de PO com DFe no Odoo).
+  Nao usar para match NF x PO na Fase 2 (usar validacao-nf-po),
+  rastrear documento individual (usar rastreando-odoo), ou operacoes
+  financeiras como pagamentos (usar executando-odoo-financeiro).
   - Depurar erro em consolidacao: "erro ao consolidar", "PO nao criado"
   - Entender fluxo split/consolidacao: "como funciona o split?", "o que e PO Conciliador?"
 

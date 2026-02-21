@@ -1,6 +1,13 @@
 ---
 name: integracao-odoo
-description: "Cria e modifica integracoes com Odoo seguindo processo de 16 etapas. Cobre lancamento de CTes, despesas extras e documentos fiscais. Usar para IMPLEMENTAR novos fluxos de lancamento ou MODIFICAR existentes. Para CONSULTAS usar rastreando-odoo."
+description: >-
+  Esta skill deve ser usada quando o usuario precisa "criar novo service de
+  integracao", "implementar lancamento de CTe no Odoo", "modificar fluxo de
+  despesas extras", ou desenvolver novas integracoes seguindo o processo de
+  16 etapas. Cobre services, mappers, jobs, Circuit Breaker e auditoria.
+  Nao usar para consultar ou rastrear documentos existentes (usar rastreando-odoo),
+  operar financeiro como pagamentos ou extratos (usar executando-odoo-financeiro),
+  ou explorar modelos desconhecidos (usar descobrindo-odoo-estrutura).
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

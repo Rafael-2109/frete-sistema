@@ -1,6 +1,12 @@
 ---
 name: frontend-design
-description: Cria interfaces frontend de alta qualidade com Flask/Jinja2. Gera componentes web, paginas, dashboards e aplicacoes com design profissional, suporte obrigatorio light/dark mode e estetica nao-generica. Usar quando precisar construir telas, artefatos visuais ou posters.
+description: >-
+  Esta skill deve ser usada quando o usuario precisa "criar tela de...",
+  "montar dashboard", "componente web", "interface com Flask/Jinja2", ou
+  construir artefatos visuais com design profissional. Gera paginas com
+  suporte obrigatorio light/dark mode e estetica nao-generica.
+  Nao usar para modificar CSS existente sem criar tela (editar diretamente),
+  criar skill (usar skill_creator), ou gerar PRD (usar prd-generator).
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

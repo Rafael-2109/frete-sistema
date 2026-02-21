@@ -1,13 +1,13 @@
 ---
 name: cotando-frete
-description: |
-  Consulta precos de frete por cidade, calcula cotacoes detalhadas e explica logica de calculo.
-
-  USAR QUANDO:
-  - Precos/tabelas: "qual preco para Manaus?", "tabelas que atendem Campinas"
-  - Cotacao: "quanto sai 5000kg R$50mil para AM?", "frete para SP 3 toneladas"
-  - Explicacao: "como funciona o calculo de frete?", "o que e GRIS?"
-  - Pedidos: "frete do pedido VCD123", "recalcular frete da separacao"
+description: >-
+  Esta skill deve ser usada quando o usuario pergunta "qual preco para Manaus?",
+  "quanto sai 5000kg para AM?", "frete para SP 3 toneladas", "como funciona
+  o calculo de frete?", "frete do pedido VCD123", "qual transportadora mais
+  barata para RJ?", ou precisa de cotacao, tabelas de preco e lead times.
+  Nao usar para consulta de documentacao SSW sobre frete CarVia (usar
+  acessando-ssw), monitorar entrega (usar monitorando-entregas), ou conceito
+  de frete real vs teorico (ler FRETE_REAL_VS_TEORICO.md via Read).
   - Comparacao: "qual transportadora mais barata para RJ?"
   - Lead time: "prazo de entrega para Manaus?" (lead_time vem nos vinculos)
 

@@ -1,13 +1,13 @@
 ---
 name: recebimento-fisico-odoo
-description: |
-  Consulta e opera o modulo de Recebimento Fisico (Fase 4): preenchimento de lotes, quantidades e quality checks com processamento assincrono no Odoo via Redis Queue.
-
-  USAR QUANDO:
-  - Debugar recebimento fisico: "erro ao validar picking", "lote nao criou", "quality check falhou"
-  - Modificar logica do worker: "alterar passos do processamento", "adicionar etapa"
-  - Consultar status de recebimento: "picking nao foi para done", "status pendente"
-  - Extender funcionalidade: "adicionar campo", "novo tipo de check", "nova validacao"
+description: >-
+  Esta skill deve ser usada quando o usuario precisa debugar ou operar o
+  Recebimento Fisico (Fase 4): "erro ao validar picking", "lote nao criou",
+  "quality check falhou", "picking nao foi para done", ou precisa modificar
+  logica do worker de processamento assincrono via Redis Queue.
+  Nao usar para match NF x PO na Fase 2 (usar validacao-nf-po), consolidacao
+  de PO na Fase 3 (usar conciliando-odoo-po), ou rastrear picking especifico
+  (usar rastreando-odoo).
   - Entender fluxo: "como funciona o recebimento?", "quais passos o worker executa?"
   - Problema com lotes: "lote duplicado", "quantidade errada", "move.line nao criou"
 

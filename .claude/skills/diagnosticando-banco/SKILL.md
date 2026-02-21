@@ -1,13 +1,12 @@
 ---
 name: diagnosticando-banco
-description: |
-  Executa diagnosticos de saude do banco PostgreSQL: indices nao usados, duplicados, queries lentas, cache hit rate, conexoes, bloat, vacuum e sequences.
-
-  USAR QUANDO:
-  - Saude do banco: "como esta o banco?", "saude do postgres", "health check"
-  - Indices: "indices nao usados", "indices duplicados", "bloat de indice"
-  - Performance: "queries lentas", "top queries", "o que esta lento?"
-  - Cache: "cache hit rate", "buffer cache", "shared_buffers"
+description: >-
+  Esta skill deve ser usada quando o usuario pergunta "como esta o banco?",
+  "indices nao usados", "queries lentas", "cache hit rate", "conexoes ativas",
+  "vacuum", "bloat", ou precisa de diagnostico de saude do PostgreSQL.
+  Nao usar para consultas analiticas de dados de negocio (usar consultando-sql),
+  logs do servidor (usar mcp__render__consultar_logs), ou performance da
+  aplicacao web (usar mcp__render__status_servicos).
   - Conexoes: "quantas conexoes?", "conexoes idle", "pool"
   - Vacuum: "precisa de vacuum?", "dead tuples", "tabelas inchadas"
   - Sequences: "sequences proximas do limite?", "risco de overflow INTEGER"

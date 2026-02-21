@@ -1,13 +1,13 @@
 ---
 name: descobrindo-odoo-estrutura
-description: |
-  Descobre campos e estrutura de qualquer modelo do Odoo. ULTIMO RECURSO — use apenas quando nenhuma skill Odoo especializada cobre o modelo.
-
-  USAR QUANDO:
-  - Modelo desconhecido: "quais campos tem stock.picking?", "estrutura do modelo X"
-  - Buscar campo: "qual campo guarda codigo de barras?", "campo de CNPJ no res.partner"
-  - Inspecionar registro: "mostra todos os campos do registro 12345", "valor do campo X"
-  - Consulta generica: "busque parceiros com CNPJ 93209765", "registros do modelo Y com filtro Z"
+description: >-
+  Esta skill deve ser usada como ULTIMO RECURSO quando nenhuma skill Odoo
+  especializada cobre o modelo: "quais campos tem stock.picking?",
+  "campo de CNPJ no res.partner", "mostra todos os campos do registro 12345",
+  ou precisa explorar estrutura de modelo Odoo desconhecido.
+  Nao usar para rastrear documentos (usar rastreando-odoo), criar integracoes
+  (usar integracao-odoo), operar financeiro (usar executando-odoo-financeiro),
+  ou IDs fixos ja documentados (ler IDS_FIXOS.md via Read).
 
   NAO USAR QUANDO:
   - Rastrear fluxo de NF/PO/SO → usar **rastreando-odoo**

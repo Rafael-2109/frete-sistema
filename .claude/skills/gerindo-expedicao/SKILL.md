@@ -1,13 +1,13 @@
 ---
 name: gerindo-expedicao
-description: |
-  Consulta pedidos em carteira, estoque, disponibilidade e cria separacoes.
-
-  USAR QUANDO (ANTES de faturar):
-  - Pedidos: "tem pedido do Atacadao?", "pedido VCD123 esta em separacao?"
-  - Estoque: "quanto tem de palmito?", "chegou cogumelo?"
-  - Disponibilidade: "quando VCD123 fica disponivel?", "o que vai dar falta?"
-  - Lead time: "se embarcar amanha, quando chega?"
+description: >-
+  Esta skill deve ser usada quando o usuario pergunta sobre pedidos ANTES do
+  faturamento: "tem pedido do Atacadao?", "pedido VCD123 esta em separacao?",
+  "quanto tem de palmito?", "quando VCD123 fica disponivel?", "crie separacao
+  do VCD123 pra amanha", ou qualquer consulta de carteira, estoque e separacao.
+  Nao usar para pedidos ja faturados (usar monitorando-entregas), rastrear NF
+  no Odoo (usar rastreando-odoo), ou analise P1-P7 completa da carteira (usar
+  subagente analista-carteira).
   - Criar separacao: "crie separacao do VCD123 pra amanha"
 
   NAO USAR QUANDO (APOS faturar):

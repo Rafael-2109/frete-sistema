@@ -1,13 +1,13 @@
 ---
 name: memoria-usuario
-description: |
-  Gerencia memoria persistente do usuario. Salva, recupera e atualiza preferencias, fatos aprendidos e contexto entre sessoes.
-
-  USAR QUANDO:
-  - Salvar preferencia: "lembre que prefiro respostas diretas", "salva essa informacao"
-  - Consultar memorias: "o que voce sabe sobre mim?", "quais minhas preferencias?"
-  - Apagar memorias: "esqueca minhas preferencias", "limpa minhas memorias"
-  - Proativamente: ao detectar preferencia, fato ou padrao novo do usuario
+description: >-
+  Esta skill deve ser usada quando o usuario pede "lembre que...",
+  "salva essa informacao", "o que voce sabe sobre mim?", "esqueca minhas
+  preferencias", ou quando o agente detecta preferencia, fato ou padrao
+  novo do usuario que deve ser persistido entre sessoes.
+  Nao usar para buscar em sessoes anteriores (usar mcp__sessions__search_sessions),
+  salvar dados de negocio no banco (usar SQL), ou buscar contexto da conversa
+  atual (usar historico recente do SDK).
 
   NAO USAR QUANDO:
   - Historico de conversas -> ja e salvo automaticamente

@@ -150,6 +150,26 @@ Pendente de entrega: R$ [...]
 
 ---
 
+## LIMITACOES CONHECIDAS
+
+### Eixo Odoo Fiscal NAO Coberto
+
+Este subagente **NAO orquestra** a skill `rastreando-odoo`. A visao 360 cobre:
+- Carteira e separacao (gerindo-expedicao)
+- Faturamento local (consultando-sql)
+- Entregas e canhotos (monitorando-entregas)
+- Frete e cotacao (cotando-frete)
+
+**NAO cobre** o audit trail fiscal no Odoo:
+- NF de compra, PO, picking Odoo
+- Pagamentos, titulos, conciliacoes bancarias
+- Notas de credito e estornos
+
+**Instrucao ao usuario**: Se o usuario solicitar visao 360 incluindo fluxo fiscal Odoo, informar:
+> "O raio-x cobre carteira, faturamento, entregas e frete. Para o audit trail fiscal no Odoo (NF de compra, PO, pagamentos, conciliacoes), delegue ao subagente **especialista-odoo** ou use a skill **rastreando-odoo** diretamente."
+
+---
+
 ## PROTOCOLO DE CONFIABILIDADE (OBRIGATORIO)
 
 > Ref: `.claude/references/SUBAGENT_RELIABILITY.md`

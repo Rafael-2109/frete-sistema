@@ -1,13 +1,13 @@
 ---
 name: monitorando-entregas
-description: |
-  Consulta status de entregas, datas de embarque/faturamento, canhotos e devolucoes.
-
-  USAR QUANDO (NFs JA FATURADAS):
-  - Status: "NF 12345 foi entregue?", "status da entrega do Atacadao"
-  - Datas de embarque: "que dia saiu?", "que dia embarcou?", "quando expediu?"
-  - Datas de faturamento: "quando faturou?", "data da NF"
-  - Datas de entrega: "quando chegou?", "foi entregue quando?"
+description: >-
+  Esta skill deve ser usada quando o usuario pergunta sobre entregas ja
+  faturadas: "NF 12345 foi entregue?", "status da entrega do Atacadao",
+  "que dia embarcou?", "quando faturou?", "tem canhoto?", "houve devolucao?",
+  ou precisa de datas de embarque, faturamento, entrega e canhotos.
+  Nao usar para pedidos ainda nao faturados (usar gerindo-expedicao),
+  rastrear NF no Odoo (usar rastreando-odoo), ou visao 360 completa
+  do pedido (usar subagente raio-x-pedido).
   - Canhoto: "tem canhoto da NF?", "canhotos pendentes"
   - Devolucoes: "houve devolucao?", "NFs devolvidas"
   - Pendencias: "entregas pendentes", "NFs no CD", "entregas com problema"

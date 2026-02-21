@@ -1,13 +1,14 @@
 ---
 name: operando-ssw
-description: |
-  Executa operacoes de escrita no SSW via Playwright. Cadastra unidades (401), cidades atendidas (402), fornecedores (478), transportadoras (485) e comissoes (408). Cota frete (002). Requer --dry-run na primeira execucao. Usa ssw_defaults.json para valores padrao CarVia.
-
-  USAR QUANDO:
-  - Cadastrar unidade: "cadastre unidade CGR no SSW", "criar unidade parceira"
-  - Cadastrar cidades: "importar cidades da rota CGR", "adicionar cidades atendidas"
-  - Cadastrar fornecedor: "cadastrar CNPJ como fornecedor no SSW"
-  - Cadastrar transportadora: "registrar transportadora no SSW"
+description: >-
+  Esta skill deve ser usada quando o usuario precisa executar operacoes de
+  escrita no SSW: "cadastre unidade CGR", "importar cidades da rota",
+  "cadastrar CNPJ como fornecedor", "registrar transportadora", "criar
+  comissao", ou cotar frete via opcao 002. Requer --dry-run na primeira
+  execucao e confirmacao do usuario antes da execucao real.
+  Nao usar para consultar documentacao SSW (usar acessando-ssw), cotacao de
+  frete interna Nacom (usar cotando-frete), ou navegar no SSW sem operacao
+  especifica (usar browser tools diretamente).
   - Criar comissao: "vincular unidade a transportadora", "criar comissao 408"
   - Gerar CSVs comissao por cidade: "gerar CSV 408 por cidade", "importar precos por cidade"
   - Importar CSVs comissao por cidade: "importar comissao por cidade no SSW", "importar CSV 408"

@@ -1,12 +1,13 @@
 ---
 name: visao-produto
-description: |
-  Visao 360 de produto - agrega dados de cadastro, estoque, custo, faturamento, carteira e producao em uma consulta unificada.
-
-  USAR QUANDO:
-  - Resumo completo de produto: "tudo sobre palmito", "visao 360 do produto X"
-  - Producao vs realizado: "cumpriram a programacao?", "programado vs produzido"
-  - Dados cross-domain de produto: "cadastro, estoque e demanda do produto X"
+description: >-
+  Esta skill deve ser usada quando o usuario pede "tudo sobre palmito",
+  "visao 360 do produto X", "cumpriram a programacao?", "programado vs
+  produzido", ou precisa de dados cross-domain de produto (cadastro, estoque,
+  custo, faturamento, carteira e producao em consulta unificada).
+  Nao usar para apenas estoque sem visao completa (usar gerindo-expedicao),
+  apenas cotacao de frete (usar cotando-frete), ou consultas analiticas
+  agregadas de varios produtos (usar consultando-sql).
 
   NAO USAR QUANDO:
   - Apenas estoque sem visao completa -> usar **gerindo-expedicao**

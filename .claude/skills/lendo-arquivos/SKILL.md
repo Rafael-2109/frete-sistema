@@ -1,12 +1,13 @@
 ---
 name: lendo-arquivos
-description: |
-  Le arquivos Excel (.xlsx, .xls) e CSV enviados pelo usuario. Retorna conteudo como JSON para analise.
-
-  USAR QUANDO:
-  - Usuario anexou arquivo: "analise essa planilha", "o que tem nesse Excel?"
-  - Importar dados: "importa os dados desse CSV", "processa esse arquivo"
-  - Analisar upload: "confere os valores dessa planilha", "quantas linhas tem?"
+description: >-
+  Esta skill deve ser usada quando o usuario envia arquivo Excel ou CSV e
+  pede "analise essa planilha", "o que tem nesse Excel?", "importa os dados
+  desse CSV", "confere os valores dessa planilha", ou precisa processar
+  arquivo enviado. Retorna conteudo como JSON para analise.
+  Nao usar para criar ou exportar arquivo (usar exportando-arquivos),
+  ler arquivo de codigo ou texto (usar Read diretamente), ou processar
+  dados sem arquivo de entrada (usar consultando-sql).
 
   NAO USAR QUANDO:
   - CRIAR/exportar arquivo para download → usar **exportando-arquivos**

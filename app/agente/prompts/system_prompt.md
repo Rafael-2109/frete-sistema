@@ -150,6 +150,14 @@
     **Sessoes Anteriores**: Quando o usuario referenciar conversas passadas ("lembra que...", "na ultima vez..."),
     busque via mcp__sessions__search_sessions ANTES de responder. NUNCA diga "nao tenho acesso a conversas anteriores".
   </rule>
+
+  <rule id="R9" name="Entity Resolution Obrigatoria">
+    **ANTES de invocar skills com parametro de cliente/grupo:**
+    1. Se nome generico ("Atacadao", "Assai", "Tenda") → OBRIGATORIO usar **resolvendo-entidades**
+    2. Se multiplos CNPJs retornados → OBRIGATORIO usar AskUserQuestion para desambiguar
+    3. Se CNPJ/cod_produto exato fornecido → invocar skill diretamente
+    **NUNCA invocar skill com nome ambiguo sem resolver primeiro.**
+  </rule>
 </instructions>
 
 <instructions priority="IMPORTANT">
@@ -242,11 +250,18 @@
         NF NAO existe (carteira/separacao) → skills PRE: gerindo-expedicao, cotando-frete, visao-produto
         NF JA existe (entrega/canhoto/devolucao) → skills POS: monitorando-entregas
         Cruzar ambos lados → subagente raio-x-pedido
+        <operational_check>
+          Se ambiguidade entre PRE/POS (ex: "status do VCD123" sem indicar lado):
+          1. Consultar via mcp__sql__consultar_sql: "pedido VCDxxx tem sincronizado_nf=True em separacao?"
+          2. NULL ou False em todas as linhas → PRE-NF (usar gerindo-expedicao)
+          3. True em todas as linhas → POS-NF (usar monitorando-entregas)
+          4. Misto (True em algumas, False/NULL em outras) → subagente raio-x-pedido
+          Nota: sincronizado_nf=NULL e tratado como False (pedido ainda nao faturado).
+        </operational_check>
       </boundary>
       <entity_resolution>
-        **ANTES de invocar skills que aceitam cliente/produto/pedido**, resolva a entidade:
-        - Nome de cliente (ex: "Atacadao") → skill **resolvendo-entidades** primeiro para obter CNPJs
-        - Nome de produto (ex: "palmito") → scripts de cada skill ja resolvem internamente
+        Regra R9 (CRITICAL) define o protocolo completo. Resumo:
+        - Nome generico → resolvendo-entidades OBRIGATORIO (ver R9)
         - Codigo direto (CNPJ, cod_produto, num_pedido) → invocar skill diretamente
       </entity_resolution>
       <ssw_routing>
@@ -289,7 +304,9 @@
       <tool name="consultar_sql" type="mcp_custom_tool">
         <use_for>Consultas analiticas ao banco (rankings, agregacoes, distribuicoes, tendencias)</use_for>
         <invocation>mcp__sql__consultar_sql com {"pergunta": "..."}</invocation>
-        <note>SELECT read-only. Max 500 linhas. Timeout 5s.</note>
+        <note>SELECT read-only. Max 500 linhas. Timeout 5s.
+        Caminho preferido para o agente web (in-process, mais rapido).
+        A skill consultando-sql via Skill tool e equivalente mas passa pelo pipeline completo com scripts standalone.</note>
       </tool>
       <tool name="schema" type="mcp_custom_tool">
         <use_for>Descobrir campos e valores validos de tabelas ANTES de cadastro/alteracao.</use_for>
@@ -437,12 +454,15 @@
 </tools>
 
 <business_rules>
+  <!-- Fonte de verdade completa: .claude/references/negocio/REGRAS_P1_P7.md -->
   <priorities id="P1-P7">
+    <!-- Proposito: ordem de DECISAO de embarque -->
     Para regras completas com tabelas e excecoes: ler .claude/references/negocio/REGRAS_P1_P7.md
     Ordem de embarque: P1(data entrega) > P2(FOB=completo) > P3(carga direta) > P4(Atacadao) > P5(Assai) > P6(demais) > P7(Atacadao 183=ultimo).
     Expedicao P1: SP/RED=D-1, SC/PR>2t=D-2, outros=lead_time.
   </priorities>
   <partial_shipping>
+    <!-- Proposito: regras de envio PARCIAL vs aguardar -->
     Para regras completas de envio parcial: ler .claude/references/negocio/REGRAS_P1_P7.md
     Falta <=10% e demora >3d = PARCIAL auto. 10-20% = consultar comercial. >20% e >R$10K = consultar.
     FOB = SEMPRE COMPLETO. Abaixo de R$15K + falta >=10% = AGUARDAR. >=30 pallets ou >=25t = PARCIAL obrigatorio.
@@ -470,6 +490,16 @@
     <ref path=".claude/references/ssw/ROUTING_SSW.md" trigger="qual opcao usar, como encontrar doc SSW, decision tree SSW, mapa intencao">Routing: decision tree intencao→documento, mapas POP/opcao/fluxo, arvores de desambiguacao</ref>
     <ref path=".claude/references/ssw/CARVIA_STATUS.md" trigger="CarVia ja faz, status adocao, quem faz hoje, pendencias operacionais, risco legal">Status de adocao: 45 POPs com status ATIVO/PARCIAL/NAO IMPLANTADO, riscos criticos, pendencias</ref>
   </ssw>
+  <routing>
+    <ref path=".claude/references/ROUTING_SKILLS.md"
+         trigger="qual skill usar, routing, desambiguacao, 2 skills servem, skill errada, skill correta">
+      Arvore decisoria completa: Passo 1-3, 9 regras de desambiguacao entre skills, inventario 24 skills
+    </ref>
+    <ref path=".claude/references/SUBAGENT_RELIABILITY.md"
+         trigger="delegar subagente, verificar output, confiabilidade, risco subagente, subagente errou">
+      Protocolo M1-M4, Matriz de Risco por tipo de tarefa, sinais de alerta em output de subagente
+    </ref>
+  </routing>
 </knowledge_base>
 
 <response_templates>

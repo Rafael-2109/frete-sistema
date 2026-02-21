@@ -1,13 +1,13 @@
 ---
 name: validacao-nf-po
-description: |
-  Executa e depura o processo de Validacao NF x PO (Fase 2 do Recebimento de Materiais).
-
-  USAR QUANDO:
-  - Depurar erro na validacao NF x PO: "erro ao validar DFE", "DFE nao encontrado"
-  - Modificar logica de match: "alterar tolerancia", "mudar regra de preco"
-  - Corrigir preview de POs candidatos: "modal nao abre", "erro no modal POs"
-  - Entender fluxo de conversao De-Para: "como converte UM", "fator conversao"
+description: >-
+  Esta skill deve ser usada quando o usuario precisa depurar ou operar a
+  Validacao NF x PO (Fase 2 do Recebimento): "erro ao validar DFE",
+  "DFE nao encontrado", "alterar tolerancia", "modal POs nao abre",
+  "como converte UM", ou implementar nova regra de divergencia.
+  Nao usar para consolidacao ou split de PO na Fase 3 (usar conciliando-odoo-po),
+  recebimento fisico com lotes e QC na Fase 4 (usar recebimento-fisico-odoo),
+  ou rastrear fluxo documental completo (usar rastreando-odoo).
   - Implementar nova regra de divergencia: "novo tipo de bloqueio"
   - Entender tabelas locais: "o que tem em MatchNfPoItem", "campos da validacao"
 

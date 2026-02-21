@@ -1,13 +1,13 @@
 ---
 name: exportando-arquivos
-description: |
-  Gera arquivos Excel, CSV ou JSON para download pelo usuario. SEMPRE use esta skill em vez de Write para criar arquivos de download.
-
-  USAR QUANDO:
-  - Exportar dados: "exporte os pedidos para Excel", "gere planilha dos 10 maiores"
-  - Criar relatorio: "gere relatorio de entregas", "relatorio mensal em CSV"
-  - Baixar informacoes: "quero baixar esses dados", "me manda em Excel"
-  - Exportar imagem: "exporte o grafico", "salve screenshot para download"
+description: >-
+  Esta skill deve ser usada quando o usuario pede "exporte para Excel",
+  "gere planilha", "relatorio em CSV", "quero baixar esses dados",
+  "salve screenshot para download", ou precisa gerar arquivos para download.
+  SEMPRE usar esta skill em vez de Write para criar arquivos de download.
+  Nao usar para ler arquivos enviados pelo usuario (usar lendo-arquivos),
+  consultar dados sem exportar (usar consultando-sql), ou exportar razao
+  geral do Odoo (usar razao-geral-odoo que ja gera Excel).
 
   NAO USAR QUANDO:
   - LER arquivo enviado pelo usuario → usar **lendo-arquivos**

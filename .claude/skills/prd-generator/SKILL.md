@@ -1,13 +1,13 @@
 ---
 name: prd-generator
-description: |
-  Gera PRD/Spec para o Ralph Loop atraves de perguntas iterativas.
-
-  USAR QUANDO:
-  - Criar especificacao: "cria PRD", "cria spec", "documenta feature"
-  - Estruturar requisitos: "preciso estruturar requisitos antes de implementar"
-  - Preparar para Ralph Loop: "quero rodar Ralph Loop mas nao tenho spec"
-  - Documentar feature existente: "documenta como funciona o modulo X"
+description: >-
+  Esta skill deve ser usada quando o usuario precisa "cria PRD", "cria spec",
+  "documenta feature", "estruturar requisitos antes de implementar", ou
+  preparar especificacao para o Ralph Loop. Gera PRD/Spec via perguntas
+  iterativas.
+  Nao usar para implementar diretamente sem spec (usar ralph-wiggum),
+  consultas de dados (usar consultando-sql), ou criar skill
+  (usar skill_creator).
 
   NAO USAR QUANDO:
   - Implementar diretamente sem spec -> usar **ralph-wiggum**

@@ -1,13 +1,13 @@
 ---
 name: executando-odoo-financeiro
-description: |
-  EXECUTA operacoes financeiras no Odoo: criar pagamentos, reconciliar extratos, baixar titulos.
-
-  USAR QUANDO:
-  - Criar pagamento no Odoo: "crie pagamento para NF 12345", "baixe titulo no Odoo"
-  - Reconciliar extrato bancario: "reconcilie extrato 31615", "vincule pagamento ao extrato"
-  - Pagamento COM juros: "crie pagamento com juros", "baixe com write-off"
-  - Corrigir extrato nao reconciliado: "extrato is_reconciled=False"
+description: >-
+  Esta skill deve ser usada quando o usuario precisa EXECUTAR operacoes
+  financeiras no Odoo: "crie pagamento para NF 12345", "reconcilie extrato",
+  "baixe titulo no Odoo", "pagamento com juros", "extrato is_reconciled=False",
+  ou criar comprovantes de pagamento e lancamento.
+  Nao usar para rastrear documento ou auditoria (usar rastreando-odoo),
+  exportar razao geral (usar razao-geral-odoo), ou consultar saldo ou titulo
+  sem executar operacao (usar consultando-sql).
   - Baixar titulo a receber: "marque como pago no Odoo"
 
   NAO USAR QUANDO:

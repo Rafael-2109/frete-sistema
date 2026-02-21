@@ -1,13 +1,12 @@
 ---
 name: acessando-ssw
-description: |
-  Consulta documentacao SSW, resolve opcoes por numero/nome, guia processos CarVia e auxilia navegacao no sistema.
-
-  USAR QUANDO:
-  - Perguntas sobre SSW: "como fazer X no SSW?", "o que e opcao NNN?", "passo a passo para..."
-  - Processos CarVia: "a CarVia ja faz manifesto?", "quem faz faturamento?"
-  - Opcoes SSW: "para que serve opcao 436?", "qual opcao usar para contas a pagar?"
-  - Fluxos end-to-end: "fluxo completo de faturamento", "como funciona transferencia?"
+description: >-
+  Esta skill deve ser usada quando o usuario pergunta "como fazer X no SSW?",
+  "o que e opcao NNN?", "passo a passo para...", menciona "CarVia", "CTRC",
+  "MDF-e", "POP", ou precisa de documentacao e processos do sistema SSW.
+  Nao usar para cotacao de frete interna Nacom (usar cotando-frete), status
+  de entrega no sistema local (usar monitorando-entregas), ou operacoes de
+  escrita no SSW como cadastros (usar operando-ssw).
   - Navegacao SSW: "acesse o SSW e preencha...", "navegue ate opcao 004"
   - Regras legais: "sequencia obrigatoria carga direta", "preciso de MDF-e?"
 
