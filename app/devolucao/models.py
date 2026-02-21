@@ -729,7 +729,7 @@ class OcorrenciaDevolucaoCategoria(db.Model):
         db.UniqueConstraint('ocorrencia_devolucao_id', 'categoria_id', name='uq_odc_ocorrencia_categoria'),
     )
 
-    categoria = db.relationship('OcorrenciaCategoria')
+    categoria = db.relationship('OcorrenciaCategoria', overlaps='categorias,ocorrencias')
 
 
 class OcorrenciaDevolucaoSubcategoria(db.Model):
@@ -754,7 +754,7 @@ class OcorrenciaDevolucaoSubcategoria(db.Model):
         db.UniqueConstraint('ocorrencia_devolucao_id', 'subcategoria_id', name='uq_ods_ocorrencia_subcategoria'),
     )
 
-    subcategoria = db.relationship('OcorrenciaSubcategoria')
+    subcategoria = db.relationship('OcorrenciaSubcategoria', overlaps='subcategorias,ocorrencias')
 
 
 # =============================================================================
@@ -957,13 +957,15 @@ class OcorrenciaDevolucao(db.Model):
         'OcorrenciaCategoria',
         secondary='ocorrencia_devolucao_categoria',
         backref=db.backref('ocorrencias', lazy='dynamic'),
-        lazy='selectin'
+        lazy='selectin',
+        overlaps='categoria'
     )
     subcategorias = db.relationship(
         'OcorrenciaSubcategoria',
         secondary='ocorrencia_devolucao_subcategoria',
         backref=db.backref('ocorrencias', lazy='dynamic'),
-        lazy='selectin'
+        lazy='selectin',
+        overlaps='subcategoria'
     )
 
     # Relacionamentos FK para lookup tables
