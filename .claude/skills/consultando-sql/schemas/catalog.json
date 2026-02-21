@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 108,
+  "total_tabelas": 115,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -664,12 +664,73 @@
       ]
     },
     {
+      "name": "ocorrencia_autorizado_por",
+      "description": "Tabela lookup de autorizadores de ocorrencia (CRUD via modal)",
+      "key_fields": [
+        "codigo",
+        "descricao",
+        "criado_por"
+      ]
+    },
+    {
+      "name": "ocorrencia_categoria",
+      "description": "Tabela lookup de categorias de ocorrencia (CRUD via modal)",
+      "key_fields": [
+        "codigo",
+        "descricao",
+        "criado_por"
+      ]
+    },
+    {
       "name": "ocorrencia_devolucao",
       "description": "Ocorrências/motivos de devolução.",
       "key_fields": [
         "nf_devolucao_id",
         "numero_ocorrencia",
         "destino"
+      ]
+    },
+    {
+      "name": "ocorrencia_devolucao_categoria",
+      "description": "Tabela de juncao N:M entre OcorrenciaDevolucao e OcorrenciaCategoria",
+      "key_fields": [
+        "ocorrencia_devolucao_id",
+        "categoria_id"
+      ]
+    },
+    {
+      "name": "ocorrencia_devolucao_subcategoria",
+      "description": "Tabela de juncao N:M entre OcorrenciaDevolucao e OcorrenciaSubcategoria",
+      "key_fields": [
+        "ocorrencia_devolucao_id",
+        "subcategoria_id"
+      ]
+    },
+    {
+      "name": "ocorrencia_origem",
+      "description": "Tabela lookup de origens de ocorrencia (CRUD via modal)",
+      "key_fields": [
+        "codigo",
+        "descricao",
+        "criado_por"
+      ]
+    },
+    {
+      "name": "ocorrencia_responsavel",
+      "description": "Tabela lookup de responsaveis de ocorrencia (CRUD via modal)",
+      "key_fields": [
+        "codigo",
+        "descricao",
+        "criado_por"
+      ]
+    },
+    {
+      "name": "ocorrencia_subcategoria",
+      "description": "Tabela lookup de subcategorias de ocorrencia (CRUD via modal)",
+      "key_fields": [
+        "codigo",
+        "descricao",
+        "criado_por"
       ]
     },
     {

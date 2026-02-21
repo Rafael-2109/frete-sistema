@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 173,
+  "total_relationships": 180,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -732,6 +732,48 @@
       "from_table": "ocorrencia_devolucao",
       "from_column": "transportadora_retorno_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao",
+      "from_column": "responsavel_id",
+      "to_table": "ocorrencia_responsavel",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao",
+      "from_column": "origem_id",
+      "to_table": "ocorrencia_origem",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao",
+      "from_column": "autorizado_por_id",
+      "to_table": "ocorrencia_autorizado_por",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao_categoria",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao_categoria",
+      "from_column": "categoria_id",
+      "to_table": "ocorrencia_categoria",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao_subcategoria",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao_subcategoria",
+      "from_column": "subcategoria_id",
+      "to_table": "ocorrencia_subcategoria",
       "to_column": "id"
     },
     {

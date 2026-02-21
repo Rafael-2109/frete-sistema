@@ -114,16 +114,16 @@
   ],
   "indices": [
     {
-      "name": "ix_registro_pedido_odoo_cnpj_cliente",
+      "name": "idx_registro_criado_em",
       "columns": [
-        "cnpj_cliente"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_registro_pedido_odoo_rede",
+      "name": "ix_registro_pedido_odoo_cnpj_cliente",
       "columns": [
-        "rede"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -132,6 +132,13 @@
       "columns": [
         "rede",
         "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_registro_pedido_odoo_rede",
+      "columns": [
+        "rede"
       ],
       "unique": false
     },
@@ -146,13 +153,6 @@
       "name": "idx_registro_status",
       "columns": [
         "status_odoo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_registro_criado_em",
-      "columns": [
-        "criado_em"
       ],
       "unique": false
     }

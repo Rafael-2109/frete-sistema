@@ -1,0 +1,48 @@
+{
+  "name": "ocorrencia_responsavel",
+  "description": "Tabela lookup de responsaveis de ocorrencia (CRUD via modal)",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "default": "migration"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

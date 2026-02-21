@@ -184,9 +184,9 @@
   ],
   "indices": [
     {
-      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
+      "name": "ix_validacao_nf_po_dfe_status",
       "columns": [
-        "cnpj_fornecedor"
+        "status"
       ],
       "unique": false
     },
@@ -198,23 +198,16 @@
       "unique": true
     },
     {
-      "name": "ix_validacao_nf_po_dfe_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
-      "columns": [
-        "odoo_po_vinculado_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_validacao_nf_po_dfe_cnpj_empresa_compradora",
       "columns": [
         "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_po_modificada_apos_validacao",
+      "columns": [
+        "po_modificada_apos_validacao"
       ],
       "unique": false
     },
@@ -226,9 +219,16 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_nf_po_dfe_po_modificada_apos_validacao",
+      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
       "columns": [
-        "po_modificada_apos_validacao"
+        "odoo_po_vinculado_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
       ],
       "unique": false
     }

@@ -1,0 +1,55 @@
+{
+  "name": "ocorrencia_devolucao_categoria",
+  "description": "Tabela de juncao N:M entre OcorrenciaDevolucao e OcorrenciaCategoria",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "ocorrencia_devolucao_id",
+      "type": "integer",
+      "description": "FK → ocorrencia_devolucao.id",
+      "nullable": false
+    },
+    {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "FK → ocorrencia_categoria.id",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "ocorrencia_devolucao_id",
+      "references": "ocorrencia_devolucao.id"
+    },
+    {
+      "column": "categoria_id",
+      "references": "ocorrencia_categoria.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "ocorrencia_devolucao_id",
+      "categoria_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_ocorrencia_devolucao_categoria_categoria_id",
+      "columns": [
+        "categoria_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_categoria_ocorrencia_devolucao_id",
+      "columns": [
+        "ocorrencia_devolucao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

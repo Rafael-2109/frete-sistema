@@ -94,6 +94,20 @@
   ],
   "indices": [
     {
+      "name": "ix_portal_sendas_planilha_modelo_unidade_destino",
+      "columns": [
+        "unidade_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
+      "columns": [
+        "codigo_pedido_cliente"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_planilha_sendas_busca",
       "columns": [
         "unidade_destino",
@@ -106,20 +120,6 @@
       "name": "ix_portal_sendas_planilha_modelo_codigo_produto_cliente",
       "columns": [
         "codigo_produto_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_portal_sendas_planilha_modelo_codigo_pedido_cliente",
-      "columns": [
-        "codigo_pedido_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_portal_sendas_planilha_modelo_unidade_destino",
-      "columns": [
-        "unidade_destino"
       ],
       "unique": false
     }
