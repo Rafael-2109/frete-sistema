@@ -59,6 +59,7 @@
 @import url('./modules/_carteira.css') layer(modules);
 @import url('./modules/_embarques.css') layer(modules);
 @import url('./modules/_pallet.css') layer(modules);
+@import url('./modules/_pallet-unified.css') layer(modules);
 @import url('./modules/_recebimento.css') layer(modules);
 @import url('./modules/_portal.css') layer(modules);
 @import url('./modules/_fretes.css') layer(modules);

@@ -1,0 +1,607 @@
+{% extends 'base.html' %}
+{% block title %}Gestao Unificada de Pallets{% endblock %}
+
+{% block content %}
+<div class="pu-page">
+
+  {# ================================================================== #}
+  {# HEADER                                                              #}
+  {# ================================================================== #}
+  <div class="pu-header">
+    <div class="pu-header__left">
+      <h1 class="pu-header__title">
+        <i class="fas fa-pallet"></i> Gestao Unificada de Pallets
+      </h1>
+      <span class="pu-header__subtitle">Visao consolidada de creditos, documentos e solucoes</span>
+    </div>
+    <div class="pu-header__actions">
+      <button class="btn btn-outline-primary btn-sm" id="btnSyncOdoo" title="Sincronizar NFs do Odoo">
+        <i class="fas fa-sync-alt"></i> Sync Odoo
+      </button>
+      <button class="btn btn-outline-info btn-sm" id="btnProcessarDfe" title="Processar devolucoes DFe">
+        <i class="fas fa-file-invoice"></i> Processar DFe
+      </button>
+      <button class="btn btn-outline-success btn-sm" id="btnVendaLote" title="Venda de pallets (selecione creditos na tabela)">
+        <i class="fas fa-shopping-cart"></i> Venda
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnExportar" title="Exportar XLSX">
+        <i class="fas fa-file-excel"></i> XLSX
+      </button>
+    </div>
+  </div>
+
+  {# ================================================================== #}
+  {# KPIs                                                                #}
+  {# ================================================================== #}
+  <div class="pu-kpis" id="kpisContainer">
+    <div class="pu-kpi pu-kpi--primary" data-kpi="em_terceiros">
+      <div class="pu-kpi__icon"><i class="fas fa-boxes"></i></div>
+      <div class="pu-kpi__body">
+        <div class="pu-kpi__value" id="kpiEmTerceiros">--</div>
+        <div class="pu-kpi__label">Em Terceiros</div>
+      </div>
+    </div>
+    <div class="pu-kpi pu-kpi--warning" data-kpi="saldo_pendente">
+      <div class="pu-kpi__icon"><i class="fas fa-balance-scale"></i></div>
+      <div class="pu-kpi__body">
+        <div class="pu-kpi__value" id="kpiSaldoPendente">--</div>
+        <div class="pu-kpi__label">Saldo Pendente</div>
+      </div>
+    </div>
+    <div class="pu-kpi pu-kpi--info" data-kpi="creditos_abertos">
+      <div class="pu-kpi__icon"><i class="fas fa-file-alt"></i></div>
+      <div class="pu-kpi__body">
+        <div class="pu-kpi__value" id="kpiCreditosAbertos">--</div>
+        <div class="pu-kpi__label">Creditos Abertos</div>
+      </div>
+    </div>
+    <div class="pu-kpi pu-kpi--danger" data-kpi="vencendo_7d">
+      <div class="pu-kpi__icon"><i class="fas fa-clock"></i></div>
+      <div class="pu-kpi__body">
+        <div class="pu-kpi__value" id="kpiVencendo7d">--</div>
+        <div class="pu-kpi__label">Vencendo &lt;7d</div>
+      </div>
+    </div>
+    <div class="pu-kpi pu-kpi--accent" data-kpi="sugestoes_pendentes">
+      <div class="pu-kpi__icon"><i class="fas fa-lightbulb"></i></div>
+      <div class="pu-kpi__body">
+        <div class="pu-kpi__value" id="kpiSugestoes">--</div>
+        <div class="pu-kpi__label">Sugestoes</div>
+      </div>
+    </div>
+    <div class="pu-kpi pu-kpi--secondary" data-kpi="docs_nao_recebidos">
+      <div class="pu-kpi__icon"><i class="fas fa-file-signature"></i></div>
+      <div class="pu-kpi__body">
+        <div class="pu-kpi__value" id="kpiDocsPendentes">--</div>
+        <div class="pu-kpi__label">Docs Pendentes</div>
+      </div>
+    </div>
+  </div>
+
+  {# ================================================================== #}
+  {# ALERTAS                                                             #}
+  {# ================================================================== #}
+  <div class="pu-alertas" id="alertasContainer" style="display:none;">
+    {# Populado via JS #}
+  </div>
+
+  {# ================================================================== #}
+  {# FILTROS                                                             #}
+  {# ================================================================== #}
+  <div class="pu-filtros">
+    <div class="pu-filtros__row">
+      <div class="pu-filtros__field pu-filtros__field--busca">
+        <input type="text" class="form-control form-control-sm" id="filtroBusca"
+               placeholder="Buscar NF, CNPJ ou nome..." autocomplete="off">
+      </div>
+      <div class="pu-filtros__field">
+        <select class="form-select form-select-sm" id="filtroStatusNf">
+          <option value="">Status NF</option>
+          <option value="ATIVA">Ativa</option>
+          <option value="RESOLVIDA">Resolvida</option>
+          <option value="CANCELADA">Cancelada</option>
+        </select>
+      </div>
+      <div class="pu-filtros__field">
+        <select class="form-select form-select-sm" id="filtroStatusCredito">
+          <option value="">Status Credito</option>
+          <option value="PENDENTE">Pendente</option>
+          <option value="PARCIAL">Parcial</option>
+          <option value="RESOLVIDO">Resolvido</option>
+        </select>
+      </div>
+      <div class="pu-filtros__field">
+        <select class="form-select form-select-sm" id="filtroEmpresa">
+          <option value="">Empresa</option>
+          <option value="CD">CD</option>
+          <option value="FB">FB</option>
+          <option value="SC">SC</option>
+        </select>
+      </div>
+      <div class="pu-filtros__field">
+        <select class="form-select form-select-sm" id="filtroTipo">
+          <option value="">Tipo</option>
+          <option value="TRANSPORTADORA">Transportadora</option>
+          <option value="CLIENTE">Cliente</option>
+        </select>
+      </div>
+      <div class="pu-filtros__field">
+        <input type="text" class="form-control form-control-sm" id="filtroCnpj"
+               placeholder="CNPJ/Nome responsavel">
+      </div>
+      <div class="pu-filtros__field">
+        <input type="date" class="form-control form-control-sm" id="filtroDataDe" title="Data de">
+      </div>
+      <div class="pu-filtros__field">
+        <input type="date" class="form-control form-control-sm" id="filtroDataAte" title="Data ate">
+      </div>
+      <div class="pu-filtros__field">
+        <select class="form-select form-select-sm" id="filtroUf">
+          <option value="">UF</option>
+          {% for uf in ufs %}
+          <option value="{{ uf }}">{{ uf }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="pu-filtros__field">
+        <select class="form-select form-select-sm" id="filtroCidade" disabled>
+          <option value="">Cidade</option>
+        </select>
+      </div>
+      <div class="pu-filtros__field pu-filtros__field--actions">
+        <button class="btn btn-sm btn-outline-secondary" id="btnLimparFiltros" title="Limpar filtros">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ================================================================== #}
+  {# ABAS                                                               #}
+  {# ================================================================== #}
+  <ul class="nav nav-tabs pu-tabs" id="tabsContainer">
+    <li class="nav-item">
+      <a class="nav-link active" href="#" data-aba="visao_geral">
+        Visao Geral <span class="badge bg-primary ms-1" id="tabCountVisao">0</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-aba="vencendo">
+        Vencendo <span class="badge bg-danger ms-1" id="tabCountVencendo">0</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-aba="sugestoes">
+        Sugestoes <span class="badge bg-info ms-1" id="tabCountSugestoes">0</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-aba="historico">
+        Historico <span class="badge bg-secondary ms-1" id="tabCountHistorico">0</span>
+      </a>
+    </li>
+  </ul>
+
+  {# ================================================================== #}
+  {# TABELA PRINCIPAL                                                    #}
+  {# ================================================================== #}
+  <div class="pu-table-container">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover pu-table" id="tabelaPrincipal">
+        <thead>
+          <tr>
+            <th class="pu-table__th--check"><input type="checkbox" id="checkAll" title="Selecionar todos"></th>
+            <th class="pu-table__th--sortable" data-sort="numero_nf">NF</th>
+            <th class="pu-table__th--sortable" data-sort="data_emissao">Emissao</th>
+            <th class="pu-table__th--sortable" data-sort="empresa">Emp</th>
+            <th>Destinatario</th>
+            <th>Tipo</th>
+            <th class="pu-table__th--sortable text-end" data-sort="quantidade">Qtd</th>
+            <th class="text-end">Saldo</th>
+            <th class="text-center">Pallets</th>
+            <th class="text-center">Pend. NF</th>
+            <th>Vcto</th>
+            <th class="text-center">Docs</th>
+            <th class="text-center">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tabelaBody">
+          <tr>
+            <td colspan="13" class="text-center py-4">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+              <span class="ms-2 text-muted">Carregando...</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {# Paginacao #}
+    <div class="pu-pagination" id="paginacaoContainer">
+      <div class="pu-pagination__info">
+        <span id="paginacaoInfo">--</span>
+      </div>
+      <nav>
+        <ul class="pagination pagination-sm mb-0" id="paginacaoNav"></ul>
+      </nav>
+    </div>
+  </div>
+
+  {# ================================================================== #}
+  {# OFFCANVAS - PAINEL LATERAL                                          #}
+  {# ================================================================== #}
+  <div class="offcanvas offcanvas-end pu-offcanvas" tabindex="-1" id="painelLateral"
+       aria-labelledby="painelLateralTitle" style="width: 520px;">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="painelLateralTitle">Detalhes da NF</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+    </div>
+    <div class="offcanvas-body" id="painelLateralBody">
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Carregando detalhes...</p>
+      </div>
+    </div>
+  </div>
+
+</div>{# /.pu-page #}
+
+{# ==================================================================== #}
+{# MODAIS                                                                #}
+{# ==================================================================== #}
+
+{# Modal: Registrar Baixa #}
+<div class="modal fade" id="modalBaixa" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-arrow-down"></i> Registrar Baixa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="baixaCreditoId">
+        <div class="mb-3">
+          <label class="form-label">Quantidade</label>
+          <input type="number" class="form-control" id="baixaQuantidade" min="1">
+          <div class="form-text">Saldo disponivel: <strong id="baixaSaldo">--</strong></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo</label>
+          <input type="text" class="form-control" id="baixaMotivo" placeholder="Ex: Pallet descartavel">
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="baixaConfirmado">
+          <label class="form-check-label" for="baixaConfirmado">Cliente confirmou a baixa</label>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Observacao (opcional)</label>
+          <textarea class="form-control" id="baixaObservacao" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnSalvarBaixa">Registrar Baixa</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Registrar Recebimento #}
+<div class="modal fade" id="modalRecebimento" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-hand-holding"></i> Registrar Recebimento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="recebCreditoId">
+        <div class="mb-3">
+          <label class="form-label">Quantidade</label>
+          <input type="number" class="form-control" id="recebQuantidade" min="1">
+          <div class="form-text">Saldo disponivel: <strong id="recebSaldo">--</strong></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Data do Recebimento</label>
+          <input type="date" class="form-control" id="recebData">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Local do Recebimento</label>
+          <input type="text" class="form-control" id="recebLocal" placeholder="Ex: CD Goya">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Observacao (opcional)</label>
+          <textarea class="form-control" id="recebObservacao" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success btn-sm" id="btnSalvarRecebimento">Registrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Registrar Venda (N:1) #}
+<div class="modal fade" id="modalVenda" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-shopping-cart"></i> Registrar Venda de Pallets</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2">
+          <i class="fas fa-info-circle"></i> Selecione creditos na tabela (checkbox) antes de abrir este modal.
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">NF de Venda</label>
+            <input type="text" class="form-control" id="vendaNf" placeholder="Numero da NF">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Data da Venda</label>
+            <input type="date" class="form-control" id="vendaData">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Valor Unitario (R$)</label>
+            <input type="number" class="form-control" id="vendaValor" step="0.01" value="35.00">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">CNPJ Comprador</label>
+            <input type="text" class="form-control" id="vendaCnpj">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Nome Comprador</label>
+            <input type="text" class="form-control" id="vendaNome">
+          </div>
+        </div>
+        <hr>
+        <h6>Creditos Selecionados</h6>
+        <div id="vendaCreditosLista" class="mb-3">
+          <p class="text-muted">Nenhum credito selecionado</p>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Observacao (opcional)</label>
+          <textarea class="form-control" id="vendaObservacao" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnSalvarVenda">Registrar Venda</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Registrar Substituicao #}
+<div class="modal fade" id="modalSubstituicao" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Substituicao de Responsabilidade</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="substOrigemId">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Credito Origem</label>
+            <input type="text" class="form-control" id="substOrigemInfo" readonly>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Quantidade</label>
+            <input type="number" class="form-control" id="substQuantidade" min="1">
+            <div class="form-text">Saldo disponivel: <strong id="substSaldo">--</strong></div>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Credito Destino (ID)</label>
+            <input type="number" class="form-control" id="substDestinoId" placeholder="ID do credito destino">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Motivo</label>
+            <input type="text" class="form-control" id="substMotivo">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Observacao (opcional)</label>
+            <textarea class="form-control" id="substObservacao" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning btn-sm" id="btnSalvarSubstituicao">Transferir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Registrar Documento #}
+<div class="modal fade" id="modalDocumento" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-file-alt"></i> Registrar Documento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="docCreditoId">
+        <div class="mb-3">
+          <label class="form-label">Tipo de Documento</label>
+          <select class="form-select" id="docTipo">
+            <option value="CANHOTO">Canhoto Assinado</option>
+            <option value="VALE_PALLET">Vale Pallet</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Quantidade</label>
+          <input type="number" class="form-control" id="docQuantidade" min="1">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Numero do Documento (opcional)</label>
+          <input type="text" class="form-control" id="docNumero">
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Data Emissao</label>
+            <input type="date" class="form-control" id="docEmissao">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Data Validade</label>
+            <input type="date" class="form-control" id="docValidade">
+          </div>
+        </div>
+        <div class="mb-3 mt-3">
+          <label class="form-label">Observacao (opcional)</label>
+          <textarea class="form-control" id="docObservacao" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnSalvarDocumento">Registrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Vincular Devolucao (1:N) #}
+<div class="modal fade" id="modalDevolucao" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-undo"></i> Vincular Devolucao</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label">NF Devolucao</label>
+            <input type="text" class="form-control" id="devolNf">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Data NF</label>
+            <input type="date" class="form-control" id="devolData">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Qtd Total</label>
+            <input type="number" class="form-control" id="devolQtdTotal" min="1">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">CNPJ Emitente</label>
+            <input type="text" class="form-control" id="devolCnpj">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Nome Emitente</label>
+            <input type="text" class="form-control" id="devolNome">
+          </div>
+        </div>
+        <hr>
+        <h6>Distribuicao por NF Remessa</h6>
+        <div id="devolVinculacoes" class="mb-3">
+          <p class="text-muted">Adicione NFs de remessa para distribuir a quantidade</p>
+        </div>
+        <div class="input-group input-group-sm mb-3">
+          <input type="number" class="form-control" id="devolAddNfId" placeholder="ID NF Remessa">
+          <input type="number" class="form-control" id="devolAddQtd" placeholder="Qtd">
+          <button class="btn btn-outline-primary" type="button" id="btnDevolAddVinc">
+            <i class="fas fa-plus"></i> Adicionar
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnSalvarDevolucao">Vincular</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Registrar Recusa #}
+<div class="modal fade" id="modalRecusa" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-ban"></i> Registrar Recusa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="recusaNfId">
+        <div class="mb-3">
+          <label class="form-label">Quantidade Recusada</label>
+          <input type="number" class="form-control" id="recusaQuantidade" min="1">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo da Recusa</label>
+          <textarea class="form-control" id="recusaMotivo" rows="3" required></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Observacao (opcional)</label>
+          <textarea class="form-control" id="recusaObservacao" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btnSalvarRecusa">Registrar Recusa</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Rejeitar Sugestao #}
+<div class="modal fade" id="modalRejeitar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-times-circle"></i> Rejeitar Sugestao</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rejeitarSolucaoId">
+        <div class="mb-3">
+          <label class="form-label">Motivo da Rejeicao</label>
+          <textarea class="form-control" id="rejeitarMotivo" rows="3" required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btnSalvarRejeicao">Rejeitar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Cancelar NF (acao destrutiva) #}
+<div class="modal fade" id="modalCancelarNf" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Cancelar NF de Remessa</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cancelarNfId">
+        <div class="alert alert-danger py-2">
+          <strong>Atencao:</strong> Esta acao nao pode ser desfeita.
+        </div>
+        <div class="mb-3">
+          <label class="form-label">NF a cancelar</label>
+          <input type="text" class="form-control" id="cancelarNfInfo" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo do Cancelamento</label>
+          <textarea class="form-control" id="cancelarMotivo" rows="3" required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btnConfirmarCancelamento">Confirmar Cancelamento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ 'js/pallet-unified.js'|asset_url }}"></script>
+{% endblock %}
