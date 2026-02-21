@@ -34,6 +34,27 @@ class ImportacaoFallbackService:
     Funciona como fallback quando a sincronização automática não importou.
     """
 
+    # Critérios de negócio compartilhados com sync normal (faturamento_service.py:1309-1319)
+    # Devem ser IDÊNTICOS aos usados na sincronização incremental
+    DOMAIN_TIPO_PEDIDO_FATURAMENTO = [
+        '|', '|', '|', '|',
+        ('l10n_br_tipo_pedido', '=', 'venda'),
+        ('l10n_br_tipo_pedido', '=', 'bonificacao'),
+        ('l10n_br_tipo_pedido', '=', 'industrializacao'),
+        ('l10n_br_tipo_pedido', '=', 'exportacao'),
+        ('l10n_br_tipo_pedido', '=', 'venda-industrializacao'),
+    ]
+
+    # Mesmo critério para sale.order (mesmos tipos de pedido)
+    DOMAIN_TIPO_PEDIDO_CARTEIRA = [
+        '|', '|', '|', '|',
+        ('l10n_br_tipo_pedido', '=', 'venda'),
+        ('l10n_br_tipo_pedido', '=', 'bonificacao'),
+        ('l10n_br_tipo_pedido', '=', 'industrializacao'),
+        ('l10n_br_tipo_pedido', '=', 'exportacao'),
+        ('l10n_br_tipo_pedido', '=', 'venda-industrializacao'),
+    ]
+
     def __init__(self):
         self.connection = get_odoo_connection()
         self.carteira_service = CarteiraService()
@@ -256,17 +277,12 @@ class ImportacaoFallbackService:
         Busca pedidos no Odoo criados em um período específico.
         """
         try:
-            # Domain com filtros de tipo de pedido
+            # Domain com filtros de tipo de pedido (constante compartilhada)
             domain = [
                 ('create_date', '>=', f'{data_inicio} 00:00:00'),
                 ('create_date', '<=', f'{data_fim} 23:59:59'),
                 ('state', 'in', ['draft', 'sent', 'sale']),
-                '|', '|', '|', '|',
-                ('l10n_br_tipo_pedido', '=', 'venda'),
-                ('l10n_br_tipo_pedido', '=', 'bonificacao'),
-                ('l10n_br_tipo_pedido', '=', 'industrializacao'),
-                ('l10n_br_tipo_pedido', '=', 'exportacao'),
-                ('l10n_br_tipo_pedido', '=', 'venda-industrializacao')
+                *self.DOMAIN_TIPO_PEDIDO_CARTEIRA,
             ]
 
             pedidos = self.connection.search_read(
@@ -321,9 +337,40 @@ class ImportacaoFallbackService:
                     'timestamp': agora_utc_naive()
                 }
 
-            logger.info(f"✅ NF {numero_nf} encontrada no Odoo. Iniciando importação...")
+            # Tratar NF cancelada (alinhado com sync normal: faturamento_service.py:756-761)
+            if nf_odoo.get('state') == 'cancel':
+                from app.faturamento.models import FaturamentoProduto
+                existe_local = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).first()
 
-            # Importar linhas da NF
+                if existe_local:
+                    logger.info(f"🚨 NF {numero_nf} cancelada no Odoo — processando cancelamento local")
+                    self.faturamento_service._processar_cancelamento_nf(numero_nf)
+                    db.session.commit()
+                    tempo_total = (datetime.now() - inicio).total_seconds()
+                    return {
+                        'sucesso': True,
+                        'mensagem': f'NF {numero_nf} cancelada localmente (estava cancelada no Odoo)',
+                        'dados_nf': nf_odoo,
+                        'itens_importados': 0,
+                        'cancelada': True,
+                        'tempo_execucao': round(tempo_total, 2),
+                        'timestamp': agora_utc_naive()
+                    }
+                else:
+                    tempo_total = (datetime.now() - inicio).total_seconds()
+                    return {
+                        'sucesso': False,
+                        'mensagem': f'NF {numero_nf} está cancelada no Odoo e não existe localmente',
+                        'dados_nf': nf_odoo,
+                        'itens_importados': 0,
+                        'cancelada': True,
+                        'tempo_execucao': round(tempo_total, 2),
+                        'timestamp': agora_utc_naive()
+                    }
+
+            logger.info(f"✅ NF {numero_nf} encontrada no Odoo (state={nf_odoo.get('state')}). Iniciando importação...")
+
+            # Importar linhas da NF (apenas posted)
             resultado = self._processar_importacao_nf(nf_odoo)
 
             tempo_total = (datetime.now() - inicio).total_seconds()
@@ -431,23 +478,390 @@ class ImportacaoFallbackService:
                 'timestamp': agora_utc_naive()
             }
 
+    def importar_faturamento_por_periodo_batch(self, data_inicio: str, data_fim: str = None) -> Dict[str, Any]:
+        """
+        Importa NFs do Odoo por período usando processamento batch (otimizado).
+
+        Performance: ~4 chamadas Odoo total vs 4N+1 do método sequencial.
+
+        Fluxo:
+        1. Busca NFs no período — 1 call Odoo (campos ampliados, elimina O2)
+        2. Filtra NFs já existentes no DB — 1 query bulk IN (elimina O3)
+        3. Busca dados complementares em batch — 3 calls Odoo (elimina O1)
+        4. Insere FaturamentoProduto + RelatorioFaturamentoImportado em bulk (elimina O5)
+        5. Pós-processamento batch: saldos + matching — 1 chamada cada (elimina O4)
+
+        Args:
+            data_inicio: Data inicial (formato YYYY-MM-DD)
+            data_fim: Data final (formato YYYY-MM-DD), se None usa data atual
+
+        Returns:
+            Dict com resultado da importação (mesmo formato de importar_faturamento_por_periodo)
+        """
+        inicio = datetime.now()
+
+        try:
+            logger.info(f"📥 Importação BATCH de faturamento: {data_inicio} a {data_fim}")
+
+            # Validar datas
+            try:
+                datetime.strptime(data_inicio, '%Y-%m-%d')
+                if data_fim:
+                    datetime.strptime(data_fim, '%Y-%m-%d')
+            except ValueError as e:
+                return {
+                    'sucesso': False,
+                    'mensagem': f'Formato de data inválido. Use YYYY-MM-DD. Erro: {str(e)}',
+                    'timestamp': agora_utc_naive()
+                }
+
+            # ============================================================
+            # FASE 1: Buscar NFs no período (1 chamada Odoo)
+            # ============================================================
+            nfs = self._buscar_nfs_por_periodo(
+                data_inicio,
+                data_fim or agora_utc_naive().strftime('%Y-%m-%d')
+            )
+
+            if not nfs:
+                return {
+                    'sucesso': True,
+                    'mensagem': f'Nenhuma NF encontrada no período {data_inicio} a {data_fim}',
+                    'total_encontradas': 0,
+                    'total_importadas': 0,
+                    'total_erros': 0,
+                    'nfs_processadas': [],
+                    'tempo_execucao': round((datetime.now() - inicio).total_seconds(), 2),
+                    'timestamp': agora_utc_naive()
+                }
+
+            logger.info(f"✅ {len(nfs)} NFs encontradas no período")
+
+            # ============================================================
+            # FASE 2: Separar NFs por estado + existência local
+            # Alinhado com sync normal (faturamento_service.py:756-764)
+            # ============================================================
+            from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
+
+            numeros_nf = [nf['numero_nf'] for nf in nfs if nf.get('numero_nf')]
+
+            nfs_existentes_set = set(
+                row[0] for row in db.session.query(FaturamentoProduto.numero_nf)
+                .filter(FaturamentoProduto.numero_nf.in_(numeros_nf))
+                .distinct().all()
+            )
+
+            # Separar por estado e existência:
+            # 1. NFs posted que NÃO existem localmente → importar
+            # 2. NFs canceladas que EXISTEM localmente → processar cancelamento
+            # 3. NFs canceladas que NÃO existem → ignorar (não importar NF cancelada)
+            nfs_novas = [
+                nf for nf in nfs
+                if nf.get('numero_nf')
+                and nf['numero_nf'] not in nfs_existentes_set
+                and nf.get('state') != 'cancel'  # Não importar NF cancelada que não existe localmente
+            ]
+
+            nfs_para_cancelar = [
+                nf for nf in nfs
+                if nf.get('numero_nf')
+                and nf['numero_nf'] in nfs_existentes_set
+                and nf.get('state') == 'cancel'
+            ]
+
+            nfs_cancel_sem_local = len([
+                nf for nf in nfs
+                if nf.get('state') == 'cancel'
+                and nf.get('numero_nf')
+                and nf['numero_nf'] not in nfs_existentes_set
+            ])
+
+            logger.info(
+                f"📊 {len(nfs_existentes_set)} NFs já existem, "
+                f"{len(nfs_novas)} novas para importar, "
+                f"{len(nfs_para_cancelar)} para cancelar, "
+                f"{nfs_cancel_sem_local} canceladas sem registro local (ignoradas)"
+            )
+
+            if not nfs_novas and not nfs_para_cancelar:
+                return {
+                    'sucesso': True,
+                    'mensagem': f'Todas as {len(nfs)} NFs do período já existem no sistema'
+                               + (f' ({nfs_cancel_sem_local} canceladas ignoradas)' if nfs_cancel_sem_local else ''),
+                    'total_encontradas': len(nfs),
+                    'total_importadas': 0,
+                    'total_ja_existentes': len(nfs_existentes_set),
+                    'total_canceladas': 0,
+                    'total_ignoradas_cancel': nfs_cancel_sem_local,
+                    'total_erros': 0,
+                    'nfs_processadas': [],
+                    'tempo_execucao': round((datetime.now() - inicio).total_seconds(), 2),
+                    'timestamp': agora_utc_naive()
+                }
+
+            # ============================================================
+            # FASE 3: Buscar dados complementares em batch (3 chamadas Odoo)
+            # ============================================================
+            caches = self._buscar_dados_batch_odoo(nfs_novas)
+            cache_parceiros = caches['parceiros']
+            cache_linhas = caches['linhas']
+            cache_produtos = caches['produtos']
+
+            # ============================================================
+            # FASE 4: Processar NFs e montar registros para bulk insert
+            # ============================================================
+            registros_faturamento = []
+            registros_relatorio = []
+            pedidos_afetados = {}  # {origem: set(cod_produtos)} para saldos
+            nfs_processadas = []
+            total_erros = 0
+            agora = agora_utc_naive()
+
+            # Check quais RelatorioFaturamentoImportado já existem (bulk)
+            relatorios_existentes = set(
+                row[0] for row in db.session.query(RelatorioFaturamentoImportado.numero_nf)
+                .filter(RelatorioFaturamentoImportado.numero_nf.in_(
+                    [nf['numero_nf'] for nf in nfs_novas]
+                )).all()
+            )
+
+            for nf in nfs_novas:
+                try:
+                    numero_nf = nf['numero_nf']
+                    move_id = nf['id']
+                    origem = nf.get('origem') or ''
+
+                    # Status mapeado (mesma lógica de faturamento_service._mapear_status)
+                    status_nf = self.faturamento_service._mapear_status(nf.get('state', ''))
+
+                    # Extrair vendedor/equipe/incoterm de many2one (do Passo 1)
+                    vendedor = self._extrair_many2one_nome(nf.get('invoice_user_id'))
+                    equipe_vendas = self._extrair_many2one_nome(nf.get('team_id'))
+                    incoterm = self._extrair_many2one_nome(nf.get('invoice_incoterm_id'))
+
+                    # Dados do parceiro (do cache batch)
+                    partner_id = None
+                    partner_raw = nf.get('cliente')
+                    if partner_raw and isinstance(partner_raw, list):
+                        partner_id = partner_raw[0]
+                    elif partner_raw and partner_raw is not False:
+                        partner_id = partner_raw
+
+                    cliente_info = cache_parceiros.get(partner_id, {
+                        'cnpj_cliente': '', 'nome_cliente': '',
+                        'municipio': '', 'estado': ''
+                    })
+
+                    # Linhas desta NF (do cache batch)
+                    linhas = cache_linhas.get(move_id, [])
+                    if not linhas:
+                        logger.warning(f"⚠️ NF {numero_nf} sem linhas de produto no cache")
+                        total_erros += 1
+                        continue
+
+                    # Processar linhas → registros FaturamentoProduto
+                    valor_total_nf = 0.0
+                    peso_total_nf = 0.0
+                    produtos_desta_nf = set()
+
+                    for linha in linhas:
+                        product_id = linha.get('product_id')
+                        if isinstance(product_id, list):
+                            prod_id = product_id[0]
+                            prod_nome = product_id[1] or ''
+                        else:
+                            prod_id = product_id
+                            prod_nome = ''
+
+                        prod_info = cache_produtos.get(prod_id, {})
+                        cod_produto = prod_info.get('default_code', '')
+                        peso_unitario = prod_info.get('weight', 0)
+                        qtd = float(linha.get('quantity', 0) or 0)
+                        peso_linha = peso_unitario * qtd
+                        preco = float(linha.get('price_unit', 0) or 0)
+                        valor = float(linha.get('price_total', 0) or 0)
+
+                        # bulk_insert_mappings não chama __init__: setar TODOS os campos obrigatórios
+                        registros_faturamento.append({
+                            'numero_nf': numero_nf,
+                            'data_fatura': nf.get('data_emissao'),
+                            'cnpj_cliente': cliente_info.get('cnpj_cliente', ''),
+                            'nome_cliente': cliente_info.get('nome_cliente', ''),
+                            'municipio': cliente_info.get('municipio', ''),
+                            'estado': cliente_info.get('estado', ''),
+                            'vendedor': vendedor,
+                            'equipe_vendas': equipe_vendas,
+                            'incoterm': incoterm,
+                            'cod_produto': cod_produto,
+                            'nome_produto': (prod_nome[:200] if prod_nome else ''),
+                            'qtd_produto_faturado': qtd,
+                            'preco_produto_faturado': preco,
+                            'valor_produto_faturado': valor,
+                            'peso_unitario_produto': peso_unitario,
+                            'peso_total': peso_linha,
+                            'origem': origem,
+                            'status_nf': status_nf,
+                            'revertida': False,
+                            'created_at': agora,
+                            'updated_at': agora,
+                            'created_by': 'Fallback Import Batch',
+                        })
+
+                        if cod_produto:
+                            produtos_desta_nf.add(cod_produto)
+                        valor_total_nf += valor
+                        peso_total_nf += peso_linha
+
+                    # RelatorioFaturamentoImportado (se não existe)
+                    if numero_nf not in relatorios_existentes:
+                        registros_relatorio.append({
+                            'numero_nf': numero_nf,
+                            'data_fatura': nf.get('data_emissao'),
+                            'cnpj_cliente': cliente_info.get('cnpj_cliente', ''),
+                            'nome_cliente': cliente_info.get('nome_cliente', ''),
+                            'municipio': cliente_info.get('municipio', ''),
+                            'estado': cliente_info.get('estado', ''),
+                            'valor_total': valor_total_nf,
+                            'peso_bruto': peso_total_nf,
+                            'origem': origem,
+                            'vendedor': vendedor,
+                            'equipe_vendas': equipe_vendas,
+                            'incoterm': incoterm,
+                            'ativo': True,
+                            'criado_em': agora,
+                        })
+
+                    nfs_processadas.append(numero_nf)
+
+                    # Acumular pedidos afetados para atualização de saldos
+                    if origem and produtos_desta_nf:
+                        if origem not in pedidos_afetados:
+                            pedidos_afetados[origem] = set()
+                        pedidos_afetados[origem].update(produtos_desta_nf)
+
+                except Exception as e:
+                    total_erros += 1
+                    logger.error(f"❌ Erro ao processar NF {nf.get('numero_nf')}: {e}")
+
+            # ============================================================
+            # FASE 5a: Bulk insert + commit (P5/P7: antes do pós-processamento)
+            # ============================================================
+            if registros_faturamento:
+                db.session.bulk_insert_mappings(FaturamentoProduto, registros_faturamento)
+                logger.info(f"📝 {len(registros_faturamento)} linhas FaturamentoProduto inseridas (bulk)")
+
+            if registros_relatorio:
+                db.session.bulk_insert_mappings(RelatorioFaturamentoImportado, registros_relatorio)
+                logger.info(f"📋 {len(registros_relatorio)} RelatorioFaturamentoImportado inseridos (bulk)")
+
+            db.session.commit()
+            logger.info(f"✅ Commit: {len(nfs_processadas)} NFs importadas")
+
+            # ============================================================
+            # FASE 5b: Processar cancelamentos (alinhado com faturamento_service.py:756-761)
+            # NFs canceladas no Odoo que EXISTEM localmente → marcar como canceladas
+            # ============================================================
+            total_canceladas = 0
+            total_ignoradas_cancel = nfs_cancel_sem_local  # Canceladas sem registro local
+
+            for nf in nfs_para_cancelar:
+                try:
+                    numero_nf_cancel = nf['numero_nf']
+                    self.faturamento_service._processar_cancelamento_nf(numero_nf_cancel)
+                    total_canceladas += 1
+                    logger.info(f"🚨 NF {numero_nf_cancel} cancelada via fallback")
+                except Exception as e:
+                    total_erros += 1
+                    logger.error(f"❌ Erro ao cancelar NF {nf.get('numero_nf')}: {e}")
+
+            if total_canceladas > 0:
+                db.session.commit()
+                logger.info(f"✅ Commit: {total_canceladas} NFs canceladas")
+
+            # ============================================================
+            # FASE 6: Pós-processamento batch (saldos + matching)
+            # ============================================================
+            try:
+                # 6a. Atualizar saldos carteira — 1 chamada para TODOS os pedidos
+                if pedidos_afetados:
+                    logger.info(f"📊 Atualizando saldos para {len(pedidos_afetados)} pedidos...")
+                    self.faturamento_service._atualizar_saldos_carteira(pedidos_afetados)
+                    logger.info(f"✅ Saldos atualizados")
+
+                # 6b. ProcessadorFaturamento — 1 chamada para TODAS as NFs
+                if nfs_processadas:
+                    logger.info(f"🔄 Processando match para {len(nfs_processadas)} NFs...")
+                    from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+                    processador = ProcessadorFaturamento()
+                    resultado_proc = processador.processar_nfs_importadas(
+                        usuario='Fallback Import Batch',
+                        nfs_especificas=nfs_processadas
+                    )
+                    if resultado_proc:
+                        logger.info(
+                            f"✅ Processamento: {resultado_proc.get('processadas', 0)} NFs, "
+                            f"{resultado_proc.get('movimentacoes_criadas', 0)} movimentações"
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"⚠️ Pós-processamento falhou (NFs já importadas, "
+                    f"serão processadas na sync regular): {e}"
+                )
+
+            tempo_total = (datetime.now() - inicio).total_seconds()
+
+            # Montar mensagem resumo
+            partes_msg = []
+            if nfs_processadas:
+                partes_msg.append(f'{len(nfs_processadas)} NFs importadas')
+            if total_canceladas:
+                partes_msg.append(f'{total_canceladas} canceladas')
+            if total_erros:
+                partes_msg.append(f'{total_erros} erros')
+            if not partes_msg:
+                partes_msg.append('Nenhuma NF nova para processar')
+
+            return {
+                'sucesso': True,
+                'mensagem': ', '.join(partes_msg),
+                'total_encontradas': len(nfs),
+                'total_importadas': len(nfs_processadas),
+                'total_ja_existentes': len(nfs_existentes_set),
+                'total_canceladas': total_canceladas,
+                'total_ignoradas_cancel': total_ignoradas_cancel,
+                'total_erros': total_erros,
+                'nfs_processadas': nfs_processadas,
+                'tempo_execucao': round(tempo_total, 2),
+                'timestamp': agora_utc_naive()
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            tempo_total = (datetime.now() - inicio).total_seconds()
+            logger.error(f"❌ Erro na importação batch: {e}")
+
+            return {
+                'sucesso': False,
+                'mensagem': f'Erro ao importar faturamento: {str(e)}',
+                'erro': str(e),
+                'tempo_execucao': round(tempo_total, 2),
+                'timestamp': agora_utc_naive()
+            }
+
     def _buscar_nf_odoo(self, numero_nf: str) -> Optional[Dict]:
         """
         Busca uma NF específica no Odoo.
         """
         try:
             # Buscar account.move pelo número da NF
+            # Alinhado com sync normal: posted + cancel (draft não faz sentido no fallback)
             nfs = self.connection.search_read(
                 'account.move',
                 [
                     ('l10n_br_numero_nota_fiscal', '=', numero_nf),
-                    ('move_type', '=', 'out_invoice'),  # Apenas NFs de saída
-                    '|', '|', '|', '|',
-                    ('l10n_br_tipo_pedido', '=', 'venda'),
-                    ('l10n_br_tipo_pedido', '=', 'bonificacao'),
-                    ('l10n_br_tipo_pedido', '=', 'industrializacao'),
-                    ('l10n_br_tipo_pedido', '=', 'exportacao'),
-                    ('l10n_br_tipo_pedido', '=', 'venda-industrializacao')
+                    ('move_type', '=', 'out_invoice'),
+                    ('state', 'in', ['posted', 'cancel']),
+                    *self.DOMAIN_TIPO_PEDIDO_FATURAMENTO,
                 ],
                 fields=['id', 'name', 'l10n_br_numero_nota_fiscal', 'state',
                         'l10n_br_tipo_pedido', 'partner_id', 'amount_total',
@@ -494,18 +908,16 @@ class ImportacaoFallbackService:
         Busca NFs no Odoo emitidas em um período específico.
         """
         try:
+            # Alinhado com sync normal (faturamento_service.py:1304-1319):
+            # - posted + cancel (draft não faz sentido no fallback por invoice_date)
+            # - move_type e numero_nf mantidos como segurança extra
             domain = [
                 ('invoice_date', '>=', data_inicio),
                 ('invoice_date', '<=', data_fim),
                 ('move_type', '=', 'out_invoice'),
-                ('state', '=', 'posted'),
+                ('state', 'in', ['posted', 'cancel']),
                 ('l10n_br_numero_nota_fiscal', '!=', False),
-                '|', '|', '|', '|',
-                ('l10n_br_tipo_pedido', '=', 'venda'),
-                ('l10n_br_tipo_pedido', '=', 'bonificacao'),
-                ('l10n_br_tipo_pedido', '=', 'industrializacao'),
-                ('l10n_br_tipo_pedido', '=', 'exportacao'),
-                ('l10n_br_tipo_pedido', '=', 'venda-industrializacao')
+                *self.DOMAIN_TIPO_PEDIDO_FATURAMENTO,
             ]
 
             nfs = self.connection.search_read(
@@ -513,7 +925,9 @@ class ImportacaoFallbackService:
                 domain,
                 fields=['id', 'name', 'l10n_br_numero_nota_fiscal', 'state',
                         'l10n_br_tipo_pedido', 'partner_id', 'amount_total',
-                        'invoice_date', 'invoice_origin'],
+                        'invoice_date', 'invoice_origin',
+                        # Campos adicionais para batch (elimina re-query O2)
+                        'invoice_user_id', 'team_id', 'invoice_incoterm_id'],
                 limit=500
             )
 
@@ -528,7 +942,11 @@ class ImportacaoFallbackService:
                     'cliente': nf.get('partner_id'),
                     'valor_total': nf.get('amount_total'),
                     'data_emissao': nf.get('invoice_date'),
-                    'origem': nf.get('invoice_origin')
+                    'origem': nf.get('invoice_origin'),
+                    # Campos many2one raw do Odoo (para batch, elimina O2)
+                    'invoice_user_id': nf.get('invoice_user_id'),
+                    'team_id': nf.get('team_id'),
+                    'invoice_incoterm_id': nf.get('invoice_incoterm_id'),
                 })
 
             return resultado
@@ -536,6 +954,137 @@ class ImportacaoFallbackService:
         except Exception as e:
             logger.error(f"❌ Erro ao buscar NFs por período: {e}")
             return []
+
+    @staticmethod
+    def _extrair_many2one_nome(valor) -> str:
+        """Extrai nome de campo many2one do Odoo ([id, name] ou False)."""
+        if valor and isinstance(valor, list) and len(valor) > 1:
+            return valor[1] or ''
+        return ''
+
+    def _buscar_dados_batch_odoo(self, nfs: List[Dict]) -> Dict[str, Dict]:
+        """
+        Busca dados complementares de TODAS as NFs em batch (Padrão P4 — Batch Fan-Out).
+
+        3 queries batch em vez de 3N queries individuais.
+
+        Args:
+            nfs: Lista de dicts retornados por _buscar_nfs_por_periodo
+                 (deve conter 'id' como move_id e 'cliente' como partner_id raw)
+
+        Returns:
+            Dict com 3 caches:
+            - 'parceiros': {partner_id: {cnpj_cliente, nome_cliente, municipio, estado}}
+            - 'linhas': {move_id: [linhas_account_move_line]}
+            - 'produtos': {product_id: {default_code, weight}}
+        """
+        move_ids = [nf['id'] for nf in nfs]
+
+        # Coletar partner_ids únicos (many2one: [id, name] ou False)
+        partner_ids = set()
+        for nf in nfs:
+            pid = nf.get('cliente')
+            if pid and isinstance(pid, list):
+                partner_ids.add(pid[0])
+            elif pid and pid is not False:
+                partner_ids.add(pid)
+
+        # ------------------------------------------------------------------
+        # Query 1: Todas as linhas de produto de TODAS as NFs
+        # ------------------------------------------------------------------
+        logger.info(f"📦 Batch: buscando linhas de {len(move_ids)} NFs...")
+        linhas_raw = self.connection.search_read(
+            'account.move.line',
+            [('move_id', 'in', move_ids), ('product_id', '!=', False)],
+            fields=['move_id', 'product_id', 'quantity', 'price_unit', 'price_total']
+        )
+
+        # Indexar linhas por move_id + coletar product_ids
+        cache_linhas: Dict[int, List[Dict]] = {}
+        product_ids = set()
+        for linha in linhas_raw or []:
+            mid = linha.get('move_id')
+            if isinstance(mid, list):
+                mid = mid[0]
+            cache_linhas.setdefault(mid, []).append(linha)
+
+            pid = linha.get('product_id')
+            if isinstance(pid, list):
+                product_ids.add(pid[0])
+            elif pid and pid is not False:
+                product_ids.add(pid)
+
+        logger.info(
+            f"📦 Batch: {len(linhas_raw or [])} linhas, "
+            f"{len(product_ids)} produtos únicos"
+        )
+
+        # ------------------------------------------------------------------
+        # Query 2: Todos os parceiros (clientes)
+        # ------------------------------------------------------------------
+        cache_parceiros: Dict[int, Dict] = {}
+        if partner_ids:
+            logger.info(f"👤 Batch: buscando {len(partner_ids)} parceiros...")
+            try:
+                parceiros_raw = self.connection.read(
+                    'res.partner', list(partner_ids),
+                    ['name', 'l10n_br_cnpj', 'l10n_br_municipio_id', 'state_id']
+                )
+                for p in parceiros_raw or []:
+                    info = {
+                        'cnpj_cliente': (p.get('l10n_br_cnpj') or '').strip(),
+                        'nome_cliente': (p.get('name') or '').strip(),
+                        'municipio': '',
+                        'estado': ''
+                    }
+
+                    # Município: many2one → [id, "Cidade (UF)"]
+                    # Mesma lógica de parse que faturamento_mapper (linhas 289-296)
+                    mun_raw = p.get('l10n_br_municipio_id')
+                    if mun_raw and isinstance(mun_raw, list) and len(mun_raw) > 1:
+                        nome_mun = mun_raw[1] or ''
+                        if '(' in nome_mun and ')' in nome_mun:
+                            partes = nome_mun.split('(')
+                            info['municipio'] = partes[0].strip()
+                            info['estado'] = partes[1].replace(')', '').strip()
+                        else:
+                            info['municipio'] = nome_mun.strip()
+
+                    # Fallback UF via state_id se município não tinha "(UF)"
+                    if not info['estado']:
+                        state_raw = p.get('state_id')
+                        if state_raw and isinstance(state_raw, list) and len(state_raw) > 1:
+                            uf_name = state_raw[1] or ''
+                            if len(uf_name) == 2:
+                                info['estado'] = uf_name
+
+                    cache_parceiros[p['id']] = info
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao buscar parceiros em batch: {e}")
+
+        # ------------------------------------------------------------------
+        # Query 3: Todos os produtos
+        # ------------------------------------------------------------------
+        cache_produtos: Dict[int, Dict] = {}
+        if product_ids:
+            logger.info(f"📦 Batch: buscando {len(product_ids)} produtos...")
+            try:
+                produtos_raw = self.connection.read(
+                    'product.product', list(product_ids), ['default_code', 'weight']
+                )
+                for p in produtos_raw or []:
+                    cache_produtos[p['id']] = {
+                        'default_code': p.get('default_code') or '',
+                        'weight': float(p.get('weight') or 0)
+                    }
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao buscar produtos em batch: {e}")
+
+        return {
+            'parceiros': cache_parceiros,
+            'linhas': cache_linhas,
+            'produtos': cache_produtos,
+        }
 
     def _processar_importacao_nf(self, nf_dados: Dict) -> Dict[str, Any]:
         """

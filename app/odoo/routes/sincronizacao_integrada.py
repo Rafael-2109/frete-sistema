@@ -507,15 +507,20 @@ def importar_faturamento_fallback():
             tempo = resultado.get('tempo_execucao', 0)
             dados = resultado.get('dados_nf', {})
 
-            if itens > 0:
+            if resultado.get('cancelada'):
+                flash(f"🚨 NF {numero_nf} cancelada localmente ({tempo:.2f}s)", 'warning')
+            elif itens > 0:
                 flash(f"✅ NF {numero_nf} importada: {itens} itens ({tempo:.2f}s)", 'success')
             else:
                 flash(f"ℹ️ NF {numero_nf} já existe no sistema ou não tem itens", 'info')
 
-            if dados:
+            if dados and not resultado.get('cancelada'):
                 flash(f"📝 Origem: {dados.get('origem', 'N/A')}", 'info')
         else:
-            flash(f"❌ {resultado.get('mensagem', 'Erro ao importar NF')}", 'error')
+            if resultado.get('cancelada'):
+                flash(f"⚠️ {resultado.get('mensagem', 'NF cancelada no Odoo')}", 'warning')
+            else:
+                flash(f"❌ {resultado.get('mensagem', 'Erro ao importar NF')}", 'error')
 
         return redirect(url_for('sync_integrada.fallback_dashboard'))
 
@@ -544,18 +549,27 @@ def importar_faturamento_por_periodo_fallback():
         logger.info(f"📥 Importação fallback de faturamento: {data_inicio} a {data_fim}")
 
         service = ImportacaoFallbackService()
-        resultado = service.importar_faturamento_por_periodo(data_inicio, data_fim)
+        resultado = service.importar_faturamento_por_periodo_batch(data_inicio, data_fim)
 
         if resultado.get('sucesso'):
             total = resultado.get('total_encontradas', 0)
             importadas = resultado.get('total_importadas', 0)
+            canceladas = resultado.get('total_canceladas', 0)
+            ignoradas_cancel = resultado.get('total_ignoradas_cancel', 0)
             erros = resultado.get('total_erros', 0)
             tempo = resultado.get('tempo_execucao', 0)
 
             if total > 0:
-                flash(f"✅ {importadas}/{total} NFs importadas ({tempo:.2f}s)", 'success')
+                if importadas > 0:
+                    flash(f"✅ {importadas}/{total} NFs importadas ({tempo:.2f}s)", 'success')
+                if canceladas > 0:
+                    flash(f"🚨 {canceladas} NFs canceladas no Odoo — status atualizado localmente", 'warning')
+                if ignoradas_cancel > 0:
+                    flash(f"ℹ️ {ignoradas_cancel} NFs canceladas no Odoo sem registro local (ignoradas)", 'info')
                 if erros > 0:
                     flash(f"⚠️ {erros} NFs com erro", 'warning')
+                if importadas == 0 and canceladas == 0:
+                    flash(f"ℹ️ Todas as {total} NFs do período já existem no sistema ({tempo:.2f}s)", 'info')
             else:
                 flash(f"ℹ️ Nenhuma NF encontrada no período", 'info')
         else:
