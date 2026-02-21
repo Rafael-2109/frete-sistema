@@ -130,13 +130,6 @@
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
-      "columns": [
-        "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_pendente_tagplus_importado",
       "columns": [
         "importado"
@@ -161,6 +154,13 @@
       "name": "ix_nf_pendente_tagplus_resolvido",
       "columns": [
         "resolvido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
       ],
       "unique": false
     }

@@ -120,9 +120,9 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_validacao_id",
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
       "columns": [
-        "validacao_id"
+        "odoo_dfe_id"
       ],
       "unique": false
     },
@@ -141,16 +141,16 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
+      "name": "ix_divergencia_nf_po_validacao_id",
       "columns": [
-        "cnpj_empresa_compradora"
+        "validacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
       "columns": [
-        "odoo_dfe_id"
+        "cnpj_empresa_compradora"
       ],
       "unique": false
     }
