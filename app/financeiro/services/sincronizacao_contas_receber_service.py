@@ -17,6 +17,7 @@ from app.utils.timezone import agora_utc_naive
 from app import db
 from app.financeiro.parcela_utils import parcela_to_str
 from app.financeiro.services.contas_receber_service import ContasReceberService
+from app.odoo.utils.connection import get_odoo_connection
 from app.financeiro.models import (
     ContasAReceber, ContasAReceberSnapshot, LiberacaoAntecipacao,
     CnabRetornoItem
@@ -176,7 +177,10 @@ class SincronizacaoContasReceberService:
     def sincronizar_incremental(self, minutos_janela: int = 120) -> dict:
         """
         Sincronização incremental para uso no scheduler.
-        Busca registros com write_date dentro da janela especificada.
+
+        Usa write_date/create_date como filtro de janela (padrão dos outros services).
+        Captura títulos recém-modificados — incluindo pagos — resolvendo o problema
+        de títulos que saíam do filtro balance > 0 após pagamento.
 
         Args:
             minutos_janela: Janela de tempo em minutos (default: 120 = 2 horas)
@@ -184,13 +188,253 @@ class SincronizacaoContasReceberService:
         Returns:
             dict com estatísticas da sincronização
         """
-        # Calcular data início baseada na janela (convertendo minutos para dias)
-        dias = minutos_janela / (60 * 24)  # Converte minutos para fração de dias
-        data_inicio = date.today() - timedelta(days=max(1, int(dias) + 1))
+        data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+        logger.info(f"🔄 Sincronização Incremental (write_date) - Janela: {minutos_janela} min, desde {data_limite}")
 
-        logger.info(f"🔄 Sincronização Incremental - Janela: {minutos_janela} minutos (desde {data_inicio})")
+        return self._sincronizar_por_write_date(data_limite)
 
-        return self.sincronizar(data_inicio=data_inicio)
+    def _sincronizar_por_write_date(self, data_limite: str) -> dict:
+        """
+        Sincroniza títulos a receber modificados/criados após data_limite.
+
+        Diferença do sincronizar() original:
+        - Query Odoo própria (NÃO usa ContasReceberService.extrair_dados_odoo que tem balance > 0)
+        - Filtra por write_date/create_date em vez de date
+        - SEM filtro balance > 0 — captura pagos E em aberto
+        - Transforma registros Odoo para formato esperado por _processar_registro()
+        - Reutiliza _criar_registro() / _atualizar_registro() existentes
+
+        Args:
+            data_limite: Data limite no formato 'YYYY-MM-DD HH:MM:SS'
+
+        Returns:
+            dict com estatísticas
+        """
+        self._resetar_estatisticas()
+
+        logger.info("=" * 60)
+        logger.info("🔄 SYNC CONTAS A RECEBER (write_date)")
+        logger.info(f"📅 Títulos modificados desde: {data_limite}")
+        logger.info("=" * 60)
+
+        try:
+            # 1. Extrair dados do Odoo — query própria sem filtro balance > 0
+            logger.info("\n[1/5] Extraindo dados do Odoo (write_date)...")
+            connection = get_odoo_connection()
+            if not connection.authenticate():
+                raise Exception("Falha na autenticação com Odoo")
+
+            # Campos: mesmos do ContasReceberService.CAMPOS_ODOO + write_date, create_date
+            campos = [
+                'company_id', 'x_studio_tipo_de_documento_fiscal',
+                'x_studio_nf_e', 'l10n_br_cobranca_parcela', 'l10n_br_paga',
+                'partner_id', 'date', 'date_maturity',
+                'balance', 'desconto_concedido', 'desconto_concedido_percentual',
+                'payment_provider_id', 'x_studio_status_de_pagamento',
+                'account_type', 'move_type', 'parent_state',
+                'write_date', 'create_date',
+            ]
+
+            filtros = [
+                ['account_type', '=', 'asset_receivable'],
+                ['parent_state', '=', 'posted'],
+                ['date_maturity', '!=', False],
+                '|',
+                ['create_date', '>=', data_limite],
+                ['write_date', '>=', data_limite],
+            ]
+
+            dados_odoo = connection.search_read(
+                'account.move.line',
+                filtros,
+                fields=campos,
+                limit=5000
+            ) or []
+            logger.info(f"   ✅ {len(dados_odoo)} registros extraídos")
+
+            if not dados_odoo:
+                self.estatisticas['sucesso'] = True
+                return self.estatisticas
+
+            # 2. Enriquecer com dados dos parceiros (CNPJ, Razão Social, UF)
+            logger.info("\n[2/5] Buscando dados dos parceiros...")
+            partner_ids = list(set(
+                r.get('partner_id', [None, None])[0]
+                for r in dados_odoo if r.get('partner_id')
+            ))
+            partner_map = self._buscar_dados_parceiros(connection, partner_ids)
+            logger.info(f"   ✅ {len(partner_map)} parceiros encontrados")
+
+            # 3. Transformar registros Odoo para formato esperado por _processar_registro()
+            logger.info("\n[3/5] Transformando registros...")
+            registros_transformados = []
+            for record in dados_odoo:
+                partner_id = record.get('partner_id', [None, None])[0]
+                p_data = partner_map.get(partner_id, {})
+
+                balance = float(record.get('balance', 0) or 0)
+                desconto = float(record.get('desconto_concedido', 0) or 0)
+
+                transformed = {
+                    'odoo_line_id': record.get('id'),  # account.move.line ID
+                    'company_id_nome': record.get('company_id', [None, ''])[1] or '',
+                    'x_studio_nf_e': record.get('x_studio_nf_e'),
+                    'l10n_br_cobranca_parcela': record.get('l10n_br_cobranca_parcela'),
+                    'partner_id_nome': record.get('partner_id', [None, ''])[1] or '',
+                    'partner_cnpj': p_data.get('cnpj'),
+                    'partner_raz_social': p_data.get('raz_social'),
+                    'partner_raz_social_red': p_data.get('raz_social_red'),
+                    'partner_state': p_data.get('uf'),
+                    'date': record.get('date'),
+                    'date_maturity': record.get('date_maturity'),
+                    'desconto_concedido_percentual': record.get('desconto_concedido_percentual', 0),
+                    'saldo_total': balance + desconto,
+                    'payment_provider_id_nome': (
+                        record.get('payment_provider_id', [None, None])[1]
+                        if isinstance(record.get('payment_provider_id'), (list, tuple))
+                        else None
+                    ),
+                    'l10n_br_paga': record.get('l10n_br_paga'),
+                    'x_studio_status_de_pagamento': record.get('x_studio_status_de_pagamento'),
+                }
+                registros_transformados.append(transformed)
+
+            logger.info(f"   ✅ {len(registros_transformados)} registros transformados")
+
+            # 4. Pre-carregar registros existentes para batch lookup (evita N+1)
+            logger.info("\n[4/6] Pre-carregando registros existentes...")
+            odoo_line_ids = [r.get('odoo_line_id') for r in registros_transformados if r.get('odoo_line_id')]
+            contas_por_line_id = {}
+            contas_por_chave = {}
+
+            # Batch lookup por odoo_line_id (chunks de 500)
+            for i in range(0, len(odoo_line_ids), 500):
+                chunk = odoo_line_ids[i:i + 500]
+                for c in ContasAReceber.query.filter(ContasAReceber.odoo_line_id.in_(chunk)).all():
+                    if c.odoo_line_id:
+                        contas_por_line_id[c.odoo_line_id] = c
+
+            # Batch lookup por chave composta (empresa, titulo_nf, parcela)
+            empresas_presentes = set()
+            for r in registros_transformados:
+                emp_nome = r.get('company_id_nome', '')
+                emp = self._mapear_empresa(emp_nome)
+                if emp != 0:
+                    empresas_presentes.add(emp)
+
+            for emp in empresas_presentes:
+                for c in ContasAReceber.query.filter(ContasAReceber.empresa == emp).all():
+                    contas_por_chave[(c.empresa, c.titulo_nf, c.parcela)] = c
+
+            logger.info(f"   ✅ {len(contas_por_line_id)} por line_id, {len(contas_por_chave)} por chave composta")
+
+            # 5. Processar cada registro (reutiliza _processar_registro existente)
+            logger.info("\n[5/6] Processando registros...")
+            for idx, row in enumerate(registros_transformados):
+                try:
+                    self._processar_registro(row, contas_por_line_id, contas_por_chave)
+                except Exception as e:
+                    logger.error(f"   ❌ Erro no registro {idx}: {e}")
+                    self.estatisticas['erros'] += 1
+                    continue
+
+            db.session.commit()
+
+            # 6. Enriquecer e reprocessar CNABs
+            logger.info("\n[6/6] Enriquecendo e reprocessando CNABs...")
+            self._enriquecer_dados_locais()
+            cnabs_reprocessados = self._reprocessar_cnabs_sem_match()
+            self.estatisticas['cnabs_reprocessados'] = cnabs_reprocessados
+            db.session.commit()
+
+            self.estatisticas['sucesso'] = True
+
+        except Exception as e:
+            logger.error(f"❌ Erro na sincronização write_date: {e}")
+            self.estatisticas['erro'] = str(e)
+            db.session.rollback()
+
+        # Resumo
+        logger.info("\n" + "=" * 60)
+        logger.info("✅ SYNC WRITE_DATE CONCLUÍDA" if self.estatisticas['sucesso'] else "❌ SYNC WRITE_DATE COM ERROS")
+        logger.info("=" * 60)
+        logger.info(f"📊 Novos: {self.estatisticas['novos']}")
+        logger.info(f"📊 Atualizados: {self.estatisticas['atualizados']}")
+        logger.info(f"📊 Enriquecidos: {self.estatisticas['enriquecidos']}")
+        logger.info(f"📊 Snapshots: {self.estatisticas['snapshots_criados']}")
+        logger.info(f"📊 CNABs reprocessados: {self.estatisticas.get('cnabs_reprocessados', 0)}")
+        logger.info(f"❌ Erros: {self.estatisticas['erros']}")
+
+        return self.estatisticas
+
+    def _buscar_dados_parceiros(self, connection, partner_ids: list) -> dict:
+        """
+        Busca CNPJ, Razão Social, Nome Fantasia e UF dos parceiros.
+
+        Mesma lógica de ContasReceberService._enriquecer_dados_parceiros()
+        mas retorna dict indexado por partner_id.
+
+        Args:
+            connection: Conexão Odoo autenticada
+            partner_ids: Lista de IDs de res.partner
+
+        Returns:
+            Dict[partner_id, {cnpj, raz_social, raz_social_red, uf}]
+        """
+        if not partner_ids:
+            return {}
+
+        partner_ids = [p for p in partner_ids if p]
+        result = {}
+        BATCH_SIZE = 500
+
+        # Mapa de nomes de estados para siglas
+        estado_map = {
+            'acre': 'AC', 'alagoas': 'AL', 'amapá': 'AP', 'amazonas': 'AM',
+            'bahia': 'BA', 'ceará': 'CE', 'distrito federal': 'DF',
+            'espírito santo': 'ES', 'goiás': 'GO', 'maranhão': 'MA',
+            'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG',
+            'pará': 'PA', 'paraíba': 'PB', 'paraná': 'PR', 'pernambuco': 'PE',
+            'piauí': 'PI', 'rio de janeiro': 'RJ', 'rio grande do norte': 'RN',
+            'rio grande do sul': 'RS', 'rondônia': 'RO', 'roraima': 'RR',
+            'santa catarina': 'SC', 'são paulo': 'SP', 'sergipe': 'SE', 'tocantins': 'TO'
+        }
+
+        for i in range(0, len(partner_ids), BATCH_SIZE):
+            batch = partner_ids[i:i + BATCH_SIZE]
+            try:
+                partners = connection.search_read(
+                    'res.partner',
+                    [['id', 'in', batch]],
+                    fields=['id', 'state_id', 'l10n_br_cnpj', 'l10n_br_razao_social', 'name'],
+                    limit=None
+                ) or []
+
+                for p in partners:
+                    pid = p.get('id')
+
+                    # UF
+                    uf = None
+                    state_id = p.get('state_id')
+                    if state_id and isinstance(state_id, (list, tuple)) and len(state_id) > 1:
+                        estado_nome = state_id[1]
+                        if len(estado_nome) == 2:
+                            uf = estado_nome.upper()
+                        else:
+                            estado_limpo = estado_nome.replace(' (BR)', '').lower().strip()
+                            uf = estado_map.get(estado_limpo, estado_nome[:2].upper() if estado_nome else None)
+
+                    result[pid] = {
+                        'cnpj': p.get('l10n_br_cnpj') or None,
+                        'raz_social': p.get('l10n_br_razao_social') or p.get('name', ''),
+                        'raz_social_red': (p.get('name', '') or '')[:100] or None,
+                        'uf': uf,
+                    }
+            except Exception as e:
+                logger.error(f"⚠️ Erro ao buscar parceiros (batch {i}): {e}")
+                continue
+
+        return result
 
     def sincronizar_manual(self, dias: int = 7) -> dict:
         """
@@ -209,10 +453,18 @@ class SincronizacaoContasReceberService:
 
         return self.sincronizar(data_inicio=data_inicio)
 
-    def _processar_registro(self, row):
-        """Processa um registro do Odoo"""
+    def _processar_registro(self, row, contas_por_line_id=None, contas_por_chave=None):
+        """
+        Processa um registro do Odoo.
+
+        Args:
+            row: Registro transformado do Odoo
+            contas_por_line_id: Dict {odoo_line_id: ContasAReceber} para lookup O(1)
+            contas_por_chave: Dict {(empresa, titulo_nf, parcela): ContasAReceber} para lookup O(1)
+        """
 
         # Extrair dados do registro
+        odoo_line_id = row.get('odoo_line_id')  # ID do account.move.line
         empresa_nome = row.get('company_id_nome', '')
         empresa = self._mapear_empresa(empresa_nome)
         titulo_nf = str(int(row.get('x_studio_nf_e', 0)))
@@ -225,27 +477,41 @@ class SincronizacaoContasReceberService:
         if empresa == 0:
             return
 
-        # Buscar registro existente
-        conta = ContasAReceber.query.filter_by(
-            empresa=empresa,
-            titulo_nf=titulo_nf,
-            parcela=parcela
-        ).first()
+        # Buscar registro existente: lookup O(1) por odoo_line_id, fallback chave composta
+        conta = None
+        if odoo_line_id and contas_por_line_id is not None:
+            conta = contas_por_line_id.get(odoo_line_id)
+
+        if not conta:
+            if contas_por_chave is not None:
+                conta = contas_por_chave.get((empresa, titulo_nf, parcela))
+            else:
+                conta = ContasAReceber.query.filter_by(
+                    empresa=empresa,
+                    titulo_nf=titulo_nf,
+                    parcela=parcela
+                ).first()
 
         odoo_write_date = agora_utc_naive()
 
         if conta:
             # Atualizar registro existente
-            self._atualizar_registro(conta, row, odoo_write_date)
+            self._atualizar_registro(conta, row, odoo_write_date, odoo_line_id=odoo_line_id)
             self.estatisticas['atualizados'] += 1
         else:
             # Criar novo registro
-            conta = self._criar_registro(row, empresa, titulo_nf, parcela, odoo_write_date)
+            conta = self._criar_registro(row, empresa, titulo_nf, parcela, odoo_write_date,
+                                         odoo_line_id=odoo_line_id)
             db.session.add(conta)
+            # Atualizar dicts para evitar duplicatas no mesmo batch
+            if contas_por_line_id is not None and odoo_line_id:
+                contas_por_line_id[odoo_line_id] = conta
+            if contas_por_chave is not None:
+                contas_por_chave[(empresa, titulo_nf, parcela)] = conta
             self.estatisticas['novos'] += 1
 
     def _criar_registro(self, row, empresa: int, titulo_nf: str, parcela: str,
-                        odoo_write_date: datetime) -> ContasAReceber:
+                        odoo_write_date: datetime, odoo_line_id: int = None) -> ContasAReceber:
         """Cria um novo registro de ContasAReceber"""
 
         # =======================================================================
@@ -285,6 +551,7 @@ class SincronizacaoContasReceberService:
             empresa=empresa,
             titulo_nf=titulo_nf,
             parcela=parcela,
+            odoo_line_id=odoo_line_id,
             cnpj=row.get('partner_cnpj'),
             raz_social=row.get('partner_raz_social') or row.get('partner_id_nome'),
             raz_social_red=row.get('partner_raz_social_red'),
@@ -306,8 +573,13 @@ class SincronizacaoContasReceberService:
 
         return conta
 
-    def _atualizar_registro(self, conta: ContasAReceber, row, odoo_write_date: datetime):
+    def _atualizar_registro(self, conta: ContasAReceber, row, odoo_write_date: datetime,
+                            odoo_line_id: int = None):
         """Atualiza um registro existente com controle de snapshots"""
+
+        # Preencher odoo_line_id se ainda não tem (backfill progressivo)
+        if odoo_line_id and not conta.odoo_line_id:
+            conta.odoo_line_id = odoo_line_id
 
         alteracoes = []
 

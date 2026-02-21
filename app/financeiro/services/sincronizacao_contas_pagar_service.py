@@ -56,6 +56,8 @@ class SincronizacaoContasAPagarService:
         'reconciled',              # Reconciliado?
         'account_type',            # Tipo de conta
         'parent_state',            # Estado da fatura
+        'write_date',              # Data última modificação (para sync incremental)
+        'create_date',             # Data criação (para sync incremental)
     ]
 
     def __init__(self, connection=None):
@@ -231,8 +233,9 @@ class SincronizacaoContasAPagarService:
         """
         Sincronização incremental para o scheduler.
 
-        Busca títulos modificados nos últimos X minutos.
-        Usa vencimentos dos últimos 90 dias como padrão.
+        Usa write_date/create_date como filtro de janela (padrão dos outros services).
+        Captura títulos recém-modificados — incluindo pagos — resolvendo o problema
+        de títulos que saíam do filtro amount_residual < 0 após pagamento.
 
         Args:
             minutos_janela: Minutos de janela para busca (default: 120)
@@ -240,15 +243,11 @@ class SincronizacaoContasAPagarService:
         Returns:
             dict com estatísticas
         """
-        # Para sincronização incremental, usamos vencimentos desde 90 dias atrás
-        # O filtro de "modificados recentemente" é aplicado pelo campo write_date no Odoo
-        data_inicio = date.today() - timedelta(days=90)
-        logger.info(f"🔄 Sincronização Incremental - Janela: {minutos_janela} min, Vencimentos desde {data_inicio}")
+        data_limite = (agora_utc_naive() - timedelta(minutes=minutos_janela)).strftime('%Y-%m-%d %H:%M:%S')
+        logger.info(f"🔄 Sincronização Incremental (write_date) - Janela: {minutos_janela} min, desde {data_limite}")
 
         try:
-            resultado = self.sincronizar(data_inicio=data_inicio)
-
-            # Ajustar resposta para compatibilidade com o scheduler
+            resultado = self._sincronizar_por_write_date(data_limite)
             return {
                 'sucesso': resultado.get('sucesso', False),
                 'novos': resultado.get('novos', 0),
@@ -262,6 +261,115 @@ class SincronizacaoContasAPagarService:
                 'sucesso': False,
                 'erro': str(e)
             }
+
+    def _sincronizar_por_write_date(self, data_limite: str) -> dict:
+        """
+        Sincroniza títulos a pagar modificados/criados após data_limite.
+
+        Diferença do sincronizar() original:
+        - Filtra por write_date/create_date em vez de date_maturity
+        - SEM filtro amount_residual < 0 — captura pagos E em aberto
+        - Reutiliza _processar_registro() para criar/atualizar
+
+        Args:
+            data_limite: Data limite no formato 'YYYY-MM-DD HH:MM:SS'
+
+        Returns:
+            dict com estatísticas
+        """
+        self._resetar_estatisticas()
+
+        logger.info("=" * 60)
+        logger.info("🔄 SYNC CONTAS A PAGAR (write_date)")
+        logger.info(f"📅 Títulos modificados desde: {data_limite}")
+        logger.info("=" * 60)
+
+        try:
+            # 1. Extrair dados do Odoo — sem filtro de amount_residual
+            logger.info("\n[1/4] Extraindo dados do Odoo (write_date)...")
+            filtros = [
+                ['account_type', '=', 'liability_payable'],
+                ['parent_state', '=', 'posted'],
+                '|',
+                ['create_date', '>=', data_limite],
+                ['write_date', '>=', data_limite],
+            ]
+
+            dados_odoo = self.connection.search_read(
+                'account.move.line',
+                filtros,
+                self.CAMPOS_ODOO,
+                limit=5000
+            ) or []
+            logger.info(f"   ✅ {len(dados_odoo)} registros extraídos")
+
+            if not dados_odoo:
+                self.estatisticas['sucesso'] = True
+                return self.estatisticas
+
+            # 2. Buscar CNPJs dos fornecedores
+            logger.info("\n[2/4] Buscando dados dos fornecedores...")
+            partner_ids = list(set(
+                r.get('partner_id', [None, None])[0]
+                for r in dados_odoo if r.get('partner_id')
+            ))
+            cnpj_map = self._buscar_cnpjs_fornecedores(partner_ids)
+            logger.info(f"   ✅ {len(cnpj_map)} fornecedores encontrados")
+
+            # 3. Pre-carregar registros existentes para batch lookup
+            logger.info("\n[3/4] Pre-carregando registros existentes...")
+            odoo_line_ids = [r.get('id') for r in dados_odoo if r.get('id')]
+            contas_por_line_id = {}
+            contas_por_chave = {}
+
+            for i in range(0, len(odoo_line_ids), 500):
+                chunk = odoo_line_ids[i:i+500]
+                for c in ContasAPagar.query.filter(ContasAPagar.odoo_line_id.in_(chunk)).all():
+                    if c.odoo_line_id:
+                        contas_por_line_id[c.odoo_line_id] = c
+
+            empresas_presentes = set()
+            for r in dados_odoo:
+                emp_nome = r.get('company_id', [None, ''])[1] or ''
+                emp = self._mapear_empresa(emp_nome)
+                if emp != 0:
+                    empresas_presentes.add(emp)
+
+            for emp in empresas_presentes:
+                for c in ContasAPagar.query.filter(ContasAPagar.empresa == emp).all():
+                    chave = (c.empresa, c.titulo_nf, c.parcela)
+                    contas_por_chave[chave] = c
+
+            logger.info(f"   ✅ {len(contas_por_line_id)} por line_id, {len(contas_por_chave)} por chave composta")
+
+            # 4. Processar cada registro
+            logger.info("\n[4/4] Processando registros...")
+            for idx, row in enumerate(dados_odoo):
+                try:
+                    self._processar_registro(row, cnpj_map, contas_por_line_id, contas_por_chave)
+                except Exception as e:
+                    logger.error(f"   ❌ Erro no registro {idx}: {e}")
+                    self.estatisticas['erros'] += 1
+                    continue
+
+            db.session.commit()
+            self.estatisticas['sucesso'] = True
+
+        except Exception as e:
+            logger.error(f"❌ Erro na sincronização write_date: {e}")
+            self.estatisticas['erro'] = str(e)
+            db.session.rollback()
+
+        # Resumo
+        logger.info("\n" + "=" * 60)
+        logger.info("✅ SYNC WRITE_DATE CONCLUÍDA" if self.estatisticas['sucesso'] else "❌ SYNC WRITE_DATE COM ERROS")
+        logger.info("=" * 60)
+        logger.info(f"📊 Novos: {self.estatisticas['novos']}")
+        logger.info(f"📊 Atualizados: {self.estatisticas['atualizados']}")
+        logger.info(f"📊 Ignorados: {self.estatisticas['ignorados']}")
+        logger.info(f"📊 Erros: {self.estatisticas['erros']}")
+
+        return self.estatisticas
 
     def _extrair_dados_odoo(
         self,

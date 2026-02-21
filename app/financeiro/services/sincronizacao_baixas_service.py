@@ -219,6 +219,17 @@ class SincronizacaoBaixasService:
         if not titulo_odoo:
             return 0
 
+        # FIX: Atualizar parcela_paga se Odoo indica título pago
+        # _buscar_titulo_odoo já retorna l10n_br_paga e balance
+        paga_odoo = bool(titulo_odoo.get('l10n_br_paga'))
+        balance = float(titulo_odoo.get('balance', 0) or 0)
+
+        if (paga_odoo or balance <= 0) and not titulo.parcela_paga:
+            titulo.parcela_paga = True
+            if not titulo.metodo_baixa:
+                titulo.metodo_baixa = 'ODOO_DIRETO'
+            logger.info(f"  Titulo {titulo.titulo_nf}-{titulo.parcela}: marcado pago via sync baixas")
+
         matched_credit_ids = titulo_odoo.get('matched_credit_ids', [])
 
         if not matched_credit_ids:

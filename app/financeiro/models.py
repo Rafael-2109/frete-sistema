@@ -323,6 +323,9 @@ class ContasAReceber(db.Model):
     titulo_nf = db.Column(db.String(20), nullable=False, index=True)  # NF-e
     parcela = db.Column(db.String(10), nullable=False, index=True)  # Número da parcela
 
+    # Rastreio Odoo (account.move.line ID)
+    odoo_line_id = db.Column(db.Integer, nullable=True, unique=True, index=True)
+
     # Cliente
     cnpj = db.Column(db.String(20), nullable=True, index=True)  # CNPJ do cliente
     raz_social = db.Column(db.String(255), nullable=True)  # Razão Social completa
@@ -427,6 +430,7 @@ class ContasAReceber(db.Model):
         Index('idx_conta_receber_vencimento', 'vencimento'),
         Index('idx_conta_receber_cnpj', 'cnpj'),
         Index('idx_conta_receber_nf', 'titulo_nf'),
+        Index('idx_conta_receber_odoo_line_id', 'odoo_line_id'),
     )
 
     def __repr__(self):
