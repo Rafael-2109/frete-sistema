@@ -177,6 +177,14 @@
       "unique": false
     },
     {
+      "name": "idx_nf_solucao_emitente",
+      "columns": [
+        "cnpj_emitente",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pallet_nf_solucoes_tipo",
       "columns": [
         "tipo"
@@ -184,10 +192,9 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_emitente",
+      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
       "columns": [
-        "cnpj_emitente",
-        "tipo"
+        "cnpj_emitente"
       ],
       "unique": false
     },
@@ -203,13 +210,6 @@
       "columns": [
         "confirmado",
         "vinculacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
       ],
       "unique": false
     },

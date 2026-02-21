@@ -98,6 +98,13 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_receber_reconciliacao_odoo_id",
+      "columns": [
+        "odoo_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_reconciliacao_odoo_id",
       "columns": [
         "odoo_id"
@@ -105,16 +112,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_reconciliacao_conta_a_receber_id",
+      "name": "ix_contas_a_receber_reconciliacao_tipo_baixa",
       "columns": [
-        "conta_a_receber_id"
+        "tipo_baixa"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_reconciliacao_tipo_baixa",
+      "name": "ix_contas_a_receber_reconciliacao_conta_a_receber_id",
       "columns": [
-        "tipo_baixa"
+        "conta_a_receber_id"
       ],
       "unique": false
     },
@@ -131,13 +138,6 @@
         "tipo_baixa"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_reconciliacao_odoo_id",
-      "columns": [
-        "odoo_id"
-      ],
-      "unique": true
     }
   ]
 }

@@ -97,16 +97,16 @@
   ],
   "indices": [
     {
-      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
+      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
       "columns": [
-        "cod_produto_fornecedor"
+        "cnpj_fornecedor"
       ],
       "unique": false
     },
     {
-      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
+      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
       "columns": [
-        "cnpj_fornecedor"
+        "cod_produto_fornecedor"
       ],
       "unique": false
     },

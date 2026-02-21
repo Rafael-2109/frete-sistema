@@ -100,16 +100,16 @@
       "unique": false
     },
     {
-      "name": "ix_correcao_data_nf_credito_status",
+      "name": "idx_correcao_data_emissao",
       "columns": [
-        "status"
+        "data_emissao"
       ],
       "unique": false
     },
     {
-      "name": "idx_correcao_data_emissao",
+      "name": "ix_correcao_data_nf_credito_status",
       "columns": [
-        "data_emissao"
+        "status"
       ],
       "unique": false
     },

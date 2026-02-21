@@ -72,21 +72,7 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
-      "columns": [
-        "chave_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_nf_referenciada_numero_nf",
-      "columns": [
-        "numero_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_ref_numero",
       "columns": [
         "numero_nf"
       ],
@@ -110,6 +96,20 @@
       "name": "ix_nf_devolucao_nf_referenciada_nf_devolucao_id",
       "columns": [
         "nf_devolucao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_ref_numero",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
+      "columns": [
+        "chave_nf"
       ],
       "unique": false
     }

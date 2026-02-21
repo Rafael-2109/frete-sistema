@@ -246,17 +246,16 @@
   ],
   "indices": [
     {
-      "name": "idx_movimentacao_tipo_data",
+      "name": "ix_movimentacao_estoque_num_pedido",
       "columns": [
-        "tipo_movimentacao",
-        "data_movimentacao"
+        "num_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cnpj_destinatario",
+      "name": "ix_movimentacao_estoque_cod_produto_raiz",
       "columns": [
-        "cnpj_destinatario"
+        "cod_produto_raiz"
       ],
       "unique": false
     },
@@ -268,9 +267,67 @@
       "unique": false
     },
     {
+      "name": "ix_movimentacao_estoque_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_producao_pai_id",
+      "columns": [
+        "producao_pai_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_produto_data",
+      "columns": [
+        "cod_produto",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_ordem_producao",
+      "columns": [
+        "ordem_producao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_data",
+      "columns": [
+        "tipo_movimentacao",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_movimentacao_nf",
       "columns": [
         "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -387,16 +444,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_nf_remessa_origem",
+      "name": "ix_movimentacao_estoque_separacao_lote_id",
       "columns": [
-        "nf_remessa_origem"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_separacao_lote_id",
+      "name": "ix_movimentacao_estoque_nf_remessa_origem",
       "columns": [
-        "separacao_lote_id"
+        "nf_remessa_origem"
       ],
       "unique": false
     },
@@ -408,13 +465,6 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cnpj_responsavel",
-      "columns": [
-        "cnpj_responsavel"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_movimentacao_estoque_numero_nf",
       "columns": [
         "numero_nf"
@@ -422,66 +472,16 @@
       "unique": false
     },
     {
+      "name": "ix_movimentacao_estoque_cnpj_responsavel",
+      "columns": [
+        "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_movimentacao_estoque_operacao_producao_id",
       "columns": [
         "operacao_producao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_cod_produto_raiz",
-      "columns": [
-        "cod_produto_raiz"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_producao_pai_id",
-      "columns": [
-        "producao_pai_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_picking_id",
-      "columns": [
-        "odoo_picking_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_produto_data",
-      "columns": [
-        "cod_produto",
-        "data_movimentacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_ordem_producao",
-      "columns": [
-        "ordem_producao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
       ],
       "unique": false
     }
