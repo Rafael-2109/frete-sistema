@@ -18,6 +18,7 @@ from app.producao.models import CadastroPalletizacao
 from app.localidades.models import CadastroSubRota
 from app.portal.utils.grupo_empresarial import GrupoEmpresarial
 from app.estoque.models import MovimentacaoEstoque
+from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.producao.models import ProgramacaoProducao
 from app.utils.lote_utils import gerar_lote_id
 from app.utils.timezone import agora_utc_naive
@@ -965,185 +966,349 @@ def analisar_estoques(rede):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ─────────────────────────────────────────────────────────────
+# Funções auxiliares para sugerir_datas (Projeção Batch + Greedy)
+# ─────────────────────────────────────────────────────────────
+
+
+def _coletar_demanda_cnpjs(cnpjs):
+    """
+    Coleta demanda de CarteiraPrincipal para os CNPJs selecionados.
+    1 query: GROUP BY cnpj_cpf, cod_produto -> SUM(qtd_saldo_produto_pedido)
+
+    Returns: {
+        'por_cnpj': {cnpj: {cod_produto: qtd}},
+        'total_por_produto': {cod_produto: sum_qtd_todos_cnpjs}
+    }
+    """
+    pedidos = db.session.query(
+        CarteiraPrincipal.cnpj_cpf,
+        CarteiraPrincipal.cod_produto,
+        func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_total')
+    ).filter(
+        CarteiraPrincipal.cnpj_cpf.in_(cnpjs),
+        CarteiraPrincipal.ativo == True,
+        CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+    ).group_by(
+        CarteiraPrincipal.cnpj_cpf,
+        CarteiraPrincipal.cod_produto
+    ).all()
+
+    por_cnpj = {}
+    total_por_produto = {}
+
+    for p in pedidos:
+        cnpj = p.cnpj_cpf
+        cod = p.cod_produto
+        qtd = float(p.qtd_total or 0)
+
+        if qtd <= 0:
+            continue
+
+        if cnpj not in por_cnpj:
+            por_cnpj[cnpj] = {}
+        por_cnpj[cnpj][cod] = por_cnpj[cnpj].get(cod, 0) + qtd
+        total_por_produto[cod] = total_por_produto.get(cod, 0) + qtd
+
+    return {
+        'por_cnpj': por_cnpj,
+        'total_por_produto': total_por_produto
+    }
+
+
+def _classificar_produtos(projecoes, total_por_produto):
+    """
+    Passos 4-5: Produto OK se menor_estoque_d7 >= demanda_total de todos os CNPJs.
+    Returns: (set(produtos_ok), set(produtos_ruptura))
+    """
+    produtos_ok = set()
+    produtos_ruptura = set()
+
+    for cod, qtd_total in total_por_produto.items():
+        proj = projecoes.get(cod, {})
+        menor_d7 = proj.get('menor_estoque_d7', 0)
+        if menor_d7 >= qtd_total:
+            produtos_ok.add(cod)
+        else:
+            produtos_ruptura.add(cod)
+
+    return produtos_ok, produtos_ruptura
+
+
+def _classificar_cnpjs(cnpjs, demanda_por_cnpj, produtos_ruptura):
+    """
+    Passo 6: CNPJ OK se NENHUM de seus produtos esta em ruptura.
+    Returns: (list_ok, list_ruptura)
+    """
+    cnpjs_ok = []
+    cnpjs_ruptura = []
+
+    for cnpj in cnpjs:
+        produtos_cnpj = set(demanda_por_cnpj.get(cnpj, {}).keys())
+        if produtos_cnpj.isdisjoint(produtos_ruptura):
+            cnpjs_ok.append(cnpj)
+        else:
+            cnpjs_ruptura.append(cnpj)
+
+    return cnpjs_ok, cnpjs_ruptura
+
+
+def _calcular_data_minima_expedicao(dias_uteis_expedicao):
+    """
+    Calcula D+2 uteis, ajustado para dias de expedicao permitidos (seg-qui).
+    """
+    data = date.today()
+    dias_adicionados = 0
+
+    while dias_adicionados < 2:
+        data += timedelta(days=1)
+        if data.weekday() < 5:  # seg-sex = util
+            dias_adicionados += 1
+
+    # Ajustar para dia de expedicao permitido (seg-qui)
+    while data.weekday() not in dias_uteis_expedicao:
+        data += timedelta(days=1)
+
+    return data
+
+
+def _proxima_data_disponivel(data_minima, dias_uteis, cnpjs_por_dia, max_por_dia):
+    """
+    Encontra a proxima data com slot disponivel (dia de expedicao + < max_por_dia).
+    """
+    data = data_minima
+    for _ in range(365):  # safety limit
+        if data.weekday() in dias_uteis:
+            data_str = data.strftime('%Y-%m-%d')
+            if cnpjs_por_dia.get(data_str, 0) < max_por_dia:
+                return data
+        data += timedelta(days=1)
+    return data  # fallback
+
+
+def _montar_sugestao(data_expedicao, tem_ruptura):
+    """
+    Monta dicionario de sugestao para um CNPJ.
+    Agendamento = expedicao + 1 dia calendario.
+    """
+    data_agendamento = data_expedicao + timedelta(days=1)
+    return {
+        'expedicao': data_expedicao.strftime('%Y-%m-%d'),
+        'agendamento': data_agendamento.strftime('%Y-%m-%d'),
+        'disponibilidade_estoque': data_expedicao.strftime('%Y-%m-%d'),
+        'tem_ruptura': tem_ruptura
+    }
+
+
+def _otimizar_cnpjs_ruptura(
+    cnpjs_ruptura, demanda, projecoes, produtos_ruptura,
+    data_minima, dias_uteis, cnpjs_por_dia, max_por_dia
+):
+    """
+    Passo 7: Otimizacao greedy para CNPJs com produtos em ruptura.
+
+    Ordenar CNPJs por demanda de produtos em ruptura (ascendente).
+    Para cada CNPJ, encontrar primeira data onde estoque projetado >= demanda.
+    Ao atribuir, deduzir demanda de todos os produtos do estoque futuro.
+
+    Complexidade: O(CNPJs x datas x produtos_ruptura) — trivial em memoria.
+    """
+    hoje = date.today()
+    dias_projecao = 28
+
+    # Montar timeline de estoque para produtos em ruptura
+    # {cod_produto: [saldo_final_d0, saldo_final_d1, ..., saldo_final_d27]}
+    estoque_timeline = {}
+    for cod in produtos_ruptura:
+        proj = projecoes.get(cod, {}).get('projecao', [])
+        estoque_timeline[cod] = [dia.get('saldo_final', 0) for dia in proj]
+
+    # Demanda de produtos em ruptura por CNPJ
+    cnpj_demanda_ruptura = {}
+    for cnpj in cnpjs_ruptura:
+        dem = {}
+        for cod, qtd in demanda['por_cnpj'].get(cnpj, {}).items():
+            if cod in produtos_ruptura:
+                dem[cod] = qtd
+        cnpj_demanda_ruptura[cnpj] = dem
+
+    # Ordenar: menor demanda total de produtos em ruptura primeiro
+    cnpjs_sorted = sorted(
+        cnpjs_ruptura,
+        key=lambda c: sum(cnpj_demanda_ruptura.get(c, {}).values())
+    )
+
+    # Stock consumido por atribuicoes anteriores
+    # {cod_produto: {day_idx: qty_consumida}}
+    consumido = {}
+
+    sugestoes = {}
+
+    for cnpj in cnpjs_sorted:
+        atribuido = False
+
+        for day_offset in range(dias_projecao):
+            data_candidata = hoje + timedelta(days=day_offset)
+
+            # Verificar restricoes de calendario
+            if data_candidata < data_minima:
+                continue
+            if data_candidata.weekday() not in dias_uteis:
+                continue
+
+            # Verificar limite diario
+            data_str = data_candidata.strftime('%Y-%m-%d')
+            if cnpjs_por_dia.get(data_str, 0) >= max_por_dia:
+                continue
+
+            # Verificar estoque para TODOS os produtos em ruptura do CNPJ
+            pode_embarcar = True
+            for cod, qtd_necessaria in cnpj_demanda_ruptura.get(cnpj, {}).items():
+                timeline = estoque_timeline.get(cod, [])
+                if day_offset >= len(timeline):
+                    pode_embarcar = False
+                    break
+                disponivel = timeline[day_offset] - consumido.get(cod, {}).get(day_offset, 0)
+                if disponivel < qtd_necessaria:
+                    pode_embarcar = False
+                    break
+
+            if pode_embarcar:
+                # Atribuir CNPJ a esta data
+                cnpjs_por_dia[data_str] = cnpjs_por_dia.get(data_str, 0) + 1
+                sugestoes[cnpj] = _montar_sugestao(data_candidata, tem_ruptura=True)
+
+                # Deduzir demanda de TODOS os produtos do CNPJ (OK + ruptura)
+                # para que o estoque futuro reflita a alocacao
+                for cod, qtd in demanda['por_cnpj'].get(cnpj, {}).items():
+                    if cod not in consumido:
+                        consumido[cod] = {}
+                    for future_idx in range(day_offset, dias_projecao):
+                        consumido[cod][future_idx] = (
+                            consumido[cod].get(future_idx, 0) + qtd
+                        )
+
+                atribuido = True
+                break
+
+        if not atribuido:
+            # Sem data viavel em 28 dias
+            sugestoes[cnpj] = {
+                'expedicao': '',
+                'agendamento': '',
+                'disponibilidade_estoque': '',
+                'tem_ruptura': True
+            }
+
+    return sugestoes
+
+
 @programacao_em_lote_bp.route('/api/sugerir-datas/<rede>', methods=['POST'])
 @login_required
 def sugerir_datas(rede):
     """
-    API para sugerir datas de expedição e agendamento com análise de ruptura
-    Regras:
-    1. Expedição inicia em D+2 úteis
-    2. Expedição apenas 2ª a 5ª feira
-    3. Agendamento D+1 da expedição
-    4. Máximo 30 CNPJs por dia
-    5. Considera disponibilidade de estoque para cada CNPJ
+    API para sugerir datas de expedicao e agendamento com projecao batch otimizada.
+
+    Algoritmo em 7 passos:
+    1. Expedicao D+2 uteis (seg-qui), agendamento D+1 calendario, max 30/dia
+    2. Projecao base excluindo CNPJs avaliados (4 queries batch)
+    3. Demanda por CNPJ via CarteiraPrincipal (1 query)
+    4-5. Classificar produtos: OK (menor_estoque_d7 >= demanda) vs ruptura
+    6. CNPJs com todos produtos OK -> data minima (fast-path)
+    7. CNPJs com ruptura -> otimizacao greedy (menor demanda primeiro)
+
+    Performance: ~5 queries totais (vs ~30.000 na versao anterior)
     """
     try:
-        # timedelta já está importado no topo do arquivo
+        import time as _time
+        inicio = _time.monotonic()
 
         dados = request.get_json()
         cnpjs_selecionados = dados.get('cnpjs', [])
-        ordem = dados.get('ordem', {})  # Ordem de prioridade
-        
+        ordem = dados.get('ordem', {})
+
         if not cnpjs_selecionados:
             return jsonify({'success': False, 'error': 'Nenhum CNPJ selecionado'}), 400
-        
-        # Configurações
+
         MAX_POR_DIA = 30
-        DIAS_UTEIS = [0, 1, 2, 3]  # Segunda a Quinta (expedição)
-        
-        # Primeiro, fazer análise de ruptura para obter datas de disponibilidade
-        logger.info(f"Analisando ruptura para {len(cnpjs_selecionados)} CNPJs")
-        
-        # Análise de ruptura considerando ordem
-        resultado_ruptura = {}
-        saidas_acumuladas = {}
-        
-        # Ordenar CNPJs conforme prioridade
-        cnpjs_ordenados = sorted(cnpjs_selecionados, key=lambda x: ordem.get(x, 999))
-        
-        for idx, cnpj in enumerate(cnpjs_ordenados):
-            # Buscar pedidos do CNPJ
-            pedidos = db.session.query(CarteiraPrincipal).filter_by(
-                cnpj_cpf=cnpj
-            ).all()
-            
-            data_completa = date.today()
-            tem_ruptura = False
-            
-            for pedido in pedidos:
-                cod_produto = pedido.cod_produto
-                qtd_necessaria = float(pedido.qtd_saldo_produto_pedido)
-                
-                # Incluir saídas acumuladas dos pedidos anteriores
-                saida_acumulada = saidas_acumuladas.get(cod_produto, 0)
-                qtd_necessaria_total = qtd_necessaria + saida_acumulada
-                
-                # Buscar estoque atual
-                estoque_atual = db.session.query(
-                    func.sum(MovimentacaoEstoque.qtd_movimentacao)
-                ).filter(
-                    MovimentacaoEstoque.cod_produto == cod_produto,
-                    MovimentacaoEstoque.ativo == True
-                ).scalar() or 0
-                
-                # Se não tem estoque suficiente, calcular quando terá
-                if float(estoque_atual) < qtd_necessaria_total:
-                    tem_ruptura = True
-                    
-                    # Buscar data quando estará disponível
-                    for dias in range(1, 60):  # Buscar até 60 dias
-                        data_futura = date.today() + timedelta(days=dias)
-                        
-                        # Projetar estoque com produções até D-1 (não considera produção do dia da expedição)
-                        # Exemplo: se expedição é dia 11, considera produções até dia 10
-                        # INCLUI produção de hoje se houver
-                        data_limite_producao = data_futura - timedelta(days=1)
-                        producoes = db.session.query(
-                            func.sum(ProgramacaoProducao.qtd_programada)
-                        ).filter(
-                            ProgramacaoProducao.cod_produto == cod_produto,
-                            ProgramacaoProducao.data_programacao >= date.today(),  # A partir de hoje (INCLUI hoje)
-                            ProgramacaoProducao.data_programacao <= data_limite_producao  # Até D-1 da expedição
-                        ).scalar() or 0
-                        
-                        # Considerar saídas já programadas até a data futura
-                        saidas_programadas = db.session.query(
-                            func.sum(Separacao.qtd_saldo)
-                        ).filter(
-                            Separacao.cod_produto == cod_produto,
-                            Separacao.expedicao <= data_futura,
-                            Separacao.sincronizado_nf == False,
-                            ~Separacao.cnpj_cpf.in_(cnpjs_ordenados)  # Excluir CNPJs da rede
-                        ).scalar() or 0
-                        
-                        # Estoque projetado = Estoque atual + Produções até D-1 - Saídas programadas
-                        estoque_projetado = float(estoque_atual) + float(producoes) - float(saidas_programadas)
-                        
-                        if estoque_projetado >= qtd_necessaria_total:
-                            if data_futura > data_completa:
-                                data_completa = data_futura
-                            break
-                
-                # Acumular saída para próximos pedidos
-                saidas_acumuladas[cod_produto] = saidas_acumuladas.get(cod_produto, 0) + qtd_necessaria
-            
-            resultado_ruptura[cnpj] = {
-                'data_disponivel': data_completa,
-                'tem_ruptura': tem_ruptura
-            }
-        
-        # Calcular D+2 úteis a partir de hoje
-        data_atual = date.today()
-        data_minima_expedicao = data_atual
-        dias_uteis_adicionados = 0
-        
-        # Adicionar 2 dias úteis
-        while dias_uteis_adicionados < 2:
-            data_minima_expedicao += timedelta(days=1)
-            # Considera útil se não for sábado (5) ou domingo (6)
-            if data_minima_expedicao.weekday() < 5:
-                dias_uteis_adicionados += 1
-        
-        # Se D+2 úteis não cair em dia permitido (2ª-5ª), ajustar
-        while data_minima_expedicao.weekday() not in DIAS_UTEIS:
-            data_minima_expedicao += timedelta(days=1)
-        
-        # Agora sugerir datas baseadas na disponibilidade
+        DIAS_UTEIS_EXPEDICAO = [0, 1, 2, 3]  # seg-qui
+
+        # ─── PASSO 3: Coletar demanda dos CNPJs ───
+        demanda = _coletar_demanda_cnpjs(cnpjs_selecionados)
+        cod_produtos_unicos = list(demanda['total_por_produto'].keys())
+
+        if not cod_produtos_unicos:
+            logger.info("Nenhum produto com saldo pendente para os CNPJs selecionados")
+            return jsonify({
+                'success': True,
+                'sugestoes': {},
+                'data_minima': date.today().strftime('%Y-%m-%d'),
+                'distribuicao_dias': {}
+            })
+
+        # ─── PASSO 2: Projecao base excluindo CNPJs avaliados ───
+        projecoes = ServicoEstoqueSimples.calcular_projecao_batch_sem_cnpjs(
+            cod_produtos_unicos, dias=28, cnpjs_excluir=cnpjs_selecionados
+        )
+
+        # ─── PASSOS 4-5: Separar produtos OK vs ruptura ───
+        produtos_ok, produtos_ruptura = _classificar_produtos(
+            projecoes, demanda['total_por_produto']
+        )
+        logger.info(
+            f"Classificacao: {len(produtos_ok)} produtos OK, "
+            f"{len(produtos_ruptura)} produtos em ruptura"
+        )
+
+        # ─── PASSO 6: Classificar CNPJs (OK vs ruptura) ───
+        cnpjs_ok, cnpjs_ruptura = _classificar_cnpjs(
+            cnpjs_selecionados, demanda['por_cnpj'], produtos_ruptura
+        )
+        logger.info(
+            f"CNPJs: {len(cnpjs_ok)} OK (fast-path), "
+            f"{len(cnpjs_ruptura)} com ruptura (greedy)"
+        )
+
+        # ─── Calcular data minima (D+2 uteis, seg-qui) ───
+        data_minima = _calcular_data_minima_expedicao(DIAS_UTEIS_EXPEDICAO)
+
+        # ─── Distribuir CNPJs OK (ordenados por prioridade) ───
         sugestoes = {}
         cnpjs_por_dia = {}
-        
-        for cnpj in cnpjs_ordenados:
-            ruptura_info = resultado_ruptura.get(cnpj, {})
-            data_disponivel = ruptura_info.get('data_disponivel', date.today())
-            
-            # Data de expedição é o maior entre: D+2 úteis ou data disponível
-            if data_disponivel > data_minima_expedicao:
-                data_expedicao = data_disponivel
-            else:
-                data_expedicao = data_minima_expedicao
-            
-            # Ajustar para dia permitido se necessário
-            while data_expedicao.weekday() not in DIAS_UTEIS:
-                data_expedicao += timedelta(days=1)
-            
-            # Verificar limite diário (30 CNPJs por dia)
-            data_str = data_expedicao.strftime('%Y-%m-%d')
-            if data_str not in cnpjs_por_dia:
-                cnpjs_por_dia[data_str] = 0
-            
-            # Se excedeu limite do dia, buscar próximo dia útil disponível
-            while cnpjs_por_dia.get(data_expedicao.strftime('%Y-%m-%d'), 0) >= MAX_POR_DIA:
-                data_expedicao += timedelta(days=1)
-                while data_expedicao.weekday() not in DIAS_UTEIS:
-                    data_expedicao += timedelta(days=1)
-                data_str = data_expedicao.strftime('%Y-%m-%d')
-                if data_str not in cnpjs_por_dia:
-                    cnpjs_por_dia[data_str] = 0
-            
-            # Incrementar contador do dia
-            cnpjs_por_dia[data_expedicao.strftime('%Y-%m-%d')] += 1
-            
-            # Data de agendamento é D+1 da expedição
-            data_agendamento = data_expedicao + timedelta(days=1)
-            
-            sugestoes[cnpj] = {
-                'expedicao': data_expedicao.strftime('%Y-%m-%d'),
-                'agendamento': data_agendamento.strftime('%Y-%m-%d'),
-                'disponibilidade_estoque': data_disponivel.strftime('%Y-%m-%d'),
-                'tem_ruptura': ruptura_info.get('tem_ruptura', False)
-            }
-        
-        logger.info(f"Sugestões geradas para {len(sugestoes)} CNPJs")
-        
+
+        cnpjs_ok_ordenados = sorted(cnpjs_ok, key=lambda x: ordem.get(x, 999))
+        for cnpj in cnpjs_ok_ordenados:
+            data_exp = _proxima_data_disponivel(
+                data_minima, DIAS_UTEIS_EXPEDICAO, cnpjs_por_dia, MAX_POR_DIA
+            )
+            data_str = data_exp.strftime('%Y-%m-%d')
+            cnpjs_por_dia[data_str] = cnpjs_por_dia.get(data_str, 0) + 1
+            sugestoes[cnpj] = _montar_sugestao(data_exp, tem_ruptura=False)
+
+        # ─── PASSO 7: Otimizacao greedy para CNPJs com ruptura ───
+        if cnpjs_ruptura:
+            sugestoes_ruptura = _otimizar_cnpjs_ruptura(
+                cnpjs_ruptura, demanda, projecoes, produtos_ruptura,
+                data_minima, DIAS_UTEIS_EXPEDICAO, cnpjs_por_dia, MAX_POR_DIA
+            )
+            sugestoes.update(sugestoes_ruptura)
+
+        duracao = _time.monotonic() - inicio
+        logger.info(
+            f"sugerir_datas: {len(sugestoes)} sugestoes em {duracao:.2f}s "
+            f"({len(cnpjs_selecionados)} CNPJs, {len(cod_produtos_unicos)} produtos)"
+        )
+
         return jsonify({
             'success': True,
             'sugestoes': sugestoes,
-            'data_minima': data_minima_expedicao.strftime('%Y-%m-%d'),
+            'data_minima': data_minima.strftime('%Y-%m-%d'),
             'distribuicao_dias': cnpjs_por_dia
         })
-        
+
     except Exception as e:
         logger.error(f"Erro ao sugerir datas: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

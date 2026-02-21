@@ -725,3 +725,228 @@ class ServicoEstoqueSimples:
             logger.error(f"Erro em calcular_estoque_batch: {e}")
             # Retornar dicionário vazio para cada produto em caso de erro
             return {cod: {'estoque_atual': 0, 'programacao': []} for cod in codigos_produtos}
+
+    @staticmethod
+    def calcular_projecao_batch_sem_cnpjs(
+        codigos_produtos: List[str],
+        dias: int = 28,
+        cnpjs_excluir: List[str] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Projeção batch para múltiplos produtos, excluindo CNPJs específicos das saídas.
+
+        Usado por sugerir_datas() para calcular estoque disponível como se os CNPJs
+        selecionados não existissem, permitindo otimização de alocação.
+
+        Performance: 4 queries totais (vs N×M×60 da versão anterior)
+
+        Queries:
+        1. UnificacaoCodigos.get_todos_codigos_relacionados_batch() — mapa de unificação
+        2. SUM(MovimentacaoEstoque) GROUP BY cod_produto — estoque atual
+        3. SUM(ProgramacaoProducao) GROUP BY cod_produto, data — entradas previstas
+        4. SUM(Separacao.qtd_saldo) GROUP BY cod_produto, expedicao — saídas previstas
+           (exclui CNPJs especificados; atrasados/NULL agrupados em hoje)
+
+        Args:
+            codigos_produtos: Lista de códigos de produtos únicos
+            dias: Horizonte de projeção em dias (default 28)
+            cnpjs_excluir: Lista de CNPJs a excluir das saídas (Separacao)
+
+        Returns:
+            Dict[cod_produto] -> {
+                'estoque_atual': float,
+                'menor_estoque_d7': float,
+                'projecao': [{dia, data, saldo_inicial, entrada, saida, saldo_final}, ...]
+            }
+        """
+        if not codigos_produtos:
+            return {}
+
+        try:
+            hoje = date.today()
+            data_fim = hoje + timedelta(days=dias)
+
+            # ─── 1. Mapa de unificação em batch (1 query) ───
+            mapa_unificacao = UnificacaoCodigos.get_todos_codigos_relacionados_batch(
+                codigos_produtos
+            )
+
+            # Expandir todos os códigos (incluindo unificados)
+            todos_codigos = set()
+            for cod, relacionados in mapa_unificacao.items():
+                todos_codigos.update(relacionados)
+            todos_codigos = list(todos_codigos)
+
+            if not todos_codigos:
+                return {}
+
+            # ─── 2. Estoque atual em batch (1 query) ───
+            resultados_estoque = db.session.query(
+                MovimentacaoEstoque.cod_produto,
+                func.sum(MovimentacaoEstoque.qtd_movimentacao).label('estoque')
+            ).filter(
+                MovimentacaoEstoque.cod_produto.in_(todos_codigos),
+                MovimentacaoEstoque.ativo == True
+            ).group_by(
+                MovimentacaoEstoque.cod_produto
+            ).all()
+
+            estoque_por_codigo = {
+                str(r.cod_produto): float(r.estoque or 0)
+                for r in resultados_estoque
+            }
+
+            # ─── 3. Entradas previstas em batch (1 query) ───
+            resultados_entradas = db.session.query(
+                ProgramacaoProducao.cod_produto,
+                func.date(ProgramacaoProducao.data_programacao).label('data'),
+                func.sum(ProgramacaoProducao.qtd_programada).label('quantidade')
+            ).filter(
+                ProgramacaoProducao.cod_produto.in_(todos_codigos),
+                func.date(ProgramacaoProducao.data_programacao) >= hoje,
+                func.date(ProgramacaoProducao.data_programacao) <= data_fim
+            ).group_by(
+                ProgramacaoProducao.cod_produto,
+                func.date(ProgramacaoProducao.data_programacao)
+            ).all()
+
+            # Agrupar: {cod_produto_str: {date_obj: qtd}}
+            entradas_por_codigo: Dict[str, Dict[date, float]] = {}
+            for r in resultados_entradas:
+                cod = str(r.cod_produto)
+                if r.data and r.quantidade:
+                    data_entry = (
+                        r.data if isinstance(r.data, date)
+                        else date.fromisoformat(str(r.data))
+                    )
+                    if cod not in entradas_por_codigo:
+                        entradas_por_codigo[cod] = {}
+                    entradas_por_codigo[cod][data_entry] = (
+                        entradas_por_codigo[cod].get(data_entry, 0) + float(r.quantidade)
+                    )
+
+            # ─── 4. Saídas previstas em batch (1 query) ───
+            # Inclui atrasadas (expedicao < hoje) e sem data (NULL) → agrupadas em hoje
+            saidas_query = db.session.query(
+                Separacao.cod_produto,
+                Separacao.expedicao,
+                func.sum(Separacao.qtd_saldo).label('quantidade')
+            ).filter(
+                Separacao.cod_produto.in_(todos_codigos),
+                Separacao.sincronizado_nf == False,
+                Separacao.qtd_saldo > 0,
+                db.or_(
+                    Separacao.expedicao.is_(None),
+                    Separacao.expedicao <= data_fim
+                )
+            )
+
+            # Filtro de exclusão de CNPJs (condicional)
+            if cnpjs_excluir:
+                saidas_query = saidas_query.filter(
+                    ~Separacao.cnpj_cpf.in_(cnpjs_excluir)
+                )
+
+            resultados_saidas = saidas_query.group_by(
+                Separacao.cod_produto,
+                Separacao.expedicao
+            ).all()
+
+            # Agrupar: {cod_produto_str: {date_obj: qtd}}, atrasados/NULL → hoje
+            saidas_por_codigo: Dict[str, Dict[date, float]] = {}
+            for r in resultados_saidas:
+                cod = str(r.cod_produto)
+                qtd = float(r.quantidade or 0)
+                if qtd <= 0:
+                    continue
+
+                # Atrasados e sem data → agrupam em hoje
+                if r.expedicao is None or r.expedicao < hoje:
+                    data_saida = hoje
+                else:
+                    data_saida = r.expedicao
+
+                if cod not in saidas_por_codigo:
+                    saidas_por_codigo[cod] = {}
+                saidas_por_codigo[cod][data_saida] = (
+                    saidas_por_codigo[cod].get(data_saida, 0) + qtd
+                )
+
+            # ─── 5. Agregar por código original e montar projeção ───
+            resultado: Dict[str, Dict[str, Any]] = {}
+
+            for cod_original in codigos_produtos:
+                codigos_relacionados = mapa_unificacao.get(
+                    cod_original, [cod_original]
+                )
+
+                # Somar estoque de códigos relacionados
+                estoque_atual = sum(
+                    estoque_por_codigo.get(str(c), 0)
+                    for c in codigos_relacionados
+                )
+
+                # Agregar entradas de códigos relacionados
+                entradas_agregadas: Dict[date, float] = {}
+                for cod_rel in codigos_relacionados:
+                    for dt, qtd in entradas_por_codigo.get(str(cod_rel), {}).items():
+                        entradas_agregadas[dt] = entradas_agregadas.get(dt, 0) + qtd
+
+                # Agregar saídas de códigos relacionados
+                saidas_agregadas: Dict[date, float] = {}
+                for cod_rel in codigos_relacionados:
+                    for dt, qtd in saidas_por_codigo.get(str(cod_rel), {}).items():
+                        saidas_agregadas[dt] = saidas_agregadas.get(dt, 0) + qtd
+
+                # Montar projeção dia a dia em memória
+                projecao = []
+                for dia in range(dias + 1):
+                    data = hoje + timedelta(days=dia)
+                    entrada_dia = entradas_agregadas.get(data, 0)
+                    saida_dia = saidas_agregadas.get(data, 0)
+
+                    if dia == 0:
+                        saldo_inicial = estoque_atual
+                    else:
+                        saldo_inicial = projecao[dia - 1]['saldo_final']
+
+                    saldo_final = saldo_inicial - saida_dia + entrada_dia
+
+                    projecao.append({
+                        'dia': dia,
+                        'data': data.isoformat(),
+                        'saldo_inicial': saldo_inicial,
+                        'entrada': entrada_dia,
+                        'saida': saida_dia,
+                        'saldo_final': saldo_final
+                    })
+
+                # menor_estoque_d7 = MIN(saldo_final[D0..D7])
+                menor_estoque_d7 = min(
+                    (p['saldo_final'] for p in projecao[:8]),
+                    default=estoque_atual
+                )
+
+                resultado[cod_original] = {
+                    'estoque_atual': estoque_atual,
+                    'menor_estoque_d7': menor_estoque_d7,
+                    'projecao': projecao
+                }
+
+            logger.info(
+                f"✅ calcular_projecao_batch_sem_cnpjs: "
+                f"{len(codigos_produtos)} produtos, "
+                f"{len(cnpjs_excluir or [])} CNPJs excluídos, {dias} dias"
+            )
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro em calcular_projecao_batch_sem_cnpjs: {e}")
+            return {
+                cod: {
+                    'estoque_atual': 0,
+                    'menor_estoque_d7': 0,
+                    'projecao': []
+                }
+                for cod in codigos_produtos
+            }
