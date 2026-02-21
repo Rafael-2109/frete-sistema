@@ -27,7 +27,9 @@
     },
     {
       "name": "odoo_line_id",
-      "type": "integer"
+      "type": "integer",
+      "description": "account.move.line ID do Odoo (UNIQUE)",
+      "unique": true
     },
     {
       "name": "cnpj",
