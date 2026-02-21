@@ -213,54 +213,49 @@
                 <table class="table table-bordered table-hover" id="tabelaProgramacao">
                     <thead class="table-thead-theme">
                         <tr>
-                            <th width="40">
+                            <th class="col-check">
                                 <input type="checkbox" id="checkTodos"
                                     title="Selecionar apenas Pendentes e Reagendar" />
                             </th>
-                            <th>Cliente</th>
-                            <th>Cidade</th>
-                            <th>Valor Total</th>
-                            <th>Peso (kg)</th>
-                            <th>Pallets</th>
-                            <th>Expedição</th>
-                            <th>Agendamento</th>
-                            <th>Status</th>
-                            <th width="150">Ações</th>
+                            <th class="col-nome-lg">Cliente</th>
+                            <th class="col-cidade">Cidade</th>
+                            <th class="col-valor">Valor Total</th>
+                            <th class="col-peso">Peso (kg)</th>
+                            <th class="col-qtd">Pallets</th>
+                            <th class="col-data-input">Expedição</th>
+                            <th class="col-data-input">Agendamento</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-acoes">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for cnpj_data in dados_cnpj %}
                         <tr class="cnpj-row {{ cnpj_data.cor_linha }}" data-cnpj="{{ cnpj_data.cnpj }}"
                             data-status="{{ cnpj_data.status }}">
-                            <td class="text-center">
+                            <td class="col-check">
                                 <input type="checkbox" class="check-cnpj" value="{{ cnpj_data.cnpj }}"
                                     data-status="{{ cnpj_data.status }}" />
                             </td>
-                            <td>
+                            <td class="col-nome-lg" title="{{ cnpj_data.raz_social }}">
                                 <div class="fw-medium">{{ cnpj_data.raz_social }}</div>
                                 <small class="text-muted">{{ cnpj_data.cnpj_formatado }}</small>
                             </td>
-                            <td>
+                            <td class="col-cidade" title="{{ cnpj_data.cidade }}">
                                 <div>{{ cnpj_data.cidade }}</div>
                                 <small class="text-muted">Sub-Rota: {{ cnpj_data.sub_rota or '-' }}</small>
                             </td>
-                            <td class="text-end" style="font-size: 0.9em;">R$ {{ "{:,.2f}".format(cnpj_data.total_valor)
-                                }}</td>
-                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_peso) }}
-                            </td>
-                            <td class="text-end" style="font-size: 0.9em;">{{ "{:,.2f}".format(cnpj_data.total_pallets)
-                                }}</td>
-                            <td>
+                            <td class="col-valor">R$ {{ "{:,.2f}".format(cnpj_data.total_valor) }}</td>
+                            <td class="col-peso">{{ "{:,.2f}".format(cnpj_data.total_peso) }}</td>
+                            <td class="col-qtd">{{ "{:,.2f}".format(cnpj_data.total_pallets) }}</td>
+                            <td class="col-data-input">
                                 <input type="date" class="form-control form-control-sm data-expedicao"
-                                    data-cnpj="{{ cnpj_data.cnpj }}" value="{{ cnpj_data.expedicao_sugerida }}"
-                                    style="width: 110px; font-size: 0.85em;">
+                                    data-cnpj="{{ cnpj_data.cnpj }}" value="{{ cnpj_data.expedicao_sugerida }}">
                             </td>
-                            <td>
+                            <td class="col-data-input">
                                 <input type="date" class="form-control form-control-sm data-agendamento"
-                                    data-cnpj="{{ cnpj_data.cnpj }}" value="{{ cnpj_data.agendamento_sugerido }}"
-                                    style="width: 110px; font-size: 0.85em;">
+                                    data-cnpj="{{ cnpj_data.cnpj }}" value="{{ cnpj_data.agendamento_sugerido }}">
                             </td>
-                            <td class="text-center">
+                            <td class="col-status">
                                 {% if cnpj_data.status %}
                                 <span
                                     class="badge 
@@ -273,7 +268,7 @@
                                 <span class="badge bg-secondary">Pendente</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">
+                            <td class="col-acoes">
                                 <button class="btn btn-sm btn-warning btn-priorizar" data-cnpj="{{ cnpj_data.cnpj }}"
                                     title="Priorizar">
                                     <i class="fas fa-arrow-up"></i>

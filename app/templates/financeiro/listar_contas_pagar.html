@@ -127,8 +127,8 @@
                 <table class="fin-table">
                     <thead>
                         <tr>
-                            <th style="width: 60px;">Emp</th>
-                            <th>
+                            <th class="col-id">Emp</th>
+                            <th class="col-pedido">
                                 <a href="{{ url_for('financeiro.listar_contas_pagar', sort='titulo_nf', direction='asc' if sort != 'titulo_nf' or direction == 'desc' else 'desc', **request.args) }}"
                                    class="fin-sortable">
                                     NF-Parcela
@@ -137,9 +137,9 @@
                                     {% endif %}
                                 </a>
                             </th>
-                            <th>Fornecedor</th>
-                            <th style="width: 170px;">CNPJ</th>
-                            <th style="width: 110px;">
+                            <th class="col-nome-lg">Fornecedor</th>
+                            <th class="col-cnpj">CNPJ</th>
+                            <th class="col-data">
                                 <a href="{{ url_for('financeiro.listar_contas_pagar', sort='vencimento', direction='asc' if sort != 'vencimento' or direction == 'desc' else 'desc', **request.args) }}"
                                    class="fin-sortable">
                                     Vencimento
@@ -148,7 +148,7 @@
                                     {% endif %}
                                 </a>
                             </th>
-                            <th class="text-end" style="width: 130px;">
+                            <th class="col-valor">
                                 <a href="{{ url_for('financeiro.listar_contas_pagar', sort='valor_residual', direction='asc' if sort != 'valor_residual' or direction == 'desc' else 'desc', **request.args) }}"
                                    class="fin-sortable">
                                     Valor
@@ -157,7 +157,7 @@
                                     {% endif %}
                                 </a>
                             </th>
-                            <th class="text-center" style="width: 100px;">Status</th>
+                            <th class="col-status">Status</th>
                         </tr>
                     </thead>
                     <tbody>

@@ -232,24 +232,24 @@
     <table class="table table-striped table-bordered align-middle">
       <thead class="table-dark">
         <tr>
-          <th style="width: 6%;">Número</th>
-          <th style="width: 10%;">Data Prevista</th>
-          <th style="width: 10%;">Data de Embarque</th>
-          <th style="width: 20%;">Transportadora</th>
-          <th style="width: 8%;">Status</th>
-          <th style="width: 10%;">Portaria</th>
-          <th style="width: 10%;">Status NFs</th>
-          <th style="width: 8%;">Fretes</th>
-          <th style="width: 18%;">Ações</th>
+          <th class="col-pedido">Número</th>
+          <th class="col-data">Data Prevista</th>
+          <th class="col-data">Data de Embarque</th>
+          <th class="col-nome-lg">Transportadora</th>
+          <th class="col-status">Status</th>
+          <th class="col-status">Portaria</th>
+          <th class="col-status">Status NFs</th>
+          <th class="col-status">Fretes</th>
+          <th class="col-acoes">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for embarque in embarques %}
         <tr>
-          <td>{{ embarque.numero }}</td>
-          <td>{{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '-' }}</td>
-          <td>{{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '-' }}</td>
-          <td>{{ embarque.transportadora.razao_social if embarque.transportadora else '' }}</td>
+          <td class="col-pedido">{{ embarque.numero }}</td>
+          <td class="col-data">{{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '-' }}</td>
+          <td class="col-data">{{ embarque.data_embarque | formatar_data_segura if embarque.data_embarque else '-' }}</td>
+          <td class="col-nome-lg" title="{{ embarque.transportadora.razao_social if embarque.transportadora else '' }}">{{ embarque.transportadora.razao_social if embarque.transportadora else '' }}</td>
           <td>
             <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %}">
               {{ (embarque.status or 'DRAFT').upper() }}
@@ -297,21 +297,21 @@
               {% endif %}
             </span>
           </td>
-          <td>
-            <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}" 
+          <td class="col-acoes">
+            <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}"
                class="btn btn-sm btn-outline-primary">
               <i class="fas fa-eye"></i> Visualizar
             </a>
-            
+
             {% if embarque.status == 'cancelado' %}
-              <a href="{{ url_for('embarques.motivo_cancelamento', id=embarque.id) }}" 
-                 class="btn btn-sm btn-outline-warning" 
+              <a href="{{ url_for('embarques.motivo_cancelamento', id=embarque.id) }}"
+                 class="btn btn-sm btn-outline-warning"
                  title="Ver motivo do cancelamento">
                 <i class="fas fa-question-circle"></i> Motivo
               </a>
             {% else %}
-              <a href="{{ url_for('fretes.index') }}" 
-                 class="btn btn-sm btn-outline-success" 
+              <a href="{{ url_for('fretes.index') }}"
+                 class="btn btn-sm btn-outline-success"
                  title="Ver Fretes">
                 <i class="fas fa-truck"></i> Fretes
               </a>

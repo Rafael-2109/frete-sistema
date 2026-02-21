@@ -144,7 +144,7 @@
           {% set query_suffix = ('&' ~ other_params|join('&')) if other_params else '' %}
 
           <!-- ID -->
-          <th style="white-space:nowrap;">
+          <th class="col-id">
             {% if current_sort == 'id' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -165,7 +165,7 @@
           </th>
 
           <!-- Pedido -->
-          <th style="white-space:nowrap;">
+          <th class="col-pedido">
             {% if current_sort == 'num_pedido' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -182,7 +182,7 @@
           </th>
 
           <!-- Data Pedido -->
-          <th>
+          <th class="col-data">
             {% if current_sort == 'data_pedido' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -199,7 +199,7 @@
           </th>
 
           <!-- CNPJ/CPF -->
-          <th>
+          <th class="col-cnpj">
             {% if current_sort == 'cnpj_cpf' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -216,7 +216,7 @@
           </th>
 
           <!-- Razão Social -->
-          <th>
+          <th class="col-nome">
             {% if current_sort == 'raz_social_red' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -232,7 +232,7 @@
             </a>
           </th>
  
-          <th>
+          <th class="col-cidade">
             {% if current_sort == 'nome_cidade' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -248,7 +248,7 @@
             </a>
           </th>
  
-          <th>
+          <th class="col-uf">
             {% if current_sort == 'cod_uf' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -264,7 +264,7 @@
             </a>
           </th>
  
-          <th>
+          <th class="col-id">
             {% if current_sort == 'cod_produto' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -280,7 +280,7 @@
             </a>
           </th>
 
-          <th>
+          <th class="col-nome-lg">
             {% if current_sort == 'nome_produto' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -296,7 +296,7 @@
             </a>
           </th>
           
-          <th>
+          <th class="col-qtd">
             {% if current_sort == 'qtd_saldo' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -314,7 +314,7 @@
 
 
           <!-- Valor Saldo -->
-          <th>
+          <th class="col-valor">
             {% if current_sort == 'valor_saldo' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -330,7 +330,7 @@
             </a>
           </th>
 
-          <th>
+          <th class="col-qtd">
             {% if current_sort == 'pallet' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -347,7 +347,7 @@
           </th>
 
           <!-- Peso -->
-          <th>
+          <th class="col-peso">
             {% if current_sort == 'peso' and current_dir == 'asc' %}
               {% set next_dir = 'desc' %}
             {% else %}
@@ -363,35 +363,35 @@
             </a>
           </th>
 
-          <th>Rota</th>
-          <th>Sub Rota</th>
-          <th>Obs.</th>
-          <th>Transp.</th>
-          <th>Embarque</th>
-          <th>Agenda</th>
-          <th>Protocolo</th>
-          <th>Status Pedido</th>
-          <th>Ações</th>
+          <th class="col-nowrap">Rota</th>
+          <th class="col-nowrap">Sub Rota</th>
+          <th class="col-obs">Obs.</th>
+          <th class="col-nome">Transp.</th>
+          <th class="col-data">Embarque</th>
+          <th class="col-data">Agenda</th>
+          <th class="col-pedido">Protocolo</th>
+          <th class="col-status">Status Pedido</th>
+          <th class="col-acoes">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for p in pedidos %}
         <tr>
-          <td>{{ p.separacao_lote_id }}</td>
-          <td>{{ p.num_pedido }}</td>
-          <td>
+          <td class="col-id">{{ p.separacao_lote_id }}</td>
+          <td class="col-pedido">{{ p.num_pedido }}</td>
+          <td class="col-data">
             {% if p.data_pedido %}
               {{ p.data_pedido | formatar_data_segura }}
             {% else %}
               -
             {% endif %}
           </td>
-          <td>{{ p.cnpj_cpf or '-' }}</td>
-          <td>{{ p.raz_social_red or '-' }}</td>
-          <td>{{ p.nome_cidade or '-' }}</td>
-          <td>{{ p.cod_uf or '-' }}</td>
-          <td>{{ p.cod_produto or '-' }}</td>
-          <td>{{ p.nome_produto or '-' }}</td>
+          <td class="col-cnpj">{{ p.cnpj_cpf or '-' }}</td>
+          <td class="col-nome" title="{{ p.raz_social_red or '' }}">{{ p.raz_social_red or '-' }}</td>
+          <td class="col-cidade" title="{{ p.nome_cidade or '' }}">{{ p.nome_cidade or '-' }}</td>
+          <td class="col-uf">{{ p.cod_uf or '-' }}</td>
+          <td class="col-id">{{ p.cod_produto or '-' }}</td>
+          <td class="col-nome-lg" title="{{ p.nome_produto or '' }}">{{ p.nome_produto or '-' }}</td>
           <td>
             {% if p.qtd_saldo is not none %}
               {{ '%.0f'|format(p.qtd_saldo) }}
@@ -421,28 +421,28 @@
               -
             {% endif %}
           </td>
-          <td>{{ p.rota or '-' }}</td>
-          <td>{{ p.sub_rota or '-' }}</td>
-          <td>{{ p.observ_ped_1 or '-' }}</td>
-          <td>{{ p.roteirizacao or '-' }}</td>
-          <td>
+          <td class="col-nowrap">{{ p.rota or '-' }}</td>
+          <td class="col-nowrap">{{ p.sub_rota or '-' }}</td>
+          <td class="col-obs" title="{{ p.observ_ped_1 or '' }}">{{ p.observ_ped_1 or '-' }}</td>
+          <td class="col-nome" title="{{ p.roteirizacao or '' }}">{{ p.roteirizacao or '-' }}</td>
+          <td class="col-data">
             {% if p.expedicao %}
               {{ p.expedicao | formatar_data_segura }}
             {% else %}
               -
             {% endif %}
           </td>
-          <td>
+          <td class="col-data">
             {% if p.agendamento %}
               {{ p.agendamento | formatar_data_segura }}
             {% else %}
               -
             {% endif %}
           </td>
-          <td>{{ (p.protocolo | formatar_protocolo) or '-' }}</td>
-          
+          <td class="col-pedido">{{ (p.protocolo | formatar_protocolo) or '-' }}</td>
+
           <!-- Coluna Status do Pedido -->
-          <td class="text-center">
+          <td class="col-status">
             {% if p.status_pedido == 'ABERTO' %}
               <span class="badge bg-secondary">
                 <i class="fas fa-clock"></i> Aberto
@@ -471,7 +471,7 @@
           </td>
           
           <!-- Coluna de Ações -->
-          <td>
+          <td class="col-acoes">
             <div class="btn-group btn-group-sm">
               {% if p.pode_excluir %}
                 {% if p.separacao_lote_id %}

@@ -17,79 +17,97 @@
 
   /* ======================================================================== */
   /* CONFIGURAÇÃO DO TAMANHO DAS COLUNAS DOS ITENS DO EMBARQUE               */
-  /* Tabela ocupa 100% da tela - 13 colunas proporcionais                    */
+  /* Tabela usa table-layout: auto com min-widths por coluna                 */
   /* ======================================================================== */
-  .itens-embarque-table th:nth-child(1),  /* Cliente - 13% */
+  .itens-embarque-table th:nth-child(1),  /* Cliente */
   .itens-embarque-table td:nth-child(1) {
-    width: 13%;
+    min-width: 150px;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(2),  /* Pedido - 6% */
+  .itens-embarque-table th:nth-child(2),  /* Pedido */
   .itens-embarque-table td:nth-child(2) {
-    width: 6%;
+    min-width: 80px;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(3),  /* Nota Fiscal - 6% */
+  .itens-embarque-table th:nth-child(3),  /* Nota Fiscal */
   .itens-embarque-table td:nth-child(3) {
-    width: 6%;
+    min-width: 80px;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(4),  /* Protocolo - 8% */
+  .itens-embarque-table th:nth-child(4),  /* Protocolo */
   .itens-embarque-table td:nth-child(4) {
-    width: 8%;
+    min-width: 100px;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(5),  /* Forma Agendamento - 7% */
+  .itens-embarque-table th:nth-child(5),  /* Forma Agendamento */
   .itens-embarque-table td:nth-child(5) {
-    width: 7%;
+    min-width: 70px;
     text-align: center;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(6),  /* Data Agendamento - 9% */
+  .itens-embarque-table th:nth-child(6),  /* Data Agendamento */
   .itens-embarque-table td:nth-child(6) {
-    width: 9%;
+    min-width: 120px;
   }
 
-  .itens-embarque-table th:nth-child(7),  /* Volumes - 4% */
+  .itens-embarque-table th:nth-child(7),  /* Volumes */
   .itens-embarque-table td:nth-child(7) {
-    width: 4%;
+    min-width: 60px;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(8),  /* UF - 3% */
+  .itens-embarque-table th:nth-child(8),  /* UF */
   .itens-embarque-table td:nth-child(8) {
-    width: 3%;
-  }
-
-  .itens-embarque-table th:nth-child(9),  /* Cidade - 9% */
-  .itens-embarque-table td:nth-child(9) {
-    width: 9%;
-  }
-
-  .itens-embarque-table th:nth-child(10),  /* Aceita NF - 5% */
-  .itens-embarque-table td:nth-child(10) {
-    width: 5%;
+    min-width: 35px;
     text-align: center;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(11),  /* NF Pallet - 6% */
+  .itens-embarque-table th:nth-child(9),  /* Cidade */
+  .itens-embarque-table td:nth-child(9) {
+    min-width: 100px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(10),  /* Aceita NF */
+  .itens-embarque-table td:nth-child(10) {
+    min-width: 60px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(11),  /* NF Pallet */
   .itens-embarque-table td:nth-child(11) {
-    width: 6%;
+    min-width: 80px;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(12),  /* Qtd Pallet - 5% */
+  .itens-embarque-table th:nth-child(12),  /* Qtd Pallet */
   .itens-embarque-table td:nth-child(12) {
-    width: 5%;
+    min-width: 60px;
+    white-space: nowrap;
   }
 
-  .itens-embarque-table th:nth-child(13),  /* Status/Ações - 19% */
+  .itens-embarque-table th:nth-child(13),  /* Status/Ações */
   .itens-embarque-table td:nth-child(13) {
-    width: 19%;
+    min-width: 160px;
     white-space: nowrap;
   }
 
   /* Configurações gerais da tabela - TELA CHEIA */
   .itens-embarque-table {
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
   }
   

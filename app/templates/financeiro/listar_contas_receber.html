@@ -183,7 +183,7 @@
 
                     <!-- NF-Parcela -->
                     {% set next_dir = 'desc' if sort == 'titulo_nf' and direction == 'asc' else 'asc' %}
-                    <th style="width: 100px;">
+                    <th class="col-pedido">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='titulo_nf', direction=next_dir, **filtros_atuais) }}">
                             NF-Parc {% if sort == 'titulo_nf' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
@@ -191,7 +191,7 @@
 
                     <!-- Cliente -->
                     {% set next_dir = 'desc' if sort == 'raz_social_red' and direction == 'asc' else 'asc' %}
-                    <th style="width: 200px;">
+                    <th class="col-nome-lg">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='raz_social_red', direction=next_dir, **filtros_atuais) }}">
                             Cliente {% if sort == 'raz_social_red' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
@@ -201,7 +201,7 @@
                     <th class="col-mini text-center">UF</th>
 
                     <!-- Tipo Título -->
-                    <th style="width: 80px;">Tipo</th>
+                    <th class="col-nowrap">Tipo</th>
 
                     <!-- Emissão -->
                     {% set next_dir = 'desc' if sort == 'emissao' and direction == 'asc' else 'asc' %}
@@ -224,35 +224,35 @@
 
                     <!-- Valor -->
                     {% set next_dir = 'desc' if sort == 'valor_titulo' and direction == 'asc' else 'asc' %}
-                    <th style="width: 90px;">
+                    <th class="col-valor">
                         <a href="{{ url_for('financeiro.listar_contas_receber', sort='valor_titulo', direction=next_dir, **filtros_atuais) }}">
                             Valor {% if sort == 'valor_titulo' %}{{ '↑' if direction == 'asc' else '↓' }}{% endif %}
                         </a>
                     </th>
 
                     <!-- Abatimento -->
-                    <th style="width: 80px;">Abat.</th>
+                    <th class="col-valor">Abat.</th>
 
                     <!-- Saldo (NOVA COLUNA) -->
-                    <th style="width: 90px;">Saldo</th>
+                    <th class="col-valor">Saldo</th>
 
                     <!-- Confirmação -->
-                    <th style="width: 80px;">Confirm.</th>
+                    <th class="col-nowrap">Confirm.</th>
 
                     <!-- Ação Necessária -->
-                    <th style="width: 100px;">Ação</th>
+                    <th class="col-status">Ação</th>
 
                     <!-- Status Entrega -->
-                    <th style="width: 85px;">Entrega</th>
+                    <th class="col-status">Entrega</th>
 
                     <!-- Previsão de Entrega -->
-                    <th style="width: 85px;">Prev.Ent</th>
+                    <th class="col-status">Prev.Ent</th>
 
                     <!-- Canhoto -->
                     <th class="col-mini text-center">📄</th>
 
                     <!-- Status Pago -->
-                    <th style="width: 65px;" class="text-center">Status</th>
+                    <th class="col-status">Status</th>
                 </tr>
             </thead>
             <tbody>

@@ -1253,7 +1253,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
               <thead>
                 <tr>
                   <!-- NF -->
-                  <th>
+                  <th class="col-pedido">
                     {% if current_sort == 'numero_nf' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1263,7 +1263,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- CNPJ -->
-                  <th>
+                  <th class="col-cnpj">
                     {% if current_sort == 'cnpj_cliente' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1273,7 +1273,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Cliente -->
-                  <th>
+                  <th class="col-nome">
                     {% if current_sort == 'cliente' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1283,7 +1283,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Transportadora -->
-                  <th>
+                  <th class="col-nome">
                     {% if current_sort == 'transportadora' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1293,7 +1293,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- UF -->
-                  <th>
+                  <th class="col-uf">
                     {% if current_sort == 'uf' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1303,7 +1303,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
                   
                   <!-- Município -->
-                  <th>
+                  <th class="col-cidade">
                     {% if current_sort == 'municipio' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1313,7 +1313,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Faturamento -->
-                  <th>
+                  <th class="col-data">
                     {% if current_sort == 'data_faturamento' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1323,7 +1323,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Embarque -->
-                  <th>
+                  <th class="col-data">
                     {% if current_sort == 'data_embarque' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1333,7 +1333,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Agendamento -->
-                  <th>
+                  <th class="col-data">
                     <!-- Se você tiver um campo "data_agendamento" no model ou algo similar -->
                     {% if current_sort == 'data_agendamento' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
@@ -1344,7 +1344,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Prevista -->
-                  <th>
+                  <th class="col-data">
                     {% if current_sort == 'data_entrega_prevista' and current_dir == 'asc' %}
                       {% set next_dir = 'desc' %}
                     {% else %}
@@ -1354,11 +1354,11 @@ nav.navbar .navbar-brand .badge.bg-primary {
                   </th>
 
                   <!-- Status -->
-                  <th>Status</th>
+                  <th class="col-status">Status</th>
                   <!-- Alertas -->
-                  <th>Alertas</th>
+                  <th class="col-nowrap">Alertas</th>
                   <!-- Ações -->
-                  <th>Ações</th>
+                  <th class="col-acoes">Ações</th>
                 </tr>
               </thead>
 

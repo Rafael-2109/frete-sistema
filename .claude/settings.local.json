@@ -102,7 +102,10 @@
       "Skill(executando-odoo-financeiro)",
       "mcp__render__get_deploy",
       "Bash(/dev/null:*)",
-      "WebFetch(domain:tylerfolkman.substack.com)"
+      "WebFetch(domain:tylerfolkman.substack.com)",
+      "Skill(acessando-ssw)",
+      "WebFetch(domain:help.figma.com)",
+      "WebFetch(domain:www.builder.io)"
     ],
     "deny": []
   },
