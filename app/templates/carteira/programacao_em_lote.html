@@ -663,7 +663,7 @@
             body: JSON.stringify(dadosEnviar)
         })
             .then(response => response.json())
-            .then(response => {
+            .then(async (response) => {
                 if (response.sucesso && response.solicitacoes && response.solicitacoes.length > 0) {
                     // Agrupar solicitações por CNPJ
                     const dadosPorCnpj = {};
@@ -682,15 +682,14 @@
                         dadosPorCnpj[sol.cnpj].pedidos.push(sol);
                     });
 
-                    // Converter para array e iniciar processamento sequencial
-                    filaAgendamentoSendas = Object.values(dadosPorCnpj);
-                    indiceAtualFila = 0;
                     protocolosGerados = {};
 
-                    Swal.close();
-
-                    // Processar o primeiro CNPJ
-                    processarProximoCNPJ();
+                    // ✅ NOVO FLUXO: Batch compare → auto-confirmar 100% match → modal só para revisão
+                    await processarComBatchCompare(
+                        response.solicitacoes,
+                        Object.values(dadosPorCnpj),
+                        cnpjsSelecionados
+                    );
 
                 } else {
                     Swal.fire({
@@ -710,7 +709,138 @@
             });
     }
 
-    // Função para processar próximo CNPJ da fila
+    // ✅ NOVO: Batch compare + auto-confirmação para 100% match
+    async function processarComBatchCompare(todasSolicitacoes, dadosPorCnpjArray, cnpjsSelecionados) {
+        try {
+            // 1. Comparar TODOS de uma vez via /lote/comparar
+            Swal.fire({
+                title: 'Comparando com planilha Sendas...',
+                html: `<div class="text-center">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p>Verificando ${dadosPorCnpjArray.length} CNPJs...</p>
+                </div>`,
+                allowOutsideClick: false,
+                showConfirmButton: false
+            });
+
+            const resComparacao = await fetch('/portal/sendas/solicitar/lote/comparar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({ solicitacoes: todasSolicitacoes })
+            });
+            const dataComparacao = await resComparacao.json();
+
+            if (!dataComparacao.sucesso) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro na comparação',
+                    text: dataComparacao.erro || 'Erro desconhecido'
+                });
+                return;
+            }
+
+            // 2. Separar match100 vs needsReview
+            const match100 = [];
+            const needsReview = [];
+
+            dadosPorCnpjArray.forEach(dadosCnpj => {
+                const resultado = dataComparacao.resultados_por_cnpj[dadosCnpj.cnpj];
+                if (resultado && resultado.todos_tem_match_100) {
+                    match100.push({ dadosCnpj, resultado });
+                } else {
+                    needsReview.push({ dadosCnpj, resultado });
+                }
+            });
+
+            console.log(`📊 Batch compare: ${match100.length} com 100% match, ${needsReview.length} para revisão`);
+
+            // 3. Auto-confirmar match100 sem modal
+            if (match100.length > 0) {
+                await autoConfirmarBatch(match100);
+            }
+
+            // 4. Processar needsReview com modais individuais
+            if (needsReview.length > 0) {
+                filaAgendamentoSendas = needsReview.map(item => item.dadosCnpj);
+                // Armazenar resultados de comparação para pré-popular os modais
+                filaAgendamentoSendas.forEach((dadosCnpj, idx) => {
+                    dadosCnpj._resultadoComparacao = needsReview[idx].resultado;
+                });
+                indiceAtualFila = 0;
+                Swal.close();
+                processarProximoCNPJ();
+            } else {
+                // Todos foram auto-confirmados
+                Swal.close();
+                exibirResumoFinal();
+            }
+
+        } catch (error) {
+            console.error('Erro no batch compare:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: 'Erro ao processar comparação em lote'
+            });
+        }
+    }
+
+    // ✅ NOVO: Auto-confirmar CNPJs com 100% match sem abrir modal
+    async function autoConfirmarBatch(match100List) {
+        for (let i = 0; i < match100List.length; i++) {
+            const { dadosCnpj, resultado } = match100List[i];
+
+            Swal.fire({
+                title: 'Auto-confirmando...',
+                html: `<div class="text-center">
+                    <div class="spinner-border text-success mb-3" role="status"></div>
+                    <p><strong>${dadosCnpj.cliente || dadosCnpj.cnpj}</strong></p>
+                    <p>100% match — confirmando ${i + 1} de ${match100List.length} CNPJs...</p>
+                </div>`,
+                allowOutsideClick: false,
+                showConfirmButton: false
+            });
+
+            // Montar itens confirmados com códigos Sendas da comparação
+            const itensConfirmados = resultado.itens.map(item => ({
+                cnpj: dadosCnpj.cnpj,
+                num_pedido: item.solicitado.num_pedido,
+                pedido_cliente: item.encontrado?.codigo_pedido_sendas || item.solicitado.pedido_cliente,
+                cod_produto: item.encontrado?.codigo_produto_sendas || item.solicitado.cod_produto,
+                nome_produto: item.solicitado.nome_produto || '',
+                quantidade: item.solicitado.quantidade,
+                separacao_lote_id: item.solicitado.separacao_lote_id,
+                data_expedicao: dadosCnpj.data_expedicao,
+                data_agendamento: dadosCnpj.data_agendamento
+            }));
+
+            try {
+                const res = await fetch('/portal/sendas/solicitar/lote/confirmar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({ itens_confirmados: itensConfirmados })
+                });
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    protocolosGerados[dadosCnpj.cnpj] = data.protocolos[dadosCnpj.cnpj];
+                    console.log(`✅ Auto-confirmado: ${dadosCnpj.cnpj} → ${data.protocolos[dadosCnpj.cnpj]}`);
+                } else {
+                    console.error(`❌ Erro ao auto-confirmar ${dadosCnpj.cnpj}: ${data.erro}`);
+                }
+            } catch (error) {
+                console.error(`❌ Erro de rede ao auto-confirmar ${dadosCnpj.cnpj}:`, error);
+            }
+        }
+    }
+
+    // Função para processar próximo CNPJ da fila (apenas needsReview)
     function processarProximoCNPJ() {
         if (indiceAtualFila >= filaAgendamentoSendas.length) {
             // Todos os CNPJs foram processados
@@ -855,6 +985,11 @@
         // Abrir modal
         const bsModal = new bootstrap.Modal(modal);
         bsModal.show();
+
+        // ✅ Se já temos resultado de comparação do batch, pré-popular o modal
+        if (dadosCnpj._resultadoComparacao) {
+            exibirResultadoComparacaoIndividual(dadosCnpj._resultadoComparacao);
+        }
     }
 
     // Função para comparar CNPJ individual
@@ -1009,25 +1144,9 @@
             document.getElementById('btn-confirmar-individual').style.display = 'inline-block';
         }
 
-        // 🎯 AUTO-CONFIRMAÇÃO: Se todos os itens têm match 100%, confirmar automaticamente
-        if (resultado.todos_tem_match_100) {
-            console.log('✅ 100% de match detectado! Confirmando automaticamente...');
-
-            // Mostrar notificação ao usuário
-            const notificacao = document.createElement('div');
-            notificacao.className = 'alert alert-success alert-dismissible fade show mt-3';
-            notificacao.innerHTML = `
-                <strong><i class="fas fa-check-circle"></i> 100% de Match!</strong><br>
-                Todos os produtos foram encontrados na planilha. Confirmando agendamento automaticamente em 2 segundos...
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            container.insertBefore(notificacao, container.firstChild);
-
-            // Confirmar automaticamente após 2 segundos para dar tempo do usuário ver
-            setTimeout(() => {
-                confirmarCNPJIndividual();
-            }, 2000);
-        }
+        // Nota: auto-confirmação de 100% match agora é feita no batch compare
+        // (processarComBatchCompare → autoConfirmarBatch), antes de abrir modais.
+        // Se um CNPJ com 100% match chegar aqui, é porque o batch falhou — manter botão manual.
     }
 
     // Confirmar agendamento individual

@@ -407,8 +407,9 @@ class VerificacaoSendasService:
 
             # A.2.1.1 - Para SP, calcular expedição = Data Efetiva - 1 dia útil
             # Usar cod_uf do registro ou do parâmetro
+            # ✅ EXCLUIR sub_rota 'D' (entregas diretas) do cálculo de expedição
             uf = sep.cod_uf or cod_uf
-            if uf == 'SP':
+            if uf == 'SP' and sep.sub_rota != 'D':
                 sep.expedicao = self._subtrair_dia_util(data_agendamento)
             # A.2.1.2 - Se não é SP, ignorar campo expedição
 

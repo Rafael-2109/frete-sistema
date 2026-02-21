@@ -261,7 +261,8 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
         logger.info("  📊 Calculando saldo líquido...")
 
         # Agrupar quantidades já em separação por num_pedido e cod_produto
-        # EXCLUINDO as que já estão no protocolo atual (para evitar contar 2x)
+        # ✅ CORREÇÃO: Incluir TODAS as separações não faturadas (de qualquer protocolo)
+        # Antes excluía o protocolo atual, causando duplicação na 2ª chamada
         ja_em_separacao = db.session.query(
             Separacao.num_pedido,
             Separacao.cod_produto,
@@ -269,11 +270,7 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
         ).filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
-                Separacao.sincronizado_nf == False,  # Apenas não faturadas
-                db.or_(
-                    Separacao.protocolo == None,      # Sem protocolo
-                    Separacao.protocolo != protocolo  # Ou protocolo diferente
-                )
+                Separacao.sincronizado_nf == False  # Apenas não faturadas
             )
         ).group_by(
             Separacao.num_pedido,
@@ -355,6 +352,10 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                 # Determinar tipo_envio: 'parcial' se já existe separação, 'total' se não
                 tipo_envio = 'parcial' if item.num_pedido in pedidos_com_separacao else 'total'
 
+                # Determinar sub_rota (import lazy para evitar circular import com routes.py)
+                from app.carteira.routes.programacao_em_lote.routes import _buscar_sub_rota
+                sub_rota = _buscar_sub_rota(item.municipio, item.estado) if item.municipio else None
+
                 nova_separacao = Separacao(
                     separacao_lote_id=separacao_lote_id,
                     status='ABERTO',  # Status para separações criadas para agendamento
@@ -363,6 +364,7 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
 
                     # Dados do pedido
                     num_pedido=item.num_pedido,
+                    data_pedido=item.data_pedido,
                     pedido_cliente=item.pedido_cliente,
                     cod_produto=item.cod_produto,
                     nome_produto=item.nome_produto,
@@ -376,6 +378,7 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                     raz_social_red=item.raz_social_red,
                     nome_cidade=item.municipio,
                     cod_uf=item.estado,
+                    sub_rota=sub_rota,
 
                     # Dados do agendamento ✅ CORRIGIDO: preencher com valores fornecidos
                     protocolo=protocolo,
@@ -398,36 +401,46 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
 
                 logger.debug(f"      Criada Separação para {chave_item}: {saldo_liquido} unidades (tipo: {tipo_envio})")
 
-        # 3. ATUALIZAR TODAS AS SEPARAÇÕES EXISTENTES COM PROTOCOLO, EXPEDIÇÃO E AGENDAMENTO
-        # ✅ OPÇÃO A: Sempre atualizar separações existentes (sobrescreve protocolo anterior)
+        # 3. ATUALIZAR SEPARAÇÕES EXISTENTES COM PROTOCOLO, EXPEDIÇÃO E AGENDAMENTO
+        # ✅ Apenas separações sem protocolo ou com o mesmo protocolo (preserva outros agendamentos)
 
-        # Separações não faturadas - TODAS do CNPJ
-        logger.info("  📝 Atualizando TODAS as Separações não faturadas do CNPJ...")
+        # Separações não faturadas — apenas sem protocolo OU com o mesmo protocolo
+        # ✅ CORREÇÃO: Não reassocia separações de outros protocolos/agendamentos
+        logger.info("  📝 Atualizando Separações não faturadas (sem protocolo ou mesmo protocolo)...")
         resultado_nao_fat = Separacao.query.filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
-                Separacao.sincronizado_nf == False
+                Separacao.sincronizado_nf == False,
+                db.or_(
+                    Separacao.protocolo == None,
+                    Separacao.protocolo == protocolo
+                )
             )
         ).update({
-            'protocolo': protocolo,              # ✅ Novo protocolo (sobrescreve anterior)
-            'agendamento': data_agendamento,     # ✅ Nova data de agendamento
-            'expedicao': data_expedicao,         # ✅ Nova data de expedição
-            'agendamento_confirmado': False      # ✅ Resetar para False
+            'protocolo': protocolo,
+            'agendamento': data_agendamento,
+            'expedicao': data_expedicao,
+            'agendamento_confirmado': False
         }, synchronize_session=False)
         contador_atualizadas += resultado_nao_fat
 
-        # NFs no CD - TODAS do CNPJ
-        logger.info("  📄 Atualizando TODAS as NFs no CD do CNPJ...")
+        # NFs no CD — apenas sem protocolo OU com o mesmo protocolo
+        # ✅ CORREÇÃO: Não reassocia NFs de outros protocolos/agendamentos
+        logger.info("  📄 Atualizando NFs no CD (sem protocolo ou mesmo protocolo)...")
         resultado_nf_cd = Separacao.query.filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
-                Separacao.nf_cd == True
+                Separacao.nf_cd == True,
+                db.or_(
+                    Separacao.protocolo == None,
+                    Separacao.protocolo == protocolo
+                )
             )
         ).update({
-            'protocolo': protocolo,              # ✅ Novo protocolo (sobrescreve anterior)
-            'agendamento': data_agendamento,     # ✅ Nova data de agendamento
-            'expedicao': data_expedicao,         # ✅ Nova data de expedição
-            'agendamento_confirmado': False      # ✅ Resetar para False
+            'protocolo': protocolo,
+            'agendamento': data_agendamento,
+            'expedicao': data_expedicao,
+            'agendamento_confirmado': False
         }, synchronize_session=False)
         contador_atualizadas += resultado_nf_cd
 
