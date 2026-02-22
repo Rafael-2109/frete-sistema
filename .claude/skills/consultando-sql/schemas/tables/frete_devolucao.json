@@ -148,34 +148,6 @@
   ],
   "indices": [
     {
-      "name": "ix_frete_devolucao_chave_cte",
-      "columns": [
-        "chave_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_frete_dev_data_cotacao",
-      "columns": [
-        "data_cotacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_frete_dev_transportadora",
-      "columns": [
-        "transportadora_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_frete_devolucao_despesa_extra_id",
-      "columns": [
-        "despesa_extra_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_frete_dev_status",
       "columns": [
         "status"
@@ -190,6 +162,13 @@
       "unique": false
     },
     {
+      "name": "idx_frete_dev_transportadora",
+      "columns": [
+        "transportadora_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_frete_devolucao_status",
       "columns": [
         "status"
@@ -197,9 +176,30 @@
       "unique": false
     },
     {
+      "name": "idx_frete_dev_data_cotacao",
+      "columns": [
+        "data_cotacao"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_frete_devolucao_ativo",
       "columns": [
         "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_frete_devolucao_chave_cte",
+      "columns": [
+        "chave_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_frete_devolucao_despesa_extra_id",
+      "columns": [
+        "despesa_extra_id"
       ],
       "unique": false
     }

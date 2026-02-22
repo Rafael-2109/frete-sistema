@@ -369,13 +369,6 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_data_pedido",
-      "columns": [
-        "data_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carteira_principal_status_pedido",
       "columns": [
         "status_pedido"
@@ -383,9 +376,38 @@
       "unique": false
     },
     {
+      "name": "idx_carteira_cliente_vendedor",
+      "columns": [
+        "cnpj_cpf",
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carteira_principal_importante",
       "columns": [
         "importante"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_vendedor",
+      "columns": [
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
       ],
       "unique": false
     },
@@ -398,31 +420,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
-        "vendedor"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_produto_saldo",
-      "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_cnpj_cpf",
-      "columns": [
-        "cnpj_cpf"
+        "odoo_write_date"
       ],
       "unique": false
     },
@@ -434,17 +434,17 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "ix_carteira_principal_data_pedido",
       "columns": [
-        "odoo_write_date"
+        "data_pedido"
       ],
       "unique": false
     },
     {
-      "name": "idx_carteira_cliente_vendedor",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "cnpj_cpf",
-        "vendedor"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     }
