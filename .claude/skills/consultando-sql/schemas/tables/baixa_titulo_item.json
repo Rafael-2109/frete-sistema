@@ -217,13 +217,6 @@
   ],
   "indices": [
     {
-      "name": "ix_baixa_titulo_item_lote_id",
-      "columns": [
-        "lote_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_baixa_item_lote",
       "columns": [
         "lote_id"
@@ -238,6 +231,13 @@
       "unique": false
     },
     {
+      "name": "idx_baixa_item_nf",
+      "columns": [
+        "nf_excel"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_baixa_titulo_item_status",
       "columns": [
         "status"
@@ -245,9 +245,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_item_nf",
+      "name": "ix_baixa_titulo_item_lote_id",
       "columns": [
-        "nf_excel"
+        "lote_id"
       ],
       "unique": false
     }

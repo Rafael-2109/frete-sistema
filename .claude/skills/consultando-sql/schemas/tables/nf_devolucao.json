@@ -260,9 +260,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_data_registro",
+      "name": "ix_nf_devolucao_numero_nf_venda",
       "columns": [
-        "data_registro"
+        "numero_nf_venda"
       ],
       "unique": false
     },
@@ -274,30 +274,16 @@
       "unique": false
     },
     {
+      "name": "idx_nfd_data_registro",
+      "columns": [
+        "data_registro"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_nfd_nf_venda",
       "columns": [
         "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_numero_nf_venda",
-      "columns": [
-        "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_odoo_dfe",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_tipo_documento",
-      "columns": [
-        "tipo_documento"
       ],
       "unique": false
     },
@@ -309,7 +295,21 @@
       "unique": true
     },
     {
+      "name": "idx_nfd_odoo_dfe",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_tipo_documento",
       "columns": [
         "tipo_documento"
       ],

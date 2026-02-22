@@ -78,24 +78,17 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_historico_cod_produto_componente",
-      "columns": [
-        "cod_produto_componente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_historico_operacao_data",
-      "columns": [
-        "operacao",
-        "alterado_em"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_lista_materiais_historico_alterado_por",
       "columns": [
         "alterado_por"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_historico_produto_data",
+      "columns": [
+        "cod_produto_produzido",
+        "alterado_em"
       ],
       "unique": false
     },
@@ -128,9 +121,16 @@
       "unique": false
     },
     {
-      "name": "idx_historico_produto_data",
+      "name": "ix_lista_materiais_historico_cod_produto_componente",
       "columns": [
-        "cod_produto_produzido",
+        "cod_produto_componente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_historico_operacao_data",
+      "columns": [
+        "operacao",
         "alterado_em"
       ],
       "unique": false

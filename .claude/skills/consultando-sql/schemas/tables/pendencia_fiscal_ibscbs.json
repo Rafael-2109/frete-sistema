@@ -173,9 +173,23 @@
       "unique": false
     },
     {
+      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
+      "columns": [
+        "chave_acesso"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_pendencia_fiscal_ibscbs_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
+      "columns": [
+        "tipo_documento"
       ],
       "unique": false
     },
@@ -199,20 +213,6 @@
         "cnpj_fornecedor"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
-      "columns": [
-        "tipo_documento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
-      "columns": [
-        "chave_acesso"
-      ],
-      "unique": true
     }
   ]
 }

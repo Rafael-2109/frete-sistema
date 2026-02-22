@@ -100,6 +100,18 @@
       "type": "varchar(30)"
     },
     {
+      "name": "inconsistencia_odoo",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "inconsistencia_detectada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "inconsistencia_resolvida_em",
+      "type": "timestamp"
+    },
+    {
       "name": "valor_titulo",
       "type": "float"
     },
@@ -214,30 +226,16 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_contas_a_receber_titulo_nf",
-      "columns": [
-        "titulo_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_uf_cliente",
-      "columns": [
-        "uf_cliente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_receber_metodo_baixa",
       "columns": [
         "metodo_baixa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_vencimento",
+      "columns": [
+        "vencimento"
       ],
       "unique": false
     },
@@ -249,9 +247,16 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_vencimento",
+      "name": "ix_contas_a_receber_uf_cliente",
       "columns": [
-        "vencimento"
+        "uf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_cnpj",
+      "columns": [
+        "cnpj"
       ],
       "unique": false
     },
@@ -270,9 +275,9 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_cnpj",
+      "name": "idx_conta_receber_nf",
       "columns": [
-        "cnpj"
+        "titulo_nf"
       ],
       "unique": false
     },
@@ -284,16 +289,23 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_nf",
+      "name": "idx_conta_receber_odoo_line_id",
       "columns": [
-        "titulo_nf"
+        "odoo_line_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_conta_receber_odoo_line_id",
+      "name": "ix_contas_a_receber_odoo_line_id",
       "columns": [
         "odoo_line_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_contas_a_receber_titulo_nf",
+      "columns": [
+        "titulo_nf"
       ],
       "unique": false
     }

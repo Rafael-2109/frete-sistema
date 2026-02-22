@@ -82,16 +82,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
+      "name": "ix_portal_atacadao_produto_depara_codigo_nosso",
       "columns": [
-        "cnpj_cliente"
+        "codigo_nosso"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_nosso",
+      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
       "columns": [
-        "codigo_nosso"
+        "cnpj_cliente"
       ],
       "unique": false
     }

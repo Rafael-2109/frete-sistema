@@ -167,9 +167,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_status",
+      "name": "ix_pallet_nf_remessa_numero_nf",
       "columns": [
-        "status"
+        "numero_nf"
       ],
       "unique": false
     },
@@ -182,9 +182,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_numero_nf",
+      "name": "ix_pallet_nf_remessa_status",
       "columns": [
-        "numero_nf"
+        "status"
       ],
       "unique": false
     },

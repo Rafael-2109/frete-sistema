@@ -147,16 +147,16 @@
       "unique": false
     },
     {
-      "name": "ix_custo_considerado_custo_atual",
+      "name": "ix_custo_considerado_cod_produto",
       "columns": [
-        "custo_atual"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_custo_considerado_cod_produto",
+      "name": "ix_custo_considerado_custo_atual",
       "columns": [
-        "cod_produto"
+        "custo_atual"
       ],
       "unique": false
     }

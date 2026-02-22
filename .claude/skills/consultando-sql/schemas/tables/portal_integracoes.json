@@ -91,6 +91,13 @@
   ],
   "indices": [
     {
+      "name": "ix_portal_integracoes_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_portal_integracoes_lote_id",
       "columns": [
         "lote_id"
@@ -115,13 +122,6 @@
       "name": "ix_portal_integracoes_job_id",
       "columns": [
         "job_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_portal_integracoes_criado_em",
-      "columns": [
-        "criado_em"
       ],
       "unique": false
     }

@@ -135,34 +135,6 @@
   ],
   "indices": [
     {
-      "name": "idx_extrato_titulo_pagar",
-      "columns": [
-        "titulo_pagar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_titulo_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_titulo_titulo_pagar_id",
-      "columns": [
-        "titulo_pagar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_titulo_extrato_item_id",
-      "columns": [
-        "extrato_item_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_titulo_item",
       "columns": [
         "extrato_item_id"
@@ -184,9 +156,37 @@
       "unique": false
     },
     {
+      "name": "idx_extrato_titulo_pagar",
+      "columns": [
+        "titulo_pagar_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_extrato_item_titulo_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_titulo_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_titulo_extrato_item_id",
+      "columns": [
+        "extrato_item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_titulo_titulo_pagar_id",
+      "columns": [
+        "titulo_pagar_id"
       ],
       "unique": false
     }
