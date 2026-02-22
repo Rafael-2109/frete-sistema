@@ -105,7 +105,8 @@
       "WebFetch(domain:tylerfolkman.substack.com)",
       "Skill(acessando-ssw)",
       "WebFetch(domain:help.figma.com)",
-      "WebFetch(domain:www.builder.io)"
+      "WebFetch(domain:www.builder.io)",
+      "mcp__render__select_workspace"
     ],
     "deny": []
   },

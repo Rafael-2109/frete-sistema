@@ -21,6 +21,7 @@ Flags:
     --empresa   Filtrar por empresa (1=FB, 2=SC, 3=CD). Default: todas.
     --dry-run   Apenas lista inconsistencias sem gravar no banco.
     --tipo      receber, pagar ou ambos (default: ambos).
+    --todos     Verificar TODOS os titulos com odoo_line_id (default: apenas pagos).
 """
 
 import argparse
@@ -54,6 +55,12 @@ def parse_args():
         choices=['receber', 'pagar', 'ambos'],
         default='ambos',
         help='Tipo de auditoria: receber, pagar ou ambos (default: ambos)',
+    )
+    parser.add_argument(
+        '--todos',
+        action='store_true',
+        default=False,
+        help='Verificar TODOS os titulos com odoo_line_id (default: apenas pagos)',
     )
     return parser.parse_args()
 
@@ -108,9 +115,12 @@ def main():
 
     empresa_label = EMPRESAS.get(args.empresa, 'TODAS')
     modo = 'DRY RUN' if args.dry_run else 'EXECUCAO REAL'
+    apenas_pagos = not args.todos
+    escopo = 'TODOS com odoo_line_id' if args.todos else 'APENAS PAGOS'
 
     print(f'\n  Auditoria de Inconsistencias Odoo')
     print(f'  Empresa: {empresa_label} | Tipo: {args.tipo} | Modo: {modo}')
+    print(f'  Escopo: {escopo}')
     print(f'  {"-" * 50}')
 
     from app import create_app
@@ -128,7 +138,7 @@ def main():
             resultado_receber = service_receber.detectar_inconsistencias(
                 empresa=args.empresa,
                 dry_run=args.dry_run,
-                apenas_pagos=True,
+                apenas_pagos=apenas_pagos,
             )
             resultados['Contas a Receber'] = resultado_receber
             imprimir_resultado('CONTAS A RECEBER', resultado_receber)
@@ -142,7 +152,7 @@ def main():
             resultado_pagar = service_pagar.detectar_inconsistencias(
                 empresa=args.empresa,
                 dry_run=args.dry_run,
-                apenas_pagos=True,
+                apenas_pagos=apenas_pagos,
             )
             resultados['Contas a Pagar'] = resultado_pagar
             imprimir_resultado('CONTAS A PAGAR', resultado_pagar)
