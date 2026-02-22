@@ -322,7 +322,7 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
                 dados_odoo = connection.search_read(
                     'account.move.line',
                     [['id', 'in', chunk]],
-                    fields=['id', 'l10n_br_paga', 'balance'],
+                    fields=['id', 'l10n_br_paga', 'amount_residual', 'x_studio_status_de_pagamento'],
                     limit=len(chunk)
                 ) or []
             except Exception as e:
@@ -341,12 +341,14 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
                     continue
 
                 paga = bool(odoo_rec.get('l10n_br_paga'))
-                balance = float(odoo_rec.get('balance', 0) or 0)
+                amount_residual = float(odoo_rec.get('amount_residual', 0) or 0)
+                status_pag = odoo_rec.get('x_studio_status_de_pagamento') or ''
 
-                if paga or balance <= 0:
+                if paga or amount_residual <= 0 or status_pag == 'paid':
                     updates_pendentes.append({
                         'id': titulo_info['id'],
                         'metodo_baixa': titulo_info['metodo_baixa'] or 'ODOO_DIRETO',
+                        'valor_residual': abs(amount_residual),
                     })
                     stats['path_a_atualizados'] += 1
                 else:
@@ -385,7 +387,8 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
                         ],
                         fields=[
                             'id', 'x_studio_nf_e', 'l10n_br_cobranca_parcela',
-                            'l10n_br_paga', 'balance', 'company_id',
+                            'l10n_br_paga', 'amount_residual',
+                            'x_studio_status_de_pagamento', 'company_id',
                         ],
                         limit=len(chunk_nfs) * 5
                     ) or []
@@ -407,9 +410,10 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
                         continue
 
                     paga = bool(rec.get('l10n_br_paga'))
-                    balance = float(rec.get('balance', 0) or 0)
+                    amount_residual = float(rec.get('amount_residual', 0) or 0)
+                    status_pag = rec.get('x_studio_status_de_pagamento') or ''
 
-                    if not (paga or balance <= 0):
+                    if not (paga or amount_residual <= 0 or status_pag == 'paid'):
                         continue
 
                     chave = (empresa_cod, nf, parcela)
@@ -423,6 +427,7 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
                         updates_pendentes.append({
                             'id': titulo_info['id'],
                             'metodo_baixa': titulo_info['metodo_baixa'] or 'ODOO_DIRETO',
+                            'valor_residual': abs(amount_residual),
                         })
                         stats['path_b_atualizados'] += 1
 
@@ -447,6 +452,7 @@ def backfill_contas_a_receber(connection, dry_run: bool = True) -> dict:
                             UPDATE contas_a_receber
                             SET parcela_paga = TRUE,
                                 metodo_baixa = :metodo_baixa,
+                                valor_residual = :valor_residual,
                                 atualizado_por = 'Backfill Marco Zero'
                             WHERE id = :id
                         """),
