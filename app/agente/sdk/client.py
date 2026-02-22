@@ -1198,6 +1198,30 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool browser: {e}")
 
+        # =================================================================
+        # MCP Routes Search Tool (busca semantica de rotas e templates)
+        # =================================================================
+        try:
+            from ..tools.routes_search_tool import routes_server
+
+            if routes_server is not None:
+                mcp_servers = options_dict.get("mcp_servers", {})
+                mcp_servers["routes"] = routes_server
+                options_dict["mcp_servers"] = mcp_servers
+
+                allowed = options_dict.get("allowed_tools", [])
+                if "mcp__routes__search_routes" not in allowed:
+                    allowed.append("mcp__routes__search_routes")
+                options_dict["allowed_tools"] = allowed
+
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'routes' registrada (1 operacao)")
+            else:
+                logger.debug("[AGENT_CLIENT] routes_server e None — claude_agent_sdk nao disponivel")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] Custom Tool routes nao disponivel (modulo nao encontrado)")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool routes: {e}")
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "

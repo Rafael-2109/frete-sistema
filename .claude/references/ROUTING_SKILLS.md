@@ -20,6 +20,7 @@
 | SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
 | SSW consulta (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
+| LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `buscando-rotas` |
 
 ---
 
@@ -81,13 +82,14 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (24 total)
+## Skills — Inventario Completo (25 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
 ### MCP Custom Tools (agente web, in-process)
 `mcp__sql__consultar_sql`, `mcp__memory__*` (6 tools), `mcp__schema__*` (2 tools),
-`mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status)
+`mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status),
+`mcp__routes__search_routes` (1 tool: busca semantica rotas)
 
 ### Skills Odoo (Claude Code)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
@@ -102,4 +104,4 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
 `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`, `memoria-usuario`,
-`diagnosticando-banco`
+`diagnosticando-banco`, `buscando-rotas`

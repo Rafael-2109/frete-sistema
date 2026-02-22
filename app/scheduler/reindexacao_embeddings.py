@@ -10,6 +10,7 @@ Orquestra todos os indexers em sequencia:
 6. Payment Categories (categorias pre-definidas)
 7. Devolucao Reasons (motivos de devolucao classificados)
 8. Carriers (transportadoras com aliases)
+9. Route/Templates (rotas Flask + menus + AJAX — via AST, sem app context)
 
 SSW docs sao estaticos — reindexar manualmente quando necessario.
 
@@ -29,7 +30,7 @@ Duas formas de execucao:
 Cada indexer tem stale detection (content_hash ou texto_embedado) — apenas
 itens novos ou modificados sao re-embeddados.
 
-Custo estimado: ~$0.03/dia, ~$0.90/mes
+Custo estimado: ~$0.032/dia, ~$0.96/mes
 """
 
 import logging
@@ -73,7 +74,7 @@ def executar_reindexacao_no_contexto():
     logger.info("   REINDEXACAO DE EMBEDDINGS")
     logger.info("   Inicio: %s", agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S'))
 
-    total_steps = 8
+    total_steps = 9
 
     # ── 1. Products (com aliases de_para) ──
     try:
@@ -256,6 +257,33 @@ def executar_reindexacao_no_contexto():
     except Exception as e:
         logger.error("      Erro em carriers: %s", e, exc_info=True)
         resultados['carriers'] = {'error': str(e)}
+
+    _cleanup_db()
+
+    # ── 9. Route/Templates (rotas Flask via AST) ──
+    try:
+        from app.embeddings.config import ROUTE_TEMPLATE_SEMANTIC_SEARCH
+        if ROUTE_TEMPLATE_SEMANTIC_SEARCH:
+            logger.info("   [9/%d] Reindexando rotas e templates...", total_steps)
+            from app.embeddings.indexers.route_template_indexer import (
+                collect_and_build_cards, index_routes
+            )
+
+            cards = collect_and_build_cards()
+            if cards:
+                stats = index_routes(cards)
+                resultados['route_templates'] = stats
+                logger.info("      Route/Templates: %d novos, %d skipped",
+                            stats.get('embedded', 0), stats.get('skipped', 0))
+            else:
+                resultados['route_templates'] = {'embedded': 0, 'skipped': 0}
+                logger.info("      Nenhuma rota para indexar")
+        else:
+            logger.info("   [9/%d] Route/Templates desabilitado", total_steps)
+            resultados['route_templates'] = {'skipped_flag': True}
+    except Exception as e:
+        logger.error("      Erro em route_templates: %s", e, exc_info=True)
+        resultados['route_templates'] = {'error': str(e)}
 
     # ── Resumo ──
     elapsed = time.time() - inicio

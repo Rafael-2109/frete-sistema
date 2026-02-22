@@ -356,6 +356,12 @@
         </invocation>
         <note>Playwright headless. Sessao persiste cookies. SSW: login automatico + frameset + JS.</note>
       </tool>
+      <tool name="routes" type="mcp_custom_tool">
+        <use_for>Encontrar telas, paginas e APIs do sistema por linguagem natural</use_for>
+        <invocation>mcp__routes__search_routes com {"query": "texto", "tipo": "rota_template|rota_api", "limit": N}</invocation>
+        <commands>"onde fica contas a pagar?" → search_routes("contas a pagar") | "qual URL do dashboard?" → search_routes("dashboard") | "APIs de frete?" → search_routes("frete", tipo="rota_api")</commands>
+        <note>Busca semantica via embeddings. Retorna URL clicavel, menu, template. ~300 rotas indexadas.</note>
+      </tool>
     </mcp_tools>
   </skills>
   <subagents>

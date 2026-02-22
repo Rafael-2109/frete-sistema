@@ -42,6 +42,7 @@ from app.embeddings.config import (
     THRESHOLD_PAYMENT_CATEGORY,
     THRESHOLD_DEVOLUCAO,
     THRESHOLD_CARRIER,
+    THRESHOLD_ROUTE_TEMPLATE,
 )
 
 logger = logging.getLogger(__name__)
@@ -1290,6 +1291,169 @@ class EmbeddingService:
                 "carrier_name": doc.carrier_name,
                 "cnpj": doc.cnpj,
                 "aliases": doc.aliases,
+                "similarity": round(similarity, 4),
+            })
+
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — ROTAS E TEMPLATES
+    # ================================================================
+
+    def search_routes(
+        self,
+        query: str,
+        tipo: str = None,
+        limit: int = 5,
+        min_similarity: float = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca semantica em rotas e templates do sistema.
+
+        Permite encontrar telas e APIs por linguagem natural:
+        "contas a pagar", "tela de extratos", "API de filtrar fretes", etc.
+
+        Args:
+            query: Texto de busca
+            tipo: Filtro opcional - 'rota_template' ou 'rota_api'
+            limit: Maximo de resultados
+            min_similarity: Score minimo (0-1)
+
+        Returns:
+            Lista de dicts com url_path, template_path, menu_path,
+            blueprint_name, function_name, tipo, similarity, etc.
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        min_similarity = min_similarity or THRESHOLD_ROUTE_TEMPLATE
+
+        query_embedding = self.embed_query(query)
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_routes(
+                query_embedding, tipo, limit, min_similarity
+            )
+        else:
+            return self._search_fallback_routes(
+                query_embedding, tipo, limit, min_similarity
+            )
+
+    def _search_pgvector_routes(
+        self,
+        query_embedding: List[float],
+        tipo: str,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca rotas/templates via pgvector."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        where_clause = ""
+        if tipo:
+            where_clause = "AND tipo = :tipo"
+
+        sql = text(f"""
+            SELECT
+                id,
+                tipo,
+                blueprint_name,
+                function_name,
+                url_path,
+                http_methods,
+                template_path,
+                menu_path,
+                permission_decorator,
+                source_file,
+                source_line,
+                docstring,
+                ajax_endpoints,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM route_template_embeddings
+            WHERE embedding IS NOT NULL
+            {where_clause}
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        params: Dict[str, Any] = {
+            "query_embedding": embedding_str,
+            "limit": limit * 2,
+        }
+        if tipo:
+            params["tipo"] = tipo
+
+        result = db.session.execute(sql, params)
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "tipo": row.tipo,
+                    "blueprint_name": row.blueprint_name,
+                    "function_name": row.function_name,
+                    "url_path": row.url_path,
+                    "http_methods": row.http_methods,
+                    "template_path": row.template_path,
+                    "menu_path": row.menu_path,
+                    "permission_decorator": row.permission_decorator,
+                    "source_file": row.source_file,
+                    "source_line": row.source_line,
+                    "docstring": row.docstring,
+                    "ajax_endpoints": row.ajax_endpoints,
+                    "similarity": round(similarity, 4),
+                })
+
+        return results[:limit]
+
+    def _search_fallback_routes(
+        self,
+        query_embedding: List[float],
+        tipo: str,
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca rotas/templates fallback sem pgvector."""
+        from app.embeddings.models import RouteTemplateEmbedding
+
+        query = RouteTemplateEmbedding.query.filter(
+            RouteTemplateEmbedding.embedding.isnot(None)
+        )
+
+        if tipo:
+            query = query.filter(RouteTemplateEmbedding.tipo == tipo)
+
+        docs = query.limit(500).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "tipo": doc.tipo,
+                "blueprint_name": doc.blueprint_name,
+                "function_name": doc.function_name,
+                "url_path": doc.url_path,
+                "http_methods": doc.http_methods,
+                "template_path": doc.template_path,
+                "menu_path": doc.menu_path,
+                "permission_decorator": doc.permission_decorator,
+                "source_file": doc.source_file,
+                "source_line": doc.source_line,
+                "docstring": doc.docstring,
+                "ajax_endpoints": doc.ajax_endpoints,
                 "similarity": round(similarity, 4),
             })
 

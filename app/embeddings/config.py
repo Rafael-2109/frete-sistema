@@ -66,6 +66,8 @@ THRESHOLD_PAYMENT_CATEGORY = float(os.environ.get("THRESHOLD_PAYMENT_CATEGORY", 
 THRESHOLD_DEVOLUCAO = float(os.environ.get("THRESHOLD_DEVOLUCAO", "0.60"))
 # Transportadoras: nome fuzzy
 THRESHOLD_CARRIER = float(os.environ.get("THRESHOLD_CARRIER", "0.40"))
+# Rotas e templates: busca por tela/funcionalidade
+THRESHOLD_ROUTE_TEMPLATE = float(os.environ.get("THRESHOLD_ROUTE_TEMPLATE", "0.40"))
 
 # Top-K para reranking (candidatos antes do rerank)
 RERANK_CANDIDATES = int(os.environ.get("RERANK_CANDIDATES", "50"))
@@ -118,3 +120,7 @@ DEVOLUCAO_REASON_SEMANTIC = os.environ.get("DEVOLUCAO_REASON_SEMANTIC", "true").
 # Habilita busca semantica de transportadoras por nome
 # Consumers: carrier_search.py, resolver_transportadora.py
 CARRIER_SEMANTIC_SEARCH = os.environ.get("CARRIER_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Habilita busca semantica de rotas e templates do sistema
+# Consumers: route_template_search.py, agente web (MCP tool futuro)
+ROUTE_TEMPLATE_SEMANTIC_SEARCH = os.environ.get("ROUTE_TEMPLATE_SEMANTIC_SEARCH", "true").lower() == "true"

@@ -404,6 +404,83 @@ class DevolucaoReasonEmbedding(db.Model):
         }
 
 
+class RouteTemplateEmbedding(db.Model):
+    """
+    Embedding de rotas e templates do sistema para busca semantica.
+
+    Cada registro corresponde a uma rota Flask (view function) com seus
+    metadados: URL, template, menu, permissoes, AJAX endpoints.
+
+    Permite busca por linguagem natural:
+    "onde fica contas a pagar?" → /financeiro/contas-pagar/
+    "tela de extratos" → /financeiro/extrato/
+    "API de filtrar fretes" → /fretes/api/filtrar
+    """
+    __tablename__ = 'route_template_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao
+    tipo = db.Column(db.String(20), nullable=False)          # 'rota_template', 'rota_api'
+    blueprint_name = db.Column(db.String(100), nullable=False)
+    function_name = db.Column(db.String(200), nullable=False)
+
+    # Rota
+    url_path = db.Column(db.String(500), nullable=False)
+    http_methods = db.Column(db.String(50), nullable=False)   # "GET,POST"
+
+    # Template (nullable para rotas API)
+    template_path = db.Column(db.String(500), nullable=True)
+
+    # Navegacao
+    menu_path = db.Column(db.Text, nullable=True)             # "Financeiro > Contas a Pagar"
+    permission_decorator = db.Column(db.String(200), nullable=True)
+
+    # Metadados
+    source_file = db.Column(db.String(500), nullable=False)
+    source_line = db.Column(db.Integer, nullable=True)
+    docstring = db.Column(db.Text, nullable=True)
+    ajax_endpoints = db.Column(db.Text, nullable=True)        # JSON: URLs AJAX consumidas pelo template
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(32), nullable=True)    # MD5 para detectar mudancas
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('blueprint_name', 'function_name', name='uq_route_blueprint_function'),
+        db.Index('idx_rte_tipo', 'tipo'),
+        db.Index('idx_rte_template_path', 'template_path'),
+        db.Index('idx_rte_content_hash', 'content_hash'),
+    )
+
+    def __repr__(self):
+        return f'<RouteTemplateEmbedding {self.blueprint_name}.{self.function_name}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding por ser muito grande)."""
+        return {
+            'id': self.id,
+            'tipo': self.tipo,
+            'blueprint_name': self.blueprint_name,
+            'function_name': self.function_name,
+            'url_path': self.url_path,
+            'http_methods': self.http_methods,
+            'template_path': self.template_path,
+            'menu_path': self.menu_path,
+            'permission_decorator': self.permission_decorator,
+            'source_file': self.source_file,
+            'source_line': self.source_line,
+            'docstring': self.docstring[:200] + '...' if self.docstring and len(self.docstring) > 200 else self.docstring,
+            'ajax_endpoints': self.ajax_endpoints,
+        }
+
+
 class CarrierEmbedding(db.Model):
     """
     Embedding de transportadoras para matching semantico de nomes.
