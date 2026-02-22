@@ -565,12 +565,13 @@ def api_confirmar_resolucao(linha_id: int):
                 codigo_cliente=linha.codigo_produto_cliente
             ).first()
 
-            # Calcular fator de conversao: qtd_por_caixa se unidade for UN, senao 1.0
+            # Calcular fator de conversao usando normalizador centralizado
             fator_conversao = 1.0
             if qtd_por_caixa and linha.unidade_medida:
-                unidade_upper = linha.unidade_medida.upper()
+                service = get_ai_resolver()
+                tipo_unidade = service._normalizar_unidade_deterministico(linha.unidade_medida)
                 # Se unidade do cliente for UNIDADE, fator = qtd_por_caixa
-                if unidade_upper in ['UN', 'UNID', 'UNIDADE', 'UNI', 'UND', 'PC', 'PCS', 'PECA', 'PECAS']:
+                if tipo_unidade == 'UNIDADE':
                     fator_conversao = float(qtd_por_caixa)
 
             if not existente:

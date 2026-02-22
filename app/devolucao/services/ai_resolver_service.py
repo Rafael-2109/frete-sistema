@@ -322,7 +322,7 @@ UNIDADE DO CLIENTE: {unidade_cliente}
 
 CATEGORIZE EM:
 - CAIXA: CX, CXA, CAIXA, CXA1, CXA2, BOX, FD, FARDO, PCT, PACOTE, etc.
-- UNIDADE: UN, UNI, UNID, UNI9, PC, PECA, UND, BD, BD1, BD2, BALDE, SC, SACO, etc.
+- UNIDADE: UN, UNI, UNID, UND, UNI9, UND9, PC, PECA, BD, BD1, BD2, BALDE, BLD, SC, SACO, PT, POTE, SH, SACHE, etc.
 - PESO: KG, GR, G, GRAMAS, QUILOS, TON, etc.
 - OUTRO: Nao identificado
 
@@ -626,7 +626,7 @@ class AIResolverService:
 
         Baseado na analise de 1892 linhas de NFD no sistema:
         - CAIXA: CX, CXA, BOX, FD, FARDO, PCT, PACOTE, TAMBOR
-        - UNIDADE: UN, UNI, PC, PECA, BD, BALDE, BLD, SC, SACO, PT, POTE, BL, BA, SH, SACHE
+        - UNIDADE: UND, UNID, UN, UNI, PC, PECA, BD, BALDE, BLD, SC, SACO, PT, POTE, BL, BA, SH, SACHE
         - PESO: KG, GR, G, GRAM, QUILO, TON
 
         Args:
@@ -645,8 +645,9 @@ class AIResolverService:
             return 'CAIXA'
 
         # UNIDADE (ordem importa - verificar padroes mais especificos primeiro)
-        # Inclui: UN, UNI, UNID, UND, PC, BD, BLD, BALDE, SC, SACO, PT, POTE, BL, BA, SH
-        if any(u in unidade_upper for u in ['UN', 'UNI', 'PC', 'PECA', 'PÇ', 'BD', 'BALDE', 'BLD',
+        # Inclui: UND, UNID, UN, UNI, PC, BD, BLD, BALDE, SC, SACO, PT, POTE, BL, BA, SH
+        # IMPORTANTE: 'UND' e 'UNID' ANTES de 'UN' para substring match correto (UND9 → UND match)
+        if any(u in unidade_upper for u in ['UND', 'UNID', 'UN', 'UNI', 'PC', 'PECA', 'PÇ', 'BD', 'BALDE', 'BLD',
                                              'SC', 'SACO', 'PT', 'POTE', 'BL', 'BA', 'SH', 'SACHE']): # noqa: E127
             return 'UNIDADE'
 
@@ -2044,8 +2045,22 @@ class AIResolverService:
         """
         from app.producao.models import CadastroPalletizacao
 
-        # Normalizar unidade (funcao deterministica)
+        # Normalizar unidade (funcao deterministica, fallback Haiku)
         tipo_unidade = self._normalizar_unidade_deterministico(linha.unidade_medida)
+
+        # Fallback Haiku quando determinístico retorna OUTRO
+        if tipo_unidade == 'OUTRO' and linha.unidade_medida:
+            try:
+                result_haiku = self.normalizar_unidade(linha.unidade_medida)
+                if result_haiku.tipo != 'OUTRO' and result_haiku.confianca >= 0.7:
+                    tipo_unidade = result_haiku.tipo
+                    logger.info(
+                        f"[AI_RESOLVER] Haiku fallback unidade: "
+                        f"{linha.unidade_medida} -> {tipo_unidade} "
+                        f"(confianca={result_haiku.confianca:.0%})"
+                    )
+            except Exception as e:
+                logger.warning(f"[AI_RESOLVER] Haiku fallback falhou para '{linha.unidade_medida}': {e}")
 
         linha_info = {
             'linha_id': linha.id,
@@ -2129,12 +2144,18 @@ class AIResolverService:
                 linha.confianca_resolucao = confianca
 
                 if prefixo_cnpj:
+                    # Calcular fator para gravar no De-Para
+                    fator_para_depara = float(qtd_por_caixa) if tipo_unidade == 'UNIDADE' and qtd_por_caixa else None
+
                     self._gravar_depara(
                         prefixo_cnpj=prefixo_cnpj,
                         codigo_cliente=linha.codigo_produto_cliente,
                         descricao_cliente=linha.descricao_produto_cliente,
                         nosso_codigo=codigo_interno,
-                        descricao_nosso=nome_interno
+                        descricao_nosso=nome_interno,
+                        fator_conversao=fator_para_depara,
+                        unidade_medida_cliente=linha.unidade_medida,
+                        unidade_medida_nosso='CX'
                     )
         else:
             linha_info['status'] = 'REQUER_CONFIRMACAO'
@@ -2180,10 +2201,27 @@ class AIResolverService:
         codigo_cliente: str,
         descricao_cliente: str,
         nosso_codigo: str,
-        descricao_nosso: str
+        descricao_nosso: str,
+        fator_conversao: Optional[float] = None,
+        unidade_medida_cliente: Optional[str] = None,
+        unidade_medida_nosso: str = 'CX'
     ):
-        """Grava De-Para no banco."""
+        """
+        Grava De-Para no banco com dados de conversao.
+
+        Se fator_conversao nao for fornecido, tenta auto-extrair:
+        1. Busca produto no CadastroPalletizacao via nosso_codigo
+        2. Extrai qtd_caixa do nome_produto via _extrair_qtd_caixa()
+        3. Se unidade_medida_cliente normaliza para UNIDADE e qtd_caixa existe, fator = qtd_caixa
+        """
         try:
+            # Auto-extrair fator_conversao se nao fornecido
+            if fator_conversao is None:
+                fator_conversao = self._auto_extrair_fator(
+                    nosso_codigo=nosso_codigo,
+                    unidade_medida_cliente=unidade_medida_cliente
+                )
+
             # Verificar se ja existe (inclui inativos para evitar violacao de constraint)
             existente = DeParaProdutoCliente.query.filter_by(
                 prefixo_cnpj=prefixo_cnpj[:8],
@@ -2201,7 +2239,17 @@ class AIResolverService:
                     existente.ativo = True
                     existente.atualizado_em = agora_utc_naive()
                     existente.atualizado_por = 'AIResolverService'
-                    logger.info(f"[AI_RESOLVER] De-Para reativado: {codigo_cliente} -> {nosso_codigo}")
+                    # Atualizar dados de conversao na reativacao
+                    if fator_conversao is not None:
+                        existente.fator_conversao = fator_conversao
+                    if unidade_medida_cliente is not None:
+                        existente.unidade_medida_cliente = unidade_medida_cliente
+                    if unidade_medida_nosso is not None:
+                        existente.unidade_medida_nosso = unidade_medida_nosso
+                    logger.info(
+                        f"[AI_RESOLVER] De-Para reativado: {codigo_cliente} -> {nosso_codigo} "
+                        f"(fator={fator_conversao}, un_cli={unidade_medida_cliente})"
+                    )
                     return
 
             depara = DeParaProdutoCliente(
@@ -2210,16 +2258,67 @@ class AIResolverService:
                 descricao_cliente=descricao_cliente,
                 nosso_codigo=nosso_codigo,
                 descricao_nosso=descricao_nosso,
+                fator_conversao=fator_conversao if fator_conversao is not None else 1.0,
+                unidade_medida_cliente=unidade_medida_cliente,
+                unidade_medida_nosso=unidade_medida_nosso,
                 ativo=True,
                 criado_em=agora_utc_naive(),
                 criado_por='AIResolverService',
             )
 
             db.session.add(depara)
-            logger.info(f"[AI_RESOLVER] De-Para gravado: {codigo_cliente} -> {nosso_codigo}")
+            logger.info(
+                f"[AI_RESOLVER] De-Para gravado: {codigo_cliente} -> {nosso_codigo} "
+                f"(fator={depara.fator_conversao}, un_cli={unidade_medida_cliente})"
+            )
 
         except Exception as e:
             logger.error(f"[AI_RESOLVER] Erro ao gravar De-Para: {e}")
+
+    def _auto_extrair_fator(
+        self,
+        nosso_codigo: str,
+        unidade_medida_cliente: Optional[str] = None
+    ) -> Optional[float]:
+        """
+        Tenta auto-extrair fator de conversao a partir do cadastro de produto.
+
+        1. Busca produto no CadastroPalletizacao via nosso_codigo
+        2. Extrai qtd_caixa do nome_produto via _extrair_qtd_caixa()
+        3. Se unidade do cliente normaliza para UNIDADE, retorna qtd_caixa como fator
+
+        Returns:
+            fator_conversao ou None se nao conseguir extrair
+        """
+        from app.producao.models import CadastroPalletizacao
+
+        try:
+            produto = CadastroPalletizacao.query.filter_by(
+                cod_produto=nosso_codigo
+            ).first()
+
+            if not produto or not produto.nome_produto:
+                return None
+
+            qtd_caixa = self._extrair_qtd_caixa(produto.nome_produto)
+            if not qtd_caixa:
+                return None
+
+            # So aplica fator se a unidade do cliente for UNIDADE
+            if unidade_medida_cliente:
+                tipo = self._normalizar_unidade_deterministico(unidade_medida_cliente)
+                if tipo == 'UNIDADE':
+                    logger.info(
+                        f"[AI_RESOLVER] Auto-extrai fator: {nosso_codigo} -> "
+                        f"qtd_caixa={qtd_caixa} (unidade_cli={unidade_medida_cliente})"
+                    )
+                    return float(qtd_caixa)
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"[AI_RESOLVER] Erro ao auto-extrair fator: {e}")
+            return None
 
     # =========================================================================
     # UTILITARIOS

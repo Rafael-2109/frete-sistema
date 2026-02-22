@@ -25,6 +25,7 @@ DATA: 30/12/2024
 """
 
 import logging
+import re
 import base64
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -824,6 +825,7 @@ class NFDService:
 
             count = 0
             auto_resolvidas = 0
+            cache_precos = {}  # {cod_produto: {mediana_caixa, qtd_por_caixa, total_vendas} ou None}
             for item in itens:
                 # Verificar se já existe linha com mesmo numero_item
                 numero_item = item.get('numero_item')
@@ -863,12 +865,32 @@ class NFDService:
                     unidade_str = (item.get('unidade_medida') or '').strip().upper()
                     tipo_unidade = self._classificar_unidade(unidade_str)
 
+                    # Validar tipo_unidade contra preço histórico de faturamento
+                    _preco_override = False
+                    tipo_validado = self._validar_tipo_por_preco(
+                        cod_produto=depara['nosso_codigo'],
+                        valor_unitario=float(item.get('valor_unitario', 0)),
+                        tipo_deterministico=tipo_unidade,
+                        cache_precos=cache_precos,
+                    )
+                    if tipo_validado and tipo_validado != tipo_unidade:
+                        logger.warning(
+                            f"[NFD_SERVICE] Override tipo_unidade: {tipo_unidade} -> {tipo_validado} "
+                            f"para cod_produto={depara['nosso_codigo']} "
+                            f"(preço NFD={item.get('valor_unitario')} vs faturamento)"
+                        )
+                        tipo_unidade = tipo_validado
+                        _preco_override = True
+
                     # Proteção: só aplicar conversão automática se tipo é reconhecido
                     if tipo_unidade != 'OUTRO':
                         linha.codigo_produto_interno = depara['nosso_codigo']
                         linha.descricao_produto_interno = depara.get('descricao_nosso', '')
                         linha.produto_resolvido = True
-                        linha.metodo_resolucao = depara.get('metodo', 'DEPARA')
+                        metodo = depara.get('metodo', 'DEPARA')
+                        if _preco_override:
+                            metodo += '+PRECO'
+                        linha.metodo_resolucao = metodo
 
                         # Calcular conversão baseada no tipo de unidade
                         fator = float(depara.get('fator_conversao', 1.0))
@@ -955,6 +977,136 @@ class NFDService:
             return 'PESO'
 
         return 'OUTRO'
+
+    @staticmethod
+    def _validar_tipo_por_preco(
+        cod_produto: str,
+        valor_unitario: float,
+        tipo_deterministico: str,
+        cache_precos: dict,
+    ) -> Optional[str]:
+        """
+        Valida tipo_unidade cruzando preço da NFD com mediana do faturamento.
+        Retorna tipo corrigido ou None se não conseguir validar.
+
+        Lógica:
+            preco_caixa_mediano  = mediana(faturamento_produto.preco_produto_faturado)
+            preco_unidade_estimado = preco_caixa_mediano / qtd_por_caixa (do padrão NxM)
+
+            ratio_como_unidade = valor_unitario / preco_unidade_estimado
+            ratio_como_caixa   = preco_caixa_mediano / valor_unitario
+
+            O ratio mais próximo de 1 vence.
+
+        Regras de skip (retorna None):
+        - valor_unitario <= 0
+        - tipo_deterministico não é CAIXA nem UNIDADE
+        - Produto sem faturamento (< 5 vendas)
+        - qtd_por_caixa <= 1 (CAIXA = UNIDADE, indistinguível)
+        - Ratio ambíguo (vencedor >= 1.5 ou perdedor <= 2.5)
+
+        Args:
+            cod_produto: Código interno do produto
+            valor_unitario: Preço unitário da NFD
+            tipo_deterministico: Tipo classificado por _classificar_unidade()
+            cache_precos: Cache local {cod_produto: dados ou None}
+
+        Returns:
+            Tipo corrigido ('CAIXA' ou 'UNIDADE') ou None se não pode validar
+        """
+        from sqlalchemy import text as sa_text
+
+        # Skip se valor_unitario inválido
+        if not valor_unitario or valor_unitario <= 0:
+            return None
+
+        # Validação só faz sentido para CAIXA vs UNIDADE
+        if tipo_deterministico not in ('CAIXA', 'UNIDADE'):
+            return None
+
+        # Consultar cache ou buscar dados
+        if cod_produto not in cache_precos:
+            try:
+                # 1. Mediana do preço de faturamento (preço por CAIXA)
+                resultado_fat = db.session.execute(sa_text("""
+                    SELECT
+                        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY preco_produto_faturado) AS mediana,
+                        COUNT(*) AS total
+                    FROM faturamento_produto
+                    WHERE cod_produto = :cod_produto
+                      AND preco_produto_faturado > 0
+                      AND status_nf = 'Lançado'
+                      AND revertida = false
+                """), {'cod_produto': cod_produto}).fetchone()
+
+                if not resultado_fat or not resultado_fat.total or resultado_fat.total < 5:
+                    cache_precos[cod_produto] = None
+                else:
+                    mediana_caixa = float(resultado_fat.mediana)
+                    total_vendas = int(resultado_fat.total)
+
+                    # 2. Buscar nome_produto do cadastro para extrair qtd_por_caixa (NxM)
+                    from app.producao.models import CadastroPalletizacao
+                    produto = CadastroPalletizacao.query.filter_by(
+                        cod_produto=cod_produto
+                    ).first()
+
+                    qtd_por_caixa = None
+                    if produto and produto.nome_produto:
+                        match = re.search(r'(\d+)\s*[Xx]\s*\d+', produto.nome_produto)
+                        if match:
+                            qtd_por_caixa = int(match.group(1))
+
+                    if not qtd_por_caixa or qtd_por_caixa <= 1:
+                        cache_precos[cod_produto] = None
+                    else:
+                        cache_precos[cod_produto] = {
+                            'mediana_caixa': mediana_caixa,
+                            'qtd_por_caixa': qtd_por_caixa,
+                            'total_vendas': total_vendas,
+                        }
+            except Exception as e:
+                logger.warning(f"[NFD_SERVICE] Erro ao consultar preço para validação: {e}")
+                cache_precos[cod_produto] = None
+
+        # Verificar resultado do cache
+        dados = cache_precos.get(cod_produto)
+        if not dados:
+            return None
+
+        mediana_caixa = dados['mediana_caixa']
+        qtd_por_caixa = dados['qtd_por_caixa']
+
+        # Calcular preço unitário estimado (dividir preço da caixa por N)
+        preco_unidade_estimado = mediana_caixa / qtd_por_caixa
+
+        # Calcular ratios
+        # ratio_como_unidade: se o preço da NFD fosse de UNIDADE, quão perto de 1 está?
+        ratio_como_unidade = valor_unitario / preco_unidade_estimado if preco_unidade_estimado > 0 else 999.0
+        # ratio_como_caixa: se o preço da NFD fosse de CAIXA, quão perto de 1 está?
+        ratio_como_caixa = mediana_caixa / valor_unitario if valor_unitario > 0 else 999.0
+
+        dist_unidade = abs(ratio_como_unidade - 1)
+        dist_caixa = abs(ratio_como_caixa - 1)
+
+        # Determinar vencedor (ratio mais próximo de 1)
+        if dist_caixa < dist_unidade:
+            tipo_sugerido = 'CAIXA'
+            winner_ratio = ratio_como_caixa
+            loser_ratio = ratio_como_unidade
+        else:
+            tipo_sugerido = 'UNIDADE'
+            winner_ratio = ratio_como_unidade
+            loser_ratio = ratio_como_caixa
+
+        # Critérios conservadores para override:
+        # - O ratio vencedor deve ser < 1.5 (próximo de 1)
+        # - O ratio perdedor deve ser > 2.5 (claramente longe de 1)
+        # Se ambos forem ambíguos → manter determinístico (None)
+        if winner_ratio < 1.5 and loser_ratio > 2.5:
+            return tipo_sugerido
+
+        return None
 
     def _detectar_nfd_pallet(self, nfd_id: int) -> bool:
         """
