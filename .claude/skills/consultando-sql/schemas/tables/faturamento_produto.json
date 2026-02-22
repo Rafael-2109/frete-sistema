@@ -157,9 +157,9 @@
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_numero_nf",
+      "name": "ix_faturamento_produto_data_fatura",
       "columns": [
-        "numero_nf"
+        "data_fatura"
       ],
       "unique": false
     },
@@ -185,9 +185,9 @@
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_data_fatura",
+      "name": "ix_faturamento_produto_numero_nf",
       "columns": [
-        "data_fatura"
+        "numero_nf"
       ],
       "unique": false
     },

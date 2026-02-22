@@ -226,27 +226,6 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_receber_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_uf_cliente",
-      "columns": [
-        "uf_cliente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_receber_odoo_line_id",
       "columns": [
         "odoo_line_id"
@@ -254,7 +233,21 @@
       "unique": true
     },
     {
+      "name": "ix_contas_a_receber_metodo_baixa",
+      "columns": [
+        "metodo_baixa"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_conta_receber_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_vencimento",
       "columns": [
         "vencimento"
       ],
@@ -268,23 +261,16 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_cnpj",
+      "name": "ix_contas_a_receber_cnpj",
       "columns": [
         "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_metodo_baixa",
+      "name": "idx_conta_receber_cnpj",
       "columns": [
-        "metodo_baixa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_vencimento",
-      "columns": [
-        "vencimento"
+        "cnpj"
       ],
       "unique": false
     },
@@ -303,9 +289,23 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_cnpj",
+      "name": "idx_conta_receber_odoo_line_id",
       "columns": [
-        "cnpj"
+        "odoo_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_uf_cliente",
+      "columns": [
+        "uf_cliente"
       ],
       "unique": false
     }

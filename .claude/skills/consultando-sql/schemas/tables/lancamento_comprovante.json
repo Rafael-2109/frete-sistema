@@ -185,17 +185,9 @@
   ],
   "indices": [
     {
-      "name": "idx_lanc_odoo_move_line",
+      "name": "ix_lancamento_comprovante_status",
       "columns": [
-        "odoo_move_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_lanc_nf_parcela",
-      "columns": [
-        "nf_numero",
-        "parcela"
+        "status"
       ],
       "unique": false
     },
@@ -207,9 +199,9 @@
       "unique": false
     },
     {
-      "name": "ix_lancamento_comprovante_status",
+      "name": "ix_lancamento_comprovante_comprovante_id",
       "columns": [
-        "status"
+        "comprovante_id"
       ],
       "unique": false
     },
@@ -222,9 +214,17 @@
       "unique": false
     },
     {
-      "name": "ix_lancamento_comprovante_comprovante_id",
+      "name": "idx_lanc_odoo_move_line",
       "columns": [
-        "comprovante_id"
+        "odoo_move_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_lanc_nf_parcela",
+      "columns": [
+        "nf_numero",
+        "parcela"
       ],
       "unique": false
     }
