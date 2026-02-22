@@ -354,6 +354,19 @@ class ContasAReceber(db.Model):
     metodo_baixa = db.Column(db.String(30), nullable=True, index=True)
 
     # =========================================================================
+    # INCONSISTÊNCIA ODOO (detecção de divergências Local × Odoo)
+    # =========================================================================
+
+    # Tipo de inconsistência detectada:
+    # - PAGO_LOCAL_ABERTO_ODOO: parcela_paga=True mas Odoo mostra not_paid/partial
+    # - VALOR_RESIDUAL_DIVERGENTE: valor_residual local ≠ abs(amount_residual) Odoo
+    # - SEM_MATCH_ODOO: odoo_line_id existe mas não encontrado no Odoo
+    # - NULL: Sem inconsistência
+    inconsistencia_odoo = db.Column(db.String(50), nullable=True)
+    inconsistencia_detectada_em = db.Column(db.DateTime, nullable=True)
+    inconsistencia_resolvida_em = db.Column(db.DateTime, nullable=True)
+
+    # =========================================================================
     # CAMPOS CALCULADOS
     # =========================================================================
 
@@ -560,7 +573,11 @@ class ContasAReceber(db.Model):
             'canhoto_arquivo': em.canhoto_arquivo if em else None,
             'nf_cd': em.nf_cd if em else False,
             'nf_cancelada': self.nf_cancelada,
-            'total_abatimentos': sum(ab.valor or 0 for ab in self.abatimentos.all())
+            'total_abatimentos': sum(ab.valor or 0 for ab in self.abatimentos.all()),
+            # Inconsistência Odoo
+            'inconsistencia_odoo': self.inconsistencia_odoo,
+            'inconsistencia_detectada_em': self.inconsistencia_detectada_em.isoformat() if self.inconsistencia_detectada_em else None,
+            'inconsistencia_resolvida_em': self.inconsistencia_resolvida_em.isoformat() if self.inconsistencia_resolvida_em else None,
         }
 
     @property

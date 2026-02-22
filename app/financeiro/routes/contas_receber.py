@@ -118,6 +118,8 @@ def listar_contas_receber():
             )
         elif status == 'cancelado':
             query = query.filter(nf_cancelada_subquery)  # NF cancelada
+        elif status == 'inconsistencia':
+            query = query.filter(ContasAReceber.inconsistencia_odoo.isnot(None))
 
     if venc_de:
         try:
@@ -309,6 +311,8 @@ def exportar_contas_receber_excel():
                 )
             elif status == 'cancelado':
                 query = query.filter(nf_cancelada_subquery)
+            elif status == 'inconsistencia':
+                query = query.filter(ContasAReceber.inconsistencia_odoo.isnot(None))
 
         if venc_de:
             try:
@@ -600,6 +604,11 @@ def status_contas_receber():
             3: 'NACOM GOYA - CD'
         }
 
+        # Contagem de inconsistências
+        total_inconsistencias = ContasAReceber.query.filter(
+            ContasAReceber.inconsistencia_odoo.isnot(None)
+        ).count()
+
         return jsonify({
             'success': True,
             'total': total,
@@ -608,10 +617,277 @@ def status_contas_receber():
                 for e, t in por_empresa
             ],
             'ultima_sincronizacao': ultima_sync.isoformat() if ultima_sync else None,
-            'total_snapshots': total_snapshots
+            'total_snapshots': total_snapshots,
+            'total_inconsistencias': total_inconsistencias
         })
 
     except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ========================================
+# INCONSISTÊNCIAS ODOO
+# ========================================
+
+@financeiro_bp.route('/contas-receber/api/inconsistencias/contagem')
+@login_required
+def api_inconsistencias_contagem():
+    """
+    API: Retorna contagem de inconsistências por tipo e por método de baixa.
+    Usado pelo hub e pelo badge na listagem.
+    """
+    try:
+        from app.financeiro.services.auditoria_inconsistencias_service import AuditoriaInconsistenciasService
+
+        service = AuditoriaInconsistenciasService()
+        contagens = service.contar_inconsistencias()
+
+        # Contagem por metodo_baixa (para saber quantos são CNAB vs ODOO_DIRETO)
+        from app.financeiro.models import ContasAReceber
+        por_metodo = db.session.query(
+            ContasAReceber.metodo_baixa,
+            func.count(ContasAReceber.id),
+        ).filter(
+            ContasAReceber.inconsistencia_odoo.isnot(None),
+        ).group_by(
+            ContasAReceber.metodo_baixa,
+        ).all()
+
+        return jsonify({
+            'success': True,
+            'total': contagens['total'],
+            'por_tipo': contagens['por_tipo'],
+            'por_metodo': {m or 'SEM_METODO': c for m, c in por_metodo},
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/contas-receber/api/inconsistencias/executar-auditoria', methods=['POST'])
+@login_required
+def api_executar_auditoria_inconsistencias():
+    """
+    API: Executa detecção de inconsistências manualmente.
+
+    Body JSON (opcional):
+        empresa: int (1=FB, 2=SC, 3=CD)
+        dry_run: bool (default False)
+    """
+    try:
+        from app.financeiro.services.auditoria_inconsistencias_service import AuditoriaInconsistenciasService
+
+        data = request.get_json(silent=True) or {}
+        empresa = data.get('empresa')
+        dry_run = data.get('dry_run', False)
+
+        service = AuditoriaInconsistenciasService()
+        resultado = service.detectar_inconsistencias(
+            empresa=empresa,
+            dry_run=dry_run,
+        )
+
+        # Remover lista detalhada para resposta JSON compacta
+        resultado.pop('inconsistencias', None)
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/contas-receber/api/inconsistencias/<int:conta_id>/reverter-pagamento', methods=['POST'])
+@login_required
+def api_reverter_pagamento_inconsistencia(conta_id):
+    """
+    API: Reverte parcela_paga para False em registro com inconsistência PAGO_LOCAL_ABERTO_ODOO.
+
+    Usado para casos ODOO_DIRETO onde o pagamento local era falso positivo
+    (l10n_br_paga transitoriamente True).
+    """
+    try:
+        from app.financeiro.models import ContasAReceber
+        from app.utils.timezone import agora_utc_naive
+
+        conta = ContasAReceber.query.get_or_404(conta_id)
+
+        if not conta.inconsistencia_odoo:
+            return jsonify({
+                'success': False,
+                'error': 'Registro não possui inconsistência ativa'
+            }), 400
+
+        if conta.inconsistencia_odoo != 'PAGO_LOCAL_ABERTO_ODOO':
+            return jsonify({
+                'success': False,
+                'error': f'Ação não aplicável para tipo {conta.inconsistencia_odoo}'
+            }), 400
+
+        # Reverter pagamento
+        conta.parcela_paga = False
+        conta.metodo_baixa = None
+        conta.inconsistencia_odoo = None
+        conta.inconsistencia_resolvida_em = agora_utc_naive()
+        conta.atualizado_em = agora_utc_naive()
+        conta.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Pagamento revertido para {conta.titulo_nf}-{conta.parcela}',
+            'conta': conta.to_dict()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@financeiro_bp.route('/contas-receber/api/inconsistencias/<int:conta_id>/criar-pagamento-odoo', methods=['POST'])
+@login_required
+def api_criar_pagamento_odoo_inconsistencia(conta_id):
+    """
+    API: Cria pagamento no Odoo para resolver inconsistência PAGO_LOCAL_ABERTO_ODOO.
+
+    Usado para casos onde parcela_paga=True está correto mas Odoo não tem o pagamento.
+    Cria payment via write-off wizard no Odoo e limpa o flag.
+    """
+    try:
+        from app.financeiro.models import ContasAReceber
+        from app.financeiro.constants import (
+            JOURNAL_GRAFENO_ID,
+            CONTA_JUROS_RECEBIMENTOS_POR_COMPANY,
+        )
+        from app.utils.timezone import agora_utc_naive
+
+        conta = ContasAReceber.query.get_or_404(conta_id)
+
+        if conta.inconsistencia_odoo != 'PAGO_LOCAL_ABERTO_ODOO':
+            return jsonify({
+                'success': False,
+                'error': f'Ação não aplicável para tipo {conta.inconsistencia_odoo or "sem inconsistência"}'
+            }), 400
+
+        if not conta.odoo_line_id:
+            return jsonify({
+                'success': False,
+                'error': 'Registro sem odoo_line_id — não é possível reconciliar'
+            }), 400
+
+        # Determinar conta de juros pela empresa
+        # Mapeamento empresa local → company_id Odoo
+        empresa_to_company = {1: 1, 2: 3, 3: 4}
+        company_id = empresa_to_company.get(conta.empresa)
+
+        conta_juros = CONTA_JUROS_RECEBIMENTOS_POR_COMPANY.get(company_id)
+        if not conta_juros:
+            return jsonify({
+                'success': False,
+                'error': f'Conta de juros não configurada para empresa {conta.empresa}'
+            }), 400
+
+        # Criar pagamento via wizard no Odoo
+        from app.odoo.utils.connection import get_odoo_connection
+        conn = get_odoo_connection()
+        if not conn.authenticate():
+            return jsonify({
+                'success': False,
+                'error': 'Falha na autenticação com Odoo'
+            }), 500
+
+        # Buscar valor residual atual no Odoo
+        linhas = conn.search_read(
+            'account.move.line',
+            [['id', '=', conta.odoo_line_id]],
+            fields=['id', 'amount_residual', 'l10n_br_paga', 'reconciled'],
+            limit=1,
+        )
+
+        if not linhas:
+            return jsonify({
+                'success': False,
+                'error': f'Linha {conta.odoo_line_id} não encontrada no Odoo'
+            }), 404
+
+        linha_odoo = linhas[0]
+        amount_residual = abs(float(linha_odoo.get('amount_residual', 0) or 0))
+
+        if amount_residual < 0.01:
+            # Já está pago no Odoo — só limpar flag
+            conta.inconsistencia_odoo = None
+            conta.inconsistencia_resolvida_em = agora_utc_naive()
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'Título {conta.titulo_nf}-{conta.parcela} já está pago no Odoo. Flag limpo.',
+            })
+
+        # Criar pagamento via wizard (account.payment.register)
+        # O wizard cria + posta + reconcilia automaticamente (GOTCHA O2)
+        try:
+            wizard_id = conn.create(
+                'account.payment.register',
+                {
+                    'line_ids': [(6, 0, [conta.odoo_line_id])],
+                    'journal_id': JOURNAL_GRAFENO_ID,
+                    'payment_type': 'inbound',
+                    'partner_type': 'customer',
+                    'amount': amount_residual,
+                    'payment_difference_handling': 'reconcile',
+                    'writeoff_account_id': conta_juros,
+                    'writeoff_label': f'Reconciliação inconsistência CNAB - NF {conta.titulo_nf}',
+                },
+            )
+
+            # Executar wizard — pode retornar None (GOTCHA O6: "cannot marshal None" = SUCESSO)
+            try:
+                conn.execute(
+                    'account.payment.register',
+                    'action_create_payments',
+                    [wizard_id],
+                )
+            except Exception as e:
+                # "cannot marshal None" = sucesso (O6)
+                if 'cannot marshal None' not in str(e):
+                    raise
+
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao criar pagamento no Odoo: {str(e)}'
+            }), 500
+
+        # Limpar flag de inconsistência
+        conta.inconsistencia_odoo = None
+        conta.inconsistencia_resolvida_em = agora_utc_naive()
+        conta.atualizado_em = agora_utc_naive()
+        conta.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': (
+                f'Pagamento criado no Odoo para {conta.titulo_nf}-{conta.parcela} '
+                f'(R$ {amount_residual:.2f}). Inconsistência resolvida.'
+            ),
+        })
+
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e)

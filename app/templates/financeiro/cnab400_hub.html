@@ -130,6 +130,47 @@
     </div>
 
     <!-- ================================================================== -->
+    <!-- INCONSISTÊNCIAS CNAB (títulos com divergência Local × Odoo)        -->
+    <!-- ================================================================== -->
+    <div class="cnab-section" id="secaoInconsistenciasCnab" style="display: none;">
+        <div class="cnab-section__header">
+            <h2 class="cnab-section__title" style="color: var(--danger, #dc3545);">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="inconsistencias-titulo">Títulos com Inconsistência CNAB</span>
+            </h2>
+            <button class="btn-cnab btn-cnab--outline btn-cnab--sm" onclick="carregarInconsistenciasCnab()" title="Atualizar">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+
+        <div id="inconsistencias-loading" class="text-center py-3" style="display: none;">
+            <i class="fas fa-spinner fa-spin"></i> Carregando...
+        </div>
+
+        <table class="cnab-table" id="tabelaInconsistencias" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Emp</th>
+                    <th>NF-Parc</th>
+                    <th>Cliente</th>
+                    <th>Valor</th>
+                    <th>Residual</th>
+                    <th>Metodo</th>
+                    <th>Inconsistencia</th>
+                    <th>Detectada</th>
+                    <th>Acao</th>
+                </tr>
+            </thead>
+            <tbody id="inconsistencias-body">
+            </tbody>
+        </table>
+
+        <div id="inconsistencias-empty" class="text-center py-3 text-muted" style="display: none;">
+            <i class="fas fa-check-circle text-success"></i> Nenhuma inconsistencia CNAB encontrada.
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
     <!-- TABELA DE LOTES -->
     <!-- ================================================================== -->
     <div class="cnab-section">
@@ -313,6 +354,140 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('cnab_batch_id');
         document.getElementById('batch-progresso-hub').style.display = 'none';
     };
+
+    // =============================================
+    // INCONSISTÊNCIAS CNAB
+    // =============================================
+
+    carregarInconsistenciasCnab();
 });
+
+function carregarInconsistenciasCnab() {
+    const secao = document.getElementById('secaoInconsistenciasCnab');
+    const loading = document.getElementById('inconsistencias-loading');
+    const tabela = document.getElementById('tabelaInconsistencias');
+    const body = document.getElementById('inconsistencias-body');
+    const empty = document.getElementById('inconsistencias-empty');
+
+    loading.style.display = 'block';
+    tabela.style.display = 'none';
+    empty.style.display = 'none';
+
+    fetch('/cnab400/api/inconsistencias')
+        .then(r => r.json())
+        .then(data => {
+            loading.style.display = 'none';
+
+            if (!data.success) {
+                console.error('Erro ao carregar inconsistencias:', data.error);
+                return;
+            }
+
+            if (data.total === 0) {
+                // Seção pode ficar oculta ou mostrar mensagem
+                secao.style.display = 'block';
+                empty.style.display = 'block';
+                return;
+            }
+
+            secao.style.display = 'block';
+            tabela.style.display = 'table';
+
+            document.getElementById('inconsistencias-titulo').textContent =
+                `Títulos com Inconsistência CNAB (${data.total})`;
+
+            body.innerHTML = '';
+            data.titulos.forEach(t => {
+                const empresaBadge = {1: '<span class="badge badge-empresa badge-fb">FB</span>',
+                                      2: '<span class="badge badge-empresa badge-sc">SC</span>',
+                                      3: '<span class="badge badge-empresa badge-cd">CD</span>'}[t.empresa] || '?';
+
+                const valor = t.valor_titulo ? `R$ ${Number(t.valor_titulo).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : '-';
+                const residual = t.valor_residual !== null ? `R$ ${Number(t.valor_residual).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : '-';
+
+                const detectada = t.inconsistencia_detectada_em
+                    ? new Date(t.inconsistencia_detectada_em).toLocaleDateString('pt-BR')
+                    : '-';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="text-center">${empresaBadge}</td>
+                    <td><strong>${t.titulo_nf}</strong>-${t.parcela}</td>
+                    <td title="${t.raz_social_red || ''}">${(t.raz_social_red || '-').substring(0, 25)}</td>
+                    <td class="text-end">${valor}</td>
+                    <td class="text-end">${residual}</td>
+                    <td><span class="badge bg-secondary">${t.metodo_baixa || '-'}</span></td>
+                    <td><span class="badge bg-danger">${t.inconsistencia_odoo}</span></td>
+                    <td>${detectada}</td>
+                    <td>
+                        <button class="btn-cnab btn-cnab--primary btn-cnab--sm"
+                                onclick="reconciliarInconsistenciaCnab(${t.id}, '${t.titulo_nf}-${t.parcela}')"
+                                title="Re-reconciliar no Odoo">
+                            <i class="fas fa-sync"></i> Reconciliar
+                        </button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        })
+        .catch(err => {
+            loading.style.display = 'none';
+            console.error('Erro ao buscar inconsistencias CNAB:', err);
+        });
+}
+
+function reconciliarInconsistenciaCnab(contaId, titulo) {
+    if (!confirm(`Confirma re-reconciliação do título ${titulo} no Odoo?\n\nIsto criará um pagamento via write-off no Odoo.`)) {
+        return;
+    }
+
+    const btn = event.target.closest('button');
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/cnab400/api/inconsistencias/${contaId}/reconciliar`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Remover linha da tabela
+            btn.closest('tr').remove();
+
+            // Verificar se tabela ficou vazia
+            const body = document.getElementById('inconsistencias-body');
+            if (body.children.length === 0) {
+                document.getElementById('tabelaInconsistencias').style.display = 'none';
+                document.getElementById('inconsistencias-empty').style.display = 'block';
+            }
+
+            // Feedback visual
+            const msg = data.ja_pago
+                ? `${titulo}: já estava pago no Odoo. Flag limpo.`
+                : `${titulo}: pagamento criado no Odoo (R$ ${data.amount ? data.amount.toFixed(2) : '?'}).`;
+
+            // Usar alert simples (sem dependência de toastr no CNAB hub)
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show';
+            alertDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${msg}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.getElementById('secaoInconsistenciasCnab').prepend(alertDiv);
+        } else {
+            alert('Erro: ' + (data.error || 'Erro desconhecido'));
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    })
+    .catch(err => {
+        alert('Erro de conexão com o servidor');
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    });
+}
 </script>
 {% endblock %}

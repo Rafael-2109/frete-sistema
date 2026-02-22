@@ -123,6 +123,34 @@
     </div>
 
     <!-- ================================================================== -->
+    <!-- ALERTA DE INCONSISTÊNCIAS ODOO                                     -->
+    <!-- ================================================================== -->
+    <div class="fin-hub-section" id="secaoInconsistencias" style="display: none;">
+        <div class="fin-hub-grid">
+            <a href="{{ url_for('financeiro.listar_contas_receber', status='inconsistencia') }}"
+               class="fin-hub-card fin-hub-card--primary"
+               style="border-left: 4px solid var(--danger, #dc3545);">
+                <span class="fin-hub-card__badge fin-hub-card__badge--danger" style="background: var(--danger, #dc3545);">ATENÇÃO</span>
+                <div class="fin-hub-card__icon" style="color: var(--danger, #dc3545);">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="fin-hub-card__title">
+                    <span id="inconsistenciaCount">0</span> Inconsistências Odoo
+                </h3>
+                <p class="fin-hub-card__desc" id="inconsistenciaDesc">
+                    Títulos marcados como pagos localmente mas abertos no Odoo.
+                    Requer ação manual para resolver.
+                </p>
+                <div class="d-flex gap-2 mt-2" id="inconsistenciaMetodos"></div>
+                <span class="fin-hub-card__action" style="color: var(--danger, #dc3545);">
+                    <i class="fas fa-search"></i>
+                    Ver Inconsistências
+                </span>
+            </a>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
     <!-- CONFIGURAÇÕES                                                       -->
     <!-- ================================================================== -->
     <div class="fin-hub-section">
@@ -319,6 +347,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     carregarEstatisticas();
+    carregarInconsistencias();
 });
 
 function carregarEstatisticas() {
@@ -350,6 +379,37 @@ function carregarEstatisticas() {
         })
         .catch(error => {
             console.error('Erro ao carregar estatísticas:', error);
+        });
+}
+
+// =============================================
+// INCONSISTÊNCIAS ODOO
+// =============================================
+
+function carregarInconsistencias() {
+    fetch("{{ url_for('financeiro.api_inconsistencias_contagem') }}")
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.total > 0) {
+                const secao = document.getElementById('secaoInconsistencias');
+                secao.style.display = 'block';
+
+                document.getElementById('inconsistenciaCount').textContent = data.total;
+
+                // Mostrar badges por método de baixa
+                const container = document.getElementById('inconsistenciaMetodos');
+                container.innerHTML = '';
+                const metodos = data.por_metodo || {};
+                for (const [metodo, qtd] of Object.entries(metodos)) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-secondary';
+                    badge.textContent = `${metodo}: ${qtd}`;
+                    container.appendChild(badge);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar inconsistências:', error);
         });
 }
 

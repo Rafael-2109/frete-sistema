@@ -99,6 +99,7 @@
                                     <option value="pago" {% if request.args.get('status') == 'pago' %}selected{% endif %}>Pagos</option>
                                     <option value="vencido" {% if request.args.get('status') == 'vencido' %}selected{% endif %}>Vencidos</option>
                                     <option value="cancelado" {% if request.args.get('status') == 'cancelado' %}selected{% endif %}>Cancelados</option>
+                                    <option value="inconsistencia" {% if request.args.get('status') == 'inconsistencia' %}selected{% endif %}>Inconsistencias Odoo</option>
                                 </select>
                             </div>
                         </div>
@@ -558,6 +559,58 @@
                                   title="Ver abatimentos e baixas">
                                 ABERTO <i class="fas fa-balance-scale ms-1"></i>
                             </span>
+                        {% endif %}
+                        {# Badge de inconsistência Odoo #}
+                        {% if conta.inconsistencia_odoo %}
+                            <br>
+                            <span class="badge bg-danger mt-1" title="Inconsistencia: {{ conta.inconsistencia_odoo }}">
+                                <i class="fas fa-exclamation-triangle"></i> INCONS
+                            </span>
+                            {# Botões de ação por método de baixa #}
+                            <div class="mt-1">
+                                {% if conta.metodo_baixa in ['CNAB', 'PAGO_CNAB', 'PAGO_CNAB_AUTO'] %}
+                                    <a href="{{ url_for('cnab400.index') }}#inconsistencias"
+                                       class="btn btn-outline-danger btn-xs" title="Resolver via CNAB Hub">
+                                        <i class="fas fa-external-link-alt"></i> CNAB
+                                    </a>
+                                {% elif conta.metodo_baixa == 'ODOO_DIRETO' %}
+                                    <div class="btn-group btn-group-xs">
+                                        <button class="btn btn-outline-warning btn-xs"
+                                                onclick="reverterPagamento({{ conta.id }}, '{{ conta.titulo_nf }}-{{ conta.parcela }}')"
+                                                title="Reverter pagamento (falso positivo)">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-xs"
+                                                onclick="criarPagamentoOdoo({{ conta.id }}, '{{ conta.titulo_nf }}-{{ conta.parcela }}')"
+                                                title="Criar pagamento no Odoo">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                {% elif conta.metodo_baixa == 'EXCEL' %}
+                                    <a href="{{ url_for('financeiro.baixas_hub') }}"
+                                       class="btn btn-outline-danger btn-xs" title="Resolver via Baixas Hub">
+                                        <i class="fas fa-external-link-alt"></i> Excel
+                                    </a>
+                                {% elif conta.metodo_baixa == 'EXTRATO' %}
+                                    <a href="{{ url_for('financeiro.extrato_itens') }}"
+                                       class="btn btn-outline-danger btn-xs" title="Resolver via Extrato">
+                                        <i class="fas fa-external-link-alt"></i> Extrato
+                                    </a>
+                                {% else %}
+                                    <div class="btn-group btn-group-xs">
+                                        <button class="btn btn-outline-warning btn-xs"
+                                                onclick="reverterPagamento({{ conta.id }}, '{{ conta.titulo_nf }}-{{ conta.parcela }}')"
+                                                title="Reverter pagamento">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-xs"
+                                                onclick="criarPagamentoOdoo({{ conta.id }}, '{{ conta.titulo_nf }}-{{ conta.parcela }}')"
+                                                title="Criar pagamento no Odoo">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            </div>
                         {% endif %}
                     </td>
                 </tr>
@@ -1027,4 +1080,90 @@ initContasReceber(
 );
 </script>
 <script src="{{ url_for('static', filename='js/financeiro/busca-semantica.js') }}"></script>
+<script>
+// =============================================
+// INCONSISTÊNCIAS ODOO — Ações Inline
+// =============================================
+
+const inconsistenciaBaseUrl = "{{ url_for('financeiro.contas_receber_hub') }}".replace(/\/contas-receber$/, '/contas-receber/api/inconsistencias');
+
+function reverterPagamento(contaId, titulo) {
+    Swal.fire({
+        title: 'Reverter Pagamento?',
+        html: `Isso vai marcar <strong>${titulo}</strong> como <strong>NAO PAGO</strong>.<br><br>
+               Use quando o pagamento local era um <em>falso positivo</em> (l10n_br_paga transitoriamente True).`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sim, reverter',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`${inconsistenciaBaseUrl}/${contaId}/reverter-pagamento`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    toastr.success(data.message, 'Pagamento Revertido');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    toastr.error(data.error, 'Erro');
+                }
+            })
+            .catch(err => toastr.error('Erro de conexao', 'Erro'));
+        }
+    });
+}
+
+function criarPagamentoOdoo(contaId, titulo) {
+    Swal.fire({
+        title: 'Criar Pagamento no Odoo?',
+        html: `Isso vai criar um <strong>pagamento</strong> no Odoo para <strong>${titulo}</strong>.<br><br>
+               Use quando o pagamento local esta correto mas o Odoo nao tem o registro.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sim, criar pagamento',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Criando pagamento...',
+                html: 'Aguarde a comunicacao com o Odoo.',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            fetch(`${inconsistenciaBaseUrl}/${contaId}/criar-pagamento-odoo`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(r => r.json())
+            .then(data => {
+                Swal.close();
+                if (data.success) {
+                    toastr.success(data.message, 'Pagamento Criado');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    toastr.error(data.error, 'Erro ao criar pagamento');
+                }
+            })
+            .catch(err => {
+                Swal.close();
+                toastr.error('Erro de conexao com o servidor', 'Erro');
+            });
+        }
+    });
+}
+</script>
 {% endblock %}

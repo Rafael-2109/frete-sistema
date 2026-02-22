@@ -791,3 +791,206 @@ def api_exportar_todas_pendencias():
     """
     from app.financeiro.routes.exportacao import _exportar_cnab_pendencias_todas
     return _exportar_cnab_pendencias_todas()
+
+
+# =============================================================================
+# INCONSISTÊNCIAS ODOO (títulos CNAB com divergência Local × Odoo)
+# =============================================================================
+
+@cnab400_bp.route('/api/inconsistencias')
+@login_required
+def api_listar_inconsistencias_cnab():
+    """
+    API: Lista títulos com inconsistência Odoo que foram baixados via CNAB.
+
+    Retorna registros de contas_a_receber com:
+    - inconsistencia_odoo IS NOT NULL
+    - metodo_baixa IN ('CNAB', 'PAGO_CNAB', 'PAGO_CNAB_AUTO')
+    """
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+
+        query = ContasAReceber.query.filter(
+            ContasAReceber.inconsistencia_odoo.isnot(None),
+            ContasAReceber.metodo_baixa.in_(['CNAB', 'PAGO_CNAB', 'PAGO_CNAB_AUTO']),
+        ).order_by(
+            ContasAReceber.empresa,
+            ContasAReceber.titulo_nf,
+        )
+
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        titulos = []
+        for conta in pagination.items:
+            titulos.append({
+                'id': conta.id,
+                'empresa': conta.empresa,
+                'empresa_nome': conta.empresa_nome,
+                'titulo_nf': conta.titulo_nf,
+                'parcela': conta.parcela,
+                'cnpj': conta.cnpj,
+                'raz_social_red': conta.raz_social_red or conta.raz_social,
+                'valor_titulo': conta.valor_titulo,
+                'valor_residual': conta.valor_residual,
+                'vencimento': conta.vencimento.isoformat() if conta.vencimento else None,
+                'metodo_baixa': conta.metodo_baixa,
+                'inconsistencia_odoo': conta.inconsistencia_odoo,
+                'inconsistencia_detectada_em': conta.inconsistencia_detectada_em.isoformat() if conta.inconsistencia_detectada_em else None,
+                'odoo_line_id': conta.odoo_line_id,
+                'status_pagamento_odoo': conta.status_pagamento_odoo,
+            })
+
+        return jsonify({
+            'success': True,
+            'titulos': titulos,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'page': page,
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cnab400_bp.route('/api/inconsistencias/<int:conta_id>/reconciliar', methods=['POST'])
+@login_required
+def api_reconciliar_inconsistencia_cnab(conta_id):
+    """
+    API: Re-reconcilia um título CNAB com inconsistência no Odoo.
+
+    Cria payment via write-off wizard no Odoo usando journal GRAFENO (883)
+    e conta de juros da empresa correspondente.
+
+    Após sucesso, limpa o flag de inconsistência.
+    """
+    try:
+        from app.financeiro.constants import (
+            JOURNAL_GRAFENO_ID,
+            CONTA_JUROS_RECEBIMENTOS_POR_COMPANY,
+        )
+        from app.utils.timezone import agora_utc_naive
+
+        conta = ContasAReceber.query.get_or_404(conta_id)
+
+        # Validações
+        if not conta.inconsistencia_odoo:
+            return jsonify({
+                'success': False,
+                'error': 'Registro não possui inconsistência ativa'
+            }), 400
+
+        if not conta.odoo_line_id:
+            return jsonify({
+                'success': False,
+                'error': 'Registro sem odoo_line_id — não é possível reconciliar'
+            }), 400
+
+        # Empresa local → company_id Odoo
+        empresa_to_company = {1: 1, 2: 3, 3: 4}
+        company_id = empresa_to_company.get(conta.empresa)
+
+        conta_juros = CONTA_JUROS_RECEBIMENTOS_POR_COMPANY.get(company_id)
+        if not conta_juros:
+            return jsonify({
+                'success': False,
+                'error': f'Conta de juros não configurada para empresa {conta.empresa}'
+            }), 400
+
+        # Conectar ao Odoo
+        from app.odoo.utils.connection import get_odoo_connection
+        conn = get_odoo_connection()
+        if not conn.authenticate():
+            return jsonify({
+                'success': False,
+                'error': 'Falha na autenticação com Odoo'
+            }), 500
+
+        # Buscar valor residual atual no Odoo
+        linhas = conn.search_read(
+            'account.move.line',
+            [['id', '=', conta.odoo_line_id]],
+            fields=['id', 'amount_residual', 'l10n_br_paga', 'reconciled'],
+            limit=1,
+        )
+
+        if not linhas:
+            return jsonify({
+                'success': False,
+                'error': f'Linha {conta.odoo_line_id} não encontrada no Odoo'
+            }), 404
+
+        linha_odoo = linhas[0]
+        amount_residual = abs(float(linha_odoo.get('amount_residual', 0) or 0))
+
+        if amount_residual < 0.01:
+            # Já pago no Odoo — limpar flag apenas
+            conta.inconsistencia_odoo = None
+            conta.inconsistencia_resolvida_em = agora_utc_naive()
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'Título {conta.titulo_nf}-{conta.parcela} já está pago no Odoo. Flag limpo.',
+                'ja_pago': True,
+            })
+
+        # Criar pagamento via wizard (O2: wizard já posta E reconcilia)
+        try:
+            wizard_id = conn.create(
+                'account.payment.register',
+                {
+                    'line_ids': [(6, 0, [conta.odoo_line_id])],
+                    'journal_id': JOURNAL_GRAFENO_ID,
+                    'payment_type': 'inbound',
+                    'partner_type': 'customer',
+                    'amount': amount_residual,
+                    'payment_difference_handling': 'reconcile',
+                    'writeoff_account_id': conta_juros,
+                    'writeoff_label': f'Re-reconciliação CNAB inconsistência - NF {conta.titulo_nf}',
+                },
+            )
+
+            # Executar wizard — O6: "cannot marshal None" = SUCESSO
+            try:
+                conn.execute(
+                    'account.payment.register',
+                    'action_create_payments',
+                    [wizard_id],
+                )
+            except Exception as e:
+                if 'cannot marshal None' not in str(e):
+                    raise
+
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao criar pagamento no Odoo: {str(e)}'
+            }), 500
+
+        # Limpar flag de inconsistência
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        conta.inconsistencia_odoo = None
+        conta.inconsistencia_resolvida_em = agora_utc_naive()
+        conta.atualizado_em = agora_utc_naive()
+        conta.atualizado_por = usuario
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': (
+                f'Pagamento CNAB criado no Odoo para {conta.titulo_nf}-{conta.parcela} '
+                f'(R$ {amount_residual:.2f}). Inconsistência resolvida.'
+            ),
+            'amount': amount_residual,
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
