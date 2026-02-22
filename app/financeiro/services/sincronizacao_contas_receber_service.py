@@ -244,12 +244,22 @@ class SincronizacaoContasReceberService:
                 ['write_date', '>=', data_limite],
             ]
 
-            dados_odoo = connection.search_read(
-                'account.move.line',
-                filtros,
-                fields=campos,
-                limit=5000
-            ) or []
+            dados_odoo = []
+            offset = 0
+            PAGE_SIZE = 2000
+            while True:
+                page = connection.search_read(
+                    'account.move.line',
+                    filtros,
+                    fields=campos,
+                    limit=PAGE_SIZE,
+                    offset=offset
+                ) or []
+                if not page:
+                    break
+                dados_odoo.extend(page)
+                offset += PAGE_SIZE
+                logger.info(f"   📄 Página {offset // PAGE_SIZE}: +{len(page)} registros (total: {len(dados_odoo)})")
             logger.info(f"   ✅ {len(dados_odoo)} registros extraídos")
 
             if not dados_odoo:

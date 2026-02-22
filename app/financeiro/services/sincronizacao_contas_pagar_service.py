@@ -295,12 +295,22 @@ class SincronizacaoContasAPagarService:
                 ['write_date', '>=', data_limite],
             ]
 
-            dados_odoo = self.connection.search_read(
-                'account.move.line',
-                filtros,
-                self.CAMPOS_ODOO,
-                limit=5000
-            ) or []
+            dados_odoo = []
+            offset = 0
+            PAGE_SIZE = 2000
+            while True:
+                page = self.connection.search_read(
+                    'account.move.line',
+                    filtros,
+                    self.CAMPOS_ODOO,
+                    limit=PAGE_SIZE,
+                    offset=offset
+                ) or []
+                if not page:
+                    break
+                dados_odoo.extend(page)
+                offset += PAGE_SIZE
+                logger.info(f"   📄 Página {offset // PAGE_SIZE}: +{len(page)} registros (total: {len(dados_odoo)})")
             logger.info(f"   ✅ {len(dados_odoo)} registros extraídos")
 
             if not dados_odoo:
@@ -401,21 +411,31 @@ class SincronizacaoContasAPagarService:
 
         logger.info(f"   Filtros: {filtros}")
 
-        dados = self.connection.search_read(
-            'account.move.line',
-            filtros,
-            self.CAMPOS_ODOO,
-            limit=5000
-        )
+        dados = []
+        offset = 0
+        PAGE_SIZE = 2000
+        while True:
+            page = self.connection.search_read(
+                'account.move.line',
+                filtros,
+                self.CAMPOS_ODOO,
+                limit=PAGE_SIZE,
+                offset=offset
+            ) or []
+            if not page:
+                break
+            dados.extend(page)
+            offset += PAGE_SIZE
+            logger.info(f"   📄 Página {offset // PAGE_SIZE}: +{len(page)} registros (total: {len(dados)})")
 
-        return dados or []
+        return dados
 
     def _buscar_cnpjs_fornecedores(self, partner_ids: List[int]) -> Dict[int, Dict]:
         """
-        Busca CNPJs dos fornecedores.
+        Busca CNPJs e dados dos fornecedores.
 
         Returns:
-            Dict[partner_id, {cnpj, name}]
+            Dict[partner_id, {cnpj, name, raz_social, raz_social_red}]
         """
         if not partner_ids:
             return {}
@@ -426,16 +446,20 @@ class SincronizacaoContasAPagarService:
         dados = self.connection.search_read(
             'res.partner',
             [['id', 'in', partner_ids]],
-            ['id', 'name', 'l10n_br_cnpj'],
+            ['id', 'name', 'l10n_br_cnpj', 'l10n_br_razao_social'],
             limit=len(partner_ids)
         )
 
         result = {}
         for p in (dados or []):
             cnpj = p.get('l10n_br_cnpj') or ''
+            name = p.get('name', '')
+            raz_social = p.get('l10n_br_razao_social') or name
             result[p['id']] = {
                 'cnpj': cnpj,
-                'name': p.get('name', '')
+                'name': name,
+                'raz_social': raz_social,
+                'raz_social_red': (name or '')[:100],
             }
 
         return result
@@ -486,9 +510,13 @@ class SincronizacaoContasAPagarService:
         emissao = row.get('date')
         vencimento = row.get('date_maturity')
 
-        # Status
-        parcela_paga = bool(row.get('l10n_br_paga'))
+        # Status — 3 sinais para parcela_paga (alinhado com Receber)
+        # Sinal 1: flag explícita l10n_br
+        # Sinal 2: reconciliado no Odoo
+        # Sinal 3: amount_residual >= 0 (para payables, negativo = em aberto — Gotcha O3)
+        paga_l10n = bool(row.get('l10n_br_paga'))
         reconciliado = bool(row.get('reconciled'))
+        parcela_paga = paga_l10n or reconciliado or amount_residual >= 0
 
         # Buscar registro existente: batch dict O(1) com fallback para query
         conta = None
@@ -514,7 +542,8 @@ class SincronizacaoContasAPagarService:
             conta.odoo_move_name = move_name
             conta.partner_id = partner_id
             conta.cnpj = cnpj
-            conta.raz_social = partner_name
+            conta.raz_social = partner_data.get('raz_social', partner_name)
+            conta.raz_social_red = partner_data.get('raz_social_red')
             conta.emissao = emissao
             conta.vencimento = vencimento
             conta.valor_original = valor_original
@@ -545,7 +574,8 @@ class SincronizacaoContasAPagarService:
                 odoo_move_name=move_name,
                 partner_id=partner_id,
                 cnpj=cnpj,
-                raz_social=partner_name,
+                raz_social=partner_data.get('raz_social', partner_name),
+                raz_social_red=partner_data.get('raz_social_red'),
                 emissao=emissao,
                 vencimento=vencimento,
                 valor_original=valor_original,
