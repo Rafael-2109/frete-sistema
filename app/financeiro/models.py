@@ -2260,6 +2260,11 @@ class ContasAPagar(db.Model):
     # Data programada para pagamento (definido pelo usuário)
     data_programada = db.Column(db.Date, nullable=True)
 
+    # Flag de inconsistência Local × Odoo
+    inconsistencia_odoo = db.Column(db.String(50), nullable=True)
+    inconsistencia_detectada_em = db.Column(db.DateTime, nullable=True)
+    inconsistencia_resolvida_em = db.Column(db.DateTime, nullable=True)
+
     # =========================================================================
     # AUDITORIA E CONTROLE
     # =========================================================================
@@ -2351,6 +2356,10 @@ class ContasAPagar(db.Model):
             'status_sistema': self.status_sistema,
             'metodo_baixa': self.metodo_baixa,
             'data_programada': self.data_programada.isoformat() if self.data_programada else None,
+            # Inconsistência Odoo
+            'inconsistencia_odoo': self.inconsistencia_odoo,
+            'inconsistencia_detectada_em': self.inconsistencia_detectada_em.isoformat() if self.inconsistencia_detectada_em else None,
+            'inconsistencia_resolvida_em': self.inconsistencia_resolvida_em.isoformat() if self.inconsistencia_resolvida_em else None,
             # Calculados
             'dias_vencidos': self.dias_vencidos,
             'status_vencimento': self.status_vencimento,

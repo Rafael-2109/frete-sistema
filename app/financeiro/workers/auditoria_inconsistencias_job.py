@@ -3,7 +3,7 @@
 Worker: Auditoria de Inconsistências Local × Odoo
 ==================================================
 
-Job RQ para detecção periódica de inconsistências em contas_a_receber.
+Jobs RQ para detecção periódica de inconsistências em contas_a_receber e contas_a_pagar.
 
 Uso manual:
     python -c "
@@ -94,6 +94,86 @@ def limpar_inconsistencias_resolvidas(empresa: int = None) -> dict:
 
         logger.info(
             f"[AuditoriaJob] Limpeza concluída — "
+            f"{resultado.get('limpas', 0)} limpas, "
+            f"{resultado.get('mantidas', 0)} mantidas"
+        )
+
+        return resultado
+
+
+# =============================================
+# CONTAS A PAGAR
+# =============================================
+
+
+def executar_auditoria_inconsistencias_pagar(
+    empresa: int = None,
+    dry_run: bool = False,
+    apenas_pagos: bool = True,
+) -> dict:
+    """
+    Job: Detecta inconsistências Local × Odoo em contas a pagar.
+
+    Args:
+        empresa: Filtrar por empresa (1=FB, 2=SC, 3=CD). None = todas.
+        dry_run: Se True, apenas lista sem atualizar flags.
+        apenas_pagos: Se True, verifica apenas registros com parcela_paga=True.
+
+    Returns:
+        Dict com estatísticas da auditoria.
+    """
+    with app_context_safe():
+        from app.financeiro.services.auditoria_inconsistencias_pagar_service import (
+            AuditoriaInconsistenciasPagarService,
+        )
+
+        logger.info(
+            f"[AuditoriaPagarJob] Iniciando (empresa={empresa}, "
+            f"dry_run={dry_run}, apenas_pagos={apenas_pagos})"
+        )
+
+        service = AuditoriaInconsistenciasPagarService()
+        resultado = service.detectar_inconsistencias(
+            empresa=empresa,
+            dry_run=dry_run,
+            apenas_pagos=apenas_pagos,
+        )
+
+        logger.info(
+            f"[AuditoriaPagarJob] Concluído — "
+            f"{resultado.get('inconsistencias_detectadas', 0)} detectadas, "
+            f"{resultado.get('inconsistencias_limpas', 0)} resolvidas, "
+            f"{resultado.get('duracao_segundos', 0)}s"
+        )
+
+        # Remover lista detalhada do resultado para não sobrecarregar Redis
+        resultado.pop('inconsistencias', None)
+
+        return resultado
+
+
+def limpar_inconsistencias_resolvidas_pagar(empresa: int = None) -> dict:
+    """
+    Job: Re-verifica registros flagados em contas a pagar e limpa os resolvidos.
+
+    Args:
+        empresa: Filtrar por empresa. None = todas.
+
+    Returns:
+        Dict com contagens de limpas/mantidas.
+    """
+    with app_context_safe():
+        from app.financeiro.services.auditoria_inconsistencias_pagar_service import (
+            AuditoriaInconsistenciasPagarService,
+        )
+
+        logger.info(f"[AuditoriaPagarJob] Limpando inconsistências resolvidas (empresa={empresa})")
+
+        service = AuditoriaInconsistenciasPagarService()
+        resultado = service.limpar_inconsistencias_resolvidas(empresa=empresa)
+
+        logger.info(
+            f"[AuditoriaPagarJob] Limpeza concluída — "
             f"{resultado.get('limpas', 0)} limpas, "
             f"{resultado.get('mantidas', 0)} mantidas"
         )
