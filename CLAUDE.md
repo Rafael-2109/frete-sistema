@@ -10,7 +10,8 @@
 1. **AMBIENTE VIRTUAL**: `source .venv/bin/activate` quando executar scripts Python
 2. **NUNCA criar tela sem acesso via UI** — TODA tela DEVE ter link no menu (`app/templates/base.html`) ou em tela relacionada
 3. **NUNCA mantenha lixo** — codigo substituido DEVE ser removido
-4. **DADOS DE PRODUCAO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
+4. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
+**Os dados válidos estão no Render e Odoo**
 5. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
 6. **QUALIDADE > VELOCIDADE**: Sempre opte por pesquisar demais do que ser rápido mas não verificar algo importante.
 
@@ -74,6 +75,7 @@ Gotchas rapidos:
 | Prioridades P1-P7 e envio parcial | `.claude/references/negocio/REGRAS_P1_P7.md` |
 | Frete Real vs Teorico | `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md` |
 | Margem e Custeio | `.claude/references/negocio/MARGEM_CUSTEIO.md` |
+| **Fluxos de reconciliacao financeira** | `app/financeiro/FLUXOS_RECONCILIACAO.md` |
 | **Timezone (convencao Brasil naive)** | `.claude/references/REGRAS_TIMEZONE.md` |
 | **Routing de skills** | `.claude/references/ROUTING_SKILLS.md` |
 | **Infraestrutura Render** | `.claude/references/INFRAESTRUTURA.md` |

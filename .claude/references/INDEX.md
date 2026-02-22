@@ -27,6 +27,17 @@
 
 ---
 
+## Financeiro
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Fluxos de reconciliacao (CNAB, Extrato, Comprovante, Baixas) | `app/financeiro/FLUXOS_RECONCILIACAO.md` |
+| Guia de desenvolvimento financeiro (gotchas A1-A10, O1-O12) | `app/financeiro/CLAUDE.md` |
+| Gotchas detalhados (80+) | `app/financeiro/GOTCHAS.md` |
+| Regras de negocio contas a receber | `app/financeiro/contas_a_receber.md` |
+
+---
+
 ## Odoo
 
 | Preciso de... | Documento |
