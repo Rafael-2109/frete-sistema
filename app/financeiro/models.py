@@ -347,6 +347,7 @@ class ContasAReceber(db.Model):
     # Status do Odoo
     parcela_paga = db.Column(db.Boolean, default=False)  # l10n_br_paga
     status_pagamento_odoo = db.Column(db.String(50), nullable=True)  # x_studio_status_de_pagamento
+    valor_residual = db.Column(db.Float, nullable=True)  # abs(amount_residual) do Odoo
 
     # Rastreio de como o titulo foi baixado
     # Valores: CNAB, EXCEL, COMPROVANTE, EXTRATO, ODOO_DIRETO

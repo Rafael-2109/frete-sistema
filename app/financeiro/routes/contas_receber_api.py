@@ -487,6 +487,7 @@ def api_comparativo_abatimentos(conta_id):
                 'desconto': conta.desconto,
                 'parcela_paga': conta.parcela_paga,
                 'status_pagamento_odoo': conta.status_pagamento_odoo,
+                'valor_residual': conta.valor_residual,
                 'vencimento': conta.vencimento.isoformat() if conta.vencimento else None,
                 'emissao': conta.emissao.isoformat() if conta.emissao else None,
             },

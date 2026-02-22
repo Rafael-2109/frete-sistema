@@ -375,6 +375,7 @@ def exportar_contas_receber_excel():
                 'Valor Título': conta.valor_titulo or 0,
                 'Abatimentos': total_abat,
                 'Saldo': saldo,
+                'Valor Residual': conta.valor_residual or '',
                 'Confirmação': conta.confirmacao_tipo.tipo if conta.confirmacao_tipo else 'ABERTO',
                 'Ação Necessária': conta.acao_necessaria_tipo.tipo if conta.acao_necessaria_tipo else '',
                 'Obs. Ação': conta.obs_acao_necessaria or '',

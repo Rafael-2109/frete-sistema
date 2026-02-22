@@ -229,7 +229,7 @@ class SincronizacaoContasReceberService:
                 'company_id', 'x_studio_tipo_de_documento_fiscal',
                 'x_studio_nf_e', 'l10n_br_cobranca_parcela', 'l10n_br_paga',
                 'partner_id', 'date', 'date_maturity',
-                'balance', 'desconto_concedido', 'desconto_concedido_percentual',
+                'balance', 'amount_residual', 'desconto_concedido', 'desconto_concedido_percentual',
                 'payment_provider_id', 'x_studio_status_de_pagamento',
                 'account_type', 'move_type', 'parent_state',
                 'write_date', 'create_date',
@@ -289,6 +289,7 @@ class SincronizacaoContasReceberService:
                     'date_maturity': record.get('date_maturity'),
                     'desconto_concedido_percentual': record.get('desconto_concedido_percentual', 0),
                     'saldo_total': balance + desconto,
+                    'amount_residual': float(record.get('amount_residual', 0) or 0),
                     'payment_provider_id_nome': (
                         record.get('payment_provider_id', [None, None])[1]
                         if isinstance(record.get('payment_provider_id'), (list, tuple))
@@ -547,6 +548,12 @@ class SincronizacaoContasReceberService:
         # desconto = diferença entre original e título (recalculado corretamente)
         desconto = valor_original - valor_titulo
 
+        # Critério expandido: 3 sinais de pagamento (alinhado com ContasAPagar)
+        paga_l10n = bool(row.get('l10n_br_paga'))
+        amount_residual = float(row.get('amount_residual', 0) or 0)
+        status_pag = row.get('x_studio_status_de_pagamento') or ''
+        parcela_paga = paga_l10n or amount_residual <= 0 or status_pag == 'paid'
+
         conta = ContasAReceber(
             empresa=empresa,
             titulo_nf=titulo_nf,
@@ -563,9 +570,10 @@ class SincronizacaoContasReceberService:
             desconto=desconto,
             valor_titulo=valor_titulo,
             tipo_titulo=row.get('payment_provider_id_nome'),
-            parcela_paga=bool(row.get('l10n_br_paga')),
-            status_pagamento_odoo=row.get('x_studio_status_de_pagamento'),
-            metodo_baixa='ODOO_DIRETO' if bool(row.get('l10n_br_paga')) else None,
+            parcela_paga=parcela_paga,
+            status_pagamento_odoo=status_pag,
+            valor_residual=abs(amount_residual),
+            metodo_baixa='ODOO_DIRETO' if parcela_paga else None,
             odoo_write_date=odoo_write_date,
             ultima_sincronizacao=agora_utc_naive(),
             criado_por='Sistema Odoo'
@@ -609,6 +617,7 @@ class SincronizacaoContasReceberService:
         # Mapear campos do DataFrame para campos do modelo
         # NOTA: Removemos saldo_total, desconto_concedido do mapeamento automático
         # pois precisam de cálculo especial (bug desconto duplo)
+        # NOTA: l10n_br_paga removido do mapeamento — parcela_paga usa critério expandido abaixo
         mapeamento = {
             'partner_cnpj': ('cnpj', lambda x: x),
             'partner_raz_social': ('raz_social', lambda x: x or row.get('partner_id_nome')),
@@ -617,7 +626,6 @@ class SincronizacaoContasReceberService:
             'date': ('emissao', lambda x: x),
             'date_maturity': ('vencimento', lambda x: x),
             'payment_provider_id_nome': ('tipo_titulo', lambda x: x),
-            'l10n_br_paga': ('parcela_paga', lambda x: bool(x)),
             'x_studio_status_de_pagamento': ('status_pagamento_odoo', lambda x: x),
         }
 
@@ -667,14 +675,36 @@ class SincronizacaoContasReceberService:
                 setattr(conta, campo, valor_novo)
                 alteracoes.append(campo)
 
+        # Atualizar valor_residual (campo novo, sem snapshot)
+        amount_residual = float(row.get('amount_residual', 0) or 0)
+        conta.valor_residual = abs(amount_residual)
+
+        # Critério expandido para parcela_paga: 3 sinais (alinhado com ContasAPagar)
+        # Permite reversão: se Odoo indicar estorno, parcela_paga volta a False
+        paga_l10n = bool(row.get('l10n_br_paga'))
+        status_pag = row.get('x_studio_status_de_pagamento') or ''
+        parcela_paga_calc = paga_l10n or amount_residual <= 0 or status_pag == 'paid'
+
+        if conta.parcela_paga != parcela_paga_calc:
+            if 'parcela_paga' in self.CAMPOS_ODOO_AUDITADOS:
+                ContasAReceberSnapshot.registrar_alteracao(
+                    conta=conta,
+                    campo='parcela_paga',
+                    valor_anterior=conta.parcela_paga,
+                    valor_novo=parcela_paga_calc,
+                    usuario='Sistema Odoo',
+                    odoo_write_date=odoo_write_date
+                )
+                self.estatisticas['snapshots_criados'] += 1
+            conta.parcela_paga = parcela_paga_calc
+            alteracoes.append('parcela_paga')
+            if parcela_paga_calc and not conta.metodo_baixa:
+                conta.metodo_baixa = 'ODOO_DIRETO'
+
         # Atualizar metadados
         conta.odoo_write_date = odoo_write_date
         conta.ultima_sincronizacao = agora_utc_naive()
         conta.atualizado_por = 'Sistema Odoo'
-
-        # FIX G3: Fallback metodo_baixa='ODOO_DIRETO' para transição parcela_paga False→True
-        if 'parcela_paga' in alteracoes and conta.parcela_paga and not conta.metodo_baixa:
-            conta.metodo_baixa = 'ODOO_DIRETO'
 
         if alteracoes:
             logger.debug(f"   📝 {conta.titulo_nf}-{conta.parcela}: {', '.join(alteracoes)}")

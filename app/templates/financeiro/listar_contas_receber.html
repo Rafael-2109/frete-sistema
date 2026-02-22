@@ -539,6 +539,13 @@
                             {% if conta.metodo_baixa %}
                             <br><span class="badge badge-metodo-{{ conta.metodo_baixa|lower }}" title="Baixado via {{ conta.metodo_baixa }}">{{ conta.metodo_baixa }}</span>
                             {% endif %}
+                        {% elif conta.valor_residual is not none and conta.valor_residual > 0 and conta.valor_titulo and conta.valor_residual < conta.valor_titulo %}
+                            <span class="badge bg-info badge-clicavel" style="cursor: pointer;"
+                                  onclick="abrirModalComparativo({{ conta.id }})"
+                                  title="Pagamento parcial — Residual: R$ {{ conta.valor_residual|valor_br }}">
+                                PARCIAL <i class="fas fa-balance-scale ms-1"></i>
+                            </span>
+                            <br><small class="text-muted">R$ {{ conta.valor_residual|valor_br }}</small>
                         {% elif conta.vencimento and conta.vencimento < hoje %}
                             <span class="badge bg-danger badge-clicavel" style="cursor: pointer;"
                                   onclick="abrirModalComparativo({{ conta.id }})"
@@ -789,7 +796,7 @@
 
                 <!-- DADOS DO TÍTULO -->
                 <div class="row mb-2 g-2 small">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <span class="text-muted">Cliente:</span>
                         <strong id="comp-cliente">-</strong>
                     </div>
@@ -808,6 +815,10 @@
                     <div class="col-md-2">
                         <span class="text-muted">Valor Título:</span>
                         <strong class="text-success" id="comp-valor-titulo">R$ 0,00</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="text-muted">Residual Odoo:</span>
+                        <strong id="comp-valor-residual" class="text-muted">R$ 0,00</strong>
                     </div>
                 </div>
 

@@ -85,6 +85,15 @@ function carregarComparativo(contaId) {
                 document.getElementById('comp-valor-titulo').textContent = formatarMoedaComp(conta.valor_titulo);
                 document.getElementById('comp-desconto').textContent = formatarMoedaComp(conta.desconto);
 
+                // Valor residual (pagamento parcial)
+                const compResidual = document.getElementById('comp-valor-residual');
+                if (compResidual) {
+                    compResidual.textContent = formatarMoedaComp(conta.valor_residual);
+                    compResidual.className = conta.valor_residual > 0
+                        ? 'text-warning fw-bold'
+                        : 'text-muted';
+                }
+
                 // Status badge
                 const statusBadge = document.getElementById('comp-status-badge');
                 if (comp.status === 'OK') {

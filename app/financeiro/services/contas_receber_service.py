@@ -41,6 +41,7 @@ class ContasReceberService:
         'desconto_concedido_percentual',  # Desconto Concedido (%)
         'payment_provider_id',  # Forma de Pagamento
         'x_studio_status_de_pagamento',  # Status de Pagamento
+        'amount_residual',  # Saldo residual (valor em aberto)
         'account_type',  # Tipo de conta (asset_receivable, etc)
         'move_type',  # Tipo de movimento (out_invoice, entry, etc)
         'parent_state',  # Estado da fatura (posted, draft, cancel)
@@ -610,6 +611,7 @@ class ContasReceberService:
             'desconto_concedido_percentual': 'Desconto Concedido (%)',
             'payment_provider_id_nome': 'Forma de Pagamento',
             'x_studio_status_de_pagamento': 'Status de Pagamento',
+            'amount_residual': 'Valor Residual',
             'data_entrega_prevista': 'Data Entrega Prevista',
             'data_hora_entrega_realizada': 'Data/Hora Entrega Realizada',
             'entregue': 'Entregue',
