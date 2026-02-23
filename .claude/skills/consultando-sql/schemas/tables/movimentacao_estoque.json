@@ -246,9 +246,59 @@
   ],
   "indices": [
     {
-      "name": "idx_movimentacao_odoo_move",
+      "name": "ix_movimentacao_estoque_odoo_move_id",
       "columns": [
         "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_data",
+      "columns": [
+        "tipo_movimentacao",
+        "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_lote",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_tipo_origem",
+      "columns": [
+        "tipo_origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_status_nf",
+      "columns": [
+        "status_nf"
       ],
       "unique": false
     },
@@ -256,6 +306,20 @@
       "name": "ix_movimentacao_estoque_recebimento_fisico_id",
       "columns": [
         "recebimento_fisico_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_odoo_picking",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_odoo_move",
+      "columns": [
+        "odoo_move_id"
       ],
       "unique": false
     },
@@ -288,13 +352,6 @@
       "unique": false
     },
     {
-      "name": "idx_movimentacao_nf_remessa_origem",
-      "columns": [
-        "nf_remessa_origem"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_movimentacao_estoque_tipo_movimentacao",
       "columns": [
         "tipo_movimentacao"
@@ -305,6 +362,13 @@
       "name": "ix_movimentacao_estoque_recebimento_lote_id",
       "columns": [
         "recebimento_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_nf_remessa_origem",
+      "columns": [
+        "nf_remessa_origem"
       ],
       "unique": false
     },
@@ -323,9 +387,9 @@
       "unique": false
     },
     {
-      "name": "idx_movimentacao_recebimento_lote",
+      "name": "ix_movimentacao_estoque_nf_remessa_origem",
       "columns": [
-        "recebimento_lote_id"
+        "nf_remessa_origem"
       ],
       "unique": false
     },
@@ -337,16 +401,9 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_nf_remessa_origem",
+      "name": "idx_movimentacao_recebimento_lote",
       "columns": [
-        "nf_remessa_origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_numero_nf",
-      "columns": [
-        "numero_nf"
+        "recebimento_lote_id"
       ],
       "unique": false
     },
@@ -354,6 +411,13 @@
       "name": "ix_movimentacao_estoque_cnpj_responsavel",
       "columns": [
         "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },
@@ -400,6 +464,13 @@
       "unique": false
     },
     {
+      "name": "ix_movimentacao_estoque_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_movimentacao_produto_data",
       "columns": [
         "cod_produto",
@@ -408,80 +479,9 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_odoo_picking_id",
-      "columns": [
-        "odoo_picking_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_movimentacao_estoque_ordem_producao",
       "columns": [
         "ordem_producao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_tipo_data",
-      "columns": [
-        "tipo_movimentacao",
-        "data_movimentacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_nf",
-      "columns": [
-        "numero_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_lote",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_tipo_origem",
-      "columns": [
-        "tipo_origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_status_nf",
-      "columns": [
-        "status_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_movimentacao_odoo_picking",
-      "columns": [
-        "odoo_picking_id"
       ],
       "unique": false
     }

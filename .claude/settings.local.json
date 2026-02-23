@@ -106,7 +106,12 @@
       "Skill(acessando-ssw)",
       "WebFetch(domain:help.figma.com)",
       "WebFetch(domain:www.builder.io)",
-      "mcp__render__select_workspace"
+      "mcp__render__select_workspace",
+      "mcp__render__get_postgres",
+      "WebFetch(domain:share.linx.com.br)",
+      "WebFetch(domain:developers.linkapi.solutions)",
+      "WebFetch(domain:www.scribd.com)",
+      "WebFetch(domain:docplayer.com.br)"
     ],
     "deny": []
   },
