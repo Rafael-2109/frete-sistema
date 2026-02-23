@@ -359,6 +359,7 @@ class ContasAReceber(db.Model):
 
     # Tipo de inconsistência detectada:
     # - PAGO_LOCAL_ABERTO_ODOO: parcela_paga=True mas Odoo mostra not_paid/partial
+    # - PAGO_ODOO_ABERTO_LOCAL: parcela_paga=False mas Odoo confirma pagamento
     # - VALOR_RESIDUAL_DIVERGENTE: valor_residual local ≠ abs(amount_residual) Odoo
     # - SEM_MATCH_ODOO: odoo_line_id existe mas não encontrado no Odoo
     # - NULL: Sem inconsistência
@@ -2260,7 +2261,12 @@ class ContasAPagar(db.Model):
     # Data programada para pagamento (definido pelo usuário)
     data_programada = db.Column(db.Date, nullable=True)
 
-    # Flag de inconsistência Local × Odoo
+    # Tipo de inconsistência Local × Odoo:
+    # - PAGO_LOCAL_ABERTO_ODOO: parcela_paga=True mas Odoo mostra not_paid/partial
+    # - PAGO_ODOO_ABERTO_LOCAL: parcela_paga=False mas Odoo confirma pagamento
+    # - VALOR_RESIDUAL_DIVERGENTE: valor_residual local ≠ abs(amount_residual) Odoo
+    # - SEM_MATCH_ODOO: odoo_line_id existe mas não encontrado no Odoo
+    # - NULL: Sem inconsistência
     inconsistencia_odoo = db.Column(db.String(50), nullable=True)
     inconsistencia_detectada_em = db.Column(db.DateTime, nullable=True)
     inconsistencia_resolvida_em = db.Column(db.DateTime, nullable=True)
