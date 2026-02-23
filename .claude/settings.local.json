@@ -111,7 +111,8 @@
       "WebFetch(domain:share.linx.com.br)",
       "WebFetch(domain:developers.linkapi.solutions)",
       "WebFetch(domain:www.scribd.com)",
-      "WebFetch(domain:docplayer.com.br)"
+      "WebFetch(domain:docplayer.com.br)",
+      "WebFetch(domain:sysmiddle.com.br)"
     ],
     "deny": []
   },
