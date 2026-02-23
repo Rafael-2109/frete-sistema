@@ -29,6 +29,12 @@ from app.odoo.utils.connection import get_odoo_connection
 logger = logging.getLogger(__name__)
 
 
+# CNPJs raiz do grupo Nacom (para excluir transações intercompany)
+# FONTE: .claude/references/odoo/IDS_FIXOS.md:18-25
+# Padrão alinhado com pedido_compras_service.py:174 e entrada_material_service.py:44
+CNPJS_RAIZ_GRUPO_PAGAR = ['61.724.241', '18.467.441']
+
+
 class SincronizacaoContasAPagarService:
     """
     Serviço para sincronizar dados do Odoo para a tabela contas_a_pagar.
@@ -497,12 +503,26 @@ class SincronizacaoContasAPagarService:
         partner_data = cnpj_map.get(partner_id, {})
         cnpj = partner_data.get('cnpj', '')
 
+        # Ignorar transações intercompany (parceiro pertence ao grupo Nacom)
+        # Alinhado com Regra 4 do receber (contas_receber_service.py:314)
+        if cnpj and any(cnpj.startswith(raiz) for raiz in CNPJS_RAIZ_GRUPO_PAGAR):
+            self.estatisticas['ignorados'] += 1
+            return
+
         # Move
         move_id = row.get('move_id', [None, None])[0]
         move_name = row.get('move_id', [None, ''])[1] or ''
 
         # Valores
         valor_original = float(row.get('credit') or 0)
+
+        # Ignorar devoluções de compra (credit = 0 → não é conta a pagar)
+        # Devoluções têm credit=0, debit>0 em liability_payable (fornecedor nos deve)
+        # Sync principal exclui via amount_residual < 0 (linha 416), mas incremental não
+        if valor_original == 0:
+            self.estatisticas['ignorados'] += 1
+            return
+
         amount_residual = float(row.get('amount_residual') or 0)
         valor_residual = abs(amount_residual)  # Converter para positivo
 

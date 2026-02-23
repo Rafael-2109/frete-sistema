@@ -663,6 +663,112 @@ def api_criar_pagamento_odoo_inconsistencia_pagar(conta_id):
         }), 500
 
 
+@financeiro_bp.route('/contas-pagar/api/inconsistencias/<int:conta_id>/confirmar-pagamento-local', methods=['POST'])
+@login_required
+def api_confirmar_pagamento_local_inconsistencia_pagar(conta_id):
+    """
+    API: Confirma pagamento localmente baseando-se nos dados do Odoo.
+
+    Usado para resolver inconsistencia PAGO_ODOO_ABERTO_LOCAL — quando o Odoo
+    confirma que o titulo esta pago mas o local ainda marca como nao pago.
+
+    Acoes:
+    1. Valida que inconsistencia_odoo == 'PAGO_ODOO_ABERTO_LOCAL'
+    2. Busca account.move.line no Odoo via odoo_line_id
+    3. Verifica que Odoo realmente confirma pago (l10n_br_paga OR residual < 0.02 OR reconciled)
+    4. Seta: parcela_paga=True, metodo_baixa='ODOO_DIRETO', reconciliado=True, valor_residual do Odoo
+    5. Limpa flag: inconsistencia_odoo=None, inconsistencia_resolvida_em=agora()
+    """
+    try:
+        from app.utils.timezone import agora_utc_naive
+
+        conta = ContasAPagar.query.get_or_404(conta_id)
+
+        if conta.inconsistencia_odoo != 'PAGO_ODOO_ABERTO_LOCAL':
+            return jsonify({
+                'success': False,
+                'error': f'Acao nao aplicavel para tipo {conta.inconsistencia_odoo or "sem inconsistencia"}'
+            }), 400
+
+        if not conta.odoo_line_id:
+            return jsonify({
+                'success': False,
+                'error': 'Registro sem odoo_line_id — nao e possivel confirmar'
+            }), 400
+
+        # Buscar estado atual no Odoo para confirmar
+        from app.odoo.utils.connection import get_odoo_connection
+        conn = get_odoo_connection()
+        if not conn.authenticate():
+            return jsonify({
+                'success': False,
+                'error': 'Falha na autenticacao com Odoo'
+            }), 500
+
+        linhas = conn.search_read(
+            'account.move.line',
+            [['id', '=', conta.odoo_line_id]],
+            fields=['id', 'amount_residual', 'l10n_br_paga', 'reconciled'],
+            limit=1,
+        )
+
+        if not linhas:
+            return jsonify({
+                'success': False,
+                'error': f'Linha {conta.odoo_line_id} nao encontrada no Odoo'
+            }), 404
+
+        linha_odoo = linhas[0]
+        paga_odoo = bool(linha_odoo.get('l10n_br_paga'))
+        # GOTCHA O3: amount_residual NEGATIVO para contas a pagar
+        amount_residual = abs(float(linha_odoo.get('amount_residual', 0) or 0))
+        reconciled_odoo = bool(linha_odoo.get('reconciled'))
+
+        # Verificar que Odoo realmente confirma pago
+        odoo_confirma_pago = (
+            paga_odoo
+            or amount_residual < 0.02
+            or reconciled_odoo
+        )
+
+        if not odoo_confirma_pago:
+            return jsonify({
+                'success': False,
+                'error': (
+                    f'Odoo NAO confirma pagamento: l10n_br_paga={paga_odoo}, '
+                    f'amount_residual={amount_residual}, reconciled={reconciled_odoo}'
+                )
+            }), 400
+
+        # Confirmar pagamento localmente
+        agora = agora_utc_naive()
+        conta.parcela_paga = True
+        conta.metodo_baixa = 'ODOO_DIRETO'
+        conta.reconciliado = True  # Campo exclusivo de ContasAPagar
+        conta.valor_residual = amount_residual
+        conta.inconsistencia_odoo = None
+        conta.inconsistencia_resolvida_em = agora
+        conta.atualizado_em = agora
+        conta.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': (
+                f'Pagamento confirmado localmente para {conta.titulo_nf}-{conta.parcela}. '
+                f'Odoo: paga={paga_odoo}, residual={amount_residual:.2f}. Inconsistencia resolvida.'
+            ),
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 # =============================================================================
 # BUSCA SEMANTICA DE ENTIDADES (compartilhado pagar/receber)
 # =============================================================================

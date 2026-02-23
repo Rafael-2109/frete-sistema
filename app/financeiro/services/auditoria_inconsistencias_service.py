@@ -8,6 +8,7 @@ e o estado real no Odoo (account.move.line).
 
 Casos detectados:
 - PAGO_LOCAL_ABERTO_ODOO: parcela_paga=True mas Odoo mostra not_paid/partial
+- PAGO_ODOO_ABERTO_LOCAL: parcela_paga=False mas Odoo confirma pagamento
 - VALOR_RESIDUAL_DIVERGENTE: valor_residual local ≠ abs(amount_residual) Odoo
 - SEM_MATCH_ODOO: odoo_line_id existe mas registro não encontrado no Odoo
 
@@ -238,7 +239,13 @@ class AuditoriaInconsistenciasService:
         empresa: int = None,
         apenas_pagos: bool = True,
     ) -> List[ContasAReceber]:
-        """Busca registros locais para verificar contra Odoo."""
+        """Busca registros locais para verificar contra Odoo.
+
+        NOTA: O filtro apenas_pagos foi removido intencionalmente para permitir
+        detecção do caso inverso (PAGO_ODOO_ABERTO_LOCAL). A query base
+        odoo_line_id.isnot(None) já delimita o escopo correto — apenas registros
+        que possuem vínculo com Odoo entram na verificação.
+        """
         query = ContasAReceber.query.filter(
             ContasAReceber.odoo_line_id.isnot(None),
         )
@@ -246,8 +253,8 @@ class AuditoriaInconsistenciasService:
         if empresa:
             query = query.filter(ContasAReceber.empresa == empresa)
 
-        if apenas_pagos:
-            query = query.filter(ContasAReceber.parcela_paga == True)
+        # apenas_pagos ignorado intencionalmente — precisamos de registros
+        # pagos E não-pagos para detectar inconsistências nos dois sentidos
 
         return query.all()
 
@@ -361,6 +368,26 @@ class AuditoriaInconsistenciasService:
                         f"Odoo: l10n_br_paga={paga_odoo}, "
                         f"amount_residual={amount_residual_odoo}, "
                         f"status={status_odoo}, reconciled={reconciled_odoo}"
+                    ),
+                )
+
+        # =====================================================================
+        # CASO 1B: parcela_paga=False local, mas Odoo CONFIRMA pagamento
+        # =====================================================================
+        if not paga_local:
+            odoo_confirma_pago = (
+                paga_odoo
+                or residual_odoo < TOLERANCIA_RESIDUAL
+                or reconciled_odoo
+            )
+            if odoo_confirma_pago:
+                return self._marcar_inconsistencia(
+                    registro, 'PAGO_ODOO_ABERTO_LOCAL', dry_run,
+                    detalhe=(
+                        f"Local: paga=False | "
+                        f"Odoo: l10n_br_paga={paga_odoo}, "
+                        f"amount_residual={amount_residual_odoo}, "
+                        f"reconciled={reconciled_odoo}"
                     ),
                 )
 

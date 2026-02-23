@@ -138,10 +138,11 @@
                     <span id="inconsistenciaCount">0</span> Inconsistências Odoo
                 </h3>
                 <p class="fin-hub-card__desc" id="inconsistenciaDesc">
-                    Títulos marcados como pagos localmente mas abertos no Odoo.
+                    Divergências entre estado de pagamento local e Odoo.
                     Requer ação manual para resolver.
                 </p>
-                <div class="d-flex gap-2 mt-2" id="inconsistenciaMetodos"></div>
+                <div class="d-flex gap-2 flex-wrap mt-2" id="inconsistenciaTipos"></div>
+                <div class="d-flex gap-2 flex-wrap mt-1" id="inconsistenciaMetodos"></div>
                 <span class="fin-hub-card__action" style="color: var(--danger, #dc3545);">
                     <i class="fas fa-search"></i>
                     Ver Inconsistências
@@ -395,6 +396,23 @@ function carregarInconsistencias() {
                 secao.style.display = 'block';
 
                 document.getElementById('inconsistenciaCount').textContent = data.total;
+
+                // Mostrar badges por tipo de inconsistência
+                const tiposContainer = document.getElementById('inconsistenciaTipos');
+                tiposContainer.innerHTML = '';
+                const tipos = data.por_tipo || {};
+                const tipoCores = {
+                    'PAGO_ODOO_ABERTO_LOCAL': 'bg-info',
+                    'PAGO_LOCAL_ABERTO_ODOO': 'bg-danger',
+                    'VALOR_RESIDUAL_DIVERGENTE': 'bg-warning text-dark',
+                    'SEM_MATCH_ODOO': 'bg-secondary',
+                };
+                for (const [tipo, qtd] of Object.entries(tipos)) {
+                    const badge = document.createElement('span');
+                    badge.className = `badge ${tipoCores[tipo] || 'bg-secondary'}`;
+                    badge.textContent = `${tipo}: ${qtd}`;
+                    tiposContainer.appendChild(badge);
+                }
 
                 // Mostrar badges por método de baixa
                 const container = document.getElementById('inconsistenciaMetodos');

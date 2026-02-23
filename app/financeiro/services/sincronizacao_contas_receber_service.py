@@ -53,6 +53,7 @@ class SincronizacaoContasReceberService:
         self.estatisticas = {
             'novos': 0,
             'atualizados': 0,
+            'ignorados': 0,
             'erros': 0,
             'snapshots_criados': 0,
             'enriquecidos': 0,
@@ -371,6 +372,7 @@ class SincronizacaoContasReceberService:
         logger.info("=" * 60)
         logger.info(f"📊 Novos: {self.estatisticas['novos']}")
         logger.info(f"📊 Atualizados: {self.estatisticas['atualizados']}")
+        logger.info(f"📊 Ignorados: {self.estatisticas['ignorados']}")
         logger.info(f"📊 Enriquecidos: {self.estatisticas['enriquecidos']}")
         logger.info(f"📊 Snapshots: {self.estatisticas['snapshots_criados']}")
         logger.info(f"📊 CNABs reprocessados: {self.estatisticas.get('cnabs_reprocessados', 0)}")
@@ -486,6 +488,15 @@ class SincronizacaoContasReceberService:
 
         # Ignorar empresas não mapeadas (empresa=0)
         if empresa == 0:
+            self.estatisticas['ignorados'] += 1
+            return
+
+        # Ignorar devoluções de venda (saldo_total <= 0 → balance negativo)
+        # Devoluções têm balance < 0 em asset_receivable (nós devemos ao cliente)
+        # Sync principal exclui via balance > 0 (contas_receber_service.py:91), mas incremental não
+        saldo_total = float(row.get('saldo_total', 0) or 0)
+        if saldo_total <= 0:
+            self.estatisticas['ignorados'] += 1
             return
 
         # Buscar registro existente: lookup O(1) por odoo_line_id, fallback chave composta
