@@ -527,6 +527,10 @@ def reconciliar_tipo(connection, tipo, empresa_filtro=None,
     # 2. Buscar TODOS os odoo_line_ids locais
     # ---------------------------------------------------------------
     logger.info("\n[2/5] Buscando odoo_line_ids locais...")
+    # Fix SSL: reconectar DB após queries longas ao Odoo (step 1 pode levar 2-3min)
+    # Sem isso, a conexão PostgreSQL expira com "SSL connection has been closed unexpectedly"
+    # FONTE: Odoo CLAUDE.md P7 — Commit Antes de Operação Longa ao Odoo
+    db.session.close()
     local_ids = buscar_odoo_line_ids_locais(tipo)
     total_local, com_line_id = contar_registros_locais_total(tipo)
     logger.info(
@@ -619,6 +623,10 @@ def reconciliar_tipo(connection, tipo, empresa_filtro=None,
         logger.info(
             f"📥 {modo}: {len(categorias['elegiveis'])} títulos elegíveis..."
         )
+
+        # Fix SSL: reconectar DB após categorização Odoo (step 4 pode levar minutos)
+        # A categorização faz read() em batches de 500 no Odoo, expirando a conexão PG
+        db.session.close()
 
         if tipo == 'receber':
             stats = importar_receber(
