@@ -379,6 +379,17 @@ Nunca invente informações."""
         else:
             prompt = prompt.replace("{user_id}", "NAO_DISPONIVEL")
 
+        # Módulo Pessoal: restrição condicional por user_id
+        # Usuários autorizados (1, 62) podem acessar; demais são bloqueados
+        from app.pessoal import USUARIOS_PESSOAL
+        if user_id and user_id in USUARIOS_PESSOAL:
+            prompt = prompt.replace("{restricao_pessoal}", "")
+        else:
+            prompt = prompt.replace(
+                "{restricao_pessoal}",
+                ", acessar ou mencionar tabelas pessoal_* (financas pessoais — dados privados, acesso restrito)"
+            )
+
         return prompt
 
     @staticmethod
@@ -1006,8 +1017,12 @@ Nunca invente informações."""
         # MCP Servers (Custom Tools in-process)
         # =================================================================
         try:
-            from ..tools.text_to_sql_tool import sql_server
+            from ..tools.text_to_sql_tool import sql_server, set_current_user_id as set_sql_user_id
             if sql_server is not None:
+                # Definir user_id no contexto para bloqueio condicional de tabelas pessoal_*
+                if user_id:
+                    set_sql_user_id(user_id)
+
                 mcp_servers = options_dict.get("mcp_servers", {})
                 mcp_servers["sql"] = sql_server
                 options_dict["mcp_servers"] = mcp_servers

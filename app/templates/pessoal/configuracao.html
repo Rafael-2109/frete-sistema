@@ -1,0 +1,776 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="fas fa-cog"></i> Configuracao - Financas Pessoais</h4>
+    <a href="{{ url_for('pessoal.pessoal_transacoes.listar') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-list"></i> Transacoes
+    </a>
+  </div>
+
+  {# ===== TABS ===== #}
+  <ul class="nav nav-tabs" id="configTabs" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabCategorias" type="button">
+        <i class="fas fa-tags"></i> Categorias ({{ categorias|length }})
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRegras" type="button">
+        <i class="fas fa-magic"></i> Regras ({{ regras|length }})
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMembros" type="button">
+        <i class="fas fa-users"></i> Membros ({{ membros|length }})
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabExclusoes" type="button">
+        <i class="fas fa-ban"></i> Exclusoes ({{ exclusoes|length }})
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabContas" type="button">
+        <i class="fas fa-university"></i> Contas ({{ contas|length }})
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content mt-3">
+    {# ===== CATEGORIAS ===== #}
+    <div class="tab-pane fade show active" id="tabCategorias">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Categorias de Despesas</span>
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCategoria" id="btnNovaCategoria">
+            <i class="fas fa-plus"></i> Nova Categoria
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Grupo</th>
+                  <th>Nome</th>
+                  <th>Icone</th>
+                  <th>Ordem</th>
+                  <th>Ativa</th>
+                  <th style="width:120px">Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for cat in categorias %}
+                <tr class="{{ '' if cat.ativa else 'text-muted' }}"
+                    data-cat-id="{{ cat.id }}"
+                    data-cat-nome="{{ cat.nome }}"
+                    data-cat-grupo="{{ cat.grupo }}"
+                    data-cat-icone="{{ cat.icone or '' }}"
+                    data-cat-ordem="{{ cat.ordem_exibicao }}">
+                  <td class="small">{{ cat.grupo }}</td>
+                  <td><i class="fas {{ cat.icone or 'fa-tag' }} me-1"></i> {{ cat.nome }}</td>
+                  <td class="small text-muted">{{ cat.icone or '-' }}</td>
+                  <td>{{ cat.ordem_exibicao }}</td>
+                  <td>
+                    {% if cat.ativa %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Nao</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <button class="btn btn-outline-primary btn-sm btn-editar-cat" title="Editar">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-{{ 'warning' if cat.ativa else 'success' }} btn-sm btn-toggle-cat"
+                            title="{{ 'Desativar' if cat.ativa else 'Ativar' }}">
+                      <i class="fas fa-{{ 'toggle-on' if cat.ativa else 'toggle-off' }}"></i>
+                    </button>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ===== REGRAS ===== #}
+    <div class="tab-pane fade" id="tabRegras">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Regras de Categorizacao</span>
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRegra">
+            <i class="fas fa-plus"></i> Nova Regra
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" id="tblRegras">
+              <thead class="table-light">
+                <tr>
+                  <th class="sortable" data-sort="string" data-col="0" role="button">Padrao <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="1" role="button">Tipo <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="2" role="button">Categoria <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="3" role="button">Origem <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="number" data-col="4" role="button">Usos <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="number" data-col="5" role="button">Conf. <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="number" data-col="6" role="button" title="Transacoes pendentes que matcham este padrao">Match <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th>Ativo</th>
+                  <th style="width:60px">Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for regra in regras %}
+                {% set match_count = contagem_match.get(regra.id, 0) %}
+                <tr class="{{ '' if regra.ativo else 'text-muted' }}"
+                    data-regra-id="{{ regra.id }}"
+                    data-regra-padrao="{{ regra.padrao_historico }}"
+                    data-regra-tipo="{{ regra.tipo_regra }}"
+                    data-regra-categoria="{{ regra.categoria_id or '' }}"
+                    data-regra-restritas="{{ regra.get_categorias_restritas()|tojson }}">
+                  <td class="small fw-bold" data-val="{{ regra.padrao_historico }}">{{ regra.padrao_historico }}</td>
+                  <td data-val="{{ regra.tipo_regra }}">
+                    {% if regra.tipo_regra == 'PADRAO' %}
+                    <span class="badge bg-primary">Padrao</span>
+                    {% else %}
+                    <span class="badge bg-info">Relativo</span>
+                    {% endif %}
+                  </td>
+                  <td class="small" data-val="{{ regra.categoria.nome if regra.categoria else '' }}">
+                    {% if regra.categoria %}
+                    {{ regra.categoria.nome }}
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td class="small" data-val="{{ regra.origem }}">{{ regra.origem }}</td>
+                  <td data-val="{{ regra.vezes_usado }}">{{ regra.vezes_usado }}</td>
+                  <td data-val="{{ regra.confianca }}">{{ regra.confianca }}%</td>
+                  <td data-val="{{ match_count }}">
+                    {% if match_count > 0 %}
+                    <span class="badge bg-warning text-dark" title="{{ match_count }} pendentes matcham este padrao">{{ match_count }}</span>
+                    {% else %}
+                    <span class="text-muted">0</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if regra.ativo %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Nao</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <button class="btn btn-outline-primary btn-sm btn-editar-regra py-0 px-1" title="Editar">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ===== MEMBROS ===== #}
+    <div class="tab-pane fade" id="tabMembros">
+      <div class="card">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Nome</th>
+                  <th>Nome Completo</th>
+                  <th>Papel</th>
+                  <th>Ativo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for m in membros %}
+                <tr>
+                  <td class="fw-bold">{{ m.nome }}</td>
+                  <td class="small">{{ m.nome_completo or '-' }}</td>
+                  <td>{{ m.papel or '-' }}</td>
+                  <td>
+                    {% if m.ativo %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Nao</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ===== EXCLUSOES ===== #}
+    <div class="tab-pane fade" id="tabExclusoes">
+      <div class="card">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Padrao</th>
+                  <th>Descricao</th>
+                  <th>Ativo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for excl in exclusoes %}
+                <tr>
+                  <td class="fw-bold">{{ excl.padrao }}</td>
+                  <td class="small">{{ excl.descricao or '-' }}</td>
+                  <td>
+                    {% if excl.ativo %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Nao</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ===== CONTAS ===== #}
+    <div class="tab-pane fade" id="tabContas">
+      <div class="card">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Nome</th>
+                  <th>Tipo</th>
+                  <th>Banco</th>
+                  <th>Agencia</th>
+                  <th>Conta/Digitos</th>
+                  <th>Membro</th>
+                  <th>Ativa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in contas %}
+                <tr>
+                  <td class="fw-bold">{{ c.nome }}</td>
+                  <td>
+                    {% if c.tipo == 'conta_corrente' %}
+                    <span class="badge bg-info">CC</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Cartao</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ c.banco }}</td>
+                  <td>{{ c.agencia or '-' }}</td>
+                  <td>{{ c.numero_conta or c.ultimos_digitos_cartao or '-' }}</td>
+                  <td>{{ c.membro.nome if c.membro else '-' }}</td>
+                  <td>
+                    {% if c.ativa %}
+                    <span class="badge bg-success">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Nao</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== MODAL NOVA/EDITAR REGRA ===== #}
+<div class="modal fade" id="modalRegra" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-magic"></i> <span id="modalRegraTitulo">Nova Regra</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="regraId">
+        <div class="mb-3">
+          <label class="form-label">Padrao (texto para match)</label>
+          <input type="text" id="regraPadrao" class="form-control" placeholder="Ex: NETFLIX, SUPERMERCADO XYZ">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Tipo</label>
+          <select id="regraTipo" class="form-select">
+            <option value="PADRAO">Padrao (sempre mesma categoria)</option>
+            <option value="RELATIVO">Relativo (depende do contexto)</option>
+          </select>
+        </div>
+        <div class="mb-3" id="divRegraCategoria">
+          <label class="form-label">Categoria</label>
+          <select id="regraCategoria" class="form-select">
+            <option value="">Selecione...</option>
+            {% for cat in categorias %}
+            <option value="{{ cat.id }}">{{ cat.grupo }} / {{ cat.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3 d-none" id="divRegraRestritas">
+          <label class="form-label">Categorias Restritas (para RELATIVO)</label>
+          <select id="regraRestritas" class="form-select" multiple size="5">
+            {% for cat in categorias %}
+            <option value="{{ cat.id }}">{{ cat.grupo }} / {{ cat.nome }}</option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">Segure Ctrl para selecionar multiplas</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSalvarRegra">
+          <i class="fas fa-check"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== MODAL NOVA/EDITAR CATEGORIA ===== #}
+<div class="modal fade" id="modalCategoria" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-tag"></i> <span id="modalCategoriaTitulo">Nova Categoria</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="catId">
+        <div class="mb-3">
+          <label class="form-label">Nome</label>
+          <input type="text" id="catNome" class="form-control" placeholder="Ex: Supermercado" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Grupo</label>
+          <input type="text" id="catGrupo" class="form-control" list="gruposExistentes" placeholder="Ex: Alimentacao">
+          <datalist id="gruposExistentes">
+            {% for g in categorias|map(attribute='grupo')|unique|sort %}
+            <option value="{{ g }}">
+            {% endfor %}
+          </datalist>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Icone</label>
+          <input type="hidden" id="catIcone" value="fa-tag">
+          <div class="d-flex flex-wrap gap-1" id="catIconeGrid">
+            {% set icones_disponiveis = [
+              ('fa-utensils', 'Alimentacao'),
+              ('fa-shopping-cart', 'Supermercado'),
+              ('fa-coffee', 'Cafe/Lanche'),
+              ('fa-pizza-slice', 'Delivery'),
+              ('fa-hamburger', 'Fast Food'),
+              ('fa-wine-glass-alt', 'Bebidas'),
+              ('fa-beer', 'Bar'),
+              ('fa-ice-cream', 'Sorvete/Doce'),
+              ('fa-apple-alt', 'Feira/Hortifruti'),
+              ('fa-car', 'Transporte'),
+              ('fa-gas-pump', 'Combustivel'),
+              ('fa-bus', 'Onibus'),
+              ('fa-taxi', 'Taxi/Uber'),
+              ('fa-motorcycle', 'Moto'),
+              ('fa-bicycle', 'Bicicleta'),
+              ('fa-plane', 'Viagem Aerea'),
+              ('fa-ship', 'Barco/Balsa'),
+              ('fa-parking', 'Estacionamento'),
+              ('fa-home', 'Moradia'),
+              ('fa-bolt', 'Energia'),
+              ('fa-tint', 'Agua'),
+              ('fa-fire', 'Gas'),
+              ('fa-wifi', 'Internet'),
+              ('fa-phone', 'Telefone'),
+              ('fa-mobile-alt', 'Celular'),
+              ('fa-couch', 'Moveis'),
+              ('fa-broom', 'Limpeza'),
+              ('fa-key', 'Aluguel/Condominio'),
+              ('fa-heartbeat', 'Saude'),
+              ('fa-pills', 'Farmacia'),
+              ('fa-tooth', 'Dentista'),
+              ('fa-eye', 'Oftalmologista'),
+              ('fa-hospital', 'Hospital'),
+              ('fa-stethoscope', 'Medico'),
+              ('fa-syringe', 'Vacina/Exame'),
+              ('fa-wheelchair', 'Acessibilidade'),
+              ('fa-graduation-cap', 'Educacao'),
+              ('fa-book', 'Livros'),
+              ('fa-school', 'Escola'),
+              ('fa-chalkboard-teacher', 'Curso'),
+              ('fa-language', 'Idiomas'),
+              ('fa-laptop-code', 'Curso Tech'),
+              ('fa-tshirt', 'Roupas'),
+              ('fa-cut', 'Beleza/Cabelo'),
+              ('fa-spa', 'Spa/Estetica'),
+              ('fa-glasses', 'Otica'),
+              ('fa-shoe-prints', 'Calcados'),
+              ('fa-dumbbell', 'Academia'),
+              ('fa-running', 'Esporte'),
+              ('fa-futbol', 'Futebol'),
+              ('fa-swimming-pool', 'Piscina/Clube'),
+              ('fa-gamepad', 'Games'),
+              ('fa-film', 'Cinema'),
+              ('fa-music', 'Musica'),
+              ('fa-tv', 'Streaming'),
+              ('fa-theater-masks', 'Teatro/Show'),
+              ('fa-campground', 'Camping'),
+              ('fa-umbrella-beach', 'Praia/Ferias'),
+              ('fa-map-marked-alt', 'Turismo'),
+              ('fa-hotel', 'Hospedagem'),
+              ('fa-gift', 'Presentes'),
+              ('fa-paw', 'Pet'),
+              ('fa-baby', 'Bebe'),
+              ('fa-baby-carriage', 'Crianca'),
+              ('fa-users', 'Familia'),
+              ('fa-ring', 'Casamento'),
+              ('fa-birthday-cake', 'Aniversario'),
+              ('fa-tools', 'Manutencao'),
+              ('fa-wrench', 'Conserto'),
+              ('fa-paint-roller', 'Reforma'),
+              ('fa-seedling', 'Jardim'),
+              ('fa-plug', 'Eletrica'),
+              ('fa-piggy-bank', 'Poupanca'),
+              ('fa-chart-line', 'Investimento'),
+              ('fa-hand-holding-usd', 'Emprestimo'),
+              ('fa-file-invoice-dollar', 'Imposto'),
+              ('fa-credit-card', 'Cartao'),
+              ('fa-university', 'Banco'),
+              ('fa-money-bill-wave', 'Dinheiro'),
+              ('fa-coins', 'Moedas/Crypto'),
+              ('fa-receipt', 'Recibo'),
+              ('fa-percentage', 'Juros/Taxas'),
+              ('fa-shield-alt', 'Seguro'),
+              ('fa-balance-scale', 'Juridico'),
+              ('fa-briefcase', 'Trabalho'),
+              ('fa-laptop', 'Computador'),
+              ('fa-desktop', 'Desktop'),
+              ('fa-print', 'Impressora'),
+              ('fa-keyboard', 'Perifericos'),
+              ('fa-hdd', 'Armazenamento'),
+              ('fa-cog', 'Sistema'),
+              ('fa-robot', 'IA'),
+              ('fa-brain', 'Inteligencia'),
+              ('fa-microchip', 'Tecnologia'),
+              ('fa-server', 'Servidor/Cloud'),
+              ('fa-code', 'Programacao'),
+              ('fa-globe', 'Internet/Web'),
+              ('fa-pray', 'Religiao'),
+              ('fa-church', 'Igreja'),
+              ('fa-hands-helping', 'Doacao'),
+              ('fa-donate', 'Caridade'),
+              ('fa-star', 'Favorito'),
+              ('fa-heart', 'Favorito 2'),
+              ('fa-flag', 'Marcador'),
+              ('fa-bookmark', 'Salvo'),
+              ('fa-thumbtack', 'Fixado'),
+              ('fa-tag', 'Outros'),
+              ('fa-tags', 'Multiplos'),
+              ('fa-question-circle', 'Indefinido'),
+              ('fa-ellipsis-h', 'Geral'),
+            ] %}
+            {% for icone, label in icones_disponiveis %}
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm btn-icone-pick{{ ' active' if icone == 'fa-tag' else '' }}"
+                    data-icone="{{ icone }}"
+                    title="{{ label }}"
+                    style="width:38px;height:38px;padding:0;display:flex;align-items:center;justify-content:center">
+              <i class="fas {{ icone }}"></i>
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Ordem de Exibicao</label>
+          <input type="number" id="catOrdem" class="form-control" value="0" min="0">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSalvarCategoria">
+          <i class="fas fa-check"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+$(function() {
+  const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+  // Toggle campos conforme tipo de regra
+  $('#regraTipo').on('change', function() {
+    if ($(this).val() === 'RELATIVO') {
+      $('#divRegraCategoria').hide();
+      $('#divRegraRestritas').removeClass('d-none');
+    } else {
+      $('#divRegraCategoria').show();
+      $('#divRegraRestritas').addClass('d-none');
+    }
+  });
+
+  // ===== CATEGORIAS =====
+
+  // Selecionar icone no grid
+  function selecionarIcone(icone) {
+    $('#catIcone').val(icone);
+    $('#catIconeGrid .btn-icone-pick').removeClass('active btn-primary').addClass('btn-outline-secondary');
+    $('#catIconeGrid .btn-icone-pick[data-icone="' + icone + '"]')
+      .removeClass('btn-outline-secondary').addClass('active btn-primary');
+  }
+
+  $(document).on('click', '.btn-icone-pick', function() {
+    selecionarIcone($(this).data('icone'));
+  });
+
+  // Limpar modal ao abrir para nova categoria
+  $('#btnNovaCategoria').on('click', function() {
+    $('#catId').val('');
+    $('#catNome').val('');
+    $('#catGrupo').val('');
+    $('#catOrdem').val(0);
+    selecionarIcone('fa-tag');
+    $('#modalCategoriaTitulo').text('Nova Categoria');
+  });
+
+  // Editar categoria — preencher modal
+  $(document).on('click', '.btn-editar-cat', function() {
+    const tr = $(this).closest('tr');
+    $('#catId').val(tr.data('cat-id'));
+    $('#catNome').val(tr.data('cat-nome'));
+    $('#catGrupo').val(tr.data('cat-grupo'));
+    $('#catOrdem').val(tr.data('cat-ordem'));
+    selecionarIcone(tr.data('cat-icone') || 'fa-tag');
+    $('#modalCategoriaTitulo').text('Editar Categoria');
+    new bootstrap.Modal('#modalCategoria').show();
+  });
+
+  // Salvar categoria (criar ou editar)
+  $('#btnSalvarCategoria').on('click', function() {
+    const nome = $('#catNome').val().trim();
+    const grupo = $('#catGrupo').val().trim();
+    if (!nome || !grupo) {
+      toastr.warning('Nome e grupo sao obrigatorios.');
+      return;
+    }
+
+    const data = {
+      id: $('#catId').val() ? parseInt($('#catId').val()) : null,
+      nome: nome,
+      grupo: grupo,
+      icone: $('#catIcone').val() || 'fa-tag',
+      ordem_exibicao: parseInt($('#catOrdem').val()) || 0,
+    };
+
+    $.ajax({
+      url: '{{ url_for("pessoal.pessoal_configuracao.salvar_categoria") }}',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify(data),
+      success: function(resp) {
+        if (resp.sucesso) {
+          toastr.success('Categoria salva com sucesso.');
+          bootstrap.Modal.getInstance('#modalCategoria').hide();
+          location.reload();
+        } else {
+          toastr.error(resp.mensagem);
+        }
+      },
+      error: function(xhr) {
+        const msg = xhr.responseJSON?.mensagem || xhr.responseJSON?.message || 'Erro ao salvar categoria.';
+        toastr.error(msg);
+      }
+    });
+  });
+
+  // Toggle ativa/inativa
+  $(document).on('click', '.btn-toggle-cat', function() {
+    const tr = $(this).closest('tr');
+    const catId = tr.data('cat-id');
+
+    $.ajax({
+      url: '/pessoal/api/categorias/' + catId + '/toggle',
+      method: 'PATCH',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      success: function(resp) {
+        if (resp.sucesso) {
+          toastr.success(resp.mensagem);
+          location.reload();
+        } else {
+          toastr.error(resp.mensagem);
+        }
+      },
+      error: function(xhr) {
+        toastr.error('Erro ao alterar status da categoria.');
+      }
+    });
+  });
+
+  // ===== SORT TABELA REGRAS =====
+  (function() {
+    const table = document.getElementById('tblRegras');
+    if (!table) return;
+    const headers = table.querySelectorAll('th.sortable');
+    let currentCol = -1;
+    let ascending = true;
+
+    headers.forEach(function(th) {
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', function() {
+        const col = parseInt(th.dataset.col);
+        const sortType = th.dataset.sort; // 'string' ou 'number'
+
+        if (col === currentCol) {
+          ascending = !ascending;
+        } else {
+          currentCol = col;
+          ascending = true;
+        }
+
+        // Atualizar icones
+        headers.forEach(function(h) {
+          h.querySelector('i').className = 'fas fa-sort text-muted ms-1';
+          h.querySelector('i').style.fontSize = '0.7rem';
+        });
+        const icon = th.querySelector('i');
+        icon.className = 'fas fa-sort-' + (ascending ? 'up' : 'down') + ' ms-1';
+        icon.style.fontSize = '0.7rem';
+
+        // Ordenar
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        rows.sort(function(a, b) {
+          const aCell = a.querySelectorAll('td')[col];
+          const bCell = b.querySelectorAll('td')[col];
+          let aVal = (aCell && aCell.dataset.val) || aCell.textContent.trim();
+          let bVal = (bCell && bCell.dataset.val) || bCell.textContent.trim();
+
+          if (sortType === 'number') {
+            aVal = parseFloat(aVal) || 0;
+            bVal = parseFloat(bVal) || 0;
+            return ascending ? aVal - bVal : bVal - aVal;
+          } else {
+            aVal = aVal.toLowerCase();
+            bVal = bVal.toLowerCase();
+            if (aVal < bVal) return ascending ? -1 : 1;
+            if (aVal > bVal) return ascending ? 1 : -1;
+            return 0;
+          }
+        });
+
+        rows.forEach(function(row) { tbody.appendChild(row); });
+      });
+    });
+  })();
+
+  // ===== REGRAS =====
+
+  // Limpar modal ao abrir para nova regra (botao "Nova Regra" no card header)
+  $('#tabRegras').on('click', '[data-bs-target="#modalRegra"]', function() {
+    $('#regraId').val('');
+    $('#regraPadrao').val('');
+    $('#regraTipo').val('PADRAO').trigger('change');
+    $('#regraCategoria').val('');
+    $('#regraRestritas').val([]);
+    $('#modalRegraTitulo').text('Nova Regra');
+  });
+
+  // Editar regra — preencher modal
+  $(document).on('click', '.btn-editar-regra', function() {
+    const tr = $(this).closest('tr');
+    $('#regraId').val(tr.data('regra-id'));
+    $('#regraPadrao').val(tr.data('regra-padrao'));
+    $('#regraTipo').val(tr.data('regra-tipo')).trigger('change');
+    $('#regraCategoria').val(tr.data('regra-categoria') || '');
+    // Categorias restritas (array JSON)
+    try {
+      const restritas = tr.data('regra-restritas');
+      const ids = Array.isArray(restritas) ? restritas.map(String) : [];
+      $('#regraRestritas').val(ids);
+    } catch(e) {
+      $('#regraRestritas').val([]);
+    }
+    $('#modalRegraTitulo').text('Editar Regra');
+    new bootstrap.Modal('#modalRegra').show();
+  });
+
+  // Salvar regra (criar ou editar)
+  $('#btnSalvarRegra').on('click', function() {
+    const tipo = $('#regraTipo').val();
+    const data = {
+      padrao_historico: $('#regraPadrao').val().trim(),
+      tipo_regra: tipo,
+      categoria_id: tipo === 'PADRAO' ? parseInt($('#regraCategoria').val()) || null : null,
+      categorias_restritas_ids: tipo === 'RELATIVO'
+        ? ($('#regraRestritas').val() || []).map(Number)
+        : [],
+    };
+
+    // Incluir ID para edicao
+    const regraId = $('#regraId').val();
+    if (regraId) {
+      data.id = parseInt(regraId);
+    }
+
+    if (!data.padrao_historico) {
+      toastr.warning('Informe o padrao.');
+      return;
+    }
+
+    if (tipo === 'PADRAO' && !data.categoria_id) {
+      toastr.warning('Selecione uma categoria para regra do tipo Padrao.');
+      return;
+    }
+
+    $.ajax({
+      url: '{{ url_for("pessoal.pessoal_configuracao.salvar_regra") }}',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify(data),
+      success: function(resp) {
+        if (resp.sucesso) {
+          let msg = 'Regra salva com sucesso.';
+          if (resp.afetadas > 0) {
+            msg += ' ' + resp.afetadas + ' transacoes despropagadas.';
+          }
+          if (resp.propagados > 0) {
+            msg += ' ' + resp.propagados + ' re-categorizadas.';
+          }
+          toastr.success(msg);
+          bootstrap.Modal.getInstance('#modalRegra').hide();
+          location.reload();
+        } else {
+          toastr.error(resp.mensagem);
+        }
+      },
+      error: function(xhr) {
+        toastr.error('Erro ao salvar regra.');
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

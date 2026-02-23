@@ -19,9 +19,33 @@ Referência SDK:
 import os
 import sys
 import logging
+from contextvars import ContextVar
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# =====================================================================
+# CONTEXTO DO USUÁRIO (thread-safe via contextvars)
+# =====================================================================
+# MCP tools são singleton (nível de módulo), mas user_id muda por request.
+# O client.py define set_current_user_id() antes de cada stream_response().
+
+_current_user_id: ContextVar[int] = ContextVar('_sql_tool_user_id', default=0)
+
+# Usuários com acesso ao módulo Pessoal (finanças pessoais)
+USUARIOS_PESSOAL = {1, 62}
+
+# Tabelas do módulo Pessoal — bloqueadas para usuários NÃO autorizados
+TABELAS_PESSOAL = {
+    'pessoal_membros', 'pessoal_contas', 'pessoal_categorias',
+    'pessoal_regras_categorizacao', 'pessoal_exclusoes_empresa',
+    'pessoal_importacoes', 'pessoal_transacoes',
+}
+
+
+def set_current_user_id(user_id: int) -> None:
+    """Define o user_id para o contexto atual (chamado por client.py)."""
+    _current_user_id.set(user_id)
 
 # Garantir que o path do projeto está disponível para importar o pipeline
 _PROJECT_ROOT = os.path.dirname(
@@ -65,26 +89,31 @@ def _get_pipeline():
     return _get_pipeline._instance
 
 
-def _execute_in_app_context(pipeline, pergunta: str) -> dict:
+def _execute_in_app_context(pipeline, pergunta: str, extra_blocked_tables: set = None) -> dict:
     """
     Executa pipeline garantindo Flask app context.
 
     O SQLExecutor precisa de app context para acessar o banco via SQLAlchemy.
     Se já estiver dentro de um app context (chamado pelo agente web), usa o existente.
     Se não (ex: teste isolado), cria um novo via create_app().
+
+    Args:
+        pipeline: TextToSQLPipeline instance
+        pergunta: Pergunta em linguagem natural
+        extra_blocked_tables: Tabelas bloqueadas adicionais (per-request)
     """
     try:
         from flask import current_app
         # Testar se o app context está ativo
         _ = current_app.name
         # Já dentro de app context — executar direto
-        return pipeline.run(pergunta)
+        return pipeline.run(pergunta, extra_blocked_tables=extra_blocked_tables)
     except RuntimeError:
         # Fora de app context — criar um
         from app import create_app
         app = create_app()
         with app.app_context():
-            return pipeline.run(pergunta)
+            return pipeline.run(pergunta, extra_blocked_tables=extra_blocked_tables)
 
 
 def _format_result(result: dict) -> str:
@@ -327,8 +356,13 @@ try:
             # Obter pipeline (singleton lazy)
             pipeline = _get_pipeline()
 
+            # Bloqueio condicional: tabelas pessoal_* bloqueadas para
+            # usuários NÃO autorizados (defesa em profundidade)
+            user_id = _current_user_id.get()
+            extra_blocked = TABELAS_PESSOAL if user_id not in USUARIOS_PESSOAL else None
+
             # Executar com app context garantido
-            result = _execute_in_app_context(pipeline, pergunta)
+            result = _execute_in_app_context(pipeline, pergunta, extra_blocked_tables=extra_blocked)
 
             # Formatar resultado legível (TextContent — backward compat)
             formatted = _format_result(result)

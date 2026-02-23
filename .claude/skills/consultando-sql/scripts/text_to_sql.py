@@ -803,12 +803,14 @@ class TextToSQLPipeline:
         max_rows = int(os.getenv("TEXT_TO_SQL_MAX_ROWS", "500"))
         self.executor = SQLExecutor(timeout_seconds=timeout, max_rows=max_rows)
 
-    def run(self, question: str) -> dict:
+    def run(self, question: str, extra_blocked_tables: set = None) -> dict:
         """
         Executa pipeline completo.
 
         Args:
             question: Pergunta em linguagem natural
+            extra_blocked_tables: Tabelas bloqueadas adicionais (per-request, thread-safe).
+                Usado para bloqueio condicional (ex: pessoal_* para usuários não autorizados).
 
         Returns:
             Dict com resultado ou erro
@@ -983,7 +985,14 @@ class TextToSQLPipeline:
             # =====================================================
             # ETAPA 3: SAFETY — Validacao de seguranca
             # =====================================================
-            is_safe, concerns = self.safety_validator.validate(sql)
+            # Se extra_blocked_tables fornecido, criar validator temporário
+            # com tabelas mescladas (thread-safe, não altera o singleton)
+            if extra_blocked_tables:
+                merged_blocked = self.schema_provider.blocked_tables | extra_blocked_tables
+                validator = SQLSafetyValidator(blocked_tables=merged_blocked)
+            else:
+                validator = self.safety_validator
+            is_safe, concerns = validator.validate(sql)
             result["etapas"]["safety"] = {"safe": is_safe, "concerns": concerns}
 
             if not is_safe:

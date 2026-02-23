@@ -615,6 +615,26 @@
           </li>
           {% endif %}
 
+          <!-- 💰 Pessoal (restrito users 1,62) -->
+          {% if current_user.is_authenticated and current_user.id in [1, 62] %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="menuPessoal" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-wallet"></i> Pessoal
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_importacao.importar') }}">
+                  <i class="fas fa-file-upload text-primary"></i> Importar CSV
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_transacoes.listar') }}">
+                  <i class="fas fa-receipt text-success"></i> Transacoes
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_configuracao.index') }}">
+                  <i class="fas fa-cog text-secondary"></i> Configuracao
+                </a></li>
+            </ul>
+          </li>
+          {% endif %}
+
           <!-- 🤖 IA - Agente e Analytics -->
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="menuIA" role="button" data-bs-toggle="dropdown">

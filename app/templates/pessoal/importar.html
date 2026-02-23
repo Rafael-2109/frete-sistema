@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="fas fa-file-upload"></i> Importar Extrato Bradesco</h4>
+    <a href="{{ url_for('pessoal.pessoal_transacoes.listar') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-list"></i> Ver Transacoes
+    </a>
+  </div>
+
+  <div class="row">
+    {# ===== FORMULARIO DE UPLOAD ===== #}
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <i class="fas fa-upload"></i> Upload CSV
+        </div>
+        <div class="card-body">
+          <form method="POST" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              <label for="arquivos" class="form-label">Arquivos CSV (Bradesco, encoding latin-1)</label>
+              {{ form.arquivos(class="form-control", accept=".csv", multiple=true, id="input-arquivos") }}
+              <div class="form-text" id="arquivos-selecionados"></div>
+            </div>
+
+            <div class="mb-3">
+              <label for="ano_referencia" class="form-label">
+                Ano de referencia <span class="text-muted">(opcional)</span>
+              </label>
+              {{ form.ano_referencia(class="form-control form-control-sm", style="width:120px", placeholder="Ex: 2025", id="ano_referencia") }}
+              <div class="form-text">
+                Informar quando o CSV tem datas sem ano (DD/MM). Se vazio, usa o ano do periodo no header do CSV.
+              </div>
+            </div>
+
+            <div class="d-grid">
+              <button type="submit" class="btn btn-primary" id="btn-processar">
+                <i class="fas fa-cog"></i> Processar Importacao
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {# ===== RESULTADOS DA IMPORTACAO (loop) ===== #}
+      {% for res in resultados %}
+      <div class="card mt-3">
+        {% if res.sucesso %}
+        <div class="card-header bg-success text-white">
+          <i class="fas fa-check-circle"></i> {{ res.arquivo }}
+        </div>
+        <div class="card-body">
+          <table class="table table-sm mb-0">
+            <tr><th style="width:40%">Conta</th><td>{{ res.conta_nome }}</td></tr>
+            <tr>
+              <th>Tipo</th>
+              <td>
+                {% if res.tipo == 'extrato_cc' %}
+                <span class="badge bg-info">CC</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Cartao</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr><th>Periodo</th><td>{{ res.periodo or '-' }}</td></tr>
+            <tr><th>Total no CSV</th><td>{{ res.total }}</td></tr>
+            <tr>
+              <th>Importadas</th>
+              <td><span class="badge bg-success">{{ res.importadas }}</span></td>
+            </tr>
+            <tr>
+              <th>Duplicadas (ignoradas)</th>
+              <td><span class="badge bg-secondary">{{ res.duplicadas }}</span></td>
+            </tr>
+            <tr>
+              <th>Empresariais (filtradas)</th>
+              <td><span class="badge bg-warning text-dark">{{ res.filtradas_empresa }}</span></td>
+            </tr>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-header bg-danger text-white">
+          <i class="fas fa-times-circle"></i> {{ res.arquivo }}
+        </div>
+        <div class="card-body">
+          <p class="mb-0 text-danger">{{ res.erro }}</p>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {# ===== HISTORICO DE IMPORTACOES ===== #}
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <i class="fas fa-history"></i> Importacoes Recentes
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Arquivo</th>
+                  <th>Tipo</th>
+                  <th>Import.</th>
+                  <th>Dupl.</th>
+                  <th>Filtr.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for imp in importacoes %}
+                <tr>
+                  <td class="small">{{ imp.criado_em|formatar_data_hora_brasil if imp.criado_em else '-' }}</td>
+                  <td class="small text-truncate" style="max-width:150px" title="{{ imp.nome_arquivo }}">
+                    {{ imp.nome_arquivo or '-' }}
+                  </td>
+                  <td>
+                    {% if imp.tipo_arquivo == 'extrato_cc' %}
+                    <span class="badge bg-info">CC</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Cartao</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ imp.linhas_importadas }}</td>
+                  <td>{{ imp.linhas_duplicadas }}</td>
+                  <td>{{ imp.linhas_empresa_filtradas }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted text-center">Nenhuma importacao realizada.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {# ===== INSTRUCOES ===== #}
+      <div class="card mt-3">
+        <div class="card-header">
+          <i class="fas fa-info-circle"></i> Instrucoes
+        </div>
+        <div class="card-body small">
+          <p><strong>Auto-deteccao:</strong> O sistema identifica automaticamente se o CSV e extrato de conta corrente ou fatura de cartao, e resolve a conta correspondente.</p>
+          <p><strong>Multi-arquivo:</strong> Selecione varios CSVs de uma vez. Cada arquivo e processado independentemente.</p>
+          <p><strong>Formatos aceitos:</strong></p>
+          <ul class="mb-2">
+            <li><strong>Extrato CC</strong>: Bradesco Net Empresa/PF &gt; Conta Corrente &gt; Extrato &gt; Exportar CSV</li>
+            <li><strong>Fatura Cartao</strong>: Bradesco &gt; Cartao &gt; Fatura &gt; Exportar CSV</li>
+          </ul>
+          <p><strong>Encoding:</strong> latin-1 (padrao Bradesco). Separador: ponto-e-virgula (;)</p>
+          <p class="mb-0"><strong>Deduplicacao:</strong> Transacoes duplicadas sao ignoradas automaticamente via hash.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var input = document.getElementById('input-arquivos');
+  var info = document.getElementById('arquivos-selecionados');
+  var btn = document.getElementById('btn-processar');
+
+  if (input) {
+    input.addEventListener('change', function() {
+      var files = this.files;
+      if (files.length === 0) {
+        info.textContent = '';
+        btn.innerHTML = '<i class="fas fa-cog"></i> Processar Importacao';
+        return;
+      }
+      if (files.length === 1) {
+        info.textContent = files[0].name;
+        btn.innerHTML = '<i class="fas fa-cog"></i> Processar 1 arquivo';
+      } else {
+        var nomes = [];
+        for (var i = 0; i < files.length; i++) {
+          nomes.push(files[i].name);
+        }
+        info.textContent = nomes.join(', ');
+        btn.innerHTML = '<i class="fas fa-cog"></i> Processar ' + files.length + ' arquivos';
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

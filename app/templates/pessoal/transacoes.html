@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% macro sort_th(label, col, qs, sb, so, width='', cls='', title='') %}
+<th {% if width %}style="width:{{ width }}"{% endif %} class="{{ cls }}" {% if title %}title="{{ title }}"{% endif %}>
+  <a href="?sort_by={{ col }}&sort_order={{ 'asc' if sb != col or so == 'desc' else 'desc' }}{{ qs }}"
+     class="text-decoration-none text-reset" style="white-space:nowrap">
+    {{ label }}
+    {% if sb == col %}
+    <i class="fas fa-sort-{{ 'up' if so == 'asc' else 'down' }}" style="font-size:0.7rem"></i>
+    {% else %}
+    <i class="fas fa-sort text-muted" style="font-size:0.7rem"></i>
+    {% endif %}
+  </a>
+</th>
+{% endmacro %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>
+      <i class="fas fa-receipt"></i> Transacoes Pessoais
+      {% if total_pendentes > 0 %}
+      <span class="badge bg-warning text-dark">{{ total_pendentes }} pendentes</span>
+      {% endif %}
+    </h4>
+    <div>
+      <a href="{{ url_for('pessoal.pessoal_importacao.importar') }}" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-file-upload"></i> Importar
+      </a>
+      <a href="{{ url_for('pessoal.pessoal_configuracao.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-cog"></i> Configuracao
+      </a>
+    </div>
+  </div>
+
+  {# ===== FILTROS ===== #}
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Data Inicio</label>
+          <input type="date" name="data_inicio" class="form-control form-control-sm"
+                 value="{{ filtros.data_inicio or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Data Fim</label>
+          <input type="date" name="data_fim" class="form-control form-control-sm"
+                 value="{{ filtros.data_fim or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Conta</label>
+          <select name="conta_id" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            {% for c in contas %}
+            <option value="{{ c.id }}" {{ 'selected' if filtros.conta_id == c.id }}>{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Categoria</label>
+          <select name="categoria_id" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            {% for cat in categorias %}
+            <option value="{{ cat.id }}" {{ 'selected' if filtros.categoria_id == cat.id }}>
+              {{ cat.grupo }} / {{ cat.nome }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small mb-0">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="PENDENTE" {{ 'selected' if filtros.status == 'PENDENTE' }}>Pendente</option>
+            <option value="CATEGORIZADO" {{ 'selected' if filtros.status == 'CATEGORIZADO' }}>Categorizado</option>
+            <option value="REVISADO" {{ 'selected' if filtros.status == 'REVISADO' }}>Revisado</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Busca</label>
+          <input type="text" name="busca" class="form-control form-control-sm"
+                 placeholder="Texto no historico..." value="{{ filtros.busca or '' }}">
+        </div>
+        <div class="col-md-1">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="fas fa-search"></i> Filtrar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# ===== QS para links de sort (sem page/sort_by/sort_order) ===== #}
+  {% set ns_sort = namespace(qs='') %}
+  {% for key, value in request.args.items(multi=True) %}
+    {% if key not in ('page', 'sort_by', 'sort_order') and value %}
+      {% set ns_sort.qs = ns_sort.qs ~ '&' ~ key ~ '=' ~ value %}
+    {% endif %}
+  {% endfor %}
+  {% set _sb = filtros.sort_by|default('data') %}
+  {% set _so = filtros.sort_order|default('desc') %}
+  {% set _qs = ns_sort.qs %}
+
+  {# ===== TABELA DE TRANSACOES ===== #}
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tblTransacoes">
+          <thead class="table-light">
+            <tr>
+              <th style="width:30px"><input type="checkbox" id="checkAll"></th>
+              {{ sort_th('Data', 'data', _qs, _sb, _so, '90px') }}
+              {{ sort_th('Historico', 'historico', _qs, _sb, _so) }}
+              {{ sort_th('Descricao', 'descricao', _qs, _sb, _so) }}
+              {{ sort_th('Valor', 'valor', _qs, _sb, _so, '110px', 'text-end') }}
+              {{ sort_th('Tipo', 'tipo', _qs, _sb, _so, '70px') }}
+              <th style="width:200px">Categoria</th>
+              <th style="width:90px">Membro</th>
+              {{ sort_th('Status', 'status', _qs, _sb, _so, '80px') }}
+              {{ sort_th('Sim.', 'similares', _qs, _sb, _so, '45px', '', 'Pendentes com mesmo historico') }}
+              <th style="width:80px">Acoes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transacoes %}
+            <tr data-id="{{ t.id }}"
+                class="{{ 'table-warning' if t.status == 'PENDENTE' and not t.excluir_relatorio else '' }}">
+              <td><input type="checkbox" class="check-item" value="{{ t.id }}"></td>
+              <td class="small">{{ t.data|formatar_data_segura if t.data else '-' }}</td>
+              <td class="small" title="{{ t.historico_completo or '' }}">
+                {{ t.historico[:50] }}{{ '...' if t.historico|length > 50 else '' }}
+              </td>
+              <td class="small text-muted">
+                {{ t.descricao[:40] if t.descricao else '' }}
+              </td>
+              <td class="text-end small fw-bold {{ 'text-success' if t.tipo == 'credito' else 'text-danger' }}">
+                R$ {{ t.valor|numero_br(2) }}
+              </td>
+              <td>
+                {% if t.tipo == 'credito' %}
+                <span class="badge bg-success">C</span>
+                {% else %}
+                <span class="badge bg-danger">D</span>
+                {% endif %}
+                {% if t.eh_pagamento_cartao %}
+                <span class="badge bg-secondary" title="Pagamento de cartao">CC</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if t.categoria %}
+                <span>
+                  <i class="fas {{ t.categoria.icone or 'fa-tag' }} me-1"></i>
+                  <span class="text-muted">{{ t.categoria.grupo }} /</span> {{ t.categoria.nome }}
+                </span>
+                {% if t.categorizacao_auto %}
+                <i class="fas fa-robot text-info ms-1" title="Auto ({{ t.categorizacao_confianca }}%)"></i>
+                {% endif %}
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if t.membro %}
+                {{ t.membro.nome }}
+                {% if t.membro_auto %}
+                <i class="fas fa-robot text-info" title="Auto"></i>
+                {% endif %}
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if t.excluir_relatorio %}
+                <span class="badge bg-secondary">Excl.</span>
+                {% elif t.status == 'PENDENTE' %}
+                <span class="badge bg-warning text-dark">Pendente</span>
+                {% elif t.status == 'CATEGORIZADO' %}
+                <span class="badge bg-success">OK</span>
+                {% else %}
+                <span class="badge bg-info">{{ t.status }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% set sim_count = similares_map.get(t.id, 0) %}
+                {% if sim_count > 1 %}
+                <span class="badge bg-info" title="{{ sim_count }} pendentes com mesmo historico">{{ sim_count }}</span>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if t.status == 'PENDENTE' and not t.excluir_relatorio %}
+                <button class="btn btn-outline-primary btn-sm py-0 px-1 btn-categorizar"
+                        data-id="{{ t.id }}" data-historico="{{ t.historico }}"
+                        data-descricao="{{ t.descricao or '' }}"
+                        data-hist-completo="{{ t.historico_completo or '' }}"
+                        title="Categorizar">
+                  <i class="fas fa-tag"></i>
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="11" class="text-center text-muted py-3">Nenhuma transacao encontrada.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ===== PAGINACAO ===== #}
+  {% if paginacao.pages > 1 %}
+  {# Construir query string sem page para reutilizar nos links #}
+  {% set ns = namespace(qs='') %}
+  {% for key, value in request.args.items(multi=True) %}
+    {% if key != 'page' and value %}
+      {% set ns.qs = ns.qs ~ '&' ~ key ~ '=' ~ value %}
+    {% endif %}
+  {% endfor %}
+  <nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+      {% if paginacao.has_prev %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ paginacao.prev_num }}{{ ns.qs }}">&laquo;</a>
+      </li>
+      {% endif %}
+      {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+        <li class="page-item {{ 'active' if p == paginacao.page }}">
+          <a class="page-link" href="?page={{ p }}{{ ns.qs }}">{{ p }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+      {% endfor %}
+      {% if paginacao.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ paginacao.next_num }}{{ ns.qs }}">&raquo;</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+
+{# ===== MODAL DE CATEGORIZACAO ===== #}
+<div class="modal fade" id="modalCategorizar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-tag"></i> Categorizar Transacao</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2" id="modalHistorico"></p>
+        <input type="hidden" id="modalTransacaoId">
+
+        <div class="mb-3">
+          <label class="form-label">Categoria</label>
+          <select id="modalCategoria" class="form-select">
+            <option value="">Selecione...</option>
+            {% for cat in categorias %}
+            <option value="{{ cat.id }}">{{ cat.grupo }} / {{ cat.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Membro (opcional)</label>
+          <select id="modalMembro" class="form-select">
+            <option value="">Nao definido</option>
+            {% for m in membros %}
+            <option value="{{ m.id }}">{{ m.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="modalCriarRegra" checked>
+          <label class="form-check-label" for="modalCriarRegra">
+            Criar regra para futuras transacoes similares
+          </label>
+        </div>
+
+        {# Tipo de regra (visivel so quando "criar regra" esta marcado) #}
+        <div id="divTipoRegra" class="mt-2 ms-4">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="tipoRegra" id="tipoRegraPadrao" value="PADRAO" checked>
+            <label class="form-check-label small" for="tipoRegraPadrao">
+              Padrao <span class="text-muted">(auto-categoriza similares)</span>
+            </label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="tipoRegra" id="tipoRegraRelativo" value="RELATIVO">
+            <label class="form-check-label small" for="tipoRegraRelativo">
+              Relativo <span class="text-muted">(sugere, nao aplica)</span>
+            </label>
+          </div>
+        </div>
+
+        {# Padrao editavel (visivel so quando "criar regra" esta marcado) #}
+        <div id="divPadrao" class="mt-2">
+          <label class="form-label small">Padrao da regra <span class="text-muted">(editavel)</span></label>
+          <input type="text" id="modalPadrao" class="form-control form-control-sm">
+          <div class="form-text">
+            Texto usado para match (substring). Remova datas ou detalhes para tornar mais generico.
+          </div>
+        </div>
+
+        {# Preview de propagacao #}
+        <div id="divPreview" class="mt-3 d-none">
+          <hr>
+          <h6 class="mb-2"><i class="fas fa-eye"></i> Preview de propagacao</h6>
+          <div id="previewLoading" class="text-center text-muted d-none">
+            <i class="fas fa-spinner fa-spin"></i> Simulando...
+          </div>
+          <div id="previewResultado" class="d-none">
+            <p class="small mb-1">
+              <strong id="previewCount">0</strong> transacoes pendentes serao auto-categorizadas:
+            </p>
+            <div id="previewTabela" style="max-height:200px;overflow-y:auto">
+              <table class="table table-sm table-bordered mb-0" style="font-size:0.8rem">
+                <thead class="table-light">
+                  <tr>
+                    <th>Data</th>
+                    <th>Historico</th>
+                    <th>Descricao</th>
+                    <th class="text-end">Valor</th>
+                  </tr>
+                </thead>
+                <tbody id="previewBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="previewVazio" class="d-none">
+            <p class="small text-muted mb-0">
+              <i class="fas fa-info-circle"></i> Nenhuma transacao pendente sera afetada.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-outline-primary" id="btnPreview">
+          <i class="fas fa-eye"></i> Preview
+        </button>
+        <button type="button" class="btn btn-primary d-none" id="btnSalvarCategoria">
+          <i class="fas fa-check"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== MODAL CATEGORIZAR LOTE ===== #}
+<div class="modal fade" id="modalLote" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-tags"></i> Categorizar em Lote</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="modalLoteCount" class="small text-muted"></p>
+        <div class="mb-3">
+          <label class="form-label">Categoria</label>
+          <select id="modalLoteCategoria" class="form-select">
+            <option value="">Selecione...</option>
+            {% for cat in categorias %}
+            <option value="{{ cat.id }}">{{ cat.grupo }} / {{ cat.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Membro (opcional)</label>
+          <select id="modalLoteMembro" class="form-select">
+            <option value="">Nao definido</option>
+            {% for m in membros %}
+            <option value="{{ m.id }}">{{ m.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSalvarLote">
+          <i class="fas fa-check-double"></i> Salvar Lote
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== BARRA DE ACOES EM LOTE ===== #}
+<div id="barraLote" class="fixed-bottom bg-primary text-white p-2 d-none">
+  <div class="container-fluid d-flex justify-content-between align-items-center">
+    <span><strong id="loteCount">0</strong> transacoes selecionadas</span>
+    <button class="btn btn-light btn-sm" id="btnAbrirLote">
+      <i class="fas fa-tags"></i> Categorizar Selecionadas
+    </button>
+  </div>
+</div>
+
+<script>
+$(function() {
+  const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+  // Check all
+  $('#checkAll').on('change', function() {
+    $('.check-item').prop('checked', this.checked);
+    atualizarBarraLote();
+  });
+
+  $('.check-item').on('change', atualizarBarraLote);
+
+  function atualizarBarraLote() {
+    const selecionados = $('.check-item:checked').length;
+    if (selecionados > 0) {
+      $('#barraLote').removeClass('d-none');
+      $('#loteCount').text(selecionados);
+    } else {
+      $('#barraLote').addClass('d-none');
+    }
+  }
+
+  // Toggle tipo regra e padrao visibilidade
+  $('#modalCriarRegra').on('change', function() {
+    if ($(this).is(':checked')) {
+      $('#divTipoRegra').show();
+      $('#divPadrao').show();
+    } else {
+      $('#divTipoRegra').hide();
+      $('#divPadrao').hide();
+    }
+  });
+
+  // Quando mudar tipo regra RELATIVO, esconder preview (nao propaga)
+  $('input[name="tipoRegra"]').on('change', function() {
+    resetPreview();
+  });
+
+  // Quando editar padrao, voltar para Preview (padrao mudou → preview anterior invalido)
+  $('#modalPadrao').on('input', function() {
+    resetPreview();
+  });
+
+  function resetPreview() {
+    $('#divPreview').addClass('d-none');
+    $('#previewResultado').addClass('d-none');
+    $('#previewVazio').addClass('d-none');
+    $('#previewLoading').addClass('d-none');
+    $('#previewBody').empty();
+    $('#btnSalvarCategoria').addClass('d-none');
+    $('#btnPreview').removeClass('d-none');
+  }
+
+  // Modal individual
+  $(document).on('click', '.btn-categorizar', function() {
+    const id = $(this).data('id');
+    const historico = $(this).data('historico');
+    const descricao = $(this).data('descricao');
+    const histCompleto = $(this).data('hist-completo');
+    $('#modalTransacaoId').val(id);
+    // Mostrar historico + descricao para contexto
+    let displayText = historico || '';
+    if (descricao) displayText += ' | ' + descricao;
+    $('#modalHistorico').text(displayText);
+    // Reset estado do modal
+    $('#modalCategoria').val('');
+    $('#modalMembro').val('');
+    $('#modalCriarRegra').prop('checked', true);
+    $('#divTipoRegra').show();
+    $('#divPadrao').show();
+    $('#tipoRegraPadrao').prop('checked', true);
+    // Pre-popular padrao com historico_completo (ja normalizado, contem descricao)
+    $('#modalPadrao').val(histCompleto || (historico || '').toUpperCase());
+    resetPreview();
+    new bootstrap.Modal('#modalCategorizar').show();
+  });
+
+  // Preview de propagacao (Passo 1)
+  $('#btnPreview').on('click', function() {
+    const categoriaId = parseInt($('#modalCategoria').val());
+    if (!categoriaId) {
+      toastr.warning('Selecione uma categoria.');
+      return;
+    }
+
+    const criarRegra = $('#modalCriarRegra').is(':checked');
+    const tipoRegra = $('input[name="tipoRegra"]:checked').val();
+
+    // Se nao cria regra ou tipo RELATIVO: pula preview, vai direto pra confirmar
+    if (!criarRegra || tipoRegra === 'RELATIVO') {
+      $('#btnPreview').addClass('d-none');
+      $('#btnSalvarCategoria').removeClass('d-none');
+      $('#divPreview').removeClass('d-none');
+      $('#previewVazio').removeClass('d-none').find('p').html(
+        '<i class="fas fa-info-circle"></i> ' +
+        (tipoRegra === 'RELATIVO'
+          ? 'Regras RELATIVO nao propagam automaticamente.'
+          : 'Nenhuma regra sera criada — sem propagacao.')
+      );
+      return;
+    }
+
+    // Chamar endpoint de preview
+    $('#divPreview').removeClass('d-none');
+    $('#previewLoading').removeClass('d-none');
+    $('#previewResultado').addClass('d-none');
+    $('#previewVazio').addClass('d-none');
+
+    $.ajax({
+      url: '{{ url_for("pessoal.pessoal_transacoes.preview_propagacao") }}',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify({
+        transacao_id: parseInt($('#modalTransacaoId').val()),
+        categoria_id: categoriaId,
+        padrao_historico: $('#modalPadrao').val(),
+      }),
+      success: function(resp) {
+        $('#previewLoading').addClass('d-none');
+        if (resp.sucesso) {
+          if (resp.total > 0) {
+            $('#previewCount').text(resp.total);
+            const tbody = $('#previewBody').empty();
+            resp.transacoes.forEach(function(t) {
+              const cls = t.tipo === 'credito' ? 'text-success' : 'text-danger';
+              tbody.append(
+                '<tr><td>' + t.data + '</td>' +
+                '<td>' + t.historico + '</td>' +
+                '<td class="text-muted">' + (t.descricao || '') + '</td>' +
+                '<td class="text-end ' + cls + '">' +
+                  parseFloat(t.valor).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}) +
+                '</td></tr>'
+              );
+            });
+            $('#previewResultado').removeClass('d-none');
+          } else {
+            $('#previewVazio').removeClass('d-none');
+          }
+          // Mostrar botao Confirmar, esconder Preview
+          $('#btnPreview').addClass('d-none');
+          $('#btnSalvarCategoria').removeClass('d-none');
+        } else {
+          toastr.error(resp.mensagem || 'Erro ao simular propagacao.');
+        }
+      },
+      error: function(xhr) {
+        $('#previewLoading').addClass('d-none');
+        toastr.error('Erro ao simular propagacao.');
+      }
+    });
+  });
+
+  // Confirmar categorizacao (Passo 2)
+  $('#btnSalvarCategoria').on('click', function() {
+    const data = {
+      transacao_id: parseInt($('#modalTransacaoId').val()),
+      categoria_id: parseInt($('#modalCategoria').val()),
+      membro_id: $('#modalMembro').val() ? parseInt($('#modalMembro').val()) : null,
+      criar_regra: $('#modalCriarRegra').is(':checked'),
+      tipo_regra: $('input[name="tipoRegra"]:checked').val() || 'PADRAO',
+      padrao_historico: $('#modalPadrao').val(),
+    };
+
+    if (!data.categoria_id) {
+      toastr.warning('Selecione uma categoria.');
+      return;
+    }
+
+    const $btn = $(this);
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Salvando...');
+
+    $.ajax({
+      url: '{{ url_for("pessoal.pessoal_transacoes.categorizar") }}',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify(data),
+      success: function(resp) {
+        if (resp.sucesso) {
+          let msg = resp.mensagem;
+          if (resp.propagados > 0) {
+            msg += ' (' + resp.propagados + ' similares auto-categorizadas)';
+          }
+          toastr.success(msg);
+          bootstrap.Modal.getInstance('#modalCategorizar').hide();
+          location.reload();
+        } else {
+          toastr.error(resp.mensagem);
+          $btn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirmar');
+        }
+      },
+      error: function(xhr) {
+        toastr.error('Erro ao categorizar: ' + (xhr.responseJSON?.mensagem || xhr.statusText));
+        $btn.prop('disabled', false).html('<i class="fas fa-check"></i> Confirmar');
+      }
+    });
+  });
+
+  // Abrir modal lote
+  $('#btnAbrirLote').on('click', function() {
+    const count = $('.check-item:checked').length;
+    $('#modalLoteCount').text(count + ' transacoes selecionadas');
+    new bootstrap.Modal('#modalLote').show();
+  });
+
+  // Salvar lote
+  $('#btnSalvarLote').on('click', function() {
+    const ids = [];
+    $('.check-item:checked').each(function() { ids.push(parseInt($(this).val())); });
+    const catId = parseInt($('#modalLoteCategoria').val());
+    const membroId = $('#modalLoteMembro').val() ? parseInt($('#modalLoteMembro').val()) : null;
+
+    if (!catId) {
+      toastr.warning('Selecione uma categoria.');
+      return;
+    }
+
+    $.ajax({
+      url: '{{ url_for("pessoal.pessoal_transacoes.categorizar_lote") }}',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify({ids: ids, categoria_id: catId, membro_id: membroId}),
+      success: function(resp) {
+        if (resp.sucesso) {
+          toastr.success(resp.mensagem);
+          bootstrap.Modal.getInstance('#modalLote').hide();
+          location.reload();
+        } else {
+          toastr.error(resp.mensagem);
+        }
+      },
+      error: function(xhr) {
+        toastr.error('Erro ao categorizar lote.');
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -760,6 +760,9 @@ def create_app(config_name=None):
     from app.integracoes.tagplus import tagplus_bp
     from app.rastreamento import rastreamento_bp  # 🚚 Rastreamento GPS
 
+    # 💰 Finanças Pessoais
+    from app.pessoal import pessoal_bp
+
     # MCP Logistica
 
     app.register_blueprint(auth_bp)
@@ -792,6 +795,7 @@ def create_app(config_name=None):
     app.register_blueprint(portaria_bp)
     app.register_blueprint(permissions_api)
     app.register_blueprint(rastreamento_bp)  # 🚚 Rastreamento GPS
+    app.register_blueprint(pessoal_bp)  # 💰 Finanças Pessoais
 
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
