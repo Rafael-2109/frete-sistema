@@ -240,7 +240,8 @@ class LancamentoOdooService:
     def _obter_operacao_correta(
         self,
         operacao_atual_id: int,
-        company_destino_id: int
+        company_destino_id: int,
+        purchase_order_id: Optional[int] = None
     ) -> Optional[int]:
         """
         Obtém a operação fiscal correta para a empresa de destino
@@ -248,11 +249,13 @@ class LancamentoOdooService:
         Args:
             operacao_atual_id: ID da operação fiscal atual
             company_destino_id: ID da empresa de destino
+            purchase_order_id: ID do Purchase Order (usado para determinar operação
+                             de transporte quando a operação atual não é de transporte)
 
         Returns:
             ID da operação correta ou None se não precisar corrigir
         """
-        # Verificar se a operação atual precisa de correção
+        # Verificar se a operação atual precisa de correção (de-para entre empresas)
         if operacao_atual_id in self.OPERACAO_DE_PARA:
             mapeamento = self.OPERACAO_DE_PARA[operacao_atual_id]
             operacao_correta = mapeamento.get(company_destino_id)
@@ -260,7 +263,7 @@ class LancamentoOdooService:
             if operacao_correta:
                 return operacao_correta
 
-        # Verificar se a operação atual já é válida
+        # Verificar se a operação atual já é válida (é de transporte)
         if operacao_atual_id in self.OPERACOES_TRANSPORTE_VALIDAS:
             # Verificar se pertence à empresa correta
             for company_id, operacoes in self.OPERACOES_TRANSPORTE.items():
@@ -276,7 +279,83 @@ class LancamentoOdooService:
                                 operacoes_destino = self.OPERACOES_TRANSPORTE.get(company_destino_id, {})
                                 return operacoes_destino.get((destino, regime))
 
+        # Operação NÃO é de transporte (ex: "Aquisição de Serviços sem Retenção")
+        # Isso ocorre quando o Odoo atribui uma operação genérica default ao PO,
+        # geralmente porque o partner (transportadora) não tem operação fiscal configurada.
+        # Devemos SEMPRE substituir por uma operação de transporte correta.
+        if operacao_atual_id not in self.OPERACOES_TRANSPORTE_VALIDAS:
+            operacao_transporte = self._determinar_operacao_transporte(
+                company_destino_id, purchase_order_id
+            )
+            if operacao_transporte:
+                return operacao_transporte
+
         return None
+
+    def _determinar_operacao_transporte(
+        self,
+        company_id: int,
+        purchase_order_id: Optional[int] = None
+    ) -> Optional[int]:
+        """
+        Determina a operação fiscal de transporte correta para a empresa,
+        consultando dados do parceiro (transportadora) no PO.
+
+        Critérios:
+        - destino: UF do partner (transportadora) — SP=Interna(1), outro=Interestadual(2)
+        - regime: l10n_br_fiscal_type do partner — '1'=Simples(1), outro=Normal(3)
+
+        Fallback: Interestadual + Regime Normal (caso mais comum para transportadoras)
+
+        Args:
+            company_id: ID da empresa no Odoo
+            purchase_order_id: ID do Purchase Order para buscar dados do parceiro
+
+        Returns:
+            ID da operação de transporte correta ou None se empresa não tem mapeamento
+        """
+        destino = 2  # Default: Interestadual
+        regime = 3   # Default: Regime Normal
+
+        if purchase_order_id and self.odoo:
+            try:
+                po_data = self.odoo.read('purchase.order', [purchase_order_id], ['partner_id'])
+                if po_data and po_data[0].get('partner_id'):
+                    partner_id = po_data[0]['partner_id'][0]
+                    partner_data = self.odoo.read(
+                        'res.partner', [partner_id], ['state_id', 'l10n_br_fiscal_type']
+                    )
+                    if partner_data:
+                        partner = partner_data[0]
+
+                        # Destino: UF da transportadora
+                        state_id = partner.get('state_id')
+                        if state_id and isinstance(state_id, (list, tuple)):
+                            state_name = str(state_id[1])
+                            if 'São Paulo' in state_name or state_name.strip().upper() == 'SP':
+                                destino = 1  # Interna
+
+                        # Regime fiscal da transportadora
+                        fiscal_type = partner.get('l10n_br_fiscal_type')
+                        if fiscal_type == '1':
+                            regime = 1  # Simples Nacional
+            except Exception as e:
+                try:
+                    current_app.logger.warning(
+                        f"⚠️ Erro ao ler dados do parceiro para operação fiscal: {e}. "
+                        f"Usando fallback: Interestadual + Regime Normal"
+                    )
+                except RuntimeError:
+                    pass
+
+        operacoes = self.OPERACOES_TRANSPORTE.get(company_id, {})
+        operacao = operacoes.get((destino, regime))
+
+        if not operacao:
+            # Fallback: Interestadual + Regime Normal (o mais comum)
+            operacao = operacoes.get((2, 3))
+
+        return operacao
 
     def _rollback_frete_odoo(self, frete_id: int, etapas_concluidas: int) -> bool:
         """
@@ -1200,14 +1279,24 @@ class LancamentoOdooService:
                         line_ids_po = po_operacao[0].get('order_line', [])
 
                         # Usar novo método que suporta qualquer empresa
-                        operacao_correta_id = self._obter_operacao_correta(operacao_atual_id, company_id)
+                        operacao_correta_id = self._obter_operacao_correta(
+                            operacao_atual_id, company_id, purchase_order_id
+                        )
 
                         if operacao_correta_id:
                             dados_po['l10n_br_operacao_id'] = operacao_correta_id
-                            current_app.logger.info(
-                                f"🔄 Corrigindo operação fiscal PO: {operacao_atual_id} ({operacao_atual_nome}) "
-                                f"→ {operacao_correta_id} (empresa {config_empresa.get('nome')})"
-                            )
+                            if operacao_atual_id in self.OPERACOES_TRANSPORTE_VALIDAS:
+                                current_app.logger.info(
+                                    f"🔄 Corrigindo operação fiscal (de-para transporte): "
+                                    f"{operacao_atual_id} ({operacao_atual_nome}) → {operacao_correta_id} "
+                                    f"(empresa {config_empresa.get('nome')})"
+                                )
+                            else:
+                                current_app.logger.warning(
+                                    f"⚠️ Substituindo operação fiscal genérica por transporte: "
+                                    f"{operacao_atual_id} ({operacao_atual_nome}) → {operacao_correta_id} "
+                                    f"(empresa {config_empresa.get('nome')})"
+                                )
 
                             # Corrigir operação fiscal das linhas
                             if line_ids_po:
@@ -1239,7 +1328,8 @@ class LancamentoOdooService:
                                     )
                         else:
                             current_app.logger.info(
-                                f"✅ Operação fiscal já está correta: {operacao_atual_id} ({operacao_atual_nome})"
+                                f"✅ Operação fiscal de transporte já está correta: "
+                                f"{operacao_atual_id} ({operacao_atual_nome})"
                             )
                     else:
                         # Mesmo sem operação fiscal, pegar line_ids para verificação posterior
