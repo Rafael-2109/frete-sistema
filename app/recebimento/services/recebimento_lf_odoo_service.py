@@ -3907,7 +3907,7 @@ class RecebimentoLfOdooService:
                     data_movimentacao=agora_utc_naive().date(),
                     tipo_movimentacao='SAIDA',
                     local_movimentacao='TRANSFERENCIA',
-                    qtd_movimentacao=lote.quantidade,
+                    qtd_movimentacao=-lote.quantidade,
                     odoo_picking_id=str(rec.odoo_transfer_out_picking_id),
                     odoo_move_id=saida_ref,
                     tipo_origem='ODOO',
