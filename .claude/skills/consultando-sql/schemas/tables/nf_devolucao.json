@@ -230,21 +230,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_origem_registro",
-      "columns": [
-        "origem_registro"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_cnpj_status",
-      "columns": [
-        "cnpj_emitente",
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nfd_data_registro",
       "columns": [
         "data_registro"
@@ -382,6 +367,21 @@
     {
       "name": "ix_nf_devolucao_status",
       "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_origem_registro",
+      "columns": [
+        "origem_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_cnpj_status",
+      "columns": [
+        "cnpj_emitente",
         "status"
       ],
       "unique": false

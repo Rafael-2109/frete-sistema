@@ -1,0 +1,35 @@
+{
+  "name": "pessoal_membros",
+  "description": "Tabela pessoal_membros",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "nome_completo",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "papel",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ]
+}

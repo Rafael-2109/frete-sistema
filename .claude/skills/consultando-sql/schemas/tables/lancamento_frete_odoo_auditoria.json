@@ -144,13 +144,6 @@
   ],
   "indices": [
     {
-      "name": "ix_lancamento_frete_odoo_auditoria_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_lancamento_frete_odoo_auditoria_etapa",
       "columns": [
         "etapa"
@@ -161,6 +154,13 @@
       "name": "ix_lancamento_frete_odoo_auditoria_despesa_extra_id",
       "columns": [
         "despesa_extra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_frete_odoo_auditoria_frete_id",
+      "columns": [
+        "frete_id"
       ],
       "unique": false
     },

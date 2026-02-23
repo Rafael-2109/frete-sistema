@@ -1,0 +1,76 @@
+{
+  "name": "pessoal_regras_categorizacao",
+  "description": "Tabela pessoal_regras_categorizacao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "padrao_historico",
+      "type": "varchar(300)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_regra",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "FK → pessoal_categorias.id"
+    },
+    {
+      "name": "membro_id",
+      "type": "integer",
+      "description": "FK → pessoal_membros.id"
+    },
+    {
+      "name": "categorias_restritas_ids",
+      "type": "text"
+    },
+    {
+      "name": "vezes_usado",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "confianca",
+      "type": "numeric(5,2)",
+      "default": 100
+    },
+    {
+      "name": "origem",
+      "type": "varchar(30)",
+      "default": "semente"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "categoria_id",
+      "references": "pessoal_categorias.id"
+    },
+    {
+      "column": "membro_id",
+      "references": "pessoal_membros.id"
+    }
+  ]
+}

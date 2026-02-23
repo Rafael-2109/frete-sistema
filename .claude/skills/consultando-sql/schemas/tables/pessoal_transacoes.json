@@ -1,0 +1,210 @@
+{
+  "name": "pessoal_transacoes",
+  "description": "Tabela pessoal_transacoes",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "importacao_id",
+      "type": "integer",
+      "description": "FK → pessoal_importacoes.id",
+      "nullable": false
+    },
+    {
+      "name": "conta_id",
+      "type": "integer",
+      "description": "FK → pessoal_contas.id",
+      "nullable": false
+    },
+    {
+      "name": "data",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "historico",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "historico_completo",
+      "type": "varchar(1000)"
+    },
+    {
+      "name": "documento",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "saldo",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_dolar",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "parcela_atual",
+      "type": "integer"
+    },
+    {
+      "name": "parcela_total",
+      "type": "integer"
+    },
+    {
+      "name": "identificador_parcela",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "FK → pessoal_categorias.id"
+    },
+    {
+      "name": "regra_id",
+      "type": "integer",
+      "description": "FK → pessoal_regras_categorizacao.id"
+    },
+    {
+      "name": "categorizacao_auto",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "categorizacao_confianca",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "membro_id",
+      "type": "integer",
+      "description": "FK → pessoal_membros.id"
+    },
+    {
+      "name": "membro_auto",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "excluir_relatorio",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "eh_pagamento_cartao",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "eh_transferencia_propria",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "default": "PENDENTE"
+    },
+    {
+      "name": "hash_transacao",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "categorizado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "categorizado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "importacao_id",
+      "references": "pessoal_importacoes.id"
+    },
+    {
+      "column": "conta_id",
+      "references": "pessoal_contas.id"
+    },
+    {
+      "column": "categoria_id",
+      "references": "pessoal_categorias.id"
+    },
+    {
+      "column": "regra_id",
+      "references": "pessoal_regras_categorizacao.id"
+    },
+    {
+      "column": "membro_id",
+      "references": "pessoal_membros.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_pessoal_transacoes_data",
+      "columns": [
+        "data"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_categoria",
+      "columns": [
+        "categoria_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_conta",
+      "columns": [
+        "conta_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_membro",
+      "columns": [
+        "membro_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "name": "pessoal_contas",
+  "description": "Tabela pessoal_contas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "banco",
+      "type": "varchar(50)",
+      "nullable": false,
+      "default": "bradesco"
+    },
+    {
+      "name": "agencia",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "numero_conta",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "ultimos_digitos_cartao",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "membro_id",
+      "type": "integer",
+      "description": "FK → pessoal_membros.id"
+    },
+    {
+      "name": "ativa",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "membro_id",
+      "references": "pessoal_membros.id"
+    }
+  ]
+}

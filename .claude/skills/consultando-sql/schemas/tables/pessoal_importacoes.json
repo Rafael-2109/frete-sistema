@@ -1,0 +1,77 @@
+{
+  "name": "pessoal_importacoes",
+  "description": "Tabela pessoal_importacoes",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "conta_id",
+      "type": "integer",
+      "description": "FK → pessoal_contas.id",
+      "nullable": false
+    },
+    {
+      "name": "nome_arquivo",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "tipo_arquivo",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "periodo_inicio",
+      "type": "date"
+    },
+    {
+      "name": "periodo_fim",
+      "type": "date"
+    },
+    {
+      "name": "situacao_fatura",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "total_linhas",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "linhas_importadas",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "linhas_duplicadas",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "linhas_empresa_filtradas",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "default": "IMPORTADO"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "conta_id",
+      "references": "pessoal_contas.id"
+    }
+  ]
+}

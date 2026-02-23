@@ -1,0 +1,26 @@
+{
+  "name": "pessoal_exclusoes_empresa",
+  "description": "Tabela pessoal_exclusoes_empresa",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "padrao",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ]
+}

@@ -165,9 +165,10 @@
   ],
   "indices": [
     {
-      "name": "idx_cnab_item_seu_numero",
+      "name": "idx_cnab_item_lote_status",
       "columns": [
-        "seu_numero"
+        "lote_id",
+        "status_match"
       ],
       "unique": false
     },
@@ -186,9 +187,9 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_status_match",
+      "name": "ix_cnab_retorno_item_conta_a_receber_id",
       "columns": [
-        "status_match"
+        "conta_a_receber_id"
       ],
       "unique": false
     },
@@ -200,17 +201,16 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_seu_numero",
+      "name": "ix_cnab_retorno_item_status_match",
       "columns": [
-        "seu_numero"
+        "status_match"
       ],
       "unique": false
     },
     {
-      "name": "idx_cnab_item_lote_status",
+      "name": "ix_cnab_retorno_item_seu_numero",
       "columns": [
-        "lote_id",
-        "status_match"
+        "seu_numero"
       ],
       "unique": false
     },
@@ -222,9 +222,9 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_conta_a_receber_id",
+      "name": "idx_cnab_item_seu_numero",
       "columns": [
-        "conta_a_receber_id"
+        "seu_numero"
       ],
       "unique": false
     },
