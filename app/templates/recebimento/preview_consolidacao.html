@@ -120,15 +120,15 @@
                                 <strong>{{ item.cod_produto }}</strong>
                                 <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
                             </td>
-                            <td class="text-center">{{ item.qtd|int }} un</td>
-                            <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
-                            <td class="text-end">R$ {{ "%.2f"|format(item.valor) }}</td>
+                            <td class="text-center">{{ item.qtd|numero_br(2) }} un</td>
+                            <td class="text-end">R$ {{ item.preco|numero_br(4) }}</td>
+                            <td class="text-end">R$ {{ item.valor|valor_br }}</td>
                             <td><span class="badge bg-primary">{{ item.po_origem }}</span></td>
                         </tr>
                         {% endfor %}
                         <tr class="table-success">
                             <td colspan="3"><strong>TOTAL</strong></td>
-                            <td class="text-end"><strong>R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td class="text-end"><strong>R$ {{ preview.po_conciliador.valor|valor_br }}</strong></td>
                             <td></td>
                         </tr>
                         {% endif %}
@@ -227,7 +227,7 @@
                                 <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
                             </td>
                             <td class="text-center">
-                                <span class="qtd-nf-ref" data-qtd-nf="{{ item.qtd_nf|default(item.qtd, true) }}">{{ (item.qtd_nf|default(item.qtd, true))|int }} un</span>
+                                <span class="qtd-nf-ref" data-qtd-nf="{{ item.qtd_nf|default(item.qtd, true) }}">{{ (item.qtd_nf|default(item.qtd, true))|numero_br(2) }} un</span>
                             </td>
                             <td class="text-center">
                                 <input type="number"
@@ -235,15 +235,15 @@
                                        data-cod-produto="{{ item.cod_produto }}"
                                        data-po-origem="{{ item.po_origem }}"
                                        data-preco="{{ item.preco }}"
-                                       value="{{ item.qtd|int }}"
+                                       value="{{ item.qtd }}"
                                        min="0"
-                                       step="1"
-                                       max="{{ (item.qtd_max|default(item.qtd, true))|int }}"
+                                       step="0.01"
+                                       max="{{ item.qtd_max|default(item.qtd, true) }}"
                                        style="width: 90px; display: inline-block;">
-                                <small class="text-muted d-block">max: {{ (item.qtd_max|default(item.qtd, true))|int }}</small>
+                                <small class="text-muted d-block">max: {{ (item.qtd_max|default(item.qtd, true))|numero_br(2) }}</small>
                             </td>
-                            <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
-                            <td class="text-end valor-linha">R$ {{ "%.2f"|format(item.valor) }}</td>
+                            <td class="text-end">R$ {{ item.preco|numero_br(4) }}</td>
+                            <td class="text-end valor-linha">R$ {{ item.valor|valor_br }}</td>
                             <td><span class="badge bg-primary">{{ item.po_origem }}</span></td>
                             <td class="text-center status-match">
                                 <i class="fas fa-check-circle text-success"></i>
@@ -252,7 +252,7 @@
                         {% endfor %}
                         <tr class="table-primary">
                             <td colspan="4"><strong>TOTAL (NF)</strong></td>
-                            <td class="text-end"><strong id="totalValorSplit">R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td class="text-end"><strong id="totalValorSplit">R$ {{ preview.po_conciliador.valor|valor_br }}</strong></td>
                             <td></td>
                             <td></td>
                         </tr>
@@ -304,11 +304,11 @@
                                 <strong>{{ item.cod_produto }}</strong>
                                 <br><small class="text-muted">{{ (item.nome_produto or '')[:40] }}{% if (item.nome_produto or '')|length > 40 %}...{% endif %}</small>
                             </td>
-                            <td class="text-center">{{ item.qtd_original|int }} un</td>
-                            <td class="text-center text-danger">-{{ item.qtd_usada|int }} un</td>
+                            <td class="text-center">{{ item.qtd_original|numero_br(2) }} un</td>
+                            <td class="text-center text-danger">-{{ item.qtd_usada|numero_br(2) }} un</td>
                             <td class="text-center">
                                 {% if item.qtd_saldo > 0 %}
-                                <strong class="text-warning">{{ item.qtd_saldo|int }} un</strong>
+                                <strong class="text-warning">{{ item.qtd_saldo|numero_br(2) }} un</strong>
                                 {% else %}
                                 <span class="text-muted">0 un</span>
                                 {% endif %}
@@ -422,7 +422,7 @@
                                 <br><small class="text-muted">{{ (item.nome_produto or '')[:50] }}{% if (item.nome_produto or '')|length > 50 %}...{% endif %}</small>
                             </td>
                             <td class="text-center">
-                                <span class="qtd-nf-ref" data-qtd-nf="{{ item.qtd_nf|default(item.qtd, true) }}">{{ (item.qtd_nf|default(item.qtd, true))|int }} un</span>
+                                <span class="qtd-nf-ref" data-qtd-nf="{{ item.qtd_nf|default(item.qtd, true) }}">{{ (item.qtd_nf|default(item.qtd, true))|numero_br(2) }} un</span>
                             </td>
                             <td class="text-center">
                                 <input type="number"
@@ -430,15 +430,15 @@
                                        data-cod-produto="{{ item.cod_produto }}"
                                        data-po-origem="{{ item.po_origem }}"
                                        data-preco="{{ item.preco }}"
-                                       value="{{ item.qtd|int }}"
+                                       value="{{ item.qtd }}"
                                        min="0"
-                                       step="1"
-                                       max="{{ (item.qtd_max|default(item.qtd, true))|int }}"
+                                       step="0.01"
+                                       max="{{ item.qtd_max|default(item.qtd, true) }}"
                                        style="width: 90px; display: inline-block;">
-                                <small class="text-muted d-block">max: {{ (item.qtd_max|default(item.qtd, true))|int }}</small>
+                                <small class="text-muted d-block">max: {{ (item.qtd_max|default(item.qtd, true))|numero_br(2) }}</small>
                             </td>
-                            <td class="text-end">R$ {{ "%.4f"|format(item.preco) }}</td>
-                            <td class="text-end valor-linha">R$ {{ "%.2f"|format(item.valor) }}</td>
+                            <td class="text-end">R$ {{ item.preco|numero_br(4) }}</td>
+                            <td class="text-end valor-linha">R$ {{ item.valor|valor_br }}</td>
                             <td><span class="badge bg-secondary">{{ item.po_origem }}</span></td>
                             <td class="text-center status-match">
                                 <i class="fas fa-check-circle text-success"></i>
@@ -447,7 +447,7 @@
                         {% endfor %}
                         <tr class="table-success">
                             <td colspan="4"><strong>TOTAL DO PO CONCILIADOR</strong></td>
-                            <td class="text-end"><strong id="totalValorNpos">R$ {{ "%.2f"|format(preview.po_conciliador.valor) }}</strong></td>
+                            <td class="text-end"><strong id="totalValorNpos">R$ {{ preview.po_conciliador.valor|valor_br }}</strong></td>
                             <td></td>
                             <td></td>
                         </tr>
@@ -499,11 +499,11 @@
                                 <strong>{{ item.cod_produto }}</strong>
                                 <br><small class="text-muted">{{ (item.nome_produto or '')[:40] }}{% if (item.nome_produto or '')|length > 40 %}...{% endif %}</small>
                             </td>
-                            <td class="text-center">{{ item.qtd_original|int }} un</td>
-                            <td class="text-center text-danger">-{{ item.qtd_usada|int }} un</td>
+                            <td class="text-center">{{ item.qtd_original|numero_br(2) }} un</td>
+                            <td class="text-center text-danger">-{{ item.qtd_usada|numero_br(2) }} un</td>
                             <td class="text-center">
                                 {% if item.qtd_saldo > 0 %}
-                                <strong class="text-warning">{{ item.qtd_saldo|int }} un</strong>
+                                <strong class="text-warning">{{ item.qtd_saldo|numero_br(2) }} un</strong>
                                 {% else %}
                                 <span class="text-muted">0 un</span>
                                 {% endif %}
@@ -597,6 +597,16 @@
 const CENARIO = '{{ cenario }}';
 
 // =========================================================================
+// HELPER: FORMATACAO NUMERICA BRASILEIRA
+// =========================================================================
+function formatarNumeroBR(valor, decimais = 2) {
+    return valor.toLocaleString('pt-BR', {
+        minimumFractionDigits: decimais,
+        maximumFractionDigits: decimais
+    });
+}
+
+// =========================================================================
 // COLETA DE QUANTIDADES EDITADAS
 // =========================================================================
 function coletarQuantidades() {
@@ -605,7 +615,7 @@ function coletarQuantidades() {
         const codProduto = input.dataset.codProduto;
         const poOrigem = input.dataset.poOrigem;
         const chave = codProduto + ':' + poOrigem;
-        quantidades[chave] = parseInt(input.value, 10) || 0;
+        quantidades[chave] = parseFloat(input.value) || 0;
     });
     return quantidades;
 }
@@ -625,8 +635,8 @@ function recalcularTotais() {
     document.querySelectorAll('.qty-input').forEach(input => {
         const codProduto = input.dataset.codProduto;
         const preco = parseFloat(input.dataset.preco) || 0;
-        const qtd = parseInt(input.value, 10) || 0;
-        const max = parseInt(input.max, 10) || 0;
+        const qtd = parseFloat(input.value) || 0;
+        const max = parseFloat(input.max) || 0;
 
         // Validar limites
         if (qtd < 0 || qtd > max) {
@@ -646,7 +656,7 @@ function recalcularTotais() {
         const tr = input.closest('tr');
         const tdValor = tr.querySelector('.valor-linha');
         if (tdValor) {
-            tdValor.textContent = 'R$ ' + valorLinha.toFixed(2);
+            tdValor.textContent = 'R$ ' + formatarNumeroBR(valorLinha);
         }
     });
 
@@ -671,10 +681,10 @@ function recalcularTotais() {
         const somaAtual = somasPorProduto[codProduto] || 0;
         const qtdNf = qtdNfPorProduto[codProduto] || 0;
 
-        if (somaAtual === qtdNf) {
+        if (Math.abs(somaAtual - qtdNf) < 0.01) {
             statusTd.innerHTML = '<i class="fas fa-check-circle text-success" title="Quantidade bate com NF"></i>';
         } else {
-            statusTd.innerHTML = '<i class="fas fa-exclamation-triangle text-danger" title="Soma (' + somaAtual + ') diferente da NF (' + qtdNf + ')"></i>';
+            statusTd.innerHTML = '<i class="fas fa-exclamation-triangle text-danger" title="Soma (' + formatarNumeroBR(somaAtual) + ') diferente da NF (' + formatarNumeroBR(qtdNf) + ')"></i>';
             algumDivergente = true;
         }
     });
@@ -682,7 +692,7 @@ function recalcularTotais() {
     // Atualizar total
     const totalEl = document.getElementById('totalValorSplit') || document.getElementById('totalValorNpos');
     if (totalEl) {
-        totalEl.textContent = 'R$ ' + valorTotal.toFixed(2);
+        totalEl.textContent = 'R$ ' + formatarNumeroBR(valorTotal);
     }
 
     // Atualizar alerta e botao
@@ -701,8 +711,8 @@ function recalcularTotais() {
             let detalhes = [];
             for (const [cod, soma] of Object.entries(somasPorProduto)) {
                 const esperado = qtdNfPorProduto[cod] || 0;
-                if (soma !== esperado) {
-                    detalhes.push(cod + ': alocado ' + soma + ' / NF ' + esperado);
+                if (Math.abs(soma - esperado) >= 0.01) {
+                    detalhes.push(cod + ': alocado ' + formatarNumeroBR(soma) + ' / NF ' + formatarNumeroBR(esperado));
                 }
             }
             msg.textContent = 'Quantidades divergentes: ' + detalhes.join('; ');

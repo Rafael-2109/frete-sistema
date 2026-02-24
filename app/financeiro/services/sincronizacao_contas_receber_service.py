@@ -26,6 +26,11 @@ from app.monitoramento.models import EntregaMonitorada
 
 logger = logging.getLogger(__name__)
 
+# CNPJs raiz do grupo Nacom (para excluir transações intercompany)
+# FONTE: .claude/references/odoo/IDS_FIXOS.md:18-25
+# Alinhado com sincronizacao_contas_pagar_service.py:35
+CNPJS_RAIZ_GRUPO_RECEBER = ['61.724.241', '18.467.441']
+
 
 class SincronizacaoContasReceberService:
     """
@@ -490,6 +495,13 @@ class SincronizacaoContasReceberService:
 
         # Ignorar empresas não mapeadas (empresa=0)
         if empresa == 0:
+            self.estatisticas['ignorados'] += 1
+            return
+
+        # Ignorar transações intercompany (cliente pertence ao grupo Nacom)
+        # Alinhado com sincronizacao_contas_pagar_service.py:508-512
+        partner_cnpj = row.get('partner_cnpj') or ''
+        if partner_cnpj and any(partner_cnpj.startswith(raiz) for raiz in CNPJS_RAIZ_GRUPO_RECEBER):
             self.estatisticas['ignorados'] += 1
             return
 

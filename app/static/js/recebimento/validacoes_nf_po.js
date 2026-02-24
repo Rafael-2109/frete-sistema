@@ -233,10 +233,10 @@ function renderizarDetalhes(data) {
                         ${m.nome_produto_interno || m.nome_produto || ''}
                     </small>
                 </td>
-                <td class="text-end">${m.qtd_nf != null ? parseFloat(m.qtd_nf).toFixed(2) : 'N/A'}</td>
+                <td class="text-end">${m.qtd_nf != null ? parseFloat(m.qtd_nf).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'N/A'}</td>
                 <td class="text-end">${m.preco_nf != null ? parseFloat(m.preco_nf).toFixed(4) : 'N/A'}</td>
                 <td>${m.odoo_po_name || '-'}</td>
-                <td class="text-end">${m.qtd_po != null ? parseFloat(m.qtd_po).toFixed(2) : '-'}</td>
+                <td class="text-end">${m.qtd_po != null ? parseFloat(m.qtd_po).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}</td>
                 <td>${m.data_po || '-'}</td>
                 <td class="text-center">${matchBadge}</td>
             </tr>

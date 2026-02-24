@@ -506,7 +506,8 @@ class SincronizacaoContasAPagarService:
         cnpj = partner_data.get('cnpj', '')
 
         # Ignorar transações intercompany (parceiro pertence ao grupo Nacom)
-        # Alinhado com Regra 4 do receber (contas_receber_service.py:314)
+        # Nota: Regra 4 do receber (contas_receber_service.py:314) filtra empresa
+        # emissora (LA FAMIGLIA), não parceiro. Este filtro é complementar.
         if cnpj and any(cnpj.startswith(raiz) for raiz in CNPJS_RAIZ_GRUPO_PAGAR):
             self.estatisticas['ignorados'] += 1
             return

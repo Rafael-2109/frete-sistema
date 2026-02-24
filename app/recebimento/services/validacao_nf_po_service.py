@@ -1877,8 +1877,9 @@ class ValidacaoNfPoService:
             )
 
         if qtd_pendente > 0:
-            # Aplicar tolerancia de +10%
-            tolerancia = item_agrupado['qtd_total'] * Decimal('0.10')
+            # Aplicar tolerancia de +10% sobre o SALDO DO PO (nao sobre qtd NF)
+            total_alocado = sum(a['qtd_alocada'] for a in alocacoes)
+            tolerancia = total_alocado * Decimal('0.10')
             if qtd_pendente <= tolerancia:
                 # Aceita com saldo pendente dentro da tolerancia
                 logger.info(
