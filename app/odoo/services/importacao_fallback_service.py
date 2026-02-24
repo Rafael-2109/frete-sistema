@@ -23,6 +23,7 @@ from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.services.carteira_service import CarteiraService
 from app.odoo.services.faturamento_service import FaturamentoService
 from app.utils.timezone import agora_utc_naive
+from app.odoo.utils.sanitizacao_faturamento import extrair_incoterm_codigo, sanitizar_dados_faturamento
 
 logger = logging.getLogger(__name__)
 
@@ -637,7 +638,8 @@ class ImportacaoFallbackService:
                     # Extrair vendedor/equipe/incoterm de many2one (do Passo 1)
                     vendedor = self._extrair_many2one_nome(nf.get('invoice_user_id'))
                     equipe_vendas = self._extrair_many2one_nome(nf.get('team_id'))
-                    incoterm = self._extrair_many2one_nome(nf.get('invoice_incoterm_id'))
+                    incoterm_raw = self._extrair_many2one_nome(nf.get('invoice_incoterm_id'))
+                    incoterm = extrair_incoterm_codigo(incoterm_raw)
 
                     # Dados do parceiro (do cache batch)
                     partner_id = None
@@ -744,8 +746,15 @@ class ImportacaoFallbackService:
                     logger.error(f"❌ Erro ao processar NF {nf.get('numero_nf')}: {e}")
 
             # ============================================================
-            # FASE 5a: Bulk insert + commit (P5/P7: antes do pós-processamento)
+            # FASE 5a: Sanitizar + Bulk insert + commit (P5/P7: antes do pós-processamento)
             # ============================================================
+            # Sanitizar dados antes do bulk insert para evitar StringDataRightTruncation
+            # (ex: incoterm '[CIF] COST, INSURANCE AND FREIGHT' = 33 chars > varchar(20))
+            if registros_faturamento:
+                registros_faturamento = sanitizar_dados_faturamento(registros_faturamento)
+            if registros_relatorio:
+                registros_relatorio = sanitizar_dados_faturamento(registros_relatorio)
+
             if registros_faturamento:
                 db.session.bulk_insert_mappings(FaturamentoProduto, registros_faturamento)
                 logger.info(f"📝 {len(registros_faturamento)} linhas FaturamentoProduto inseridas (bulk)")
@@ -1158,7 +1167,7 @@ class ImportacaoFallbackService:
             incoterm = ''
             m2o = nf_info.get('invoice_incoterm_id')
             if m2o and isinstance(m2o, list) and len(m2o) > 1:
-                incoterm = m2o[1] or ''
+                incoterm = extrair_incoterm_codigo(m2o[1] or '')
 
             # 1b. Dados do parceiro (cliente) — inclui município e UF
             cliente_info = {
@@ -1371,3 +1380,168 @@ class ImportacaoFallbackService:
                 'mensagem': str(e),
                 'itens_importados': 0
             }
+
+    def reparar_orfaos_faturamento(self, nfs_especificas: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Repara NFs orfas: existem em FaturamentoProduto mas nao em RelatorioFaturamentoImportado.
+
+        Isso impede que ProcessadorFaturamento as encontre, causando ausencia de:
+        - MovimentacaoEstoque
+        - Separacao.sincronizado_nf
+        - EmbarqueItem.nota_fiscal
+
+        Fluxo:
+        1. Identifica NFs orfas (diferenca de conjuntos FaturamentoProduto - RelatorioFaturamentoImportado)
+        2. Agrega dados das linhas de FaturamentoProduto (mesma logica de _consolidar_faturamento)
+        3. Cria RelatorioFaturamentoImportado para cada NF orfa
+        4. Dispara ProcessadorFaturamento para completar o pipeline
+
+        Args:
+            nfs_especificas: Lista de NFs para verificar (safety net do sync).
+                            Se None, faz scan completo (botao manual).
+
+        Returns:
+            Dict com estatisticas: encontradas, reparadas, movimentacoes_criadas, erros
+        """
+        from app.faturamento.models import RelatorioFaturamentoImportado, FaturamentoProduto
+
+        resultado = {
+            'sucesso': False,
+            'orfas_encontradas': 0,
+            'orfas_reparadas': 0,
+            'movimentacoes_criadas': 0,
+            'erros': []
+        }
+
+        try:
+            # ============================================================
+            # FASE 1: Identificar NFs orfas
+            # ============================================================
+            # NFs ativas em FaturamentoProduto (nao canceladas, nao revertidas)
+            query_fp = db.session.query(
+                FaturamentoProduto.numero_nf
+            ).filter(
+                FaturamentoProduto.status_nf != 'Cancelado',
+                FaturamentoProduto.revertida == False  # noqa: E712
+            ).distinct()
+
+            if nfs_especificas:
+                query_fp = query_fp.filter(FaturamentoProduto.numero_nf.in_(nfs_especificas))
+
+            nfs_em_faturamento = set(row[0] for row in query_fp.all())
+
+            if not nfs_em_faturamento:
+                resultado['sucesso'] = True
+                logger.info("📊 Nenhuma NF encontrada para verificacao de orfas")
+                return resultado
+
+            # NFs que ja existem em RelatorioFaturamentoImportado
+            nfs_em_relatorio = set(
+                row[0] for row in db.session.query(
+                    RelatorioFaturamentoImportado.numero_nf
+                ).filter(
+                    RelatorioFaturamentoImportado.numero_nf.in_(list(nfs_em_faturamento))
+                ).all()
+            )
+
+            nfs_orfas = nfs_em_faturamento - nfs_em_relatorio
+            resultado['orfas_encontradas'] = len(nfs_orfas)
+
+            if not nfs_orfas:
+                resultado['sucesso'] = True
+                logger.info("✅ Nenhuma NF orfa encontrada")
+                return resultado
+
+            logger.warning(f"⚠️ {len(nfs_orfas)} NFs orfas encontradas: {sorted(nfs_orfas)[:20]}...")
+
+            # ============================================================
+            # FASE 2: Agregar dados e criar RelatorioFaturamentoImportado
+            # ============================================================
+            # Mesma logica de FaturamentoService._consolidar_faturamento (linhas 498-594)
+            agora = agora_utc_naive()
+            nfs_reparadas = []
+
+            for numero_nf in nfs_orfas:
+                try:
+                    # Buscar linhas desta NF em FaturamentoProduto
+                    linhas_nf = db.session.query(FaturamentoProduto).filter_by(
+                        numero_nf=numero_nf
+                    ).filter(
+                        FaturamentoProduto.status_nf != 'Cancelado',
+                        FaturamentoProduto.revertida == False  # noqa: E712
+                    ).all()
+
+                    if not linhas_nf:
+                        continue
+
+                    # Agregar dados (primeira linha fornece metadados, todas fornecem totais)
+                    primeira = linhas_nf[0]
+                    valor_total = sum(float(l.valor_produto_faturado or 0) for l in linhas_nf)
+                    peso_total = sum(
+                        float(l.peso_unitario_produto or 0) * float(l.qtd_produto_faturado or 0)
+                        for l in linhas_nf
+                    )
+
+                    relatorio = RelatorioFaturamentoImportado(
+                        numero_nf=numero_nf,
+                        data_fatura=primeira.data_fatura,
+                        cnpj_cliente=primeira.cnpj_cliente,
+                        nome_cliente=primeira.nome_cliente,
+                        municipio=primeira.municipio,
+                        estado=primeira.estado,
+                        valor_total=valor_total,
+                        peso_bruto=peso_total,
+                        origem=primeira.origem,
+                        vendedor=primeira.vendedor,
+                        equipe_vendas=primeira.equipe_vendas,
+                        incoterm=primeira.incoterm,
+                        ativo=True,
+                        criado_em=agora,
+                    )
+                    db.session.add(relatorio)
+                    nfs_reparadas.append(numero_nf)
+                    logger.info(f"📋 RelatorioFaturamentoImportado criado para NF orfa {numero_nf}")
+
+                except Exception as e:
+                    resultado['erros'].append(f"NF {numero_nf}: {e}")
+                    logger.error(f"❌ Erro ao reparar NF orfa {numero_nf}: {e}")
+
+            # Commit dos relatorios criados
+            if nfs_reparadas:
+                db.session.commit()
+                resultado['orfas_reparadas'] = len(nfs_reparadas)
+                logger.info(f"✅ {len(nfs_reparadas)} RelatorioFaturamentoImportado criados")
+            else:
+                logger.info("📊 Nenhuma NF orfa reparada (todas ja tinham erros)")
+                resultado['sucesso'] = True
+                return resultado
+
+            # ============================================================
+            # FASE 3: Processar NFs reparadas via ProcessadorFaturamento
+            # ============================================================
+            try:
+                from app.faturamento.services.processar_faturamento import ProcessadorFaturamento
+                processador = ProcessadorFaturamento()
+                resultado_proc = processador.processar_nfs_importadas(
+                    usuario='Reparacao Orfas',
+                    nfs_especificas=nfs_reparadas
+                )
+                if resultado_proc:
+                    resultado['movimentacoes_criadas'] = resultado_proc.get('movimentacoes_criadas', 0)
+                    logger.info(
+                        f"✅ Processamento pos-reparacao: "
+                        f"{resultado_proc.get('processadas', 0)} NFs processadas, "
+                        f"{resultado['movimentacoes_criadas']} movimentacoes criadas"
+                    )
+            except Exception as e:
+                resultado['erros'].append(f"Processamento pos-reparacao: {e}")
+                logger.error(f"⚠️ Erro no processamento pos-reparacao (NFs ja reparadas no RelatorioFaturamentoImportado): {e}")
+
+            resultado['sucesso'] = True
+            return resultado
+
+        except Exception as e:
+            db.session.rollback()
+            resultado['erros'].append(str(e))
+            logger.error(f"❌ Erro geral ao reparar NFs orfas: {e}")
+            return resultado

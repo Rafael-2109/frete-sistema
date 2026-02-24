@@ -585,3 +585,47 @@ def importar_faturamento_por_periodo_fallback():
         logger.error(f"❌ Erro na importação fallback de faturamento: {e}")
         flash(f"❌ Erro ao importar faturamento: {str(e)}", 'error')
         return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+
+@sync_integrada_bp.route('/fallback/reparar-orfaos', methods=['POST'])
+@login_required
+def reparar_orfaos_faturamento():
+    """
+    Repara NFs orfas: existem em FaturamentoProduto mas nao em RelatorioFaturamentoImportado.
+    Scan completo — uso manual via dashboard fallback.
+    """
+    try:
+        from app.odoo.services.importacao_fallback_service import ImportacaoFallbackService
+
+        logger.info("🔧 Reparacao manual de NFs orfas iniciada")
+        service = ImportacaoFallbackService()
+        resultado = service.reparar_orfaos_faturamento()
+
+        if resultado.get('sucesso'):
+            encontradas = resultado.get('orfas_encontradas', 0)
+            reparadas = resultado.get('orfas_reparadas', 0)
+            movimentacoes = resultado.get('movimentacoes_criadas', 0)
+
+            if encontradas == 0:
+                flash("✅ Nenhuma NF orfa encontrada — pipeline consistente", 'success')
+            else:
+                flash(
+                    f"🔧 {reparadas}/{encontradas} NFs orfas reparadas, "
+                    f"{movimentacoes} movimentacoes de estoque criadas",
+                    'success'
+                )
+                if resultado.get('erros'):
+                    flash(
+                        f"⚠️ {len(resultado['erros'])} erros: {'; '.join(resultado['erros'][:3])}",
+                        'warning'
+                    )
+        else:
+            erros = resultado.get('erros', [])
+            flash(f"❌ Erro ao reparar NFs orfas: {'; '.join(erros[:3])}", 'error')
+
+        return redirect(url_for('sync_integrada.fallback_dashboard'))
+
+    except Exception as e:
+        logger.error(f"❌ Erro na reparacao de NFs orfas: {e}")
+        flash(f"❌ Erro ao reparar NFs orfas: {str(e)}", 'error')
+        return redirect(url_for('sync_integrada.fallback_dashboard'))

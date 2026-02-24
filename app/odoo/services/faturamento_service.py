@@ -912,7 +912,38 @@ class FaturamentoService:
                     erros.append(f"Erro na consolidação incremental: {e}")
             else:
                 logger.info("📊 Modo incremental: pulando consolidação (sem NFs novas)")
-            
+
+            # ============================================
+            # SAFETY NET: Verificar NFs orfas do sync atual
+            # ============================================
+            # Se a consolidacao falhou ou pulou NFs, reparar ANTES do ProcessadorFaturamento
+            if nfs_novas:
+                try:
+                    from app.faturamento.models import RelatorioFaturamentoImportado as _RFI
+                    nfs_novas_set = set(nfs_novas)
+                    nfs_em_relatorio = set(
+                        row[0] for row in db.session.query(_RFI.numero_nf)
+                        .filter(_RFI.numero_nf.in_(list(nfs_novas_set)))
+                        .all()
+                    )
+                    nfs_orfas = nfs_novas_set - nfs_em_relatorio
+                    if nfs_orfas:
+                        logger.warning(
+                            f"⚠️ Safety net: {len(nfs_orfas)} NFs orfas detectadas "
+                            f"(em FaturamentoProduto mas nao em RelatorioFaturamentoImportado): "
+                            f"{sorted(nfs_orfas)[:10]}"
+                        )
+                        from app.odoo.services.importacao_fallback_service import ImportacaoFallbackService
+                        resultado_reparacao = ImportacaoFallbackService().reparar_orfaos_faturamento(
+                            nfs_especificas=list(nfs_orfas)
+                        )
+                        if resultado_reparacao.get('orfas_reparadas', 0) > 0:
+                            logger.info(
+                                f"✅ Safety net: {resultado_reparacao['orfas_reparadas']} NFs orfas reparadas"
+                            )
+                except Exception as e:
+                    logger.error(f"⚠️ Erro no safety net de NFs orfas (nao bloqueante): {e}")
+
             # ============================================
             # 🚨 PROCESSAMENTO DE MOVIMENTAÇÕES DE ESTOQUE
             # ============================================
@@ -1603,62 +1634,13 @@ class FaturamentoService:
     
     def _sanitizar_dados_faturamento(self, dados_faturamento: List[Dict]) -> List[Dict]:
         """
-        Sanitiza e corrige dados de faturamento antes da inserção
-        Garante que campos não excedam os limites do banco
+        Sanitiza e corrige dados de faturamento antes da inserção.
+        Garante que campos não excedam os limites do banco.
+
+        Delega para utilitário compartilhado (reutilizado por ImportacaoFallbackService).
         """
-        dados_sanitizados = []
-        
-        for item in dados_faturamento:
-            item_sanitizado = item.copy()
-            
-            # Campos com limite de 20 caracteres
-            campos_varchar20 = ['numero_nf', 'cnpj_cliente', 'incoterm', 'origem', 'status_nf']
-            for campo in campos_varchar20:
-                if campo in item_sanitizado and item_sanitizado[campo]:
-                    valor = str(item_sanitizado[campo])
-                    if len(valor) > 20:
-                        item_sanitizado[campo] = valor[:20]
-            
-            # Tratar município com formato "Cidade (UF)"
-            if 'municipio' in item_sanitizado and item_sanitizado['municipio']:
-                municipio = str(item_sanitizado['municipio'])
-                if '(' in municipio and ')' in municipio:
-                    # Extrair cidade e estado
-                    partes = municipio.split('(')
-                    item_sanitizado['municipio'] = partes[0].strip()
-                    if len(partes) > 1:
-                        estado = partes[1].replace(')', '').strip()
-                        # Garantir que estado tem apenas 2 caracteres
-                        if len(estado) > 2:
-                            estado = estado[:2]
-                        item_sanitizado['estado'] = estado
-            
-            # Garantir que estado é string de 2 caracteres
-            if 'estado' in item_sanitizado:
-                estado_valor = item_sanitizado['estado']
-                if isinstance(estado_valor, (int, float)):
-                    # Se for número, limpar
-                    item_sanitizado['estado'] = ''
-                elif estado_valor and len(str(estado_valor)) > 2:
-                    item_sanitizado['estado'] = str(estado_valor)[:2]
-            
-            # Garantir que incoterm específico cabe no campo
-            if 'incoterm' in item_sanitizado and item_sanitizado['incoterm']:
-                incoterm = str(item_sanitizado['incoterm'])
-                # Remover prefixo [CIF] se necessário para caber
-                if len(incoterm) > 20:
-                    if '[' in incoterm and ']' in incoterm:
-                        # Pegar apenas o código entre colchetes
-                        inicio = incoterm.find('[')
-                        fim = incoterm.find(']')
-                        if inicio >= 0 and fim > inicio:
-                            item_sanitizado['incoterm'] = incoterm[inicio+1:fim]
-                    else:
-                        item_sanitizado['incoterm'] = incoterm[:20]
-            
-            dados_sanitizados.append(item_sanitizado)
-        
-        return dados_sanitizados
+        from app.odoo.utils.sanitizacao_faturamento import sanitizar_dados_faturamento
+        return sanitizar_dados_faturamento(dados_faturamento)
     
     def _calcular_peso_total(self, quantidade: float, peso_unitario: float) -> float:
         """
