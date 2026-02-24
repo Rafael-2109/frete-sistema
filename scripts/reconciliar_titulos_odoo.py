@@ -55,6 +55,17 @@ logger = logging.getLogger(__name__)
 # FB=1, SC=3, CD=4 (LF=5 não é mapeada localmente)
 ODOO_COMPANY_IDS_ELEGIVEIS = [1, 3, 4]
 
+# CNPJs raiz do grupo Nacom (para excluir transações intercompany)
+# FONTE: .claude/references/odoo/IDS_FIXOS.md:18-25
+CNPJS_RAIZ_GRUPO = ['61.724.241', '18.467.441']
+
+
+def _is_intercompany(cnpj):
+    """Verifica se o CNPJ pertence ao grupo Nacom (transação intercompany)."""
+    if not cnpj:
+        return False
+    return any(cnpj.startswith(raiz) for raiz in CNPJS_RAIZ_GRUPO)
+
 
 def configurar_logging(verbose=False):
     """Configura logging para o script."""
@@ -146,7 +157,7 @@ def contar_registros_locais_total(tipo):
 # CATEGORIZAÇÃO
 # ===================================================================
 
-def categorizar_faltantes(connection, ids_faltantes, batch_size=500):
+def categorizar_faltantes(connection, ids_faltantes, tipo='receber', batch_size=500):
     """
     Busca detalhes dos IDs faltantes e categoriza.
 
@@ -156,10 +167,12 @@ def categorizar_faltantes(connection, ids_faltantes, batch_size=500):
     - sem_vencimento: date_maturity é False
     - empresa_nao_mapeada: company_id não está em [1, 3, 4]
     - nao_posted: parent_state mudou desde o search inicial
+    - devolucao: receber com balance <= 0, pagar com credit <= 0
 
     Args:
         connection: Conexão Odoo autenticada
         ids_faltantes: list[int] de IDs para categorizar
+        tipo: 'receber' ou 'pagar' (para detectar devoluções)
         batch_size: Tamanho do batch para read
 
     Returns:
@@ -171,14 +184,21 @@ def categorizar_faltantes(connection, ids_faltantes, batch_size=500):
         'sem_vencimento': 0,
         'empresa_nao_mapeada': 0,
         'nao_posted': 0,
+        'intercompany': 0,
+        'devolucao': 0,
         'erro_leitura': 0,
         'total': len(ids_faltantes),
     }
 
     campos_minimos = [
         'id', 'company_id', 'x_studio_nf_e',
-        'date_maturity', 'parent_state'
+        'date_maturity', 'parent_state',
+        'partner_id',  # Para detectar transações intercompany
+        'balance', 'credit',  # Para detectar devoluções
     ]
+
+    # Cache de CNPJs por partner_id (preenchido incrementalmente entre batches)
+    partner_cnpj_cache = {}
 
     for i in range(0, len(ids_faltantes), batch_size):
         batch = ids_faltantes[i:i + batch_size]
@@ -187,6 +207,28 @@ def categorizar_faltantes(connection, ids_faltantes, batch_size=500):
             if not records:
                 resultado['erro_leitura'] += len(batch)
                 continue
+
+            # Buscar CNPJs dos parceiros não cacheados (para detectar intercompany)
+            partner_ids_novos = []
+            for r in records:
+                pid = r.get('partner_id')
+                if pid and isinstance(pid, (list, tuple)):
+                    pid_num = pid[0]
+                    if pid_num and pid_num not in partner_cnpj_cache:
+                        partner_ids_novos.append(pid_num)
+
+            if partner_ids_novos:
+                try:
+                    partners = connection.search_read(
+                        'res.partner',
+                        [['id', 'in', list(set(partner_ids_novos))]],
+                        ['id', 'l10n_br_cnpj'],
+                        limit=len(set(partner_ids_novos))
+                    )
+                    for p in (partners or []):
+                        partner_cnpj_cache[p['id']] = p.get('l10n_br_cnpj', '') or ''
+                except Exception:
+                    pass  # Não bloqueia — apenas não detecta intercompany neste batch
 
             for r in records:
                 company_id = r.get('company_id', [None, None])
@@ -197,8 +239,20 @@ def categorizar_faltantes(connection, ids_faltantes, batch_size=500):
                 vencimento = r.get('date_maturity')
                 parent_state = r.get('parent_state')
 
+                # Extrair partner CNPJ do cache
+                pid = r.get('partner_id')
+                partner_cnpj = ''
+                if pid and isinstance(pid, (list, tuple)):
+                    partner_cnpj = partner_cnpj_cache.get(pid[0], '')
+
                 if parent_state != 'posted':
                     resultado['nao_posted'] += 1
+                elif _is_intercompany(partner_cnpj):
+                    resultado['intercompany'] += 1
+                elif tipo == 'receber' and float(r.get('balance', 0) or 0) <= 0:
+                    resultado['devolucao'] += 1
+                elif tipo == 'pagar' and float(r.get('credit', 0) or 0) <= 0:
+                    resultado['devolucao'] += 1
                 elif not nf or nf is False:
                     resultado['sem_nf'] += 1
                 elif not vencimento or vencimento is False:
@@ -554,13 +608,13 @@ def reconciliar_tipo(connection, tipo, empresa_filtro=None,
     logger.info("\n[4/5] Categorizando faltantes...")
     categorias = {
         'elegiveis': [], 'sem_nf': 0, 'sem_vencimento': 0,
-        'empresa_nao_mapeada': 0, 'nao_posted': 0, 'erro_leitura': 0,
-        'total': 0,
+        'empresa_nao_mapeada': 0, 'nao_posted': 0, 'intercompany': 0,
+        'devolucao': 0, 'erro_leitura': 0, 'total': 0,
     }
 
     if faltam_no_local:
         categorias = categorizar_faltantes(
-            connection, list(faltam_no_local)
+            connection, list(faltam_no_local), tipo=tipo
         )
 
     # ---------------------------------------------------------------
@@ -588,6 +642,8 @@ def reconciliar_tipo(connection, tipo, empresa_filtro=None,
     logger.info(f"║    → Elegíveis (importáveis):            {len(categorias['elegiveis']):>10,}        ║")
     logger.info(f"║    → Sem NF-e:                           {categorias['sem_nf']:>10,}        ║")
     logger.info(f"║    → Sem vencimento:                     {categorias['sem_vencimento']:>10,}        ║")
+    logger.info(f"║    → Intercompany (grupo Nacom):         {categorias['intercompany']:>10,}        ║")
+    logger.info(f"║    → Devolução (venda/compra):           {categorias['devolucao']:>10,}        ║")
     logger.info(f"║    → Empresa não mapeada:                {categorias['empresa_nao_mapeada']:>10,}        ║")
     logger.info(f"║    → Não posted (race condition):        {categorias['nao_posted']:>10,}        ║")
     if categorias['erro_leitura'] > 0:
@@ -611,6 +667,7 @@ def reconciliar_tipo(connection, tipo, empresa_filtro=None,
         'sem_vencimento': categorias['sem_vencimento'],
         'empresa_nao_mapeada': categorias['empresa_nao_mapeada'],
         'nao_posted': categorias['nao_posted'],
+        'devolucao': categorias['devolucao'],
         'orfaos_locais': len(orfaos_locais),
     }
 
