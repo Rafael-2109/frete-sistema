@@ -303,7 +303,7 @@ class LancamentoOdooService:
 
         Critérios:
         - destino: UF do partner (transportadora) — SP=Interna(1), outro=Interestadual(2)
-        - regime: l10n_br_fiscal_type do partner — '1'=Simples(1), outro=Normal(3)
+        - regime: sempre Regime Normal (3) — campo fiscal_type indisponível via XML-RPC
 
         Fallback: Interestadual + Regime Normal (caso mais comum para transportadoras)
 
@@ -323,7 +323,7 @@ class LancamentoOdooService:
                 if po_data and po_data[0].get('partner_id'):
                     partner_id = po_data[0]['partner_id'][0]
                     partner_data = self.odoo.read(
-                        'res.partner', [partner_id], ['state_id', 'l10n_br_fiscal_type']
+                        'res.partner', [partner_id], ['state_id']
                     )
                     if partner_data:
                         partner = partner_data[0]
@@ -334,11 +334,6 @@ class LancamentoOdooService:
                             state_name = str(state_id[1])
                             if 'São Paulo' in state_name or state_name.strip().upper() == 'SP':
                                 destino = 1  # Interna
-
-                        # Regime fiscal da transportadora
-                        fiscal_type = partner.get('l10n_br_fiscal_type')
-                        if fiscal_type == '1':
-                            regime = 1  # Simples Nacional
             except Exception as e:
                 try:
                     current_app.logger.warning(

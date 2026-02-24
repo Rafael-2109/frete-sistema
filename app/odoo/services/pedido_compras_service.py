@@ -410,7 +410,7 @@ class PedidoComprasServiceOtimizado:
                     'id',
                     'nfe_infnfe_ide_nnf',            # Número da NF
                     'nfe_infnfe_ide_serie',          # Série
-                    'nfe_chNFe',                     # Chave de acesso (44 dígitos)
+                    'protnfe_infnfe_chnfe',           # Chave de acesso (44 dígitos)
                     'nfe_infnfe_ide_dhemi',          # Data de emissão
                     'nfe_infnfe_total_icmstot_vnf'   # Valor total
                 ]
@@ -709,7 +709,7 @@ class PedidoComprasServiceOtimizado:
             if dfe_info:
                 nf_numero = dfe_info.get('nfe_infnfe_ide_nnf')
                 nf_serie = dfe_info.get('nfe_infnfe_ide_serie')
-                nf_chave_acesso = dfe_info.get('nfe_chNFe')
+                nf_chave_acesso = dfe_info.get('protnfe_infnfe_chnfe')
                 nf_valor_total = Decimal(str(dfe_info.get('nfe_infnfe_total_icmstot_vnf') or 0)) if dfe_info.get('nfe_infnfe_total_icmstot_vnf') else None
 
                 # Converter data de emissão
@@ -943,7 +943,7 @@ class PedidoComprasServiceOtimizado:
                     pedido_existente.nf_serie = novo_nf_serie
                     alterado = True
 
-                novo_nf_chave = dfe_info.get('nfe_chNFe')
+                novo_nf_chave = dfe_info.get('protnfe_infnfe_chnfe')
                 if novo_nf_chave and pedido_existente.nf_chave_acesso != novo_nf_chave:
                     pedido_existente.nf_chave_acesso = novo_nf_chave
                     alterado = True

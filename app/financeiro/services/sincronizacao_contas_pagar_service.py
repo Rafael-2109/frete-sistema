@@ -198,6 +198,7 @@ class SincronizacaoContasAPagarService:
                 try:
                     self._processar_registro(row, cnpj_map, contas_por_line_id, contas_por_chave)
                 except Exception as e:
+                    db.session.rollback()
                     logger.error(f"   ❌ Erro no registro {idx}: {e}")
                     self.estatisticas['erros'] += 1
                     continue
@@ -364,6 +365,7 @@ class SincronizacaoContasAPagarService:
                 try:
                     self._processar_registro(row, cnpj_map, contas_por_line_id, contas_por_chave)
                 except Exception as e:
+                    db.session.rollback()
                     logger.error(f"   ❌ Erro no registro {idx}: {e}")
                     self.estatisticas['erros'] += 1
                     continue
