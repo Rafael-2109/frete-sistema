@@ -503,20 +503,96 @@ try:
                 png_bytes = await _page.screenshot(type="png", full_page=full_page)
                 capture_desc = "pagina inteira" if full_page else "viewport"
 
-            # Salvar arquivo e gerar URL
+            # Salvar PNG original no disco (para download via URL)
             filename = _save_screenshot(png_bytes)
             url = f"/agente/api/files/screenshots/{filename}"
 
-            # Codificar em base64 para ImageContent
-            b64_data = base64.b64encode(png_bytes).decode("utf-8")
+            original_size_kb = len(png_bytes) / 1024
+
+            # ─── Compressão para manter dentro do buffer do SDK ───
+            # O SDK tem buffer de 10MB, mas base64 adiciona 33% overhead.
+            # Limite seguro: 750KB de imagem comprimida (~1MB em base64).
+            # Estratégia: PNG → JPEG quality 80% → resize se necessário.
+            MAX_IMAGE_BYTES = 768_000  # 750KB
+            image_bytes = png_bytes
+            mime_type = "image/png"
+
+            if len(png_bytes) > MAX_IMAGE_BYTES:
+                try:
+                    from io import BytesIO
+                    from PIL import Image
+
+                    img = Image.open(BytesIO(png_bytes))
+                    if img.mode == "RGBA":
+                        img = img.convert("RGB")
+
+                    # Tentativa 1: JPEG quality 80%
+                    buf = BytesIO()
+                    img.save(buf, format="JPEG", quality=80, optimize=True)
+                    image_bytes = buf.getvalue()
+                    mime_type = "image/jpeg"
+
+                    # Tentativa 2: se ainda grande, reduzir resolução 50%
+                    if len(image_bytes) > MAX_IMAGE_BYTES:
+                        w, h = img.size
+                        img_resized = img.resize((w // 2, h // 2), Image.LANCZOS)
+                        buf = BytesIO()
+                        img_resized.save(buf, format="JPEG", quality=75, optimize=True)
+                        image_bytes = buf.getvalue()
+                        logger.info(
+                            f"[BROWSER] Screenshot reduzido: {w}x{h} → {w//2}x{h//2}, "
+                            f"{original_size_kb:.0f}KB → {len(image_bytes)/1024:.0f}KB"
+                        )
+
+                    # Tentativa 3: se AINDA grande, reduzir para 25%
+                    if len(image_bytes) > MAX_IMAGE_BYTES:
+                        w, h = img.size
+                        img_small = img.resize((w // 4, h // 4), Image.LANCZOS)
+                        buf = BytesIO()
+                        img_small.save(buf, format="JPEG", quality=60, optimize=True)
+                        image_bytes = buf.getvalue()
+                        logger.warning(
+                            f"[BROWSER] Screenshot agressivamente reduzido: {w}x{h} → {w//4}x{h//4}, "
+                            f"{original_size_kb:.0f}KB → {len(image_bytes)/1024:.0f}KB"
+                        )
+                except ImportError:
+                    # Pillow não instalado — fallback: retornar apenas URL (sem imagem inline)
+                    logger.warning(
+                        f"[BROWSER] Pillow não disponível para comprimir screenshot "
+                        f"de {original_size_kb:.0f}KB. Retornando apenas URL."
+                    )
+                    title = await _page.title()
+                    page_url = _page.url
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    f"Screenshot capturado ({capture_desc}): {original_size_kb:.0f}KB "
+                                    f"(muito grande para inline, disponível via URL)\n"
+                                    f"Pagina: {title} ({page_url})\n"
+                                    f"URL da imagem: {url}\n\n"
+                                    f"Para exibir ao usuario, inclua no markdown:\n"
+                                    f"![Screenshot]({url})"
+                                ),
+                            },
+                        ],
+                    }
+                except Exception as compress_err:
+                    logger.warning(f"[BROWSER] Erro ao comprimir screenshot: {compress_err}")
+                    # Prossegue com PNG original (pode falhar no SDK se > buffer)
+
+            b64_data = base64.b64encode(image_bytes).decode("utf-8")
+            final_size_kb = len(image_bytes) / 1024
 
             # Log de tamanho
-            size_kb = len(png_bytes) / 1024
-            size_mb = size_kb / 1024
-            if size_mb > 5:
-                logger.warning(f"[BROWSER] Screenshot grande: {size_mb:.1f}MB ({capture_desc})")
+            compression_info = ""
+            if mime_type == "image/jpeg":
+                compression_info = f" (comprimido de {original_size_kb:.0f}KB PNG)"
+            if final_size_kb > 1024:
+                logger.warning(f"[BROWSER] Screenshot grande: {final_size_kb/1024:.1f}MB ({capture_desc}){compression_info}")
             else:
-                logger.info(f"[BROWSER] Screenshot capturado: {size_kb:.0f}KB ({capture_desc}) → {filename}")
+                logger.info(f"[BROWSER] Screenshot capturado: {final_size_kb:.0f}KB ({capture_desc}) → {filename}{compression_info}")
 
             title = await _page.title()
             page_url = _page.url
@@ -526,14 +602,14 @@ try:
                     {
                         "type": "image",
                         "data": b64_data,
-                        "mimeType": "image/png",
+                        "mimeType": mime_type,
                     },
                     {
                         "type": "text",
                         "text": (
-                            f"Screenshot capturado ({capture_desc}): {size_kb:.0f}KB\n"
+                            f"Screenshot capturado ({capture_desc}): {final_size_kb:.0f}KB\n"
                             f"Pagina: {title} ({page_url})\n"
-                            f"URL da imagem: {url}\n\n"
+                            f"URL da imagem (PNG original): {url}\n\n"
                             f"Para exibir ao usuario, inclua no markdown:\n"
                             f"![Screenshot]({url})"
                         ),

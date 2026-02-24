@@ -37,7 +37,7 @@ NUNCA substituir `threading.local()` por variavel global — causa race conditio
 
 NUNCA remover o `yield None` no `finally` do generator — frontend trava esperando eventos.
 
-**`streaming_done_event`** (`client.py:1199`): `asyncio.Event()` que controla o prompt generator. Se NAO chamar `.set()` em QUALQUER error path, o generator fica preso em `done_event.wait(timeout=600)` → processo zombie por 10min. Chamado atualmente em 3 locais: linhas 1489, 1636, 1683. **Ao adicionar NOVO error handler em `_stream_response()`, DEVE chamar `streaming_done_event.set()`.**
+**`streaming_done_event`** (`client.py:1319`): `asyncio.Event()` que controla o prompt generator. Se NAO chamar `.set()` em QUALQUER error path, o generator fica preso em `done_event.wait(timeout=600)` → processo zombie por 10min. Chamado em 6 locais: ResultMessage (1617), ProcessError (1674), CLINotFoundError (1695), CLIJSONDecodeError (1716), BaseExceptionGroup (1773), Generic Exception (1820). **Ao adicionar NOVO error handler em `_stream_response()`, DEVE chamar `streaming_done_event.set()`.**
 
 ### AskUserQuestion: blocking cross-arquivo
 Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes.py`
@@ -83,6 +83,12 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 
 ### system_prompt.md vs CLAUDE.md
 `prompts/system_prompt.md` = prompt do agente web (usuarios finais). Este arquivo = Claude Code (dev). NUNCA misturar.
+
+### SDK max_buffer_size: 10MB
+`client.py:561` configura `max_buffer_size=10_000_000` (10MB). Default do SDK e 1MB — insuficiente para screenshots base64 (PNG full-page: 1.3-2.6MB). Se reduzir abaixo de 2MB, browser_screenshot volta a crashar com "JSON message exceeded maximum buffer size".
+
+### Screenshot compression: 750KB limit
+`playwright_mcp_tool.py:516` comprime PNG → JPEG (quality 80%) se > 750KB. Escalonamento: JPEG 80% → resize 50% → resize 25%. PNG original salvo em disco (URL funciona). Requer Pillow (`pillow` no requirements.txt).
 
 ### Prerequisitos de execucao
 1. **`set_current_user_id()` ANTES do stream** — MCP tools (`memory_mcp_tool.py:33`, `session_search_tool.py:25`) usam `ContextVar` independentes. Se esquecer: `RuntimeError("user_id nao definido")`. CADA tool tem seu PROPRIO ContextVar.

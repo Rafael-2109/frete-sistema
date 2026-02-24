@@ -552,6 +552,14 @@ Nunca invente informações."""
             # Máximo de turnos
             "max_turns": max_turns,
 
+            # Buffer size para JSON messages do subprocess CLI.
+            # Default do SDK: 1MB (1_048_576 bytes) — insuficiente para
+            # tool results grandes (screenshots base64, HTML pesado).
+            # Um screenshot PNG full-page (1280x720) em base64 gera ~1.3-2.6MB.
+            # 10MB acomoda screenshots + margem para JSON envelope.
+            # FONTE: claude_agent_sdk/_internal/subprocess_cli.py:29
+            "max_buffer_size": 10_000_000,  # 10MB
+
             # System Prompt: preset "claude_code" para ter tools funcionando
             "system_prompt": {
                 "type": "preset",
@@ -1659,6 +1667,11 @@ Nunca invente informações."""
                              'tool_calls': len(tool_calls), 'error_recovery': True},
                     metadata={'error_type': 'process_error'}
                 )
+            # FIX: Liberar prompt generator para evitar zombie de 10min.
+            # Sem isso, _make_streaming_prompt() fica bloqueado em
+            # done_event.wait(timeout=600) — processo zombie por até 10 min.
+            # Ref: CLAUDE.md R5 (streaming_done_event)
+            streaming_done_event.set()
 
         except CLINotFoundError as e:
             elapsed_total = time.time() - stream_start_time
@@ -1678,6 +1691,8 @@ Nunca invente informações."""
                              'error_recovery': True},
                     metadata={'error_type': 'cli_not_found'}
                 )
+            # FIX: Liberar prompt generator (mesmo motivo do ProcessError acima)
+            streaming_done_event.set()
 
         except CLIJSONDecodeError as e:
             elapsed_total = time.time() - stream_start_time
@@ -1697,6 +1712,8 @@ Nunca invente informações."""
                              'error_recovery': True},
                     metadata={'error_type': 'json_decode_error'}
                 )
+            # FIX: Liberar prompt generator (mesmo motivo do ProcessError acima)
+            streaming_done_event.set()
 
         except BaseExceptionGroup as eg:
             # Python 3.11+: asyncio.TaskGroup envolve erros de tools paralelas
