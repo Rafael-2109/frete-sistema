@@ -396,31 +396,24 @@ def api_listar_snapshots(conta_id):
 def api_importar_baixas(conta_id):
     """
     Importa baixas do Odoo para uma conta específica.
-    Executa a importação on-demand para um título específico.
+    Executa a importação on-demand para um título específico
+    usando SincronizacaoBaixasService (substituto do script deprecated).
     """
     try:
         from app.financeiro.models import ContasAReceber
-        from app.odoo.utils.connection import get_odoo_connection
+        from app.financeiro.services.sincronizacao_baixas_service import SincronizacaoBaixasService
 
         conta = ContasAReceber.query.get_or_404(conta_id)
 
-        # Conectar ao Odoo
-        connection = get_odoo_connection()
-        if not connection.authenticate():
-            return jsonify({'success': False, 'error': 'Falha na autenticação com Odoo'}), 500
-
-        # Importar usando o serviço
-        from scripts.importar_baixas_odoo import ImportadorBaixasOdoo
-
-        importador = ImportadorBaixasOdoo(connection)
-        qtd_importada = importador.importar_titulo(conta)
+        service = SincronizacaoBaixasService()
+        qtd_importada = service._processar_titulo(conta)
         db.session.commit()
 
         return jsonify({
             'success': True,
             'message': f'{qtd_importada} reconciliações importadas',
             'quantidade': qtd_importada,
-            'estatisticas': importador.estatisticas
+            'estatisticas': service.estatisticas
         })
 
     except Exception as e:
