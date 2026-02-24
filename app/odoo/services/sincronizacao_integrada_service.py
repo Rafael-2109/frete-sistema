@@ -35,26 +35,30 @@ class SincronizacaoIntegradaService:
         self.faturamento_service = FaturamentoService()
         self.carteira_service = CarteiraService()
     
-    def executar_sincronizacao_completa_segura(self, usar_filtro_carteira=True):
+    def executar_sincronizacao_completa_segura(self, usar_filtro_carteira=True, periodo_minutos=11520):
         """
         🔄 SINCRONIZAÇÃO SEGURA COMPLETA
-        
+
         Executa na sequência CORRETA para máxima segurança:
         1. 📊 FATURAMENTO primeiro (preserva NFs)
         2. 🔍 Validação de integridade
         3. 🔄 CARTEIRA depois (sem risco)
-        
+
         Args:
             usar_filtro_carteira (bool): Filtrar apenas carteira pendente
-            
+            periodo_minutos (int): Janela de busca no Odoo em minutos (default: 11520 = 8 dias)
+
         Returns:
             dict: Resultado completo da operação segura
         """
         inicio_operacao = datetime.now()
         
         try:
-            logger.info("🚀 INICIANDO SINCRONIZAÇÃO INTEGRADA SEGURA (FATURAMENTO → CARTEIRA)")
-            
+            horas = periodo_minutos / 60
+            dias = horas / 24
+            logger.info(f"🚀 INICIANDO SINCRONIZAÇÃO INTEGRADA SEGURA (FATURAMENTO → CARTEIRA)")
+            logger.info(f"   📊 Período de recuperação: {dias:.1f} dias ({periodo_minutos} minutos)")
+
             resultado_completo = {
                 'sucesso': False,
                 'operacao_completa': False,
@@ -69,7 +73,7 @@ class SincronizacaoIntegradaService:
             logger.info("📊 ETAPA 1/3: Sincronizando FATURAMENTO (prioridade de segurança)...")
             resultado_completo['etapas_executadas'].append('INICIANDO_FATURAMENTO')
             
-            resultado_faturamento = self._sincronizar_faturamento_seguro()
+            resultado_faturamento = self._sincronizar_faturamento_seguro(periodo_minutos=periodo_minutos)
             
             if not resultado_faturamento.get('sucesso', False):
                 # Falha no faturamento = PARAR TUDO
@@ -117,7 +121,7 @@ class SincronizacaoIntegradaService:
             resultado_carteira = self.carteira_service.sincronizar_carteira_odoo_com_gestao_quantidades(
                 usar_filtro_pendente=usar_filtro_carteira,
                 modo_incremental=True,
-                minutos_janela=6360,
+                minutos_janela=periodo_minutos,
                 primeira_execucao=False
             )
             
@@ -176,25 +180,27 @@ class SincronizacaoIntegradaService:
                 'mensagem': f'❌ Erro na sincronização integrada: {str(e)}'
             }
     
-    def _sincronizar_faturamento_seguro(self):
+    def _sincronizar_faturamento_seguro(self, periodo_minutos=11520):
         """
-        📊 SINCRONIZAÇÃO DE FALLBACK - FATURAMENTO COM LIMITE DE 20.000 LINHAS
+        📊 SINCRONIZAÇÃO DE FALLBACK - FATURAMENTO
 
         Executa sincronização como fallback:
-        1. Busca últimas 20.000 linhas de faturamento
+        1. Busca faturamento dentro da janela configurável
         2. Processa movimentações de estoque automaticamente
+
+        Args:
+            periodo_minutos (int): Janela de busca em minutos (default: 11520 = 8 dias)
 
         IMPORTANTE: Método usado apenas como fallback manual ou recuperação
         """
         try:
-            logger.info("📊 Executando sincronização FALLBACK de faturamento...")
-            logger.info("   ⚠️ MODO FALLBACK: Buscando últimas 20.000 linhas")
+            dias = periodo_minutos / 60 / 24
+            logger.info(f"📊 Executando sincronização FALLBACK de faturamento ({dias:.1f} dias)...")
 
-            # ✅ EXECUTAR SINCRONIZAÇÃO DE FALLBACK COM LIMITE
-            # Usar janela muito grande para pegar tudo recente (30 dias = 43.200 minutos)
+            # ✅ EXECUTAR SINCRONIZAÇÃO DE FALLBACK
             resultado_fat = self.faturamento_service.sincronizar_faturamento_incremental(
                 primeira_execucao=False,
-                minutos_status=43200      # 30 dias também para status
+                minutos_status=periodo_minutos   # Configurável pelo usuário
             )
 
             # Nota: O Odoo tem limite interno que evita trazer mais de 20.000 registros

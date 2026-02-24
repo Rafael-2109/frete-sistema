@@ -133,6 +133,22 @@
                                             </label>
                                         </div>
 
+                                        <div class="mb-3">
+                                            <label for="periodo-recuperacao" class="form-label">
+                                                <strong>Período de recuperação</strong>
+                                                <small class="text-muted d-block">
+                                                    Janela de busca no Odoo (quanto maior, mais dados processados)
+                                                </small>
+                                            </label>
+                                            <select name="periodo_recuperacao" id="periodo-recuperacao" class="form-select">
+                                                <option value="2880">2 dias</option>
+                                                <option value="5760">4 dias (= scheduler)</option>
+                                                <option value="11520" selected>8 dias (padrão)</option>
+                                                <option value="20160">14 dias</option>
+                                                <option value="43200">30 dias (máximo)</option>
+                                            </select>
+                                        </div>
+
                                         <button type="submit" class="btn btn-success btn-lg" id="btn-sync-seguro">
                                             <i class="fas fa-shield-alt"></i>
                                             <strong>SINCRONIZAR TUDO (SEGURO)</strong>

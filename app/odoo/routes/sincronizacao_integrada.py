@@ -167,12 +167,16 @@ def executar_sincronizacao_segura():
     try:
         # Parâmetros da requisição
         usar_filtro_carteira = request.form.get('usar_filtro_carteira') == 'on'
-        
-        logger.info(f"🚀 INICIANDO sincronização integrada segura (filtro carteira: {usar_filtro_carteira})")
-        
+        periodo_minutos = request.form.get('periodo_recuperacao', 11520, type=int)
+        # Clampar entre 120 (2h) e 43200 (30d) para segurança
+        periodo_minutos = max(120, min(43200, periodo_minutos))
+
+        logger.info(f"🚀 INICIANDO sincronização integrada segura (filtro carteira: {usar_filtro_carteira}, período: {periodo_minutos} min)")
+
         # ✅ EXECUTAR SINCRONIZAÇÃO INTEGRADA
         resultado = sync_service.executar_sincronizacao_completa_segura(
-            usar_filtro_carteira=usar_filtro_carteira
+            usar_filtro_carteira=usar_filtro_carteira,
+            periodo_minutos=periodo_minutos
         )
         
         # ✅ PROCESSAR RESULTADO E MOSTRAR FEEDBACK DETALHADO
