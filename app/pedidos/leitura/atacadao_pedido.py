@@ -14,6 +14,7 @@ import re
 from typing import Dict, List, Any, Optional
 from decimal import Decimal
 from .base import PDFExtractor
+from app import db
 
 
 class AtacadaoPedidoExtractor(PDFExtractor):
@@ -388,7 +389,6 @@ class AtacadaoPedidoExtractor(PDFExtractor):
         # 1. Tenta buscar no RelatorioFaturamentoImportado
         try:
             from app.faturamento.models import RelatorioFaturamentoImportado
-            from app import db
 
             cliente = db.session.query(RelatorioFaturamentoImportado).filter(
                 RelatorioFaturamentoImportado.cnpj_cliente == cnpj,
@@ -405,6 +405,7 @@ class AtacadaoPedidoExtractor(PDFExtractor):
                 return resultado
 
         except Exception as e:
+            db.session.rollback()  # Limpa transação inválida para queries seguintes
             self.warnings.append(f"Erro ao buscar cliente local {cnpj}: {e}")
 
         # 2. Fallback: Busca no Odoo (res.partner)
@@ -509,7 +510,6 @@ class AtacadaoPedidoExtractor(PDFExtractor):
 
         try:
             from app.portal.atacadao.models import ProdutoDeParaAtacadao
-            from app import db
 
             # Normaliza código removendo zeros à esquerda
             codigo_normalizado = codigo_atacadao.lstrip('0') if codigo_atacadao else ''
@@ -544,6 +544,7 @@ class AtacadaoPedidoExtractor(PDFExtractor):
             return result
 
         except Exception as e:
+            db.session.rollback()  # Limpa transação inválida para queries seguintes
             self.warnings.append(f"Erro ao buscar De-Para para código {codigo_atacadao}: {e}")
             return {
                 'nosso_codigo': None,

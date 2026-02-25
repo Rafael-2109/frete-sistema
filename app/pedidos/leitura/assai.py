@@ -26,6 +26,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from decimal import Decimal
 import pdfplumber
 from .base import PDFExtractor
+from app import db
 
 
 class AssaiExtractor(PDFExtractor):
@@ -316,6 +317,7 @@ class AssaiExtractor(PDFExtractor):
             self.filial_cache[numero_loja] = result
 
         except Exception as e:
+            db.session.rollback()  # Limpa transação inválida para queries seguintes
             self.warnings.append(f"Erro ao buscar filial {numero_loja}: {e}")
 
         return result
@@ -337,7 +339,6 @@ class AssaiExtractor(PDFExtractor):
 
         try:
             from app.portal.sendas.models import ProdutoDeParaSendas
-            from app import db
 
             # Busca no De-Para
             depara = ProdutoDeParaSendas.query.filter_by(
@@ -356,6 +357,7 @@ class AssaiExtractor(PDFExtractor):
             self.depara_cache[codigo_sendas] = result
 
         except Exception as e:
+            db.session.rollback()  # Limpa transação inválida para queries seguintes
             self.warnings.append(f"Erro ao buscar De-Para para código {codigo_sendas}: {e}")
 
         return result
@@ -375,7 +377,6 @@ class AssaiExtractor(PDFExtractor):
 
         try:
             from app.producao.models import CadastroPalletizacao
-            from app import db
 
             produto = CadastroPalletizacao.query.filter_by(
                 cod_produto=nosso_codigo,
@@ -393,6 +394,7 @@ class AssaiExtractor(PDFExtractor):
             self.produto_cache[nosso_codigo] = result
 
         except Exception as e:
+            db.session.rollback()  # Limpa transação inválida para queries seguintes
             self.warnings.append(f"Erro ao buscar produto {nosso_codigo}: {e}")
 
         return result
