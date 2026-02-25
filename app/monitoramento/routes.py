@@ -68,16 +68,21 @@ _CONTATOS_TTL = 60
 
 
 def _get_contatos_agendamento():
-    """Retorna dict {cnpj: ContatoAgendamento} com CNPJs originais e limpos. Cache 60s."""
+    """Retorna dict {cnpj: {forma, contato, observacao}} com CNPJs originais e limpos. Cache 60s.
+
+    IMPORTANTE: Armazena dicts simples (não instâncias ORM) para evitar
+    DetachedInstanceError quando o cache sobrevive ao request que o populou.
+    """
     global _contatos_cache, _contatos_cache_ts
     if _contatos_cache is not None and (time.time() - _contatos_cache_ts) < _CONTATOS_TTL:
         return _contatos_cache
     contatos = {}
     for c in ContatoAgendamento.query.all():
-        contatos[c.cnpj] = c
+        dados = {'forma': c.forma, 'contato': c.contato, 'observacao': c.observacao}
+        contatos[c.cnpj] = dados
         if c.cnpj:
             cnpj_limpo = c.cnpj.replace('.', '').replace('-', '').replace('/', '')
-            contatos[cnpj_limpo] = c
+            contatos[cnpj_limpo] = dados
     _contatos_cache = contatos
     _contatos_cache_ts = time.time()
     return contatos
@@ -88,7 +93,8 @@ def _get_cnpjs_que_precisam_agendamento():
     contatos = _get_contatos_agendamento()
     cnpjs = set()
     for cnpj, contato in contatos.items():
-        if contato.forma and contato.forma != '' and contato.forma != 'SEM AGENDAMENTO':
+        forma = contato.get('forma', '')
+        if forma and forma != 'SEM AGENDAMENTO':
             cnpjs.add(cnpj)
     return cnpjs
 

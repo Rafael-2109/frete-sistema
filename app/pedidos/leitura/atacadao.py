@@ -14,6 +14,7 @@ class AtacadaoExtractor(PDFExtractor):
         super().__init__()
         self.formato = "ATACADAO_PROPOSTA"
         self.depara_cache = {}  # Cache para conversões de código
+        self._odoo_client = None  # Conexão Odoo reutilizada entre filiais
         
     def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
@@ -276,7 +277,9 @@ class AtacadaoExtractor(PDFExtractor):
     def _get_dados_cliente_odoo(self, cnpj: str) -> Dict[str, Any]:
         """
         Busca dados do cliente no Odoo via res.partner
-        Usa OdooConnection com Circuit Breaker para maior estabilidade
+        Usa OdooConnection com Circuit Breaker para maior estabilidade.
+        Reutiliza mesma conexão entre filiais para evitar re-autenticação
+        (cada get_odoo_connection() = nova instância = ~2s de handshake).
         """
         from app.odoo.utils.connection import get_odoo_connection
 
@@ -287,7 +290,10 @@ class AtacadaoExtractor(PDFExtractor):
             'codigo_ibge': None
         }
 
-        client = get_odoo_connection()
+        # Reutiliza conexão Odoo entre filiais (evita N re-autenticações)
+        if self._odoo_client is None:
+            self._odoo_client = get_odoo_connection()
+        client = self._odoo_client
 
         # Limpa CNPJ para busca (remove formatação)
         cnpj_limpo = re.sub(r'\D', '', cnpj)
