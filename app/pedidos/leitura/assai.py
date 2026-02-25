@@ -38,10 +38,13 @@ class AssaiExtractor(PDFExtractor):
         self.filial_cache = {}  # Cache para conversões de filial
         self.produto_cache = {}  # Cache para dados de produto (nome)
 
-    def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
+    def extract(self, pdf_path: str, pre_extracted_text: str = None) -> List[Dict[str, Any]]:
         """
         Extrai dados do PDF do Assaí/Sendas
         Retorna lista de dicionários com os dados extraídos, um por item/filial
+
+        Nota: pre_extracted_text é ignorado pois este extractor usa pdfplumber
+        page objects (não apenas texto) para extrair dados tabulares.
         """
         all_data = []
 

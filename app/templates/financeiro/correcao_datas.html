@@ -183,9 +183,16 @@
 
 <!-- Loading Overlay -->
 <div class="fin-loading-overlay" id="loadingOverlay">
-    <div style="text-align: center;">
+    <div style="text-align: center; max-width: 400px;">
         <div class="fin-loading__spinner" style="width: 50px; height: 50px; margin-bottom: 1rem;"></div>
-        <div style="color: var(--fin-text-primary);" id="loadingText">Processando...</div>
+        <div style="color: var(--fin-text-primary); margin-bottom: 0.5rem;" id="loadingText">Processando...</div>
+        <!-- Barra de progresso (visivel durante job async) -->
+        <div id="progressContainer" style="display: none;">
+            <div style="background: var(--fin-bg-tertiary); border-radius: 8px; height: 8px; margin: 0.75rem 0; overflow: hidden;">
+                <div id="progressBar" style="background: var(--fin-accent-success); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <div style="color: var(--fin-text-secondary); font-size: 0.8rem;" id="progressDetail">0 / 0</div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -363,55 +370,135 @@ async function corrigirSelecionados() {
     if (selecionados.size === 0) { toastr.warning('Selecione pelo menos um item'); return; }
     if (!confirm(`Corrigir ${selecionados.size} documento(s)? Esta acao alterara os dados no Odoo.`)) return;
 
-    showLoading(`Corrigindo ${selecionados.size} documento(s)...`);
-
-    try {
-        const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: Array.from(selecionados) })
-        });
-        const data = await response.json();
-
-        if (data.sucesso) {
-            toastr.success(`Correcao concluida! ${data.corrigidos} corrigidos, ${data.erros} erros.`);
-            selecionados.clear();
-            carregarDados();
-            atualizarEstatisticas();
-        } else {
-            toastr.error('Erro: ' + data.erro);
-        }
-    } catch (error) {
-        toastr.error('Erro na correcao');
-    } finally {
-        hideLoading();
-    }
+    await _enviarCorrecao(Array.from(selecionados));
 }
 
 async function corrigirUm(id) {
     if (!confirm('Corrigir este documento?')) return;
-    showLoading('Corrigindo documento...');
+    await _enviarCorrecao([id]);
+}
+
+/**
+ * Envia IDs para correcao assincrona e inicia polling de progresso.
+ * O backend enfileira um job RQ e retorna job_id imediatamente.
+ */
+async function _enviarCorrecao(ids) {
+    showLoading(`Enviando ${ids.length} documento(s) para correcao...`);
+    document.getElementById('progressContainer').style.display = 'none';
 
     try {
         const response = await fetch('/financeiro/correcao-datas/api/corrigir', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: [id] })
+            body: JSON.stringify({ ids: ids })
         });
         const data = await response.json();
 
-        if (data.sucesso && data.corrigidos > 0) {
-            toastr.success('Documento corrigido!');
-            carregarDados();
-            atualizarEstatisticas();
+        if (data.sucesso && data.job_id) {
+            // Mostra barra de progresso e inicia polling
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressDetail').textContent = `0 / ${data.total}`;
+            document.getElementById('loadingText').textContent = 'Processando no servidor...';
+
+            _pollProgresso(data.job_id, data.total);
         } else {
-            toastr.error('Erro: ' + (data.detalhes?.[0]?.erro || data.erro || 'Erro desconhecido'));
+            hideLoading();
+            toastr.error('Erro: ' + (data.erro || 'Erro desconhecido'));
         }
     } catch (error) {
-        toastr.error('Erro na correcao');
-    } finally {
         hideLoading();
+        toastr.error('Erro ao enviar correcao');
+        console.error(error);
     }
+}
+
+/**
+ * Polling de progresso do job de correcao via Redis.
+ * Consulta a cada 2 segundos ate o job finalizar.
+ */
+function _pollProgresso(jobId, total) {
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch(`/financeiro/correcao-datas/api/progresso/${jobId}`);
+            const data = await response.json();
+
+            if (!data.sucesso) {
+                clearInterval(interval);
+                hideLoading();
+                toastr.error('Erro ao consultar progresso');
+                return;
+            }
+
+            // Atualiza UI com progresso
+            const processados = data.processados || 0;
+            const sucesso = data.sucesso_count || 0;
+            const erros = data.erros || 0;
+            const totalReal = data.total || total;
+            const pct = totalReal > 0 ? Math.round((processados / totalReal) * 100) : 0;
+
+            document.getElementById('progressBar').style.width = pct + '%';
+            document.getElementById('progressDetail').textContent =
+                `${processados} / ${totalReal} (${sucesso} OK, ${erros} erro${erros !== 1 ? 's' : ''})`;
+            document.getElementById('loadingText').textContent =
+                data.item_atual || 'Processando...';
+
+            // Verifica se finalizou
+            const status = data.status || '';
+            if (status === 'concluido' || status === 'concluido_com_erros' || status === 'erro') {
+                clearInterval(interval);
+                hideLoading();
+
+                if (status === 'concluido') {
+                    toastr.success(`Correcao concluida! ${sucesso} documento(s) corrigido(s).`);
+                } else if (status === 'concluido_com_erros') {
+                    toastr.warning(`Concluido com erros: ${sucesso} corrigido(s), ${erros} erro(s).`);
+                } else {
+                    toastr.error('Erro no processamento: ' + (data.item_atual || ''));
+                }
+
+                selecionados.clear();
+                carregarDados();
+                atualizarEstatisticas();
+                return;
+            }
+
+            // Verifica status RQ (fallback se Redis nao tem dados)
+            if (data.status_display === 'Concluido' || data.status === 'finished') {
+                clearInterval(interval);
+                hideLoading();
+
+                const result = data.result;
+                if (result) {
+                    const msg = `${result.corrigidos || 0} corrigido(s), ${result.erros || 0} erro(s)`;
+                    if (result.erros > 0) {
+                        toastr.warning('Concluido com erros: ' + msg);
+                    } else {
+                        toastr.success('Correcao concluida! ' + msg);
+                    }
+                } else {
+                    toastr.success('Correcao concluida!');
+                }
+
+                selecionados.clear();
+                carregarDados();
+                atualizarEstatisticas();
+                return;
+            }
+
+            if (data.status === 'failed' || data.status_display === 'Falhou') {
+                clearInterval(interval);
+                hideLoading();
+                toastr.error('Job falhou: ' + (data.error || 'Erro desconhecido'));
+                carregarDados();
+                return;
+            }
+
+        } catch (error) {
+            console.error('Erro no polling:', error);
+            // Nao para o polling em caso de erro de rede temporario
+        }
+    }, 2000);  // Polling a cada 2 segundos
 }
 
 async function resetarErros() {

@@ -11,7 +11,7 @@ Fluxo:
 7. Inserção Odoo → sale.order via XML-RPC
 """
 
-from flask import Blueprint, render_template, request, jsonify, send_file, flash, redirect, url_for, session
+from flask import Blueprint, render_template, request, jsonify, send_file, flash, redirect, url_for
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
@@ -89,6 +89,18 @@ def upload():
     - Lista de itens sem De-Para
     """
     try:
+        # Limpeza lazy de registros expirados (>24h, status PROCESSADO ou ERRO)
+        try:
+            removidos = PedidoImportacaoTemp.limpar_expirados()
+            if removidos > 0:
+                db.session.commit()
+                import logging
+                logging.getLogger(__name__).info(
+                    f"[Upload] Limpeza lazy: {removidos} registro(s) expirado(s) removido(s)"
+                )
+        except Exception:
+            db.session.rollback()
+
         # Verifica se arquivo foi enviado
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': 'Nenhum arquivo enviado'}), 400
@@ -260,19 +272,7 @@ def upload():
             db.session.add(registro_temp)
             db.session.commit()
 
-            # Também mantém na session para compatibilidade temporária
             session_key = registro_temp.chave_importacao
-            session[session_key] = {
-                'data': data_serializable,
-                'summary': summary,
-                'identificacao': identificacao,
-                'validacao_precos': validacao_precos,
-                'itens_sem_depara': itens_sem_depara,
-                's3_path': s3_path,
-                'filename': filename,
-                'timestamp': agora_utc_naive().isoformat(),
-                'usuario': usuario
-            }
 
             response_data = {
                 'success': True,
@@ -441,9 +441,6 @@ def inserir_odoo():
         registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
 
         if not registro_temp:
-            # Fallback para session (compatibilidade temporária)
-            if session_key in session:
-                return _inserir_odoo_via_session(session_key, cnpj_filial, justificativa_global, justificativas_por_filial)
             return jsonify({'success': False, 'error': 'Importação não encontrada ou expirada'}), 400
 
         # 🔧 EXTRAI TODOS OS DADOS ANTES das operações longas para evitar perda de sessão
@@ -611,135 +608,6 @@ def inserir_odoo():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
-
-
-def _inserir_odoo_via_session(session_key, cnpj_filial, justificativa_global, justificativas_por_filial):
-    """
-    Fallback: Insere usando dados da session (compatibilidade temporária)
-    TODO: Remover após migração completa
-    """
-    pedido_data = session[session_key]
-    summary = pedido_data.get('summary', {})
-    identificacao = pedido_data.get('identificacao', {})
-    validacao_precos = pedido_data.get('validacao_precos', {})
-    itens_sem_depara = pedido_data.get('itens_sem_depara', [])
-
-    rede = identificacao.get('rede', 'DESCONHECIDA')
-    tipo_doc = identificacao.get('tipo', 'DESCONHECIDO')
-    numero_doc = identificacao.get('numero_documento', '')
-    s3_path = pedido_data.get('s3_path', '')
-    usuario = pedido_data.get('usuario', str(current_user.id))
-
-    service = get_odoo_service()
-    resultados = []
-    filiais_para_inserir = summary.get('por_filial', [])
-
-    if cnpj_filial:
-        filiais_para_inserir = [f for f in filiais_para_inserir if f.get('cnpj') == cnpj_filial]
-        itens_sem_depara_filial = [i for i in itens_sem_depara if i.get('cnpj_filial') == cnpj_filial]
-        if itens_sem_depara_filial:
-            return jsonify({
-                'success': False,
-                'error': 'Esta filial possui itens sem De-Para.',
-                'itens_sem_depara': itens_sem_depara_filial
-            }), 400
-    elif itens_sem_depara:
-        return jsonify({
-            'success': False,
-            'error': 'Existem itens sem De-Para.',
-            'itens_sem_depara': itens_sem_depara
-        }), 400
-
-    for filial in filiais_para_inserir:
-        cnpj = filial.get('cnpj')
-        produtos = filial.get('produtos', [])
-        uf = filial.get('estado', '')
-        nome_cliente = filial.get('nome_cliente', '')
-
-        tem_divergencia_filial = False
-        divergencias_filial = None
-        if validacao_precos and validacao_precos.get('por_filial'):
-            for val_filial in validacao_precos['por_filial']:
-                if val_filial.get('cnpj') == cnpj:
-                    tem_divergencia_filial = val_filial.get('tem_divergencia', False)
-                    if tem_divergencia_filial:
-                        divergencias_filial = val_filial.get('validacoes', [])
-                    break
-
-        justificativa = justificativas_por_filial.get(cnpj, justificativa_global)
-
-        if tem_divergencia_filial and not justificativa:
-            resultados.append({
-                'cnpj': cnpj,
-                'nome_cliente': nome_cliente,
-                'sucesso': False,
-                'order_id': None,
-                'order_name': None,
-                'mensagem': 'Justificativa obrigatória',
-                'erros': ['Informe uma justificativa'],
-                'registro_id': None
-            })
-            continue
-
-        itens_odoo = []
-        for produto in produtos:
-            if produto.get('nosso_codigo'):
-                itens_odoo.append({
-                    'nosso_codigo': produto.get('nosso_codigo'),
-                    'quantidade': produto.get('quantidade', 0),
-                    'preco': produto.get('valor_unitario', 0),
-                    'uf': uf,
-                    'nome_cliente': nome_cliente
-                })
-
-        if not itens_odoo:
-            resultados.append({
-                'cnpj': cnpj,
-                'nome_cliente': nome_cliente,
-                'sucesso': False,
-                'order_id': None,
-                'order_name': None,
-                'mensagem': 'Nenhum item válido',
-                'erros': [],
-                'registro_id': None
-            })
-            continue
-
-        resultado, registro = service.criar_pedido_e_registrar(
-            cnpj_cliente=cnpj,
-            itens=itens_odoo,
-            rede=rede,
-            tipo_documento=tipo_doc,
-            numero_documento=numero_doc,
-            arquivo_pdf_s3=s3_path,
-            usuario=usuario,
-            divergente=tem_divergencia_filial,
-            divergencias=divergencias_filial,
-            justificativa=justificativa if tem_divergencia_filial else None,
-            aprovador=usuario if tem_divergencia_filial else None,
-            payment_provider_id=30
-        )
-
-        resultados.append({
-            'cnpj': cnpj,
-            'nome_cliente': nome_cliente,
-            'sucesso': resultado.sucesso,
-            'order_id': resultado.order_id,
-            'order_name': resultado.order_name,
-            'mensagem': resultado.mensagem,
-            'erros': resultado.erros,
-            'registro_id': registro.id if registro else None
-        })
-
-    todos_sucesso = all(r.get('sucesso') for r in resultados) if resultados else False
-    algum_sucesso = any(r.get('sucesso') for r in resultados) if resultados else False
-
-    return jsonify({
-        'success': algum_sucesso,
-        'todos_sucesso': todos_sucesso,
-        'resultados': resultados,
-        'message': 'Pedido(s) inserido(s) no Odoo' if todos_sucesso else 'Alguns pedidos falharam'
-    })
 
 
 # ============================================================================
@@ -940,60 +808,65 @@ def obter_dados_importacao(session_key):
 @login_required
 def reprocessar():
     """
-    Reprocessa os dados da sessão após criar De-Para
-    Atualiza os itens com os novos códigos convertidos
+    Reprocessa dados após criar De-Para.
+    Atualiza os itens com os novos códigos convertidos.
+
+    Usa PedidoImportacaoTemp (banco) em vez de session Flask.
     """
     try:
         data = request.get_json()
         session_key = data.get('session_key')
 
-        if not session_key or session_key not in session:
-            return jsonify({'success': False, 'error': 'Sessão inválida ou expirada'}), 400
+        if not session_key:
+            return jsonify({'success': False, 'error': 'Chave de importação não fornecida'}), 400
 
-        pedido_data = session[session_key]
-        summary = pedido_data.get('summary', {})
-        identificacao = pedido_data.get('identificacao', {})
-        rede = identificacao.get('rede', 'ATACADAO')
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada ou expirada'}), 404
+
+        rede = (registro_temp.rede or 'ATACADAO').upper()
+        dados_filiais = registro_temp.dados_filiais or []
 
         # Reprocessa cada filial para atualizar De-Para
         itens_sem_depara = []
 
-        for filial in summary.get('por_filial', []):
-            for produto in filial.get('produtos', []):
-                codigo_rede = produto.get('codigo')
+        for filial in dados_filiais:
+            for item in filial.get('itens', []):
+                codigo_rede = item.get('codigo_rede')
 
                 # Tenta buscar De-Para novamente
-                if not produto.get('nosso_codigo') and codigo_rede:
+                if not item.get('nosso_codigo') and codigo_rede:
                     if rede == 'ATACADAO':
                         nosso_codigo = ProdutoDeParaAtacadao.obter_nosso_codigo(codigo_rede)
                         if nosso_codigo:
-                            produto['nosso_codigo'] = nosso_codigo
+                            item['nosso_codigo'] = nosso_codigo
 
                 # Verifica se ainda está sem De-Para
-                if not produto.get('nosso_codigo'):
+                if not item.get('nosso_codigo'):
                     itens_sem_depara.append({
                         'cnpj_filial': filial.get('cnpj'),
                         'codigo_rede': codigo_rede,
-                        'descricao': produto.get('descricao'),
-                        'quantidade': produto.get('quantidade'),
-                        'valor_unitario': produto.get('valor_unitario')
+                        'descricao': item.get('descricao'),
+                        'quantidade': item.get('quantidade'),
+                        'valor_unitario': item.get('preco_documento')
                     })
 
-        # Atualiza sessão
-        pedido_data['itens_sem_depara'] = itens_sem_depara
-        pedido_data['summary'] = summary
-        session[session_key] = pedido_data
-
-        pode_inserir = len(itens_sem_depara) == 0
+        # Atualiza registro no banco
+        registro_temp.itens_sem_depara = itens_sem_depara
+        registro_temp.pode_inserir = len(itens_sem_depara) == 0
+        flag_modified(registro_temp, 'dados_filiais')
+        flag_modified(registro_temp, 'itens_sem_depara')
+        db.session.commit()
 
         return jsonify({
             'success': True,
-            'summary': summary,
+            'summary': registro_temp.summary,
             'itens_sem_depara': itens_sem_depara,
-            'pode_inserir': pode_inserir
+            'pode_inserir': registro_temp.pode_inserir
         })
 
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1023,24 +896,26 @@ def historico():
 @login_required
 def export(format, session_key):
     """
-    Exporta dados processados para Excel ou CSV
+    Exporta dados processados para Excel ou CSV.
+
+    Usa PedidoImportacaoTemp (banco) em vez de session Flask.
 
     Excel: 2 abas
-    - Aba 1 "Pedido Completo": Todos itens com preço tabela, preço pedido e diferença
-    - Aba 2 "Divergências": Apenas itens divergentes com % de diferença
+    - Aba 1 "Pedido Completo": Todos itens com preco tabela, preco pedido e diferenca
+    - Aba 2 "Divergencias": Apenas itens divergentes com % de diferenca
     """
     try:
-        # Recupera dados da sessão
-        if session_key not in session:
-            flash('Dados não encontrados. Por favor, processe o arquivo novamente.', 'warning')
+        # Recupera dados do banco
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            flash('Dados nao encontrados. Por favor, processe o arquivo novamente.', 'warning')
             return redirect(url_for('leitura_pedidos.index'))
 
-        pedido_data = session[session_key]
-        data = pedido_data['data']
-        original_filename = pedido_data['filename'].rsplit('.', 1)[0]
+        data = registro_temp.dados_brutos
+        original_filename = (registro_temp.filename_original or 'pedido').rsplit('.', 1)[0]
 
-        # Recupera dados de validação de preços (para Excel com 2 abas)
-        validacao_precos = pedido_data.get('validacao_precos')
+        # Recupera dados de validacao de precos (para Excel com 2 abas)
+        validacao_precos = registro_temp.validacao_precos
 
         if not data:
             flash('Sem dados para exportar', 'warning')

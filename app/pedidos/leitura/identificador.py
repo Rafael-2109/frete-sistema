@@ -25,6 +25,7 @@ class IdentificacaoDocumento:
     numero_documento: Optional[str] = None
     confianca: float = 0.0  # 0.0 a 1.0
     detalhes: Optional[Dict] = None
+    texto_extraido: Optional[str] = None  # Texto completo extraído (reutilizável pelos extractors)
 
 
 class IdentificadorDocumento:
@@ -160,7 +161,8 @@ class IdentificadorDocumento:
                 'confianca_rede': confianca_rede,
                 'confianca_tipo': confianca_tipo,
                 'texto_encontrado': self.texto_primeira_pagina[:500] if self.texto_primeira_pagina else None
-            }
+            },
+            texto_extraido=self.texto_completo
         )
 
     def _extrair_texto(self, pdf_path: str):

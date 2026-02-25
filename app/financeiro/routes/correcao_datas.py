@@ -15,7 +15,7 @@ Data: 11/12/2025
 """
 
 from datetime import datetime
-from flask import render_template, request, jsonify, session, send_file
+from flask import render_template, request, jsonify, send_file
 from flask_login import login_required, current_user
 import io
 from app.utils.timezone import agora_utc_naive
@@ -136,7 +136,14 @@ def correcao_datas_api_diagnosticar():
 @financeiro_bp.route('/correcao-datas/api/corrigir', methods=['POST'])
 @login_required
 def correcao_datas_api_corrigir():
-    """Executa correção dos documentos selecionados"""
+    """
+    Enfileira correção dos documentos selecionados como job assíncrono (RQ).
+
+    Retorna job_id para acompanhamento via polling em /api/progresso/<job_id>.
+    Motivação: Cada documento leva 5-15s (8-11 chamadas XML-RPC ao Odoo).
+    Processar síncrono bloqueava 1 de 4 Gunicorn workers por até 184s,
+    contribuindo para OOM (incidente 25/02/2026).
+    """
     try:
         data = request.get_json()
         if not data or not data.get('ids'):
@@ -145,13 +152,65 @@ def correcao_datas_api_corrigir():
         ids = data['ids']
         usuario = current_user.nome if current_user else 'sistema'
 
-        service = CorrecaoDatasService()
-        resultado = service.corrigir(ids, usuario)
+        # Enfileira job assíncrono no worker RQ
+        from app.portal.workers import enqueue_job
+        from app.financeiro.workers.correcao_datas_jobs import (
+            processar_correcao_datas_job,
+            TIMEOUT_CORRECAO_DATAS,
+        )
 
-        return jsonify(resultado)
+        job = enqueue_job(
+            processar_correcao_datas_job,
+            ids,
+            usuario,
+            queue_name='default',
+            timeout=f'{TIMEOUT_CORRECAO_DATAS}s',
+        )
+
+        logger.info(
+            f"[CorrecaoDatas] Job {job.id} enfileirado: "
+            f"{len(ids)} documentos (usuario: {usuario})"
+        )
+
+        return jsonify({
+            'sucesso': True,
+            'job_id': job.id,
+            'total': len(ids),
+            'mensagem': f'{len(ids)} documento(s) enviado(s) para processamento'
+        })
 
     except Exception as e:
-        logger.error(f"Erro na correção: {e}")
+        logger.error(f"Erro ao enfileirar correção: {e}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+@financeiro_bp.route('/correcao-datas/api/progresso/<job_id>')
+@login_required
+def correcao_datas_api_progresso(job_id):
+    """
+    Retorna progresso do job de correção de datas.
+
+    Polling recomendado: a cada 2 segundos.
+    Fontes de dados (em ordem de prioridade):
+    1. Redis (progresso em tempo real, atualizado a cada documento)
+    2. RQ job status (fallback: queued, started, finished, failed)
+    """
+    try:
+        # 1. Tenta Redis primeiro (dados mais ricos)
+        from app.financeiro.workers.correcao_datas_jobs import obter_progresso_correcao
+
+        progresso = obter_progresso_correcao(job_id)
+        if progresso:
+            return jsonify({'sucesso': True, **progresso})
+
+        # 2. Fallback: status do RQ
+        from app.financeiro.workers.extrato_conciliacao_jobs import get_job_status
+
+        status = get_job_status(job_id)
+        return jsonify({'sucesso': True, **status})
+
+    except Exception as e:
+        logger.error(f"Erro ao obter progresso: {e}")
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
 
