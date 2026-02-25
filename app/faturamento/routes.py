@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -602,6 +601,8 @@ def api_estatisticas_produtos():
 @login_required 
 def exportar_dados_faturamento():
     """Exportar dados existentes de faturamento por produto"""
+    import pandas as pd  # Lazy import
+
     try:
         from flask import make_response
         from io import BytesIO

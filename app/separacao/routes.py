@@ -1,7 +1,5 @@
 import os
 import tempfile
-import numpy as np
-import pandas as pd
 from datetime import datetime
 from flask import Blueprint, render_template, redirect, flash, request, jsonify
 from flask_login import login_required
@@ -28,6 +26,8 @@ def parse_float_br(valor):
 
     Se não conseguir, retorna None.
     """
+    import pandas as pd  # Lazy import
+    import numpy as np  # Lazy import
     if pd.isna(valor) or valor in ['nan', '', None, np.nan]:
         return None
 
@@ -73,6 +73,7 @@ def parse_date(valor):
     Tenta converter algo no Excel (data ou string) para datetime.date.
     Se não conseguir, retorna None
     """
+    import pandas as pd  # Lazy import
     if pd.isna(valor):
         return None
     dt = pd.to_datetime(valor, errors='coerce')
@@ -85,6 +86,7 @@ def parse_str(valor):
     """
     Converte para string 'segura' ou None se vazio
     """
+    import pandas as pd  # Lazy import
     if pd.isna(valor):
         return None
     s = str(valor).strip()
@@ -93,6 +95,8 @@ def parse_str(valor):
 
 @separacao_bp.route('/importar', methods=['GET', 'POST'])
 def importar():
+    import pandas as pd  # Lazy import
+
     form = ImportarExcelForm()
     if form.validate_on_submit():
         arquivo = form.arquivo_excel.data

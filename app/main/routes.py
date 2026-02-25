@@ -3,7 +3,6 @@ from flask_login import current_user, login_required
 import os
 from app.utils.api_helper import APIDataHelper, get_dashboard_stats, get_system_alerts
 import tempfile
-import pandas as pd
 from datetime import datetime, timedelta
 from app.utils.timezone import agora_utc_naive
 
@@ -76,6 +75,8 @@ def relatorio_gerencial():
 @login_required  
 def relatorio_gerencial_excel():
     """Exporta relatório gerencial em Excel usando dados da API"""
+    import pandas as pd  # Lazy import
+
     try:
         periodo = int(request.args.get('periodo', 30))
         

@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory, jsonify, send_file
 from flask_login import login_required
 from werkzeug.utils import secure_filename
@@ -149,6 +148,8 @@ def buscar_cnpj():
 @cadastros_agendamento_bp.route('/importar', methods=['GET', 'POST'])
 @login_required
 def importar_contatos():
+    import pandas as pd  # Lazy import
+
     form = ImportarAgendamentosForm()
 
     if form.validate_on_submit():
@@ -281,7 +282,8 @@ def importar_contatos():
 @login_required
 def exportar_contatos():
     """Exporta contatos filtrados para Excel"""
-    
+    import pandas as pd  # Lazy import
+
     # Aplicar mesmos filtros da listagem
     query = ContatoAgendamento.query
     

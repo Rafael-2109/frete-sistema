@@ -4,6 +4,13 @@
 
 ---
 
+## DADOS:
+
+### OBRIGATÓRIO
+1. **FONTE PARA CONSULTA**: Utilize exclusivamente o MCP do Render, orientações em: `.claude/references/INFRAESTRUTURA.md`
+2. **NÃO UTILIZAR**: Dados locais = Dados teste.
+
+
 ## REGRAS UNIVERSAIS
 
 ### SEMPRE:
@@ -11,7 +18,6 @@
 2. **NUNCA criar tela sem acesso via UI** — TODA tela DEVE ter link no menu (`app/templates/base.html`) ou em tela relacionada
 3. **NUNCA mantenha lixo** — codigo substituido DEVE ser removido
 4. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
-**Os dados válidos estão no Render e Odoo**
 5. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
 6. **QUALIDADE > VELOCIDADE**: Sempre opte por pesquisar demais do que ser rápido mas não verificar algo importante.
 
@@ -82,12 +88,14 @@ Gotchas rapidos:
 | **Confiabilidade de subagentes** | `.claude/references/SUBAGENT_RELIABILITY.md` |
 | **Manual CLAUDE.md de modulo** | `.claude/references/MANUAL_CLAUDE_MD.md` |
 | **Capacidades MCP (versoes, gaps, enhanced)** | `.claude/references/MCP_CAPABILITIES_2026.md` |
+| **Linx Microvix (APIs, WS, integracao)** | `.claude/references/linx/INTEGRACOES.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:
 - Card de Separacao: `CARD_SEPARACAO.md` (raiz)
 - Sistema de Devolucoes: `app/devolucao/README.md`
 - **SSW Sistemas (documentacao completa)**: `.claude/references/ssw/INDEX.md`
+- **Linx Microvix (APIs, WebServices, manuais)**: `.claude/references/linx/INTEGRACOES.md`
 
 ---
 

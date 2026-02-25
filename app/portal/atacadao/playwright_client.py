@@ -7,7 +7,6 @@ import os
 import time
 from datetime import datetime, date
 from pathlib import Path
-from playwright.sync_api import sync_playwright
 import logging
 from .config import ATACADAO_CONFIG
 from dotenv import load_dotenv
@@ -43,6 +42,7 @@ class AtacadaoPlaywrightClient:
     
     def iniciar_sessao(self, salvar_login=False):
         """Inicia sessao do Playwright com ou sem login salvo"""
+        from playwright.sync_api import sync_playwright  # Lazy import
         self.playwright = sync_playwright().start()
         
         # Configuracoes do navegador - IGUAL AO SCRIPT QUE FUNCIONA
@@ -96,6 +96,7 @@ class AtacadaoPlaywrightClient:
         Faz login automaticamente preenchendo credenciais do .env
         Abre navegador visível para o usuário resolver o CAPTCHA
         """
+        from playwright.sync_api import sync_playwright  # Lazy import
         try:
             # Verificar se tem credenciais no .env
             usuario = os.environ.get('ATACADAO_USUARIO')

@@ -98,8 +98,10 @@ def upload():
                 logging.getLogger(__name__).info(
                     f"[Upload] Limpeza lazy: {removidos} registro(s) expirado(s) removido(s)"
                 )
-        except Exception:
-            db.session.rollback()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"[Upload] Erro na limpeza lazy (ignorado): {e}")
+            db.session.remove()  # Reset completo da sessão — garante conexão limpa
 
         # Verifica se arquivo foi enviado
         if 'file' not in request.files:
@@ -302,6 +304,7 @@ def upload():
             raise e
 
     except Exception as e:
+        db.session.rollback()  # Garante sessão limpa para próximo request
         import traceback
         return jsonify({
             'success': False,

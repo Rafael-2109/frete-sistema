@@ -57,6 +57,10 @@ NAVIGATION_TIMEOUT = 60000  # 60 segundos
 DEFAULT_VIEWPORT = {"width": 1280, "height": 720}
 _frame_local = threading.local()  # Frame ativo por thread (isolamento entre requests)
 
+# Auto-close: fecha browser após inatividade para liberar ~100-300 MB
+_last_browser_activity = 0.0
+_BROWSER_IDLE_TIMEOUT = 300  # 5 minutos
+
 
 def _get_current_frame():
     """Retorna frame ativo da thread atual (None = page principal)."""
@@ -66,6 +70,30 @@ def _get_current_frame():
 def _set_current_frame(frame):
     """Define frame ativo da thread atual."""
     _frame_local.frame = frame
+
+
+def _touch_browser_activity():
+    """Registra atividade do browser (chamado a cada uso de tool)."""
+    global _last_browser_activity
+    _last_browser_activity = time.time()
+
+
+def _check_browser_idle():
+    """Fecha browser se ocioso por mais de _BROWSER_IDLE_TIMEOUT segundos.
+
+    Chamado no início de _ensure_browser() para liberar memória (~100-300 MB)
+    de instâncias Chromium que não são usadas há mais de 5 minutos.
+    Se o browser estava idle, _ensure_browser() criará um novo.
+    """
+    global _browser, _last_browser_activity
+    if _browser is not None and _last_browser_activity > 0:
+        idle_seconds = time.time() - _last_browser_activity
+        if idle_seconds > _BROWSER_IDLE_TIMEOUT:
+            logger.info(
+                f"[BROWSER] Auto-close: browser ocioso por {idle_seconds:.0f}s "
+                f"(limite: {_BROWSER_IDLE_TIMEOUT}s). Liberando memória."
+            )
+            _cleanup_browser_sync()
 
 
 def _get_storage_path() -> str:
@@ -94,12 +122,18 @@ async def _ensure_browser():
 
     Restaura storage_state (cookies/localStorage) se existir de sessao anterior.
     Configura viewport padrao e timeout de navegacao.
+    Auto-close: fecha browser ocioso antes de criar novo (libera memória).
 
     Returns:
         Page instance do Playwright
     """
     global _playwright, _browser, _context, _page
+
+    # Auto-close browser ocioso (>5 min sem uso) para liberar memória
+    _check_browser_idle()
+
     if _page is not None:
+        _touch_browser_activity()
         return _page
 
     from playwright.async_api import async_playwright
@@ -122,6 +156,7 @@ async def _ensure_browser():
     _page = await _context.new_page()
     _page.set_default_navigation_timeout(NAVIGATION_TIMEOUT)
 
+    _touch_browser_activity()
     logger.info("[BROWSER] Browser inicializado (headless Chromium)")
     return _page
 

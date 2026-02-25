@@ -6,7 +6,6 @@ Gerencia re-login quando sessão expira, com suporte a CAPTCHA
 import os
 import time
 import logging
-from playwright.sync_api import sync_playwright
 from app.portal.atacadao.config import ATACADAO_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -40,6 +39,7 @@ class LoginInterativoAtacadao:
                 page = client.page
             else:
                 # Criar temporário para verificar
+                from playwright.sync_api import sync_playwright  # Lazy import
                 self.playwright = sync_playwright().start()
                 self.browser = self.playwright.chromium.launch(headless=True)
                 
@@ -148,6 +148,7 @@ class LoginInterativoAtacadao:
             logger.info("Abrindo navegador para login interativo...")
             
             # Iniciar Playwright em modo visível
+            from playwright.sync_api import sync_playwright  # Lazy import
             self.playwright = sync_playwright().start()
             self.browser = self.playwright.chromium.launch(
                 headless=headless,

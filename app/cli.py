@@ -2,7 +2,6 @@ import click
 from flask.cli import with_appcontext
 from app import db
 import os
-import pandas as pd
 
 @click.command('normalizar-dados')
 @with_appcontext
@@ -216,6 +215,7 @@ def corrigir_vinculos_grupo():
 @with_appcontext
 def importar_cidades_cli(arquivo_excel):
     """Importa cidades de arquivo Excel (uso único)"""
+    import pandas as pd  # Lazy import
     from app.localidades.models import Cidade
     
     if not os.path.exists(arquivo_excel):

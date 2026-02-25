@@ -6,9 +6,8 @@ Performance garantida < 50ms por consulta
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
 import logging
-import time
+import cachetools
 
 from sqlalchemy import func
 from flask import current_app
@@ -19,9 +18,7 @@ from app.producao.models import ProgramacaoProducao
 
 logger = logging.getLogger(__name__)
 
-# 🚀 OTIMIZAÇÃO: Cache global com TTL de 10 segundos (reduzido de 30s)
-_cache_ttl = {}  # {chave: timestamp}
-_cache_data = {}  # {chave: dados}
+_cache = cachetools.TTLCache(maxsize=2000, ttl=30)
 
 
 class ServicoEstoqueSimples:
@@ -32,39 +29,13 @@ class ServicoEstoqueSimples:
 
     @staticmethod
     def _get_cache(chave: str, ttl_seconds: int = 10):
-        """Obter valor do cache se ainda válido (TTL padrão: 10s)"""
-        if chave in _cache_ttl:
-            idade = time.time() - _cache_ttl[chave]
-            if idade < ttl_seconds:
-                return _cache_data.get(chave)
-            else:
-                # Limpar cache expirado
-                del _cache_ttl[chave]
-                if chave in _cache_data:
-                    del _cache_data[chave]
-        return None
+        """Obter valor do cache se ainda válido"""
+        return _cache.get(chave)
 
     @staticmethod
     def _set_cache(chave: str, valor: Any):
         """Salvar valor no cache"""
-        _cache_ttl[chave] = time.time()
-        _cache_data[chave] = valor
-
-    @staticmethod
-    def _invalidar_cache_produto(cod_produto: str):
-        """Invalida TODOS os caches de um produto específico"""
-        chaves_para_remover = []
-        for chave in _cache_ttl.keys():
-            if chave.startswith(f"projecao_{cod_produto}_"):
-                chaves_para_remover.append(chave)
-
-        for chave in chaves_para_remover:
-            del _cache_ttl[chave]
-            if chave in _cache_data:
-                del _cache_data[chave]
-
-        if chaves_para_remover:
-            logger.info(f"🗑️ Cache invalidado para produto {cod_produto}: {len(chaves_para_remover)} entrada(s)")
+        _cache[chave] = valor
 
     @staticmethod
     def calcular_estoque_atual(cod_produto: str) -> float:

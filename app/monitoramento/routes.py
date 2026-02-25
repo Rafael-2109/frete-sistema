@@ -3,13 +3,12 @@ from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
 from app.utils.timezone import agora_utc_naive
 import os
-import pandas as pd
+import time
 import tempfile
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 import logging
 
-from collections import defaultdict
 
 import re
 
@@ -58,6 +57,41 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, '..', '..', 'uploads', 'entregas')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ------------------------------------
+# Cache de contatos de agendamento (TTL 60s)
+# Evita ContatoAgendamento.query.all() (~4000 regs) em cada request
+# ------------------------------------
+_contatos_cache = None
+_contatos_cache_ts = 0
+_CONTATOS_TTL = 60
+
+
+def _get_contatos_agendamento():
+    """Retorna dict {cnpj: ContatoAgendamento} com CNPJs originais e limpos. Cache 60s."""
+    global _contatos_cache, _contatos_cache_ts
+    if _contatos_cache is not None and (time.time() - _contatos_cache_ts) < _CONTATOS_TTL:
+        return _contatos_cache
+    contatos = {}
+    for c in ContatoAgendamento.query.all():
+        contatos[c.cnpj] = c
+        if c.cnpj:
+            cnpj_limpo = c.cnpj.replace('.', '').replace('-', '').replace('/', '')
+            contatos[cnpj_limpo] = c
+    _contatos_cache = contatos
+    _contatos_cache_ts = time.time()
+    return contatos
+
+
+def _get_cnpjs_que_precisam_agendamento():
+    """Retorna set de CNPJs (original + limpo) que precisam de agendamento. Derivado do cache."""
+    contatos = _get_contatos_agendamento()
+    cnpjs = set()
+    for cnpj, contato in contatos.items():
+        if contato.forma and contato.forma != '' and contato.forma != 'SEM AGENDAMENTO':
+            cnpjs.add(cnpj)
+    return cnpjs
+
 
 def get_file_icon(filename):
     """Retorna ícone baseado na extensão do arquivo"""
@@ -794,35 +828,17 @@ def listar_entregas():
             EntregaMonitorada.status_finalizacao.is_(None)  # Não finalizada
         )
 
-    # ✅ CORRIGIDO: Filtro sem_agendamento como IF independente - USAR CAMPO DIRETO
+    # Filtro sem_agendamento — usa cache de contatos e IN() ao invés de OR-explosion
     if status == 'sem_agendamento':
-        # Buscar CNPJs que precisam de agendamento (mesma lógica do dicionário)
-        contatos_que_precisam = ContatoAgendamento.query.filter(
-            ContatoAgendamento.forma.isnot(None),
-            ContatoAgendamento.forma != '',
-            ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-        ).all()
-        
-        # Criar lista de CNPJs (original e limpo - mesma lógica do template)
-        cnpjs_validos = []
-        for contato in contatos_que_precisam:
-            cnpjs_validos.append(contato.cnpj)
-            if contato.cnpj:
-                cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
-                cnpjs_validos.append(cnpj_limpo)
-        
-        # ✅ USAR CAMPO DIRETO como nos pedidos (muito mais simples e eficiente)
+        cnpjs_validos = _get_cnpjs_que_precisam_agendamento()
+
         if cnpjs_validos:
             query = query.filter(
-                # CNPJ está na lista (original ou limpo)
-                db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_validos]),
-                # ✅ CORREÇÃO CRÍTICA: Usar campo direto data_agenda ao invés de subquery
-                EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento
-                # Não finalizada
+                EntregaMonitorada.cnpj_cliente.in_(cnpjs_validos),
+                EntregaMonitorada.data_agenda.is_(None),
                 EntregaMonitorada.status_finalizacao.is_(None)
             )
         else:
-            # Se não há CNPJs válidos, não mostrar nenhuma entrega
             query = query.filter(db.text('1=0'))
 
     if numero_nf := request.args.get('numero_nf'):
@@ -941,73 +957,8 @@ def listar_entregas():
         # Ordenação padrão
         query = query.order_by(EntregaMonitorada.criado_em.desc())
 
-    entregas = query.all()
-
-    # ------------------------------
-    # Montagem do dicionário de contatos de agendamento
-    # ✅ CORRIGIDO: Criar dicionário com CNPJs limpos para ser compatível com o filtro
-    contatos_agendamento = {}
-    for c in ContatoAgendamento.query.all():
-        # CNPJ original (para compatibilidade)
-        contatos_agendamento[c.cnpj] = c
-        # CNPJ limpo (para funcionar com o filtro)
-        if c.cnpj:
-            cnpj_limpo = c.cnpj.replace('.', '').replace('-', '').replace('/', '')
-            contatos_agendamento[cnpj_limpo] = c
-
-    agrupar = request.args.get('agrupar') == 'status'
-    entregas_agrupadas = defaultdict(list)
-
-    if agrupar:
-        entregas_agrupadas = {
-            '✅ Entregues': [],
-            '🔴 Atrasadas': [],
-            '🔁 Reagendar': [],
-            '🟡 Sem Previsão': [],
-            '⚪ No Prazo': [],
-            '⚠️ Sem Agendamento': []
-        }
-
-        for e in entregas:
-            # ✅ CORREÇÃO: Status de finalização tem prioridade máxima
-            if e.status_finalizacao:
-                if e.status_finalizacao == 'Entregue':
-                    entregas_agrupadas['✅ Entregues'].append(e)
-                # Outros status de finalização (Cancelada, Devolvida, Sinistro, etc.) não entram no agrupamento
-            # ✅ CORREÇÃO: Reagendar tem segunda prioridade
-            elif e.reagendar:
-                entregas_agrupadas['🔁 Reagendar'].append(e)
-            # ✅ CORREÇÃO: Status baseado em data (apenas para não finalizadas)
-            elif e.data_entrega_prevista and e.data_entrega_prevista < date.today():
-                entregas_agrupadas['🔴 Atrasadas'].append(e)
-            elif not e.data_entrega_prevista:
-                entregas_agrupadas['🟡 Sem Previsão'].append(e)
-            else:
-                entregas_agrupadas['⚪ No Prazo'].append(e)
-            
-            # ✅ CORREÇÃO: Agendamento pendente é critério INDEPENDENTE (não else)
-            # Verifica se precisa de agendamento independente do status de data
-            if (not e.status_finalizacao and
-                    e.cnpj_cliente in contatos_agendamento and
-                    len(e.agendamentos) == 0 and
-                    contatos_agendamento[e.cnpj_cliente].forma and
-                    contatos_agendamento[e.cnpj_cliente].forma != '' and
-                    contatos_agendamento[e.cnpj_cliente].forma != 'SEM AGENDAMENTO'):
-                # Se não estava em nenhum grupo ainda (entregas estranhas), coloca em agendamento
-                encontrado_em_grupo = False
-                for grupo in entregas_agrupadas.values():
-                    if e in grupo:
-                        encontrado_em_grupo = True
-                        break
-                if not encontrado_em_grupo:
-                    entregas_agrupadas['⚠️ Sem Agendamento'].append(e)
-
-        # Remove grupos vazios
-        entregas_agrupadas = {k: v for k, v in entregas_agrupadas.items() if v}
-        
-        # Batch pre-fetch: enriquecer todas as entregas agrupadas de uma vez
-        todas_entregas_agrupadas = [e for grupo in entregas_agrupadas.values() for e in grupo]
-        _enriquecer_entregas_batch(todas_entregas_agrupadas)
+    # Contatos de agendamento (cache 60s — evita query em cada request)
+    contatos_agendamento = _get_contatos_agendamento()
 
     # ✅ CALCULANDO CONTADORES DOS FILTROS
     contadores = {}
@@ -1036,30 +987,14 @@ def listar_entregas():
         EntregaMonitorada.status_finalizacao.is_(None)
     ).count()
     
-    # ✅ CONTADOR SIMPLIFICADO: Mesma lógica do filtro usando campo direto
-    # Buscar CNPJs que precisam de agendamento
-    contatos_contador = ContatoAgendamento.query.filter(
-        ContatoAgendamento.forma.isnot(None),
-        ContatoAgendamento.forma != '',
-        ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-    ).all()
-    
-    # Criar lista de CNPJs válidos
-    cnpjs_contador = []
-    for contato in contatos_contador:
-        cnpjs_contador.append(contato.cnpj)
-        if contato.cnpj:
-            cnpj_limpo = contato.cnpj.replace('.', '').replace('-', '').replace('/', '')
-            cnpjs_contador.append(cnpj_limpo)
-    
-    # ✅ USAR CAMPO DIRETO para o contador também (consistente com filtro)
-    if cnpjs_contador:
-        count_query_sem_agend = base_count_query.filter(
-            db.or_(*[EntregaMonitorada.cnpj_cliente == cnpj for cnpj in cnpjs_contador]),
-            EntregaMonitorada.data_agenda.is_(None),  # Sem data de agendamento (campo direto)
+    # Contador sem_agendamento — reutiliza cache de CNPJs (IN ao invés de OR-explosion)
+    cnpjs_agendamento = _get_cnpjs_que_precisam_agendamento()
+    if cnpjs_agendamento:
+        contadores['sem_agendamento'] = base_count_query.filter(
+            EntregaMonitorada.cnpj_cliente.in_(cnpjs_agendamento),
+            EntregaMonitorada.data_agenda.is_(None),
             EntregaMonitorada.status_finalizacao.is_(None)
-        )
-        contadores['sem_agendamento'] = count_query_sem_agend.count()
+        ).count()
     else:
         contadores['sem_agendamento'] = 0
     
@@ -1107,8 +1042,6 @@ def listar_entregas():
         'monitoramento/listar_entregas.html',
         paginacao=paginacao,
         entregas=paginacao.items,
-        entregas_agrupadas=entregas_agrupadas,
-        agrupar=agrupar,
         current_date=date.today(),
         contatos_agendamento=contatos_agendamento,
         current_user=current_user,
@@ -1839,7 +1772,8 @@ def aplicar_filtros_exportacao(query, filtros):
 
 def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
     """Gera arquivo Excel com dados do monitoramento - sempre formato completo"""
-    
+    import pandas as pd  # Lazy import (~150 MB) — só carregado quando gera Excel
+
     # Cache para conversões de timezone (evita conversões repetidas)
     timezone_cache = {}
     

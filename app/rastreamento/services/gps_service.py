@@ -8,6 +8,7 @@ from flask import current_app
 import os
 import hashlib
 import requests
+import cachetools
 
 
 class GPSService:
@@ -15,7 +16,7 @@ class GPSService:
 
     # Configuração do Google Maps API
     _api_key = None
-    _geocoding_cache = {}
+    _geocoding_cache = cachetools.TTLCache(maxsize=500, ttl=3600)
     _base_geocoding_url = "https://maps.googleapis.com/maps/api/geocode/json"
 
     @classmethod

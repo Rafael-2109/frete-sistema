@@ -13,7 +13,6 @@ Fluxo:
 """
 
 from typing import Dict, List, Any, Optional
-import pandas as pd
 from decimal import Decimal
 
 from .atacadao import AtacadaoExtractor
@@ -180,6 +179,7 @@ class PedidoProcessor:
             if not data:
                 return {}
 
+            import pandas as pd
             df = pd.DataFrame(data)
 
             summary = {
@@ -304,6 +304,7 @@ class PedidoProcessor:
         if not data:
             raise ValueError("Sem dados para exportar")
 
+        import pandas as pd
         from openpyxl.utils import get_column_letter
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -509,6 +510,7 @@ class PedidoProcessor:
         if not data:
             raise ValueError("Sem dados para exportar")
 
+        import pandas as pd
         df = pd.DataFrame(data)
         df.to_csv(output_path, index=False, encoding='utf-8-sig')
 

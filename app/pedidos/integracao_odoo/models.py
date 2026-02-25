@@ -593,18 +593,18 @@ class PedidoImportacaoTemp(db.Model):
     @classmethod
     def limpar_expirados(cls) -> int:
         """
-        Remove registros expirados.
+        Remove registros expirados sem carregar dados em memória.
+
+        Usa bulk DELETE direto no banco para evitar carregar colunas JSONB
+        pesadas (dados_brutos, dados_filiais, summary) que podem ter
+        centenas de KB cada registro.
 
         Returns:
             Número de registros removidos
         """
-        expirados = cls.query.filter(
+        count = cls.query.filter(
             cls.expira_em < agora_utc_naive(),
             cls.status.in_(['PROCESSADO', 'ERRO'])  # Não remove LANCADO
-        ).all()
-
-        count = len(expirados)
-        for reg in expirados:
-            db.session.delete(reg)
+        ).delete(synchronize_session=False)
 
         return count

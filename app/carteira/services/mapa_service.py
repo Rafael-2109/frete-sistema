@@ -9,6 +9,7 @@ import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
+import cachetools
 from sqlalchemy import func, or_
 from app import db
 from app.carteira.models import CarteiraPrincipal
@@ -24,7 +25,7 @@ class MapaService:
     
     def __init__(self):
         self.api_key = os.getenv('GOOGLE_MAPS_API_KEY', '')
-        self.geocoding_cache = {}  # Cache em memória para geocodificação
+        self.geocoding_cache = cachetools.TTLCache(maxsize=500, ttl=3600)
         self.base_geocoding_url = "https://maps.googleapis.com/maps/api/geocode/json"
         self.base_directions_url = "https://maps.googleapis.com/maps/api/directions/json"
         self.base_distance_matrix_url = "https://maps.googleapis.com/maps/api/distancematrix/json"

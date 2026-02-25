@@ -7,7 +7,6 @@ import os
 import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
-from playwright.sync_api import sync_playwright
 import logging
 from .config import TENDA_CONFIG
 from .models import ProdutoDeParaEAN, LocalEntregaDeParaTenda
@@ -44,6 +43,7 @@ class TendaPlaywrightClient:
     
     def iniciar_sessao(self, salvar_login=False):
         """Inicia sessao do Playwright com ou sem login salvo"""
+        from playwright.sync_api import sync_playwright  # Lazy import
         self.playwright = sync_playwright().start()
         
         # Configuracoes do navegador

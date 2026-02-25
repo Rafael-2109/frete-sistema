@@ -1,4 +1,3 @@
-import pandas as pd
 from flask import render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app import db
@@ -383,6 +382,7 @@ def importar_movimentacoes():
 @login_required
 def processar_importacao_movimentacoes():
     """Processar importação de movimentações de estoque"""
+    import pandas as pd  # Lazy import
     try:
         
         
@@ -1046,6 +1046,7 @@ def importar_unificacao_codigos():
 @login_required
 def processar_importacao_unificacao():
     """Processar importação de unificações de códigos"""
+    import pandas as pd  # Lazy import
     try:
         
         if 'arquivo' not in request.files:
@@ -1177,6 +1178,7 @@ def processar_importacao_unificacao():
 @login_required
 def baixar_modelo_unificacao():
     """Baixar modelo Excel para importação de unificações"""
+    import pandas as pd  # Lazy import
     try:
         
         # Dados exemplo conforme arquivo CSV 7
@@ -1228,6 +1230,7 @@ def baixar_modelo_unificacao():
 @login_required
 def exportar_dados_unificacao():
     """Exportar dados existentes de unificações"""
+    import pandas as pd  # Lazy import
     try:
         
         # 🔧 CORREÇÃO: Definir inspector na função
@@ -1639,6 +1642,7 @@ def filtrar_saldo_estoque():
 @login_required
 def baixar_modelo_movimentacoes():
     """Download do modelo Excel para importação de movimentações"""
+    import pandas as pd  # Lazy import
     try:
         
         # Criar modelo Excel
@@ -1689,6 +1693,7 @@ def baixar_modelo_movimentacoes():
 @login_required
 def exportar_dados_movimentacoes():
     """Exporta dados de movimentações para Excel com filtros"""
+    import pandas as pd  # Lazy import
     try:
         # Capturar filtros da requisição
         cod_produto = request.args.get('cod_produto', '')

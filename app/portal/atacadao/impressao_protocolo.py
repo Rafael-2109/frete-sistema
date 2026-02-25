@@ -9,7 +9,6 @@ import os
 import base64
 from pathlib import Path
 from datetime import datetime
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
@@ -34,6 +33,7 @@ class GeradorPDFProtocoloAtacadao:
 
     def iniciar_navegador(self):
         """Inicia navegador"""
+        from playwright.sync_api import sync_playwright  # Lazy import
         self.playwright = sync_playwright().start()
         self.browser = self.playwright.chromium.launch(headless=True)
 
@@ -82,6 +82,7 @@ class GeradorPDFProtocoloAtacadao:
         Returns:
             dict com resultado
         """
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout  # Lazy import
         try:
             # 1. Iniciar navegador
             logger.info(f"📄 Iniciando captura do protocolo {protocolo}")

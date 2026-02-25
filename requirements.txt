@@ -46,6 +46,7 @@ redis==7.2.0                # 5.0.8 → 7.2.0 (API core compatível, requer Pyth
 rq==2.6.1                   # 1.16.2 → 2.6.1 (Connection ctx removido, worker_ttl renomeado)
 # rq-dashboard removido — abandonware (2020), não importado no app, incompatível com rq 2.x
 APScheduler==3.11.2
+cachetools==5.5.2          # Bounded in-memory caches (TTLCache) — OOM prevention
 whitenoise==6.11.0  # Serve arquivos estaticos com compressao e cache no WSGI layer
 Flask-Compress==1.23  # Compressao gzip de respostas dinamicas (HTML, JSON)
 
@@ -59,7 +60,7 @@ email-validator==2.3.0
 # AI & CLAUDE INTEGRATION
 # ==========================================
 anthropic==0.79.0           # API direta Anthropic (fallback)
-claude-agent-sdk==0.1.39    # Claude Agent SDK oficial (0.1.39: ThinkingConfig, effort field nativo, CLI 2.1.49 bundled)
+claude-agent-sdk==0.1.43    # Claude Agent SDK oficial (0.1.43: Fix memory tool, support for multiple models, new hooks)
 mcp>=1.26.0                 # Model Context Protocol (latest stable)
 pydantic==2.12.5           # Data validation
 anyio==4.12.1              # Async support
