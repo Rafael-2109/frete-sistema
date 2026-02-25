@@ -314,4 +314,37 @@
     white-space: nowrap;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SIMULACAO DE FRETE - Compact table + modal styles
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .simulacao-frete-table {
+    font-size: 0.85rem;
+  }
+
+  .simulacao-frete-table thead th {
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .simulacao-frete-table tbody tr.frete-row:hover {
+    background-color: var(--bs-tertiary-bg);
+    cursor: pointer;
+  }
+
+  #modalDetalhes .table code {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  /* Preview peso cubado */
+  .peso-cubado-preview {
+    font-size: 0.85rem;
+  }
+
+  .peso-cubado-preview .badge {
+    font-size: 0.8rem;
+  }
+
 } /* End @layer modules */

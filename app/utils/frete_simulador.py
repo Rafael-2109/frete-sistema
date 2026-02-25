@@ -212,6 +212,7 @@ def calcular_fretes_possiveis(
                     "icms_destino": cidade_icms,
                     "cidade": cidade_nome,
                     "uf": cidade_uf,
+                    "lead_time": at.lead_time,
                     # Detalhes do cálculo (útil para debug)
                     "detalhes_calculo": resultado_calculo.get('detalhes', {})
                 }

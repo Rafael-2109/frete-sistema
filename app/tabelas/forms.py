@@ -101,3 +101,20 @@ class GerarTemplateFreteForm(FlaskForm):
                              validators=[DataRequired()], default='N')
     quantidade_linhas = IntegerField('Quantidade de Linhas', validators=[DataRequired(), NumberRange(min=1, max=1000)], default=50)
     submit = SubmitField("Gerar Template")
+
+
+class SimulacaoFreteForm(FlaskForm):
+    uf_destino = SelectField('UF Destino', validators=[DataRequired()])
+    cidade_destino = SelectField('Cidade Destino', choices=[], validators=[DataRequired()])
+    valor_carga = StringField('Valor da Carga (R$)', validators=[DataRequired()])
+    peso_kg = StringField('Peso (kg)', validators=[DataRequired()])
+    modo_dimensao = SelectField('Medidas', choices=[
+        ('sem_medidas', 'Sem medidas (usar peso real)'),
+        ('cxlxa', 'Comprimento x Largura x Altura (cm)'),
+        ('m3_direto', 'Volume M3 direto'),
+    ], default='sem_medidas')
+    comprimento_cm = StringField('Comprimento (cm)')
+    largura_cm = StringField('Largura (cm)')
+    altura_cm = StringField('Altura (cm)')
+    volume_m3 = StringField('Volume (m3)')
+    submit = SubmitField('Simular Frete')

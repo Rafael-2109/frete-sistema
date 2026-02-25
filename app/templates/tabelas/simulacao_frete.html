@@ -1,0 +1,513 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid mt-4">
+  <h3><i class="fas fa-calculator"></i> Simulação de Frete</h3>
+  <p class="text-muted">Informe os dados da carga para simular cotações de frete com todas as transportadoras.</p>
+
+  <!-- ====================== FORMULÁRIO ====================== -->
+  <div class="card mb-4 border-left-info">
+    <div class="card-header card-header-theme">
+      <strong><i class="fas fa-box"></i> Dados da Carga</strong>
+    </div>
+    <div class="card-body">
+      <form method="POST" id="formSimulacao">
+        {{ form.hidden_tag() }}
+        <div class="row g-3">
+          <!-- UF Destino -->
+          <div class="col-md-2">
+            <label for="uf_destino" class="form-label">UF Destino</label>
+            {{ form.uf_destino(class="form-select", id="uf_destino") }}
+          </div>
+
+          <!-- Cidade Destino -->
+          <div class="col-md-3">
+            <label for="cidade_destino" class="form-label">Cidade Destino</label>
+            {{ form.cidade_destino(class="form-select", id="cidade_destino") }}
+          </div>
+
+          <!-- Valor da Carga -->
+          <div class="col-md-2">
+            <label for="valor_carga" class="form-label">Valor da Carga (R$)</label>
+            {{ form.valor_carga(class="form-control", id="valor_carga", placeholder="1.000,00") }}
+          </div>
+
+          <!-- Peso -->
+          <div class="col-md-2">
+            <label for="peso_kg" class="form-label">Peso (kg)</label>
+            {{ form.peso_kg(class="form-control", id="peso_kg", placeholder="500") }}
+          </div>
+
+          <!-- Modo Dimensão -->
+          <div class="col-md-3">
+            <label for="modo_dimensao" class="form-label">Medidas (opcional)</label>
+            {{ form.modo_dimensao(class="form-select", id="modo_dimensao") }}
+          </div>
+        </div>
+
+        <!-- Campos de dimensão (toggle via JS) -->
+        <div class="row g-3 mt-1" id="campos_cxlxa" style="display:none;">
+          <div class="col-md-2">
+            <label for="comprimento_cm" class="form-label">Comprimento (cm)</label>
+            {{ form.comprimento_cm(class="form-control dim-input", id="comprimento_cm", placeholder="120") }}
+          </div>
+          <div class="col-md-2">
+            <label for="largura_cm" class="form-label">Largura (cm)</label>
+            {{ form.largura_cm(class="form-control dim-input", id="largura_cm", placeholder="80") }}
+          </div>
+          <div class="col-md-2">
+            <label for="altura_cm" class="form-label">Altura (cm)</label>
+            {{ form.altura_cm(class="form-control dim-input", id="altura_cm", placeholder="100") }}
+          </div>
+          <!-- Preview ao vivo -->
+          <div class="col-md-6 d-flex align-items-end">
+            <div id="previewCxLxA" class="peso-cubado-preview"></div>
+          </div>
+        </div>
+
+        <div class="row g-3 mt-1" id="campos_m3" style="display:none;">
+          <div class="col-md-2">
+            <label for="volume_m3" class="form-label">Volume (m3)</label>
+            {{ form.volume_m3(class="form-control dim-input", id="volume_m3", placeholder="0,96") }}
+          </div>
+          <!-- Preview ao vivo -->
+          <div class="col-md-6 d-flex align-items-end">
+            <div id="previewM3" class="peso-cubado-preview"></div>
+          </div>
+        </div>
+
+        <div class="row mt-3">
+          <div class="col-md-12 text-end">
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if resultado %}
+  <!-- ====================== RESUMO DA CARGA ====================== -->
+  <div class="card mb-4 border-left-success">
+    <div class="card-header card-header-theme">
+      <strong><i class="fas fa-info-circle"></i> Resumo da Carga</strong>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-2">
+          <small class="text-muted d-block">Destino</small>
+          <strong>{{ resultado.cidade }} / {{ resultado.uf }}</strong>
+        </div>
+        <div class="col-md-2">
+          <small class="text-muted d-block">Valor da Carga</small>
+          <strong>{{ resultado.valor_carga|valor_br }}</strong>
+        </div>
+        <div class="col-md-1">
+          <small class="text-muted d-block">Peso Real</small>
+          <strong>{{ resultado.peso_real|numero_br(2) }} kg</strong>
+        </div>
+        {% if resultado.modo_dimensao != 'sem_medidas' %}
+        <div class="col-md-1">
+          <small class="text-muted d-block">Volume</small>
+          <strong>{{ resultado.volume_m3|numero_br(4) }} m3</strong>
+        </div>
+        <div class="col-md-1">
+          <small class="text-muted d-block">Cubagem</small>
+          <strong>{{ resultado.cubagem|numero_br(1) }} kg/m3</strong>
+        </div>
+        {% endif %}
+        <div class="col-md-2">
+          <small class="text-muted d-block">Peso p/ Cálculo</small>
+          <strong>{{ resultado.peso_cubado|numero_br(2) }} kg</strong>
+          {% if resultado.usou_peso_cubado %}
+          <span class="badge bg-warning text-dark ms-1">Peso Cubado</span>
+          {% else %}
+          <span class="badge bg-secondary ms-1">Peso Real</span>
+          {% endif %}
+        </div>
+        <div class="col-md-1">
+          <small class="text-muted d-block">ICMS Cidade</small>
+          <strong>{{ resultado.icms_cidade|numero_br(2) }}%</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================== COTAÇÕES ====================== -->
+  <div class="card mb-4">
+    <div class="card-header card-header-theme d-flex justify-content-between align-items-center">
+      <strong><i class="fas fa-list"></i> Cotações de Frete ({{ fretes|length }})</strong>
+    </div>
+    <div class="card-body p-0">
+      {% if fretes %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 simulacao-frete-table">
+          <thead class="table-thead-theme">
+            <tr>
+              <th>#</th>
+              <th>Transportadora</th>
+              <th>Tabela</th>
+              <th>Tipo</th>
+              <th>Modalidade</th>
+              <th class="cel-num">Frete Total</th>
+              <th class="cel-num">Frete Líquido</th>
+              <th class="cel-num">R$/kg</th>
+              <th class="cel-num">% s/ Valor</th>
+              <th class="text-center">Lead Time</th>
+              <th class="text-center">Detalhes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in fretes %}
+            <tr class="frete-row" data-frete='{{ f|tojson }}'>
+              <td>{{ loop.index }}</td>
+              <td class="cel-transp" title="{{ f.transportadora }}">{{ f.transportadora }}</td>
+              <td class="cel-tabela" title="{{ f.nome_tabela }}">{{ f.nome_tabela }}</td>
+              <td>{{ f.tipo_carga }}</td>
+              <td>{{ f.modalidade }}</td>
+              <td class="cel-num"><strong>{{ f.valor_total|valor_br }}</strong></td>
+              <td class="cel-num">{{ f.valor_liquido|valor_br }}</td>
+              <td class="cel-num">{{ (f.valor_liquido / resultado.peso_cubado)|numero_br(2) }}</td>
+              <td class="cel-num">{{ ((f.valor_total / resultado.valor_carga) * 100)|numero_br(2) }}%</td>
+              <td class="text-center">
+                {% if f.lead_time %}
+                {{ f.lead_time }} dia{{ 's' if f.lead_time > 1 else '' }}
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-primary btn-detalhes"
+                        onclick="abrirModalDetalhes(this.closest('tr'))">
+                  <i class="fas fa-search-plus"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-4 text-muted">
+        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+        <p>Nenhuma transportadora atende esta rota.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ====================== MODAL DETALHES ====================== -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header card-header-theme">
+        <h5 class="modal-title"><i class="fas fa-calculator"></i> Detalhes do Cálculo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalDetalhesBody">
+        <!-- Preenchido via JS -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const ufSelect = document.getElementById('uf_destino');
+  const cidadeSelect = document.getElementById('cidade_destino');
+  const modoSelect = document.getElementById('modo_dimensao');
+  const camposCxLxA = document.getElementById('campos_cxlxa');
+  const camposM3 = document.getElementById('campos_m3');
+
+  // --- Cascata UF → Cidade ---
+  ufSelect.addEventListener('change', function() {
+    const uf = this.value;
+    cidadeSelect.innerHTML = '<option value="">Carregando...</option>';
+    if (!uf) {
+      cidadeSelect.innerHTML = '<option value="">Selecione UF primeiro</option>';
+      return;
+    }
+    fetch(`/vinculos/cidades_por_uf/${uf}`)
+      .then(r => r.json())
+      .then(cidades => {
+        cidadeSelect.innerHTML = '<option value="">Selecione...</option>';
+        cidades.forEach(c => {
+          cidadeSelect.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+      })
+      .catch(() => {
+        cidadeSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+      });
+  });
+
+  // --- Toggle campos de dimensão ---
+  function toggleDimensoes() {
+    const modo = modoSelect.value;
+    camposCxLxA.style.display = modo === 'cxlxa' ? '' : 'none';
+    camposM3.style.display = modo === 'm3_direto' ? '' : 'none';
+  }
+  modoSelect.addEventListener('change', toggleDimensoes);
+  toggleDimensoes();
+
+  // --- Preview ao vivo peso cubado ---
+  function parseBR(val) {
+    if (!val) return 0;
+    val = val.toString().trim();
+    if (val.indexOf(',') >= 0) {
+      val = val.replace(/\./g, '').replace(',', '.');
+    }
+    return parseFloat(val) || 0;
+  }
+
+  function formatBR(val, dec) {
+    if (dec === undefined) dec = 2;
+    return val.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  }
+
+  function calcPreview() {
+    const pesoReal = parseBR(document.getElementById('peso_kg').value);
+    if (pesoReal <= 0) return;
+
+    const modo = modoSelect.value;
+    let volume = 0, cubagem = 0, pesoCubado = pesoReal;
+
+    if (modo === 'cxlxa') {
+      const comp = parseBR(document.getElementById('comprimento_cm').value);
+      const larg = parseBR(document.getElementById('largura_cm').value);
+      const alt = parseBR(document.getElementById('altura_cm').value);
+      if (comp > 0 && larg > 0 && alt > 0) {
+        volume = (comp * larg * alt) / 1000000;
+        cubagem = pesoReal / volume;
+        pesoCubado = Math.max(volume * 300, pesoReal);
+      }
+      const html = volume > 0
+        ? `<span class="text-muted">Volume:</span> <strong>${formatBR(volume, 4)} m3</strong> &nbsp;|&nbsp; `
+          + `<span class="text-muted">Cubagem:</span> <strong>${formatBR(cubagem, 1)} kg/m3</strong> &nbsp;|&nbsp; `
+          + `<span class="text-muted">Peso p/ Cálculo:</span> <strong>${formatBR(pesoCubado, 2)} kg</strong> `
+          + (pesoCubado > pesoReal
+              ? '<span class="badge bg-warning text-dark">Peso Cubado</span>'
+              : '<span class="badge bg-secondary">Peso Real</span>')
+        : '';
+      document.getElementById('previewCxLxA').innerHTML = html;
+
+    } else if (modo === 'm3_direto') {
+      volume = parseBR(document.getElementById('volume_m3').value);
+      if (volume > 0) {
+        cubagem = pesoReal / volume;
+        pesoCubado = Math.max(volume * 300, pesoReal);
+      }
+      const html = volume > 0
+        ? `<span class="text-muted">Cubagem:</span> <strong>${formatBR(cubagem, 1)} kg/m3</strong> &nbsp;|&nbsp; `
+          + `<span class="text-muted">Peso p/ Cálculo:</span> <strong>${formatBR(pesoCubado, 2)} kg</strong> `
+          + (pesoCubado > pesoReal
+              ? '<span class="badge bg-warning text-dark">Peso Cubado</span>'
+              : '<span class="badge bg-secondary">Peso Real</span>')
+        : '';
+      document.getElementById('previewM3').innerHTML = html;
+    }
+  }
+
+  document.querySelectorAll('.dim-input, #peso_kg').forEach(el => {
+    el.addEventListener('input', calcPreview);
+  });
+  modoSelect.addEventListener('change', calcPreview);
+});
+
+// --- Modal detalhes ---
+function abrirModalDetalhes(row) {
+  const frete = JSON.parse(row.getAttribute('data-frete'));
+  const det = frete.detalhes_calculo || {};
+
+  function fmt(v, dec) {
+    if (v === null || v === undefined) return '-';
+    if (dec === undefined) dec = 2;
+    return parseFloat(v).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  }
+
+  function pct(v) {
+    if (!v) return '-';
+    return fmt(v, 4) + '%';
+  }
+
+  function moeda(v) {
+    if (v === null || v === undefined) return '-';
+    return 'R$ ' + fmt(v);
+  }
+
+  // --- Info transportadora + resultado ---
+  let html = `
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card border-left-info">
+        <div class="card-body py-2">
+          <h6 class="mb-1"><i class="fas fa-truck"></i> ${frete.transportadora}</h6>
+          <small class="text-muted">Tabela: <strong>${frete.nome_tabela}</strong></small><br>
+          <small class="text-muted">Tipo: ${frete.tipo_carga} | Modalidade: ${frete.modalidade}</small>
+          ${frete.lead_time ? '<br><small class="text-muted">Lead Time: <strong>' + frete.lead_time + ' dia(s)</strong></small>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-left-success">
+        <div class="card-body py-2">
+          <h6 class="mb-1"><i class="fas fa-dollar-sign"></i> Resultado</h6>
+          <small>Frete Total: <strong>${moeda(frete.valor_total)}</strong></small><br>
+          <small>Frete Líquido: <strong>${moeda(frete.valor_liquido)}</strong></small><br>
+          <small>ICMS Destino: <strong>${fmt(frete.icms_destino)}%</strong></small>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // --- Parâmetros da tabela ---
+  html += `
+  <h6 class="mt-3 mb-2"><i class="fas fa-sliders-h"></i> Parâmetros da Tabela</h6>
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered mb-3">
+      <thead class="table-thead-theme">
+        <tr>
+          <th>Parâmetro</th>
+          <th class="text-end">Valor</th>
+          <th>Parâmetro</th>
+          <th class="text-end">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>R$/kg</td><td class="text-end">${moeda(frete.valor_kg)}</td>
+          <td>% s/ Valor</td><td class="text-end">${pct(frete.percentual_valor)}</td>
+        </tr>
+        <tr>
+          <td>Frete Mín. Peso</td><td class="text-end">${moeda(frete.frete_minimo_peso)}</td>
+          <td>Frete Mín. Valor</td><td class="text-end">${moeda(frete.frete_minimo_valor)}</td>
+        </tr>
+        <tr>
+          <td>% GRIS</td><td class="text-end">${pct(frete.percentual_gris)}</td>
+          <td>GRIS Mínimo</td><td class="text-end">${moeda(frete.gris_minimo)}</td>
+        </tr>
+        <tr>
+          <td>% ADV</td><td class="text-end">${pct(frete.percentual_adv)}</td>
+          <td>ADV Mínimo</td><td class="text-end">${moeda(frete.adv_minimo)}</td>
+        </tr>
+        <tr>
+          <td>% RCA</td><td class="text-end">${pct(frete.percentual_rca)}</td>
+          <td>Pedágio /100kg</td><td class="text-end">${moeda(frete.pedagio_por_100kg)}</td>
+        </tr>
+        <tr>
+          <td>Despacho</td><td class="text-end">${moeda(frete.valor_despacho)}</td>
+          <td>CTE</td><td class="text-end">${moeda(frete.valor_cte)}</td>
+        </tr>
+        <tr>
+          <td>TAS</td><td class="text-end">${moeda(frete.valor_tas)}</td>
+          <td>ICMS Incluso</td><td class="text-end">${frete.icms_incluso ? 'Sim' : 'Não'}</td>
+        </tr>
+        <tr>
+          <td>ICMS Próprio</td><td class="text-end">${frete.icms_proprio ? pct(frete.icms_proprio) : '-'}</td>
+          <td>Optante Simples</td><td class="text-end">${frete.transportadora_optante ? 'Sim' : 'Não'}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+
+  // --- Passo a passo do cálculo ---
+  if (det && Object.keys(det).length > 0) {
+    html += `
+    <h6 class="mt-3 mb-2"><i class="fas fa-list-ol"></i> Passo a Passo do Cálculo</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead class="table-thead-theme">
+          <tr>
+            <th style="width:30px">#</th>
+            <th>Etapa</th>
+            <th>Fórmula / Descrição</th>
+            <th class="text-end">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Peso Real</td>
+            <td><code>Peso informado</code></td>
+            <td class="text-end">${fmt(det.peso_real)} kg</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Peso p/ Cálculo</td>
+            <td><code>MAX(peso_real, frete_minimo_peso)</code></td>
+            <td class="text-end">${fmt(det.peso_para_calculo)} kg</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Frete Base</td>
+            <td><code>peso_calc * valor_kg + valor_merc * %valor</code></td>
+            <td class="text-end">${moeda(det.frete_base)}</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>GRIS</td>
+            <td><code>MAX(valor_merc * %gris, gris_min)</code></td>
+            <td class="text-end">${moeda(det.gris)}</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>ADV</td>
+            <td><code>MAX(valor_merc * %adv, adv_min)</code></td>
+            <td class="text-end">${moeda(det.adv)}</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>RCA</td>
+            <td><code>valor_merc * %rca</code></td>
+            <td class="text-end">${moeda(det.rca)}</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>Pedágio</td>
+            <td><code>ceil(peso_calc/100) * pedagio_100kg</code></td>
+            <td class="text-end">${moeda(det.pedagio)}</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>TAS + Despacho + CTE</td>
+            <td><code>Valores fixos da tabela</code></td>
+            <td class="text-end">${moeda((det.valor_tas || 0) + (det.valor_despacho || 0) + (det.valor_cte || 0))}</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>Componentes Antes Mín.</td>
+            <td><code>Soma etapas 3-8 (antes do mínimo)</code></td>
+            <td class="text-end">${moeda(det.componentes_antes_minimo)}</td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>Frete Líquido antes Mín.</td>
+            <td><code>frete_base + componentes_antes</code></td>
+            <td class="text-end">${moeda(det.frete_liquido_antes_minimo)}</td>
+          </tr>
+          <tr class="${det.frete_minimo_aplicado ? 'table-warning' : ''}">
+            <td>11</td>
+            <td>Frete Mínimo Valor</td>
+            <td><code>MAX(frete_liquido, frete_min_valor)</code></td>
+            <td class="text-end">
+              ${det.frete_minimo_aplicado ? '<span class="badge bg-warning text-dark">Mínimo Aplicado</span>' : '<span class="text-muted">Não aplicado</span>'}
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>ICMS Final</td>
+            <td><code>frete / (1 - icms%/100)</code></td>
+            <td class="text-end">${moeda(frete.valor_total)} ${det.icms_incluso_tabela ? '<small class="text-muted">(incluso)</small>' : ''}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  document.getElementById('modalDetalhesBody').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+}
+</script>
+{% endblock %}

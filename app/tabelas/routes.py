@@ -7,7 +7,7 @@ from app import db
 import pandas as pd
 from datetime import datetime
 
-from app.tabelas.forms import TabelaFreteForm, ImportarTabelaFreteForm, GerarTemplateFreteForm
+from app.tabelas.forms import TabelaFreteForm, ImportarTabelaFreteForm, GerarTemplateFreteForm, SimulacaoFreteForm
 from app.tabelas.models import TabelaFrete, HistoricoTabelaFrete
 from app.transportadoras.models import Transportadora
 from app.localidades.models import Cidade
@@ -1111,3 +1111,93 @@ def exportar_tabelas():
         traceback.print_exc()
         flash(f'Erro ao exportar tabelas: {str(e)}', 'error')
         return redirect(url_for('tabelas.listar_todas_tabelas'))
+
+
+@tabelas_bp.route('/simulacao_frete', methods=['GET', 'POST'])
+@login_required
+def simulacao_frete():
+    """Tela de simulação de frete com suporte a peso cubado."""
+    from app.utils.frete_simulador import calcular_fretes_possiveis, buscar_cidade_unificada
+    from app.utils.valores_brasileiros import converter_valor_brasileiro
+
+    form = SimulacaoFreteForm()
+    form.uf_destino.choices = [('', 'Selecione...')] + UF_LIST
+
+    resultado = None
+    fretes = []
+
+    if form.validate_on_submit():
+        try:
+            valor_carga = converter_valor_brasileiro(form.valor_carga.data)
+            peso_real = converter_valor_brasileiro(form.peso_kg.data)
+        except (ValueError, TypeError):
+            flash('Valor ou peso inválido. Use formato: 1.234,56', 'danger')
+            return render_template('tabelas/simulacao_frete.html', form=form,
+                                   resultado=None, fretes=[])
+
+        if not valor_carga or valor_carga <= 0:
+            flash('Valor da carga deve ser maior que zero.', 'danger')
+            return render_template('tabelas/simulacao_frete.html', form=form,
+                                   resultado=None, fretes=[])
+        if not peso_real or peso_real <= 0:
+            flash('Peso deve ser maior que zero.', 'danger')
+            return render_template('tabelas/simulacao_frete.html', form=form,
+                                   resultado=None, fretes=[])
+
+        # Cálculo peso cubado
+        volume_m3 = 0
+        cubagem = 0
+        peso_cubado = peso_real
+        modo = form.modo_dimensao.data
+
+        if modo == 'cxlxa':
+            comp = converter_valor_brasileiro(form.comprimento_cm.data) or 0
+            larg = converter_valor_brasileiro(form.largura_cm.data) or 0
+            alt = converter_valor_brasileiro(form.altura_cm.data) or 0
+            if comp > 0 and larg > 0 and alt > 0:
+                volume_m3 = (comp * larg * alt) / 1_000_000
+                cubagem = peso_real / volume_m3 if volume_m3 > 0 else 0
+                peso_cubado = max(volume_m3 * 300, peso_real)
+        elif modo == 'm3_direto':
+            volume_m3 = converter_valor_brasileiro(form.volume_m3.data) or 0
+            if volume_m3 > 0:
+                cubagem = peso_real / volume_m3
+                peso_cubado = max(volume_m3 * 300, peso_real)
+
+        # Buscar cidade
+        cidade = buscar_cidade_unificada(
+            cidade=form.cidade_destino.data, uf=form.uf_destino.data
+        )
+        if not cidade:
+            flash(f'Cidade "{form.cidade_destino.data}" não encontrada para UF {form.uf_destino.data}.', 'danger')
+            return render_template('tabelas/simulacao_frete.html', form=form,
+                                   resultado=None, fretes=[])
+
+        # Calcular fretes possíveis (usa peso cubado como peso_utilizado)
+        fretes = calcular_fretes_possiveis(
+            cidade_destino_id=cidade.id,
+            peso_utilizado=peso_cubado,
+            valor_carga=valor_carga,
+            uf_origem='SP'
+        )
+        fretes.sort(key=lambda x: x.get('valor_total', float('inf')))
+
+        resultado = {
+            'peso_real': peso_real,
+            'volume_m3': round(volume_m3, 4),
+            'cubagem': round(cubagem, 1),
+            'peso_cubado': round(peso_cubado, 2),
+            'valor_carga': valor_carga,
+            'cidade': cidade.nome,
+            'uf': form.uf_destino.data,
+            'icms_cidade': cidade.icms or 0,
+            'modo_dimensao': modo,
+            'usou_peso_cubado': peso_cubado > peso_real,
+        }
+
+    return render_template(
+        'tabelas/simulacao_frete.html',
+        form=form,
+        resultado=resultado,
+        fretes=fretes,
+    )
