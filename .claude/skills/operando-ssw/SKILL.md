@@ -12,6 +12,9 @@ description: >-
   - Criar comissao: "vincular unidade a transportadora", "criar comissao 408"
   - Gerar CSVs comissao por cidade: "gerar CSV 408 por cidade", "importar precos por cidade"
   - Importar CSVs comissao por cidade: "importar comissao por cidade no SSW", "importar CSV 408"
+  - Exportar cidades atendidas (402, lote): "exportar cidades todas UFs", "CSV 402 completo"
+  - Exportar comissao por cidade (408, lote): "exportar comissao cidade todas unidades", "baixar CSV 408"
+  - Agrupar CSVs: "merge CSVs", "consolidar CSVs exportados"
   - Cotar frete no SSW: "cotar frete na 002", "simular frete SSW", "cotacao SSW"
   - Implantar rota: "POP-A10", "nova rota completa"
 
@@ -21,6 +24,9 @@ description: >-
 decision_tree: |
   Cadastrar unidade parceira (tipo T)?
     → cadastrar_unidade_401.py --sigla X --tipo T --razao-social "..." --dry-run
+  Exportar cidades atendidas (402, TODAS as 27 UFs de uma vez)?
+    → exportar_todas_cidades_402.py [--ufs AC,BA] [--output-dir /tmp/402_export_all/] --dry-run
+    → Depois: agrupar_csvs.py --input-dir /tmp/402_export_all/ --output /tmp/402_todas_cidades.csv --pattern "*_402_export.csv"
   Alterar/importar cidades na 402 (qualquer quantidade)?
     → PREFERIR CSV: exportar_cidades_402.py --uf XX → modificar → importar_cidades_402.py --csv /tmp/cidades.csv --dry-run [--timeout 30]
   Cadastrar 1-3 cidades VISIVEIS na grid 402?
@@ -34,6 +40,9 @@ decision_tree: |
     → criar_comissao_408.py --unidade XXX --cnpj X --dry-run
   Gerar CSVs comissao por cidade (408, em lote)?
     → gerar_csv_comissao_408.py --excel /tmp/backup_vinculos.xlsx [--unidades BVH,CGR] --dry-run
+  Exportar CSVs comissao por cidade do SSW (408, todas as unidades)?
+    → exportar_comissao_cidade_408.py [--unidades MAO,CGR] [--output-dir /tmp/408_export/] --dry-run
+    → Depois: agrupar_csvs.py --input-dir /tmp/408_export/ --output /tmp/408_todas_comissoes.csv --pattern "*_408_export.csv"
   Importar CSVs comissao por cidade no SSW (408)?
     → importar_comissao_cidade_408.py --csv-dir /tmp/ssw_408_csvs/ [--unidades BVH,CGR] --dry-run
   Cotar frete no SSW (002)?
@@ -96,6 +105,9 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | 8 | `gerar_csv_comissao_408.py` | 408 | Gerar CSVs comissao por cidade (238 cols, lote) |
 | 9 | `importar_comissao_cidade_408.py` | 408 | Importar CSVs de comissao por cidade no SSW |
 | 10 | `cotar_frete_ssw_002.py` | 002 | Cotar frete no SSW (simular proposta) |
+| 11 | `exportar_todas_cidades_402.py` | 402 | Exportar CSV de cidades para TODAS as 27 UFs (batch) |
+| 12 | `agrupar_csvs.py` | — | Merge generico de CSVs (reutilizavel 402 e 408) |
+| 13 | `exportar_comissao_cidade_408.py` | 408 | Exportar CSV comissao por cidade para todas as unidades |
 
 ---
 
