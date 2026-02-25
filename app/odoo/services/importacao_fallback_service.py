@@ -56,6 +56,15 @@ class ImportacaoFallbackService:
         ('l10n_br_tipo_pedido', '=', 'venda-industrializacao'),
     ]
 
+    # CNPJs das empresas do grupo — NFs intercompany NÃO devem ser importadas
+    # Transferências entre FB, SC, CD e LF não são frete para terceiros
+    CNPJS_GRUPO = {
+        '61.724.241/0001-78',  # Nacom Goya - FB
+        '61.724.241/0002-59',  # Nacom Goya - SC
+        '61.724.241/0003-30',  # Nacom Goya - CD
+        '18.467.441/0001-63',  # La Famiglia - LF
+    }
+
     def __init__(self):
         self.connection = get_odoo_connection()
         self.carteira_service = CarteiraService()
@@ -654,6 +663,12 @@ class ImportacaoFallbackService:
                         'municipio': '', 'estado': ''
                     })
 
+                    # Filtrar NFs intercompany (empresas do grupo)
+                    cnpj_cliente = cliente_info.get('cnpj_cliente', '')
+                    if cnpj_cliente in self.CNPJS_GRUPO:
+                        logger.info(f"⏭️ NF {numero_nf} ignorada — intercompany ({cnpj_cliente})")
+                        continue
+
                     # Linhas desta NF (do cache batch)
                     linhas = cache_linhas.get(move_id, [])
                     if not linhas:
@@ -1208,6 +1223,14 @@ class ImportacaoFallbackService:
                                     cliente_info['estado'] = uf_name
                 except Exception as e:
                     logger.warning(f"⚠️ Erro ao buscar dados do parceiro {partner_id}: {e}")
+
+            # Filtrar NFs intercompany (empresas do grupo)
+            if cliente_info['cnpj_cliente'] in self.CNPJS_GRUPO:
+                return {
+                    'sucesso': False,
+                    'mensagem': f'NF {numero_nf} é intercompany (CNPJ {cliente_info["cnpj_cliente"]})',
+                    'itens_importados': 0
+                }
 
             # 1c. Linhas de produto da NF
             linhas = self.connection.search_read(
