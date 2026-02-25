@@ -235,4 +235,83 @@
       }
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TABELAS DE FRETE - Compact table for listar_todas_tabelas
+     25 columns require aggressive space optimization
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .tabelas-frete-table {
+    font-size: 0.8rem;
+  }
+
+  .tabelas-frete-table thead th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0.3rem 0.4rem;
+    vertical-align: middle;
+  }
+
+  .tabelas-frete-table thead th a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .tabelas-frete-table thead th a:hover {
+    color: var(--bs-primary);
+  }
+
+  .tabelas-frete-table tbody td {
+    padding: 0.25rem 0.4rem;
+    vertical-align: middle;
+  }
+
+  /* Numeric cells: no wrap */
+  .tabelas-frete-table .cel-num {
+    white-space: nowrap;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* UF cells: centered, narrow */
+  .tabelas-frete-table .cel-uf {
+    text-align: center;
+    width: 2.5rem;
+  }
+
+  /* Action buttons: compact */
+  .tabelas-frete-table .cel-acoes {
+    white-space: nowrap;
+    text-align: center;
+    width: 5rem;
+  }
+
+  .tabelas-frete-table .cel-acoes .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+
+  /* Status cell: centered */
+  .tabelas-frete-table .cel-status {
+    text-align: center;
+    width: 3rem;
+  }
+
+  /* Transportadora: truncate with ellipsis */
+  .tabelas-frete-table .cel-transp {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Tabela name column */
+  .tabelas-frete-table .cel-tabela {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
 } /* End @layer modules */

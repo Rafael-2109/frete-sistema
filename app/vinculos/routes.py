@@ -12,6 +12,7 @@ from app.localidades.models import Cidade
 from app.tabelas.models import TabelaFrete
 from app.utils.importacao.utils_importacao import salvar_temp, limpar_temp
 from app.utils.importacao.importar_vinculos_web import validar_vinculos
+from app.utils.timezone import agora_utc_naive
 import io
 import openpyxl
 import math

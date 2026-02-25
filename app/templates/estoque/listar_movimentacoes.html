@@ -217,7 +217,7 @@
                                         <span class="fw-bold
                                             {% if mov.qtd_movimentacao > 0 %}text-success
                                             {% else %}text-danger{% endif %}">
-                                            {{ mov.qtd_movimentacao|valor_br }}
+                                            {{ mov.qtd_movimentacao|numero_br(0) }}
                                         </span>
                                     </td>
                                     <td>

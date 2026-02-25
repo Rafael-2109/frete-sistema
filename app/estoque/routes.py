@@ -138,24 +138,7 @@ def converter_projecao_para_resumo(projecao):
     }
 
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
-
-# Registrar filtro de formatação brasileira para o template
-@estoque_bp.app_template_filter('valor_br')
-def valor_br_filter(value, decimais=0):
-    """Filtro Jinja2 para formatar valores no padrão brasileiro"""
-    if value is None or value == '':
-        return '0'
-    
-    try:
-        valor_float = float(value)
-        if decimais == 0:
-            return f"{valor_float:,.0f}".replace(',', '.')
-        else:
-            valor_formatado = f"{valor_float:,.{decimais}f}"
-            valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
-            return f"R$ {valor_formatado}"
-    except (ValueError, TypeError):
-        return 'R$ 0,00'
+# Filtros globais (valor_br, numero_br, peso_br) definidos em app/utils/template_filters.py
 
 @estoque_bp.route('/')
 @login_required

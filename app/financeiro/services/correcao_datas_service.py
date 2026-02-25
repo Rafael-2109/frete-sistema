@@ -504,74 +504,69 @@ class CorrecaoDatasService:
         Corrige a data de um documento no Odoo.
 
         Fluxo:
-        1. Desbloquear período fiscal temporariamente
+        1. Desbloquear TODOS os períodos fiscais temporariamente
+           (fiscalyear_lock_date, period_lock_date, tax_lock_date)
         2. Voltar documento para draft
-        3. Atualizar date
-        4. Repostar documento
-        5. Restaurar bloqueio
+        3. Atualizar date + limpar name para '/' (evitar erro de sequência)
+        4. Repostar documento (Odoo gera nova sequência compatível)
+        5. Restaurar bloqueios
         """
-        lock_date_original = None
+        lock_dates_original = {}
         company_id = None
+        was_posted = False
+        data_lancamento_antes = None
 
         try:
             # 1. Verificar estado atual e empresa
             move = self.odoo.execute_kw(
                 'account.move', 'read',
                 [[move_id]],
-                {'fields': ['state', 'company_id']}
+                {'fields': ['state', 'company_id', 'date', 'name']}
             )
 
             if not move:
-                raise Exception(f"Documento {move_id} não encontrado")
+                raise Exception(f"Documento {move_id} não encontrado no Odoo (removido ou inacessível)")
 
             was_posted = move[0]['state'] == 'posted'
             company_id = move[0]['company_id'][0] if move[0]['company_id'] else 1
+            data_lancamento_antes = move[0].get('date')
 
-            # 2. Salvar e remover lock_date da empresa
+            # 2. Salvar e remover TODOS os lock_dates da empresa
+            # Campos que podem bloquear: fiscalyear_lock_date, period_lock_date, tax_lock_date
+            lock_date_fields = ['fiscalyear_lock_date', 'period_lock_date', 'tax_lock_date']
             company = self.odoo.execute_kw(
                 'res.company', 'read',
                 [[company_id]],
-                {'fields': ['fiscalyear_lock_date']}
+                {'fields': lock_date_fields}
             )
-            lock_date_original = company[0].get('fiscalyear_lock_date') if company else None
 
-            if lock_date_original:
-                logger.info(f"Removendo lock_date temporariamente (era: {lock_date_original})")
+            if company:
+                for field in lock_date_fields:
+                    val = company[0].get(field)
+                    if val:
+                        lock_dates_original[field] = val
+
+            if lock_dates_original:
+                unlock_vals = {field: False for field in lock_dates_original}
+                logger.info(
+                    f"Removendo lock_dates temporariamente para doc {move_id}: "
+                    f"{', '.join(f'{k}={v}' for k, v in lock_dates_original.items())}"
+                )
                 self.odoo.execute_kw(
                     'res.company', 'write',
-                    [[company_id], {'fiscalyear_lock_date': False}]
+                    [[company_id], unlock_vals]
                 )
 
             # 3. Voltar para draft se estava posted
             if was_posted:
-                try:
-                    self.odoo.execute_kw('account.move', 'button_draft', [[move_id]])
-                except Exception as draft_error:
-                    # Odoo server retorna None no button_draft e não consegue serializar
-                    if 'cannot marshal None' in str(draft_error):
-                        logger.warning(f"Erro XML-RPC 'None' no button_draft para {move_id}, verificando estado...")
+                self._safe_button_draft(move_id)
 
-                        # Verificar se o documento foi para draft mesmo com o erro
-                        move_check = self.odoo.execute_kw(
-                            'account.move', 'read',
-                            [[move_id]],
-                            {'fields': ['state']}
-                        )
-
-                        if move_check and move_check[0]['state'] == 'draft':
-                            logger.info(f"Documento {move_id} foi para draft com sucesso apesar do erro XML-RPC")
-                        else:
-                            # Documento não foi para draft, erro real
-                            logger.error(f"Documento {move_id} permaneceu posted após erro")
-                            raise Exception(f"Falha ao voltar documento para draft")
-                    else:
-                        # Outro erro, propagar
-                        raise
-
-            # 4. Atualizar a data
+            # 4. Atualizar a data E limpar o name (evitar erro de sequência ano)
+            # Setar name='/' faz o Odoo gerar nova sequência ao repostar,
+            # compatível com o ano da data_correta.
             self.odoo.execute_kw(
                 'account.move', 'write',
-                [[move_id], {'date': data_correta}]
+                [[move_id], {'date': data_correta, 'name': '/'}]
             )
 
             # 5. Atualizar linhas
@@ -588,31 +583,7 @@ class CorrecaoDatasService:
 
             # 6. Repostar se estava posted
             if was_posted:
-                try:
-                    self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
-                except Exception as post_error:
-                    # Odoo server retorna None no action_post e não consegue serializar
-                    # Erro: "cannot marshal None unless allow_none is enabled"
-                    # A operação PODE ter sido executada com sucesso no servidor
-                    if 'cannot marshal None' in str(post_error):
-                        logger.warning(f"Erro XML-RPC 'None' no action_post para {move_id}, verificando estado...")
-
-                        # Verificar se o documento foi postado mesmo com o erro
-                        move_check = self.odoo.execute_kw(
-                            'account.move', 'read',
-                            [[move_id]],
-                            {'fields': ['state']}
-                        )
-
-                        if move_check and move_check[0]['state'] == 'posted':
-                            logger.info(f"Documento {move_id} foi postado com sucesso apesar do erro XML-RPC")
-                        else:
-                            # Documento não foi postado, erro real
-                            logger.error(f"Documento {move_id} permaneceu em draft após erro")
-                            raise Exception(f"Falha ao repostar documento: permaneceu em draft")
-                    else:
-                        # Outro erro, propagar
-                        raise
+                self._safe_action_post(move_id)
 
             logger.info(f"Documento {move_id} corrigido para data {data_correta}")
             return True
@@ -621,49 +592,150 @@ class CorrecaoDatasService:
             logger.error(f"Erro ao corrigir documento {move_id}: {e}")
 
             # CRÍTICO: Se estava posted e ficou em draft por causa do erro,
-            # tentar repostar para não deixar documento inconsistente
+            # tentar recuperar para não deixar documento inconsistente
             if was_posted:
-                try:
-                    move_state = self.odoo.execute_kw(
-                        'account.move', 'read',
-                        [[move_id]],
-                        {'fields': ['state']}
-                    )
-                    if move_state and move_state[0]['state'] == 'draft':
-                        logger.warning(f"Documento {move_id} ficou em draft após erro, tentando repostar...")
-                        try:
-                            self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
-                            logger.info(f"Documento {move_id} repostado com sucesso após erro")
-                        except Exception as repost_err:
-                            if 'cannot marshal None' in str(repost_err):
-                                # Verificar se realmente postou
-                                check = self.odoo.execute_kw(
-                                    'account.move', 'read',
-                                    [[move_id]],
-                                    {'fields': ['state']}
-                                )
-                                if check and check[0]['state'] == 'posted':
-                                    logger.info(f"Documento {move_id} repostado (ignorando erro XML-RPC)")
-                                else:
-                                    logger.error(f"CRÍTICO: Documento {move_id} permaneceu em draft!")
-                            else:
-                                logger.error(f"CRÍTICO: Falha ao repostar documento {move_id}: {repost_err}")
-                except Exception as check_err:
-                    logger.error(f"CRÍTICO: Não foi possível verificar/repostar documento {move_id}: {check_err}")
+                self._recovery_repost(move_id, data_lancamento_antes)
 
             raise
 
         finally:
-            # SEMPRE restaurar lock_date
-            if lock_date_original and company_id:
+            # SEMPRE restaurar TODOS os lock_dates
+            if lock_dates_original and company_id:
                 try:
-                    logger.info(f"Restaurando lock_date para {lock_date_original}")
+                    logger.info(
+                        f"Restaurando lock_dates para doc {move_id}: "
+                        f"{', '.join(f'{k}={v}' for k, v in lock_dates_original.items())}"
+                    )
                     self.odoo.execute_kw(
                         'res.company', 'write',
-                        [[company_id], {'fiscalyear_lock_date': lock_date_original}]
+                        [[company_id], lock_dates_original]
                     )
                 except Exception as restore_error:
-                    logger.error(f"CRÍTICO: Falha ao restaurar lock_date: {restore_error}")
+                    logger.error(f"CRÍTICO: Falha ao restaurar lock_dates: {restore_error}")
+
+    def _safe_button_draft(self, move_id: int) -> None:
+        """
+        Coloca documento em draft com tratamento do erro 'cannot marshal None'.
+        Raises Exception se o documento não for para draft.
+        """
+        try:
+            self.odoo.execute_kw('account.move', 'button_draft', [[move_id]])
+        except Exception as draft_error:
+            if 'cannot marshal None' in str(draft_error):
+                logger.warning(f"Erro XML-RPC 'None' no button_draft para {move_id}, verificando estado...")
+                move_check = self.odoo.execute_kw(
+                    'account.move', 'read',
+                    [[move_id]],
+                    {'fields': ['state']}
+                )
+                if move_check and move_check[0]['state'] == 'draft':
+                    logger.info(f"Documento {move_id} foi para draft com sucesso apesar do erro XML-RPC")
+                else:
+                    logger.error(f"Documento {move_id} permaneceu posted após erro")
+                    raise Exception("Falha ao voltar documento para draft")
+            else:
+                raise
+
+    def _safe_action_post(self, move_id: int) -> None:
+        """
+        Reposta documento com tratamento do erro 'cannot marshal None'.
+        Raises Exception se o documento não for para posted.
+        """
+        try:
+            self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
+        except Exception as post_error:
+            if 'cannot marshal None' in str(post_error):
+                logger.warning(f"Erro XML-RPC 'None' no action_post para {move_id}, verificando estado...")
+                move_check = self.odoo.execute_kw(
+                    'account.move', 'read',
+                    [[move_id]],
+                    {'fields': ['state']}
+                )
+                if move_check and move_check[0]['state'] == 'posted':
+                    logger.info(f"Documento {move_id} foi postado com sucesso apesar do erro XML-RPC")
+                else:
+                    logger.error(f"Documento {move_id} permaneceu em draft após erro")
+                    raise Exception("Falha ao repostar documento: permaneceu em draft")
+            else:
+                raise
+
+    def _recovery_repost(self, move_id: int, data_lancamento_antes: str = None) -> None:
+        """
+        Tenta recuperar um documento que ficou preso em draft após erro.
+
+        Estratégia (em ordem):
+        1. Verifica se está em draft (se posted, nada a fazer)
+        2. Tenta repostar direto (pode funcionar se name já foi limpo)
+        3. Se falhar por sequência, limpa name='/' e tenta novamente
+        4. Se falhar novamente, reverte date para original e reposta
+           (pelo menos o documento volta a posted com dados anteriores)
+        """
+        try:
+            move_state = self.odoo.execute_kw(
+                'account.move', 'read',
+                [[move_id]],
+                {'fields': ['state', 'name', 'date']}
+            )
+            if not move_state or move_state[0]['state'] != 'draft':
+                return  # Não está em draft, nada a fazer
+
+            logger.warning(f"Documento {move_id} ficou em draft após erro, tentando recuperar...")
+
+            # Tentativa 1: repostar direto (name pode já ser '/')
+            try:
+                self._safe_action_post(move_id)
+                logger.info(f"Documento {move_id} repostado com sucesso na tentativa 1")
+                return
+            except Exception as e1:
+                logger.warning(f"Tentativa 1 falhou para {move_id}: {e1}")
+
+            # Tentativa 2: limpar name e repostar
+            try:
+                self.odoo.execute_kw(
+                    'account.move', 'write',
+                    [[move_id], {'name': '/'}]
+                )
+                self._safe_action_post(move_id)
+                logger.info(f"Documento {move_id} repostado com sucesso na tentativa 2 (name limpo)")
+                return
+            except Exception as e2:
+                logger.warning(f"Tentativa 2 falhou para {move_id}: {e2}")
+
+            # Tentativa 3: reverter date para original e repostar
+            # (preserva o documento posted com dados antigos — melhor que ficar em draft)
+            if data_lancamento_antes:
+                try:
+                    logger.warning(
+                        f"Revertendo date do documento {move_id} para {data_lancamento_antes} "
+                        f"e repostando (fallback de segurança)"
+                    )
+                    self.odoo.execute_kw(
+                        'account.move', 'write',
+                        [[move_id], {'date': data_lancamento_antes, 'name': '/'}]
+                    )
+                    # Atualizar linhas também
+                    line_ids = self.odoo.execute_kw(
+                        'account.move.line', 'search',
+                        [[['move_id', '=', move_id]]]
+                    )
+                    if line_ids:
+                        self.odoo.execute_kw(
+                            'account.move.line', 'write',
+                            [line_ids, {'date': data_lancamento_antes}]
+                        )
+                    self._safe_action_post(move_id)
+                    logger.info(
+                        f"Documento {move_id} repostado com data ORIGINAL {data_lancamento_antes} "
+                        f"(correção não aplicada, mas documento não ficou em draft)"
+                    )
+                    return
+                except Exception as e3:
+                    logger.error(f"CRÍTICO: Tentativa 3 (revert) falhou para {move_id}: {e3}")
+
+            logger.error(f"CRÍTICO: Documento {move_id} permaneceu em DRAFT após todas as tentativas de recovery!")
+
+        except Exception as check_err:
+            logger.error(f"CRÍTICO: Não foi possível verificar/recuperar documento {move_id}: {check_err}")
 
     def atualizar_numeros_nf(self) -> Dict:
         """

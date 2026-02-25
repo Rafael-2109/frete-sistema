@@ -18,58 +18,8 @@ from app.utils.timezone import agora_utc_naive
 
 tabelas_bp = Blueprint('tabelas', __name__, url_prefix='/tabelas')
 
-# Registrar filtros de formatação brasileira para o template
-@tabelas_bp.app_template_filter('valor_br')
-def valor_br_filter(value, decimais=2):
-    """Filtro Jinja2 para formatar valores no padrão brasileiro"""
-    if value is None or value == '':
-        return 'R$ 0,00'
-    
-    try:
-        valor_float = float(value)
-        if decimais == 0:
-            return f"R$ {valor_float:,.0f}".replace(',', '.')
-        else:
-            valor_formatado = f"{valor_float:,.{decimais}f}"
-            valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
-            return f"R$ {valor_formatado}"
-    except (ValueError, TypeError):
-        return 'R$ 0,00'
-
-@tabelas_bp.app_template_filter('numero_br')
-def numero_br_filter(value, decimais=2):
-    """Filtro Jinja2 para formatar números no padrão brasileiro"""
-    if value is None or value == '':
-        return '0' + (',' + '0' * decimais if decimais > 0 else '')
-
-    try:
-        valor_float = float(value)
-        if decimais == 0:
-            return f"{valor_float:,.0f}".replace(',', '.')
-        else:
-            valor_formatado = f"{valor_float:,.{decimais}f}"
-            valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
-            return valor_formatado
-    except (ValueError, TypeError):
-        return '0' + (',' + '0' * decimais if decimais > 0 else '')
-
-@tabelas_bp.app_template_filter('peso_br')
-def peso_br_filter(value):
-    """Filtro Jinja2 para formatar peso no padrão brasileiro"""
-    if value is None or value == '':
-        return '0,0 kg'
-        
-    try:
-        valor_float = float(value)
-        if valor_float >= 1000:
-            valor_formatado = f"{valor_float:,.1f}"
-            valor_formatado = valor_formatado.replace(',', 'X').replace('.', ',').replace('X', '.')
-            return f"{valor_formatado} kg"
-        else:
-            valor_formatado = f"{valor_float:.1f}".replace('.', ',')
-            return f"{valor_formatado} kg"
-    except (ValueError, TypeError):
-        return '0,0 kg'
+# Filtros globais (valor_br, numero_br, peso_br) definidos em app/utils/template_filters.py
+# Removidos app_template_filter locais que sobrescreviam filtros globais causando conflitos
 
 @tabelas_bp.route('/tabelas_frete', methods=['GET', 'POST'])
 @login_required

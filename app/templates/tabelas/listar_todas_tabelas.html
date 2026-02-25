@@ -33,14 +33,16 @@
 
     <div class="col-md-2">
       <label class="form-label">Cidade</label>
-      <select name="cidade" id="cidadeSelect" class="form-select">
+      <select name="cidade" id="cidadeSelect" class="form-select"
+              data-cidade-selecionada="{{ request.args.get('cidade', '') }}">
         <option value="">Selecione uma Cidade</option>
       </select>
     </div>
 
     <div class="col-md-2">
       <label class="form-label">Nome Tabela</label>
-      <select name="nome_tabela" id="tabelaSelect" class="form-select">
+      <select name="nome_tabela" id="tabelaSelect" class="form-select"
+              data-tabela-selecionada="{{ request.args.get('nome_tabela', '') }}">
         <option value="">Selecione uma Tabela</option>
       </select>
     </div>
@@ -100,358 +102,87 @@
 
   <!-- ====================== TABELA ====================== -->
   <div class="table-responsive">
-    <table class="table table-striped table-bordered">
+    <table class="table table-striped table-bordered table-sm tabelas-frete-table">
       <thead class="table-light">
         <tr>
-          <th>Ações</th>
-          <th>Status</th>
-
           {% set current_sort = sort|default('') %}
           {% set current_dir  = direction|default('asc') %}
 
-          {# Exemplo: Transportadora #}
-          {% set next_dir = 'desc' if (current_sort=='transportadora' and current_dir=='asc') else 'asc' %}
-          <th>
-            <a href="?sort=transportadora&direction={{ next_dir }}&page=1">
-              Transportadora
-              {% if current_sort == 'transportadora' %}
-                <span class="badge text-light">{{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
+          {# Macro para header sortable compacto #}
+          {% macro th_sort(field, label, extra_class='') %}
+            {% set next_dir = 'desc' if (current_sort == field and current_dir == 'asc') else 'asc' %}
+            <th class="{{ extra_class }}">
+              <a href="?sort={{ field }}&direction={{ next_dir }}&page=1" title="{{ label }}">
+                {{ label }}
+                {% if current_sort == field %}{{ '↑' if current_dir == 'asc' else '↓' }}{% endif %}
+              </a>
+            </th>
+          {% endmacro %}
 
-          {# uf_origem #}
-          {% set next_dir = 'desc' if (current_sort=='uf_origem' and current_dir=='asc') else 'asc' %}
-          <th>
-            <a href="?sort=uf_origem&direction={{ next_dir }}&page=1">
-              UF Origem
-              {% if current_sort == 'uf_origem' %}
-                <span class="badge text-light">{{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
-
-          {# uf_destino #}
-          {% set next_dir = 'desc' if (current_sort=='uf_destino' and current_dir=='asc') else 'asc' %}
-          <th>
-            <a href="?sort=uf_destino&direction={{ next_dir }}&page=1">
-              UF Destino
-              {% if current_sort == 'uf_destino' %}
-                <span class="badge text-light">{{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
-
-          {# nome_tabela #}
-          {% set next_dir = 'desc' if (current_sort=='nome_tabela' and current_dir=='asc') else 'asc' %}
-          <th style="min-width:150px;">
-            <a href="?sort=nome_tabela&direction={{ next_dir }}&page=1">
-              Nome Tabela
-              {% if current_sort=='nome_tabela' %}
-                <span class="badge text-light">{{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
-
-          {# tipo_carga #}
-          {% set next_dir = 'desc' if (current_sort=='tipo_carga' and current_dir=='asc') else 'asc' %}
-          <th>
-            <a href="?sort=tipo_carga&direction={{ next_dir }}&page=1">
-              Tipo Carga
-              {% if current_sort=='tipo_carga' %}
-                <span class="badge text-light">{{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
-
-          {# modalidade #}
-          {% set next_dir = 'desc' if (current_sort=='modalidade' and current_dir=='asc') else 'asc' %}
-          <th>
-            <a href="?sort=modalidade&direction={{ next_dir }}&page=1">
-              Modalidade
-              {% if current_sort=='modalidade' %}
-                <span class="badge text-light">{{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- Frete Min. Valor -->
-          {% set next_dir = 'desc' if current_sort == 'frete_minimo_valor' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=frete_minimo_valor&direction={{ next_dir }}">
-              Frete Min. Valor
-              {% if current_sort == 'frete_minimo_valor' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- Frete Min. Peso -->
-          {% set next_dir = 'desc' if current_sort == 'frete_minimo_peso' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=frete_minimo_peso&direction={{ next_dir }}">
-              Frete Min. Peso
-              {% if current_sort == 'frete_minimo_peso' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- Valor KG -->
-          {% set next_dir = 'desc' if current_sort == 'valor_kg' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=valor_kg&direction={{ next_dir }}">
-              Valor KG
-              {% if current_sort == 'valor_kg' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- % Valor -->
-          {% set next_dir = 'desc' if current_sort == 'percentual_valor' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=percentual_valor&direction={{ next_dir }}">
-              % Valor
-              {% if current_sort == 'percentual_valor' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- % GRIS -->
-          {% set next_dir = 'desc' if current_sort == 'percentual_gris' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=percentual_gris&direction={{ next_dir }}">
-              % GRIS
-              {% if current_sort == 'percentual_gris' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- % ADV -->
-          {% set next_dir = 'desc' if current_sort == 'percentual_adv' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=percentual_adv&direction={{ next_dir }}">
-              % ADV
-              {% if current_sort == 'percentual_adv' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- % RCA -->
-          {% set next_dir = 'desc' if current_sort == 'percentual_rca' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=percentual_rca&direction={{ next_dir }}">
-              % RCA
-              {% if current_sort == 'percentual_rca' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- Despacho -->
-          {% set next_dir = 'desc' if current_sort == 'valor_despacho' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=valor_despacho&direction={{ next_dir }}">
-              Despacho
-              {% if current_sort == 'valor_despacho' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- CTE -->
-          {% set next_dir = 'desc' if current_sort == 'valor_cte' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=valor_cte&direction={{ next_dir }}">
-              CTE
-              {% if current_sort == 'valor_cte' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- TAS -->
-          {% set next_dir = 'desc' if current_sort == 'valor_tas' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=valor_tas&direction={{ next_dir }}">
-              TAS
-              {% if current_sort == 'valor_tas' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- Pedágio 100kg -->
-          {% set next_dir = 'desc' if current_sort == 'pedagio_por_100kg' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=pedagio_por_100kg&direction={{ next_dir }}">
-              Pedágio p/100kg
-              {% if current_sort == 'pedagio_por_100kg' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- ICMS Incluso -->
-          {% set next_dir = 'desc' if current_sort == 'icms_incluso' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=icms_incluso&direction={{ next_dir }}">
-              ICMS Incluso
-              {% if current_sort == 'icms_incluso' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- GRIS Mínimo -->
-          {% set next_dir = 'desc' if current_sort == 'gris_minimo' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=gris_minimo&direction={{ next_dir }}">
-              GRIS Mín.
-              {% if current_sort == 'gris_minimo' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- ADV Mínimo -->
-          {% set next_dir = 'desc' if current_sort == 'adv_minimo' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=adv_minimo&direction={{ next_dir }}">
-              ADV Mín.
-              {% if current_sort == 'adv_minimo' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- ICMS Próprio -->
-          {% set next_dir = 'desc' if current_sort == 'icms_proprio' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=icms_proprio&direction={{ next_dir }}">
-              ICMS Próp.
-              {% if current_sort == 'icms_proprio' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-
-          <!-- Criado Por -->
-          {% set next_dir = 'desc' if current_sort == 'criado_por' and current_dir == 'asc' else 'asc' %}
-          <th>
-            <a href="?sort=criado_por&direction={{ next_dir }}">
-              Criado Por
-              {% if current_sort == 'criado_por' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir == 'asc' else '↓' }}
-                </span>
-              {% endif %}
-            </a>
-          </th>
-          
-
-          {# criado_em #}
-          {% set next_dir = 'desc' if (current_sort=='criado_em' and current_dir=='asc') else 'asc' %}
-          <th>
-            <a href="?sort=criado_em&direction={{ next_dir }}">
-              Criado Em
-              {% if current_sort=='criado_em' %}
-                <span class="badge text-light">
-                  {{ '↑' if current_dir=='asc' else '↓' }}</span>
-              {% endif %}
-            </a>
-          </th>
+          <th class="cel-acoes">Acoes</th>
+          <th class="cel-status">St.</th>
+          {{ th_sort('transportadora', 'Transp.', 'cel-transp') }}
+          {{ th_sort('uf_origem', 'Orig.', 'cel-uf') }}
+          {{ th_sort('uf_destino', 'Dest.', 'cel-uf') }}
+          {{ th_sort('nome_tabela', 'Tabela', 'cel-tabela') }}
+          {{ th_sort('tipo_carga', 'Tipo') }}
+          {{ th_sort('modalidade', 'Modal.') }}
+          {{ th_sort('frete_minimo_valor', 'Fr.Min.Vlr', 'cel-num') }}
+          {{ th_sort('frete_minimo_peso', 'Fr.Min.Peso', 'cel-num') }}
+          {{ th_sort('valor_kg', 'Vlr/KG', 'cel-num') }}
+          {{ th_sort('percentual_valor', '% Valor', 'cel-num') }}
+          {{ th_sort('percentual_gris', '% GRIS', 'cel-num') }}
+          {{ th_sort('percentual_adv', '% ADV', 'cel-num') }}
+          {{ th_sort('percentual_rca', '% RCA', 'cel-num') }}
+          {{ th_sort('valor_despacho', 'Desp.', 'cel-num') }}
+          {{ th_sort('valor_cte', 'CTE', 'cel-num') }}
+          {{ th_sort('valor_tas', 'TAS', 'cel-num') }}
+          {{ th_sort('pedagio_por_100kg', 'Ped/100kg', 'cel-num') }}
+          {{ th_sort('icms_incluso', 'ICMS Inc.') }}
+          {{ th_sort('gris_minimo', 'GRIS Min.', 'cel-num') }}
+          {{ th_sort('adv_minimo', 'ADV Min.', 'cel-num') }}
+          {{ th_sort('icms_proprio', 'ICMS Pr.', 'cel-num') }}
+          {{ th_sort('criado_por', 'Autor') }}
+          {{ th_sort('criado_em', 'Data') }}
         </tr>
       </thead>
       <tbody>
         {% for tabela in tabelas %}
         <tr>
-          <td class="text-center">
+          <td class="cel-acoes">
             <a href="{{ url_for('tabelas.editar_tabela_frete', tabela_id=tabela.id) }}"
-               class="btn btn-sm btn-warning">Editar</a>
+               class="btn btn-sm btn-warning" title="Editar"><i class="fas fa-edit"></i></a>
             <button onclick="confirmarExclusao('{{ tabela.id }}')"
-               class="btn btn-sm btn-danger">Excluir</button>
+               class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></button>
           </td>
-          <td class="text-center">
+          <td class="cel-status">
             <span class="badge badge-{{ tabela.status_cor }}">
               {{ tabela.status_texto }}
             </span>
           </td>
-          <td>{{ tabela.transportadora.razao_social }}</td>
-          <td>{{ tabela.uf_origem }}</td>
-          <td>{{ tabela.uf_destino }}</td>
-          <td>{{ tabela.nome_tabela }}</td>
-          <td>{{ tabela.tipo_carga }}</td>
+          <td class="cel-transp" title="{{ tabela.transportadora.razao_social }}">{{ tabela.transportadora.razao_social }}</td>
+          <td class="cel-uf">{{ tabela.uf_origem }}</td>
+          <td class="cel-uf">{{ tabela.uf_destino }}</td>
+          <td class="cel-tabela" title="{{ tabela.nome_tabela }}">{{ tabela.nome_tabela }}</td>
+          <td>{% if tabela.tipo_carga == 'FRACIONADA' %}Frac.{% elif tabela.tipo_carga == 'DIRETA' %}Dir.{% else %}{{ tabela.tipo_carga }}{% endif %}</td>
           <td>{{ tabela.modalidade }}</td>
-          <td>{{ tabela.frete_minimo_valor | valor_br }}</td>
-          <td>{{ tabela.frete_minimo_peso | peso_br }}</td>
-          <td>{{ tabela.valor_kg | valor_br(4) }}</td>
-          <td>{{ tabela.percentual_valor | numero_br }} %</td>
-          <td>{{ tabela.percentual_gris | numero_br }} %</td>
-          <td>{{ tabela.percentual_adv | numero_br }} %</td>
-          <td>{{ tabela.percentual_rca | numero_br }} %</td>
-          <td>{{ tabela.valor_despacho | valor_br }}</td>
-          <td>{{ tabela.valor_cte | valor_br }}</td>
-          <td>{{ tabela.valor_tas | valor_br }}</td>
-          <td>{{ tabela.pedagio_por_100kg | valor_br }}</td>
-          <td>{{ 'Sim' if tabela.icms_incluso else 'Não' }}</td>
-          <td>
-            {% if tabela.gris_minimo %}
-              {{ tabela.gris_minimo | valor_br }}
-            {% else %}
-              -
-            {% endif %}
-          </td>
-          <td>
-            {% if tabela.adv_minimo %}
-              {{ tabela.adv_minimo | valor_br }}
-            {% else %}
-              -
-            {% endif %}
-          </td>
-          <td>
-            {% if tabela.icms_proprio %}
-              {{ tabela.icms_proprio | numero_br }}%
-            {% else %}
-              -
-            {% endif %}
-          </td>
+          <td class="cel-num">{{ tabela.frete_minimo_valor | valor_br }}</td>
+          <td class="cel-num">{{ tabela.frete_minimo_peso | peso_br }}</td>
+          <td class="cel-num">{{ tabela.valor_kg | valor_br(4) }}</td>
+          <td class="cel-num">{{ tabela.percentual_valor | numero_br(2) }} %</td>
+          <td class="cel-num">{{ tabela.percentual_gris | numero_br(2) }} %</td>
+          <td class="cel-num">{{ tabela.percentual_adv | numero_br(2) }} %</td>
+          <td class="cel-num">{{ tabela.percentual_rca | numero_br(2) }} %</td>
+          <td class="cel-num">{{ tabela.valor_despacho | valor_br }}</td>
+          <td class="cel-num">{{ tabela.valor_cte | valor_br }}</td>
+          <td class="cel-num">{{ tabela.valor_tas | valor_br }}</td>
+          <td class="cel-num">{{ tabela.pedagio_por_100kg | valor_br }}</td>
+          <td class="text-center">{{ 'S' if tabela.icms_incluso else 'N' }}</td>
+          <td class="cel-num">{% if tabela.gris_minimo %}{{ tabela.gris_minimo | valor_br }}{% else %}-{% endif %}</td>
+          <td class="cel-num">{% if tabela.adv_minimo %}{{ tabela.adv_minimo | valor_br }}{% else %}-{% endif %}</td>
+          <td class="cel-num">{% if tabela.icms_proprio %}{{ tabela.icms_proprio | numero_br(2) }}%{% else %}-{% endif %}</td>
           <td>{{ tabela.criado_por }}</td>
-          <td>{{ tabela.criado_em | formatar_data_hora_brasil }}</td>
+          <td class="cel-num">{{ tabela.criado_em | formatar_data_hora_brasil }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -536,15 +267,7 @@ document.addEventListener('DOMContentLoaded', function () {
       cidadeSelect.innerHTML = '<option value="">Selecione uma Cidade</option>';
       return;
     }
-    fetch(`/vinculos/cidades_por_uf/${ufSelect.value}`)
-      .then(response => response.json())
-      .then(cidades => {
-        cidadeSelect.innerHTML = '<option value="">Selecione uma Cidade</option>';
-        cidades.forEach(cidade => {
-          cidadeSelect.innerHTML += `<option value="${cidade}">${cidade}</option>`;
-        });
-      })
-      .catch(() => alert('Erro ao carregar cidades'));
+    fetchCidades(ufSelect.value);
   });
 
   transportadoraSelect.addEventListener('change', function () {
@@ -553,16 +276,47 @@ document.addEventListener('DOMContentLoaded', function () {
       tabelaSelect.innerHTML = '<option value="">Selecione uma Tabela</option>';
       return;
     }
-    fetch(`/vinculos/tabelas_por_transportadora/${tId}`)
+    fetchTabelas(tId);
+  });
+
+  // --- Inicializacao: restaurar selects dependentes apos reload ---
+  // Se UF ja esta selecionado (via query param), buscar cidades e pre-selecionar
+  if (ufSelect.value) {
+    const cidadeSelecionada = cidadeSelect.dataset.cidadeSelecionada;
+    fetchCidades(ufSelect.value, cidadeSelecionada);
+  }
+
+  // Se Transportadora ja esta selecionada, buscar tabelas e pre-selecionar
+  if (transportadoraSelect.value) {
+    const tabelaSelecionada = tabelaSelect.dataset.tabelaSelecionada;
+    fetchTabelas(transportadoraSelect.value, tabelaSelecionada);
+  }
+
+  function fetchCidades(uf, valorPreSelecionar) {
+    fetch(`/vinculos/cidades_por_uf/${uf}`)
+      .then(response => response.json())
+      .then(cidades => {
+        cidadeSelect.innerHTML = '<option value="">Selecione uma Cidade</option>';
+        cidades.forEach(cidade => {
+          const selected = (valorPreSelecionar && cidade === valorPreSelecionar) ? ' selected' : '';
+          cidadeSelect.innerHTML += `<option value="${cidade}"${selected}>${cidade}</option>`;
+        });
+      })
+      .catch(() => alert('Erro ao carregar cidades'));
+  }
+
+  function fetchTabelas(transportadoraId, valorPreSelecionar) {
+    fetch(`/vinculos/tabelas_por_transportadora/${transportadoraId}`)
       .then(response => response.json())
       .then(tabelas => {
         tabelaSelect.innerHTML = '<option value="">Selecione uma Tabela</option>';
         tabelas.forEach(tb => {
-          tabelaSelect.innerHTML += `<option value="${tb}">${tb}</option>`;
+          const selected = (valorPreSelecionar && tb === valorPreSelecionar) ? ' selected' : '';
+          tabelaSelect.innerHTML += `<option value="${tb}"${selected}>${tb}</option>`;
         });
       })
       .catch(() => alert('Erro ao carregar tabelas'));
-  });
+  }
 
 });
 
