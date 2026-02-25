@@ -45,20 +45,45 @@ CSV_CAPTURE_TIMEOUT = 15
 PAUSA_ENTRE_UNIDADES = 3
 
 
+async def _find_page_with_link(context, main_page, link_text):
+    """Procura em todas as paginas do contexto a que contem o link especificado."""
+    for pg in context.pages:
+        if pg == main_page:
+            continue
+        try:
+            has = await pg.evaluate(f"""() => {{
+                const links = document.querySelectorAll('a[onclick]');
+                for (const a of links) {{
+                    if ((a.getAttribute('onclick') || '').includes('{link_text}')) return true;
+                }}
+                return false;
+            }}""")
+            if has:
+                return pg
+        except Exception:
+            pass
+    return None
+
+
 async def exportar_csv_unidade(context, page, unidade, output_path):
     """
     Exporta CSV de comissao por cidade da 408 para uma unidade.
 
+    Mecanismo descoberto via diagnostico:
+    - NÃO usar createNewDoc override (quebra ajaxEnvia subsequente)
+    - Deixar SSW navegar nativamente (ENV abre nova pagina)
+    - LINK_DOWN_CID dispara cadeia AJAX que gera download real do browser
+    - Capturar via Playwright download handler
+
     Fluxo:
       1. Abre 408 (popup)
-      2. Override createNewDoc para manter DOM in-place
-      3. Preenche unidade no campo id="2"
-      4. ajaxEnvia('ENV', 1) — carrega form da comissao
-      5. Aguarda link id="10" (confirma que tela carregou)
-      6. Registra handlers download + response interceptor
-      7. ajaxEnvia('LINK_DOWN_CID', 0) — dispara download CSV
-      8. Captura CSV via 3 estrategias
-      9. Salva arquivo
+      2. Preenche unidade no campo id="2"
+      3. ajaxEnvia('ENV', 1) — SSW nativo abre nova pagina
+      4. Encontra pagina com link LINK_DOWN_CID
+      5. Registra download handler
+      6. ajaxEnvia('LINK_DOWN_CID', 0) — dispara cadeia AJAX → download
+      7. Captura CSV via download handler
+      8. Salva arquivo
 
     Retorna dict com resultado (sem imprimir JSON).
     """
@@ -68,66 +93,51 @@ async def exportar_csv_unidade(context, page, unidade, output_path):
         popup = await abrir_opcao_popup(context, page.frames[0], 408, timeout_s=30)
         await asyncio.sleep(1)
 
-        # 2. Override createNewDoc para manter DOM in-place apos ENV
-        await popup.evaluate("""() => {
-            createNewDoc = function(pathname) {
-                document.open("text/html", "replace");
-                document.write(valSep.toString());
-                document.close();
-                if (pathname) try { history.pushState({}, "", pathname); } catch(e) {}
-            };
-        }""")
-
-        # 3. Preencher unidade no campo id="2"
+        # 2. Preencher unidade no campo id="2" (SEM override de createNewDoc)
         await popup.evaluate(f"""() => {{
             const f2 = document.getElementById('2');
             if (f2) f2.value = '{unidade}';
         }}""")
 
-        # 4. ajaxEnvia('ENV', 1) — carrega dados da comissao
+        # 3. ajaxEnvia('ENV', 1) — SSW nativo navega (pode abrir nova pagina)
         await popup.evaluate("ajaxEnvia('ENV', 1)")
+        await asyncio.sleep(5)
 
-        # 5. Aguardar form carregar — verificar presenca do link id="10"
-        form_loaded = False
-        for _ in range(30):
-            has_link = await popup.evaluate("""() => {
-                const el = document.getElementById('10');
-                if (el) return true;
-                // Fallback: procurar link com LINK_DOWN_CID no onclick
-                const links = document.querySelectorAll('a');
-                for (const a of links) {
-                    const onclick = a.getAttribute('onclick') || '';
-                    if (onclick.includes('LINK_DOWN_CID')) return true;
-                }
-                return false;
-            }""")
-            if has_link:
-                form_loaded = True
-                break
-            await asyncio.sleep(0.5)
+        # 4. Encontrar a pagina com LINK_DOWN_CID (busca em todas)
+        target_page = await _find_page_with_link(context, page, "LINK_DOWN_CID")
 
-        if not form_loaded:
-            # Verificar se comissao existe para esta unidade
-            body_text = await popup.evaluate(
-                "() => document.body ? document.body.innerText.substring(0, 2000) : ''"
-            )
-            if "nao encontrad" in body_text.lower() or "não encontrad" in body_text.lower():
-                return {
-                    "unidade": unidade,
-                    "sucesso": False,
-                    "erro": f"Comissao nao encontrada para unidade {unidade}",
-                }
+        if not target_page:
+            # Esperar mais e tentar novamente
+            await asyncio.sleep(5)
+            target_page = await _find_page_with_link(context, page, "LINK_DOWN_CID")
+
+        if not target_page:
+            # Verificar se alguma pagina mostra erro
+            for pg in context.pages:
+                if pg == page:
+                    continue
+                try:
+                    body_text = await pg.evaluate(
+                        "() => document.body ? document.body.innerText.substring(0, 2000) : ''"
+                    )
+                    if "nao encontrad" in body_text.lower() or "não encontrad" in body_text.lower():
+                        return {
+                            "unidade": unidade,
+                            "sucesso": False,
+                            "erro": f"Comissao nao encontrada para unidade {unidade}",
+                        }
+                except Exception:
+                    pass
             return {
                 "unidade": unidade,
                 "sucesso": False,
-                "erro": f"Timeout aguardando form 408 (link LINK_DOWN_CID nao encontrado) para {unidade}",
+                "erro": f"Timeout: link LINK_DOWN_CID nao encontrado em nenhuma pagina para {unidade}",
             }
 
-        await asyncio.sleep(1)  # DOM estabilizar
-
+        # 5. Registrar download handler na pagina-alvo
         csv_content = None
+        download_done = asyncio.Event()
 
-        # ── Estrategia 1: Download handler ──
         async def on_download(download):
             nonlocal csv_content
             tmp_path = output_path + ".download"
@@ -138,88 +148,43 @@ async def exportar_csv_unidade(context, page, unidade, output_path):
                 os.remove(tmp_path)
             except OSError:
                 pass
+            download_done.set()
 
-        popup.on("download", on_download)
+        target_page.on("download", on_download)
 
-        # ── Estrategia 2: Response interceptor ──
-        async def on_response(response):
-            nonlocal csv_content
-            if csv_content:
-                return
-            url = response.url
-            ct = response.headers.get("content-type", "")
-            disp = response.headers.get("content-disposition", "")
-            try:
-                body = await response.body()
-                text = body.decode("iso-8859-1", errors="replace")
-                if (";" in text and len(text) > 200
-                        and ("csv" in ct.lower() or "csv" in disp.lower()
-                             or "ssw0424" in url or "octet" in ct.lower()
-                             or "ssw04" in url)):
-                    csv_content = text
-            except Exception:
-                pass
+        # Tambem monitorar downloads em novas paginas (SSW pode abrir popup para download)
+        def on_page(new_page):
+            new_page.on("download", on_download)
 
-        popup.on("response", on_response)
+        context.on("page", on_page)
 
-        # ── Estrategia 3: Override createNewDoc para capturar valSep no JS ──
-        # Re-override para capturar a response do LINK_DOWN_CID
-        await popup.evaluate("""() => {
-            window._origCreateNewDoc2 = window.createNewDoc;
-            createNewDoc = function(pathname) {
-                window._csvResult = valSep ? valSep.toString() : null;
-                try { window._origCreateNewDoc2(pathname); } catch(e) {}
-            };
-        }""")
+        # 6. ajaxEnvia('LINK_DOWN_CID', 0) — dispara cadeia AJAX → download
+        await target_page.evaluate("ajaxEnvia('LINK_DOWN_CID', 0)")
 
-        # 6. ajaxEnvia('LINK_DOWN_CID', 0) — dispara download CSV
-        await popup.evaluate("ajaxEnvia('LINK_DOWN_CID', 0)")
+        # 7. Aguardar download (timeout 30s — cadeia AJAX tem 3 etapas)
+        try:
+            await asyncio.wait_for(download_done.wait(), timeout=30)
+        except asyncio.TimeoutError:
+            pass
 
-        # Aguardar captura do CSV
-        for _ in range(CSV_CAPTURE_TIMEOUT * 2):
-            if csv_content:
-                break
-            await asyncio.sleep(0.5)
-
-        popup.remove_listener("download", on_download)
-        popup.remove_listener("response", on_response)
-
-        # Fallback: JS variable
-        if not csv_content:
-            csv_result = await popup.evaluate("() => window._csvResult || ''")
-            if csv_result and ";" in csv_result and len(csv_result) > 200:
-                csv_content = csv_result
-
-        # Fallback: nova pagina aberta pelo SSW
-        if not csv_content:
-            for pg in context.pages:
-                if pg != page and pg != popup:
-                    try:
-                        text = await pg.evaluate(
-                            "() => document.body?.innerText || ''"
-                        )
-                        if ";" in text and len(text) > 200:
-                            csv_content = text
-                            await pg.close()
-                            break
-                    except Exception:
-                        pass
+        target_page.remove_listener("download", on_download)
+        context.remove_listener("page", on_page)
 
         if not csv_content:
             return {
                 "unidade": unidade,
                 "sucesso": False,
-                "erro": f"CSV nao capturado para unidade={unidade}",
+                "erro": f"CSV nao capturado (download nao disparou) para unidade={unidade}",
             }
 
-        # Salvar
+        # 8. Salvar
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="iso-8859-1") as f:
             f.write(csv_content)
 
         # Analisar
         lines = csv_content.strip().split("\n")
-        total_linhas = len(lines) - 1  # Descontar header (pelo menos 1)
+        total_linhas = len(lines) - 1  # Descontar header
         if total_linhas < 0:
             total_linhas = 0
 
@@ -234,13 +199,8 @@ async def exportar_csv_unidade(context, page, unidade, output_path):
         return {"unidade": unidade, "sucesso": False, "erro": str(e)}
 
     finally:
-        # Fechar popup e quaisquer paginas extras
-        if popup:
-            try:
-                await popup.close()
-            except Exception:
-                pass
-        for pg in context.pages:
+        # Fechar TODAS as paginas extras (popup, nova pagina do ENV, etc.)
+        for pg in list(context.pages):
             if pg != page:
                 try:
                     await pg.close()
