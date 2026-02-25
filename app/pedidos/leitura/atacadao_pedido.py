@@ -24,16 +24,14 @@ class AtacadaoPedidoExtractor(PDFExtractor):
         self.formato = "ATACADAO_PEDIDO"
         self.depara_cache = {}
 
-    def extract(self, pdf_path: str, pre_extracted_text: str = None) -> List[Dict[str, Any]]:
+    def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
         Extrai dados do PDF de Pedido do Atacadão
 
         Args:
             pdf_path: Caminho do arquivo PDF
-            pre_extracted_text: Texto já extraído pelo identificador (evita abrir o PDF novamente)
         """
-        # Reutiliza texto pré-extraído se disponível
-        text = pre_extracted_text or self.extract_text_with_pdfplumber(pdf_path)
+        text = self.extract_text_with_pdfplumber(pdf_path)
 
         if not text:
             text = self.extract_text_with_pypdf2(pdf_path)

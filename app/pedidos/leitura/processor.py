@@ -77,10 +77,6 @@ class PedidoProcessor:
         }
 
         try:
-            # Texto pré-extraído pelo identificador (reutilizado pelos extractors
-            # baseados em texto para evitar abrir o PDF uma segunda vez)
-            pre_extracted_text = None
-
             # Detecta formato se necessário
             if formato == 'auto':
                 self.identificacao = identificar_documento(file_path)
@@ -90,9 +86,6 @@ class PedidoProcessor:
                     'numero_documento': self.identificacao.numero_documento,
                     'confianca': self.identificacao.confianca
                 }
-
-                # Captura texto extraído pelo identificador para reutilização
-                pre_extracted_text = self.identificacao.texto_extraido
 
                 # Monta chave do extrator
                 formato = f"{self.identificacao.rede.lower()}_{self.identificacao.tipo.lower()}"
@@ -116,9 +109,9 @@ class PedidoProcessor:
                 result['errors'].append(f"Formato '{formato}' não suportado")
                 return result
 
-            # Extrai dados (passa texto pré-extraído para evitar leitura dupla do PDF)
+            # Extrai dados
             extractor = extractor_class()
-            data = extractor.extract(file_path, pre_extracted_text=pre_extracted_text)
+            data = extractor.extract(file_path)
 
             if not data:
                 result['errors'].append("Nenhum dado foi extraído do PDF")

@@ -20,16 +20,12 @@ class PDFExtractor(ABC):
         self.warnings = []
         
     @abstractmethod
-    def extract(self, pdf_path: str, pre_extracted_text: str = None) -> List[Dict[str, Any]]:
+    def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
         Extrai dados do PDF.
 
         Args:
             pdf_path: Caminho do arquivo PDF
-            pre_extracted_text: Texto já extraído (evita abrir o PDF novamente).
-                                Se fornecido, extractors baseados em texto podem
-                                reutilizá-lo em vez de chamar extract_text_with_pdfplumber().
-                                Extractors que precisam de page objects (ex: Assaí) ignoram.
         """
         pass
     
