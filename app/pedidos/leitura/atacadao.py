@@ -15,6 +15,7 @@ class AtacadaoExtractor(PDFExtractor):
         super().__init__()
         self.formato = "ATACADAO_PROPOSTA"
         self.depara_cache = {}  # Cache para conversões de código
+        self._clientes_cache = {}  # Cache batch de dados de clientes
         self._odoo_client = None  # Conexão Odoo reutilizada entre filiais
         
     def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
@@ -30,20 +31,35 @@ class AtacadaoExtractor(PDFExtractor):
         if not text:
             # Fallback para pypdf
             text = self.extract_text_with_pypdf2(pdf_path)
-        
+
         if not text:
             self.errors.append("Não foi possível extrair texto do PDF")
             return []
-        
+
         # Divide o texto por páginas/filiais
         filiais = self._split_por_filial(text)
-        
+
+        # Batch preload: coleta identificadores e carrega tudo em ~3 queries
+        # em vez de ~1700 queries individuais (N+1)
+        cnpjs, codigos = self._coletar_identificadores(filiais)
+        self._preload_clientes(cnpjs)
+        self._preload_depara(codigos)
+
+        # Batch Odoo para CNPJs não encontrados localmente
+        # NOTA: NÃO fechar db.session aqui — os batch preloads completam em <1s,
+        # bem abaixo do idle_in_transaction_session_timeout=30s.
+        # db.session.close() causa DetachedInstanceError em objetos carregados.
+        cnpjs_faltantes = [c for c in cnpjs if c not in self._clientes_cache]
+        if cnpjs_faltantes:
+            self._preload_clientes_odoo(cnpjs_faltantes)
+
+        # Processa filiais usando caches em memória (sem mais queries DB)
         all_data = []
         for filial_text in filiais:
             filial_data = self._extract_filial_data(filial_text)
             if filial_data:
                 all_data.extend(filial_data)
-        
+
         return all_data
     
     def _split_por_filial(self, text: str) -> List[str]:
@@ -66,7 +82,178 @@ class AtacadaoExtractor(PDFExtractor):
             sections.append(text[start:end])
         
         return sections
-    
+
+    def _coletar_identificadores(self, filiais: List[str]):
+        """
+        Primeira passada leve: extrai CNPJs e códigos de produto de todas
+        as filiais sem tocar no banco de dados.
+        Retorna (cnpjs, codigos) para batch preload.
+        """
+        cnpjs = set()
+        codigos = set()
+
+        for filial_text in filiais:
+            # CNPJ: formato XX.XXX.XXX/XXXX-XX (já formatado no PDF de Proposta)
+            cnpj_match = re.search(r'(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', filial_text)
+            if cnpj_match:
+                cnpjs.add(cnpj_match.group(1))
+
+            # Códigos de produto: formato NNNNN-NNN seguido de descrição
+            for m in re.finditer(r'\b(\d{4,6})-\d+\s+[A-Z]', filial_text):
+                codigos.add(m.group(1))
+
+        return list(cnpjs), list(codigos)
+
+    def _preload_clientes(self, cnpjs: List[str]):
+        """
+        Carrega todos os clientes de uma vez em UMA query batch.
+        Popula self._clientes_cache[cnpj] = {nome_cliente, municipio, estado, codigo_ibge}
+        """
+        if not cnpjs:
+            return
+
+        try:
+            from app.faturamento.models import RelatorioFaturamentoImportado
+
+            resultados = db.session.query(RelatorioFaturamentoImportado).filter(
+                RelatorioFaturamentoImportado.cnpj_cliente.in_(cnpjs),
+                RelatorioFaturamentoImportado.ativo == True
+            ).order_by(
+                RelatorioFaturamentoImportado.criado_em.desc()
+            ).all()
+
+            # Dedupe: primeiro registro por CNPJ (mais recente)
+            for r in resultados:
+                if r.cnpj_cliente not in self._clientes_cache:
+                    self._clientes_cache[r.cnpj_cliente] = {
+                        'nome_cliente': r.nome_cliente,
+                        'municipio': r.municipio,
+                        'estado': r.estado,
+                        'codigo_ibge': r.codigo_ibge
+                    }
+        except Exception as e:
+            db.session.rollback()
+            self.warnings.append(f"Erro ao precarregar clientes: {e}")
+
+    def _preload_depara(self, codigos: List[str]):
+        """
+        Carrega todos os De-Para de produto em UMA query batch.
+        Popula self.depara_cache[codigo] = {nosso_codigo, nossa_descricao, fator_conversao}
+        """
+        if not codigos:
+            return
+
+        try:
+            from app.portal.atacadao.models import ProdutoDeParaAtacadao
+
+            # Inclui versão normalizada (sem zeros à esquerda)
+            codigos_norm = [c.lstrip('0') for c in codigos if c]
+            todos = list(set(codigos + codigos_norm))
+
+            resultados = ProdutoDeParaAtacadao.query.filter(
+                ProdutoDeParaAtacadao.codigo_atacadao.in_(todos),
+                ProdutoDeParaAtacadao.ativo == True
+            ).all()
+
+            for r in resultados:
+                result = {
+                    'nosso_codigo': r.codigo_nosso,
+                    'nossa_descricao': r.descricao_nosso,
+                    'fator_conversao': float(r.fator_conversao) if r.fator_conversao else 1.0
+                }
+                self.depara_cache[r.codigo_atacadao] = result
+        except Exception as e:
+            db.session.rollback()
+            self.warnings.append(f"Erro ao precarregar De-Para: {e}")
+
+    def _preload_clientes_odoo(self, cnpjs_faltantes: List[str]):
+        """
+        Busca em batch no Odoo os CNPJs não encontrados localmente.
+        UMA busca search_read com IN() em vez de N buscas individuais.
+        """
+        if not cnpjs_faltantes:
+            return
+
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+
+            if self._odoo_client is None:
+                self._odoo_client = get_odoo_connection()
+            client = self._odoo_client
+
+            # Formata CNPJs para padrão Odoo (XX.XXX.XXX/XXXX-XX)
+            cnpjs_formatados = []
+            cnpj_map = {}  # cnpj_formatado_odoo → cnpj_original
+            for cnpj in cnpjs_faltantes:
+                cnpj_limpo = re.sub(r'\D', '', cnpj)
+                if len(cnpj_limpo) == 14:
+                    cnpj_fmt = (
+                        f"{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}"
+                        f"/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
+                    )
+                else:
+                    cnpj_fmt = cnpj
+                cnpjs_formatados.append(cnpj_fmt)
+                cnpj_map[cnpj_fmt] = cnpj
+
+            # UMA busca batch no Odoo
+            partners = client.search_read(
+                'res.partner',
+                domain=[('l10n_br_cnpj', 'in', cnpjs_formatados)],
+                fields=['name', 'state_id', 'l10n_br_municipio_id', 'l10n_br_cnpj'],
+                limit=0
+            )
+
+            # Coleta state_ids para busca batch de UFs
+            state_ids_to_fetch = set()
+            for partner in partners:
+                if partner.get('state_id'):
+                    sid = partner['state_id']
+                    if isinstance(sid, (list, tuple)) and len(sid) > 1:
+                        state_ids_to_fetch.add(sid[0])
+
+            # UMA busca batch de estados
+            state_codes = {}
+            if state_ids_to_fetch:
+                states = client.search_read(
+                    'res.country.state',
+                    domain=[('id', 'in', list(state_ids_to_fetch))],
+                    fields=['id', 'code'],
+                    limit=0
+                )
+                for s in states:
+                    state_codes[s['id']] = s.get('code')
+
+            # Processa resultados e popula cache
+            for partner in partners:
+                cnpj_odoo = partner.get('l10n_br_cnpj', '')
+                cnpj_original = cnpj_map.get(cnpj_odoo, cnpj_odoo)
+
+                resultado = {
+                    'nome_cliente': partner.get('name'),
+                    'municipio': None,
+                    'estado': None,
+                    'codigo_ibge': None
+                }
+
+                # Municipio
+                if partner.get('l10n_br_municipio_id'):
+                    mun = partner['l10n_br_municipio_id']
+                    if isinstance(mun, (list, tuple)) and len(mun) > 1:
+                        nome = mun[1]
+                        resultado['municipio'] = nome.split('(')[0].strip() if '(' in nome else nome
+
+                # Estado (UF)
+                if partner.get('state_id'):
+                    sid = partner['state_id']
+                    if isinstance(sid, (list, tuple)) and len(sid) > 1:
+                        resultado['estado'] = state_codes.get(sid[0])
+
+                self._clientes_cache[cnpj_original] = resultado
+
+        except Exception as e:
+            self.warnings.append(f"Erro ao buscar clientes no Odoo em batch: {e}")
+
     def _extract_filial_data(self, text: str) -> List[Dict[str, Any]]:
         """Extrai dados de uma filial específica"""
         data = []
@@ -226,187 +413,48 @@ class AtacadaoExtractor(PDFExtractor):
     
     def _get_dados_cliente(self, cnpj: str) -> Dict[str, Any]:
         """
-        Busca dados do cliente com fallback:
-        1. Primeiro tenta RelatorioFaturamentoImportado (local)
-        2. Se não encontrar, busca no Odoo (res.partner)
-        3. Nunca retorna None - usa valores padrão se necessário
+        Busca dados do cliente no cache (precarregado em batch por
+        _preload_clientes e _preload_clientes_odoo).
+        Não faz queries ao banco — todo acesso a DB foi feito no preload.
         """
+        if cnpj in self._clientes_cache:
+            return self._clientes_cache[cnpj]
+
+        # Fallback: CNPJ não encontrado nem local nem no Odoo
         resultado = {
-            'nome_cliente': None,
+            'nome_cliente': f"CLIENTE {cnpj}",
             'municipio': None,
             'estado': None,
             'codigo_ibge': None
         }
-
-        # 1. Tenta buscar no RelatorioFaturamentoImportado
-        try:
-            from app.faturamento.models import RelatorioFaturamentoImportado
-
-            cliente = db.session.query(RelatorioFaturamentoImportado).filter(
-                RelatorioFaturamentoImportado.cnpj_cliente == cnpj,
-                RelatorioFaturamentoImportado.ativo == True
-            ).order_by(RelatorioFaturamentoImportado.criado_em.desc()).first()
-
-            if cliente and cliente.nome_cliente:
-                resultado = {
-                    'nome_cliente': cliente.nome_cliente,
-                    'municipio': cliente.municipio,
-                    'estado': cliente.estado,
-                    'codigo_ibge': cliente.codigo_ibge
-                }
-                return resultado
-
-        except Exception as e:
-            db.session.rollback()  # Limpa transação inválida para queries seguintes
-            self.warnings.append(f"Erro ao buscar cliente local {cnpj}: {e}")
-
-        # 2. Fallback: Busca no Odoo (res.partner)
-        try:
-            resultado_odoo = self._get_dados_cliente_odoo(cnpj)
-            if resultado_odoo.get('nome_cliente'):
-                return resultado_odoo
-        except Exception as e:
-            self.warnings.append(f"Erro ao buscar cliente no Odoo {cnpj}: {e}")
-
-        # 3. Se não encontrou em nenhum lugar, retorna com valores padrão
-        if not resultado.get('nome_cliente'):
-            resultado['nome_cliente'] = f"CLIENTE {cnpj}"
-            self.warnings.append(f"Cliente {cnpj} não encontrado - usando nome padrão")
-
-        return resultado
-
-    def _get_dados_cliente_odoo(self, cnpj: str) -> Dict[str, Any]:
-        """
-        Busca dados do cliente no Odoo via res.partner
-        Usa OdooConnection com Circuit Breaker para maior estabilidade.
-        Reutiliza mesma conexão entre filiais para evitar re-autenticação
-        (cada get_odoo_connection() = nova instância = ~2s de handshake).
-        """
-        from app.odoo.utils.connection import get_odoo_connection
-
-        resultado = {
-            'nome_cliente': None,
-            'municipio': None,
-            'estado': None,
-            'codigo_ibge': None
-        }
-
-        # Reutiliza conexão Odoo entre filiais (evita N re-autenticações)
-        if self._odoo_client is None:
-            self._odoo_client = get_odoo_connection()
-        client = self._odoo_client
-
-        # Limpa CNPJ para busca (remove formatação)
-        cnpj_limpo = re.sub(r'\D', '', cnpj)
-
-        # Formata CNPJ para padrão XX.XXX.XXX/XXXX-XX (como está no Odoo)
-        # O Odoo armazena CNPJ FORMATADO e só aceita busca exata nesse formato
-        if len(cnpj_limpo) == 14:
-            cnpj_formatado = f"{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
-        else:
-            cnpj_formatado = cnpj  # Usa o original se não tiver 14 dígitos
-
-        # Busca no res.partner pelo CNPJ formatado (único formato que funciona no Odoo)
-        domain = [('l10n_br_cnpj', '=', cnpj_formatado)]
-
-        partners = client.search_read(
-            'res.partner',
-            domain=domain,
-            fields=['name', 'state_id', 'l10n_br_municipio_id', 'l10n_br_cnpj'],
-            limit=1
-        )
-
-        if partners:
-            partner = partners[0]
-            resultado['nome_cliente'] = partner.get('name')
-
-            # Cidade - campo l10n_br_municipio_id (brasileiro)
-            # Retorna [id, "Nome da Cidade (UF)"] - Ex: [5570, "Brasília (DF)"]
-            if partner.get('l10n_br_municipio_id'):
-                municipio_id = partner.get('l10n_br_municipio_id')
-                if isinstance(municipio_id, (list, tuple)) and len(municipio_id) > 1:
-                    # Extrai apenas o nome da cidade (sem a UF entre parênteses)
-                    nome_completo = municipio_id[1]  # "Brasília (DF)"
-                    # Remove a UF entre parênteses se existir
-                    if '(' in nome_completo:
-                        resultado['municipio'] = nome_completo.split('(')[0].strip()
-                    else:
-                        resultado['municipio'] = nome_completo
-
-            # Estado - state_id retorna [id, "Nome do Estado (BR)"]
-            # Exemplo: [77, "Distrito Federal (BR)"]
-            if partner.get('state_id'):
-                state_id = partner.get('state_id')
-                if isinstance(state_id, (list, tuple)) and len(state_id) > 1:
-                    # Busca o código UF do estado
-                    states = client.search_read(
-                        'res.country.state',
-                        domain=[('id', '=', state_id[0])],
-                        fields=['code', 'name'],
-                        limit=1
-                    )
-                    if states:
-                        resultado['estado'] = states[0].get('code')
-
+        self.warnings.append(f"Cliente {cnpj} não encontrado - usando nome padrão")
         return resultado
     
     def _get_nosso_codigo(self, codigo_atacadao: str) -> Dict[str, Any]:
         """
-        Busca nosso código interno baseado no código do Atacadão
-        Usa cache para evitar múltiplas consultas ao banco
+        Busca nosso código no cache (precarregado em batch por _preload_depara).
+        Não faz queries ao banco — todo acesso a DB foi feito no preload.
 
-        IMPORTANTE: Normaliza códigos removendo zeros à esquerda para garantir
-        compatibilidade entre formatos (ex: '082545' vs '82545')
+        Normaliza códigos removendo zeros à esquerda para garantir
+        compatibilidade entre formatos (ex: '082545' vs '82545').
         """
-        # Verifica cache primeiro
+        # Verifica código original no cache
         if codigo_atacadao in self.depara_cache:
             return self.depara_cache[codigo_atacadao]
 
-        try:
-            # Importa aqui para evitar dependência circular
-            from app.portal.atacadao.models import ProdutoDeParaAtacadao
-
-            # Normaliza código removendo zeros à esquerda
-            codigo_normalizado = codigo_atacadao.lstrip('0') if codigo_atacadao else ''
-
-            # Busca no banco - primeiro tenta código normalizado (sem zeros à esquerda)
-            depara = db.session.query(ProdutoDeParaAtacadao).filter(
-                ProdutoDeParaAtacadao.codigo_atacadao == codigo_normalizado,
-                ProdutoDeParaAtacadao.ativo == True
-            ).first()
-
-            # Se não encontrou, tenta com código original (com zeros)
-            if not depara and codigo_normalizado != codigo_atacadao:
-                depara = db.session.query(ProdutoDeParaAtacadao).filter(
-                    ProdutoDeParaAtacadao.codigo_atacadao == codigo_atacadao,
-                    ProdutoDeParaAtacadao.ativo == True
-                ).first()
-
-            if depara:
-                result = {
-                    'nosso_codigo': depara.codigo_nosso,
-                    'nossa_descricao': depara.descricao_nosso,
-                    'fator_conversao': float(depara.fator_conversao) if depara.fator_conversao else 1.0
-                }
-            else:
-                result = {
-                    'nosso_codigo': None,
-                    'nossa_descricao': None,
-                    'fator_conversao': 1.0
-                }
-
-            # Adiciona ao cache
-            self.depara_cache[codigo_atacadao] = result
+        # Tenta versão normalizada (sem zeros à esquerda)
+        codigo_normalizado = codigo_atacadao.lstrip('0') if codigo_atacadao else ''
+        if codigo_normalizado in self.depara_cache:
+            result = self.depara_cache[codigo_normalizado]
+            self.depara_cache[codigo_atacadao] = result  # Cache para lookups futuros
             return result
 
-        except Exception as e:
-            db.session.rollback()  # Limpa transação inválida para queries seguintes
-            self.warnings.append(f"Erro ao buscar De-Para para código {codigo_atacadao}: {e}")
-            return {
-                'nosso_codigo': None,
-                'nossa_descricao': None,
-                'fator_conversao': 1.0
-            }
+        # Não encontrado no De-Para
+        return {
+            'nosso_codigo': None,
+            'nossa_descricao': None,
+            'fator_conversao': 1.0
+        }
     
     def validate(self, data: Dict[str, Any]) -> bool:
         """Valida os dados extraídos"""

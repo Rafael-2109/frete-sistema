@@ -65,7 +65,50 @@ class ValidadorPrecos:
             tolerancia_percentual: Margem de tolerância para divergência (ex: 0.01 = 1%)
         """
         self.tolerancia_percentual = tolerancia_percentual
-        self.cache_regiao = {}  # Cache de UF → Região
+        self.cache_regiao = {}  # Cache de UF → Região (str)
+        self._precos_cache = {}  # Cache batch: (regiao, cod_produto) → float
+
+    def precarregar_precos(self, rede: str, ufs: List[str], codigos: List[str]):
+        """
+        Carrega todas as regiões e preços necessários em 2 queries batch.
+        Deve ser chamado ANTES do loop de validar() por filial.
+
+        Args:
+            rede: Nome da rede (ATACADAO, TENDA, ASSAI)
+            ufs: Lista de UFs únicas de todas as filiais
+            codigos: Lista de códigos de produto únicos (nosso_codigo)
+        """
+        rede = rede.upper()
+
+        if not ufs or not codigos:
+            return
+
+        # Query 1: Todas as regiões por UF
+        regioes_objs = RegiaoTabelaRede.query.filter(
+            RegiaoTabelaRede.rede == rede,
+            RegiaoTabelaRede.uf.in_([u.upper() for u in ufs]),
+            RegiaoTabelaRede.ativo == True
+        ).all()
+
+        for r in regioes_objs:
+            self.cache_regiao[f"{rede}_{r.uf}"] = r.regiao
+
+        # Coleta regiões únicas encontradas
+        regioes_unicas = list(set(self.cache_regiao.values()))
+
+        if not regioes_unicas:
+            return
+
+        # Query 2: Todos os preços para (rede, regiões, produtos)
+        precos_objs = TabelaRede.query.filter(
+            TabelaRede.rede == rede,
+            TabelaRede.regiao.in_(regioes_unicas),
+            TabelaRede.cod_produto.in_(codigos),
+            TabelaRede.ativo == True
+        ).all()
+
+        for p in precos_objs:
+            self._precos_cache[(p.regiao, p.cod_produto)] = float(p.preco)
 
     def validar(self,
                 rede: str,
@@ -119,12 +162,16 @@ class ValidadorPrecos:
             else:
                 preco_doc = float(preco_doc) if preco_doc else 0.0
 
-            # Busca preço na tabela
+            # Busca preço na tabela (cache batch primeiro, fallback para DB)
             preco_tabela = None
             if regiao:
-                tabela = TabelaRede.buscar_preco(rede, regiao, codigo)
-                if tabela:
-                    preco_tabela = float(tabela.preco)
+                cache_key = (regiao.upper(), codigo)
+                if cache_key in self._precos_cache:
+                    preco_tabela = self._precos_cache[cache_key]
+                else:
+                    tabela = TabelaRede.buscar_preco(rede, regiao, codigo)
+                    if tabela:
+                        preco_tabela = float(tabela.preco)
 
             # Calcula valores totais
             valor_item_doc = preco_doc * quantidade

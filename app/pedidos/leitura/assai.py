@@ -48,10 +48,25 @@ class AssaiExtractor(PDFExtractor):
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
-                # Extrai header da primeira página
-                header_info = self._extract_header(pdf.pages[0])
+                # Phase 1: Coleta identificadores (text parsing only, sem DB)
+                codigos, numeros_loja = self._coletar_identificadores(pdf)
 
-                # Processa todas as páginas para extrair produtos
+                # Phase 2: Batch preload de DB (~3 queries em vez de centenas)
+                self._preload_filiais()
+                self._preload_depara_sendas(codigos)
+                # Coleta nosso_codigos para preload de info de produto
+                nosso_codigos = list(set(
+                    v['nosso_codigo'] for v in self.depara_cache.values()
+                    if v.get('nosso_codigo')
+                ))
+                self._preload_produtos(nosso_codigos)
+
+                # NOTA: NÃO fechar db.session aqui — os batch preloads completam em <1s,
+                # bem abaixo do idle_in_transaction_session_timeout=30s.
+                # db.session.close() causa DetachedInstanceError em objetos carregados.
+
+                # Phase 3: Extrai header + produtos (usa caches, sem mais queries DB)
+                header_info = self._extract_header(pdf.pages[0])
                 produtos_por_loja = self._extract_all_products(pdf)
 
                 # Combina header com produtos
@@ -116,6 +131,121 @@ class AssaiExtractor(PDFExtractor):
             header['nome_fornecedor'] = fornecedor_match.group(2).strip()
 
         return header
+
+    def _coletar_identificadores(self, pdf):
+        """
+        Primeira passada leve: coleta códigos de produto e números de loja
+        de todas as páginas usando os mesmos parsers de texto (sem DB).
+        Retorna (codigos, numeros_loja) para batch preload.
+        """
+        codigos = set()
+        numeros_loja = set()
+
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            for line in text.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Tenta parsear como cabeçalho de produto
+                ph = self._parse_product_header(line)
+                if ph:
+                    codigos.add(ph['codigo'])
+                    continue
+
+                # Tenta parsear como linha de loja
+                ll = self._parse_loja_line(line)
+                if ll:
+                    numeros_loja.add(ll['numero_loja'])
+
+        return list(codigos), list(numeros_loja)
+
+    def _preload_filiais(self):
+        """
+        Carrega TODAS as filiais ativas de uma vez em UMA query.
+        Popula self.filial_cache[numero_loja] = {cnpj, nome_filial, cidade, uf}
+        """
+        try:
+            from app.portal.sendas.models import FilialDeParaSendas
+
+            todas = FilialDeParaSendas.query.filter_by(ativo=True).all()
+
+            for f in todas:
+                info = {
+                    'cnpj': f.cnpj,
+                    'nome_filial': f.nome_filial,
+                    'cidade': f.cidade,
+                    'uf': f.uf
+                }
+                # Indexa pelo campo numero (se populado)
+                if f.numero:
+                    numero_norm = str(f.numero).zfill(3)
+                    if numero_norm not in self.filial_cache:
+                        self.filial_cache[numero_norm] = info
+
+                # Também tenta extrair número do campo filial
+                # Ex: "010 SAO BERNARDO PIRAPORI" -> "010"
+                match = re.match(r'^(\d+)', f.filial or '')
+                if match:
+                    numero_ext = match.group(1).zfill(3)
+                    if numero_ext not in self.filial_cache:
+                        self.filial_cache[numero_ext] = info
+        except Exception as e:
+            db.session.rollback()
+            self.warnings.append(f"Erro ao precarregar filiais: {e}")
+
+    def _preload_depara_sendas(self, codigos: List[str]):
+        """
+        Carrega todos os De-Para de produto Sendas em UMA query batch.
+        Popula self.depara_cache[codigo] = {nosso_codigo, nossa_descricao, fator_conversao}
+        """
+        if not codigos:
+            return
+
+        try:
+            from app.portal.sendas.models import ProdutoDeParaSendas
+
+            resultados = ProdutoDeParaSendas.query.filter(
+                ProdutoDeParaSendas.codigo_sendas.in_(codigos),
+                ProdutoDeParaSendas.ativo == True
+            ).all()
+
+            for r in resultados:
+                self.depara_cache[r.codigo_sendas] = {
+                    'nosso_codigo': r.codigo_nosso,
+                    'nossa_descricao': r.descricao_nosso,
+                    'fator_conversao': float(r.fator_conversao) if r.fator_conversao else 1.0
+                }
+        except Exception as e:
+            db.session.rollback()
+            self.warnings.append(f"Erro ao precarregar De-Para Sendas: {e}")
+
+    def _preload_produtos(self, nosso_codigos: List[str]):
+        """
+        Carrega informações de produto (CadastroPalletizacao) em UMA query batch.
+        Popula self.produto_cache[cod_produto] = {nome_produto, palletizacao, peso_bruto}
+        """
+        if not nosso_codigos:
+            return
+
+        try:
+            from app.producao.models import CadastroPalletizacao
+
+            resultados = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.cod_produto.in_(nosso_codigos),
+                CadastroPalletizacao.ativo == True
+            ).all()
+
+            for r in resultados:
+                self.produto_cache[r.cod_produto] = {
+                    'nome_produto': r.nome_produto,
+                    'palletizacao': r.palletizacao,
+                    'peso_bruto': r.peso_bruto
+                }
+        except Exception as e:
+            db.session.rollback()
+            self.warnings.append(f"Erro ao precarregar produtos: {e}")
 
     def _extract_all_products(self, pdf) -> List[Dict[str, Any]]:
         """
@@ -285,119 +415,51 @@ class AssaiExtractor(PDFExtractor):
 
     def _get_filial_info(self, numero_loja: str) -> Dict[str, Any]:
         """
-        Busca informações da filial pelo número
-        Usa FilialDeParaSendas.obter_info_por_numero() ou busca manual
+        Busca informações da filial no cache (precarregado em batch por _preload_filiais).
+        Não faz queries ao banco — todo acesso a DB foi feito no preload.
         """
-        # Verifica cache primeiro
-        if numero_loja in self.filial_cache:
-            return self.filial_cache[numero_loja]
+        # Normaliza para 3 dígitos
+        numero_norm = str(numero_loja).zfill(3)
 
-        result = {
+        if numero_norm in self.filial_cache:
+            return self.filial_cache[numero_norm]
+
+        # Não encontrada
+        return {
             'cnpj': None,
             'nome_filial': None,
             'cidade': None,
             'uf': None
         }
 
-        try:
-            from app.portal.sendas.models import FilialDeParaSendas
-
-            # Usa o novo método otimizado
-            info = FilialDeParaSendas.obter_info_por_numero(numero_loja)
-
-            if info:
-                result = {
-                    'cnpj': info.get('cnpj'),
-                    'nome_filial': info.get('nome_filial'),
-                    'cidade': info.get('cidade'),
-                    'uf': info.get('uf')
-                }
-
-            # Adiciona ao cache
-            self.filial_cache[numero_loja] = result
-
-        except Exception as e:
-            db.session.rollback()  # Limpa transação inválida para queries seguintes
-            self.warnings.append(f"Erro ao buscar filial {numero_loja}: {e}")
-
-        return result
-
     def _get_nosso_codigo(self, codigo_sendas: str) -> Dict[str, Any]:
         """
-        Busca nosso código interno baseado no código do Sendas
-        Usa cache para evitar múltiplas consultas ao banco
+        Busca nosso código no cache (precarregado em batch por _preload_depara_sendas).
+        Não faz queries ao banco — todo acesso a DB foi feito no preload.
         """
-        # Verifica cache primeiro
         if codigo_sendas in self.depara_cache:
             return self.depara_cache[codigo_sendas]
 
-        result = {
+        # Não encontrado no De-Para
+        return {
             'nosso_codigo': None,
             'nossa_descricao': None,
             'fator_conversao': 1.0
         }
 
-        try:
-            from app.portal.sendas.models import ProdutoDeParaSendas
-
-            # Busca no De-Para
-            depara = ProdutoDeParaSendas.query.filter_by(
-                codigo_sendas=codigo_sendas,
-                ativo=True
-            ).first()
-
-            if depara:
-                result = {
-                    'nosso_codigo': depara.codigo_nosso,
-                    'nossa_descricao': depara.descricao_nosso,
-                    'fator_conversao': float(depara.fator_conversao) if depara.fator_conversao else 1.0
-                }
-
-            # Adiciona ao cache
-            self.depara_cache[codigo_sendas] = result
-
-        except Exception as e:
-            db.session.rollback()  # Limpa transação inválida para queries seguintes
-            self.warnings.append(f"Erro ao buscar De-Para para código {codigo_sendas}: {e}")
-
-        return result
-
     def _get_produto_info(self, nosso_codigo: str) -> Dict[str, Any]:
         """
-        Busca informações do produto no CadastroPalletizacao
+        Busca informações do produto no cache (precarregado em batch por _preload_produtos).
+        Não faz queries ao banco — todo acesso a DB foi feito no preload.
         """
         if not nosso_codigo:
             return {}
 
-        # Verifica cache primeiro
         if nosso_codigo in self.produto_cache:
             return self.produto_cache[nosso_codigo]
 
-        result = {}
-
-        try:
-            from app.producao.models import CadastroPalletizacao
-
-            produto = CadastroPalletizacao.query.filter_by(
-                cod_produto=nosso_codigo,
-                ativo=True
-            ).first()
-
-            if produto:
-                result = {
-                    'nome_produto': produto.nome_produto,
-                    'palletizacao': produto.palletizacao,
-                    'peso_bruto': produto.peso_bruto
-                }
-
-            # Adiciona ao cache
-            self.produto_cache[nosso_codigo] = result
-
-        except Exception as e:
-            db.session.rollback()  # Limpa transação inválida para queries seguintes
-            self.warnings.append(f"Erro ao buscar produto {nosso_codigo}: {e}")
-
-        return result
+        # Não encontrado
+        return {}
 
     def validate(self, data: Dict[str, Any]) -> bool:
         """Valida os dados extraídos"""

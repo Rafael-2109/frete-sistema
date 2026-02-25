@@ -162,12 +162,33 @@ def upload():
             tipo_doc = identificacao.get('tipo', 'DESCONHECIDO')
             numero_doc = identificacao.get('numero_documento', '')
 
+            # NOTA: NÃO fechar db.session aqui.
+            # db.session.close() detacha current_user (Flask-Login) e quaisquer
+            # objetos ORM carregados, causando DetachedInstanceError quando
+            # current_user.username é acessado mais adiante (linha ~275).
+            # Com batch preloads, todas as queries completam em <1s — não há risco
+            # de idle_in_transaction_session_timeout (30s).
+
             # Valida preços contra TabelaRede
             validacao_precos = None
             tem_divergencia = False
 
             if summary.get('por_filial'):
                 validador = ValidadorPrecos(tolerancia_percentual=0.0)
+
+                # Batch preload: coleta UFs e códigos para carregar preços em 2 queries
+                ufs_unicas = set()
+                codigos_unicos = set()
+                for filial in summary['por_filial']:
+                    uf = filial.get('estado', '')
+                    if uf:
+                        ufs_unicas.add(uf.upper())
+                    for produto in filial.get('produtos', []):
+                        nosso_codigo = produto.get('nosso_codigo')
+                        if nosso_codigo:
+                            codigos_unicos.add(nosso_codigo)
+                validador.precarregar_precos(rede, list(ufs_unicas), list(codigos_unicos))
+
                 validacoes_filiais = []
 
                 for filial in summary['por_filial']:
