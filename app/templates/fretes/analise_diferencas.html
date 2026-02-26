@@ -87,8 +87,10 @@
                             </span>
                             <span class="badge bg-warning text-dark d-none" id="badge-fonte-cadastrada">
                                 <i class="fas fa-sync"></i> Tabela atual
-                                {% if tabela_cadastrada %}
-                                (atualizada em {{ tabela_cadastrada.criado_em|formatar_data_segura }})
+                                {% if reavaliacao_info and reavaliacao_info.mudou %}
+                                — <i class="fas fa-exchange-alt"></i> Vínculo mudou para <strong>{{ reavaliacao_info.nome_tabela_atual }}</strong>
+                                {% elif tabela_cadastrada %}
+                                ({{ tabela_dados_cadastrada.nome_tabela if tabela_dados_cadastrada else 'N/A' }})
                                 {% endif %}
                             </span>
                         </div>
@@ -99,6 +101,28 @@
                         Tabela cadastrada não encontrada para "{{ frete.tabela_nome_tabela }}" /
                         {{ frete.uf_destino }} / {{ frete.tipo_carga }} / {{ frete.modalidade }}.
                         Opção desabilitada.
+                    </div>
+                    {% endif %}
+                    {% if reavaliacao_info %}
+                    <div class="alert d-none mt-2 mb-0 py-1 {{ 'alert-info' if reavaliacao_info.mudou else 'alert-light' }}" id="info-reavaliacao">
+                        <i class="fas fa-link"></i>
+                        {% if reavaliacao_info.mudou %}
+                        <strong>Vínculo alterado:</strong>
+                        Tabela mudou de <strong>{{ reavaliacao_info.nome_tabela_original }}</strong>
+                        para <strong>{{ reavaliacao_info.nome_tabela_atual }}</strong>
+                        {% else %}
+                        <strong>Vínculo:</strong>
+                        Tabela <strong>{{ reavaliacao_info.nome_tabela_atual }}</strong> (sem mudança desde o embarque)
+                        {% endif %}
+                        {% if reavaliacao_info.tipo == 'DIRETA' %}
+                        — {{ reavaliacao_info.tabelas_avaliadas }} tabela(s) avaliada(s),
+                        {{ reavaliacao_info.cidades_resolvidas|length }} cidade(s) resolvida(s)
+                        {% if not reavaliacao_info.todas_cidades_resolvidas %}
+                        <span class="badge bg-warning text-dark ms-1">
+                            {{ reavaliacao_info.cidades_nao_resolvidas|length }} cidade(s) não resolvida(s)
+                        </span>
+                        {% endif %}
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -600,6 +624,12 @@
             // Toggle badge no card de componentes
             document.getElementById('badge-tabela-embarque').classList.toggle('d-none', fonteAtiva !== 'embarque');
             document.getElementById('badge-tabela-cadastrada').classList.toggle('d-none', fonteAtiva !== 'cadastrada');
+
+            // Toggle info card de reavaliação (suplementar à cadastrada)
+            var infoReav = document.getElementById('info-reavaliacao');
+            if (infoReav) {
+                infoReav.classList.toggle('d-none', fonteAtiva !== 'cadastrada');
+            }
         });
     });
 

@@ -157,6 +157,12 @@
                 <strong>Busca Manual:</strong> Esta busca NÃO valida NFs em comum.
                 Use quando o CTe complementar não está aparecendo na sugestão automática.
                 Ao vincular manualmente, será registrada uma observação na despesa.
+                {% if filtros and filtros.grupo_ativo %}
+                <br>
+                <span class="badge bg-info mt-1">
+                    <i class="fas fa-building"></i> Grupo empresarial ativo — buscando CTes de todas transportadoras do grupo
+                </span>
+                {% endif %}
             </div>
 
             <!-- Resultados -->

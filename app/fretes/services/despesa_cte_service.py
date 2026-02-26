@@ -454,10 +454,18 @@ class DespesaCteService:
             resultado['frete'] = frete
 
             # Usar valores padrão do frete se não informados
-            # Normaliza e pega os 8 primeiros dígitos (prefixo do CNPJ)
-            if not prefixo_cnpj_transportadora and frete.transportadora and frete.transportadora.cnpj:
-                cnpj_transp_limpo = normalizar_cnpj(frete.transportadora.cnpj)
-                prefixo_cnpj_transportadora = cnpj_transp_limpo[:8] if cnpj_transp_limpo else None #type: ignore
+            # Grupo-aware: usa todos os prefixos do grupo empresarial quando auto-preenchendo
+            prefixos_grupo = set()
+            grupo_ativo = False
+
+            if not prefixo_cnpj_transportadora and frete.transportadora:
+                # Auto-fill: usar todos os prefixos do grupo empresarial
+                prefixos_grupo = frete.transportadora.obter_prefixos_cnpj_grupo()
+                grupo_ativo = len(prefixos_grupo) > 1
+                # Manter prefixo único para exibição em filtros_aplicados
+                if frete.transportadora.cnpj:
+                    cnpj_transp_limpo = normalizar_cnpj(frete.transportadora.cnpj)
+                    prefixo_cnpj_transportadora = cnpj_transp_limpo[:8] if cnpj_transp_limpo else None  # type: ignore
 
             if not prefixo_cnpj_cliente and frete.cnpj_cliente:
                 cnpj_cliente_limpo = normalizar_cnpj(frete.cnpj_cliente)
@@ -467,7 +475,8 @@ class DespesaCteService:
             resultado['filtros_aplicados'] = {
                 'prefixo_transportadora': prefixo_cnpj_transportadora,
                 'prefixo_cliente': prefixo_cnpj_cliente,
-                'numero_cte': numero_cte
+                'numero_cte': numero_cte,
+                'grupo_ativo': grupo_ativo,
             }
 
             # Buscar CTes já vinculados a outras despesas (para marcar)
@@ -489,8 +498,18 @@ class DespesaCteService:
                 )
 
             # Filtro por CNPJ da transportadora (emitente do CTe)
-            if prefixo_cnpj_transportadora:
-                # Limpa o prefixo para comparar com banco (que armazena CNPJ limpo)
+            # Grupo-aware: usa OR de todos os prefixos do grupo quando disponível
+            if prefixos_grupo:
+                filtros_cnpj = [
+                    ConhecimentoTransporte.cnpj_emitente.like(f'{p}%')
+                    for p in prefixos_grupo
+                ]
+                if len(filtros_cnpj) == 1:
+                    filtros.append(filtros_cnpj[0])
+                else:
+                    filtros.append(or_(*filtros_cnpj))
+            elif prefixo_cnpj_transportadora:
+                # Fallback: prefixo único (fornecido pelo usuário manualmente)
                 prefixo_limpo = _limpar_prefixo_cnpj(prefixo_cnpj_transportadora)
                 if prefixo_limpo:
                     filtros.append(

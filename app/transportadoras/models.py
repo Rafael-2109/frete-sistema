@@ -96,5 +96,19 @@ class Transportadora(db.Model):
 
         return prefixos
 
+    def pertence_mesmo_grupo(self, outra_transportadora_id: int) -> bool:
+        """
+        Retorna True se mesma transportadora ou mesmo grupo_transportadora.
+        Usado para aceitar vinculação de CTe/Fatura entre transportadoras do mesmo grupo.
+        """
+        if self.id == outra_transportadora_id:
+            return True
+        if not self.grupo_transportadora_id:
+            return False
+        outra = Transportadora.query.get(outra_transportadora_id)
+        if not outra or not outra.grupo_transportadora_id:
+            return False
+        return self.grupo_transportadora_id == outra.grupo_transportadora_id
+
     def __repr__(self):
         return f'<Transportadora {self.razao_social}>'

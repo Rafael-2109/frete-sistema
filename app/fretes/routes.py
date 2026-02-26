@@ -651,13 +651,20 @@ def processar_cte_frete_existente():
             flash(f"Este frete já possui CTe {frete.numero_cte} lançado!", "warning")
             return redirect(url_for("fretes.visualizar_frete", frete_id=frete.id))
 
-        # ✅ VALIDAÇÃO: Transportadora da fatura deve ser a mesma do frete
+        # ✅ VALIDAÇÃO: Transportadora da fatura deve ser a mesma do frete (ou do mesmo grupo)
         if frete.transportadora_id != fatura.transportadora_id:
-            flash(
-                f"❌ Erro: A transportadora da fatura ({fatura.transportadora.razao_social}) é diferente da transportadora do frete ({frete.transportadora.razao_social})!",
-                "error",
-            )
-            return redirect(url_for("fretes.lancar_cte", fatura_id=fatura_frete_id))
+            if not frete.transportadora.pertence_mesmo_grupo(fatura.transportadora_id):
+                flash(
+                    f"❌ Erro: A transportadora da fatura ({fatura.transportadora.razao_social}) é diferente da transportadora do frete ({frete.transportadora.razao_social}) e não pertencem ao mesmo grupo!",
+                    "error",
+                )
+                return redirect(url_for("fretes.lancar_cte", fatura_id=fatura_frete_id))
+            else:
+                grupo_nome = frete.transportadora.grupo.nome if frete.transportadora.grupo else "mesmo grupo"
+                flash(
+                    f"⚠️ Transportadoras diferentes mas do {grupo_nome}. Vinculação permitida.",
+                    "info",
+                )
 
         # ✅ VINCULA A FATURA AO FRETE EXISTENTE
         if not frete.fatura_frete_id:
@@ -1602,35 +1609,207 @@ def analise_diferencas(frete_id):
         frete, tabela_dados_embarque, transportadora_config
     )
 
-    # ========== FONTE 2: Tabela Cadastrada (tabela atual do banco) ==========
+    # ========== FONTE 2: Tabela Cadastrada (com reavaliação de vínculo integrada) ==========
+    # Estratégia: primeiro tenta resolver via CidadeAtendida (vínculo atual).
+    # Se encontrar, usa essa tabela como "cadastrada" (pode ser diferente da congelada).
+    # Se não encontrar, faz fallback pelo nome_tabela congelado no frete.
     tabela_cadastrada = None
     tabela_nao_encontrada = False
     componentes_cadastrada = None
     resumo_cadastrada = None
     tabela_dados_cadastrada = None
+    reavaliacao_info = None
 
     from app.tabelas.models import TabelaFrete as TabelaFreteModel
     from sqlalchemy import func as sa_func
+    from app.vinculos.models import CidadeAtendida
+    from app.utils.localizacao import LocalizacaoService
 
-    tabela_cadastrada = TabelaFreteModel.query.filter(
-        TabelaFreteModel.transportadora_id == frete.transportadora_id,
-        sa_func.upper(sa_func.trim(TabelaFreteModel.nome_tabela)) == sa_func.upper(sa_func.trim(frete.tabela_nome_tabela or '')),
-        TabelaFreteModel.uf_origem == 'SP',
-        TabelaFreteModel.uf_destino == frete.uf_destino,
-        TabelaFreteModel.tipo_carga == frete.tipo_carga,
-        TabelaFreteModel.modalidade == frete.modalidade,
-    ).first()
+    try:
+        tabela_via_vinculo = None  # Tabela encontrada via reavaliação de vínculo
 
-    if tabela_cadastrada:
+        if frete.tipo_carga == 'FRACIONADA':
+            # --- REAVALIAÇÃO FRACIONADA ---
+            # 1. Buscar todas as nome_tabela disponíveis em TabelaFrete
+            tabelas_disponiveis = TabelaFreteModel.query.filter(
+                TabelaFreteModel.transportadora_id == frete.transportadora_id,
+                TabelaFreteModel.uf_destino == frete.uf_destino,
+                TabelaFreteModel.tipo_carga == frete.tipo_carga,
+                TabelaFreteModel.modalidade == frete.modalidade,
+            ).with_entities(TabelaFreteModel.nome_tabela).distinct().all()
+            lista_nome_tabela = [t[0] for t in tabelas_disponiveis]
+
+            if lista_nome_tabela:
+                # 2. Resolver cidade do frete
+                cidade = LocalizacaoService.buscar_cidade_por_nome(frete.cidade_destino, frete.uf_destino)
+                if cidade:
+                    # 3. Buscar vínculo atual em CidadeAtendida
+                    vinculo = CidadeAtendida.query.filter(
+                        CidadeAtendida.cidade_id == cidade.id,
+                        CidadeAtendida.transportadora_id == frete.transportadora_id,
+                        CidadeAtendida.nome_tabela.in_(lista_nome_tabela),
+                    ).first()
+
+                    if vinculo:
+                        # 4. Buscar TabelaFrete completa com nome_tabela do vínculo
+                        tabela_via_vinculo = TabelaFreteModel.query.filter(
+                            TabelaFreteModel.transportadora_id == frete.transportadora_id,
+                            sa_func.upper(sa_func.trim(TabelaFreteModel.nome_tabela)) == sa_func.upper(sa_func.trim(vinculo.nome_tabela)),
+                            TabelaFreteModel.uf_origem == 'SP',
+                            TabelaFreteModel.uf_destino == frete.uf_destino,
+                            TabelaFreteModel.tipo_carga == frete.tipo_carga,
+                            TabelaFreteModel.modalidade == frete.modalidade,
+                        ).first()
+
+                        if tabela_via_vinculo:
+                            nome_tabela_original = (frete.tabela_nome_tabela or '').strip()
+                            nome_tabela_atual = (vinculo.nome_tabela or '').strip()
+                            reavaliacao_info = {
+                                'nome_tabela_original': nome_tabela_original,
+                                'nome_tabela_atual': nome_tabela_atual,
+                                'mudou': nome_tabela_original.upper() != nome_tabela_atual.upper(),
+                                'cidade_resolvida': cidade.nome,
+                                'cidade_uf': cidade.uf,
+                                'tipo': 'FRACIONADA',
+                                'tabelas_avaliadas': 1,
+                                'icms_cidade': cidade.icms,
+                            }
+
+        elif frete.tipo_carga == 'DIRETA':
+            # --- REAVALIAÇÃO DIRETA ---
+            # 1. Obter itens ativos do embarque
+            itens = [i for i in frete.embarque.itens if i.status == 'ativo']
+            if itens:
+                # 2. Para cada item, coletar vínculos atualizados
+                tabelas_candidatas = set()
+                cidades_resolvidas = []
+                cidades_nao_resolvidas = []
+
+                for item in itens:
+                    cidade_item = LocalizacaoService.buscar_cidade_por_nome(item.cidade_destino, item.uf_destino)
+                    if not cidade_item:
+                        cidades_nao_resolvidas.append(f"{item.cidade_destino}/{item.uf_destino}")
+                        continue
+
+                    cidades_resolvidas.append(f"{cidade_item.nome}/{cidade_item.uf}")
+
+                    # Buscar TabelaFrete disponíveis para este item
+                    tabelas_item = TabelaFreteModel.query.filter(
+                        TabelaFreteModel.transportadora_id == frete.transportadora_id,
+                        TabelaFreteModel.uf_destino == item.uf_destino,
+                        TabelaFreteModel.tipo_carga == 'DIRETA',
+                        TabelaFreteModel.modalidade == frete.modalidade,
+                    ).with_entities(TabelaFreteModel.nome_tabela).distinct().all()
+                    nomes_tabela_item = [t[0] for t in tabelas_item]
+
+                    if nomes_tabela_item:
+                        vinculos_item = CidadeAtendida.query.filter(
+                            CidadeAtendida.cidade_id == cidade_item.id,
+                            CidadeAtendida.transportadora_id == frete.transportadora_id,
+                            CidadeAtendida.nome_tabela.in_(nomes_tabela_item),
+                        ).all()
+                        for v in vinculos_item:
+                            tabelas_candidatas.add(v.nome_tabela)
+
+                if tabelas_candidatas:
+                    # 3. Para CADA candidata, simular cálculo e selecionar a MAIS CARA
+                    from app.utils.calculadora_frete import CalculadoraFrete
+
+                    melhor_tabela = None
+                    melhor_valor_bruto = -1
+                    melhor_tabela_obj = None
+
+                    for nome_tabela_candidata in tabelas_candidatas:
+                        tabela_obj = TabelaFreteModel.query.filter(
+                            TabelaFreteModel.transportadora_id == frete.transportadora_id,
+                            sa_func.upper(sa_func.trim(TabelaFreteModel.nome_tabela)) == sa_func.upper(sa_func.trim(nome_tabela_candidata)),
+                            TabelaFreteModel.uf_origem == 'SP',
+                            TabelaFreteModel.uf_destino == frete.uf_destino,
+                            TabelaFreteModel.tipo_carga == 'DIRETA',
+                            TabelaFreteModel.modalidade == frete.modalidade,
+                        ).first()
+
+                        if not tabela_obj:
+                            continue
+
+                        dados_candidata = TabelaFreteManager.preparar_dados_tabela(tabela_obj)
+                        dados_candidata["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
+                        dados_candidata["icms_destino"] = frete.tabela_icms_destino or 0
+
+                        resultado_calculo = CalculadoraFrete.calcular_frete_unificado(
+                            peso=frete.peso_total,
+                            valor_mercadoria=frete.valor_total_nfs,
+                            tabela_dados=dados_candidata,
+                            transportadora_optante=dados_candidata.get("transportadora_optante", True),
+                            transportadora_config=transportadora_config,
+                            cidade={"icms": dados_candidata.get("icms_destino", 0)},
+                            codigo_ibge=None,
+                        )
+
+                        valor_bruto = resultado_calculo.get("valor_bruto", 0) or 0
+                        if valor_bruto > melhor_valor_bruto:
+                            melhor_valor_bruto = valor_bruto
+                            melhor_tabela = nome_tabela_candidata
+                            melhor_tabela_obj = tabela_obj
+
+                    if melhor_tabela_obj:
+                        tabela_via_vinculo = melhor_tabela_obj
+
+                        nome_tabela_original = (frete.tabela_nome_tabela or '').strip()
+                        nome_tabela_atual = (melhor_tabela or '').strip()
+                        reavaliacao_info = {
+                            'nome_tabela_original': nome_tabela_original,
+                            'nome_tabela_atual': nome_tabela_atual,
+                            'mudou': nome_tabela_original.upper() != nome_tabela_atual.upper(),
+                            'cidades_resolvidas': cidades_resolvidas,
+                            'cidades_nao_resolvidas': cidades_nao_resolvidas,
+                            'todas_cidades_resolvidas': len(cidades_nao_resolvidas) == 0,
+                            'tipo': 'DIRETA',
+                            'tabelas_avaliadas': len(tabelas_candidatas),
+                        }
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Erro na reavaliação de vínculo para frete #{frete.id}: {e}")
+        tabela_via_vinculo = None
+
+    # Decidir qual tabela usar como "cadastrada":
+    # Prioridade 1: tabela via reavaliação de vínculo (CidadeAtendida)
+    # Prioridade 2: tabela pelo nome_tabela congelado (fallback)
+    if tabela_via_vinculo:
+        tabela_cadastrada = tabela_via_vinculo
         tabela_dados_cadastrada = TabelaFreteManager.preparar_dados_tabela(tabela_cadastrada)
-        tabela_dados_cadastrada["icms_destino"] = frete.tabela_icms_destino
+        # Para FRACIONADA com cidade resolvida, usar ICMS da cidade atual
+        if reavaliacao_info and reavaliacao_info.get('icms_cidade'):
+            tabela_dados_cadastrada["icms_destino"] = reavaliacao_info['icms_cidade']
+        else:
+            tabela_dados_cadastrada["icms_destino"] = frete.tabela_icms_destino or 0
         tabela_dados_cadastrada["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
 
         componentes_cadastrada, resumo_cadastrada, _ = _calcular_componentes_analise(
             frete, tabela_dados_cadastrada, transportadora_config
         )
     else:
-        tabela_nao_encontrada = True
+        # Fallback: buscar pelo nome_tabela congelado no frete
+        tabela_cadastrada = TabelaFreteModel.query.filter(
+            TabelaFreteModel.transportadora_id == frete.transportadora_id,
+            sa_func.upper(sa_func.trim(TabelaFreteModel.nome_tabela)) == sa_func.upper(sa_func.trim(frete.tabela_nome_tabela or '')),
+            TabelaFreteModel.uf_origem == 'SP',
+            TabelaFreteModel.uf_destino == frete.uf_destino,
+            TabelaFreteModel.tipo_carga == frete.tipo_carga,
+            TabelaFreteModel.modalidade == frete.modalidade,
+        ).first()
+
+        if tabela_cadastrada:
+            tabela_dados_cadastrada = TabelaFreteManager.preparar_dados_tabela(tabela_cadastrada)
+            tabela_dados_cadastrada["icms_destino"] = frete.tabela_icms_destino
+            tabela_dados_cadastrada["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
+
+            componentes_cadastrada, resumo_cadastrada, _ = _calcular_componentes_analise(
+                frete, tabela_dados_cadastrada, transportadora_config
+            )
+        else:
+            tabela_nao_encontrada = True
 
     # ========== RENDER ==========
     resumo_cte = {"total_liquido": None, "percentual_icms": None, "valor_icms": None, "total_bruto": frete.valor_cte}
@@ -1643,10 +1822,11 @@ def analise_diferencas(frete_id):
         tabela_dados=tabela_dados_embarque,
         resumo_cotacao=resumo_embarque,
         configuracao_info=config_info_embarque,
-        # Dados Cadastrada (injetados como JSON para JS)
+        # Dados Cadastrada (com reavaliação integrada, injetados como JSON para JS)
         componentes_cadastrada=componentes_cadastrada,
         tabela_dados_cadastrada=tabela_dados_cadastrada,
         resumo_cadastrada=resumo_cadastrada,
+        reavaliacao_info=reavaliacao_info,
         # Controle
         resumo_cte=resumo_cte,
         transportadora_config=transportadora_config,
