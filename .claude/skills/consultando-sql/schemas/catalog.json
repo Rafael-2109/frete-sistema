@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 122,
+  "total_tabelas": 128,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -193,6 +193,59 @@
         "num_pedido",
         "cod_produto",
         "pedido_cliente"
+      ]
+    },
+    {
+      "name": "carvia_faturas_cliente",
+      "description": "Tabela carvia_faturas_cliente",
+      "key_fields": [
+        "cnpj_cliente",
+        "nome_cliente",
+        "numero_fatura"
+      ]
+    },
+    {
+      "name": "carvia_faturas_transportadora",
+      "description": "Tabela carvia_faturas_transportadora",
+      "key_fields": [
+        "transportadora_id",
+        "numero_fatura",
+        "data_emissao"
+      ]
+    },
+    {
+      "name": "carvia_nfs",
+      "description": "Tabela carvia_nfs",
+      "key_fields": [
+        "numero_nf",
+        "serie_nf",
+        "chave_acesso_nf"
+      ]
+    },
+    {
+      "name": "carvia_operacao_nfs",
+      "description": "Tabela carvia_operacao_nfs",
+      "key_fields": [
+        "operacao_id",
+        "nf_id"
+      ]
+    },
+    {
+      "name": "carvia_operacoes",
+      "description": "Tabela carvia_operacoes",
+      "key_fields": [
+        "cte_numero",
+        "cte_chave_acesso",
+        "cte_valor"
+      ]
+    },
+    {
+      "name": "carvia_subcontratos",
+      "description": "Tabela carvia_subcontratos",
+      "key_fields": [
+        "operacao_id",
+        "transportadora_id",
+        "cte_numero"
       ]
     },
     {

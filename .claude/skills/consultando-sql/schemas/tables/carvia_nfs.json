@@ -1,0 +1,127 @@
+{
+  "name": "carvia_nfs",
+  "description": "Tabela carvia_nfs",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "serie_nf",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "chave_acesso_nf",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "cnpj_emitente",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_emitente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "uf_emitente",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "cidade_emitente",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cnpj_destinatario",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_destinatario",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "uf_destinatario",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "cidade_destinatario",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "peso_bruto",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "peso_liquido",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "quantidade_volumes",
+      "type": "integer"
+    },
+    {
+      "name": "arquivo_pdf_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "arquivo_xml_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "arquivo_nome_original",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "tipo_fonte",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_nfs_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_nfs_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_nfs_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    }
+  ]
+}

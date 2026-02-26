@@ -1,0 +1,86 @@
+{
+  "name": "carvia_faturas_transportadora",
+  "description": "Tabela carvia_faturas_transportadora",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_fatura",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "data_emissao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "vencimento",
+      "type": "date"
+    },
+    {
+      "name": "arquivo_pdf_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "arquivo_nome_original",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "status_conferencia",
+      "type": "varchar(20)",
+      "default": "PENDENTE"
+    },
+    {
+      "name": "conferido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "conferido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_faturas_transportadora_numero_fatura",
+      "columns": [
+        "numero_fatura"
+      ],
+      "unique": false
+    }
+  ]
+}
