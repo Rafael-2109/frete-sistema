@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 16/02/2026
+**Ultima Atualizacao**: 26/02/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -20,6 +20,7 @@
 | SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
 | SSW consulta (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
+| CARVIA (frete subcontratado) | "operacoes CarVia", "subcontratos pendentes", "cotar subcontrato", "faturas CarVia", "conferencia transportadora" | -> `gerindo-carvia` |
 | LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `buscando-rotas` |
 
 ---
@@ -76,13 +77,15 @@ Se a resposta esta no reference -> NAO usar skill.
 | integracao vs descobrindo | CRIAR novo service -> integracao. EXPLORAR modelo -> descobrindo |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
 | cotando-frete vs acessando-ssw | **Nacom** (industria, contrata frete) -> cotando-frete. **CarVia** (transportadora, vende frete) -> acessando-ssw. Sinal: "no SSW", "opcao NNN", "CarVia" -> SSW. Sem qualificador -> Nacom. Sinais adicionais CarVia: "parametros de frete" (opcao 062), "resultado CTRC" (opcao 101), "formacao de preco" (opcao 062/004) |
+| cotando-frete vs gerindo-carvia | **Nacom** (cotacao outbound, tabela de frete da Nacom) -> cotando-frete. **CarVia** (cotacao subcontrato inbound, operacao + transportadora) -> gerindo-carvia. Sinal: "subcontrato", "operacao CarVia", "frete subcontratado" -> gerindo-carvia. "frete para Manaus", "pedido VCD" -> cotando-frete |
+| gerindo-carvia vs gerindo-expedicao | **CarVia** (frete subcontratado, operacao inbound) -> gerindo-carvia. **Nacom** (separacao, embarque outbound) -> gerindo-expedicao. Sinal: "subcontrato", "fatura CarVia" -> gerindo-carvia. "separacao", "pedido VCD" -> gerindo-expedicao |
 | acessando-ssw vs operando-ssw | **Consultar/entender** SSW -> acessando-ssw. **Executar/cadastrar/criar** no SSW -> operando-ssw. Sinal: "cadastre", "crie unidade", "inclua cidade" -> operando. "como funciona", "o que e", "passo a passo" -> acessando |
 | gerindo-expedicao vs acessando-ssw | Estoque/separacao/embarque **Nacom** -> gerindo-expedicao. Romaneio/manifesto **SSW** -> acessando-ssw |
 | monitorando-entregas vs acessando-ssw | Entrega rastreada no **sistema local** -> monitorando-entregas. Baixa/ocorrencia no **SSW** -> acessando-ssw |
 
 ---
 
-## Skills — Inventario Completo (25 total)
+## Skills — Inventario Completo (26 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
@@ -100,6 +103,9 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
 ### Skills SSW (Claude Code)
 `acessando-ssw`, `operando-ssw`
+
+### Skills CarVia (Claude Code)
+`gerindo-carvia`
 
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,

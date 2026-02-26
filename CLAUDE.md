@@ -1,6 +1,6 @@
 # Sistema de Fretes — Instrucoes de Projeto
 
-**Ultima Atualizacao**: 14/02/2026
+**Ultima Atualizacao**: 26/02/2026
 
 ---
 
@@ -89,6 +89,7 @@ Gotchas rapidos:
 | **Manual CLAUDE.md de modulo** | `.claude/references/MANUAL_CLAUDE_MD.md` |
 | **Capacidades MCP (versoes, gaps, enhanced)** | `.claude/references/MCP_CAPABILITIES_2026.md` |
 | **Linx Microvix (APIs, WS, integracao)** | `.claude/references/linx/INTEGRACOES.md` |
+| **CarVia (frete subcontratado)** | `app/carvia/CLAUDE.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:
@@ -172,6 +173,7 @@ Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao auto
 > **Manual**: `.claude/references/MANUAL_CLAUDE_MD.md` — template, principios, checklist e exemplo comentado
 
 Modulos complexos terao CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
+- `app/carvia/CLAUDE.md` — **CRIADO** (3.3K LOC, 16 arquivos, 16 templates)
 - `app/financeiro/CLAUDE.md` — P0 (38.7K LOC, 64 arquivos)
 - `app/recebimento/CLAUDE.md` — P0 (27.3K LOC, 28 arquivos)
 - `app/carteira/CLAUDE.md` — P1 (19K LOC, 49 arquivos)
