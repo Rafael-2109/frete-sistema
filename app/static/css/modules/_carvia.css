@@ -1,0 +1,186 @@
+/* ═══════════════════════════════════════════════════════════════
+   CarVia Module Styles
+   Gestao de frete subcontratado
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Dashboard Stats Cards */
+.carvia-stat-card {
+    border-radius: var(--radius-lg, 0.75rem);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.carvia-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+.carvia-stat-card .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.carvia-stat-card .stat-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.85;
+}
+
+/* Status Badges */
+.carvia-badge-rascunho {
+    --_badge-bg: var(--bs-secondary-bg, #6c757d);
+    --_badge-color: var(--bs-secondary-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-cotado {
+    --_badge-bg: var(--bs-info-bg, #0dcaf0);
+    --_badge-color: var(--bs-info-color, #000);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-confirmado {
+    --_badge-bg: var(--bs-success-bg, #198754);
+    --_badge-color: var(--bs-success-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-faturado {
+    --_badge-bg: var(--bs-primary-bg, #0d6efd);
+    --_badge-color: var(--bs-primary-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-cancelado {
+    --_badge-bg: var(--bs-danger-bg, #dc3545);
+    --_badge-color: var(--bs-danger-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-pendente {
+    --_badge-bg: var(--bs-warning-bg, #ffc107);
+    --_badge-color: var(--bs-warning-color, #000);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-conferido {
+    --_badge-bg: var(--bs-success-bg, #198754);
+    --_badge-color: var(--bs-success-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-divergente {
+    --_badge-bg: var(--bs-danger-bg, #dc3545);
+    --_badge-color: var(--bs-danger-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-emitida {
+    --_badge-bg: var(--bs-info-bg, #0dcaf0);
+    --_badge-color: var(--bs-info-color, #000);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-paga {
+    --_badge-bg: var(--bs-success-bg, #198754);
+    --_badge-color: var(--bs-success-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-cancelada {
+    --_badge-bg: var(--bs-danger-bg, #dc3545);
+    --_badge-color: var(--bs-danger-color, #fff);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+.carvia-badge-em-conferencia {
+    --_badge-bg: var(--bs-info-bg, #0dcaf0);
+    --_badge-color: var(--bs-info-color, #000);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
+
+/* Upload Area */
+.carvia-upload-area {
+    border: 2px dashed var(--border-color, #dee2e6);
+    border-radius: var(--radius-lg, 0.75rem);
+    padding: 2rem;
+    text-align: center;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+    cursor: pointer;
+}
+
+.carvia-upload-area:hover,
+.carvia-upload-area.dragover {
+    border-color: var(--bs-primary, #0d6efd);
+    background-color: var(--bg-light, rgba(13, 110, 253, 0.05));
+}
+
+.carvia-upload-area .upload-icon {
+    font-size: 3rem;
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+
+/* Operacao Detail */
+.carvia-nf-list .nf-item {
+    border-left: 3px solid var(--bs-primary, #0d6efd);
+    padding-left: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.carvia-subcontrato-card {
+    border-left: 4px solid var(--bs-info, #0dcaf0);
+    transition: border-color 0.15s ease;
+}
+
+.carvia-subcontrato-card.confirmado {
+    border-left-color: var(--bs-success, #198754);
+}
+
+.carvia-subcontrato-card.cancelado {
+    border-left-color: var(--bs-danger, #dc3545);
+    opacity: 0.7;
+}
+
+/* Cotacao Result */
+.carvia-cotacao-resultado {
+    background: var(--bg-light, #f8f9fa);
+    border-radius: var(--radius-md, 0.5rem);
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+[data-bs-theme="dark"] .carvia-cotacao-resultado {
+    background: var(--bg-dark, #212529);
+}
+
+/* Table Responsive */
+.carvia-table th {
+    white-space: nowrap;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.carvia-table .cnpj-col {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.85rem;
+}
+
+.carvia-table .valor-col {
+    text-align: right;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}

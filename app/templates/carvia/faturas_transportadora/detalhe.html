@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-file-invoice"></i> Fatura {{ fatura.numero_fatura }}
+                <span class="badge carvia-badge-{{ fatura.status_conferencia|lower|replace('_', '-') }}">
+                    {{ fatura.status_conferencia }}
+                </span>
+            </h2>
+            <p class="text-muted mb-0">
+                Fatura da transportadora | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
+                por {{ fatura.criado_por }}
+            </p>
+        </div>
+        <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Info da fatura -->
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Fatura</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Transportadora</small>
+                            <strong>{{ fatura.transportadora.razao_social if fatura.transportadora else '-' }}</strong>
+                            <div class="small text-muted">{{ fatura.transportadora.cnpj if fatura.transportadora else '-' }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Numero</small>
+                            <strong>{{ fatura.numero_fatura }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data Emissao</small>
+                            <strong>{{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Vencimento</small>
+                            <strong>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</strong>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted d-block">Valor Total da Fatura</small>
+                            <h3 class="text-primary mb-0">{{ fatura.valor_total|valor_br }}</h3>
+                        </div>
+                    </div>
+                    {% if fatura.conferido_por %}
+                    <hr>
+                    <small class="text-muted d-block">Conferido por</small>
+                    <p class="mb-0">{{ fatura.conferido_por }} em {{ fatura.conferido_em|formatar_data_hora_brasil if fatura.conferido_em else '-' }}</p>
+                    {% endif %}
+                    {% if fatura.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ fatura.observacoes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Conferencia -->
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-clipboard-check"></i> Conferencia</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Comparativo -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-4 text-center">
+                            <small class="text-muted d-block">Valor Fatura</small>
+                            <h5>{{ fatura.valor_total|valor_br }}</h5>
+                        </div>
+                        <div class="col-4 text-center">
+                            <small class="text-muted d-block">Soma Cotado</small>
+                            <h5>R$ {{ "%.2f"|format(valor_cotado_total) }}</h5>
+                        </div>
+                        <div class="col-4 text-center">
+                            <small class="text-muted d-block">Soma Final</small>
+                            <h5>R$ {{ "%.2f"|format(valor_acertado_total) }}</h5>
+                        </div>
+                    </div>
+
+                    {% set diff = (fatura.valor_total|float - valor_acertado_total)|abs %}
+                    {% if diff > 0.01 %}
+                    <div class="alert alert-warning mb-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Diferenca de R$ {{ "%.2f"|format(diff) }} entre valor da fatura e soma dos valores finais.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-check-circle"></i> Valores conferem.
+                    </div>
+                    {% endif %}
+
+                    <!-- Acoes de conferencia -->
+                    <h6>Alterar Status de Conferencia:</h6>
+                    <div class="d-flex gap-2 flex-wrap">
+                        {% for status in ['PENDENTE', 'EM_CONFERENCIA', 'CONFERIDO', 'DIVERGENTE'] %}
+                        {% if status != fatura.status_conferencia %}
+                        <form method="POST" action="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="{{ status }}">
+                            <button type="submit" class="btn btn-sm
+                                {% if status == 'CONFERIDO' %}btn-success
+                                {% elif status == 'DIVERGENTE' %}btn-danger
+                                {% elif status == 'EM_CONFERENCIA' %}btn-info
+                                {% else %}btn-secondary{% endif %}"
+                                {% if status == 'CONFERIDO' %}onclick="return confirm('Confirmar conferencia? Subcontratos serao marcados como CONFERIDO.')"{% endif %}>
+                                {{ status|replace('_', ' ') }}
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subcontratos da fatura -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Subcontratos ({{ subcontratos|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Operacao</th>
+                            <th>Cliente</th>
+                            <th>Destino</th>
+                            <th>CTe Sub</th>
+                            <th>Valor Cotado</th>
+                            <th>Valor Acertado</th>
+                            <th>Valor Final</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sub in subcontratos %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}">
+                                    <strong>#{{ sub.operacao_id }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ sub.operacao.nome_cliente if sub.operacao else '-' }}</td>
+                            <td>{{ sub.operacao.cidade_destino + '/' + sub.operacao.uf_destino if sub.operacao else '-' }}</td>
+                            <td>{{ sub.cte_numero or '-' }}</td>
+                            <td class="valor-col">{{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}</td>
+                            <td class="valor-col">{{ sub.valor_acertado|valor_br if sub.valor_acertado else '-' }}</td>
+                            <td class="valor-col"><strong>{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</strong></td>
+                            <td><span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

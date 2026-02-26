@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-file-invoice-dollar"></i> Fatura {{ fatura.numero_fatura }}
+                <span class="badge carvia-badge-{{ fatura.status|lower }}">{{ fatura.status }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                Fatura ao cliente | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
+                por {{ fatura.criado_por }}
+            </p>
+        </div>
+        <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Info da fatura -->
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Fatura</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Cliente</small>
+                            <strong>{{ fatura.nome_cliente or '-' }}</strong>
+                            <div class="small text-muted">{{ fatura.cnpj_cliente }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Numero</small>
+                            <strong>{{ fatura.numero_fatura }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data Emissao</small>
+                            <strong>{{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Vencimento</small>
+                            <strong>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</strong>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted d-block">Valor Total</small>
+                            <h3 class="text-success mb-0">{{ fatura.valor_total|valor_br }}</h3>
+                        </div>
+                    </div>
+                    {% if fatura.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ fatura.observacoes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Acoes de status -->
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tasks"></i> Status e Acoes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex gap-2 flex-wrap">
+                        {% for status in ['PENDENTE', 'EMITIDA', 'PAGA', 'CANCELADA'] %}
+                        {% if status != fatura.status %}
+                        <form method="POST" action="{{ url_for('carvia.atualizar_status_fatura_cliente', fatura_id=fatura.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="{{ status }}">
+                            <button type="submit" class="btn btn-sm carvia-badge-{{ status|lower }}"
+                                    {% if status == 'CANCELADA' %}onclick="return confirm('Cancelar esta fatura?')"{% endif %}>
+                                {{ status }}
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <hr>
+                    <h6>Operacoes Vinculadas: {{ operacoes|length }}</h6>
+                    <p class="text-muted small mb-0">
+                        Soma CTe: R$ {{ "%.2f"|format(operacoes|sum(attribute='cte_valor', default=0)) }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Operacoes da fatura -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Operacoes ({{ operacoes|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Operacao</th>
+                            <th>CTe</th>
+                            <th>Destino</th>
+                            <th>Peso</th>
+                            <th>Valor CTe</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for op in operacoes %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}">
+                                    <strong>#{{ op.id }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ op.cte_numero or '-' }}</td>
+                            <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
+                            <td>{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }} kg</td>
+                            <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
+                            <td><span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

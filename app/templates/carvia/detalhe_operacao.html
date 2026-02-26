@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-file-invoice"></i> Operacao #{{ operacao.id }}
+                <span class="badge carvia-badge-{{ operacao.status|lower }}">{{ operacao.status }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                {{ operacao.tipo_entrada }} | Criado em {{ operacao.criado_em|formatar_data_hora_brasil if operacao.criado_em else '-' }}
+                por {{ operacao.criado_por }}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if operacao.status not in ('FATURADO', 'CANCELADO') %}
+            <a href="{{ url_for('carvia.editar_operacao', operacao_id=operacao.id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            <form method="POST" action="{{ url_for('carvia.cancelar_operacao', operacao_id=operacao.id) }}"
+                  onsubmit="return confirm('Tem certeza que deseja cancelar esta operacao?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Info Principal -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Operacao</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Cliente</small>
+                            <strong>{{ operacao.nome_cliente or '-' }}</strong>
+                            <div class="cnpj-col small text-muted">{{ operacao.cnpj_cliente }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">CTe CarVia</small>
+                            <strong>{{ operacao.cte_numero or 'Sem CTe' }}</strong>
+                            {% if operacao.cte_data_emissao %}
+                            <div class="small text-muted">{{ operacao.cte_data_emissao.strftime('%d/%m/%Y') }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Origem</small>
+                            <strong>{{ operacao.cidade_origem or '-' }}/{{ operacao.uf_origem or '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Destino</small>
+                            <strong>{{ operacao.cidade_destino }}/{{ operacao.uf_destino }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Peso Bruto</small>
+                            <strong>{{ operacao.peso_bruto|numero_br(1) if operacao.peso_bruto else '-' }} kg</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Peso Cubado</small>
+                            <strong>{{ operacao.peso_cubado|numero_br(1) if operacao.peso_cubado else '-' }} kg</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Peso Utilizado</small>
+                            <strong class="text-primary">{{ operacao.peso_utilizado|numero_br(1) if operacao.peso_utilizado else '-' }} kg</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor Mercadoria</small>
+                            <strong>{{ operacao.valor_mercadoria|valor_br if operacao.valor_mercadoria else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor CTe CarVia</small>
+                            <strong class="text-success">{{ operacao.cte_valor|valor_br if operacao.cte_valor else '-' }}</strong>
+                        </div>
+                    </div>
+                    {% if operacao.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ operacao.observacoes }}</p>
+                    {% endif %}
+                    {% if operacao.status not in ('FATURADO', 'CANCELADO') %}
+                    <hr>
+                    <a href="{{ url_for('carvia.atualizar_cubagem', operacao_id=operacao.id) }}" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-cube"></i> Cubagem
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- NFs Vinculadas -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-file-alt"></i> NFs Vinculadas ({{ nfs|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if nfs %}
+                    <div class="carvia-nf-list">
+                        {% for nf in nfs %}
+                        <div class="nf-item">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>NF {{ nf.numero_nf }}</strong>
+                                    {% if nf.serie_nf %}<small class="text-muted">Serie {{ nf.serie_nf }}</small>{% endif %}
+                                    <span class="badge bg-secondary">{{ nf.tipo_fonte }}</span>
+                                </div>
+                                <div class="text-end">
+                                    <strong>{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</strong>
+                                </div>
+                            </div>
+                            <div class="small text-muted">
+                                {{ nf.nome_emitente or nf.cnpj_emitente }} |
+                                Peso: {{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg |
+                                {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">Nenhuma NF vinculada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subcontratos -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-handshake"></i> Subcontratos ({{ subcontratos|length }})</h5>
+            {% if operacao.status not in ('FATURADO', 'CANCELADO') %}
+            <a href="{{ url_for('carvia.adicionar_subcontrato', operacao_id=operacao.id) }}" class="btn btn-sm btn-success">
+                <i class="fas fa-plus"></i> Adicionar Subcontrato
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if subcontratos %}
+            <div class="row g-3">
+                {% for sub in subcontratos %}
+                <div class="col-md-6">
+                    <div class="card carvia-subcontrato-card {{ sub.status|lower }}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-truck"></i>
+                                    {{ sub.transportadora.razao_social if sub.transportadora else 'Transportadora #' + sub.transportadora_id|string }}
+                                </h6>
+                                <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
+                            </div>
+                            <div class="row g-2 small">
+                                <div class="col-6">
+                                    <span class="text-muted">CTe Subcontratado:</span><br>
+                                    {{ sub.cte_numero or 'Sem CTe' }}
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Valor CTe:</span><br>
+                                    {{ sub.cte_valor|valor_br if sub.cte_valor else '-' }}
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Valor Cotado:</span><br>
+                                    {{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Valor Acertado:</span><br>
+                                    <strong class="text-primary">{{ sub.valor_acertado|valor_br if sub.valor_acertado else '-' }}</strong>
+                                </div>
+                            </div>
+                            {% if sub.observacoes %}
+                            <div class="mt-2 small text-muted">
+                                <i class="fas fa-comment"></i> {{ sub.observacoes }}
+                            </div>
+                            {% endif %}
+
+                            <!-- Acoes do subcontrato -->
+                            {% if sub.status not in ('FATURADO', 'CANCELADO') %}
+                            <hr class="my-2">
+                            <div class="d-flex gap-1 flex-wrap">
+                                {% if sub.status in ('PENDENTE', 'COTADO') %}
+                                <form method="POST" action="{{ url_for('carvia.confirmar_subcontrato', operacao_id=operacao.id, sub_id=sub.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <i class="fas fa-check"></i> Confirmar
+                                    </button>
+                                </form>
+                                {% endif %}
+
+                                <form method="POST" action="{{ url_for('carvia.recotar_subcontrato', operacao_id=operacao.id, sub_id=sub.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-calculator"></i> Recotar
+                                    </button>
+                                </form>
+
+                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                        data-bs-toggle="modal" data-bs-target="#modalValor{{ sub.id }}">
+                                    <i class="fas fa-dollar-sign"></i> Valor
+                                </button>
+
+                                <form method="POST" action="{{ url_for('carvia.cancelar_subcontrato', operacao_id=operacao.id, sub_id=sub.id) }}"
+                                      onsubmit="return confirm('Cancelar este subcontrato?')" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Valor Acertado -->
+                {% if sub.status not in ('FATURADO', 'CANCELADO') %}
+                <div class="modal fade" id="modalValor{{ sub.id }}" tabindex="-1">
+                    <div class="modal-dialog modal-sm">
+                        <div class="modal-content">
+                            <form method="POST" action="{{ url_for('carvia.atualizar_valor_subcontrato', operacao_id=operacao.id, sub_id=sub.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="modal-header">
+                                    <h6 class="modal-title">Valor Acertado</h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <label class="form-label">Valor (R$)</label>
+                                    <input type="number" class="form-control" name="valor_acertado"
+                                           step="0.01" value="{{ sub.valor_acertado or '' }}"
+                                           placeholder="Deixe vazio para remover">
+                                    <small class="text-muted">Cotacao: {{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}</small>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <p class="text-muted mb-3">Nenhum subcontrato. Adicione uma transportadora para cotar o frete.</p>
+                {% if operacao.status not in ('FATURADO', 'CANCELADO') %}
+                <a href="{{ url_for('carvia.adicionar_subcontrato', operacao_id=operacao.id) }}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Adicionar Subcontrato
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

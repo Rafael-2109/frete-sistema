@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-file-invoice"></i> Nova Fatura de Transportadora</h2>
+            <p class="text-muted mb-0">Registrar fatura recebida do subcontratado</p>
+        </div>
+        <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% if not transp_selecionada %}
+    <!-- Passo 1: Selecionar transportadora -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-truck"></i> Selecionar Transportadora</h5>
+        </div>
+        <div class="card-body">
+            {% if transportadoras_disponiveis %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Transportadora</th>
+                            <th>CNPJ</th>
+                            <th>Subcontratos Disponiveis</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in transportadoras_disponiveis %}
+                        <tr>
+                            <td><strong>{{ t.razao_social }}</strong></td>
+                            <td class="cnpj-col">{{ t.cnpj }}</td>
+                            <td><span class="badge bg-primary">{{ t.qtd_subcontratos }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.nova_fatura_transportadora', transportadora_id=t.id) }}"
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-arrow-right"></i> Selecionar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-info-circle text-muted fa-2x mb-2"></i>
+                <p class="text-muted">Nenhuma transportadora com subcontratos confirmados disponiveis para faturamento.</p>
+                <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-primary">
+                    Ver Operacoes
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Passo 2: Criar fatura com subcontratos selecionados -->
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="transportadora_id" value="{{ transp_selecionada }}">
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Fatura</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Transportadora</label>
+                        {% if subcontratos_disponiveis %}
+                        <input type="text" class="form-control"
+                               value="{{ subcontratos_disponiveis[0].transportadora.razao_social if subcontratos_disponiveis[0].transportadora else '-' }}" disabled>
+                        {% else %}
+                        <input type="text" class="form-control" value="ID: {{ transp_selecionada }}" disabled>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Numero da Fatura *</label>
+                        <input type="text" class="form-control" name="numero_fatura" required placeholder="NF-001">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Emissao *</label>
+                        <input type="date" class="form-control" name="data_emissao" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Vencimento</label>
+                        <input type="date" class="form-control" name="vencimento">
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-12">
+                        <label class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" name="observacoes" placeholder="Observacoes opcionais...">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-list-check"></i> Selecionar Subcontratos</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-select-all">
+                    Selecionar Todos
+                </button>
+            </div>
+            <div class="card-body p-0">
+                {% if subcontratos_disponiveis %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th width="30"><input type="checkbox" id="check-all"></th>
+                                <th>Operacao</th>
+                                <th>Cliente</th>
+                                <th>Destino</th>
+                                <th>Valor Cotado</th>
+                                <th>Valor Acertado</th>
+                                <th>Valor Final</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subcontratos_disponiveis %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" name="subcontrato_ids" value="{{ sub.id }}" class="sub-check">
+                                </td>
+                                <td><strong>#{{ sub.operacao_id }}</strong></td>
+                                <td>{{ sub.operacao.nome_cliente if sub.operacao else '-' }}</td>
+                                <td>{{ sub.operacao.cidade_destino + '/' + sub.operacao.uf_destino if sub.operacao else '-' }}</td>
+                                <td class="valor-col">{{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}</td>
+                                <td class="valor-col">{{ sub.valor_acertado|valor_br if sub.valor_acertado else '-' }}</td>
+                                <td class="valor-col"><strong>{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    Nenhum subcontrato confirmado disponivel para esta transportadora.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-check"></i> Criar Fatura
+            </button>
+            <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-outline-secondary btn-lg">
+                Voltar
+            </a>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('check-all')?.addEventListener('change', function() {
+    document.querySelectorAll('.sub-check').forEach(cb => cb.checked = this.checked);
+});
+document.getElementById('btn-select-all')?.addEventListener('click', function() {
+    const checkAll = document.getElementById('check-all');
+    checkAll.checked = true;
+    document.querySelectorAll('.sub-check').forEach(cb => cb.checked = true);
+});
+</script>
+{% endblock %}

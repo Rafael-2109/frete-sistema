@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-file-invoice-dollar"></i> Nova Fatura ao Cliente</h2>
+            <p class="text-muted mb-0">Agrupar operacoes confirmadas em uma fatura</p>
+        </div>
+        <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% if not cnpj_selecionado %}
+    <!-- Passo 1: Selecionar cliente -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-user"></i> Selecionar Cliente</h5>
+        </div>
+        <div class="card-body">
+            {% if clientes %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>CNPJ</th>
+                            <th>Operacoes Disponiveis</th>
+                            <th>Valor Total CTes</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in clientes %}
+                        <tr>
+                            <td><strong>{{ c.nome_cliente or '-' }}</strong></td>
+                            <td class="cnpj-col">{{ c.cnpj_cliente }}</td>
+                            <td><span class="badge bg-primary">{{ c.qtd_operacoes }}</span></td>
+                            <td>{{ c.valor_total|valor_br if c.valor_total else '-' }}</td>
+                            <td>
+                                <a href="{{ url_for('carvia.nova_fatura_cliente', cnpj=c.cnpj_cliente) }}"
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-arrow-right"></i> Selecionar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-info-circle text-muted fa-2x mb-2"></i>
+                <p class="text-muted">Nenhum cliente com operacoes confirmadas disponiveis para faturamento.</p>
+                <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-primary">
+                    Ver Operacoes
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Passo 2: Criar fatura com operacoes selecionadas -->
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="cnpj_cliente" value="{{ cnpj_selecionado }}">
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Fatura</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" class="form-control" value="{{ operacoes_disponiveis[0].nome_cliente if operacoes_disponiveis else cnpj_selecionado }}" disabled>
+                        <small class="text-muted">{{ cnpj_selecionado }}</small>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Numero da Fatura *</label>
+                        <input type="text" class="form-control" name="numero_fatura" required placeholder="FAT-001">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Data Emissao *</label>
+                        <input type="date" class="form-control" name="data_emissao" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Vencimento</label>
+                        <input type="date" class="form-control" name="vencimento">
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-12">
+                        <label class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" name="observacoes" placeholder="Observacoes opcionais...">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-list-check"></i> Selecionar Operacoes</h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-select-all">
+                        Selecionar Todas
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if operacoes_disponiveis %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th width="30"><input type="checkbox" id="check-all"></th>
+                                <th>Operacao</th>
+                                <th>CTe</th>
+                                <th>Destino</th>
+                                <th>Valor CTe</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for op in operacoes_disponiveis %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" name="operacao_ids" value="{{ op.id }}" class="op-check">
+                                </td>
+                                <td><strong>#{{ op.id }}</strong></td>
+                                <td>{{ op.cte_numero or '-' }}</td>
+                                <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
+                                <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
+                                <td>{{ op.criado_em.strftime('%d/%m/%Y') if op.criado_em else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    Nenhuma operacao confirmada disponivel para este cliente.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-check"></i> Criar Fatura
+            </button>
+            <a href="{{ url_for('carvia.nova_fatura_cliente') }}" class="btn btn-outline-secondary btn-lg">
+                Voltar
+            </a>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('check-all')?.addEventListener('change', function() {
+    document.querySelectorAll('.op-check').forEach(cb => cb.checked = this.checked);
+});
+document.getElementById('btn-select-all')?.addEventListener('click', function() {
+    const checkAll = document.getElementById('check-all');
+    checkAll.checked = true;
+    document.querySelectorAll('.op-check').forEach(cb => cb.checked = true);
+});
+</script>
+{% endblock %}

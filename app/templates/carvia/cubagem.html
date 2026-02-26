@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-cube"></i> Cubagem — Operacao #{{ operacao.id }}</h2>
+            <p class="text-muted mb-0">
+                {{ operacao.nome_cliente }} |
+                {{ operacao.cidade_destino }}/{{ operacao.uf_destino }}
+            </p>
+        </div>
+        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Pesos atuais -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-secondary">
+                <div class="card-body text-center">
+                    <small class="text-muted">Peso Bruto</small>
+                    <h4>{{ operacao.peso_bruto|numero_br(1) if operacao.peso_bruto else '-' }} kg</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info">
+                <div class="card-body text-center">
+                    <small class="text-muted">Peso Cubado</small>
+                    <h4>{{ operacao.peso_cubado|numero_br(1) if operacao.peso_cubado else '-' }} kg</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <small class="text-muted">Peso Utilizado (maior)</small>
+                    <h4 class="text-primary">{{ operacao.peso_utilizado|numero_br(1) if operacao.peso_utilizado else '-' }} kg</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" novalidate>
+                {{ form.hidden_tag() }}
+
+                <!-- Opcao 1: Peso cubado direto -->
+                <div class="mb-4">
+                    <h5><i class="fas fa-pencil-alt"></i> Opcao 1: Informar Peso Cubado Direto</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="peso_cubado" class="form-label">Peso Cubado (kg)</label>
+                            {{ form.peso_cubado(class="form-control", step="0.001", placeholder="Deixe vazio para calcular por dimensoes") }}
+                            <small class="text-muted">{{ form.peso_cubado.description }}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Opcao 2: Calcular por dimensoes -->
+                <div class="mb-4">
+                    <h5><i class="fas fa-ruler-combined"></i> Opcao 2: Calcular por Dimensoes</h5>
+                    <p class="text-muted small">Peso cubado = (C x L x A / Fator) x Volumes</p>
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Comprimento (cm)</label>
+                            {{ form.cubagem_comprimento(class="form-control", step="0.01", placeholder="0") }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Largura (cm)</label>
+                            {{ form.cubagem_largura(class="form-control", step="0.01", placeholder="0") }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Altura (cm)</label>
+                            {{ form.cubagem_altura(class="form-control", step="0.01", placeholder="0") }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Fator Divisor</label>
+                            {{ form.cubagem_fator(class="form-control", step="0.01") }}
+                            <small class="text-muted">5000 (aereo) ou 3333 (rodoviario)</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Volumes</label>
+                            {{ form.cubagem_volumes(class="form-control", min="1") }}
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-info w-100" id="btn-calcular">
+                                <i class="fas fa-calculator"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="resultado-calculo" class="mt-2 d-none">
+                        <div class="alert alert-info mb-0">
+                            <strong>Peso cubado calculado:</strong> <span id="peso-calc">-</span> kg
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save"></i> Salvar Cubagem
+                    </button>
+                    <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-outline-secondary btn-lg">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('btn-calcular').addEventListener('click', function() {
+    const comp = parseFloat(document.getElementById('cubagem_comprimento').value) || 0;
+    const larg = parseFloat(document.getElementById('cubagem_largura').value) || 0;
+    const alt = parseFloat(document.getElementById('cubagem_altura').value) || 0;
+    const fator = parseFloat(document.getElementById('cubagem_fator').value) || 5000;
+    const volumes = parseInt(document.getElementById('cubagem_volumes').value) || 1;
+
+    if (comp > 0 && larg > 0 && alt > 0 && fator > 0) {
+        const pesoCubado = (comp * larg * alt / fator) * volumes;
+        document.getElementById('peso-calc').textContent = pesoCubado.toFixed(3);
+        document.getElementById('resultado-calculo').classList.remove('d-none');
+    } else {
+        alert('Preencha todas as dimensoes.');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-check-circle"></i> Resultado da Importacao</h2>
+            <p class="text-muted mb-0">Revise os dados extraidos antes de confirmar</p>
+        </div>
+        <a href="{{ url_for('carvia.importar') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h3 class="text-primary">{{ resultado.nfs_parseadas|length }}</h3>
+                    <small class="text-muted">NFs Extraidas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info">
+                <div class="card-body text-center">
+                    <h3 class="text-info">{{ resultado.ctes_parseados|length }}</h3>
+                    <small class="text-muted">CTes Extraidos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card {{ 'border-danger' if resultado.erros else 'border-success' }}">
+                <div class="card-body text-center">
+                    <h3 class="{{ 'text-danger' if resultado.erros else 'text-success' }}">
+                        {{ resultado.erros|length }}
+                    </h3>
+                    <small class="text-muted">Erros</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if resultado.erros %}
+    <div class="alert alert-warning">
+        <h6><i class="fas fa-exclamation-triangle"></i> Erros durante o processamento:</h6>
+        <ul class="mb-0 small">
+            {% for erro in resultado.erros %}
+            <li>{{ erro }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- NFs Extraidas -->
+    {% if resultado.nfs_parseadas %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-alt"></i> NFs Extraidas</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>NF</th>
+                            <th>Chave Acesso</th>
+                            <th>Emitente</th>
+                            <th>CNPJ</th>
+                            <th>Valor</th>
+                            <th>Peso</th>
+                            <th>Fonte</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for nf in resultado.nfs_parseadas %}
+                        <tr>
+                            <td><strong>{{ nf.numero_nf or '-' }}</strong></td>
+                            <td class="cnpj-col small">
+                                {{ nf.chave_acesso_nf[:20] + '...' if nf.chave_acesso_nf else '-' }}
+                            </td>
+                            <td>{{ nf.nome_emitente or '-' }}</td>
+                            <td class="cnpj-col">{{ nf.cnpj_emitente or '-' }}</td>
+                            <td class="valor-col">
+                                {% if nf.valor_total %}R$ {{ "%.2f"|format(nf.valor_total) }}{% else %}-{% endif %}
+                            </td>
+                            <td class="valor-col">
+                                {% if nf.peso_bruto %}{{ "%.1f"|format(nf.peso_bruto) }} kg{% else %}-{% endif %}
+                            </td>
+                            <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CTes Extraidos -->
+    {% if resultado.ctes_parseados %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTes Extraidos</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>CTe</th>
+                            <th>Tipo</th>
+                            <th>Rota</th>
+                            <th>Valor Prestacao</th>
+                            <th>Remetente</th>
+                            <th>NFs Ref.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cte in resultado.ctes_parseados %}
+                        <tr>
+                            <td><strong>{{ cte.cte_numero or '-' }}</strong></td>
+                            <td>{{ cte.tipo_cte_descricao or 'Normal' }}</td>
+                            <td>
+                                {{ cte.cidade_origem or '?' }}/{{ cte.uf_origem or '?' }}
+                                &rarr;
+                                {{ cte.cidade_destino or '?' }}/{{ cte.uf_destino or '?' }}
+                            </td>
+                            <td class="valor-col">
+                                {% if cte.cte_valor %}R$ {{ "%.2f"|format(cte.cte_valor) }}{% else %}-{% endif %}
+                            </td>
+                            <td>{{ (cte.remetente or {}).get('nome', '-') }}</td>
+                            <td>
+                                <span class="badge bg-info">{{ (cte.nfs_referenciadas or [])|length }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Matching -->
+    {% if resultado.matches %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-link"></i> Matching NF &harr; CTe</h5>
+        </div>
+        <div class="card-body">
+            {% for cte_key, match_list in resultado.matches.items() %}
+            <h6>CTe {{ cte_key }}</h6>
+            <table class="table table-sm mb-3">
+                <thead>
+                    <tr>
+                        <th>NF Ref. (CTe)</th>
+                        <th>NF Importada</th>
+                        <th>Confianca</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in match_list %}
+                    <tr class="{{ 'table-success' if m.encontrada else 'table-warning' }}">
+                        <td>
+                            {{ m.nf_ref.numero_nf or m.nf_ref.chave[:20] + '...' if m.nf_ref.chave else '-' }}
+                        </td>
+                        <td>
+                            {% if m.nf_importada %}
+                            NF {{ m.nf_importada.numero_nf }}
+                            {% else %}
+                            <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Nao encontrada</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.confianca == 'CHAVE' %}
+                            <span class="badge bg-success">Chave Exata</span>
+                            {% elif m.confianca == 'CNPJ_NUMERO' %}
+                            <span class="badge bg-info">CNPJ+Numero</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">Nao Encontrada</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Acoes -->
+    <div class="d-flex gap-2">
+        {% if resultado.nfs_parseadas or resultado.ctes_parseados %}
+        <form method="POST" action="{{ url_for('carvia.importar_confirmar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-check"></i> Confirmar e Salvar
+            </button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('carvia.importar') }}" class="btn btn-outline-secondary btn-lg">
+            <i class="fas fa-redo"></i> Refazer Upload
+        </a>
+    </div>
+</div>
+{% endblock %}

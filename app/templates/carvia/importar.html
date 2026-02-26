@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-upload"></i> Importar NFs e CTes</h2>
+            <p class="text-muted mb-0">Upload de arquivos PDF (DANFE) e XML (NF-e / CTe)</p>
+        </div>
+        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Upload Area -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-upload"></i> Upload de Arquivos</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="formUpload">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="carvia-upload-area mb-3" id="dropArea">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <h5>Arraste arquivos aqui ou clique para selecionar</h5>
+                            <p class="text-muted mb-2">
+                                Aceita: PDF (DANFE), XML (NF-e), XML (CTe)
+                            </p>
+                            <input type="file" name="arquivos" id="inputArquivos"
+                                   multiple accept=".pdf,.xml"
+                                   class="d-none">
+                            <button type="button" class="btn btn-outline-primary"
+                                    onclick="document.getElementById('inputArquivos').click()">
+                                <i class="fas fa-folder-open"></i> Selecionar Arquivos
+                            </button>
+                        </div>
+
+                        <!-- Lista de arquivos selecionados -->
+                        <div id="listaArquivos" class="mb-3" style="display:none;">
+                            <h6><i class="fas fa-list"></i> Arquivos Selecionados:</h6>
+                            <div id="arquivosList"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="btnImportar" disabled>
+                            <i class="fas fa-cogs"></i> Processar Arquivos
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instrucoes -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Como Funciona</h5>
+                </div>
+                <div class="card-body">
+                    <ol class="small">
+                        <li class="mb-2">
+                            <strong>Upload</strong>: Selecione NFs (PDF ou XML) e CTes (XML) simultaneamente.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Parsing</strong>: O sistema extrai dados automaticamente de cada arquivo.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Matching</strong>: CTes sao associados as NFs pela chave de acesso ou CNPJ+numero.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Review</strong>: Voce confere e corrige os matches antes de confirmar.
+                        </li>
+                        <li>
+                            <strong>Operacoes</strong>: Operacoes sao criadas com status RASCUNHO.
+                        </li>
+                    </ol>
+
+                    <hr>
+                    <h6><i class="fas fa-file-alt"></i> Formatos Aceitos</h6>
+                    <ul class="small mb-0">
+                        <li><strong>PDF</strong>: DANFE (NF de mercadoria)</li>
+                        <li><strong>XML NF-e</strong>: Nota Fiscal Eletronica</li>
+                        <li><strong>XML CTe</strong>: Conhecimento de Transporte</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropArea = document.getElementById('dropArea');
+    const inputArquivos = document.getElementById('inputArquivos');
+    const listaArquivos = document.getElementById('listaArquivos');
+    const arquivosList = document.getElementById('arquivosList');
+    const btnImportar = document.getElementById('btnImportar');
+
+    // Drag & Drop
+    ['dragenter', 'dragover'].forEach(evt => {
+        dropArea.addEventListener(evt, function(e) {
+            e.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+        dropArea.addEventListener(evt, function(e) {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+        });
+    });
+
+    dropArea.addEventListener('drop', function(e) {
+        inputArquivos.files = e.dataTransfer.files;
+        atualizarLista();
+    });
+
+    dropArea.addEventListener('click', function(e) {
+        if (e.target === dropArea || e.target.closest('.upload-icon') || e.target.tagName === 'H5' || e.target.tagName === 'P') {
+            inputArquivos.click();
+        }
+    });
+
+    inputArquivos.addEventListener('change', atualizarLista);
+
+    function atualizarLista() {
+        const files = inputArquivos.files;
+        if (files.length === 0) {
+            listaArquivos.style.display = 'none';
+            btnImportar.disabled = true;
+            return;
+        }
+
+        listaArquivos.style.display = 'block';
+        btnImportar.disabled = false;
+        arquivosList.innerHTML = '';
+
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const ext = f.name.split('.').pop().toUpperCase();
+            const icon = ext === 'PDF' ? 'fa-file-pdf text-danger' : 'fa-file-code text-info';
+            const tipo = ext === 'PDF' ? 'DANFE PDF' : 'XML';
+
+            arquivosList.innerHTML += `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas ${icon}"></i>
+                    <span class="small">${f.name}</span>
+                    <span class="badge bg-secondary">${tipo}</span>
+                    <span class="text-muted small">${(f.size / 1024).toFixed(1)} KB</span>
+                </div>
+            `;
+        }
+    }
+});
+</script>
+{% endblock %}

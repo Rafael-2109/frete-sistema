@@ -23,7 +23,8 @@ class Usuario(db.Model, UserMixin):
     # Sistemas permitidos (novo - para separar logística de motochefe)
     sistema_logistica = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema de logística
     sistema_motochefe = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema motochefe
-    
+    sistema_carvia = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema CarVia (frete subcontratado)
+
     # Dados de controle
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     aprovado_em = db.Column(db.DateTime, nullable=True)
@@ -139,6 +140,10 @@ class Usuario(db.Model, UserMixin):
     def pode_acessar_motochefe(self):
         """Verifica se pode acessar o sistema motochefe"""
         return self.sistema_motochefe
+
+    def pode_acessar_carvia(self):
+        """Verifica se pode acessar o sistema CarVia (frete subcontratado)"""
+        return self.sistema_carvia
 
     def __repr__(self):
         return f'<Usuario {self.email}>'

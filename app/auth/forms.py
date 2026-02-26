@@ -36,6 +36,7 @@ class AprovarUsuarioForm(FlaskForm):
     vendedor_vinculado = SelectField('Vendedor Vinculado', choices=[], validators=[Optional()])
     sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
+    sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
     observacoes = TextAreaField('Observações', validators=[Optional()])
     submit = SubmitField('Aprovar Usuário')
 
@@ -60,6 +61,7 @@ class EditarUsuarioForm(FlaskForm):
     vendedor_vinculado = SelectField('Vendedor Vinculado', choices=[], validators=[Optional()])
     sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
+    sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
     status = SelectField('Status', choices=[
         ('ativo', 'Ativo'),
         ('bloqueado', 'Bloqueado'),

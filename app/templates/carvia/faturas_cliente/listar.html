@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-file-invoice-dollar"></i> Faturas CarVia — Cliente</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.nova_fatura_cliente') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Nova Fatura
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Buscar por cliente, CNPJ ou numero..."
+                           value="{{ busca }}">
+                </div>
+                <div class="col-md-3">
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Todos os Status</option>
+                        <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
+                        <option value="EMITIDA" {{ 'selected' if status_filtro == 'EMITIDA' }}>Emitida</option>
+                        <option value="PAGA" {{ 'selected' if status_filtro == 'PAGA' }}>Paga</option>
+                        <option value="CANCELADA" {{ 'selected' if status_filtro == 'CANCELADA' }}>Cancelada</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    {% if busca or status_filtro %}
+                    <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            {% if faturas %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Fatura</th>
+                            <th>Cliente</th>
+                            <th>Emissao</th>
+                            <th>Vencimento</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in faturas %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}">
+                                    <strong>{{ f.numero_fatura }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ f.nome_cliente or f.cnpj_cliente }}</td>
+                            <td>{{ f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '-' }}</td>
+                            <td>{{ f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '-' }}</td>
+                            <td class="valor-col">{{ f.valor_total|valor_br }}</td>
+                            <td><span class="badge carvia-badge-{{ f.status|lower }}">{{ f.status }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if paginacao.pages > 1 %}
+            <nav class="d-flex justify-content-center py-3">
+                <ul class="pagination pagination-sm mb-0">
+                    {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if p %}
+                    <li class="page-item {{ 'active' if p == paginacao.page }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=p, status=status_filtro, busca=busca) }}">{{ p }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </nav>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-file-invoice fa-3x mb-3 d-block opacity-50"></i>
+                <p>Nenhuma fatura encontrada.</p>
+                <a href="{{ url_for('carvia.nova_fatura_cliente') }}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Criar Fatura
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

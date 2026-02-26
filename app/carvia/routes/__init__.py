@@ -1,0 +1,18 @@
+"""
+Routes do Modulo CarVia
+"""
+
+
+def register_routes(bp):
+    """Registra todas as rotas no blueprint principal"""
+    from app.carvia.routes.dashboard_routes import register_dashboard_routes
+    from app.carvia.routes.importacao_routes import register_importacao_routes
+    from app.carvia.routes.operacao_routes import register_operacao_routes
+    from app.carvia.routes.fatura_routes import register_fatura_routes
+    from app.carvia.routes.api_routes import register_api_routes
+
+    register_dashboard_routes(bp)
+    register_importacao_routes(bp)
+    register_operacao_routes(bp)
+    register_fatura_routes(bp)
+    register_api_routes(bp)

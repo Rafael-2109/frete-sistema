@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-plus-circle"></i> Nova Operacao Manual</h2>
+            <p class="text-muted mb-0">Criar operacao sem CTe — entrada manual de dados</p>
+        </div>
+        <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" novalidate>
+                {{ form.hidden_tag() }}
+
+                <h5 class="mb-3"><i class="fas fa-user"></i> Dados do Cliente</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label for="cnpj_cliente" class="form-label">CNPJ Cliente *</label>
+                        {{ form.cnpj_cliente(class="form-control", placeholder="00.000.000/0000-00") }}
+                        {% if form.cnpj_cliente.errors %}
+                        <div class="invalid-feedback d-block">{{ form.cnpj_cliente.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-8">
+                        <label for="nome_cliente" class="form-label">Nome/Razao Social *</label>
+                        {{ form.nome_cliente(class="form-control", placeholder="Nome do cliente") }}
+                        {% if form.nome_cliente.errors %}
+                        <div class="invalid-feedback d-block">{{ form.nome_cliente.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <h5 class="mb-3"><i class="fas fa-route"></i> Rota</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-2">
+                        <label for="uf_origem" class="form-label">UF Origem</label>
+                        {{ form.uf_origem(class="form-control", placeholder="SP", maxlength="2") }}
+                    </div>
+                    <div class="col-md-4">
+                        <label for="cidade_origem" class="form-label">Cidade Origem</label>
+                        {{ form.cidade_origem(class="form-control", placeholder="Sao Paulo") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label for="uf_destino" class="form-label">UF Destino *</label>
+                        {{ form.uf_destino(class="form-control", placeholder="AM", maxlength="2") }}
+                        {% if form.uf_destino.errors %}
+                        <div class="invalid-feedback d-block">{{ form.uf_destino.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <label for="cidade_destino" class="form-label">Cidade Destino *</label>
+                        {{ form.cidade_destino(class="form-control", placeholder="Manaus") }}
+                        {% if form.cidade_destino.errors %}
+                        <div class="invalid-feedback d-block">{{ form.cidade_destino.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <h5 class="mb-3"><i class="fas fa-weight-hanging"></i> Peso e Valor</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label for="peso_bruto" class="form-label">Peso Bruto (kg)</label>
+                        {{ form.peso_bruto(class="form-control", placeholder="0.000", step="0.001") }}
+                    </div>
+                    <div class="col-md-4">
+                        <label for="valor_mercadoria" class="form-label">Valor Mercadoria (R$)</label>
+                        {{ form.valor_mercadoria(class="form-control", placeholder="0.00", step="0.01") }}
+                    </div>
+                </div>
+
+                <h5 class="mb-3"><i class="fas fa-sticky-note"></i> Observacoes</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        {{ form.observacoes(class="form-control", rows="3", placeholder="Observacoes opcionais...") }}
+                    </div>
+                </div>
+
+                <hr>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-check"></i> Criar Operacao
+                    </button>
+                    <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary btn-lg">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

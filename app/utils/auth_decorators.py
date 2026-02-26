@@ -85,6 +85,10 @@ def require_editar_cadastros():
     """Decorador para edição de cadastros"""
     return require_permission('pode_editar_cadastros')
 
+def require_carvia():
+    """Decorador para acesso ao sistema CarVia (frete subcontratado)"""
+    return require_permission('pode_acessar_carvia')
+
 def allow_vendedor_own_data():
     """
     Decorador especial para vendedores acessarem apenas seus próprios dados

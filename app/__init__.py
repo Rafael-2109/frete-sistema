@@ -819,6 +819,9 @@ def create_app(config_name=None):
     from app.relatorios_fiscais import relatorios_fiscais_bp
     app.register_blueprint(relatorios_fiscais_bp)
 
+    # 🚛 CarVia - Gestão de Frete Subcontratado
+    from app.carvia import init_app as init_carvia
+    init_carvia(app)
 
     # 🤖 Agente Logístico - Claude Agent SDK (substitui Claude AI Lite)
     try:
