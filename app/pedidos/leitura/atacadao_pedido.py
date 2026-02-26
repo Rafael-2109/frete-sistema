@@ -190,12 +190,21 @@ class AtacadaoPedidoExtractor(PDFExtractor):
             codigos_norm = [c.lstrip('0') for c in codigos if c]
             todos = list(set(codigos + codigos_norm))
 
+            # ORDER BY id ASC: registros mais recentes (IDs maiores) sobrescrevem
+            # os mais antigos no loop, priorizando dados corrigidos
             resultados = ProdutoDeParaAtacadao.query.filter(
                 ProdutoDeParaAtacadao.codigo_atacadao.in_(todos),
                 ProdutoDeParaAtacadao.ativo == True
-            ).all()
+            ).order_by(ProdutoDeParaAtacadao.id.asc()).all()
 
             for r in resultados:
+                codigo_nosso = r.codigo_nosso or ''
+                # Defesa: se codigo_nosso tem >10 chars ou contém espaço,
+                # provavelmente é descrição invertida — não sobrescrever registro válido
+                parece_invalido = len(codigo_nosso) > 10 or ' ' in codigo_nosso
+                if parece_invalido and r.codigo_atacadao in self.depara_cache:
+                    continue  # Já temos registro válido, não sobrescrever
+
                 result = {
                     'nosso_codigo': r.codigo_nosso,
                     'nossa_descricao': r.descricao_nosso,
