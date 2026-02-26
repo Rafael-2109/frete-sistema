@@ -165,9 +165,16 @@
   ],
   "indices": [
     {
-      "name": "ix_cnab_retorno_item_processado",
+      "name": "ix_cnab_retorno_item_cnpj_pagador",
       "columns": [
-        "processado"
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_conta_a_receber_id",
+      "columns": [
+        "conta_a_receber_id"
       ],
       "unique": false
     },
@@ -175,6 +182,13 @@
       "name": "idx_cnab_item_seu_numero",
       "columns": [
         "seu_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_processado",
+      "columns": [
+        "processado"
       ],
       "unique": false
     },
@@ -215,13 +229,6 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_conta_a_receber_id",
-      "columns": [
-        "conta_a_receber_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_cnab_retorno_item_seu_numero",
       "columns": [
         "seu_numero"
@@ -232,13 +239,6 @@
       "name": "ix_cnab_retorno_item_lote_id",
       "columns": [
         "lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cnab_retorno_item_cnpj_pagador",
-      "columns": [
-        "cnpj_pagador"
       ],
       "unique": false
     }

@@ -223,6 +223,13 @@
       "unique": false
     },
     {
+      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_ocorrencia_categoria",
       "columns": [
         "categoria",
@@ -237,13 +244,6 @@
         "status"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
-      "columns": [
-        "nf_devolucao_id"
-      ],
-      "unique": true
     },
     {
       "name": "idx_ocorrencia_data_abertura",

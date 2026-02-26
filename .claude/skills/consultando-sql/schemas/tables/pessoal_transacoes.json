@@ -172,16 +172,23 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_data",
+      "name": "idx_pessoal_transacoes_membro",
       "columns": [
-        "data"
+        "membro_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_pessoal_transacoes_categoria",
+      "name": "idx_pessoal_transacoes_status",
       "columns": [
-        "categoria_id"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_data",
+      "columns": [
+        "data"
       ],
       "unique": false
     },
@@ -193,16 +200,9 @@
       "unique": false
     },
     {
-      "name": "idx_pessoal_transacoes_membro",
+      "name": "idx_pessoal_transacoes_categoria",
       "columns": [
-        "membro_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_status",
-      "columns": [
-        "status"
+        "categoria_id"
       ],
       "unique": false
     }

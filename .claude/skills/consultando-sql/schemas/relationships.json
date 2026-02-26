@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 180,
+  "total_relationships": 189,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -888,6 +888,60 @@
       "from_table": "pendencias_financeiras_nf",
       "from_column": "entrega_id",
       "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_contas",
+      "from_column": "membro_id",
+      "to_table": "pessoal_membros",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_importacoes",
+      "from_column": "conta_id",
+      "to_table": "pessoal_contas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_regras_categorizacao",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_regras_categorizacao",
+      "from_column": "membro_id",
+      "to_table": "pessoal_membros",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "importacao_id",
+      "to_table": "pessoal_importacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "conta_id",
+      "to_table": "pessoal_contas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "regra_id",
+      "to_table": "pessoal_regras_categorizacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "membro_id",
+      "to_table": "pessoal_membros",
       "to_column": "id"
     },
     {

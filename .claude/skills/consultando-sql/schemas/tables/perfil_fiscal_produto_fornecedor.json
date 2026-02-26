@@ -133,6 +133,13 @@
   ],
   "indices": [
     {
+      "name": "ix_perfil_fiscal_produto_fornecedor_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_perfil_fiscal_produto_fornecedor_cnpj_fornecedor",
       "columns": [
         "cnpj_fornecedor"
@@ -143,13 +150,6 @@
       "name": "ix_perfil_fiscal_produto_fornecedor_cnpj_empresa_compradora",
       "columns": [
         "cnpj_empresa_compradora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_perfil_fiscal_produto_fornecedor_cod_produto",
-      "columns": [
-        "cod_produto"
       ],
       "unique": false
     }

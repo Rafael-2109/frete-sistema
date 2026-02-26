@@ -268,6 +268,13 @@
       "unique": false
     },
     {
+      "name": "ix_movimentacao_estoque_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_movimentacao_nf",
       "columns": [
         "numero_nf"
@@ -303,16 +310,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_recebimento_fisico_id",
+      "name": "idx_movimentacao_odoo_picking",
       "columns": [
-        "recebimento_fisico_id"
+        "odoo_picking_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_movimentacao_odoo_picking",
+      "name": "ix_movimentacao_estoque_recebimento_fisico_id",
       "columns": [
-        "odoo_picking_id"
+        "recebimento_fisico_id"
       ],
       "unique": false
     },
@@ -359,16 +366,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_recebimento_lote_id",
+      "name": "idx_movimentacao_nf_remessa_origem",
       "columns": [
-        "recebimento_lote_id"
+        "nf_remessa_origem"
       ],
       "unique": false
     },
     {
-      "name": "idx_movimentacao_nf_remessa_origem",
+      "name": "ix_movimentacao_estoque_recebimento_lote_id",
       "columns": [
-        "nf_remessa_origem"
+        "recebimento_lote_id"
       ],
       "unique": false
     },
@@ -443,13 +450,6 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_movimentacao_estoque_ativo",
       "columns": [
         "ativo"
@@ -464,17 +464,17 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_odoo_picking_id",
-      "columns": [
-        "odoo_picking_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_movimentacao_produto_data",
       "columns": [
         "cod_produto",
         "data_movimentacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
       ],
       "unique": false
     },

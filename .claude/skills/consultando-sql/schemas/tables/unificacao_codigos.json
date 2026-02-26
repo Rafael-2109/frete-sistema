@@ -68,9 +68,16 @@
   ],
   "indices": [
     {
-      "name": "ix_unificacao_codigos_ativo",
+      "name": "idx_unificacao_destino",
       "columns": [
-        "ativo"
+        "codigo_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_unificacao_codigos_codigo_destino",
+      "columns": [
+        "codigo_destino"
       ],
       "unique": false
     },
@@ -89,9 +96,9 @@
       "unique": false
     },
     {
-      "name": "ix_unificacao_codigos_codigo_destino",
+      "name": "ix_unificacao_codigos_ativo",
       "columns": [
-        "codigo_destino"
+        "ativo"
       ],
       "unique": false
     },
@@ -99,13 +106,6 @@
       "name": "idx_unificacao_origem",
       "columns": [
         "codigo_origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_unificacao_destino",
-      "columns": [
-        "codigo_destino"
       ],
       "unique": false
     }

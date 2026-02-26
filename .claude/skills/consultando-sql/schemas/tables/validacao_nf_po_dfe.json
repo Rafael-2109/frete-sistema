@@ -184,6 +184,27 @@
   ],
   "indices": [
     {
+      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
+      "columns": [
+        "odoo_po_vinculado_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_validacao_nf_po_dfe_cnpj_empresa_compradora",
       "columns": [
         "cnpj_empresa_compradora"
@@ -198,20 +219,6 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_nf_po_dfe_chave_nfe",
-      "columns": [
-        "chave_nfe"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
-      "columns": [
-        "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_validacao_nf_po_dfe_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
@@ -219,16 +226,9 @@
       "unique": true
     },
     {
-      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
+      "name": "ix_validacao_nf_po_dfe_chave_nfe",
       "columns": [
-        "odoo_po_vinculado_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_nf_po_dfe_status",
-      "columns": [
-        "status"
+        "chave_nfe"
       ],
       "unique": false
     }

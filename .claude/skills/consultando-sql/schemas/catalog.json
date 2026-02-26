@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 115,
+  "total_tabelas": 122,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -830,6 +830,68 @@
         "usuario_id",
         "tipo",
         "valor"
+      ]
+    },
+    {
+      "name": "pessoal_categorias",
+      "description": "Tabela pessoal_categorias",
+      "key_fields": [
+        "nome",
+        "grupo",
+        "icone"
+      ]
+    },
+    {
+      "name": "pessoal_contas",
+      "description": "Tabela pessoal_contas",
+      "key_fields": [
+        "nome",
+        "tipo",
+        "banco"
+      ]
+    },
+    {
+      "name": "pessoal_exclusoes_empresa",
+      "description": "Tabela pessoal_exclusoes_empresa",
+      "key_fields": [
+        "padrao",
+        "descricao"
+      ]
+    },
+    {
+      "name": "pessoal_importacoes",
+      "description": "Tabela pessoal_importacoes",
+      "key_fields": [
+        "conta_id",
+        "nome_arquivo",
+        "tipo_arquivo"
+      ]
+    },
+    {
+      "name": "pessoal_membros",
+      "description": "Tabela pessoal_membros",
+      "key_fields": [
+        "nome",
+        "nome_completo",
+        "papel"
+      ]
+    },
+    {
+      "name": "pessoal_regras_categorizacao",
+      "description": "Tabela pessoal_regras_categorizacao",
+      "key_fields": [
+        "padrao_historico",
+        "tipo_regra",
+        "categoria_id"
+      ]
+    },
+    {
+      "name": "pessoal_transacoes",
+      "description": "Tabela pessoal_transacoes",
+      "key_fields": [
+        "importacao_id",
+        "conta_id",
+        "data"
       ]
     },
     {
