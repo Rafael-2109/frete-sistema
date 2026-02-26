@@ -6,7 +6,7 @@ description: >-
   construir artefatos visuais com design profissional. Gera paginas com
   suporte obrigatorio light/dark mode e estetica nao-generica.
   Nao usar para modificar CSS existente sem criar tela (editar diretamente),
-  criar skill (usar skill_creator), ou gerar PRD (usar prd-generator).
+  criar skill (usar skill-creator), ou gerar PRD (usar prd-generator).
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

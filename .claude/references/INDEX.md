@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 17/02/2026
+**Ultima atualizacao**: 26/02/2026
 
 ---
 
@@ -24,6 +24,15 @@
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
 | **Manual para CLAUDE.md de modulo** | [MANUAL_CLAUDE_MD.md](MANUAL_CLAUDE_MD.md) |
 | **Capacidades MCP (versoes, features, gaps)** | [MCP_CAPABILITIES_2026.md](MCP_CAPABILITIES_2026.md) |
+
+---
+
+## CarVia (Frete Subcontratado)
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Guia de desenvolvimento CarVia (regras R1-R5, gotchas, modelos) | `app/carvia/CLAUDE.md` |
+| Campos de tabelas CarVia | Schemas: `skills/consultando-sql/schemas/tables/carvia_*.json` |
 
 ---
 
@@ -51,6 +60,19 @@
 | Conversao de unidades (UoM) | [odoo/CONVERSAO_UOM.md](odoo/CONVERSAO_UOM.md) |
 | Wizard vs API (reconciliacao extrato) | `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` |
 | Analise multi-company extrato (teste UI) | `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` |
+
+---
+
+## Linx (Microvix/ERP)
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| APIs, WebServices, autenticacao, metodos (WS Saida, B2C, Entrada, REST) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) |
+| Timestamp incremental (sincronizacao) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 3 |
+| API Faturas a Pagar (REST/JSON) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 7 |
+| B2CConsultaNFe — campos, XML completo, chave 44 digitos | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 5.1 |
+| Gotcha estoque (deposito em Tools) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 8 |
+| Links de documentacao e manuais | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 13 |
 
 ---
 
@@ -83,4 +105,5 @@ Roadmaps e planejamento futuro foram movidos para `.planning/roadmaps/`:
 | `rastreando-odoo` | odoo/MODELOS_CAMPOS, odoo/IDS_FIXOS |
 | `descobrindo-odoo-estrutura` | odoo/MODELOS_CAMPOS |
 | `gerindo-expedicao` | modelos/REGRAS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
+| `gerindo-carvia` | app/carvia/CLAUDE.md |
 | `frontend-design` | design/MAPEAMENTO_CORES |

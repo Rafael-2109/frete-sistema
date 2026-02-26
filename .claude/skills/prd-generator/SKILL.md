@@ -7,7 +7,7 @@ description: >-
   iterativas.
   Nao usar para implementar diretamente sem spec (usar ralph-wiggum),
   consultas de dados (usar consultando-sql), ou criar skill
-  (usar skill_creator).
+  (usar skill-creator).
 
   NAO USAR QUANDO:
   - Implementar diretamente sem spec -> usar **ralph-wiggum**

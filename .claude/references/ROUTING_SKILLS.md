@@ -99,7 +99,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 `integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`
 
 ### Skills Dev (Claude Code)
-`frontend-design`, `skill_creator`, `ralph-wiggum`, `prd-generator`
+`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`
 
 ### Skills SSW (Claude Code)
 `acessando-ssw`, `operando-ssw`

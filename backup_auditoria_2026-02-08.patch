@@ -69,7 +69,7 @@ index 6350ec52..3899467b 100644
 -
 -### Claude Code (Desenvolvimento)
 -- Odoo: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, integracao-odoo, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
--- Dev: frontend-design, skill_creator, ralph-wiggum, prd-generator
+-- Dev: frontend-design, skill-creator, ralph-wiggum, prd-generator
 -
 -### Compartilhados (ambos dominios)
 -- `exportando-arquivos`, `lendo-arquivos`
@@ -4876,10 +4876,10 @@ index 2db87449..60a28bf8 100644
  ---
  
  # Ralph Wiggum Technique
-diff --git a/.claude/skills/skill_creator/SKILL.md b/.claude/skills/skill_creator/SKILL.md
+diff --git a/.claude/skills/skill-creator/SKILL.md b/.claude/skills/skill-creator/SKILL.md
 index fa0a3093..17b25a6a 100644
---- a/.claude/skills/skill_creator/SKILL.md
-+++ b/.claude/skills/skill_creator/SKILL.md
+--- a/.claude/skills/skill-creator/SKILL.md
++++ b/.claude/skills/skill-creator/SKILL.md
 @@ -1,6 +1,6 @@
  ---
  name: skill-creator
@@ -5143,7 +5143,7 @@ index 656f93dd..5927f891 100644
 -`integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`
 -
 -### Skills Dev (Claude Code)
--`frontend-design`, `skill_creator`, `ralph-wiggum`, `prd-generator`
+-`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`
 -
 -### Utilitarios (compartilhados)
 -`exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
