@@ -1,0 +1,77 @@
+{
+  "skill_name": "gerindo-expedicao",
+  "version": 1,
+  "changelog": "v1: 5 evals cobrindo scripts principais + anti-pattern de selecao de script + cenario de dados vazios",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Tem pedido pendente pro Atacadao? Quero ver valor total e quantos pedidos.",
+      "expected_output": "Lista de pedidos pendentes do grupo Atacadao com valor total, quantidade de pedidos e itens por pedido",
+      "files": [],
+      "expectations": [
+        "Executou consultando_situacao_pedidos.py com --grupo atacadao (NAO consultando_produtos_estoque.py)",
+        "Retornou lista de pedidos com num_pedido, cliente e valor para cada pedido",
+        "Informou total de pedidos e valor total agregado",
+        "Valores monetarios apresentados em formato R$ brasileiro",
+        "NAO inventou dados que nao existem no JSON de saida do script (ex: datas de entrega ou status que o script nao retornou)",
+        "Se resultado veio vazio (0 pedidos), informou claramente ao usuario sem inventar pedidos ficticios"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Quanto tem de palmito no estoque? Quero a situacao completa.",
+      "expected_output": "Situacao completa do produto palmito: estoque atual, separacoes, demanda, producao programada e projecao",
+      "files": [],
+      "expectations": [
+        "Executou consultando_produtos_estoque.py com --produto palmito --completo (NAO consultando_situacao_pedidos.py)",
+        "Apresentou estoque atual do(s) produto(s) encontrado(s)",
+        "Mostrou separacoes por data de expedicao quando disponivel no output",
+        "Incluiu projecao dia-a-dia ou indicadores (sobra, cobertura) quando retornados pelo script",
+        "Se multiplos produtos de palmito retornaram, listou todos com quantidades individuais",
+        "Quantidades e valores correspondem EXATAMENTE ao JSON de saida — NAO arredondou ou estimou valores que nao vieram do script"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Quantas caixas de ketchup tem pendentes pro Atacadao 183?",
+      "expected_output": "Pedidos do Atacadao 183 contendo ketchup, com quantidades pendentes por item",
+      "files": [],
+      "expectations": [
+        "Executou consultando_situacao_pedidos.py com --grupo atacadao e --produto ketchup (NAO consultando_produtos_estoque.py)",
+        "Anti-pattern verificado: NAO usou consultando_produtos_estoque.py (que mostra catalogo, nao pedidos do cliente)",
+        "Se encontrou pedidos, mostrou quantidades de ketchup por pedido/loja",
+        "Filtrou ou destacou resultados da loja 183 quando possivel",
+        "NAO confundiu estoque total com quantidade pendente de pedido do cliente",
+        "Se nenhum pedido encontrado, informou claramente sem inventar dados"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "O que vai faltar de estoque essa semana? Quero ver os produtos criticos.",
+      "expected_output": "Previsao de ruptura dos proximos 7 dias com produtos criticos listados por urgencia",
+      "files": [],
+      "expectations": [
+        "Executou consultando_produtos_estoque.py com --scan-ruptura-global ou --ruptura e --dias 7",
+        "NAO executou analisando_disponibilidade_estoque.py (que analisa pedido especifico, nao scan global)",
+        "Listou produtos em risco de ruptura com data prevista e quantidade faltante quando retornados",
+        "Distinguiu urgencia (critico vs alerta) se o script retornou essa informacao",
+        "NAO inventou datas de ruptura ou quantidades que nao estao no JSON de saida",
+        "Se nenhum produto em ruptura, informou claramente que nao ha previsao de falta"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Qual a programacao de producao pra proxima semana? Mostra por dia.",
+      "expected_output": "Programacao de producao dos proximos 7 dias agrupada por dia, com produtos e linhas de producao",
+      "files": [],
+      "expectations": [
+        "Executou consultando_programacao_producao.py com --listar --dias 7 --por-dia",
+        "NAO executou consultando_produtos_estoque.py --entradas (que mostra entradas passadas, NAO producao futura)",
+        "Apresentou programacao agrupada por dia conforme retorno do script",
+        "Incluiu produto e linha de producao quando disponiveis no output",
+        "Quantidades correspondem ao JSON de saida do script",
+        "Se nao ha programacao cadastrada, informou claramente sem inventar dados"
+      ]
+    }
+  ]
+}

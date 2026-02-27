@@ -1,0 +1,82 @@
+[
+  {
+    "query": "Tem pedido pendente pro Atacadao?",
+    "should_trigger": true
+  },
+  {
+    "query": "Quanto tem de palmito no estoque?",
+    "should_trigger": true
+  },
+  {
+    "query": "Pedido VCD123 esta em separacao?",
+    "should_trigger": true
+  },
+  {
+    "query": "Quando o pedido VCD456 fica disponivel?",
+    "should_trigger": true
+  },
+  {
+    "query": "Crie separacao do VCD789 pra amanha",
+    "should_trigger": true
+  },
+  {
+    "query": "O que vai faltar de estoque essa semana?",
+    "should_trigger": true
+  },
+  {
+    "query": "Qual a programacao de producao pra proxima semana?",
+    "should_trigger": true
+  },
+  {
+    "query": "Quantas caixas de ketchup tem pendentes pro Atacadao 183?",
+    "should_trigger": true
+  },
+  {
+    "query": "Chegou cogumelo no estoque?",
+    "should_trigger": true
+  },
+  {
+    "query": "Se embarcar amanha, quando chega no Assai SP?",
+    "should_trigger": true
+  },
+  {
+    "query": "NF 12345 foi entregue?",
+    "should_trigger": false
+  },
+  {
+    "query": "Que dia embarcou o pedido do Carrefour?",
+    "should_trigger": false
+  },
+  {
+    "query": "Rastreie a NF 56789 no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "Qual o preco de frete pra Manaus?",
+    "should_trigger": false
+  },
+  {
+    "query": "Top 10 clientes por valor de frete no ultimo mes",
+    "should_trigger": false
+  },
+  {
+    "query": "Tem canhoto do pedido VCD100?",
+    "should_trigger": false
+  },
+  {
+    "query": "Crie pagamento para NF 12345 no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "Exporte razao geral do Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "Como funciona a opcao 408 no SSW?",
+    "should_trigger": false
+  },
+  {
+    "query": "Operacoes CarVia do Atacadao esse mes",
+    "should_trigger": false
+  }
+]

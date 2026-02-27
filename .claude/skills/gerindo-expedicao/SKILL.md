@@ -45,11 +45,25 @@ NAO USE para:
 **PROIBIDO** criar, calcular ou inferir dados que NAO foram retornados pelo script.
 Se precisar de dado que nao veio no script: EXECUTE o script com flag adequado ou PERGUNTE ao usuario.
 
-### 2. REGRA DE FALLBACK (NUNCA TRAVAR)
+### 2. FIDELIDADE AO OUTPUT DO SCRIPT
+**TODA informacao na resposta DEVE ter origem no JSON retornado pelo script.**
+- Quantidades, valores, datas, nomes: copiar EXATAMENTE do JSON
+- NAO arredondar, estimar ou interpolar valores
+- Se o script retornou resultado vazio (0 itens), informar claramente: "Nao ha dados cadastrados para [periodo/filtro]"
+- NAO inventar dados para preencher resultados vazios
+- Sugerir alternativas: "Posso verificar com horizonte maior" ou "Quer que consulte por outro filtro?"
+
+### 3. FILTRAGEM DE FALSE POSITIVES
+Scripts com busca semantica podem retornar produtos irrelevantes (ex: "maionese" ao buscar "ketchup").
+- **Verificar** se cada item retornado corresponde ao que o usuario pediu
+- **Descartar** itens que nao sao do produto solicitado
+- **Informar** ao usuario quando houver descarte: "O script tambem retornou [X] por semelhanca, mas nao e [produto pedido]"
+
+### 4. REGRA DE FALLBACK (NUNCA TRAVAR)
 Se um script falhar: SEMPRE responda ao usuario com erro e alternativa.
 **NUNCA:** Ficar em silencio, travar, ou tentar criar scripts customizados.
 
-### 3. SIMULAR ANTES DE EXECUTAR (ACOES)
+### 5. SIMULAR ANTES DE EXECUTAR (ACOES)
 Para QUALQUER acao que modifica dados (criar separacao):
 1. Executar SEM --executar (simular)
 2. Mostrar resultado ao usuario
@@ -89,6 +103,11 @@ Para QUALQUER acao que modifica dados (criar separacao):
 4. **DISPONIBILIDADE de pedido:** → `analisando_disponibilidade_estoque.py --pedido X`
 5. **PRAZO de entrega:** → `calculando_leadtime_entrega.py`
 6. **ACAO de criar separacao:** → `criando_separacao_pedidos.py` (SEMPRE simular antes!)
+
+### --cliente vs --grupo (IMPORTANTE)
+- **Loja especifica mencionada** (ex: "Atacadao 183", "Assai SP"): usar `--cliente "ATACADAO 183"`
+- **Grupo inteiro** (ex: "Atacadao", "Assai"): usar `--grupo atacadao`
+- Se resultado de `--grupo` veio muito amplo e usuario quer loja especifica: refinar com `--cliente`
 
 ### Como Decidir (Raciocinio Obrigatorio)
 
@@ -142,6 +161,25 @@ Resumo dos 8 scripts:
 | Protocolo | CONDICIONAL | Se exige agendamento |
 
 Sequencia: SIMULAR → Verificar alertas → Mostrar → Confirmar → EXECUTAR
+
+---
+
+## Organizacao de Resultados na Resposta
+
+### Muitos itens (>10): Priorizar e agrupar
+- **Ordenar** por relevancia: valor em risco, urgencia (ruptura antes de deficit), quantidade
+- **Mostrar top 5-10** na resposta principal com tabela
+- **Agrupar** por categoria quando aplicavel (familia de produto, loja, urgencia)
+- **Resumir totais**: "39 produtos criticos, Top 10 por valor em risco:"
+- **Oferecer detalhamento**: "Quer ver a lista completa?" ou "Posso detalhar por [criterio]?"
+
+### Poucos itens (<10): Mostrar todos
+- Listar individualmente com dados completos
+
+### Resultado vazio (0 itens):
+- Informar claramente: "Nao ha [X] para [filtro/periodo]"
+- Sugerir motivos possiveis (dados nao cadastrados, periodo diferente)
+- Oferecer alternativas (horizonte maior, filtro diferente)
 
 ---
 
