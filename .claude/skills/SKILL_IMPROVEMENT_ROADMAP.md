@@ -112,7 +112,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | # | Skill | Scripts | Size | Status | Data |
 |---|-------|---------|------|--------|------|
 | 1 | `cotando-frete` | 4 | 124KB | DONE | 2026-02-26 |
-| 2 | `gerindo-expedicao` | 8 | 504KB | IN_PROGRESS | 2026-02-26 |
+| 2 | `gerindo-expedicao` | 8 | 504KB | DONE | 2026-02-26 |
 | 3 | `rastreando-odoo` | 8 | 572KB | IN_PROGRESS | 2026-02-26 |
 | 4 | `operando-ssw` | 16 | 532KB | DONE | 2026-02-26 |
 | 5 | `consultando-sql` | 2 | 928KB | DONE | 2026-02-26 |
