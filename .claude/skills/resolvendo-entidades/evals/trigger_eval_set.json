@@ -1,0 +1,22 @@
+[
+  {"query": "Quais CNPJs do Atacadao tem entregas em SP?", "should_trigger": true},
+  {"query": "Encontra o CNPJ do Assai de Guarulhos", "should_trigger": true},
+  {"query": "Busca o produto AZ VF pra mim", "should_trigger": true},
+  {"query": "Qual o cod_produto do palmito pupunha?", "should_trigger": true},
+  {"query": "Acha o pedido VCD256 na carteira", "should_trigger": true},
+  {"query": "Clientes de Itanhaem com entrega pendente", "should_trigger": true},
+  {"query": "Lista transportadoras que atendem o nome TAC", "should_trigger": true},
+  {"query": "Quem sao os clientes da Tenda no Rio?", "should_trigger": true},
+  {"query": "Resolve o cliente Carrefour pra mim", "should_trigger": true},
+  {"query": "Quais UFs tem entrega pendente do Assai?", "should_trigger": true},
+  {"query": "Qual o frete para Manaus com 3 toneladas?", "should_trigger": false},
+  {"query": "Quantos pedidos pendentes por estado?", "should_trigger": false},
+  {"query": "Crie uma separacao do VCD2565291 para amanha", "should_trigger": false},
+  {"query": "Rastreie a NF 12345 no Odoo", "should_trigger": false},
+  {"query": "Exporte para Excel os dados de faturamento", "should_trigger": false},
+  {"query": "Como esta o banco? Cache hit rate?", "should_trigger": false},
+  {"query": "Crie pagamento para NF 54321 no Odoo", "should_trigger": false},
+  {"query": "Qual o status da entrega do CNPJ 06.057.22/0001-00?", "should_trigger": false},
+  {"query": "Implemente um novo service de integracao com o Odoo", "should_trigger": false},
+  {"query": "Visao 360 completa do produto PAL001", "should_trigger": false}
+]

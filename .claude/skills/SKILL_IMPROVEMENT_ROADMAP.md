@@ -116,7 +116,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | 3 | `rastreando-odoo` | 8 | 572KB | IN_PROGRESS | 2026-02-26 |
 | 4 | `operando-ssw` | 16 | 532KB | DONE | 2026-02-26 |
 | 5 | `consultando-sql` | 2 | 928KB | IN_PROGRESS | 2026-02-26 |
-| 6 | `resolvendo-entidades` | 7 | 116KB | IN_PROGRESS | 2026-02-26 |
+| 6 | `resolvendo-entidades` | 7 | 116KB | DONE | 2026-02-26 |
 
 ### P2 — Media Complexidade (scripts + references)
 

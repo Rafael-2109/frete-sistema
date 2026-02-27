@@ -1,0 +1,77 @@
+{
+  "skill_name": "resolvendo-entidades",
+  "version": 1,
+  "changelog": "v1: Initial evals covering 7 scripts — grupo, cliente, produto (abreviacao), pedido (parcial), cidade (acentos), UF, transportadora + cenario composto multi-entidade",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Quais CNPJs do Atacadao tem entregas pendentes em SP? Me da a lista completa.",
+      "expected_output": "Lista de CNPJs do grupo Atacadao filtrada por UF=SP, usando prefixos 93.209.76, 75.315.33, 00.063.96",
+      "files": [],
+      "expectations": [
+        "Executou resolver_grupo.py com --grupo atacadao --uf SP (ou parametros equivalentes)",
+        "Retornou JSON com sucesso=true e prefixos_cnpj contendo pelo menos 93.209.76",
+        "A resposta menciona os CNPJs retornados pelo script — NAO inventou CNPJs extras que nao estejam no output",
+        "Informou a quantidade total de CNPJs encontrados (campo total do JSON)",
+        "Se nenhum CNPJ encontrado (total=0), reportou honestamente sem inventar dados",
+        "NAO tentou buscar no resolver_cliente.py primeiro (deveria reconhecer Atacadao como grupo)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Preciso achar um produto com a abreviacao AZ VF. O que temos cadastrado?",
+      "expected_output": "Lista de produtos com tipo_materia_prima = AZ VF (Azeitona Verde Fatiada), mostrando cod_produto e nome_produto",
+      "files": [],
+      "expectations": [
+        "Executou resolver_produto.py com --termo 'AZ VF' (ou equivalente)",
+        "Retornou JSON com sucesso=true e lista de produtos",
+        "Mencionou que AZ VF = Azeitona Verde Fatiada (campo abreviacoes_detectadas do output)",
+        "Listou cod_produto e nome_produto para cada resultado — campos exatos do script output",
+        "NAO inventou produtos que nao estejam no JSON de retorno do script",
+        "Se modo=hibrida falhou, explicou fallback para texto (campo modo do output)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Busca o pedido VCD256 pra mim. Quero saber de qual cliente e.",
+      "expected_output": "Pedido(s) que casam com VCD256 na carteira ou separacao, com nome do cliente e CNPJ",
+      "files": [],
+      "expectations": [
+        "Executou resolver_pedido.py com --termo VCD256 (ou similar)",
+        "Retornou JSON com estrategia NUMERO_PARCIAL ou NUMERO_EXATO",
+        "Se multiplos=true (mais de 1 pedido), apresentou opcoes ao usuario para escolher",
+        "Mostrou num_pedido, cliente e cnpj de cada resultado conforme o output JSON",
+        "NAO completou o numero do pedido por conta propria sem ter recebido dados do script",
+        "Se nenhum pedido encontrado (sucesso=false), reportou honestamente e sugeriu alternativas"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Quais clientes tem entrega pendente em Itanhaem?",
+      "expected_output": "Clientes com entregas pendentes na cidade de Itanhaem (com ou sem acento), usando normalizacao",
+      "files": [],
+      "expectations": [
+        "Executou resolver_cidade.py com --cidade Itanhaem (ou itanhaem, Itanhaém)",
+        "Retornou JSON com cidades_encontradas casando com o termo apesar da falta de acento",
+        "Listou clientes (cnpj + nome) da cidade encontrada — dados exatos do output JSON",
+        "Informou quantidade total de clientes (campo total do JSON)",
+        "NAO adivinhou ou inventou nomes de cidades parecidas que nao estejam no output",
+        "Se cidade nao encontrada (sucesso=false), reportou e sugeriu verificar grafia"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quero saber os CNPJs do Assai em MG e tambem quais produtos de palmito em balde temos. Preciso resolver tudo antes de consultar a carteira.",
+      "expected_output": "Resolucao de 2 entidades em sequencia: grupo Assai filtrado por MG, e produto palmito com embalagem balde",
+      "files": [],
+      "expectations": [
+        "Executou resolver_grupo.py com --grupo assai --uf MG para resolver os CNPJs",
+        "Executou resolver_produto.py com --termo contendo palmito e balde (ou equivalente composto)",
+        "Apresentou resultados das DUAS resolucoes SEPARADAMENTE antes de qualquer consulta posterior",
+        "CNPJs retornados correspondem EXATAMENTE ao output do resolver_grupo (prefixo 06.057.22)",
+        "Produtos retornados correspondem EXATAMENTE ao output do resolver_produto — sem inventar SKUs",
+        "NAO misturou ou confundiu as duas consultas (grupo vs produto sao entidades distintas)"
+      ]
+    }
+  ]
+}
