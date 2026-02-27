@@ -1,0 +1,57 @@
+[
+  {
+    "id": "eval-1-excel-simples",
+    "prompt": "O usuario enviou um arquivo Excel com pedidos. O arquivo esta em .claude/skills/lendo-arquivos/evals/fixtures/pedidos_teste.xlsx (use caminho absoluto). Leia o arquivo e me diga quantas linhas tem, quais colunas, e qual o valor total da coluna Valor.",
+    "expected_output": "O arquivo tem 5 linhas e 5 colunas (Pedido, Cliente, Valor, Data, UF). O valor total eh 274501.50 (soma de 50000.50 + 75000.00 + 32000.75 + 18500.25 + 99000.00).",
+    "expectations": [
+      "Executou o script ler.py com o caminho correto do arquivo",
+      "Identificou 5 linhas e 5 colunas",
+      "Listou as colunas: Pedido, Cliente, Valor, Data, UF",
+      "Calculou o valor total corretamente (274501.50 ou proximo)"
+    ]
+  },
+  {
+    "id": "eval-2-excel-multi-abas",
+    "prompt": "Preciso ver os dados da aba 'Custos' do arquivo .claude/skills/lendo-arquivos/evals/fixtures/multi_abas.xlsx (use caminho absoluto). Quais itens tem e quanto custa cada um?",
+    "expected_output": "A aba Custos tem 3 itens: Frete SP (R$ 5000), Frete RJ (R$ 7500) e Embalagem (R$ 2000). Total: R$ 14500.",
+    "expectations": [
+      "Executou ler.py com --aba Custos",
+      "Identificou 3 registros na aba Custos",
+      "Listou os itens: Frete SP, Frete RJ, Embalagem com valores corretos",
+      "NAO confundiu com a aba Vendas"
+    ]
+  },
+  {
+    "id": "eval-3-csv-separador-br",
+    "prompt": "Analise o CSV de clientes em .claude/skills/lendo-arquivos/evals/fixtures/clientes_br.csv (use caminho absoluto). Quais clientes tem, de quais estados, e qual o saldo total?",
+    "expected_output": "3 clientes: ATACADAO LTDA (SP, saldo 150000.50), ASSAI ATACADISTA (RJ, saldo 85000.00), CARREFOUR SA (MG, saldo 42000.75). Saldo total: 277001.25.",
+    "expectations": [
+      "Executou ler.py detectando o separador ponto-e-virgula automaticamente",
+      "Identificou 3 clientes com CNPJ, razao social, cidade, UF e saldo",
+      "Calculou saldo total corretamente (277001.25 ou proximo)",
+      "NAO tratou ponto-e-virgula como coluna extra"
+    ]
+  },
+  {
+    "id": "eval-4-dados-nulos",
+    "prompt": "O arquivo .claude/skills/lendo-arquivos/evals/fixtures/dados_nulos.xlsx (use caminho absoluto) pode ter dados faltantes. Leia e me diga quais registros tem dados incompletos.",
+    "expected_output": "IDs 2, 4 e 5 tem dados incompletos. ID 2: Nome e Valor nulos. ID 4: Valor e Ativo nulos. ID 5: Nome nulo.",
+    "expectations": [
+      "Executou ler.py e obteve os 5 registros",
+      "Identificou corretamente os campos null/nulos",
+      "Reportou quais campos estao faltando em cada registro",
+      "NAO inventou dados onde havia null"
+    ]
+  },
+  {
+    "id": "eval-5-csv-vazio",
+    "prompt": "Tenho um CSV em .claude/skills/lendo-arquivos/evals/fixtures/vazio.csv (use caminho absoluto) que parece estar vazio. Confirma pra mim se tem dados ou nao?",
+    "expected_output": "O arquivo tem apenas o cabecalho com 3 colunas (Coluna_A, Coluna_B, Coluna_C) mas zero linhas de dados.",
+    "expectations": [
+      "Executou ler.py e obteve resultado com sucesso=true",
+      "Identificou 0 linhas de dados",
+      "Informou que tem 3 colunas no cabecalho",
+      "NAO reportou erro - o arquivo nao esta corrompido, apenas vazio"
+    ]
+  }
+]

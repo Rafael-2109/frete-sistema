@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: 11.9K | **Arquivos**: 37 | **Atualizado**: 14/02/2026
+**LOC**: ~15.4K | **Arquivos**: 35 | **Atualizado**: 27/02/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 

@@ -1,6 +1,6 @@
 # Sistema de Fretes — Instrucoes de Projeto
 
-**Ultima Atualizacao**: 26/02/2026
+**Ultima Atualizacao**: 27/02/2026
 
 ---
 
@@ -96,7 +96,6 @@ Documentos adicionais:
 - Card de Separacao: `CARD_SEPARACAO.md` (raiz)
 - Sistema de Devolucoes: `app/devolucao/README.md`
 - **SSW Sistemas (documentacao completa)**: `.claude/references/ssw/INDEX.md`
-- **Linx Microvix (APIs, WebServices, manuais)**: `.claude/references/linx/INTEGRACOES.md`
 
 ---
 
@@ -168,18 +167,22 @@ Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao auto
 
 ---
 
-## SUBDIRECTORY CLAUDE.md (Planejados)
+## SUBDIRECTORY CLAUDE.md
 
 > **Manual**: `.claude/references/MANUAL_CLAUDE_MD.md` — template, principios, checklist e exemplo comentado
 
-Modulos complexos terao CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
-- `app/carvia/CLAUDE.md` — **CRIADO** (3.3K LOC, 16 arquivos, 16 templates)
-- `app/financeiro/CLAUDE.md` — P0 (38.7K LOC, 64 arquivos)
+Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
+
+**Criados:**
+- `app/carvia/CLAUDE.md` — 3.3K LOC, 16 arquivos, 16 templates
+- `app/financeiro/CLAUDE.md` — ~43.5K LOC, 70 arquivos
+- `app/odoo/CLAUDE.md` — ~17.9K LOC, 31 arquivos
+- `app/agente/CLAUDE.md` — ~15.4K LOC, 35 arquivos
+
+**Planejados:**
 - `app/recebimento/CLAUDE.md` — P0 (27.3K LOC, 28 arquivos)
 - `app/carteira/CLAUDE.md` — P1 (19K LOC, 49 arquivos)
-- `app/odoo/CLAUDE.md` — P1 (16.8K LOC, 30 arquivos)
 - `app/pallet/CLAUDE.md` — P2 (13.3K LOC, 27 arquivos)
-- `app/agente/CLAUDE.md` — P2 (11.9K LOC, 35 arquivos)
 
 ---
 

@@ -1,0 +1,49 @@
+{
+  "skill_name": "cotando-frete",
+  "version": 2,
+  "changelog": "v2: Added data-fidelity assertions based on iteration-1 grader feedback (GRIS hallucination, numeric cross-check, date range validation)",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Quanto sai para enviar 3000kg de mercadoria no valor de R$45.000 para Manaus? Quero ver a opcao mais barata e o prazo.",
+      "expected_output": "Cotacao com multiplas transportadoras, valores com ICMS, lead time em dias uteis, melhor opcao destacada",
+      "files": [],
+      "expectations": [
+        "Executou calcular_cotacao.py com peso=3000, valor=45000, cidade=Manaus",
+        "Retornou pelo menos 1 opcao de transportadora com valor_com_icms",
+        "Informou lead_time (prazo em dias uteis) para a melhor opcao com valor nao-zero",
+        "Identificou a opcao mais barata e o valor R$ corresponde EXATAMENTE ao campo melhor_opcao.valor_com_icms do script_output.json",
+        "Apresentou resultado em formato legivel com R$ e formatacao brasileira",
+        "NAO apresentou dados que nao existem no JSON de saida do script (ex: percentuais GRIS/ADV sem usar --detalhado)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Quero ver todas as tabelas de frete disponiveis para Recife. Quais transportadoras atendem la?",
+      "expected_output": "Lista de tabelas com transportadoras, tipos de carga, valores por kg, fretes minimos e lead times",
+      "files": [],
+      "expectations": [
+        "Executou buscar_tabelas_cidade.py com cidade=Recife",
+        "Listou transportadoras disponiveis com nome e tipo de carga",
+        "Mostrou valor_kg e frete_minimo_valor para cada tabela FRACIONADA",
+        "Incluiu lead_time quando disponivel",
+        "Diferenciou FRACIONADA de DIRETA quando ambas existem",
+        "Valores monetarios e percentuais na resposta (valor_kg, frete_minimo, GRIS) correspondem EXATAMENTE aos campos do script_output.json"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Qual foi o frete real que pagamos nos pedidos do Atacadao no ultimo mes? Teve alguma divergencia de CTe?",
+      "expected_output": "Resumo de fretes pagos por transportadora, totais, e lista de divergencias CTe vs cotacao",
+      "files": [],
+      "expectations": [
+        "Executou consultando_frete_real.py com --cliente Atacadao e filtro de data de aproximadamente 30 dias",
+        "Mostrou resumo com total_pago e qtd_fretes (valores correspondem ao script_output.json)",
+        "Executou --divergencias como chamada SEPARADA (mesmo que frete retorne 0 resultados)",
+        "Apresentou valores em formato R$ brasileiro",
+        "NAO especulou causa para resultados vazios sem dados que suportem a afirmacao",
+        "Agrupou fretes por transportadora com totais (quando houver dados) ou reportou claramente '0 fretes encontrados'"
+      ]
+    }
+  ]
+}

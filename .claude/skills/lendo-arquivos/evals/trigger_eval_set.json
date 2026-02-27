@@ -1,0 +1,22 @@
+[
+  {"query": "analise essa planilha que enviei", "should_trigger": true},
+  {"query": "o que tem nesse Excel?", "should_trigger": true},
+  {"query": "importa os dados desse CSV pra mim", "should_trigger": true},
+  {"query": "confere os valores dessa planilha de pedidos", "should_trigger": true},
+  {"query": "le esse arquivo .xlsx que subi", "should_trigger": true},
+  {"query": "quais colunas tem no arquivo que enviei?", "should_trigger": true},
+  {"query": "quantas linhas tem essa planilha?", "should_trigger": true},
+  {"query": "o arquivo tem dados de quais clientes?", "should_trigger": true},
+  {"query": "soma a coluna de valores do arquivo enviado", "should_trigger": true},
+  {"query": "tem alguma linha com dado faltando no Excel?", "should_trigger": true},
+  {"query": "exporte esses dados para Excel", "should_trigger": false},
+  {"query": "gere uma planilha com os top 10 clientes", "should_trigger": false},
+  {"query": "top 10 clientes por faturamento", "should_trigger": false},
+  {"query": "qual o frete para Manaus 5000kg?", "should_trigger": false},
+  {"query": "tem pedido do Atacadao em separacao?", "should_trigger": false},
+  {"query": "crie uma tela de dashboard de entregas", "should_trigger": false},
+  {"query": "rastreie a NF 12345 no Odoo", "should_trigger": false},
+  {"query": "como esta o banco? cache hit rate?", "should_trigger": false},
+  {"query": "lembre que eu prefiro relatorios resumidos", "should_trigger": false},
+  {"query": "onde fica a tela de carteira de pedidos?", "should_trigger": false}
+]

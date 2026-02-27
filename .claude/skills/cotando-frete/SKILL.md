@@ -5,15 +5,12 @@ description: >-
   "quanto sai 5000kg para AM?", "frete para SP 3 toneladas", "como funciona
   o calculo de frete?", "frete do pedido VCD123", "qual transportadora mais
   barata para RJ?", ou precisa de cotacao, tabelas de preco e lead times.
-  Nao usar para consulta de documentacao SSW sobre frete CarVia (usar
-  acessando-ssw), monitorar entrega (usar monitorando-entregas), ou conceito
-  de frete real vs teorico (ler FRETE_REAL_VS_TEORICO.md via Read).
-  - Comparacao: "qual transportadora mais barata para RJ?"
+  Nao usar para documentacao SSW CarVia (usar acessando-ssw), monitorar
+  entrega (usar monitorando-entregas), ou frete real vs teorico (ler
+  FRETE_REAL_VS_TEORICO.md via Read).
   - Lead time: "prazo de entrega para Manaus?" (lead_time vem nos vinculos)
-
   - Frete real: "quanto gastei de frete com Atacadao?", "divergencia CTe", "fretes pendentes Odoo"
   - Despesas frete: "custo real do pedido com despesas extras"
-
   NAO USAR QUANDO:
   - Criar embarque/separacao → usar **gerindo-expedicao**
   - Status de entrega pos-faturamento → usar **monitorando-entregas**
@@ -72,6 +69,18 @@ Skill para consultar precos de frete, calcular cotacoes detalhadas e explicar a 
 5. **EXPLICACAO do calculo:** → Ler `references/calculo_frete.md`
 6. **TERMOS (GRIS, ADV, etc.):** → Ler `references/glossario_frete.md`
 
+### Cenarios Compostos (Multi-Query)
+
+Algumas perguntas exigem MAIS de uma execucao de script:
+
+| Pergunta do usuario | Execucoes necessarias |
+|---------------------|----------------------|
+| "frete real + divergencias do Atacadao" | 1. `--cliente "Atacadao" --de ... --ate ...` 2. `--divergencias --de ... --ate ...` |
+| "cotacao para Manaus e Recife" | 1. `calcular_cotacao.py --cidade Manaus` 2. `calcular_cotacao.py --cidade Recife` |
+| "tabelas e cotacao para SP" | 1. `buscar_tabelas_cidade.py --cidade SP` 2. `calcular_cotacao.py --cidade SP --peso ... --valor ...` |
+
+**REGRA**: Quando a pergunta menciona "divergencia" junto com frete real, SEMPRE executar `--divergencias` como chamada separada, mesmo que o primeiro resultado retorne 0 fretes.
+
 ### Fluxo de Ambiguidade de Cidade
 
 Se o script retornar `ambiguidade: true`:
@@ -79,9 +88,24 @@ Se o script retornar `ambiguidade: true`:
 2. Agente DEVE perguntar ao usuario qual estado
 3. Re-executar script com `--uf` informada
 
+### Tratamento de Resultados Vazios (Zero Fretes)
+
+Quando um script retorna 0 resultados:
+1. **NAO tratar como erro** — e um resultado valido
+2. **Reportar zeros claramente**: "0 fretes encontrados", "R$ 0,00 total"
+3. **Ainda executar queries complementares** (ex: --divergencias mesmo com 0 fretes)
+4. **NAO especular causa** sem dados — dizer "nenhum frete registrado no periodo" (NAO "embarques nao finalizados")
+5. **Sugerir verificacao**: "Confirme se existem embarques finalizados para esse cliente no periodo"
+
 ---
 
 ## Regras de Negocio (Anti-Alucinacao)
+
+### REGRA CARDINAL: Fidelidade ao Script Output
+**SOMENTE apresentar dados que existem no JSON de saida do script.**
+- Se um campo NAO aparece no script_output.json, NAO incluir na resposta
+- Se quiser adicionar contexto de negocio (ex: "DIRETA compensa para volumes acima de X"), rotular explicitamente como `[Nota: estimativa, nao vem do script]`
+- Valores monetarios na resposta DEVEM corresponder EXATAMENTE aos retornados pelo script
 
 ### O Agente PODE Afirmar:
 - Precos e valores retornados pelos scripts (baseados em tabelas REAIS)
@@ -93,6 +117,7 @@ Se o script retornar `ambiguidade: true`:
 - Lead times sem dados no sistema
 - Tabelas de frete que nao existem
 - Descontos ou negociacoes especiais
+- Dados que NAO existem no JSON de saida do script executado
 
 ### Formulas CORRETAS
 
@@ -115,12 +140,12 @@ Se o script retornar `ambiguidade: true`:
 
 **Para parametros completos, retornos JSON e exemplos**: LER `SCRIPTS.md`
 
-| # | Script | Proposito |
-|---|--------|-----------|
-| 1 | `buscar_tabelas_cidade.py` | Tabelas de frete por cidade |
-| 2 | `calcular_cotacao.py` | Cotacao detalhada peso/valor/destino |
-| 3 | `consultar_pedido_frete.py` | Frete de pedido/separacao/NF |
-| 4 | `consultando_frete_real.py` | Frete real: historico, divergencias, pendentes |
+| # | Script | Proposito | Campos-chave no output |
+|---|--------|-----------|------------------------|
+| 1 | `buscar_tabelas_cidade.py` | Tabelas de frete por cidade | transportadora, tipo_carga, valor_kg, frete_minimo_valor, lead_time, percentual_gris, pedagio_por_100kg, percentual_adv |
+| 2 | `calcular_cotacao.py` | Cotacao detalhada peso/valor/destino | valor_com_icms, melhor_opcao, lead_time. Com `--detalhado`: breakdown completo de cada componente |
+| 3 | `consultar_pedido_frete.py` | Frete de pedido/separacao/NF | frete_cotado, frete_real, transportadora, itens |
+| 4 | `consultando_frete_real.py` | Frete real: historico, divergencias, pendentes | resumo (total_pago, qtd_fretes), por_transportadora, divergencias |
 
 ---
 

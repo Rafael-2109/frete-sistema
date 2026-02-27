@@ -1,6 +1,6 @@
 # Financeiro — Guia de Desenvolvimento
 
-**66 arquivos** | **40K LOC** | **Atualizado**: 20/02/2026
+**70 arquivos** | **~43.5K LOC** | **Atualizado**: 27/02/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 

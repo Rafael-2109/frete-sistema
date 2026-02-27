@@ -1,0 +1,82 @@
+[
+  {
+    "query": "qual preco de frete para Manaus?",
+    "should_trigger": true
+  },
+  {
+    "query": "quanto sai enviar 5000kg para AM?",
+    "should_trigger": true
+  },
+  {
+    "query": "frete para SP 3 toneladas valor 80 mil",
+    "should_trigger": true
+  },
+  {
+    "query": "como funciona o calculo de frete com ICMS?",
+    "should_trigger": true
+  },
+  {
+    "query": "frete do pedido VCD123",
+    "should_trigger": true
+  },
+  {
+    "query": "qual transportadora mais barata para RJ?",
+    "should_trigger": true
+  },
+  {
+    "query": "quais tabelas de frete tem pra Recife?",
+    "should_trigger": true
+  },
+  {
+    "query": "prazo de entrega para Manaus? quanto tempo demora?",
+    "should_trigger": true
+  },
+  {
+    "query": "quanto gastei de frete com Atacadao no ultimo mes?",
+    "should_trigger": true
+  },
+  {
+    "query": "tem divergencia de CTe? fretes pendentes Odoo",
+    "should_trigger": true
+  },
+  {
+    "query": "NF 12345 foi entregue? quando chegou?",
+    "should_trigger": false
+  },
+  {
+    "query": "top 10 clientes por valor faturado no mes",
+    "should_trigger": false
+  },
+  {
+    "query": "rastreie PO00789 no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "crie separacao do VCD456 pra amanha",
+    "should_trigger": false
+  },
+  {
+    "query": "status da entrega do Atacadao, tem canhoto?",
+    "should_trigger": false
+  },
+  {
+    "query": "cadastre transportadora no SSW opcao 485",
+    "should_trigger": false
+  },
+  {
+    "query": "exporte razao geral do Odoo de janeiro",
+    "should_trigger": false
+  },
+  {
+    "query": "tudo sobre palmito, producao vs programado",
+    "should_trigger": false
+  },
+  {
+    "query": "crie pagamento para NF 12345 no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "quantos pedidos pendentes por estado? distribuicao",
+    "should_trigger": false
+  }
+]

@@ -181,6 +181,35 @@ def run_single_query(
             command_file.unlink()
 
 
+def _hide_real_skill(skill_path: Path) -> Path | None:
+    """Temporarily hide a real skill by renaming SKILL.md → SKILL.md.hidden.
+
+    Returns the hidden path if successful, None if nothing to hide.
+    Must be paired with _restore_real_skill() in a try/finally block.
+    """
+    skill_md = skill_path / "SKILL.md"
+    hidden_md = skill_path / "SKILL.md.hidden"
+
+    # Recover from a previous crash that left the file hidden
+    if hidden_md.exists() and not skill_md.exists():
+        print(f"Warning: Found orphaned SKILL.md.hidden, restoring first", file=sys.stderr)
+        hidden_md.rename(skill_md)
+
+    if skill_md.exists():
+        skill_md.rename(hidden_md)
+        print(f"Hidden real skill: {skill_md} → {hidden_md}", file=sys.stderr)
+        return hidden_md
+    return None
+
+
+def _restore_real_skill(hidden_path: Path | None) -> None:
+    """Restore a previously hidden skill."""
+    if hidden_path and hidden_path.exists():
+        original = hidden_path.parent / "SKILL.md"
+        hidden_path.rename(original)
+        print(f"Restored real skill: {hidden_path} → {original}", file=sys.stderr)
+
+
 def run_eval(
     eval_set: list[dict],
     skill_name: str,
@@ -191,8 +220,49 @@ def run_eval(
     runs_per_query: int = 1,
     trigger_threshold: float = 0.5,
     model: str | None = None,
+    hide_skill_path: Path | None = None,
 ) -> dict:
-    """Run the full eval set and return results."""
+    """Run the full eval set and return results.
+
+    Args:
+        hide_skill_path: If provided, temporarily hides the real skill at this
+            path during evaluation so the temp command file gets triggered
+            instead of the real skill. Essential when the skill already exists
+            in .claude/skills/.
+    """
+    hidden_path = None
+
+    if hide_skill_path:
+        hidden_path = _hide_real_skill(hide_skill_path)
+
+    try:
+        return _run_eval_inner(
+            eval_set=eval_set,
+            skill_name=skill_name,
+            description=description,
+            num_workers=num_workers,
+            timeout=timeout,
+            project_root=project_root,
+            runs_per_query=runs_per_query,
+            trigger_threshold=trigger_threshold,
+            model=model,
+        )
+    finally:
+        _restore_real_skill(hidden_path)
+
+
+def _run_eval_inner(
+    eval_set: list[dict],
+    skill_name: str,
+    description: str,
+    num_workers: int,
+    timeout: int,
+    project_root: Path,
+    runs_per_query: int = 1,
+    trigger_threshold: float = 0.5,
+    model: str | None = None,
+) -> dict:
+    """Inner implementation of run_eval (without hide/restore logic)."""
     results = []
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -266,6 +336,8 @@ def main():
     parser.add_argument("--runs-per-query", type=int, default=3, help="Number of runs per query")
     parser.add_argument("--trigger-threshold", type=float, default=0.5, help="Trigger rate threshold")
     parser.add_argument("--model", default=None, help="Model to use for claude -p (default: user's configured model)")
+    parser.add_argument("--hide-real-skill", action="store_true",
+                        help="Temporarily hide the real skill during eval so the temp command file gets triggered")
     parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
     args = parser.parse_args()
 
@@ -293,6 +365,7 @@ def main():
         runs_per_query=args.runs_per_query,
         trigger_threshold=args.trigger_threshold,
         model=args.model,
+        hide_skill_path=skill_path if args.hide_real_skill else None,
     )
 
     if args.verbose:

@@ -24,6 +24,18 @@ Skill para **leitura de arquivos** enviados pelo usuario via upload.
 > Para CRIAR/EXPORTAR arquivos para download, use `exportando-arquivos`.
 > Para consultas Odoo (NF, PO, SO, titulos), use `rastreando-odoo`.
 
+## Regras de Fidelidade (OBRIGATORIAS)
+
+```
+R1: NUNCA inventar dados que nao estao no output do script
+R2: NUNCA arredondar valores — reportar EXATAMENTE como retornado
+R3: NUNCA renomear colunas — usar os nomes EXATOS do JSON
+R4: Se o script retornar null, reportar como "vazio/nulo" — NAO preencher
+R5: Se o usuario pedir calculo (soma, media), fazer sobre registros REAIS
+R6: Se o arquivo estiver vazio (0 linhas), informar que nao ha dados — NAO e erro
+R7: Sempre executar o script ANTES de responder — NUNCA ler o arquivo com Read tool
+```
+
 ## Script Principal
 
 ### ler.py
@@ -48,6 +60,7 @@ FORMATOS SUPORTADOS
 │
 └── CSV (.csv)
     Separadores: ; , \t |
+    Deteccao automatica (sem precisar informar)
     Usar: Arquivos texto estruturados
 ```
 
@@ -57,10 +70,21 @@ FORMATOS SUPORTADOS
 
 | Parametro | Obrigatorio | Descricao | Exemplo |
 |-----------|-------------|-----------|---------|
-| `--url` | Sim | URL do arquivo (do upload) | `--url /agente/api/files/default/abc.xlsx` |
+| `--url` | Sim | URL do arquivo ou **caminho absoluto** | `--url /tmp/agente_files/abc.xlsx` |
 | `--limite` | Nao | Limite de linhas (default: 1000) | `--limite 100` |
 | `--aba` | Nao | Nome ou indice da aba (Excel) | `--aba 0` ou `--aba "Dados"` |
-| `--cabecalho` | Nao | Linha do cabecalho (default: 0) | `--cabecalho 1` |
+| `--cabecalho` | Nao | Linha do cabecalho, 0-indexed (default: 0) | `--cabecalho 1` |
+
+### Quando usar `--cabecalho`
+
+O default (`--cabecalho 0`) assume que a primeira linha e o cabecalho.
+Use `--cabecalho 1` quando a planilha tem titulo ou linhas de metadados acima dos dados.
+Se nao souber, tente primeiro sem o parametro. Se as colunas vierem estranhas (ex: "Unnamed: 0"), tente `--cabecalho 1`.
+
+### Quando usar `--url` com caminho absoluto
+
+O `--url` aceita TANTO URLs do agente (`/agente/api/files/...`) QUANTO caminhos absolutos (`/home/.../arquivo.xlsx`, `/tmp/arquivo.csv`).
+Para arquivos locais do projeto, use o caminho absoluto completo.
 
 ## Exemplos de Uso
 
@@ -69,6 +93,13 @@ FORMATOS SUPORTADOS
 source .venv/bin/activate && \
 python .claude/skills/lendo-arquivos/scripts/ler.py \
   --url "/agente/api/files/default/abc123_planilha.xlsx"
+```
+
+### Ler com caminho absoluto
+```bash
+source .venv/bin/activate && \
+python .claude/skills/lendo-arquivos/scripts/ler.py \
+  --url "/tmp/dados_cliente.xlsx"
 ```
 
 ### Ler com limite de linhas
@@ -112,26 +143,44 @@ python .../ler.py --url "/agente/api/files/default/dados.csv"
 }
 ```
 
-## Fluxo de Uso
+### Campos importantes no retorno
 
-Quando o usuario anexar um arquivo e pedir "analise essa planilha":
+| Campo | Significado |
+|-------|-------------|
+| `sucesso` | `true` se o arquivo foi lido com sucesso |
+| `dados.total_linhas` | Total REAL de linhas no arquivo (antes do limite) |
+| `dados.linhas_retornadas` | Quantas linhas estao em `registros` (apos limite) |
+| `dados.registros` | Lista de dicts — CADA dict e uma linha com colunas como chaves |
+| `arquivo.abas` | Apenas para Excel — lista de TODAS as abas disponiveis |
+| `arquivo.aba_lida` | Apenas para Excel — qual aba foi efetivamente lida |
 
-1. **Identificar URL** do arquivo nos metadados do anexo
-2. **Executar script**:
-   ```bash
-   source .../venv/bin/activate && python .../ler.py --url "URL_DO_ARQUIVO"
-   ```
-3. **Analisar JSON** retornado
-4. **Responder ao usuario** com insights dos dados
+## Cenarios Compostos
+
+### "Leia o arquivo e some a coluna X"
+1. Execute o script normalmente
+2. Percorra `dados.registros` e some os valores da coluna
+3. **Use apenas os valores retornados** — nao invente valores extras
+4. Se `total_linhas > linhas_retornadas`, avise que a soma e parcial
+
+### "Compare este arquivo com dados do sistema"
+1. Primeiro leia o arquivo com esta skill
+2. Depois consulte o sistema com a skill apropriada (consultando-sql, etc.)
+3. Cruze os dados manualmente na resposta
+
+### "O arquivo tem dados de quais clientes?"
+1. Execute o script
+2. Liste valores UNICOS da coluna de clientes encontrados nos registros
+3. **NAO consulte o banco** — a pergunta e sobre o ARQUIVO
 
 ## Tratamento de Erros
 
 | Erro | Causa | Solucao |
 |------|-------|---------|
-| Arquivo nao encontrado | URL invalida | Verificar URL do anexo |
-| Formato nao suportado | Extensao invalida | Apenas xlsx, xls, csv |
-| Arquivo corrompido | Arquivo danificado | Pedir ao usuario reenviar |
-| Dependencia faltando | Biblioteca nao instalada | pip install pandas openpyxl xlrd |
+| `sucesso: false` + `erro: "Arquivo nao encontrado"` | URL/caminho invalido | Verificar URL do anexo ou caminho |
+| `sucesso: false` + `erro: "Formato nao suportado"` | Extensao invalida | Apenas xlsx, xls, csv |
+| `sucesso: false` + `erro: "Dependencia nao instalada"` | Biblioteca faltando | `pip install pandas openpyxl xlrd` |
+| `sucesso: true` + `total_linhas: 0` | Arquivo vazio | **NAO e erro** — informar que nao ha dados |
+| Colunas "Unnamed: 0" | Cabecalho errado | Tentar `--cabecalho 1` |
 
 ## Conversoes Automaticas
 
@@ -141,6 +190,7 @@ Quando o usuario anexar um arquivo e pedir "analise essa planilha":
 | Numeros | float/int preservado |
 | NaN/vazio | null |
 | Texto | string |
+| Booleanos | 1.0/0.0 (Excel converte para numerico) |
 
 ## Notas
 
@@ -148,6 +198,20 @@ Quando o usuario anexar um arquivo e pedir "analise essa planilha":
 - Para arquivos grandes, use `--limite` para obter amostra
 - Separador CSV eh detectado automaticamente (`;`, `,`, `\t`, `|`)
 - Encoding: UTF-8 com BOM suportado
+- **Booleanos em Excel**: True/False sao convertidos para 1.0/0.0 pelo pandas
+
+## Fluxo de Uso
+
+Quando o usuario anexar um arquivo e pedir "analise essa planilha":
+
+1. **Identificar caminho** do arquivo (URL do anexo ou caminho local)
+2. **Executar script** (OBRIGATORIO — nao usar Read tool para ler planilhas):
+   ```bash
+   source .venv/bin/activate && python .claude/skills/lendo-arquivos/scripts/ler.py --url "CAMINHO_DO_ARQUIVO"
+   ```
+3. **Verificar sucesso** no JSON retornado
+4. **Analisar dados** usando APENAS os registros retornados
+5. **Responder ao usuario** com insights dos dados reais
 
 ## Relacionado
 

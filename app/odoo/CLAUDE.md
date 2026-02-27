@@ -1,5 +1,7 @@
 # Odoo — Guia de Desenvolvimento
 
+**31 arquivos** | **~17.9K LOC** | **Atualizado**: 27/02/2026
+
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
 ---

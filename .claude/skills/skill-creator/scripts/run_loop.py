@@ -60,6 +60,7 @@ def run_loop(
     verbose: bool,
     live_report_path: Path | None = None,
     log_dir: Path | None = None,
+    hide_real_skill: bool = False,
 ) -> dict:
     """Run the eval + improvement loop."""
     project_root = find_project_root()
@@ -99,6 +100,7 @@ def run_loop(
             runs_per_query=runs_per_query,
             trigger_threshold=trigger_threshold,
             model=model,
+            hide_skill_path=skill_path if hide_real_skill else None,
         )
         eval_elapsed = time.time() - t0
 
@@ -258,6 +260,8 @@ def main():
     parser.add_argument("--holdout", type=float, default=0.4, help="Fraction of eval set to hold out for testing (0 to disable)")
     parser.add_argument("--model", required=True, help="Model for improvement")
     parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
+    parser.add_argument("--hide-real-skill", action="store_true",
+                        help="Temporarily hide the real skill during eval so the temp command file gets triggered")
     parser.add_argument("--report", default="auto", help="Generate HTML report at this path (default: 'auto' for temp file, 'none' to disable)")
     parser.add_argument("--results-dir", default=None, help="Save all outputs (results.json, report.html, log.txt) to a timestamped subdirectory here")
     args = parser.parse_args()
@@ -308,6 +312,7 @@ def main():
         verbose=args.verbose,
         live_report_path=live_report_path,
         log_dir=log_dir,
+        hide_real_skill=args.hide_real_skill,
     )
 
     # Save JSON output
