@@ -1,0 +1,82 @@
+[
+  {
+    "query": "A NF 144533 foi entregue?",
+    "should_trigger": true
+  },
+  {
+    "query": "entregas pendentes do Atacadao",
+    "should_trigger": true
+  },
+  {
+    "query": "tem canhoto da NF 98765?",
+    "should_trigger": true
+  },
+  {
+    "query": "houve devolucao da NF 55000?",
+    "should_trigger": true
+  },
+  {
+    "query": "produtos mais devolvidos no ultimo mes",
+    "should_trigger": true
+  },
+  {
+    "query": "quanto custou as devolucoes em janeiro?",
+    "should_trigger": true
+  },
+  {
+    "query": "que dia embarcou a NF 12345?",
+    "should_trigger": true
+  },
+  {
+    "query": "NFs no CD sem entrega, quais sao?",
+    "should_trigger": true
+  },
+  {
+    "query": "entregas reagendadas da Braspress",
+    "should_trigger": true
+  },
+  {
+    "query": "devolucoes abertas do Sendas",
+    "should_trigger": true
+  },
+  {
+    "query": "qual preco de frete para Manaus?",
+    "should_trigger": false
+  },
+  {
+    "query": "tem pedido do Atacadao em carteira?",
+    "should_trigger": false
+  },
+  {
+    "query": "rastreie PO00789 no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "crie separacao do VCD456 pra amanha",
+    "should_trigger": false
+  },
+  {
+    "query": "cadastre transportadora no SSW opcao 485",
+    "should_trigger": false
+  },
+  {
+    "query": "exporte razao geral do Odoo de janeiro",
+    "should_trigger": false
+  },
+  {
+    "query": "tudo sobre palmito, producao vs programado",
+    "should_trigger": false
+  },
+  {
+    "query": "crie pagamento para NF 12345 no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "quantos pedidos pendentes por estado? distribuicao",
+    "should_trigger": false
+  },
+  {
+    "query": "operacoes da CarVia pendentes de fatura",
+    "should_trigger": false
+  }
+]

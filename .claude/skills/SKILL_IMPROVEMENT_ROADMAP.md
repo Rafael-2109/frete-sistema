@@ -123,7 +123,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | # | Skill | Scripts | Size | Status | Data |
 |---|-------|---------|------|--------|------|
 | 7 | `gerindo-carvia` | 3 | 100KB | IN_PROGRESS | 2026-02-26 |
-| 8 | `monitorando-entregas` | 3 | 88KB | IN_PROGRESS | 2026-02-26 |
+| 8 | `monitorando-entregas` | 3 | 88KB | DONE | 2026-02-26 |
 | 9 | `integracao-odoo` | 4 | 76KB | IN_PROGRESS | 2026-02-26 |
 | 10 | `visao-produto` | 2 | 48KB | IN_PROGRESS | 2026-02-26 |
 | 11 | `acessando-ssw` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |

@@ -1,0 +1,76 @@
+{
+  "skill": "monitorando-entregas",
+  "version": "1.0",
+  "evals": [
+    {
+      "id": "eval-1-status-nf-especifica",
+      "prompt": "A NF 144533 foi entregue?",
+      "expected_output": "Deve executar consultando_status_entrega.py --nf 144533 e reportar o status_finalizacao da NF",
+      "expectations": [
+        "Usa consultando_status_entrega.py com --nf 144533",
+        "Reporta o valor exato de status_finalizacao (null=pendente, Entregue, etc.)",
+        "NAO inventa data de entrega se data_hora_entrega_realizada for null",
+        "Menciona data_embarque e data_faturamento se disponiveis no resultado",
+        "NAO usa consultando_canhotos.py (script nao existe)"
+      ],
+      "scripts_expected": ["consultando_status_entrega.py"],
+      "category": "status_entrega"
+    },
+    {
+      "id": "eval-2-entregas-pendentes-cliente",
+      "prompt": "Tem entrega pendente do Atacadao?",
+      "expected_output": "Deve executar consultando_status_entrega.py --cliente atacadao --pendentes e listar as NFs pendentes",
+      "expectations": [
+        "Usa consultando_status_entrega.py com --cliente e --pendentes",
+        "Reporta total de entregas pendentes",
+        "Lista NFs com numeros reais do output",
+        "NAO inventa previsao de entrega sem dados no campo data_entrega_prevista",
+        "NAO confunde status_finalizacao IS NULL (pendente) com entregue=false"
+      ],
+      "scripts_expected": ["consultando_status_entrega.py"],
+      "category": "status_entrega"
+    },
+    {
+      "id": "eval-3-devolucoes-abertas",
+      "prompt": "Tem devolucao aberta?",
+      "expected_output": "Deve executar consultando_devolucoes.py --abertas e listar ocorrencias abertas",
+      "expectations": [
+        "Usa consultando_devolucoes.py com --abertas",
+        "Reporta total de devolucoes abertas",
+        "Menciona status_ocorrencia (ABERTA, EM_ANALISE, AGUARDANDO_RETORNO)",
+        "Inclui nome do cliente (nome_emitente) e numero da NFD",
+        "NAO inventa motivo de devolucao sem dado de ocorrencia_devolucao"
+      ],
+      "scripts_expected": ["consultando_devolucoes.py"],
+      "category": "devolucoes"
+    },
+    {
+      "id": "eval-4-ranking-produtos-devolvidos",
+      "prompt": "Quais sao os produtos mais devolvidos?",
+      "expected_output": "Deve executar consultando_devolucoes_detalhadas.py --ranking e mostrar top N produtos",
+      "expectations": [
+        "Usa consultando_devolucoes_detalhadas.py com --ranking",
+        "Reporta ranking com produto_referencia ou descricao_produto_interno",
+        "Inclui total_ocorrencias e qtd_total para cada produto",
+        "Menciona total_clientes afetados",
+        "NAO usa consultando_devolucoes.py (script errado para ranking)"
+      ],
+      "scripts_expected": ["consultando_devolucoes_detalhadas.py"],
+      "category": "devolucoes_detalhadas"
+    },
+    {
+      "id": "eval-5-custo-devolucoes-periodo",
+      "prompt": "Qual o custo total das devolucoes em janeiro de 2025?",
+      "expected_output": "Deve executar consultando_devolucoes_detalhadas.py --custo --de 2025-01-01 --ate 2025-01-31",
+      "expectations": [
+        "Usa consultando_devolucoes_detalhadas.py com --custo --de 2025-01-01 --ate 2025-01-31",
+        "Reporta custo_total em formato monetario (R$)",
+        "Inclui breakdown mensal se disponivel",
+        "Menciona total_nfds_com_custo",
+        "NAO confunde valor de NFD com custo de devolucao (sao fontes diferentes: nf_devolucao.valor_total vs despesas_extras.valor_despesa)"
+      ],
+      "scripts_expected": ["consultando_devolucoes_detalhadas.py"],
+      "category": "devolucoes_detalhadas"
+    }
+  ]
+}

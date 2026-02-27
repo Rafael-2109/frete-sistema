@@ -9,8 +9,9 @@ description: >-
   rastrear NF no Odoo (usar rastreando-odoo), ou visao 360 completa
   do pedido (usar subagente raio-x-pedido).
   - Canhoto: "tem canhoto da NF?", "canhotos pendentes"
-  - Devolucoes: "houve devolucao?", "NFs devolvidas"
+  - Devolucoes: "houve devolucao?", "NFs devolvidas", "produtos mais devolvidos"
   - Pendencias: "entregas pendentes", "NFs no CD", "entregas com problema"
+  - Custo devolucao: "quanto custou as devolucoes?"
 
   NAO USAR QUANDO (ANTES de faturar):
   - Pedidos em carteira/separacao → usar **gerindo-expedicao**
@@ -22,7 +23,7 @@ allowed-tools: Read, Bash, Glob, Grep
 
 # Monitorando Entregas
 
-Skill para consultar status de entregas, canhotos, devoluções e agendamentos.
+Skill para consultar status de entregas, canhotos, devoluções e agendamentos pós-faturamento.
 
 ---
 
@@ -30,10 +31,11 @@ Skill para consultar status de entregas, canhotos, devoluções e agendamentos.
 
 1. [Quando NÃO Usar Esta Skill](#quando-não-usar-esta-skill)
 2. [DECISION TREE - Qual Script Usar?](#decision-tree---qual-script-usar)
-3. [Regras de Negócio (Anti-Alucinação)](#regras-de-negócio-anti-alucinação)
+3. [Regras CRÍTICAS (Anti-Alucinação)](#regras-críticas-anti-alucinação)
 4. [Scripts Disponíveis](#scripts-disponíveis)
-5. [Referência Cruzada](#referência-cruzada)
-6. [References](#references)
+5. [Tratamento de Resultados](#tratamento-de-resultados)
+6. [Referência Cruzada](#referência-cruzada)
+7. [References](#references)
 
 ---
 
@@ -51,56 +53,85 @@ Skill para consultar status de entregas, canhotos, devoluções e agendamentos.
 
 ## DECISION TREE - Qual Script Usar?
 
+### Scripts EXISTENTES (apenas estes 3)
+
+⚠️ **IMPORTANTE**: Esta skill possui EXATAMENTE 3 scripts. NÃO tente executar scripts que não estão listados abaixo.
+
+| Script | Arquivo | Função |
+|--------|---------|--------|
+| Status de entregas | `consultando_status_entrega.py` | Status, datas, canhotos, filtros por NF/cliente/período |
+| Devoluções básicas | `consultando_devolucoes.py` | NFDs com ocorrências (abertas, por NF/cliente) |
+| Devoluções detalhadas | `consultando_devolucoes_detalhadas.py` | 4 modos: por cliente, produto, ranking, custo |
+
 ### Mapeamento Rápido
 
 | Se a pergunta menciona... | Use este script | Com estes parâmetros |
 |---------------------------|-----------------|----------------------|
 | **Status de NF específica** | `consultando_status_entrega.py` | `--nf 12345` |
 | **Status por cliente/CNPJ** | `consultando_status_entrega.py` | `--cliente "Atacadao"` ou `--cnpj 123...` |
-| **Data de embarque** ("que dia saiu?", "quando embarcou?", "quando expediu?") | `consultando_status_entrega.py` | `--nf 12345` (retorna `data_embarque`) |
-| **Data de faturamento** ("quando faturou?", "data da NF") | `consultando_status_entrega.py` | `--nf 12345` (retorna `data_faturamento`) |
-| **Data de entrega** ("quando chegou?", "foi entregue quando?") | `consultando_status_entrega.py` | `--nf 12345` (retorna `data_hora_entrega_realizada`) |
+| **Data de embarque** ("que dia saiu?", "quando embarcou?") | `consultando_status_entrega.py` | `--nf 12345` → campo `data_embarque` |
+| **Data de faturamento** ("quando faturou?", "data da NF") | `consultando_status_entrega.py` | `--nf 12345` → campo `data_faturamento` |
+| **Data de entrega** ("quando chegou?", "foi entregue quando?") | `consultando_status_entrega.py` | `--nf 12345` → campo `data_hora_entrega_realizada` |
 | **Entregas pendentes** | `consultando_status_entrega.py` | `--pendentes` |
 | **Entregas no CD** | `consultando_status_entrega.py` | `--no-cd` |
 | **Entregas reagendadas** | `consultando_status_entrega.py` | `--reagendadas` |
 | **Entregas entregues** (período) | `consultando_status_entrega.py` | `--entregues --de 2025-01-01 --ate 2025-01-31` |
-| **Canhoto de NF** | `consultando_canhotos.py` | `--nf 12345` |
-| **Canhotos pendentes** | `consultando_canhotos.py` | `--pendentes` |
+| **Canhoto de NF** | `consultando_status_entrega.py` | `--nf 12345` → campo `canhoto_arquivo` |
+| **Canhotos pendentes** | `consultando_status_entrega.py` | `--entregues` → filtrar onde `canhoto_arquivo` é null |
+| **Entregas com problema** | `consultando_status_entrega.py` | `--problemas` |
 | **Devoluções abertas** | `consultando_devolucoes.py` | `--abertas` |
 | **Devolução de NF específica** | `consultando_devolucoes.py` | `--nf 12345` |
 | **Devoluções de cliente** | `consultando_devolucoes_detalhadas.py` | `--cliente "Sendas"` |
 | **Produtos mais devolvidos** | `consultando_devolucoes_detalhadas.py` | `--ranking` |
 | **Custo de devoluções** | `consultando_devolucoes_detalhadas.py` | `--custo` |
-| **Agendamento de entrega** | `consultando_agendamentos.py` | `--nf 12345` |
-| **Agendamentos do dia** | `consultando_agendamentos.py` | `--data 2025-02-05` |
+| **Devoluções de produto** | `consultando_devolucoes_detalhadas.py` | `--produto "palmito"` |
 
 ### Regras de Decisão (em ordem de prioridade)
 
-1. **Se pergunta sobre STATUS de entrega:**
+1. **Se pergunta sobre STATUS de entrega ou DATAS (embarque/faturamento/entrega):**
    → Use `consultando_status_entrega.py`
-   → Exemplo: "NF 12345 foi entregue?" → `--nf 12345`
 
 2. **Se pergunta sobre CANHOTO:**
-   → Use `consultando_canhotos.py`
-   → Exemplo: "tem canhoto da NF?" → `--nf 12345`
+   → Use `consultando_status_entrega.py` (campo `canhoto_arquivo` no retorno)
+   → Se `canhoto_arquivo` é null → "sem canhoto registrado"
+   → Se `canhoto_arquivo` tem valor → "canhoto disponível"
 
-3. **Se pergunta sobre DEVOLUÇÃO:**
+3. **Se pergunta sobre DEVOLUÇÃO (ocorrência/status/NFD):**
    → Use `consultando_devolucoes.py`
-   → Exemplo: "houve devolução?" → `--nf 12345`
 
-4. **Se pergunta sobre AGENDAMENTO:**
-   → Use `consultando_agendamentos.py`
-   → Exemplo: "quando está agendada?" → `--nf 12345`
+4. **Se pergunta sobre ANÁLISE de devoluções (ranking, custo, histórico por cliente/produto):**
+   → Use `consultando_devolucoes_detalhadas.py` com o modo adequado
 
-5. **Se pergunta sobre PROBLEMAS genéricos:**
+5. **Se pergunta sobre AGENDAMENTO:**
+   → Dados de agendamento estão em `consultando_status_entrega.py` (campos `data_agenda`, `reagendar`, `motivo_reagendamento`)
+   → Para agendamentos detalhados, usar `consultando-sql` com tabela `agendamentos_entrega`
+
+6. **Se pergunta sobre PROBLEMAS genéricos:**
    → Use `consultando_status_entrega.py --problemas`
    → Inclui: nf_cd=True OU reagendar=True
 
 ---
 
-## Regras de Negócio (Anti-Alucinação)
+## Regras CRÍTICAS (Anti-Alucinação)
 
-### status_finalizacao - Valores Válidos
+### R1: FIDELIDADE AO OUTPUT DOS SCRIPTS
+
+```
+OBRIGATÓRIO:
+- Reportar EXATAMENTE os valores retornados pelo script
+- Usar EXATAMENTE os nomes de campos do JSON de retorno
+- Citar numeros (total, valores) do campo "resumo" quando disponivel
+- Formatar datas como DD/MM/YYYY (converter de YYYY-MM-DD do script)
+- Formatar valores monetarios como R$ X.XXX,XX
+
+PROIBIDO:
+- Inventar dados que NAO estao no output do script
+- Inferir status a partir de campos booleanos isolados (usar status_finalizacao)
+- Arredondar ou estimar valores — usar exatamente o que o script retorna
+- Adicionar contexto ou explicacao que nao tem base nos dados retornados
+```
+
+### R2: status_finalizacao — Valores Válidos
 
 | Valor | Significado |
 |-------|-------------|
@@ -112,40 +143,44 @@ Skill para consultar status de entregas, canhotos, devoluções e agendamentos.
 | `Sinistro` | Perda/extravio da mercadoria |
 | `nao_finalizado` | NF saiu do monitoramento sem conclusão |
 
-### Fórmulas CORRETAS (O que o agente DEVE usar)
+### R3: Fórmulas CORRETAS
 
-| Consulta | Fórmula SQL CORRETA |
-|----------|---------------------|
-| Entregas pendentes | `status_finalizacao IS NULL` |
-| Entregas finalizadas | `status_finalizacao IS NOT NULL` |
-| Entregas entregues | `status_finalizacao = 'Entregue'` |
-| Entregas devolvidas | `status_finalizacao = 'Devolvida' OR teve_devolucao = True` |
-| Entregas com problema | `nf_cd = True OR reagendar = True` |
+| Consulta | Fórmula | Flag no script |
+|----------|---------|----------------|
+| Entregas pendentes | `status_finalizacao IS NULL` | `--pendentes` |
+| Entregas entregues | `status_finalizacao = 'Entregue'` | `--entregues` |
+| Entregas devolvidas | `status_finalizacao = 'Devolvida' OR teve_devolucao = True` | — |
+| Entregas com problema | `nf_cd = True OR reagendar = True` | `--problemas` |
+| Com canhoto | `canhoto_arquivo IS NOT NULL` | — |
 
-### O Agente PODE Afirmar:
+### R4: O Agente PODE Afirmar
 
 - Status atual da entrega (baseado em `status_finalizacao`)
 - Se tem canhoto (baseado em `canhoto_arquivo IS NOT NULL`)
 - Data de entrega (baseado em `data_hora_entrega_realizada`)
 - Se está no CD (baseado em `nf_cd = True`)
 - Se precisa reagendar (baseado em `reagendar = True`)
+- Ranking de produtos devolvidos (baseado no output de `--ranking`)
+- Custo de devoluções (baseado no output de `--custo`)
 
-### O Agente NÃO PODE Inventar:
+### R5: O Agente NÃO PODE Inventar
 
-- Lead time se não calculado pelo script
-- Motivo de devolução sem consultar `ocorrencia_devolucao`
-- Status de agendamento sem consultar `agendamentos_entrega`
-- Previsão de entrega sem dados no sistema
+- Lead time ou prazo de entrega se não calculado pelo script
+- Motivo de devolução sem consultar `ocorrencia_devolucao` (usar `consultando_devolucoes.py`)
+- Previsão de entrega sem dados no campo `data_entrega_prevista`
+- Custo de devolução sem executar `consultando_devolucoes_detalhadas.py --custo`
+- Status de agendamento detalhado sem consultar tabela `agendamentos_entrega`
 
-### Campos Importantes
+### R6: Campos com Semântica Especial
 
-| Campo | Descrição |
-|-------|-----------|
-| `entregue` | **Boolean** - True APENAS quando `status_finalizacao='Entregue'`. NÃO usar isoladamente para filtrar pendentes |
-| `nf_cd` | **Boolean** - True = NF está fisicamente no CD. Pode ser NF que nunca saiu OU que saiu e voltou |
-| `reagendar` | **Boolean** - True = cliente solicitou reagendamento |
-| `teve_devolucao` | **Boolean** - True = houve devolução (mesmo que parcial) |
-| `nova_nf` | Número da NF substituta (quando `status_finalizacao='Troca de NF'`) |
+| Campo | Descrição | ⚠️ Cuidado |
+|-------|-----------|------------|
+| `entregue` | Boolean - True quando `status_finalizacao='Entregue'` | NÃO usar isoladamente para filtrar pendentes |
+| `nf_cd` | Boolean - NF fisicamente no CD | Pode ser NF que nunca saiu OU que voltou |
+| `reagendar` | Boolean - cliente solicitou reagendamento | — |
+| `teve_devolucao` | Boolean - houve devolução (mesmo parcial) | — |
+| `nova_nf` | NF substituta | Só presente quando `status_finalizacao='Troca de NF'` |
+| `canhoto_arquivo` | Caminho do arquivo do canhoto | null = sem canhoto, valor = tem canhoto |
 
 ---
 
@@ -153,7 +188,7 @@ Skill para consultar status de entregas, canhotos, devoluções e agendamentos.
 
 ### 1. consultando_status_entrega.py
 
-Consulta status de entregas com vários filtros.
+Consulta status de entregas com vários filtros. Script principal — cobre status, datas, canhotos e agendamentos básicos.
 
 ```bash
 source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/consultando_status_entrega.py [opções]
@@ -163,8 +198,8 @@ source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/
 
 | Param | Obrig | Descrição |
 |-------|-------|-----------|
-| `--nf` | Não | Número da NF (busca exata ou parcial) |
-| `--cliente` | Não | Nome do cliente (busca parcial) |
+| `--nf` | Não | Número da NF (busca parcial ILIKE) |
+| `--cliente` | Não | Nome do cliente (busca parcial ILIKE) |
 | `--cnpj` | Não | CNPJ do cliente |
 | `--transportadora` | Não | Transportadora |
 | `--pendentes` | Não | Apenas entregas pendentes (status_finalizacao IS NULL) |
@@ -182,48 +217,39 @@ source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/
 {
   "sucesso": true,
   "total": 15,
+  "exibindo": 50,
+  "filtros_aplicados": {"pendentes": true},
   "entregas": [
     {
       "id": 1234,
       "numero_nf": "144533",
       "cliente": "ATACADAO SA",
+      "cnpj_cliente": "45.543.915/0039-00",
+      "transportadora": "BRASPRESS",
+      "municipio": "SAO PAULO",
+      "uf": "SP",
+      "valor_nf": 12345.67,
+      "data_faturamento": "2025-01-15",
+      "data_embarque": "2025-01-16",
+      "data_entrega_prevista": "2025-01-20",
+      "data_hora_entrega_realizada": null,
       "status_finalizacao": null,
       "entregue": false,
       "nf_cd": false,
       "reagendar": false,
-      "data_faturamento": "2025-01-15",
-      "data_embarque": "2025-01-16",
-      "data_entrega_prevista": "2025-01-20",
-      "transportadora": "BRASPRESS",
-      "municipio": "SAO PAULO",
-      "uf": "SP"
+      "motivo_reagendamento": null,
+      "data_agenda": null,
+      "teve_devolucao": false,
+      "canhoto_arquivo": null,
+      "nova_nf": null
     }
   ]
 }
 ```
 
-### 2. consultando_canhotos.py
+### 2. consultando_devolucoes.py
 
-Consulta canhotos de entregas.
-
-```bash
-source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/consultando_canhotos.py [opções]
-```
-
-**Parâmetros:**
-
-| Param | Obrig | Descrição |
-|-------|-------|-----------|
-| `--nf` | Não | Número da NF |
-| `--pendentes` | Não | Apenas entregas sem canhoto |
-| `--com-canhoto` | Não | Apenas entregas com canhoto |
-| `--de` | Não | Data inicial |
-| `--ate` | Não | Data final |
-| `--limite` | Não | Máximo de registros |
-
-### 3. consultando_devolucoes.py
-
-Consulta devoluções e ocorrências.
+Consulta devoluções (NFDs) com ocorrências relacionadas.
 
 ```bash
 source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/consultando_devolucoes.py [opções]
@@ -235,105 +261,109 @@ source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/
 |-------|-------|-----------|
 | `--nf` | Não | Número da NF original |
 | `--nfd` | Não | Número da NF de devolução |
-| `--abertas` | Não | Apenas ocorrências abertas |
-| `--cliente` | Não | Nome do cliente |
-| `--de` | Não | Data inicial |
-| `--ate` | Não | Data final |
-| `--limite` | Não | Máximo de registros |
+| `--abertas` | Não | Apenas ocorrências abertas (ABERTA, EM_ANALISE, AGUARDANDO_RETORNO) |
+| `--cliente` | Não | Nome do cliente/emitente |
+| `--de` | Não | Data inicial (YYYY-MM-DD) |
+| `--ate` | Não | Data final (YYYY-MM-DD) |
+| `--limite` | Não | Máximo de registros (default: 50) |
 
-### 4. consultando_agendamentos.py
-
-Consulta agendamentos de entrega.
-
-```bash
-source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/consultando_agendamentos.py [opções]
+**Retorno esperado:**
+```json
+{
+  "sucesso": true,
+  "total": 30,
+  "exibindo": 30,
+  "devolucoes": [
+    {
+      "id": 456,
+      "numero_nfd": "67890",
+      "numero_nf_venda": "12345",
+      "motivo": "AVARIA",
+      "valor_total": 1234.56,
+      "nome_emitente": "ATACADAO SA",
+      "status_nfd": "REGISTRADA",
+      "status_ocorrencia": "ABERTA",
+      "categoria": "QUALIDADE",
+      "responsavel": "QUALIDADE"
+    }
+  ]
+}
 ```
 
-**Parâmetros:**
+### 3. consultando_devolucoes_detalhadas.py
 
-| Param | Obrig | Descrição |
-|-------|-------|-----------|
-| `--nf` | Não | Número da NF |
-| `--data` | Não | Data do agendamento (YYYY-MM-DD) |
-| `--pendentes` | Não | Apenas agendamentos aguardando confirmação |
-| `--confirmados` | Não | Apenas agendamentos confirmados |
-| `--limite` | Não | Máximo de registros |
-
-### 5. consultando_devolucoes_detalhadas.py
-
-Consulta devoluções detalhadas com entity resolution e análises agregadas.
+Consulta devoluções detalhadas com 4 modos mutuamente exclusivos.
 
 ```bash
 source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/consultando_devolucoes_detalhadas.py [opções]
 ```
 
-**Parâmetros (modos mutuamente exclusivos):**
+**Parâmetros de modo (UM obrigatório, mutuamente exclusivos):**
 
-| Param | Obrig | Descrição |
-|-------|-------|-----------|
-| `--cliente` | Sim* | Histórico de devoluções por cliente (LIKE no nome_emitente) |
-| `--produto` | Sim* | Produtos devolvidos (LIKE na descricao_produto_cliente ou descricao_produto_interno) |
-| `--ranking` | Sim* | Top N produtos mais devolvidos (GROUP BY codigo_produto_interno) |
-| `--custo` | Sim* | Custo total de devoluções (via despesas_extras.tipo_despesa='DEVOLUCAO') |
-| `--de` | Não | Data início (YYYY-MM-DD) |
-| `--ate` | Não | Data fim (YYYY-MM-DD) |
-| `--limite` | Não | Máximo de registros (default: 50) |
-| `--incluir-custo` | Não | Incluir custo (apenas com --cliente) |
-| `--ordenar-por` | Não | 'ocorrencias' ou 'quantidade' (apenas com --ranking, default: ocorrencias) |
+| Param | Descrição |
+|-------|-----------|
+| `--cliente "Nome"` | Histórico de devoluções por cliente |
+| `--produto "nome"` | Produtos devolvidos (ILIKE) |
+| `--ranking` | Top N produtos mais devolvidos |
+| `--custo` | Custo total de devoluções (via despesas_extras) |
 
-*Um dos 4 modos deve ser especificado.
+**Parâmetros gerais:**
 
-**Retorno esperado (modo --cliente):**
-```json
-{
-  "sucesso": true,
-  "modo": "cliente",
-  "resumo": {
-    "mensagem": "Historico de devolucoes de 12 NFDs do cliente 'Sendas'",
-    "total_nfds": 12,
-    "exibindo": 10,
-    "valor_total_devolucoes": 45678.90,
-    "custo_total": 3456.78,
-    "cliente": "Sendas",
-    "periodo": {"de": "2025-01-01", "ate": "2025-12-31"}
-  },
-  "nfds": [
-    {
-      "id": 123,
-      "numero_nfd": "12345",
-      "nome_emitente": "Sendas Distribuidora SA",
-      "cnpj_emitente": "12.345.678/0001-99",
-      "data_registro": "2025-01-15",
-      "valor_total": 4567.89,
-      "status": "REGISTRADA",
-      "motivo": "AVARIA",
-      "total_linhas": 3
-    }
-  ]
-}
+| Param | Descrição |
+|-------|-----------|
+| `--de` | Data início (YYYY-MM-DD) |
+| `--ate` | Data fim (YYYY-MM-DD) |
+| `--limite` | Max resultados (default: 50) |
+| `--incluir-custo` | Incluir custo (apenas com --cliente) |
+| `--ordenar-por` | 'ocorrencias' ou 'quantidade' (apenas com --ranking) |
+
+**Retorno por modo:**
+
+| Modo | Campo principal | Conteúdo |
+|------|-----------------|----------|
+| `--cliente` | `nfds` | Lista de NFDs + resumo com total/valor |
+| `--produto` | `linhas` | Linhas de devolução + resumo com qtd/clientes |
+| `--ranking` | `ranking` | Top N com total_ocorrencias, qtd_total, total_clientes |
+| `--custo` | `breakdown_mensal` | Custo total + breakdown por mês |
+
+---
+
+## Tratamento de Resultados
+
+### Quando o Script Retorna `"sucesso": false`
+
+```
+1. Reportar o erro ao usuario: "Nao consegui consultar: {erro}"
+2. NAO inventar dados alternativos
+3. Sugerir: "Verifique se o numero da NF/nome do cliente esta correto"
 ```
 
-**Retorno esperado (modo --ranking):**
-```json
-{
-  "sucesso": true,
-  "modo": "ranking",
-  "resumo": {
-    "mensagem": "Top 10 produtos mais devolvidos (ordenado por ocorrencias)",
-    "criterio": "ocorrencias",
-    "total_produtos": 10
-  },
-  "ranking": [
-    {
-      "produto_referencia": "PALMITO-400G",
-      "descricao_produto_interno": "Palmito Inteiro 400g",
-      "total_ocorrencias": 45,
-      "qtd_total": 234.0,
-      "total_nfds": 38,
-      "total_clientes": 12
-    }
-  ]
-}
+### Quando o Script Retorna `"total": 0` (sem resultados)
+
+```
+1. Dizer claramente: "Nao encontrei entregas com os filtros aplicados"
+2. Sugerir filtros alternativos:
+   - Se buscou por NF → "Verifique o numero da NF"
+   - Se buscou por cliente → "O nome exato pode ser diferente. Tente parte do nome"
+   - Se buscou pendentes → "Nao ha entregas pendentes no momento"
+3. NAO inventar dados ou resultados aproximados
+```
+
+### Quando `total` > `exibindo` (resultados truncados)
+
+```
+1. Informar: "Encontrei {total} entregas, mostrando as {exibindo} mais recentes"
+2. Sugerir refinar filtros (período, NF específica) se total for muito grande
+```
+
+### Formatação de Resposta
+
+```
+- Datas: converter YYYY-MM-DD → DD/MM/YYYY (padrão brasileiro)
+- Valores: R$ com separador de milhar (.) e decimal (,)
+- Status null: dizer "pendente" ou "em andamento" (NÃO dizer "null")
+- Canhoto null: dizer "sem canhoto registrado" (NÃO dizer "null")
+- Listas: numerar NFs quando houver múltiplas
 ```
 
 ---
@@ -344,63 +374,57 @@ source .venv/bin/activate && python .claude/skills/monitorando-entregas/scripts/
 
 ```
 Pergunta: "NF 144533 foi entregue?"
-Raciocínio: Pergunta sobre STATUS de NF → consultando_status_entrega.py
-Comando: --nf 144533
-Resultado: "A NF 144533 está pendente (em andamento). Data de embarque: 16/01/2025."
+Script: consultando_status_entrega.py --nf 144533
+Resposta: "A NF 144533 está pendente (em andamento). Data de embarque: 16/01/2025."
 ```
 
 ### Cenário 2: Entregas pendentes do Atacadão
 
 ```
 Pergunta: "tem entrega pendente do Atacadão?"
-Raciocínio: STATUS + CLIENTE → consultando_status_entrega.py
-Comando: --cliente atacadao --pendentes
-Resultado: "Encontrei 5 entregas pendentes do Atacadão: [lista com NFs]"
+Script: consultando_status_entrega.py --cliente atacadao --pendentes
+Resposta: "Encontrei 5 entregas pendentes do Atacadão: [lista com NFs]"
 ```
 
-### Cenário 3: Canhotos pendentes
+### Cenário 3: Canhoto de NF
 
 ```
-Pergunta: "quais entregas não têm canhoto?"
-Raciocínio: CANHOTO + pendentes → consultando_canhotos.py
-Comando: --pendentes --limite 20
-Resultado: "20 entregas sem canhoto registrado: [lista]"
+Pergunta: "tem canhoto da NF 144533?"
+Script: consultando_status_entrega.py --nf 144533
+Resposta (se canhoto_arquivo != null): "Sim, canhoto registrado para a NF 144533."
+Resposta (se canhoto_arquivo == null): "Não, NF 144533 não tem canhoto registrado."
 ```
 
 ### Cenário 4: Devoluções abertas
 
 ```
 Pergunta: "tem devolução aberta?"
-Raciocínio: DEVOLUÇÃO + abertas → consultando_devolucoes.py
-Comando: --abertas
-Resultado: "3 ocorrências de devolução abertas: [detalhes]"
+Script: consultando_devolucoes.py --abertas
+Resposta: "3 ocorrências de devolução abertas: [detalhes com NFD, cliente, categoria]"
 ```
 
-### Cenário 5: Data de embarque
+### Cenário 5: Ranking de produtos devolvidos
+
+```
+Pergunta: "quais produtos são mais devolvidos?"
+Script: consultando_devolucoes_detalhadas.py --ranking --limite 10
+Resposta: "Top 10 produtos mais devolvidos: 1. Palmito 400g (45 ocorrências)..."
+```
+
+### Cenário 6: Custo de devoluções em período
+
+```
+Pergunta: "quanto custaram as devoluções em janeiro?"
+Script: consultando_devolucoes_detalhadas.py --custo --de 2025-01-01 --ate 2025-01-31
+Resposta: "Custo total de devoluções em janeiro: R$ 12.345,67 (15 despesas, 8 NFDs)"
+```
+
+### Cenário 7: Data de embarque
 
 ```
 Pergunta: "que dia saiu a NF 144533?"
-Raciocínio: Pergunta sobre DATA DE EMBARQUE → consultando_status_entrega.py
-Comando: --nf 144533
-Resultado: "A NF 144533 saiu (embarcou) em 16/01/2025."
-```
-
-### Cenário 6: Data de faturamento
-
-```
-Pergunta: "quando faturou a NF do Atacadão loja 183?"
-Raciocínio: DATA DE FATURAMENTO + CLIENTE → resolver grupo primeiro, depois consultando_status_entrega.py
-Comando: --cliente "Atacadao 183"
-Resultado: "Encontrei 3 NFs do Atacadão 183. Faturamento: NF 144533 em 15/01/2025, NF 144534 em 16/01/2025..."
-```
-
-### Cenário 7: Data de entrega realizada
-
-```
-Pergunta: "quando chegou a NF 144533?"
-Raciocínio: DATA DE ENTREGA REALIZADA → consultando_status_entrega.py
-Comando: --nf 144533
-Resultado: "A NF 144533 foi entregue em 20/01/2025 às 14:32."
+Script: consultando_status_entrega.py --nf 144533
+Resposta: "A NF 144533 saiu (embarcou) em 16/01/2025."
 ```
 
 ---
@@ -411,7 +435,7 @@ Resultado: "A NF 144533 foi entregue em 20/01/2025 às 14:32."
 |-------|--------------------------|
 | **gerindo-expedicao** | Pedidos antes de faturar, estoque, separação |
 | **rastreando-odoo** | Rastrear NF/PO/pagamento no Odoo |
-| **consultando-sql** | Consultas analíticas complexas (agregações, rankings) |
+| **consultando-sql** | Consultas analíticas complexas (agregações, rankings avançados) |
 | **analista-carteira** | Análise completa da carteira com decisões P1-P7 |
 
 ---
@@ -420,10 +444,9 @@ Resultado: "A NF 144533 foi entregue em 20/01/2025 às 14:32."
 
 | Gatilho na Pergunta | Reference a Ler | Motivo |
 |---------------------|-----------------|--------|
-| "status de devolução" | `references/devolucoes.md` | Fluxo completo de devolução |
+| "status de devolução" | `references/devolucoes.md` | Fluxo completo de devolução, status NFD/ocorrência |
 | "categorias de ocorrência" | `references/devolucoes.md` | Valores válidos de categoria/subcategoria |
-| "como funciona agendamento" | `references/agendamentos.md` | Fluxo de agendamento e confirmação |
-| "tabelas relacionadas" | `references/tables.md` | Relacionamentos entre tabelas |
+| "tabelas relacionadas" | `references/tables.md` | Relacionamentos entre tabelas do domínio |
 
 ---
 
