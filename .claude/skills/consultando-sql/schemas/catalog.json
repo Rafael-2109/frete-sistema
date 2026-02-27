@@ -254,7 +254,7 @@
       "key_fields": [
         "operacao_id",
         "transportadora_id",
-        "cte_numero"
+        "numero_sequencial_transportadora"
       ]
     },
     {

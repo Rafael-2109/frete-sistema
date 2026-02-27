@@ -119,9 +119,9 @@
   ],
   "indices": [
     {
-      "name": "ix_saldo_standby_status_standby",
+      "name": "ix_saldo_standby_cnpj_cliente",
       "columns": [
-        "status_standby"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -140,9 +140,16 @@
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cnpj_cliente",
+      "name": "ix_saldo_standby_origem_separacao_lote_id",
       "columns": [
-        "cnpj_cliente"
+        "origem_separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_saldo_standby_status_standby",
+      "columns": [
+        "status_standby"
       ],
       "unique": false
     },
@@ -150,13 +157,6 @@
       "name": "ix_saldo_standby_cod_produto",
       "columns": [
         "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_saldo_standby_origem_separacao_lote_id",
-      "columns": [
-        "origem_separacao_lote_id"
       ],
       "unique": false
     }

@@ -158,9 +158,16 @@
   ],
   "indices": [
     {
-      "name": "ix_despesas_extras_despesa_cte_id",
+      "name": "ix_despesas_extras_nfd_id",
       "columns": [
-        "despesa_cte_id"
+        "nfd_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -193,16 +200,9 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_status",
+      "name": "ix_despesas_extras_despesa_cte_id",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_despesas_extras_nfd_id",
-      "columns": [
-        "nfd_id"
+        "despesa_cte_id"
       ],
       "unique": false
     }
