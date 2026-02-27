@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 197,
+  "total_relationships": 198,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -72,6 +72,12 @@
       "from_table": "carvia_faturas_transportadora",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_nf_itens",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
       "to_column": "id"
     },
     {

@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 128,
+  "total_tabelas": 129,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -211,6 +211,15 @@
         "transportadora_id",
         "numero_fatura",
         "data_emissao"
+      ]
+    },
+    {
+      "name": "carvia_nf_itens",
+      "description": "Tabela carvia_nf_itens",
+      "key_fields": [
+        "nf_id",
+        "codigo_produto",
+        "descricao"
       ]
     },
     {

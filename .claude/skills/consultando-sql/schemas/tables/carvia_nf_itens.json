@@ -1,0 +1,69 @@
+{
+  "name": "carvia_nf_itens",
+  "description": "Tabela carvia_nf_itens",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id",
+      "nullable": false
+    },
+    {
+      "name": "codigo_produto",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "ncm",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "cfop",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "unidade",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "valor_unitario",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "valor_total_item",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_id",
+      "references": "carvia_nfs.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_nf_itens_nf_id",
+      "columns": [
+        "nf_id"
+      ],
+      "unique": false
+    }
+  ]
+}

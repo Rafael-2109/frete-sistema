@@ -138,9 +138,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_cte_numero",
+      "name": "ix_carvia_operacoes_cnpj_cliente",
       "columns": [
-        "cte_numero"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -152,9 +152,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_cnpj_cliente",
+      "name": "ix_carvia_operacoes_cte_numero",
       "columns": [
-        "cnpj_cliente"
+        "cte_numero"
       ],
       "unique": false
     }
