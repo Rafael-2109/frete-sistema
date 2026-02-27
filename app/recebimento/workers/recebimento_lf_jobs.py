@@ -101,10 +101,14 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
 
         from app import db
 
+        # Guardar valores primitivos ANTES do try — instancia ORM pode ficar
+        # detached apos db.session.close() durante retry SSL no service
+        odoo_dfe_id = recebimento.odoo_dfe_id
+
         # Verificar lock (evitar duplicata pelo DFe)
-        if not _adquirir_lock(recebimento.odoo_dfe_id):
+        if not _adquirir_lock(odoo_dfe_id):
             logger.warning(
-                f"[Job LF] DFe {recebimento.odoo_dfe_id} ja esta sendo processado. "
+                f"[Job LF] DFe {odoo_dfe_id} ja esta sendo processado. "
                 "Abortando."
             )
             # Atualizar status no banco para nao ficar 'pendente' eternamente
@@ -136,7 +140,7 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
 
             logger.info(
                 f"[Job LF] Recebimento {recebimento_id} processado com sucesso "
-                f"(DFe={recebimento.odoo_dfe_id}, PO={recebimento.odoo_po_name})"
+                f"(DFe={odoo_dfe_id}, PO={rec_final.odoo_po_name if rec_final else '?'})"
             )
 
             return resultado
@@ -161,17 +165,19 @@ def processar_recebimento_lf_job(recebimento_id, usuario_nome=None):
         except Exception as e:
             logger.error(f"[Job LF] Erro ao processar recebimento {recebimento_id}: {e}")
             _atualizar_progresso(recebimento_id, 0, 0, total, f'Erro: {str(e)[:100]}')
-            # Atualizar status no banco (pode ja ter sido feito pelo OdooService)
+            # Refetch para evitar DetachedInstanceError apos session.close() no retry SSL
             try:
-                recebimento.status = 'erro'
-                recebimento.erro_mensagem = str(e)[:500]
-                db.session.commit()
+                rec_fresh = db.session.get(RecebimentoLf, recebimento_id)
+                if rec_fresh:
+                    rec_fresh.status = 'erro'
+                    rec_fresh.erro_mensagem = str(e)[:500]
+                    db.session.commit()
             except Exception:
                 db.session.rollback()
             return {'status': 'erro', 'mensagem': str(e)[:500]}
 
         finally:
-            _liberar_lock(recebimento.odoo_dfe_id)
+            _liberar_lock(odoo_dfe_id)  # Usa variavel local, nao instancia ORM
 
 
 def processar_transfer_fb_cd_job(recebimento_id):

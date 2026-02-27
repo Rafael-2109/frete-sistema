@@ -118,8 +118,8 @@ class Config:
                 "keepalives_count": 5,  # Tentativas antes de desistir
                 "client_encoding": "utf8",  # Encoding UTF-8 explícito
                 # Combina todas as opções em uma única string
-                # idle_in_transaction_session_timeout reduzido para 30s para evitar SSL timeout
-                "options": "-c client_encoding=UTF8 -c timezone=America/Sao_Paulo -c statement_timeout=60000 -c idle_in_transaction_session_timeout=30000",
+                # idle_in_transaction_session_timeout=120s: operacoes Odoo podem levar 60-180s
+                "options": "-c client_encoding=UTF8 -c timezone=America/Sao_Paulo -c statement_timeout=60000 -c idle_in_transaction_session_timeout=120000",
             },
         }
     else:

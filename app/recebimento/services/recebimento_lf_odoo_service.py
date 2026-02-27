@@ -133,7 +133,7 @@ class RecebimentoLfOdooService:
     CFOPS_RETORNO = ('1902', '5902', '1903', '5903')
 
     # Fire and Poll — parametros
-    FIRE_TIMEOUT = 60       # Timeout curto para disparar acao (60s)
+    FIRE_TIMEOUT = 120      # Timeout para disparar acao (120s — Odoo pode demorar sob carga)
     POLL_INTERVAL = 10      # Intervalo entre polls (10s)
     MAX_POLL_TIME = 1800    # Tempo maximo de polling (30 min)
 
@@ -423,7 +423,8 @@ class RecebimentoLfOdooService:
                         db.session.close()
                     except Exception:
                         pass
-                    time.sleep(0.5 * (attempt + 1))
+                    db.engine.dispose()  # Limpa pool de conexoes ruins
+                    time.sleep(0.5 * (2 ** attempt))  # Exponential backoff: 0.5s, 1s, 2s
                 else:
                     raise
 
@@ -506,7 +507,8 @@ class RecebimentoLfOdooService:
                         db.session.close()
                     except Exception:
                         pass
-                    time.sleep(0.5 * (attempt + 1))
+                    db.engine.dispose()  # Limpa pool de conexoes ruins
+                    time.sleep(0.5 * (2 ** attempt))  # Exponential backoff: 0.5s, 1s, 2s
                     # Loop continua: re-fetch + re-set + re-commit
                 else:
                     raise

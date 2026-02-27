@@ -193,20 +193,24 @@ def collect_runtime_templates() -> List[Dict[str, Any]]:
         Lista de dicts prontos para indexacao
     """
     from app import db as _db
-    from app.embeddings.models import SqlTemplateEmbedding
 
-    existing = SqlTemplateEmbedding.query.all()
+    # Usar db.session.execute() em vez de .query.all() para evitar
+    # transacao implicita que pode ficar "dirty" e bloquear operacoes seguintes
+    result = _db.session.execute(
+        text(
+            "SELECT id, question_text, sql_text, tables_used, texto_embedado, content_hash "
+            "FROM sql_template_embeddings WHERE embedding IS NULL"
+        )
+    )
     results = []
-    for t in existing:
-        if t.embedding is not None:
-            continue  # Ja tem embedding
+    for row in result.fetchall():
         results.append({
-            "id": t.id,
-            "question_text": t.question_text,
-            "sql_text": t.sql_text,
-            "tables_used": t.tables_used,
-            "texto_embedado": t.texto_embedado,
-            "content_hash": t.content_hash,
+            "id": row[0],
+            "question_text": row[1],
+            "sql_text": row[2],
+            "tables_used": row[3],
+            "texto_embedado": row[4],
+            "content_hash": row[5],
         })
     return results
 
@@ -348,6 +352,13 @@ def save_successful_query(question: str, sql: str, tables_used: list) -> bool:
         from app.embeddings.service import EmbeddingService
         from app.embeddings.config import VOYAGE_DEFAULT_MODEL
 
+        # Rollback preventivo: limpa transacoes sujas de operacoes anteriores
+        # que podem deixar a sessao em estado "invalid transaction"
+        try:
+            _db.session.rollback()
+        except Exception:
+            pass
+
         ch = _content_hash(question)
         tables_str = ",".join(tables_used) if tables_used else ""
         texto = f"Pergunta: {question}\nTabelas: {tables_str}"
@@ -405,11 +416,7 @@ def save_successful_query(question: str, sql: str, tables_used: list) -> bool:
 
     except Exception as e:
         logger.error(f"[SQL_TEMPLATE_INDEXER] Erro salvando template: {e}")
-        try:
-            from app import db as _db
-            _db.session.rollback()
-        except Exception:
-            pass
+        _db.session.rollback()  # Idempotente, seguro chamar sempre
         return False
 
 

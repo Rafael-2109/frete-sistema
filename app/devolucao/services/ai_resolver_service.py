@@ -16,6 +16,7 @@ DATA: 30/12/2024
 """
 
 import os
+import re
 import json
 import logging
 from typing import Dict, List, Optional, Any, Tuple
@@ -1469,14 +1470,10 @@ class AIResolverService:
     ) -> ResultadoResolucaoProduto:
         """Parseia resposta JSON do Haiku."""
         try:
-            # Tentar extrair JSON
-            if '{' in texto:
-                inicio = texto.find('{')
-                fim = texto.rfind('}') + 1
-                json_str = texto[inicio:fim]
-                dados = json.loads(json_str)
-            else:
-                raise ValueError("JSON nao encontrado na resposta")
+            # Usar _extrair_json com reparacao automatica de JSON malformado
+            dados = self._extrair_json(texto)
+            if not dados:
+                raise ValueError("JSON nao encontrado ou invalido na resposta")
 
             codigo_interno = dados.get('codigo_interno')
             confianca = float(dados.get('confianca', 0))
@@ -2324,15 +2321,41 @@ class AIResolverService:
     # UTILITARIOS
     # =========================================================================
 
+    def _reparar_json(self, texto: str) -> str:
+        """Tenta reparar JSON malformado comum de LLMs."""
+        # Remover comentarios apos JSON
+        texto = re.sub(r'}\s*(?://|#).*$', '}', texto, flags=re.MULTILINE)
+        # Remover trailing commas antes de } ou ]
+        texto = re.sub(r',(\s*[}\]])', r'\1', texto)
+        # Fechar chaves abertas
+        if texto.count('{') > texto.count('}'):
+            texto += '}' * (texto.count('{') - texto.count('}'))
+        # Fechar colchetes abertos
+        if texto.count('[') > texto.count(']'):
+            texto += ']' * (texto.count('[') - texto.count(']'))
+        return texto.strip()
+
     def _extrair_json(self, texto: str) -> Dict:
-        """Extrai JSON de texto."""
+        """Extrai JSON de texto, com tentativa de reparacao para JSON malformado."""
         try:
-            if '{' in texto:
-                inicio = texto.find('{')
-                fim = texto.rfind('}') + 1
-                json_str = texto[inicio:fim]
+            if '{' not in texto:
+                return {}
+            inicio = texto.find('{')
+            fim = texto.rfind('}') + 1
+            json_str = texto[inicio:fim]
+
+            try:
                 return json.loads(json_str)
-            return {}
+            except json.JSONDecodeError:
+                # Tentar reparar JSON malformado (trailing commas, comentarios, chaves abertas)
+                json_reparado = self._reparar_json(json_str)
+                try:
+                    resultado = json.loads(json_reparado)
+                    logger.info("[AI_RESOLVER] JSON reparado com sucesso")
+                    return resultado
+                except json.JSONDecodeError as e:
+                    logger.warning(f"[AI_RESOLVER] JSON invalido apos reparacao: {str(e)[:100]}")
+                    return {}
         except Exception:
             return {}
 
