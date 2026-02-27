@@ -922,6 +922,7 @@
 
         for (let index = 0; index < endIndex; index++) {
             const item = state.dados[index];
+            if (!item || item._deleted) continue;
             const row = document.getElementById(item.tipo === 'separacao' ? `row-sep-${index}` : `row-${index}`);
             if (!row) continue; // Skip se não renderizado
 
@@ -1621,6 +1622,7 @@
         if (target.classList.contains('dt-expedicao')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
+            if (!item || item._deleted) return;
             const novoValor = target.value;
 
             // ✅ CORREÇÃO: Apenas separações devem atualizar backend
@@ -1642,6 +1644,7 @@
         if (target.classList.contains('dt-agendamento')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
+            if (!item || item._deleted) return;
             const novoValor = target.value;
 
             // Apenas separações devem atualizar backend
@@ -1661,6 +1664,7 @@
         if (target.classList.contains('qtd-editavel')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
+            if (!item || item._deleted) return;
 
             // 🔧 CORREÇÃO: Sincronizar valor do DOM para state.dados
             item.qtd_editavel = parseFloat(target.value || 0);
@@ -1713,6 +1717,7 @@
         if (target.classList.contains('protocolo')) {
             const rowIndex = parseInt(target.dataset.rowIndex);
             const item = state.dados[rowIndex];
+            if (!item || item._deleted) return;
             const novoValor = target.value.trim();
 
             // Apenas separações devem atualizar backend
@@ -1743,6 +1748,7 @@
         let pedidosOcultados = 0;
 
         state.dados.forEach((item, index) => {
+            if (!item || item._deleted) return;
             if (item.tipo === 'pedido') {
                 // ✅ CORREÇÃO: Usar qtd_saldo que já vem calculado da API
                 // API já faz: qtd_saldo = qtd_saldo_produto_pedido - qtd_separada
@@ -1834,8 +1840,8 @@
             const item = state.dados[rowIndex];
 
             // Validação básica
-            if (!item || item.tipo !== 'separacao') {
-                console.error('Item não é uma separação válida');
+            if (!item || item._deleted || item.tipo !== 'separacao') {
+                console.error('Item não é uma separação válida ou já foi deletado');
                 return;
             }
 
@@ -1868,9 +1874,9 @@
                     console.log(`✅ Linha removida do DOM`);
                 }
 
-                // Remover do state.dados
-                state.dados.splice(rowIndex, 1);
-                console.log(`✅ Item removido do state.dados`);
+                // Marcar como deletado no state.dados (preserva índices)
+                state.dados[rowIndex]._deleted = true;
+                console.log(`✅ Item marcado como _deleted no state.dados`);
 
                 // Atualizar qtd do pedido correspondente (deduzir)
                 atualizarQtdPedidoAposEdicaoSeparacao(item.num_pedido, item.cod_produto);
@@ -1930,7 +1936,7 @@
             if (item.tipo === 'pedido' && item.num_pedido === numPedido && item.cod_produto === codProduto) {
                 // Somar todas as qtds das separações deste pedido+produto
                 const totalSeparado = state.dados
-                    .filter(d => d.tipo === 'separacao' && d.num_pedido === numPedido && d.cod_produto === codProduto)
+                    .filter(d => d.tipo === 'separacao' && !d._deleted && d.num_pedido === numPedido && d.cod_produto === codProduto)
                     .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
 
                 // 🔧 CORREÇÃO: Usar qtd_original_pedido (QTD DESTE PEDIDO, não soma de todos)
