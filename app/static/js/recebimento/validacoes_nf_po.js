@@ -284,20 +284,61 @@ function renderizarDetalhes(data) {
 // =============================================================================
 
 function validarNf(dfeId) {
-    if (!confirm('Validar esta NF contra os POs do fornecedor?')) return;
+    Swal.fire({
+        title: 'Reprocessar validacao?',
+        text: 'Validar esta NF contra os POs do fornecedor?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, validar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d6efd'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
 
-    fetch(`/api/recebimento/validar-nf-po/${dfeId}`, {method: 'POST'})
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'aprovado') {
-                alert('NF aprovada! Todos os itens com match.');
-            } else if (data.status === 'bloqueado') {
-                alert('NF bloqueada: ' + data.mensagem);
-            } else {
-                alert('Erro: ' + data.mensagem);
-            }
-            location.reload();
+        Swal.fire({
+            title: 'Reprocessando...',
+            html: 'Validando NF contra POs do fornecedor.<br>Aguarde, isso pode levar alguns segundos.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => { Swal.showLoading(); }
         });
+
+        fetch(`/api/recebimento/validar-nf-po/${dfeId}`, {method: 'POST'})
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'aprovado') {
+                    Swal.fire({
+                        title: 'NF Aprovada!',
+                        text: 'Todos os itens com match.',
+                        icon: 'success',
+                        confirmButtonColor: '#0d6efd'
+                    }).then(() => location.reload());
+                } else if (data.status === 'bloqueado') {
+                    Swal.fire({
+                        title: 'NF Bloqueada',
+                        text: data.mensagem,
+                        icon: 'warning',
+                        confirmButtonColor: '#0d6efd'
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire({
+                        title: 'Erro',
+                        text: data.mensagem,
+                        icon: 'error',
+                        confirmButtonColor: '#0d6efd'
+                    }).then(() => location.reload());
+                }
+            })
+            .catch(err => {
+                Swal.fire({
+                    title: 'Erro de conexao',
+                    text: err.message,
+                    icon: 'error',
+                    confirmButtonColor: '#0d6efd'
+                });
+            });
+    });
 }
 
 function consolidarPos(validacaoId) {
