@@ -3,8 +3,10 @@ name: integracao-odoo
 description: >-
   Esta skill deve ser usada quando o usuario precisa "criar novo service de
   integracao", "implementar lancamento de CTe no Odoo", "modificar fluxo de
-  despesas extras", ou desenvolver novas integracoes seguindo o processo de
-  16 etapas. Cobre services, mappers, jobs, Circuit Breaker e auditoria.
+  despesas extras", "como funciona o lancamento no Odoo?", "quais sao as 16
+  etapas?", "IDs fixos do Odoo", "criar migration para campos Odoo", ou
+  desenvolver novas integracoes seguindo o processo Nacom de 16 etapas
+  (DFe->PO->Invoice). Cobre services, templates, auditoria e rollback.
   Nao usar para consultar ou rastrear documentos existentes (usar rastreando-odoo),
   operar financeiro como pagamentos ou extratos (usar executando-odoo-financeiro),
   ou explorar modelos desconhecidos (usar descobrindo-odoo-estrutura).
@@ -13,15 +15,30 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 
 ## QUANDO NAO USAR ESTA SKILL
 - OPERAR integracoes ja existentes (esta skill e para CRIAR/MODIFICAR, nao para executar fluxos)
-- Rastrear documentos no Odoo (esta skill nao faz consultas de rastreamento)
-- Explorar modelo Odoo desconhecido (esta skill assume modelos ja mapeados)
+- Rastrear documentos no Odoo (usar rastreando-odoo)
+- Explorar modelo Odoo desconhecido (usar descobrindo-odoo-estrutura)
+- Criar pagamentos ou reconciliar extratos (usar executando-odoo-financeiro)
+- Consolidar POs ou split de pedidos (usar conciliando-odoo-po)
 
 # Integracao Odoo - Sistema de Fretes
 
 > **ATENCAO**: Esta skill eh para DESENVOLVIMENTO (criar/modificar integracoes).
-> Para CONSULTAS e rastreamento de fluxos, existe skill especializada em rastreamento.
+> Para CONSULTAS e rastreamento de fluxos, usar skill `rastreando-odoo`.
+
+> **IMPORTANTE**: As 16 etapas documentadas aqui sao ESPECIFICAS da Nacom Goya.
+> NAO sao o fluxo generico do Odoo (SEFAZ/XML). O processo eh:
+> CTe no Odoo → DFe (configurar) → Purchase Order (gerar/confirmar) → Invoice (criar/postar).
 
 Skill de desenvolvimento que documenta o processo completo de integracao com o Odoo ERP para lancamento de documentos fiscais (CTe) no sistema de fretes.
+
+## GOTCHAS — Anti-Alucinacao
+
+1. **NAO confundir com fluxo SEFAZ**: As 16 etapas NAO envolvem XML, assinatura digital ou transmissao SEFAZ. O CTe JA existe no Odoo como DFe com status '04'.
+2. **NAO usar modelos genericos**: O modelo correto eh `l10n_br_ciel_it_account.dfe` (NAO `stock.move`, NAO `account.invoice`).
+3. **NAO usar xmlrpc.client diretamente**: Usar `get_odoo_connection()` de `app.odoo.utils.connection`.
+4. **NAO inventar IDs**: Os 6 IDs fixos estao documentados abaixo. NUNCA chutar valores.
+5. **SEMPRE gerar 2 artefatos de migracao**: Python (.py) + SQL (.sql) conforme CLAUDE.md.
+6. **Rollback eh LOCAL**: Limpa campos no banco local. NAO desfaz operacoes no Odoo.
 
 ## Quando Usar Este Skill
 
@@ -196,6 +213,11 @@ LancamentoFreteOdooAuditoria(
 
 ## Tratamento de Erros e Rollback
 
+### Comportamento do Rollback
+
+O rollback eh **LOCAL** — limpa campos no banco local. **NAO desfaz operacoes no Odoo**.
+Se o DFe ja teve PO gerado (etapas 6+), o PO permanece no Odoo e precisa ser tratado manualmente.
+
 ```python
 def _rollback_xxx_odoo(self, xxx_id: int, etapas_concluidas: int) -> bool:
     """
@@ -209,6 +231,41 @@ def _rollback_xxx_odoo(self, xxx_id: int, etapas_concluidas: int) -> bool:
         xxx.lancado_odoo_por = None
         xxx.status = 'status_anterior'
 ```
+
+### Diagnostico com Auditoria
+
+Quando um lancamento falha, consultar a tabela `lancamento_frete_odoo_auditoria` para entender ONDE falhou:
+
+```sql
+-- Ver todas as etapas de um lancamento (por chave CTe)
+SELECT etapa, etapa_descricao, status, mensagem, tempo_execucao_ms,
+       dfe_id, purchase_order_id, invoice_id
+FROM lancamento_frete_odoo_auditoria
+WHERE chave_cte = '35250112345678000190570010000012341000012340'
+ORDER BY etapa;
+
+-- Ver erros recentes (ultimas 24h)
+SELECT chave_cte, etapa, etapa_descricao, mensagem, created_at
+FROM lancamento_frete_odoo_auditoria
+WHERE status = 'ERRO'
+  AND created_at >= NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC;
+
+-- Verificar se PO foi criado no Odoo antes de tentar novamente
+SELECT etapa, purchase_order_id, invoice_id
+FROM lancamento_frete_odoo_auditoria
+WHERE chave_cte = '...'
+  AND etapa >= 6
+  AND status = 'SUCESSO';
+```
+
+### Procedimento Apos Falha
+
+1. **Consultar auditoria** — identificar a etapa exata do erro
+2. **Verificar estado no Odoo** — se PO ja foi criado (etapas 6-8 OK), NAO re-executar do zero
+3. **Limpar campos locais** — rollback limpa odoo_dfe_id, odoo_purchase_order_id, etc.
+4. **Corrigir causa** — ex: DFe com status errado, vencimento invalido, permissao no Odoo
+5. **Re-executar** — o service e idempotente para etapas 1-5 (busca DFe de novo)
 
 ## Exemplos Reais de Implementacao
 
@@ -373,19 +430,35 @@ odoo.execute_method(modelo, metodo, args)
 
 ## Relacionado
 
-| Skill | Uso |
+| Skill | Quando Usar (NAO esta skill) |
 |-------|-----|
-| rastreando-odoo | Para CONSULTAS e rastreamento de fluxos (NF, PO, SO, titulos, conciliacoes) |
-| descobrindo-odoo-estrutura | Para descobrir campos/modelos nao mapeados |
-| gerindo-expedicao | Para consultas de carteira, separacoes e estoque |
+| rastreando-odoo | CONSULTAS e rastreamento de fluxos (NF, PO, SO, titulos, conciliacoes) |
+| descobrindo-odoo-estrutura | Descobrir campos/modelos NAO mapeados nesta skill |
+| executando-odoo-financeiro | Criar pagamentos, reconciliar extratos, baixar titulos |
+| conciliando-odoo-po | Consolidar POs, split de pedidos, PO conciliador |
+| gerindo-expedicao | Consultas de carteira, separacoes e estoque |
+
+## Implementacoes Reais (Referencia)
+
+Ao criar nova integracao, consultar estes arquivos como referencia:
+
+| Arquivo | O que contem |
+|---------|-------------|
+| `app/fretes/services/lancamento_odoo_service.py` | Service principal de lancamento de frete (16 etapas completas) |
+| `app/fretes/services/lancamento_despesa_odoo_service.py` | Service de despesa extra (adapta lancamento para DespesaExtra) |
+| `app/fretes/routes.py` | Routes `lancar_frete_odoo()` e `lancar_despesa_odoo()` |
+| `app/fretes/models.py` | Modelos Frete e DespesaExtra com campos Odoo |
+| `app/odoo/utils/connection.py` | `get_odoo_connection()` — UNICA forma de conectar |
 
 ## Templates Disponiveis
 
 Os templates em `resources/` auxiliam na criacao de novas integracoes:
 
-| Template | Descricao |
-|----------|-----------|
-| `template_modelo_campos.py` | Campos SQLAlchemy para integracao Odoo |
-| `template_service.py` | Estrutura base do Service de lancamento |
-| `template_migracao.py` | Script de migracao para novos campos |
-| `template_route.py` | Routes Flask para lancamento e auditoria |
+| Template | Descricao | Quando Usar |
+|----------|-----------|-------------|
+| `template_modelo_campos.py` | Campos SQLAlchemy para integracao Odoo | Adicionar campos odoo_* num modelo existente |
+| `template_service.py` | Estrutura base do Service de lancamento | Criar novo service de lancamento (herda LancamentoOdooService) |
+| `template_migracao.py` | Script de migracao para novos campos | Adicionar colunas odoo_* numa tabela existente |
+| `template_route.py` | Routes Flask para lancamento e auditoria | Criar endpoints POST lancamento + GET auditoria |
+
+**NAO usar templates para**: consultar dados do Odoo (usar rastreando-odoo), criar pagamentos (usar executando-odoo-financeiro), ou consolidar POs (usar conciliando-odoo-po).

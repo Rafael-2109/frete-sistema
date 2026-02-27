@@ -1,0 +1,22 @@
+[
+  {"query": "me da tudo sobre palmito", "should_trigger": true},
+  {"query": "visao 360 do AZ VF pouch", "should_trigger": true},
+  {"query": "dados completos do produto cogumelo", "should_trigger": true},
+  {"query": "o PCP cumpriu a programacao de palmito em janeiro?", "should_trigger": true},
+  {"query": "como foi a producao geral na ultima semana?", "should_trigger": true},
+  {"query": "resumo completo do produto azeitona verde", "should_trigger": true},
+  {"query": "producao programada vs realizada de alcaparra esse mes", "should_trigger": true},
+  {"query": "quero saber tudo sobre o produto 1234", "should_trigger": true},
+  {"query": "qual o estoque, custo e demanda do milho verde?", "should_trigger": true},
+  {"query": "cumpriram a programacao de producao em fevereiro?", "should_trigger": true},
+  {"query": "quanto custa o frete para Sao Paulo?", "should_trigger": false},
+  {"query": "NF 12345 foi entregue?", "should_trigger": false},
+  {"query": "qual o status do embarque 98765?", "should_trigger": false},
+  {"query": "lista os pedidos pendentes do cliente ABC", "should_trigger": false},
+  {"query": "preciso separar o pedido 5555", "should_trigger": false},
+  {"query": "reconcilia o extrato bancario de ontem", "should_trigger": false},
+  {"query": "cadastra uma nova cidade na SSW", "should_trigger": false},
+  {"query": "qual o saldo em estoque do palmito?", "should_trigger": false},
+  {"query": "cota frete de SP para RJ 500kg", "should_trigger": false},
+  {"query": "mostra as notas fiscais do fornecedor X", "should_trigger": false}
+]

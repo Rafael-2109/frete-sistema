@@ -1,0 +1,82 @@
+[
+  {
+    "query": "Top 10 clientes por valor total de pedidos pendentes na carteira",
+    "should_trigger": true
+  },
+  {
+    "query": "Qual o valor total de contas a receber vencidas por cliente?",
+    "should_trigger": true
+  },
+  {
+    "query": "Quantos pedidos foram faturados por estado nos ultimos 30 dias?",
+    "should_trigger": true
+  },
+  {
+    "query": "Distribuicao de fretes por transportadora com valor total e quantidade",
+    "should_trigger": true
+  },
+  {
+    "query": "Quais produtos tem maior saldo pendente na carteira agrupado por familia?",
+    "should_trigger": true
+  },
+  {
+    "query": "Media de peso por embarque nos ultimos 90 dias agrupado por UF destino",
+    "should_trigger": true
+  },
+  {
+    "query": "Quanto temos de contas a pagar vencendo essa semana por fornecedor?",
+    "should_trigger": true
+  },
+  {
+    "query": "Ranking de cidades com mais entregas pendentes na separacao",
+    "should_trigger": true
+  },
+  {
+    "query": "Total faturado por vendedor no mes atual comparado com mes anterior",
+    "should_trigger": true
+  },
+  {
+    "query": "Quantas NFs foram emitidas por dia na ultima semana?",
+    "should_trigger": true
+  },
+  {
+    "query": "Cote um frete de 500kg para Manaus valor R$15.000",
+    "should_trigger": false
+  },
+  {
+    "query": "Rastreie a NF 123456 da Patrus",
+    "should_trigger": false
+  },
+  {
+    "query": "Cadastre uma nova transportadora no SSW chamada Teste Ltda",
+    "should_trigger": false
+  },
+  {
+    "query": "Quais tabelas de frete atendem Recife?",
+    "should_trigger": false
+  },
+  {
+    "query": "Reconcilie o extrato bancario do Itau de ontem no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "Como esta o status do pedido 78900 do cliente Atacadao?",
+    "should_trigger": false
+  },
+  {
+    "query": "Gere o romaneio do embarque 4521",
+    "should_trigger": false
+  },
+  {
+    "query": "Qual o prazo de entrega da Braspress para Salvador?",
+    "should_trigger": false
+  },
+  {
+    "query": "Lance o CTe 987654 como despesa no Odoo",
+    "should_trigger": false
+  },
+  {
+    "query": "Exporte a lista de produtos com estoque zerado para CSV",
+    "should_trigger": false
+  }
+]

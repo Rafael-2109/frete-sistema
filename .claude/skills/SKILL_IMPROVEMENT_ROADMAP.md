@@ -115,7 +115,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | 2 | `gerindo-expedicao` | 8 | 504KB | IN_PROGRESS | 2026-02-26 |
 | 3 | `rastreando-odoo` | 8 | 572KB | IN_PROGRESS | 2026-02-26 |
 | 4 | `operando-ssw` | 16 | 532KB | DONE | 2026-02-26 |
-| 5 | `consultando-sql` | 2 | 928KB | IN_PROGRESS | 2026-02-26 |
+| 5 | `consultando-sql` | 2 | 928KB | DONE | 2026-02-26 |
 | 6 | `resolvendo-entidades` | 7 | 116KB | DONE | 2026-02-26 |
 
 ### P2 — Media Complexidade (scripts + references)
@@ -124,8 +124,8 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 |---|-------|---------|------|--------|------|
 | 7 | `gerindo-carvia` | 3 | 100KB | IN_PROGRESS | 2026-02-26 |
 | 8 | `monitorando-entregas` | 3 | 88KB | DONE | 2026-02-26 |
-| 9 | `integracao-odoo` | 4 | 76KB | IN_PROGRESS | 2026-02-26 |
-| 10 | `visao-produto` | 2 | 48KB | IN_PROGRESS | 2026-02-26 |
+| 9 | `integracao-odoo` | 4 | 76KB | DONE | 2026-02-26 |
+| 10 | `visao-produto` | 2 | 48KB | DONE | 2026-02-26 |
 | 11 | `acessando-ssw` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |
 | 12 | `diagnosticando-banco` | 1 | 44KB | IN_PROGRESS | 2026-02-26 |
 
@@ -134,7 +134,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | # | Skill | Scripts | Size | Status | Data |
 |---|-------|---------|------|--------|------|
 | 13 | `exportando-arquivos` | 1 | 36KB | DONE | 2026-02-26 |
-| 14 | `lendo-arquivos` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
+| 14 | `lendo-arquivos` | 1 | 32KB | DONE | 2026-02-26 |
 | 15 | `memoria-usuario` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
 | 16 | `descobrindo-odoo-estrutura` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
 | 17 | `buscando-rotas` | 1 | 16KB | IN_PROGRESS | 2026-02-26 |
@@ -143,7 +143,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 | # | Skill | Refs | Size | Status | Data |
 |---|-------|------|------|--------|------|
-| 18 | `executando-odoo-financeiro` | 3 | 64KB | IN_PROGRESS | 2026-02-26 |
+| 18 | `executando-odoo-financeiro` | 3 | 64KB | DONE | 2026-02-26 |
 | 19 | `conciliando-odoo-po` | 3 | 56KB | IN_PROGRESS | 2026-02-26 |
 | 20 | `validacao-nf-po` | 2 | 48KB | IN_PROGRESS | 2026-02-26 |
 | 21 | `recebimento-fisico-odoo` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |

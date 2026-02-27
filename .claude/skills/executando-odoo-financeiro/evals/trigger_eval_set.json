@@ -1,0 +1,26 @@
+{
+  "skill_name": "executando-odoo-financeiro",
+  "version": 1,
+  "queries": [
+    {"query": "crie pagamento para NF 12345 no Odoo", "should_trigger": true},
+    {"query": "reconcilie o extrato bancario com o payment no Odoo", "should_trigger": true},
+    {"query": "baixe titulo no Odoo, marque como pago", "should_trigger": true},
+    {"query": "pagamento com juros no Odoo para titulo da empresa CD", "should_trigger": true},
+    {"query": "extrato is_reconciled=False, como resolver?", "should_trigger": true},
+    {"query": "corrigir partner_id=False em extrato ja reconciliado", "should_trigger": true},
+    {"query": "qual conta de juros usar para empresa SC no Odoo?", "should_trigger": true},
+    {"query": "erro cannot marshal None ao criar payment", "should_trigger": true},
+    {"query": "criar comprovante de pagamento e lancar no Odoo", "should_trigger": true},
+    {"query": "preparar extrato para reconciliacao no Odoo", "should_trigger": true},
+    {"query": "rastreie NF 12345 no Odoo", "should_trigger": false},
+    {"query": "quais campos tem o modelo stock.picking?", "should_trigger": false},
+    {"query": "crie lancamento de CTe no Odoo", "should_trigger": false},
+    {"query": "consolide os POs da NF no Odoo", "should_trigger": false},
+    {"query": "exporte o razao geral do Odoo", "should_trigger": false},
+    {"query": "qual preco de frete para Manaus?", "should_trigger": false},
+    {"query": "top 10 clientes por valor de frete", "should_trigger": false},
+    {"query": "tem pedido do Atacadao pendente?", "should_trigger": false},
+    {"query": "NF 12345 foi entregue?", "should_trigger": false},
+    {"query": "erro ao validar DFE na Fase 2", "should_trigger": false}
+  ]
+}

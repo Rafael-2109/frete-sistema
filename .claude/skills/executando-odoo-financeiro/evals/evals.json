@@ -1,0 +1,75 @@
+{
+  "skill_name": "executando-odoo-financeiro",
+  "version": 1,
+  "changelog": "v1: Initial evals covering wizard payment, account mapping, error handling, reconciliation flow, and corrective flow",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Preciso criar um pagamento com juros no Odoo para um titulo da empresa NACOM CD (company_id=4). O titulo tem saldo de R$ 1316.20 mas o extrato mostra R$ 1342.52. Me mostra o codigo completo.",
+      "expected_output": "Codigo Python usando wizard account.payment.register com payment_difference_handling=reconcile, writeoff_account_id correto para CD, try/except para cannot marshal None",
+      "files": [],
+      "expectations": [
+        "Leu a SKILL.md ou references/fluxo-recebimento.md para obter o padrao de codigo",
+        "Usou wizard account.payment.register (NAO _criar_pagamento direto)",
+        "Incluiu payment_difference_handling='reconcile' e writeoff_account_id no wizard_data",
+        "Usou a conta de juros CORRETA para CD: 25345 (NAO outra empresa)",
+        "Incluiu try/except que ignora 'cannot marshal None' como retorno normal",
+        "Mostrou amount = valor do extrato (1342.52), NAO o saldo do titulo (1316.20)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Qual conta de juros de recebimento devo usar para a empresa SC no Odoo? E para pagamento?",
+      "expected_output": "Conta de juros recebimento SC = 24061, conta de juros pagamento SC = 24051, com codigos contabeis",
+      "files": [],
+      "expectations": [
+        "Leu references/contas-por-empresa.md para obter o mapeamento",
+        "Informou conta de juros de RECEBIMENTO para SC (company_id=3) = 24061",
+        "Informou conta de juros de PAGAMENTO para SC (company_id=3) = 24051",
+        "NAO confundiu os IDs entre empresas (FB=22778/22769, CD=25345/25335, LF=26629/26619)",
+        "Mencionou que cada empresa tem IDs diferentes para a mesma conta contabil (3702010003 / 3701010003)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Estou tentando criar payment no Odoo mas recebo erro 'cannot marshal None unless allow_none is enabled'. O que aconteceu? O pagamento foi criado?",
+      "expected_output": "Explicacao que o erro e NORMAL e esperado, a operacao FOI executada com sucesso, com padrao try/except",
+      "files": [],
+      "expectations": [
+        "Leu references/erros-comuns.md (Erro 1) ou a SKILL.md secao Error Handling",
+        "Afirmou claramente que o erro NAO e grave e a operacao FOI executada com sucesso",
+        "Explicou que o Odoo retorna None que XML-RPC nao consegue serializar",
+        "Mostrou padrao try/except correto para ignorar o erro",
+        "Mencionou que action_create_payments e reconcile frequentemente geram esse erro"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Criei um payment no Odoo mas o statement_line ainda mostra is_reconciled=False. Como reconcilio o extrato com o payment?",
+      "expected_output": "Fluxo de 3 passos: preparar extrato (OBRIGATORIO), buscar linha PENDENTES do payment (conta 26868), reconciliar com linha do extrato",
+      "files": [],
+      "expectations": [
+        "Leu references/fluxo-recebimento.md Passo 3 ou SKILL.md secao Reconciliar Extrato",
+        "Explicou que wizard reconcilia payment com TITULO mas NAO com extrato",
+        "Mencionou preparar_extrato_para_reconciliacao como passo OBRIGATORIO antes de reconciliar",
+        "Mencionou a conta PENDENTES (26868) para buscar linha do payment",
+        "Alertou sobre gotcha: account_id DEVE ser ultimo write antes de action_post",
+        "NAO recomendou usar _atualizar_campos_extrato (metodo DEPRECADO)"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Tenho extratos ja reconciliados (is_reconciled=True) mas com partner_id=False e conta TRANSITORIA em vez de PENDENTES. Como corrijo isso?",
+      "expected_output": "Fluxo corretivo de 7 passos: desconciliar, draft, partner, rotulo, account (ULTIMO), post, re-reconciliar com NOVOS IDs",
+      "files": [],
+      "expectations": [
+        "Leu references/erros-comuns.md Erro 12 ou SKILL.md secao Correcao Retroativa",
+        "Descreveu fluxo de 7 passos na ordem correta (desconciliar, draft, partner, rotulo, account, post, re-reconciliar)",
+        "Alertou que Odoo RECRIA move lines ao voltar para draft (IDs mudam)",
+        "Enfatizou que account_id DEVE ser ultimo campo alterado antes de action_post",
+        "Mencionou necessidade de guardar counterpart_ids ANTES de desconciliar para re-reconciliar",
+        "NAO sugeriu editar direto sem desconciliar primeiro"
+      ]
+    }
+  ]
+}

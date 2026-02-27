@@ -11,12 +11,12 @@ description: >-
   - Baixar titulo a receber: "marque como pago no Odoo"
 
   NAO USAR QUANDO:
-  - Apenas consultar/rastrear documentos sem modificar -> usar **rastreando-odoo**
-  - Explorar campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
-  - Criar lancamentos fiscais (CTe, despesas extras) -> usar **integracao-odoo**
-  - Split/consolidar PO -> usar **conciliando-odoo-po**
-  - Validar match NF x PO -> usar **validacao-nf-po**
-  - Exportar razao geral -> usar **razao-geral-odoo**
+  - Apenas consultar/rastrear documentos sem modificar, usar **rastreando-odoo**
+  - Explorar campos de modelo Odoo desconhecido, usar **descobrindo-odoo-estrutura**
+  - Criar lancamentos fiscais (CTe, despesas extras), usar **integracao-odoo**
+  - Split/consolidar PO, usar **conciliando-odoo-po**
+  - Validar match NF x PO, usar **validacao-nf-po**
+  - Exportar razao geral, usar **razao-geral-odoo**
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -37,6 +37,49 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-odoo que apenas consulta).
 
+## REGRAS ANTI-ALUCINACAO
+
+```
+NUNCA FAZER:
+- NUNCA inventar IDs de contas/journals — consultar SEMPRE contas-por-empresa.md
+- NUNCA criar account.move separado para juros — usar Wizard com writeoff
+- NUNCA usar _atualizar_campos_extrato() — metodo DEPRECADO
+- NUNCA editar registro ja reconciliado sem desconciliar primeiro (7 passos)
+- NUNCA fazer 3 writes separados no extrato (partner, rotulo, account) — usar metodo consolidado
+- NUNCA alterar account_id ANTES de outros campos — DEVE ser ULTIMO write
+- NUNCA assumir que "cannot marshal None" e erro real — operacao FOI executada
+
+SEMPRE FAZER:
+- SEMPRE usar get_odoo_connection() do app.odoo.utils.connection (NAO xmlrpc direto)
+- SEMPRE usar amount = valor do EXTRATO (NAO saldo do titulo) no wizard
+- SEMPRE verificar amount_residual > 0 antes de criar wizard
+- SEMPRE preparar extrato (preparar_extrato_para_reconciliacao) ANTES de reconciliar
+- SEMPRE incluir try/except para "cannot marshal None" em action_create_payments e reconcile
+- SEMPRE buscar conta de juros do mapeamento CONTA_JUROS_RECEBIMENTOS_POR_COMPANY
+```
+
+## Como Descobrir titulo_line_id
+
+Se o usuario nao informar o ID do titulo, buscar assim:
+
+```python
+# Buscar titulo (account.move.line) do partner com saldo pendente
+titulos = odoo.execute_kw(
+    'account.move.line', 'search_read',
+    [[
+        ['partner_id', '=', partner_id],
+        ['account_id.account_type', '=', 'asset_receivable'],
+        ['full_reconcile_id', '=', False],
+        ['amount_residual', '>', 0],
+        ['parent_state', '=', 'posted'],
+        ['company_id', '=', company_id],
+    ]],
+    {'fields': ['id', 'move_id', 'ref', 'amount_residual', 'date_maturity'],
+     'order': 'date_maturity asc'}
+)
+# Filtrar pelo ref da NF se disponivel
+```
+
 ## DECISION TREE — Qual Operacao Usar?
 
 | Se a pergunta menciona... | Operacao | Metodo |
@@ -49,11 +92,12 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
 
 ### Regras de Decisao
 
-1. **Pagamento SEM juros**: `_criar_pagamento()` → `action_post` → reconcile manual
-2. **Pagamento COM juros** (valor_extrato > saldo_titulo): Wizard `account.payment.register` com `writeoff_account_id`
+1. **Pagamento SEM juros** (valor_extrato == saldo_titulo): Wizard `account.payment.register` SEM writeoff (sem `payment_difference_handling`)
+2. **Pagamento COM juros** (valor_extrato > saldo_titulo): Wizard `account.payment.register` COM `writeoff_account_id` e `payment_difference_handling='reconcile'`
 3. **APOS criar payment**: SEMPRE reconciliar com extrato (se extrato existe)
 4. **ANTES de reconciliar extrato**: SEMPRE preparar via `preparar_extrato_para_reconciliacao()` (corrige conta, partner, rotulo em 1 ciclo consolidado)
 5. **Registros JA reconciliados**: Fluxo CORRETIVO (7 passos) — NUNCA editar direto
+6. **Valor_extrato < saldo_titulo**: Reconciliacao PARCIAL — payment cobre apenas parte. Nao usar writeoff (titulo mantem saldo residual)
 
 ## Operacoes Suportadas
 
@@ -116,16 +160,27 @@ Skill para **EXECUTAR** operacoes financeiras no Odoo (diferente de rastreando-o
 
 ## Dados Criticos
 
-### Contas por Empresa (Juros de Recebimento)
+### Contas por Empresa (Juros)
 
 ```python
+# Juros de RECEBIMENTO (receita — 3702010003)
 CONTA_JUROS_RECEBIMENTOS_POR_COMPANY = {
     1: 22778,  # NACOM GOYA - FB
     3: 24061,  # NACOM GOYA - SC
     4: 25345,  # NACOM GOYA - CD
     5: 26629,  # LA FAMIGLIA - LF
 }
+
+# Juros de PAGAMENTO (despesa — 3701010003)
+CONTA_JUROS_PAGAMENTOS_POR_COMPANY = {
+    1: 22769,  # NACOM GOYA - FB
+    3: 24051,  # NACOM GOYA - SC
+    4: 25335,  # NACOM GOYA - CD
+    5: 26619,  # LA FAMIGLIA - LF
+}
 ```
+
+> **ATENCAO**: Cada empresa tem IDs DIFERENTES para a MESMA conta contabil. NUNCA usar ID de uma empresa em outra.
 
 ### Contas Importantes
 

@@ -301,6 +301,41 @@ Regenere schemas quando:
 | Timeout (>5s) | Query muito pesada | RuntimeError com sugestao de simplificar |
 | Campo/tabela inexistente | Haiku alucionou campo nao corrigido pelo Evaluator | Erro PostgreSQL capturado |
 
+## Regra de Fidelidade ao Output (OBRIGATORIO)
+
+O agente DEVE seguir estas regras ao apresentar resultados ao usuario:
+
+1. **Valores EXATOS**: Todos os numeros (monetarios, quantidades, contagens) apresentados DEVEM corresponder EXATAMENTE aos valores no campo `dados` do JSON retornado. NAO arredondar, NAO converter, NAO estimar.
+2. **NAO inventar dados**: Se o campo `dados` retorna 10 linhas, apresentar 10 linhas. NAO adicionar linhas extras, NAO inferir tendencias, NAO extrapolar.
+3. **NAO adicionar metricas nao-solicitadas**: Se o usuario pediu "top 10 por valor", NAO adicionar percentuais, medias ou comparativos que nao existem no output do script.
+4. **Campo `aviso`**: Se o JSON contem `aviso` (ex: "SQL corrigida pelo evaluator"), MENCIONAR ao usuario que houve correcao automatica. Isso eh transparencia, nao erro.
+5. **Campo `sql`**: Incluir o SQL final executado quando relevante (especialmente se o usuario pediu com --debug ou fez pergunta tecnica).
+6. **Resultados vazios** (`total_linhas=0`): Informar claramente "Nenhum dado encontrado para os criterios especificados" — NAO especular causa sem evidencia.
+
+## Gotchas de Campos Comuns
+
+O Evaluator corrige campos automaticamente, mas o agente deve conhecer os mapeamentos mais frequentes:
+
+| Tabela | Campo ERRADO (Generator inventa) | Campo CORRETO (Evaluator corrige) |
+|--------|----------------------------------|-----------------------------------|
+| `carteira_principal` | `cnpj_cliente`, `nome_cliente` | `cnpj_cpf`, `raz_social` |
+| `carteira_principal` | `valor_pedido`, `valor_total` | `qtd_saldo_produto_pedido * preco_produto_pedido` (calculado) |
+| `carteira_principal` | `qtd_saldo` | `qtd_saldo_produto_pedido` |
+| `carteira_principal` | `uf`, `estado_destino` | `cod_uf` |
+| `faturamento_produto` | `cnpj_cpf`, `razao_social` | `cnpj_cliente`, `nome_cliente` |
+| `despesas_extras` | `valor`, `data_lancamento` | `valor_despesa`, `criado_em` |
+| `fretes` | `nome_transportadora` | JOIN com `transportadoras.razao_social` via `transportadora_id` |
+
+## Comportamento de Seguranca
+
+A skill tem defesa em profundidade multi-camada:
+
+1. **Generator LLM**: Instruido a gerar apenas SELECT. Se recebe DELETE/DROP/etc, converte para SELECT equivalente (ex: DELETE→SELECT WHERE).
+2. **Safety Regex**: Valida keywords proibidas, funcoes perigosas, tabelas bloqueadas. Se o Generator nao converteu, o Safety bloqueia (sucesso=false).
+3. **Executor**: `SET TRANSACTION READ ONLY` + timeout 5s. Mesmo que as camadas anteriores falhem, o PostgreSQL bloqueia escrita.
+
+**Resultado pratico**: Uma query destrutiva como "DELETE FROM X" gera `sucesso=true` com um SELECT equivalente executado em read-only, NAO `sucesso=false`. O agente deve informar ao usuario que operacoes destrutivas nao sao suportadas.
+
 ## Notas
 
 - Custo estimado: ~$0.010/query (2 chamadas Haiku)

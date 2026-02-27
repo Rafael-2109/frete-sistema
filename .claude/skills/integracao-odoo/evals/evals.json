@@ -1,0 +1,81 @@
+{
+  "skill_name": "integracao-odoo",
+  "version": 1,
+  "changelog": "v1: 5 evals covering 16-step process, template usage, migration, rollback/debug, and architecture/IDs",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Preciso criar uma integracao para lancar notas de debito no Odoo. Quais arquivos preciso criar e qual a estrutura?",
+      "expected_output": "Lista completa de arquivos (service, route, migration, model fields) com checklist de implementacao seguindo as 16 etapas",
+      "files": [],
+      "expectations": [
+        "Referenciou os 4 templates disponiveis em resources/ (template_service.py, template_route.py, template_migracao.py, template_modelo_campos.py)",
+        "Listou os arquivos concretos a criar: service, route, migration, e campos no modelo",
+        "Mencionou heranca de LancamentoOdooService como classe base",
+        "Incluiu o checklist de nova integracao (12 itens) ou equivalente",
+        "Mencionou a necessidade de registrar auditoria em LancamentoFreteOdooAuditoria",
+        "NAO confundiu com rastreamento/consulta Odoo — foco em CRIACAO de integracao"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Explique o fluxo completo de 16 etapas do lancamento de CTe no Odoo. Quais modelos sao usados em cada fase?",
+      "expected_output": "Descricao das 3 fases (DFe, PO, Invoice) com 16 etapas detalhadas e modelos Odoo envolvidos",
+      "files": [],
+      "expectations": [
+        "Descreveu as 3 fases: Configuracao DFe (1-5), Purchase Order (6-10), Invoice (11-16)",
+        "Mencionou os modelos corretos: l10n_br_ciel_it_account.dfe, dfe.line, dfe.pagamento, purchase.order, account.move",
+        "Etapa 1: buscar DFe pela chave de 44 digitos com status '04'",
+        "Etapa 6: action_gerar_po_dfe para gerar PO",
+        "Etapa 9: button_confirm para confirmar PO",
+        "Etapa 15: action_post para confirmar Invoice",
+        "Etapa 16: atualizar registro local com odoo_dfe_id, odoo_purchase_order_id, odoo_invoice_id",
+        "NAO inventou etapas adicionais ou modelos que nao constam no SKILL.md"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Preciso adicionar campos de integracao Odoo na tabela carvia_subcontratos. Como faco a migracao?",
+      "expected_output": "Script de migracao Python + SQL idempotente para adicionar campos Odoo (odoo_dfe_id, odoo_purchase_order_id, etc.)",
+      "files": [],
+      "expectations": [
+        "Referenciou template_migracao.py como base",
+        "Listou os 5 campos obrigatorios: odoo_dfe_id, odoo_purchase_order_id, odoo_invoice_id, lancado_odoo_em, lancado_odoo_por",
+        "Usou verificacao IF NOT EXISTS ou information_schema para idempotencia",
+        "Mencionou necessidade de criar DOIS artefatos: .py + .sql (conforme CLAUDE.md)",
+        "Incluiu indice para odoo_dfe_id",
+        "NAO esqueceu o campo status ou mencionou como lidar se ja existe"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "O lancamento de uma despesa extra falhou na etapa 9 (confirmar PO). O que acontece com o rollback e como debugar?",
+      "expected_output": "Explicacao do mecanismo de rollback, campos que sao limpos, e como usar auditoria para diagnostico",
+      "files": [],
+      "expectations": [
+        "Explicou que o rollback limpa campos Odoo locais (odoo_dfe_id, odoo_purchase_order_id, etc.) quando etapas < 16",
+        "Mencionou que o status volta ao valor anterior (nao fica como LANCADO_ODOO)",
+        "Indicou consultar a tabela lancamento_frete_odoo_auditoria para diagnostico",
+        "Mencionou os campos de auditoria relevantes: etapa, status, mensagem, tempo_execucao_ms",
+        "Sugeriu verificar se o PO foi criado no Odoo (etapas 6-8 concluidas) antes de tentar novamente",
+        "NAO sugeriu limpar dados diretamente no Odoo sem entender o estado"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quais sao os IDs fixos do Odoo de producao usados no lancamento de frete? E como me conecto ao Odoo via codigo?",
+      "expected_output": "Lista dos 6 IDs fixos com descricao e codigo de conexao usando get_odoo_connection",
+      "files": [],
+      "expectations": [
+        "Listou PRODUTO_SERVICO_FRETE_ID = 29993",
+        "Listou CONTA_ANALITICA_LOGISTICA_ID = 1186",
+        "Listou TEAM_LANCAMENTO_FRETE_ID = 119",
+        "Listou PAYMENT_PROVIDER_TRANSFERENCIA_ID = 30",
+        "Listou COMPANY_NACOM_GOYA_CD_ID = 4",
+        "Listou PICKING_TYPE_CD_RECEBIMENTO_ID = 13",
+        "Mostrou codigo de conexao usando get_odoo_connection() de app.odoo.utils.connection",
+        "Mencionou operacoes disponiveis: search_read, read, write, execute_method"
+      ]
+    }
+  ]
+}

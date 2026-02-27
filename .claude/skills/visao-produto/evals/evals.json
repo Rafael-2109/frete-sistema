@@ -1,0 +1,58 @@
+[
+  {
+    "id": "eval-1-visao-360-nome",
+    "prompt": "me da tudo sobre palmito",
+    "expected_output": "JSON com secoes: cadastro, estoque, custo, demanda_carteira, demanda_separacao, faturamento_30d, producao_14d",
+    "expectations": [
+      "Usa consultando_produto_completo.py com --produto palmito",
+      "Retorna resultado JSON com sucesso=true",
+      "Apresenta dados de todas as 7 secoes (cadastro, estoque, custo, demanda_carteira, demanda_separacao, faturamento_30d, producao_14d)",
+      "NAO inventa dados — apresenta EXATAMENTE o que o script retornou",
+      "Formata valores monetarios em R$ e quantidades de forma legivel"
+    ]
+  },
+  {
+    "id": "eval-2-producao-vs-real-produto",
+    "prompt": "o PCP cumpriu a programacao de palmito em janeiro de 2026?",
+    "expected_output": "Comparativo programado vs realizado com percentual de cumprimento",
+    "expectations": [
+      "Usa consultando_producao_vs_real.py com --produto palmito --de 2026-01-01 --ate 2026-01-31",
+      "Retorna comparativo com qtd_programada, qtd_realizada, diferenca, percentual_cumprimento",
+      "Interpreta o status (CUMPRIDO, CRITICO, ATENCAO, etc.) em linguagem natural",
+      "NAO inventa percentuais — usa EXATAMENTE os valores retornados pelo script"
+    ]
+  },
+  {
+    "id": "eval-3-producao-geral",
+    "prompt": "como foi a producao geral na ultima semana?",
+    "expected_output": "Comparativo geral de todos os produtos no periodo",
+    "expectations": [
+      "Usa consultando_producao_vs_real.py com --de e --ate cobrindo ultima semana",
+      "NAO passa --produto (consulta geral de todos)",
+      "Apresenta resumo com total_programado, total_realizado, percentual_geral",
+      "Lista os produtos com maior gap (diferenca) primeiro"
+    ]
+  },
+  {
+    "id": "eval-4-abreviacao-produto",
+    "prompt": "visao 360 do AZ VF pouch",
+    "expected_output": "Dados completos do produto resolvido via abreviacao AZ VF",
+    "expectations": [
+      "Usa consultando_produto_completo.py com --produto 'AZ VF pouch'",
+      "Resolver entidades identifica o produto correto via abreviacao",
+      "Se ambiguidade, apresenta candidatos para o usuario escolher",
+      "NAO inventa cod_produto — usa o retornado pelo script"
+    ]
+  },
+  {
+    "id": "eval-5-produto-nao-encontrado",
+    "prompt": "tudo sobre xyzprodutoinexistente123",
+    "expected_output": "Mensagem de produto nao encontrado",
+    "expectations": [
+      "Usa consultando_produto_completo.py com --produto xyzprodutoinexistente123",
+      "Retorna sucesso=false com mensagem de produto nao encontrado",
+      "NAO inventa dados para um produto inexistente",
+      "Sugere ao usuario tentar outro termo ou verificar o nome"
+    ]
+  }
+]
