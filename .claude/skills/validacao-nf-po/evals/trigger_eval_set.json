@@ -1,0 +1,22 @@
+[
+  {"query": "erro ao validar DFE 12345 no recebimento", "should_trigger": true},
+  {"query": "qual tolerancia de preco na validacao NF x PO?", "should_trigger": true},
+  {"query": "o modal de POs candidatos esta lento, demora 5 segundos", "should_trigger": true},
+  {"query": "campo nfe_infnfe_dest_xnome nao existe no Odoo", "should_trigger": true},
+  {"query": "como funciona a vinculacao DFE-PO no Odoo?", "should_trigger": true},
+  {"query": "alterar tolerancia de quantidade na validacao", "should_trigger": true},
+  {"query": "DFE status 04 nao foi processado pelo job", "should_trigger": true},
+  {"query": "novo tipo de divergencia na validacao NF x PO", "should_trigger": true},
+  {"query": "como converter unidade de medida no De-Para fornecedor?", "should_trigger": true},
+  {"query": "o job de validacao nao roda, scheduler parou", "should_trigger": true},
+  {"query": "consolide os POs da NF 93549", "should_trigger": false},
+  {"query": "crie pagamento para NF 12345 no Odoo", "should_trigger": false},
+  {"query": "rastreie o fluxo completo da NF 93549 no Odoo", "should_trigger": false},
+  {"query": "erro ao validar picking no recebimento fisico", "should_trigger": false},
+  {"query": "quais campos tem stock.picking no Odoo?", "should_trigger": false},
+  {"query": "qual preco de frete para Manaus?", "should_trigger": false},
+  {"query": "top 10 clientes por valor de frete", "should_trigger": false},
+  {"query": "pedido VCD123 esta em separacao?", "should_trigger": false},
+  {"query": "exporte razao geral do Odoo para Excel", "should_trigger": false},
+  {"query": "cadastre unidade CGR no SSW", "should_trigger": false}
+]

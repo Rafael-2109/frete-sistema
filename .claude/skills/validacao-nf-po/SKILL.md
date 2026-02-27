@@ -4,20 +4,15 @@ description: >-
   Esta skill deve ser usada quando o usuario precisa depurar ou operar a
   Validacao NF x PO (Fase 2 do Recebimento): "erro ao validar DFE",
   "DFE nao encontrado", "alterar tolerancia", "modal POs nao abre",
-  "como converte UM", ou implementar nova regra de divergencia.
-  Nao usar para consolidacao ou split de PO na Fase 3 (usar conciliando-odoo-po),
-  recebimento fisico com lotes e QC na Fase 4 (usar recebimento-fisico-odoo),
-  ou rastrear fluxo documental completo (usar rastreando-odoo).
-  - Implementar nova regra de divergencia: "novo tipo de bloqueio"
-  - Entender tabelas locais: "o que tem em MatchNfPoItem", "campos da validacao"
-
-  NAO USAR QUANDO:
-  - Rastrear documentos no Odoo sem foco em match -> usar **rastreando-odoo**
-  - Descobrir campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
-  - Criar pagamentos ou reconciliar extratos -> usar **executando-odoo-financeiro**
-  - Criar CTe ou despesas -> usar **integracao-odoo**
-  - Depurar recebimento fisico (Fase 4) -> usar **recebimento-fisico-odoo**
-  - Conciliar POs por split/consolidacao (Fase 3) -> usar **conciliando-odoo-po**
+  "como converte UM", "novo tipo de bloqueio", "campos da validacao",
+  ou implementar nova regra de divergencia. Cobre: match NF vs PO,
+  De-Para fornecedor, tolerancias (preco 0%, qtd 10%), status DFE,
+  job de validacao (4 etapas), preview POs candidatos, divergencias.
+  Nao usar para split/consolidacao PO Fase 3 (conciliando-odoo-po),
+  recebimento fisico Fase 4 (recebimento-fisico-odoo),
+  rastrear fluxo documental (rastreando-odoo),
+  operacoes financeiras (executando-odoo-financeiro),
+  explorar campos Odoo (descobrindo-odoo-estrutura).
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -315,6 +310,21 @@ sincronizar_pedidos_incremental()
 ```
 
 **IMPORTANTE**: O scheduler busca dados de `l10n_br_ciel_it_account.dfe` (modelo DFE do modulo CIEL IT).
+
+## Campos DFE: EXISTEM vs NAO EXISTEM
+
+Campos frequentemente confundidos no modelo `l10n_br_ciel_it_account.dfe`:
+
+| Campo | Existe? | Alternativa |
+|-------|---------|-------------|
+| `nfe_infnfe_dest_xnome` | **NAO** | Usar `razao_empresa_compradora` (local) ou `res.partner` por CNPJ |
+| `nfe_infnfe_dest_xfant` | **NAO** | Usar `res.partner` por CNPJ |
+| `nfe_infnfe_dest_cnpj` | SIM | CNPJ da empresa compradora |
+| `nfe_infnfe_emit_xnome` | SIM | Razao social do EMITENTE (fornecedor) |
+| `nfe_infnfe_emit_cnpj` | SIM | CNPJ do emitente |
+| `lines_ids` | **NAO** | Usar `dfe.line_ids` (sem 's' extra) |
+
+**Lista completa de campos validos**: ver `erros-comuns.md` ERRO 1 e `_buscar_dfe()` no service.
 
 ## Referencias
 

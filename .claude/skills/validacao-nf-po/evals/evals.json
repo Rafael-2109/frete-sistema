@@ -1,0 +1,63 @@
+[
+  {
+    "id": "eval-1-tolerancias",
+    "prompt": "Quais sao as tolerancias usadas na validacao NF x PO? Preciso saber os valores exatos de tolerancia de preco, quantidade e data.",
+    "expected_output": "Tolerancia de preco: 0% (exato). Tolerancia de quantidade: 10% (NF pode ser ate 10% maior que PO). Tolerancia de data: 5 dias corridos antecipado, 15 dias corridos atrasado.",
+    "expectations": [
+      "Mencionar tolerancia de preco 0% (exato)",
+      "Mencionar tolerancia de quantidade 10%",
+      "Mencionar tolerancia de data antecipado 5 dias",
+      "Mencionar tolerancia de data atrasado 15 dias",
+      "Citar arquivo validacao_nf_po_service.py como fonte das constantes",
+      "NAO inventar valores diferentes dos documentados"
+    ]
+  },
+  {
+    "id": "eval-2-preview-local",
+    "prompt": "O modal de preview de POs candidatos esta lento, demora 5 segundos. Qual pode ser a causa e como corrigir?",
+    "expected_output": "O preview NUNCA deve chamar Odoo. Se esta lento, provavelmente esta chamando _buscar_dfe() ou _buscar_dfe_lines() que fazem XML-RPC. O metodo buscar_preview_pos_candidatos() deve usar APENAS dados locais: ValidacaoNfPoDfe, MatchNfPoItem e PedidoCompras.",
+    "expectations": [
+      "Identificar que preview deve ser 100% local (NUNCA chamar Odoo)",
+      "Mencionar buscar_preview_pos_candidatos como metodo correto",
+      "Citar que NAO deve usar _buscar_dfe() ou _buscar_dfe_lines() no preview",
+      "Mencionar tabelas locais: ValidacaoNfPoDfe, MatchNfPoItem, PedidoCompras",
+      "NAO sugerir otimizacao de query Odoo como solucao"
+    ]
+  },
+  {
+    "id": "eval-3-tres-caminhos-po",
+    "prompt": "Como funciona a vinculacao DFE-PO no Odoo? Quais caminhos existem e qual e o principal?",
+    "expected_output": "Existem 3 caminhos: (1) DFE.purchase_id (14.6%, direto), (2) DFE.purchase_fiscal_id (75% status=06, escrituracao), (3) PO.dfe_id (85.4% status=04, inverso - PRINCIPAL). O Caminho 3 e o principal porque no workflow normal o operador vincula PO ao DFE preenchendo PO.dfe_id, nao DFE.purchase_id.",
+    "expectations": [
+      "Listar os 3 caminhos com nomes dos campos corretos",
+      "Identificar Caminho 3 (PO.dfe_id) como PRINCIPAL para status=04",
+      "Mencionar percentuais ou indicar que Caminho 3 e o mais comum",
+      "Explicar POR QUE o Caminho 3 e principal (workflow do operador)",
+      "Mencionar que _sync_pos_vinculados faz batch lookup com 2 queries"
+    ]
+  },
+  {
+    "id": "eval-4-campo-inexistente",
+    "prompt": "Estou recebendo erro 'Invalid field nfe_infnfe_dest_xnome' ao buscar DFE no Odoo. O que esta acontecendo?",
+    "expected_output": "O campo nfe_infnfe_dest_xnome NAO existe no modelo l10n_br_ciel_it_account.dfe do Odoo. Para obter a razao social do destinatario, busque via res.partner pelo CNPJ (campo nfe_infnfe_dest_cnpj que EXISTE).",
+    "expectations": [
+      "Confirmar que nfe_infnfe_dest_xnome NAO existe no Odoo",
+      "Sugerir alternativa: buscar via res.partner pelo CNPJ",
+      "Mencionar nfe_infnfe_dest_cnpj como campo que EXISTE",
+      "NAO inventar que o campo existe com outro nome",
+      "Citar erros-comuns.md ou SKILL.md como referencia"
+    ]
+  },
+  {
+    "id": "eval-5-etapas-job",
+    "prompt": "O job de validacao executa 4 etapas. Qual a diferenca entre a etapa 2 (sync_pos_vinculados) e a etapa 3 (buscar_dfes_pendentes) em relacao a janela temporal?",
+    "expected_output": "Etapa 2 (_sync_pos_vinculados): SEM janela temporal, processa TODOS os DFEs sem PO. Etapa 3 (_buscar_dfes_pendentes): COM janela temporal (default 48h), afetada pelo modal De/Ate. O modal De/Ate NAO afeta a etapa 2.",
+    "expectations": [
+      "Identificar que etapa 2 NAO tem janela temporal",
+      "Identificar que etapa 3 TEM janela temporal (default 2880 min = 48h)",
+      "Mencionar que modal De/Ate afeta APENAS etapa 3",
+      "Mencionar que etapa 2 busca ValidacaoNfPoDfe sem PO",
+      "Mencionar que etapa 3 busca DFEs no Odoo com filtro write_date"
+    ]
+  }
+]

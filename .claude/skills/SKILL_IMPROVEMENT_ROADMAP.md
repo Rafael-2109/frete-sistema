@@ -145,7 +145,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 |---|-------|------|------|--------|------|
 | 18 | `executando-odoo-financeiro` | 3 | 64KB | DONE | 2026-02-26 |
 | 19 | `conciliando-odoo-po` | 3 | 56KB | DONE | 2026-02-26 |
-| 20 | `validacao-nf-po` | 2 | 48KB | IN_PROGRESS | 2026-02-26 |
+| 20 | `validacao-nf-po` | 2 | 48KB | DONE | 2026-02-26 |
 | 21 | `recebimento-fisico-odoo` | 2 | 44KB | DONE | 2026-02-26 |
 | 22 | `frontend-design` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |
 | 23 | `razao-geral-odoo` | 0 | 16KB | DONE | 2026-02-26 |
