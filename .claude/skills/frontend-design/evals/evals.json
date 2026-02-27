@@ -1,0 +1,68 @@
+{
+  "skill_name": "frontend-design",
+  "version": 1,
+  "changelog": "v1: Initial evals covering existing module page, dashboard with KPI cards, new module design system, and table-heavy page",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Crie uma tela de listagem de devoluções no módulo de monitoramento. Deve ter um header com título, filtros por data e cliente, e uma tabela com colunas: NF, Cliente, Data, Valor, Status. Use o design system existente do Bootstrap.",
+      "expected_output": "Template Jinja2 que extends base.html, usa variáveis CSS do sistema (--bs-*), classe premium-page, reveal no header, tabela com estilos do design system",
+      "files": [],
+      "expectations": [
+        "O template gerado usa {% extends 'base.html' %} (NAO cria HTML standalone)",
+        "Usa bloco {% block extra_css %} para carregar CSS de módulo (NAO inline <style> no template)",
+        "O container principal tem a classe 'premium-page'",
+        "O header usa a classe 'reveal' para scroll animation",
+        "Backgrounds de card/container usam var(--bs-secondary-bg) ou var(--bs-tertiary-bg) (NAO hex como #ffffff ou #343541)",
+        "Cores de texto usam var(--bs-body-color) ou var(--bs-secondary-color) (NAO hex fixo)",
+        "Bordas usam var(--bs-border-color) (NAO hex fixo)",
+        "Thead da tabela usa var(--bs-tertiary-bg) para background conforme padrão documentado"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Monte um dashboard com 4 cards de KPI (Total de Fretes, Fretes Pendentes, Valor Médio, Entregas Atrasadas) para o módulo de fretes. Cada card deve ter ícone, valor numérico grande e label. Quero animações ao carregar a página.",
+      "expected_output": "Dashboard com 4 KPI cards usando stagger-children para animação escalonada, shadow-glow nos cards, classe premium-page, variáveis CSS corretas",
+      "files": [],
+      "expectations": [
+        "O grid de cards usa a classe 'stagger-children' para animação escalonada dos filhos",
+        "Cards usam 'shadow-glow' ou outra classe premium documentada (btn-shine, glass, pulse-glow)",
+        "O container principal tem classe 'premium-page' para ativar aurora background",
+        "Valores numéricos usam formatação brasileira (R$) ou referência a filtros template (valor_br, numero_br)",
+        "NAO usa cores hex hardcoded — todos backgrounds/bordas/textos via var(--bs-*)",
+        "Cards seguem o padrão documentado: background var(--bs-secondary-bg), border var(--bs-border-color), border-radius 12px",
+        "Template extends base.html e carrega CSS via bloco extra_css"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Preciso criar um design system novo para o módulo de 'auditoria'. Crie o CSS com variáveis customizadas (prefixo aud-*), suporte completo a light e dark mode, e um template exemplo de tela de listagem.",
+      "expected_output": "CSS com design system aud-* com variáveis para ambos os temas, template Jinja2 usando as variáveis, seletores de tema corretos",
+      "files": [],
+      "expectations": [
+        "CSS define variáveis com prefixo --aud-* (backgrounds, texto, acentos, bordas) conforme template do SKILL.md",
+        "Inclui definições para AMBOS os modos: dark (padrão em :root) E light (em [data-bs-theme='light'] ou [data-theme='light'])",
+        "As cores light mode NAO são simplesmente inversão do dark (cores pensadas para cada tema)",
+        "Inclui pelo menos 2 'signature visual moments' (atmospheric background, entry animation, progressive glow, ou similar)",
+        "Template exemplo usa {% extends 'base.html' %} e premium-page",
+        "CSS NÃO usa cores hex hardcoded nos elementos — apenas nas definições das variáveis CSS customizadas",
+        "Inclui regra @media (prefers-reduced-motion: reduce) para desabilitar animações"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Crie uma tela do módulo financeiro mostrando um hub de conciliação com 3 seções: Extrato Bancário, Títulos a Receber, Títulos a Pagar. Cada seção é um card com contadores de status (conciliado, pendente, divergente).",
+      "expected_output": "Template financeiro usando variáveis --fin-* do design system existente, status badges com cores de conciliação, layout premium com efeitos",
+      "files": [],
+      "expectations": [
+        "Usa variáveis do design system financeiro (--fin-*) para backgrounds, bordas e texto — NAO inventa novas variáveis",
+        "Status badges usam as variáveis de status de conciliação documentadas (--fin-conciliado-bg, --fin-match-bg, --fin-sem-match-bg ou equivalentes --fin-bg-success/warning/danger)",
+        "Template extends base.html com bloco extra_css apontando para CSS financeiro (css/financeiro/)",
+        "Usa classes premium documentadas: premium-page, reveal, e pelo menos uma de glass/shadow-glow/btn-shine",
+        "Cards seguem o padrão do sistema financeiro: classes fin-* (fin-container, fin-section, fin-stat-card ou fin-hub-card)",
+        "NAO usa fonte genérica (Arial, Roboto) — usa a tipografia do sistema (IBM Plex Sans ou variável --fin-font-display)",
+        "NAO usa background-color hex fixo nos elementos (ex: #ffffff, #0d1117, #343541 são PROIBIDOS)"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[
+  {"query": "Crie uma tela de listagem de transportadoras com filtros e tabela", "should_trigger": true},
+  {"query": "Monte um dashboard com KPIs para o módulo de faturamento", "should_trigger": true},
+  {"query": "Preciso de uma interface Flask com cards e gráficos para vendas", "should_trigger": true},
+  {"query": "Crie um componente web de timeline para rastreamento de entregas", "should_trigger": true},
+  {"query": "Montar tela de cadastro de clientes com formulário e validação JS", "should_trigger": true},
+  {"query": "Quero um layout Jinja2 com sidebar e header responsivo", "should_trigger": true},
+  {"query": "Crie uma página de configurações com abas e toggles dark/light mode", "should_trigger": true},
+  {"query": "Monte uma tela de detalhes do pedido com cards de status e timeline", "should_trigger": true},
+  {"query": "Preciso de um hub visual com 5 seções de cards estilo financeiro", "should_trigger": true},
+  {"query": "Crie um painel de controle com tabelas, badges e ações em lote", "should_trigger": true},
+  {"query": "Quanto custa enviar 3000kg para Manaus?", "should_trigger": false},
+  {"query": "Rastreie a NF 12345 no Odoo", "should_trigger": false},
+  {"query": "Quais pedidos pendentes do Atacadão?", "should_trigger": false},
+  {"query": "Exporte os dados de frete para Excel", "should_trigger": false},
+  {"query": "Como está o banco de dados? Cache hit rate?", "should_trigger": false},
+  {"query": "Consolide os POs da nota fiscal 9876", "should_trigger": false},
+  {"query": "Crie um service de integração para lançar CTe no Odoo", "should_trigger": false},
+  {"query": "Mude a cor do botão de #ff0000 para azul no CSS existente", "should_trigger": false},
+  {"query": "Qual é o estoque atual de palmito?", "should_trigger": false},
+  {"query": "Gere um balancete contábil do mês passado", "should_trigger": false}
+]
