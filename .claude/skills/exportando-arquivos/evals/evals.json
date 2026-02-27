@@ -1,0 +1,72 @@
+{
+  "skill_name": "exportando-arquivos",
+  "version": 1,
+  "changelog": "v1: Initial evals covering all 4 formats (Excel, CSV, JSON, imagem), column filtering, and empty data edge case",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Tenho esses dados de pedidos: VCD001 Atacadao R$50.000, VCD002 Carrefour R$75.000, VCD003 Assai R$30.000. Gera uma planilha Excel pra mim com titulo 'Maiores Pedidos'.",
+      "expected_output": "Arquivo Excel gerado com 3 registros, link de download com url_completa do Render",
+      "files": [],
+      "expectations": [
+        "Executou exportar.py com --formato excel e --titulo contendo 'Maiores Pedidos'",
+        "Passou dados via stdin como JSON com campo 'dados' contendo array de 3 registros",
+        "Retornou link de download usando url_completa (com dominio sistema-fretes.onrender.com), NAO url relativa",
+        "Informou quantidade de registros (3) e tamanho do arquivo na resposta",
+        "NAO usou a tool Write para criar o arquivo — usou exclusivamente o script exportar.py"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Exporta esses produtos em CSV: Palmito 300g R$12,50; Palmito 500g R$18,90; Palmito 800g R$25,00. Preciso das colunas Produto e Preco apenas.",
+      "expected_output": "Arquivo CSV gerado com 3 registros, apenas 2 colunas filtradas, link de download",
+      "files": [],
+      "expectations": [
+        "Executou exportar.py com --formato csv",
+        "Usou --colunas para filtrar apenas Produto e Preco (JSON array)",
+        "Passou dados via stdin com 3 registros",
+        "Retornou link de download usando url_completa",
+        "Mencionou que CSV usa separador ponto-e-virgula (;) para compatibilidade brasileira, OU informou que o arquivo esta pronto sem inventar detalhes"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Gera um arquivo JSON com essa lista de transportadoras: TAC (cod 1, ativa), Transmagna (cod 2, ativa), Rodolatina (cod 3, inativa).",
+      "expected_output": "Arquivo JSON gerado com 3 registros, link de download",
+      "files": [],
+      "expectations": [
+        "Executou exportar.py com --formato json",
+        "Passou dados via stdin como JSON com 3 transportadoras",
+        "Retornou link de download usando url_completa",
+        "NAO inventou campos adicionais que nao estavam nos dados fornecidos pelo usuario",
+        "Informou formato JSON e quantidade de registros corretamente"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Preciso exportar uma imagem que esta em /tmp/grafico_vendas.png. Salva pra download com nome 'vendas_fevereiro'.",
+      "expected_output": "Imagem copiada para pasta de downloads, link de download ou mensagem de erro se imagem nao existir",
+      "files": [],
+      "expectations": [
+        "Executou exportar.py com --formato imagem --imagem /tmp/grafico_vendas.png --nome vendas_fevereiro",
+        "NAO tentou passar dados via stdin para formato imagem",
+        "Se a imagem existir: retornou link de download com url_completa",
+        "Se a imagem NAO existir: reportou erro claramente ao usuario sem inventar alternativas",
+        "NAO usou a tool Write para copiar a imagem — usou exclusivamente o script exportar.py"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Exporta pra Excel uma lista vazia de dados. Quero ver como o sistema trata isso.",
+      "expected_output": "Erro informando que campo dados esta vazio, sem gerar arquivo",
+      "files": [],
+      "expectations": [
+        "Executou exportar.py com --formato excel passando dados vazio via stdin",
+        "Script retornou sucesso=false com mensagem sobre dados vazios",
+        "Agente NAO inventou dados para preencher a planilha",
+        "Agente informou claramente ao usuario que nao ha dados para exportar",
+        "NAO tentou gerar arquivo com 0 registros silenciosamente"
+      ]
+    }
+  ]
+}

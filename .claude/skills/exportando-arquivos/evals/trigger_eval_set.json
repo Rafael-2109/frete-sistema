@@ -1,0 +1,106 @@
+{
+  "skill_name": "exportando-arquivos",
+  "version": 1,
+  "queries": [
+    {
+      "query": "Exporte para Excel os 10 maiores pedidos",
+      "should_trigger": true,
+      "reason": "Exportacao explicita para Excel"
+    },
+    {
+      "query": "Gera uma planilha com os dados de frete",
+      "should_trigger": true,
+      "reason": "Planilha = Excel export"
+    },
+    {
+      "query": "Quero baixar esses dados em CSV",
+      "should_trigger": true,
+      "reason": "Download em CSV"
+    },
+    {
+      "query": "Salva esse grafico como imagem pra download",
+      "should_trigger": true,
+      "reason": "Exportacao de imagem para download"
+    },
+    {
+      "query": "Gera um relatorio em Excel dos clientes",
+      "should_trigger": true,
+      "reason": "Relatorio Excel = exportacao"
+    },
+    {
+      "query": "Preciso de um arquivo JSON com esses dados",
+      "should_trigger": true,
+      "reason": "Geracao de arquivo JSON"
+    },
+    {
+      "query": "Exporta em planilha os pedidos do Atacadao",
+      "should_trigger": true,
+      "reason": "Planilha = Excel export"
+    },
+    {
+      "query": "Gera CSV das transportadoras ativas",
+      "should_trigger": true,
+      "reason": "Geracao CSV explicita"
+    },
+    {
+      "query": "Quero um Excel com resumo de fretes",
+      "should_trigger": true,
+      "reason": "Excel explicito"
+    },
+    {
+      "query": "Salva screenshot pra download",
+      "should_trigger": true,
+      "reason": "Screenshot para download = exportacao de imagem"
+    },
+    {
+      "query": "Qual o frete pra Manaus?",
+      "should_trigger": false,
+      "reason": "Cotacao de frete, nao exportacao"
+    },
+    {
+      "query": "Analise essa planilha que enviei",
+      "should_trigger": false,
+      "reason": "LER arquivo, nao criar — usar lendo-arquivos"
+    },
+    {
+      "query": "Quantos pedidos pendentes por estado?",
+      "should_trigger": false,
+      "reason": "Consulta analitica, nao exportacao — usar consultando-sql"
+    },
+    {
+      "query": "Exporte o razao geral do Odoo",
+      "should_trigger": false,
+      "reason": "Razao geral tem skill propria — usar razao-geral-odoo"
+    },
+    {
+      "query": "Tem pedido do Atacadao?",
+      "should_trigger": false,
+      "reason": "Consulta de carteira, nao exportacao"
+    },
+    {
+      "query": "Como esta o banco de dados?",
+      "should_trigger": false,
+      "reason": "Diagnostico de banco, nao exportacao"
+    },
+    {
+      "query": "Cria uma tela de dashboard",
+      "should_trigger": false,
+      "reason": "Frontend design, nao exportacao"
+    },
+    {
+      "query": "O que tem nesse CSV que mandei?",
+      "should_trigger": false,
+      "reason": "LER arquivo CSV, nao criar — usar lendo-arquivos"
+    },
+    {
+      "query": "Rastreie a NF 12345 no Odoo",
+      "should_trigger": false,
+      "reason": "Rastreamento Odoo, nao exportacao"
+    },
+    {
+      "query": "Importa os dados dessa planilha",
+      "should_trigger": false,
+      "reason": "Importar/ler arquivo, nao exportar — usar lendo-arquivos"
+    }
+  ]
+}

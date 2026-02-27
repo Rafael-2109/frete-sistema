@@ -133,7 +133,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 | # | Skill | Scripts | Size | Status | Data |
 |---|-------|---------|------|--------|------|
-| 13 | `exportando-arquivos` | 1 | 36KB | IN_PROGRESS | 2026-02-26 |
+| 13 | `exportando-arquivos` | 1 | 36KB | DONE | 2026-02-26 |
 | 14 | `lendo-arquivos` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
 | 15 | `memoria-usuario` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
 | 16 | `descobrindo-odoo-estrutura` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
