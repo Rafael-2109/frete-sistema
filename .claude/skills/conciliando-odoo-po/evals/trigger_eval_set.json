@@ -1,0 +1,122 @@
+[
+  {
+    "id": 0,
+    "query": "Consolide os POs da NF 12345",
+    "should_trigger": true,
+    "reason": "Pedido explicito de consolidacao de POs"
+  },
+  {
+    "id": 1,
+    "query": "Execute split do pedido PO00456 que veio com quantidade diferente",
+    "should_trigger": true,
+    "reason": "Pedido explicito de split de PO"
+  },
+  {
+    "id": 2,
+    "query": "Crie PO conciliador para a NF que chegou com 400 unidades em vez de 500",
+    "should_trigger": true,
+    "reason": "Criacao de PO conciliador e operacao core desta skill"
+  },
+  {
+    "id": 3,
+    "query": "Reduza a quantidade do PO original para 100 unidades apos o split",
+    "should_trigger": true,
+    "reason": "Ajuste de quantidade de PO e operacao desta skill"
+  },
+  {
+    "id": 4,
+    "query": "Reverta a consolidacao que foi feita incorretamente no PO00789",
+    "should_trigger": true,
+    "reason": "Reversao de consolidacao e operacao desta skill"
+  },
+  {
+    "id": 5,
+    "query": "Como funciona o split de PO quando a NF chega com quantidade diferente?",
+    "should_trigger": true,
+    "reason": "Explicacao do fluxo de split e dominio desta skill"
+  },
+  {
+    "id": 6,
+    "query": "Erro ao consolidar: AttributeError execute no OdooConnection",
+    "should_trigger": true,
+    "reason": "Depuracao de erro em consolidacao e dominio desta skill"
+  },
+  {
+    "id": 7,
+    "query": "Simule a consolidacao antes de executar para a validacao 456",
+    "should_trigger": true,
+    "reason": "Simulacao de consolidacao e operacao desta skill"
+  },
+  {
+    "id": 8,
+    "query": "Vincule o DFe ao PO conciliador que foi criado",
+    "should_trigger": true,
+    "reason": "Vinculacao DFe a PO e operacao desta skill"
+  },
+  {
+    "id": 9,
+    "query": "O PO conciliador foi criado mas nao ficou com as linhas certas, o que pode ser?",
+    "should_trigger": true,
+    "reason": "Depuracao de problema em consolidacao de PO"
+  },
+  {
+    "id": 10,
+    "query": "Rastreie a NF 12345 no Odoo e me diga o status",
+    "should_trigger": false,
+    "reason": "Rastreamento de documento sem modificacao de PO, usar rastreando-odoo"
+  },
+  {
+    "id": 11,
+    "query": "Quais campos tem o modelo purchase.order no Odoo?",
+    "should_trigger": false,
+    "reason": "Exploracao de modelo Odoo, usar descobrindo-odoo-estrutura"
+  },
+  {
+    "id": 12,
+    "query": "Crie um pagamento para a NF 12345 no Odoo",
+    "should_trigger": false,
+    "reason": "Operacao financeira, usar executando-odoo-financeiro"
+  },
+  {
+    "id": 13,
+    "query": "Reconcilie o extrato bancario com os pagamentos",
+    "should_trigger": false,
+    "reason": "Reconciliacao financeira, usar executando-odoo-financeiro"
+  },
+  {
+    "id": 14,
+    "query": "Valide o match da NF com os POs antes da consolidacao",
+    "should_trigger": false,
+    "reason": "Match NF x PO e Fase 2, usar validacao-nf-po"
+  },
+  {
+    "id": 15,
+    "query": "Qual o status do picking da NF 12345?",
+    "should_trigger": false,
+    "reason": "Recebimento fisico e Fase 4, usar recebimento-fisico-odoo"
+  },
+  {
+    "id": 16,
+    "query": "Quanto sai o frete para Manaus com 3000kg?",
+    "should_trigger": false,
+    "reason": "Cotacao de frete, usar cotando-frete"
+  },
+  {
+    "id": 17,
+    "query": "Top 10 clientes por valor de pedido no ultimo mes",
+    "should_trigger": false,
+    "reason": "Consulta analitica SQL, usar consultando-sql"
+  },
+  {
+    "id": 18,
+    "query": "Exporte o razao geral do Odoo para Excel",
+    "should_trigger": false,
+    "reason": "Exportacao contabil, usar razao-geral-odoo"
+  },
+  {
+    "id": 19,
+    "query": "O lote nao foi criado no quality check, o que aconteceu?",
+    "should_trigger": false,
+    "reason": "Recebimento fisico Fase 4, usar recebimento-fisico-odoo"
+  }
+]

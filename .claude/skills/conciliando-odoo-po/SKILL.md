@@ -1,22 +1,29 @@
 ---
 name: conciliando-odoo-po
 description: >-
-  Esta skill deve ser usada quando o usuario precisa "consolide os POs da NF",
-  "execute split do pedido", "crie PO conciliador", "reduza quantidade do PO",
-  "reverta consolidacao", ou executar operacoes de Fase 3 do recebimento
-  (split, consolidacao, ajuste de saldos de PO com DFe no Odoo).
-  Nao usar para match NF x PO na Fase 2 (usar validacao-nf-po),
-  rastrear documento individual (usar rastreando-odoo), ou operacoes
-  financeiras como pagamentos (usar executando-odoo-financeiro).
-  - Depurar erro em consolidacao: "erro ao consolidar", "PO nao criado"
-  - Entender fluxo split/consolidacao: "como funciona o split?", "o que e PO Conciliador?"
-
-  NAO USAR QUANDO:
-  - Apenas consultar/rastrear documentos sem modificar POs -> usar **rastreando-odoo**
-  - Explorar campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
-  - Operacoes financeiras (pagamentos, extratos, reconciliacao) -> usar **executando-odoo-financeiro**
-  - Validar match NF x PO (Fase 2, anterior) -> usar **validacao-nf-po**
+  Use for split and consolidacao of purchase orders in Odoo to reconcile with
+  a nota fiscal: consolidar POs de uma NF, executar split de pedido, criar PO
+  Conciliador, reverter consolidacao, or ajustar quantidades de linhas de PO.
+  Also use to debug errors during these operations (AttributeError, PO criado
+  sem linhas corretas, fornecedor nao encontrado) or to explain conceptually
+  how split/consolidacao works.
+  Do NOT use for: read-only document queries (usar rastreando-odoo),
+  NF x PO matching before consolidation (usar validacao-nf-po),
+  financial payments (usar executando-odoo-financeiro),
+  or exploring unknown Odoo model fields (usar descobrindo-odoo-estrutura).
 allowed-tools: Read, Bash, Glob, Grep
+---
+
+## REGRAS CRITICAS — Anti-Alucinacao
+
+1. **NUNCA usar `odoo.execute()`** — NAO EXISTE. Usar `odoo.execute_kw()` sempre
+2. **NUNCA usar `odoo.create()` para PO** — Usar `copy()` que herda campos fiscais BR automaticamente
+3. **Cada linha copia da SUA origem** — `aloc.odoo_po_line_id` (NAO da linha do PO de referencia)
+4. **CNPJ DEVE ser formatado** — `l10n_br_cnpj` armazena `XX.XXX.XXX/XXXX-XX` (com pontuacao)
+5. **Acumular consumo por linha** — Se 2 itens NF alocam da mesma linha PO, usar cache de consumo
+6. **SEMPRE simular antes de executar** — `simular_consolidacao()` antes de `consolidar_pos()`
+7. **Reversao e best-effort** — Pode nao restaurar estado exato, alertar usuario
+
 ---
 
 ## Quando NAO Usar Esta Skill
@@ -196,6 +203,56 @@ Resultado (via MatchAlocacao):
 2. MatchNfPoItem com `status_match='match'` para cada item
 3. MatchAlocacao com `odoo_po_line_id` preenchido para multi-PO
 4. Conexao Odoo funcional
+
+## Diagnostico Rapido de Erros
+
+| Erro / Sintoma | Causa Provavel | Solucao |
+|----------------|---------------|---------|
+| `AttributeError: no attribute 'execute'` | Usando `odoo.execute()` | Trocar para `odoo.execute_kw()` |
+| `Required field(s) missing` | Usando `create()` em vez de `copy()` | Usar `copy()` com `default` |
+| `Expected singleton or list of IDs` | `unlink` com formato errado | `unlink([lista_ids])` em uma chamada |
+| CFOP/impostos errados no conciliador | Copiando linha do PO de ref | Copiar de `aloc.odoo_po_line_id` |
+| Linhas duplicadas apos copy() | `order_line=False` ignorado | Fallback: buscar e `unlink` linhas |
+| Saldo maior que esperado | 2 itens NF na mesma linha PO | Cache `linhas_processadas` por `po_line_id` |
+| Fornecedor nao encontrado | CNPJ sem formatacao | Formatar para `XX.XXX.XXX/XXXX-XX` |
+| Quantidades imprecisas | Aritmetica com float | Usar `Decimal` para calculos |
+| `Cannot confirm order with empty lines` | Todas linhas falharam | Verificar se PO tem linhas antes de confirmar |
+
+## Checklist de Depuracao (ordem)
+
+1. `odoo.authenticate()` retornou True?
+2. CNPJ formatado encontrado em `res.partner`?
+3. `pos_para_consolidar[0]['po_id']` existe no Odoo?
+4. `copy()` retornou `novo_po_id` nao-None?
+5. PO Conciliador esta limpo (sem linhas indesejadas)?
+6. Cada `aloc.odoo_po_line_id` existe e tem `product_id`?
+7. `product_qty` e `qty_received` sao numeros validos?
+8. PO tem pelo menos 1 linha antes de `button_confirm`?
+9. Campo `dfe_id` existe no modelo `purchase.order`?
+
+## Ponto Critico: Multi-PO com copy()
+
+```
+Cabecalho: copy(PO-1) - herda empresa, fiscal, picking_type de PO-1
+Linha A: copy(linha 101 do PO-1) - CFOP/impostos do PO-1
+Linha B: copy(linha 202 do PO-2) - CFOP/impostos do PO-2  (NAO do PO-1!)
+Linha C: copy(linha 303 do PO-3) - CFOP/impostos do PO-3  (NAO do PO-1!)
+```
+
+O PO de referencia (primeiro da lista) define APENAS o cabecalho.
+Cada LINHA e copiada da sua propria origem via `aloc.odoo_po_line_id`.
+
+## Cache de Consumo (mesma linha, multiplos itens NF)
+
+```python
+linhas_processadas = {}  # {po_line_id: Decimal total_consumido}
+
+for aloc in alocacoes:
+    consumo_anterior = linhas_processadas.get(aloc.odoo_po_line_id, Decimal('0'))
+    consumo_total = consumo_anterior + qtd_alocada
+    linhas_processadas[aloc.odoo_po_line_id] = consumo_total
+    saldo = qtd_po_original - qtd_recebida - consumo_total
+```
 
 ## Referencia Cruzada com Outras Skills
 

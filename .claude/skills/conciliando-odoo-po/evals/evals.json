@@ -1,0 +1,74 @@
+{
+  "skill_name": "conciliando-odoo-po",
+  "version": 1,
+  "changelog": "v1: Initial evals covering split flow, debug consolidation errors, multi-PO scenario, CNPJ formatting, and correct API method usage",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Preciso consolidar os POs de uma NF que chegou com 400 unidades de produto X, mas o PO original tinha 500. Como funciona o split? Me explica o fluxo passo a passo e mostra o codigo.",
+      "expected_output": "Explicacao do fluxo de split com 5 passos (buscar fornecedor, criar PO conciliador via copy(), criar linhas, confirmar, vincular DFe), incluindo codigo usando execute_kw e copy()",
+      "files": [],
+      "expectations": [
+        "Leu reference fluxo-conciliacao.md OU SKILL.md para obter o fluxo completo",
+        "Explicou que o PO Conciliador e criado via copy() (NAO create()) e citou o motivo (heranca automatica de campos fiscais/obrigatorios)",
+        "Descreveu os 5 passos: buscar fornecedor, criar PO vazio via copy(), criar linhas, confirmar PO, vincular DFe",
+        "Mostrou que o PO original fica com saldo de 100 (500 - 400) e o PO Conciliador fica com 400",
+        "Usou execute_kw (NAO execute) nos exemplos de codigo — se mostrou codigo com odoo.execute() sem kw, FAIL",
+        "Mencionou o fallback de limpeza de linhas apos copy() (unlink de linhas indesejadas)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Estou recebendo AttributeError: 'OdooConnection' object has no attribute 'execute' ao tentar confirmar o PO Conciliador. O que esta errado?",
+      "expected_output": "Diagnostico correto: usar execute_kw em vez de execute, com codigo corrigido",
+      "files": [],
+      "expectations": [
+        "Identificou IMEDIATAMENTE que o erro e usar odoo.execute() em vez de odoo.execute_kw()",
+        "Referenciou erros-comuns.md ERRO 1 OU mencionou que OdooConnection so tem execute_kw",
+        "Listou os metodos disponiveis na OdooConnection: execute_kw, search, read, write, create, authenticate",
+        "Mostrou o codigo CORRETO: odoo.execute_kw('purchase.order', 'button_confirm', [po_id])",
+        "NAO sugeriu instalar bibliotecas ou modificar a classe OdooConnection — a solucao e trocar o metodo chamado"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Tenho uma NF com 3 itens vindos de 3 POs diferentes (PO-A produto X, PO-B produto Y, PO-C produto Z). Como funciona a consolidacao multi-PO? Qual PO serve de referencia e como as linhas sao copiadas?",
+      "expected_output": "Explicacao de multi-PO com PO de referencia (primeiro da lista), cada linha copiada da sua origem individual, e uso de MatchAlocacao",
+      "files": [],
+      "expectations": [
+        "Explicou que o PO de referencia e o PRIMEIRO da lista (pos_para_consolidar[0])",
+        "Explicou que o cabecalho (empresa, fiscal, picking_type) vem do PO de referencia",
+        "Enfatizou que CADA LINHA e copiada da sua linha de origem individual (aloc.odoo_po_line_id), NAO do PO de referencia",
+        "Mencionou MatchAlocacao como modelo que mapeia 1 item NF para N POs",
+        "Explicou que CFOP/impostos de cada linha vem do PO especifico, nao do PO de referencia — citou ERRO 4 ou equivalente",
+        "NAO confundiu copy() do cabecalho (PO) com copy() das linhas (purchase.order.line) — sao operacoes distintas"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "A consolidacao esta dando erro: fornecedor nao encontrado no Odoo. O CNPJ esta correto mas o search nao retorna nada. O que pode ser?",
+      "expected_output": "Diagnostico de CNPJ nao formatado, com explicacao do formato XX.XXX.XXX/XXXX-XX e codigo de formatacao",
+      "files": [],
+      "expectations": [
+        "Identificou que o problema e provavelmente CNPJ sem formatacao (campo l10n_br_cnpj armazena com pontuacao)",
+        "Mostrou o formato correto: XX.XXX.XXX/XXXX-XX",
+        "Forneceu funcao formatar_cnpj ou equivalente para converter 14 digitos para formato com pontuacao",
+        "Mencionou que o search deve usar ('l10n_br_cnpj', '=', cnpj_formatado) no domain",
+        "NAO sugeriu buscar por campo inexistente como 'cnpj' ou 'vat' — o campo correto e l10n_br_cnpj"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Preciso reverter uma consolidacao que foi executada incorretamente. O que acontece com os POs originais e o PO Conciliador?",
+      "expected_output": "Explicacao da reversao best-effort com passos: cancelar PO conciliador, restaurar quantidades, descancelar POs, remover vinculo DFe",
+      "files": [],
+      "expectations": [
+        "Mencionou que a reversao e BEST-EFFORT (pode nao restaurar estado exato)",
+        "Listou os passos de reversao: restaurar quantidades originais, cancelar PO Conciliador, remover vinculo DFe, atualizar status local",
+        "Identificou o metodo reverter_consolidacao() como responsavel",
+        "Mencionou que POs cancelados precisam ser descancelados (state de volta para purchase)",
+        "Alertou sobre limitacoes: se houve recebimento parcial no PO Conciliador, reversao pode ser complexa"
+      ]
+    }
+  ]
+}
