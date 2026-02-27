@@ -23,7 +23,7 @@ from app.rastreamento.models import RastreamentoEmbarque  # 🚚 RASTREAMENTO GP
 
 # Utils
 from app.utils.localizacao import LocalizacaoService
-from app.utils.frete_simulador import calcular_frete_por_cnpj, buscar_cidade_unificada
+from app.utils.frete_simulador import calcular_frete_por_cnpj, buscar_cidade_unificada, calcular_fretes_possiveis
 from app.utils.vehicle_utils import normalizar_nome_veiculo
 from app.utils.calculadora_frete import CalculadoraFrete
 from app.utils.embarque_numero import obter_proximo_numero_embarque
@@ -3447,7 +3447,92 @@ def incluir_em_embarque():
             pedidos_adicionados += 1
         
         db.session.commit()
-        
+
+        # ✅ RECÁLCULO DA TABELA PARA CARGA DIRETA — "cidade mais cara"
+        # Após incluir novos itens, verifica se alguma cidade nova é mais cara
+        # que a cidade da tabela atual e atualiza os campos tabela_* do embarque
+        if tipo_carga == 'DIRETA' and pedidos_adicionados > 0:
+            try:
+                # Invalida cache de itens para incluir os recém-adicionados
+                embarque.invalidar_cache_itens()
+                itens_ativos = [i for i in embarque.itens if i.status == 'ativo']
+
+                # Calcula novos totais do embarque (peso/valor/pallets)
+                novo_peso_total = sum(i.peso or 0 for i in itens_ativos)
+                novo_valor_total = sum(i.valor or 0 for i in itens_ativos)
+                novo_pallet_total = sum(i.pallets or 0 for i in itens_ativos)
+
+                # Coleta cidades únicas de TODOS os itens ativos
+                cidades_unicas = set()
+                for item in itens_ativos:
+                    if item.cidade_destino and item.uf_destino:
+                        cidade_obj = buscar_cidade_unificada(
+                            cidade=item.cidade_destino,
+                            uf=item.uf_destino
+                        )
+                        if cidade_obj:
+                            cidades_unicas.add(cidade_obj.id)
+
+                if cidades_unicas and novo_peso_total > 0:
+                    print(f"[DEBUG] 🔄 RECÁLCULO DIRETA: {len(cidades_unicas)} cidades, peso total {novo_peso_total:.2f}kg")
+
+                    # Busca fretes para TODAS as cidades, filtra pela transportadora do embarque
+                    grupos_recalculo = {}  # (transportadora_id, modalidade) -> [opcoes]
+
+                    for cidade_id in cidades_unicas:
+                        fretes_cidade = calcular_fretes_possiveis(
+                            cidade_destino_id=cidade_id,
+                            peso_utilizado=novo_peso_total,
+                            valor_carga=novo_valor_total,
+                            veiculo_forcado=embarque.modalidade,
+                            tipo_carga="DIRETA"
+                        )
+
+                        for opcao in fretes_cidade:
+                            # Filtra apenas pela transportadora do embarque
+                            if opcao['transportadora_id'] == embarque.transportadora_id:
+                                chave = (opcao['transportadora_id'], opcao['modalidade'])
+                                if chave not in grupos_recalculo:
+                                    grupos_recalculo[chave] = []
+                                grupos_recalculo[chave].append(opcao)
+
+                    # Seleciona a tabela mais cara entre todas as cidades
+                    tabela_atualizada = False
+                    for (_transp_id, modal), opcoes_todas in grupos_recalculo.items():
+                        # Filtra pela modalidade do embarque (se tiver)
+                        if embarque.modalidade and modal != embarque.modalidade:
+                            continue
+
+                        if opcoes_todas:
+                            opcao_mais_cara = max(opcoes_todas, key=lambda x: x['valor_liquido'])
+
+                            print(f"[DEBUG] 📊 Tabela mais cara: {opcao_mais_cara['nome_tabela']} "
+                                  f"({opcao_mais_cara.get('cidade', 'N/A')}) "
+                                  f"R${opcao_mais_cara['valor_liquido']:.2f}")
+
+                            # Atualiza campos tabela_* do embarque
+                            dados_tabela_nova = TabelaFreteManager.preparar_dados_tabela(opcao_mais_cara)
+                            TabelaFreteManager.atribuir_campos_objeto(embarque, dados_tabela_nova)
+                            embarque.icms_destino = opcao_mais_cara.get('icms_destino', 0)
+                            tabela_atualizada = True
+                            break  # Apenas uma combinação transportadora/modalidade por embarque DIRETA
+
+                    # Atualiza totais do embarque
+                    embarque.peso_total = novo_peso_total
+                    embarque.valor_total = novo_valor_total
+                    embarque.pallet_total = novo_pallet_total
+
+                    db.session.commit()
+
+                    if tabela_atualizada:
+                        print(f"[DEBUG] ✅ Tabela do embarque #{embarque.numero} RECALCULADA com sucesso")
+                    else:
+                        print(f"[DEBUG] ⚠️ Nenhuma tabela encontrada para recalcular embarque #{embarque.numero}")
+
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Erro ao recalcular tabela DIRETA: {str(e)}")
+                # Não falha a inclusão — o embarque foi criado, tabela pode ser ajustada via "Alterar Cotação"
+
         # ✅ FEEDBACK DETALHADO SOBRE PEDIDOS INCLUÍDOS E NÃO INCLUÍDOS
         if pedidos_adicionados > 0:
             flash(f'✅ {pedidos_adicionados} pedido(s) adicionado(s) ao embarque #{embarque.numero} com sucesso!', 'success')
