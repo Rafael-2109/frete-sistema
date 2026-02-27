@@ -554,10 +554,21 @@ class OdooPoService:
             if not validacao:
                 raise ValueError(f"Validacao {validacao_id} nao encontrada")
 
+            # Refresh para pegar estado mais recente (evitar race condition
+            # entre _marcar_dfes_afetados_por_pos e esta leitura)
+            db.session.refresh(validacao)
+
             if validacao.status != 'aprovado':
                 raise ValueError(
                     f"Validacao {validacao_id} nao esta aprovada. "
                     f"Status atual: {validacao.status}"
+                )
+
+            # CHECK: PO modificada apos validacao (defense in depth — rota ja verifica)
+            if validacao.po_modificada_apos_validacao:
+                raise ValueError(
+                    f"Validacao {validacao_id}: PO foi modificada após validação "
+                    f"(pode ter sido usada por outra NF). Revalide antes de consolidar."
                 )
 
             if not pos_para_consolidar:
@@ -592,6 +603,12 @@ class OdooPoService:
             odoo = get_odoo_connection()
             if not odoo.authenticate():
                 raise ValueError("Falha na autenticacao com Odoo")
+
+            # =================================================================
+            # VERIFICAÇÃO PRÉ-CONSOLIDAÇÃO: POs ainda disponíveis no Odoo?
+            # Previne reutilização de PO já vinculada a outra NF (RC3/RC4/RC5)
+            # =================================================================
+            self._verificar_pos_disponiveis(odoo, matches, alocacoes_por_match)
 
             # =================================================================
             # Buscar fornecedor_id no Odoo pelo CNPJ
@@ -676,6 +693,68 @@ class OdooPoService:
                 'sucesso': False,
                 'erro': str(e)
             }
+
+    # =========================================================================
+    # VERIFICAÇÃO PRÉ-CONSOLIDAÇÃO
+    # =========================================================================
+
+    def _verificar_pos_disponiveis(
+        self,
+        odoo,
+        matches: list,
+        alocacoes_por_match: dict
+    ) -> None:
+        """
+        Verifica no Odoo se os POs dos matches ainda estão disponíveis.
+
+        Raises ValueError se algum PO:
+        - Já tem dfe_id preenchido (vinculado a outra NF)
+        - Não está mais confirmada (state != purchase/done)
+
+        Esta verificação é a 2ª camada de proteção:
+        1ª: flag po_modificada_apos_validacao (check local)
+        2ª: leitura real do Odoo (este método)
+        3ª: guard em _vincular_dfe_ao_po (última defesa)
+        """
+        # Coletar todos os PO IDs únicos dos matches e alocações
+        po_ids = set()
+        for match in matches:
+            alocs = alocacoes_por_match.get(match.id, [])
+            for aloc in alocs:
+                if aloc.odoo_po_id:
+                    po_id = _obter_po_id_por_linha(aloc.odoo_po_line_id, aloc.odoo_po_id)
+                    po_ids.add(po_id)
+            if match.odoo_po_id:
+                po_id = _obter_po_id_por_linha(match.odoo_po_line_id, match.odoo_po_id)
+                po_ids.add(po_id)
+
+        if not po_ids:
+            return
+
+        # Ler estado atual no Odoo (1 chamada batch)
+        pos_odoo = odoo.read('purchase.order', list(po_ids), ['name', 'state', 'dfe_id'])
+
+        for po in pos_odoo:
+            # CHECK 1: dfe_id já preenchido = PO já usada por outra NF
+            dfe_id = po.get('dfe_id')
+            if dfe_id and dfe_id not in (False, 0, '', None):
+                dfe_display = dfe_id[1] if isinstance(dfe_id, (list, tuple)) else dfe_id
+                raise ValueError(
+                    f"PO {po['name']} (ID {po['id']}) já está vinculada a outra NF "
+                    f"(DFE: {dfe_display}). Revalide esta NF para buscar POs atualizados."
+                )
+
+            # CHECK 2: PO cancelada ou em draft
+            if po.get('state') not in ('purchase', 'done'):
+                raise ValueError(
+                    f"PO {po['name']} não está mais confirmada (state={po.get('state')}). "
+                    f"Revalide esta NF."
+                )
+
+        logger.info(
+            f"Verificação pré-consolidação OK: {len(po_ids)} POs disponíveis "
+            f"(sem dfe_id, state=purchase/done)"
+        )
 
     # =========================================================================
     # CENARIO A: exact_1po — 1 PO, qtd NF == qtd PO
@@ -1738,13 +1817,27 @@ class OdooPoService:
             True se vinculou com sucesso
         """
         try:
-            # 1. Vínculo PO -> DFE (existente)
+            # GUARD: Verificar se PO já tem dfe_id (prevenir sobrescrita)
+            # Esta é a última linha de defesa — mesmo que _verificar_pos_disponiveis
+            # tenha passado (race condition entre check e write), este guard impede
+            # a sobrescrita de um vínculo já existente.
+            po_atual = odoo.read('purchase.order', [po_id], ['dfe_id', 'name'])
+            if po_atual:
+                dfe_atual = po_atual[0].get('dfe_id')
+                if dfe_atual and dfe_atual not in (False, 0, '', None):
+                    dfe_display = dfe_atual[1] if isinstance(dfe_atual, (list, tuple)) else dfe_atual
+                    raise ValueError(
+                        f"PO {po_atual[0].get('name', po_id)} (ID {po_id}) já possui "
+                        f"DFE vinculado: {dfe_display}. Não é possível sobrescrever."
+                    )
+
+            # 1. Vínculo PO -> DFE
             odoo.write(
                 'purchase.order',
                 po_id,
                 {'dfe_id': dfe_id}
             )
-            logger.info(f"✅ PO {po_id} vinculado ao DFE {dfe_id}")
+            logger.info(f"PO {po_id} vinculado ao DFE {dfe_id}")
 
             # 2. NOVO: Vínculo DFE -> PO Consolidador
             # Campos do modelo l10n_br_ciel_it_account.dfe:
@@ -1772,9 +1865,12 @@ class OdooPoService:
 
             return True
 
+        except ValueError:
+            # ValueError do guard de sobrescrita DEVE propagar — é proteção crítica
+            raise
         except Exception as e:
             logger.warning(f"Nao foi possivel vincular DFE {dfe_id} ao PO {po_id}: {e}")
-            # Nao falhar a operacao por isso
+            # Erros de rede/Odoo nao falham a operacao
             return False
 
     # =========================================================================

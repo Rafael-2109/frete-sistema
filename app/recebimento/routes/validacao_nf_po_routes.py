@@ -8,10 +8,12 @@ Endpoints:
   - POST /api/recebimento/depara - Cria De-Para
   - PUT /api/recebimento/depara/<id> - Atualiza De-Para
   - DELETE /api/recebimento/depara/<id> - Remove De-Para
+  - GET /api/recebimento/depara/uoms-odoo - Lista UoMs disponiveis no Odoo
   - POST /api/recebimento/depara/sincronizar-odoo - Sincroniza com Odoo
   - POST /api/recebimento/depara/importar-odoo - Importa do Odoo
   - POST /api/recebimento/depara/importar-excel - Importa de arquivo Excel
   - GET /api/recebimento/depara/template-excel - Baixa template Excel
+  - GET /api/recebimento/depara/exportar-excel - Exporta De-Para em Excel (com aba UoMs Odoo)
 
 - Validacao NF x PO:
   - POST /api/recebimento/validar-nf-po/<dfe_id> - Valida NF contra POs
@@ -181,6 +183,33 @@ def buscar_depara(depara_id):
         }), 500
 
 
+@validacao_nf_po_bp.route('/depara/uoms-odoo', methods=['GET'])
+@login_required
+def listar_uoms_odoo():
+    """Lista UoMs disponiveis no Odoo para o SELECT de De-Para."""
+    try:
+        from app.odoo.utils.connection import get_odoo_connection
+
+        odoo = get_odoo_connection()
+        if not odoo.authenticate():
+            return jsonify({'sucesso': False, 'erro': 'Falha autenticacao Odoo'}), 500
+
+        # Buscar todas as UoMs disponiveis
+        uom_ids = odoo.search('uom.uom', [], limit=100)
+        uoms = odoo.read('uom.uom', uom_ids, ['id', 'name', 'category_id', 'uom_type', 'factor'])
+
+        resultado = [
+            {'id': u['id'], 'name': u['name']}
+            for u in uoms if u
+        ]
+
+        return jsonify({'sucesso': True, 'uoms': resultado})
+
+    except Exception as e:
+        logger.error(f"Erro ao listar UoMs do Odoo: {e}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
 @validacao_nf_po_bp.route('/depara', methods=['POST'])
 @login_required
 def criar_depara():
@@ -210,6 +239,11 @@ def criar_depara():
         if data.get('fator_conversao'):
             fator = Decimal(str(data['fator_conversao']))
 
+        # Extrair odoo_product_uom_id se fornecido
+        odoo_product_uom_id = data.get('odoo_product_uom_id')
+        if odoo_product_uom_id is not None:
+            odoo_product_uom_id = int(odoo_product_uom_id)
+
         resultado = service.criar(
             cnpj_fornecedor=data['cnpj_fornecedor'],
             cod_produto_fornecedor=data['cod_produto_fornecedor'],
@@ -221,6 +255,7 @@ def criar_depara():
             um_fornecedor=data.get('um_fornecedor'),
             um_interna=data.get('um_interna', 'UNITS'),
             fator_conversao=fator,
+            odoo_product_uom_id=odoo_product_uom_id,
             criado_por=current_user.nome if current_user else None
         )
 
@@ -262,6 +297,11 @@ def atualizar_depara(depara_id):
         if data.get('fator_conversao') is not None:
             fator = Decimal(str(data['fator_conversao']))
 
+        # Extrair odoo_product_uom_id se fornecido
+        odoo_product_uom_id = data.get('odoo_product_uom_id')
+        if odoo_product_uom_id is not None:
+            odoo_product_uom_id = int(odoo_product_uom_id)
+
         resultado = service.atualizar(
             depara_id=depara_id,
             cod_produto_interno=data.get('cod_produto_interno'),
@@ -270,6 +310,7 @@ def atualizar_depara(depara_id):
             um_fornecedor=data.get('um_fornecedor'),
             um_interna=data.get('um_interna'),
             fator_conversao=fator,
+            odoo_product_uom_id=odoo_product_uom_id,
             ativo=data.get('ativo'),
             atualizado_por=current_user.nome if current_user else None
         )
@@ -660,6 +701,119 @@ def baixar_template_depara_excel():
 
     except Exception as e:
         logger.error(f"Erro ao gerar template Excel: {e}")
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        }), 500
+
+
+@validacao_nf_po_bp.route('/depara/exportar-excel', methods=['GET'])
+@login_required
+def exportar_depara_excel():
+    """
+    Exporta De-Para ativos em Excel no mesmo formato da importacao.
+
+    Aba 1 (DePara): Dados dos De-Para com mesmas colunas da importacao
+    Aba 2 (UoMs_Odoo): Lista de UoMs cadastradas no Odoo para referencia
+
+    Query params:
+    - cnpj_fornecedor: filtrar por CNPJ (opcional)
+    - todos: se 'true', inclui inativos (default: apenas ativos)
+    """
+    try:
+        # Buscar registros
+        query = ProdutoFornecedorDepara.query
+
+        cnpj = request.args.get('cnpj_fornecedor', '').strip()
+        if cnpj:
+            cnpj_limpo = ''.join(c for c in cnpj if c.isdigit())
+            query = query.filter(
+                ProdutoFornecedorDepara.cnpj_fornecedor.ilike(f'%{cnpj_limpo}%')
+            )
+
+        incluir_todos = request.args.get('todos', 'false').lower() == 'true'
+        if not incluir_todos:
+            query = query.filter(ProdutoFornecedorDepara.ativo == True)
+
+        items = query.order_by(
+            ProdutoFornecedorDepara.razao_fornecedor,
+            ProdutoFornecedorDepara.cod_produto_fornecedor
+        ).all()
+
+        if not items:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nenhum De-Para encontrado para exportar'
+            }), 404
+
+        # Aba 1: DePara (mesmo formato da importacao)
+        dados_depara = []
+        for item in items:
+            dados_depara.append({
+                'cnpj_fornecedor': item.cnpj_fornecedor or '',
+                'cod_produto_fornecedor': item.cod_produto_fornecedor or '',
+                'cod_produto_interno': item.cod_produto_interno or '',
+                'descricao_produto_fornecedor': item.descricao_produto_fornecedor or '',
+                'um_fornecedor': item.um_fornecedor or '',
+                'fator_conversao': float(item.fator_conversao) if item.fator_conversao else 1.0,
+            })
+
+        df_depara = pd.DataFrame(dados_depara)
+
+        # Aba 2: UoMs do Odoo
+        uoms_data = []
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+            odoo = get_odoo_connection()
+            if odoo.authenticate():
+                uom_ids = odoo.search('uom.uom', [], limit=200)
+                uoms = odoo.read('uom.uom', uom_ids, [
+                    'id', 'name', 'category_id', 'uom_type', 'factor'
+                ])
+                for u in uoms:
+                    if not u:
+                        continue
+                    cat_name = ''
+                    if u.get('category_id') and isinstance(u['category_id'], (list, tuple)):
+                        cat_name = u['category_id'][1] if len(u['category_id']) >= 2 else ''
+                    uoms_data.append({
+                        'id_odoo': u.get('id', ''),
+                        'nome': u.get('name', ''),
+                        'categoria': cat_name,
+                        'tipo': u.get('uom_type', ''),
+                        'fator': u.get('factor', ''),
+                    })
+        except Exception as e:
+            logger.warning(f"Nao foi possivel carregar UoMs do Odoo: {e}")
+            uoms_data.append({
+                'id_odoo': '',
+                'nome': 'Erro ao carregar UoMs do Odoo',
+                'categoria': str(e),
+                'tipo': '',
+                'fator': '',
+            })
+
+        df_uoms = pd.DataFrame(uoms_data) if uoms_data else pd.DataFrame(
+            columns=['id_odoo', 'nome', 'categoria', 'tipo', 'fator']
+        )
+
+        # Gerar Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_depara.to_excel(writer, index=False, sheet_name='DePara')
+            df_uoms.to_excel(writer, index=False, sheet_name='UoMs_Odoo')
+
+        output.seek(0)
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='depara_fornecedor_exportacao.xlsx'
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao exportar De-Para Excel: {e}")
         return jsonify({
             'sucesso': False,
             'erro': str(e)
@@ -1186,6 +1340,17 @@ def consolidar_pos(validacao_id):
                 'sucesso': False,
                 'erro': f'Validacao nao esta aprovada. Status: {validacao.status}'
             }), 400
+
+        # CHECK: PO foi modificada apos validacao (outra NF consolidou o mesmo PO)
+        if validacao.po_modificada_apos_validacao:
+            return jsonify({
+                'sucesso': False,
+                'erro': (
+                    'PO foi modificada após validação (pode ter sido usada por outra NF). '
+                    'Revalide a NF antes de consolidar.'
+                ),
+                'requer_revalidacao': True
+            }), 409
 
         # Buscar matches para montar lista de POs
         matches = db.session.query(MatchNfPoItem).filter_by(
