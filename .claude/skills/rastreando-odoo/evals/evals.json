@@ -1,0 +1,77 @@
+{
+  "skill_name": "rastreando-odoo",
+  "version": 1,
+  "changelog": "v1: Initial eval set covering 5 scripts — rastrear, normalizar, auditoria_faturas, auditoria_extrato, mapeamento_vinculos",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Rastreie a NF 93549 no Odoo. Quero ver o fluxo completo: DFE, pedido de compra, fatura e titulos.",
+      "expected_output": "Fluxo de compra completo com DFE, PO vinculado, fatura com status de pagamento, e titulos com vencimento e status de conciliacao",
+      "files": [],
+      "expectations": [
+        "Executou rastrear.py com entrada 'NF 93549' ou '93549' com --json",
+        "Retornou fluxo tipo 'compra' com campos dfe, pedido_compra, fatura e titulos",
+        "Informou payment_state da fatura (paid/not_paid/partial) conforme retornado pelo script",
+        "Listou titulos com date_maturity, debit/credit e reconciled conforme JSON de saida",
+        "NAO inventou motivos de nao-pagamento ou previsoes sem evidencia no output do script",
+        "NAO apresentou dados que nao existem no JSON retornado pelo rastrear.py"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Quais documentos do Atacadao existem no Odoo? Quero ver notas fiscais e pedidos de compra.",
+      "expected_output": "Lista de documentos do parceiro Atacadao: DFEs, POs e faturas encontradas no Odoo",
+      "files": [],
+      "expectations": [
+        "Executou rastrear.py com entrada 'Atacadao' com --json",
+        "Retornou documentos vinculados ao parceiro Atacadao (por nome ou CNPJ)",
+        "Listou DFEs com numero de NF e chave NFe quando disponiveis",
+        "Listou POs com name e amount_total quando disponiveis",
+        "Se resultado vazio, reportou claramente 'nenhum documento encontrado' sem inventar dados",
+        "NAO confundiu fluxo de compra com venda — Atacadao como fornecedor gera fluxo de compra"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Faca uma auditoria das faturas de compra de novembro de 2025. Quero ver quais estao pagas e quais pendentes.",
+      "expected_output": "Relatorio de auditoria com faturas de compra de nov/2025, separadas por status de pagamento, com totais e detalhes de titulos",
+      "files": [],
+      "expectations": [
+        "Executou auditoria_faturas_compra.py com --mes 11 --ano 2025",
+        "Apresentou resumo com total de faturas, valor total e breakdown por payment_state",
+        "Listou faturas com fornecedor, CNPJ, valor e status de pagamento",
+        "Incluiu informacoes de titulos (parcelas, vencimentos) quando disponiveis no output",
+        "Valores monetarios em formato R$ brasileiro correspondem EXATAMENTE ao output do script",
+        "NAO especulou sobre motivos de atraso ou previsao de pagamento sem evidencia no output"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Quero ver o extrato bancario de julho a dezembro de 2024. Tem algum extrato sem conciliacao?",
+      "expected_output": "Extrato bancario do periodo com status de conciliacao, destacando linhas nao reconciliadas",
+      "files": [],
+      "expectations": [
+        "Executou auditoria_extrato_bancario.py com --inicio 2024-07-01 --fim 2024-12-31",
+        "Apresentou resumo com total de linhas, valores e percentual de conciliacao",
+        "Destacou extratos com is_reconciled=False ou sem vinculo",
+        "Incluiu dados de conta bancaria e parceiro quando disponiveis",
+        "NAO inventou vinculos entre extratos e faturas sem evidencia no output do script",
+        "Se nenhum dado encontrado no periodo, reportou claramente sem inventar numeros"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Mapeie os vinculos de pagamentos de janeiro a junho de 2025. Quero ver extratos sem vinculo e titulos soltos.",
+      "expected_output": "Mapeamento cruzado com 5 visoes: extratos, titulos, faturas, notas de credito e pagamentos, destacando registros sem vinculo",
+      "files": [],
+      "expectations": [
+        "Executou mapeamento_vinculos_completo.py com --inicio 2025-01-01 --fim 2025-06-30",
+        "Apresentou pelo menos 2 das 5 visoes: extratos, titulos, faturas, notas_credito, pagamentos",
+        "Identificou registros 'soltos' (sem vinculo) em cada visao quando existentes",
+        "Mostrou contadores de total vs sem-vinculo para cada categoria",
+        "NAO cruzou dados de visoes diferentes sem evidencia explicita no JSON de saida",
+        "Se resultado vazio em alguma visao, reportou '0 registros' sem inventar dados"
+      ]
+    }
+  ]
+}

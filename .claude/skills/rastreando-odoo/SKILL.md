@@ -8,19 +8,13 @@ description: >-
   Nao usar para criar pagamento ou reconciliar extrato (usar
   executando-odoo-financeiro), exportar razao geral (usar razao-geral-odoo),
   ou criar nova integracao (usar integracao-odoo).
-  - Rastrear por CNPJ: "rastreie 18467441000123"
-  - Rastrear por chave NF-e: "rastreie 3525..."
+  - Rastrear por CNPJ/chave NF-e: "rastreie 18467441000123", "rastreie 3525..."
   - Ver titulos e conciliacoes: "pagamentos da NF 12345", "titulos do PO00789"
   - Verificar devolucoes: "devolucao da NF 54321", "nota de credito"
-  - Auditoria de faturas de compra: "auditoria faturas novembro", "faturas fornecedores"
-  - Auditoria de extrato bancario: "extrato bancario 2024", "conciliacao bancaria"
-  - Mapeamento de vinculos: "extratos sem vinculo", "titulos soltos", "faturas sem pagamento"
-  - Vincular extrato com fatura via Excel: "processar planilha de vinculacao", "conciliar via Excel"
-
-  NAO USAR QUANDO:
-  - Descobrir campos de modelo desconhecido (esta skill rastreia fluxos, nao explora estrutura)
-  - Criar lancamentos fiscais (esta skill apenas consulta, nao cria documentos)
-  - Apenas listar registros sem rastrear fluxo
+  - Auditoria faturas/extrato: "auditoria faturas novembro", "extrato bancario 2024"
+  - Mapeamento de vinculos: "extratos sem vinculo", "titulos soltos"
+  - Vincular extrato via Excel: "processar planilha de vinculacao"
+  Nao usar para explorar modelo desconhecido ou criar lancamentos fiscais.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -57,14 +51,24 @@ Rastreia fluxo completo de documentos e executa auditorias financeiras.
 | **Auditoria faturas de compra** | `auditoria_faturas_compra.py` | `--mes 11 --ano 2025` |
 | **Extrato bancario, conciliacao** | `auditoria_extrato_bancario.py` | `--inicio ... --fim ...` |
 | **Extratos sem vinculo, titulos soltos** | `mapeamento_vinculos_completo.py` | `--inicio ... --fim ...` |
+| **Auditoria conciliacao, vinculos documentados** | `auditoria_conciliacao.py` | `--inicio ... --fim ...` |
+| **Relatorio DFE, NFs recebidas no periodo** | `relatorio_dfe.py` | `--inicio ... --fim ...` |
 | **Vincular extrato via planilha** | `vincular_extrato_fatura_excel.py` | `-a planilha.xlsx` |
 
 ### Regras de Decisao
 
 1. **Rastreamento de documento unico** → `rastrear.py` (aceita qualquer entrada)
-2. **Apenas identificar tipo** → `normalizar.py --detectar`
-3. **Auditoria em massa** (por periodo) → scripts de auditoria
-4. **Vinculacao bulk via Excel** → `vincular_extrato_fatura_excel.py`
+2. **Apenas identificar tipo** → `normalizar.py --detectar` (NAO requer conexao Odoo)
+3. **Auditoria faturas por mes** → `auditoria_faturas_compra.py`
+4. **Auditoria extrato bancario** → `auditoria_extrato_bancario.py`
+5. **Auditoria conciliacao documentada** (vinculos A/B) → `auditoria_conciliacao.py`
+6. **Relatorio DFEs recebidas** → `relatorio_dfe.py`
+7. **Mapeamento de registros soltos** → `mapeamento_vinculos_completo.py`
+8. **Vinculacao bulk via Excel** → `vincular_extrato_fatura_excel.py`
+
+### Quando usar --excel
+
+Todos os scripts de auditoria suportam `--excel` para exportar dados tabulares. Usar `--excel` quando o usuario pedir planilha ou exportacao. Combinar com skill `exportando-arquivos` para gerar download.
 
 ## Regras de Negocio (Anti-Alucinacao)
 
@@ -79,6 +83,32 @@ Rastreia fluxo completo de documentos e executa auditorias financeiras.
 - Status de documentos nao consultados
 - Vinculos entre documentos sem navegacao real
 - Previsoes de pagamento ou conciliacao
+- Cruzamento de dados entre visoes diferentes do mapeamento_vinculos sem evidencia explicita no JSON
+
+### Regra de Fidelidade ao Output
+
+**OBRIGATORIO**: Valores numericos (R$, quantidades), datas, IDs e nomes de documentos DEVEM ser COPIADOS do output JSON do script, NAO reformulados ou arredondados. Exemplo:
+- Script retorna `"amount_total": 12345.67` → Apresentar "R$ 12.345,67" (formatacao BR OK, valor EXATO)
+- Script retorna `"date_maturity": "2025-01-15"` → Apresentar "15/01/2025" (formato BR OK, data EXATA)
+- Script retorna `"name": "BILL/2025/0001"` → Usar "BILL/2025/0001" (NAO "Fatura 1 de 2025")
+
+### Tratamento de Erros e Resultados Vazios
+
+| Situacao | Acao Correta |
+|----------|-------------|
+| Script retorna `"sucesso": false` | Reportar EXATAMENTE a mensagem de erro do JSON |
+| Erro de conexao Odoo | Dizer "Nao foi possivel conectar ao Odoo" — NAO inventar dados |
+| Lista vazia (`"faturas": []`) | Dizer "Nenhuma fatura encontrada no periodo" — NAO especular motivo |
+| Campos null no JSON | Dizer "Campo X nao disponivel" — NAO preencher com suposicao |
+| Timeout do script | Reportar timeout e sugerir filtro menor (periodo, limite) |
+
+### Modelo de Conciliacao (2 Camadas)
+
+O Odoo usa reconciliacao em 2 etapas:
+- **Conciliacao A**: Extrato bancario ↔ Payment (account.payment)
+- **Conciliacao B**: Payment ↔ Titulo (account.move.line com account_type payable/receivable)
+
+NAO confundir: um extrato reconciliado (Conc. A) NAO significa que o titulo esta pago (precisa Conc. B tambem).
 
 ---
 
@@ -215,6 +245,47 @@ python .claude/skills/rastreando-odoo/scripts/mapeamento_vinculos_completo.py --
 - FATURAS: titulo_ids, extrato_ids, nc_ids, chave_nfe, CNPJ
 - NOTAS_CREDITO: fatura_origem_id, titulo_ids, extrato_ids, CNPJ
 - PAGAMENTOS: extrato_ids, titulo_ids, CNPJ
+
+### [auditoria_conciliacao.py](scripts/auditoria_conciliacao.py)
+
+Extrai vinculos documentados via account.partial.reconcile. Classifica em Conciliacao A e B.
+
+```bash
+source .venv/bin/activate
+
+# Auditoria de conciliacao por periodo
+python .claude/skills/rastreando-odoo/scripts/auditoria_conciliacao.py --inicio 2024-07-01 --fim 2025-12-31
+
+# Exportar para JSON
+python .claude/skills/rastreando-odoo/scripts/auditoria_conciliacao.py --inicio 2024-07-01 --fim 2025-12-31 --json
+
+# Exportar formato tabular (para Excel)
+python .claude/skills/rastreando-odoo/scripts/auditoria_conciliacao.py --inicio 2024-07-01 --fim 2025-12-31 --excel
+```
+
+**Visoes extraidas**: faturas (com titulos e reconciliacoes), extratos (com links a payments), notas_credito, vinculos_fatura_extrato (cadeia completa fatura→titulo→payment→extrato).
+
+### [relatorio_dfe.py](scripts/relatorio_dfe.py)
+
+Relatorio de DFEs (documentos fiscais eletronicos) recebidos no periodo, com itens detalhados.
+
+```bash
+source .venv/bin/activate
+
+# DFEs de periodo
+python .claude/skills/rastreando-odoo/scripts/relatorio_dfe.py --inicio 2025-01-01 --fim 2025-01-31
+
+# Limitar quantidade
+python .claude/skills/rastreando-odoo/scripts/relatorio_dfe.py --inicio 2025-01-01 --fim 2025-01-31 --limit 50
+
+# Exportar para JSON
+python .claude/skills/rastreando-odoo/scripts/relatorio_dfe.py --inicio 2025-01-01 --fim 2025-01-31 --json
+
+# Exportar formato tabular (para Excel)
+python .claude/skills/rastreando-odoo/scripts/relatorio_dfe.py --inicio 2025-01-01 --fim 2025-01-31 --excel
+```
+
+**Dados extraidos**: numero NF, chave NFe, fornecedor, CNPJ, data emissao, valor total, itens (produto, NCM, CFOP, quantidade, valor unitario).
 
 ### [vincular_extrato_fatura_excel.py](scripts/vincular_extrato_fatura_excel.py)
 

@@ -1,0 +1,22 @@
+[
+  {"query": "rastreie a NF 93549 no Odoo", "should_trigger": true},
+  {"query": "qual o fluxo completo do PO00789?", "should_trigger": true},
+  {"query": "documentos do Atacadao no Odoo", "should_trigger": true},
+  {"query": "auditoria das faturas de compra de novembro 2025", "should_trigger": true},
+  {"query": "extrato bancario de julho a dezembro 2024", "should_trigger": true},
+  {"query": "extratos sem vinculo no Odoo", "should_trigger": true},
+  {"query": "conciliacoes bancarias do ultimo semestre", "should_trigger": true},
+  {"query": "pagamentos da NF 12345 no Odoo, titulos e vencimentos", "should_trigger": true},
+  {"query": "devolucao da NF 54321, nota de credito vinculada", "should_trigger": true},
+  {"query": "relatorio de DFEs recebidas em janeiro 2025", "should_trigger": true},
+  {"query": "crie um pagamento para a NF 12345 no Odoo", "should_trigger": false},
+  {"query": "reconcilie o extrato bancario com o titulo", "should_trigger": false},
+  {"query": "exporte o razao geral de 2025", "should_trigger": false},
+  {"query": "quais campos tem o modelo stock.picking?", "should_trigger": false},
+  {"query": "crie uma integracao para lancamento de CTe", "should_trigger": false},
+  {"query": "tem pedido do Atacadao na carteira?", "should_trigger": false},
+  {"query": "quanto sai para enviar 3000kg para Manaus?", "should_trigger": false},
+  {"query": "NF 12345 foi entregue? que dia embarcou?", "should_trigger": false},
+  {"query": "top 10 clientes por valor de faturamento", "should_trigger": false},
+  {"query": "consolide os POs da NF no Odoo", "should_trigger": false}
+]
