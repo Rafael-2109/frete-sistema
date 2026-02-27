@@ -1,0 +1,76 @@
+{
+  "skill_name": "descobrindo-odoo-estrutura",
+  "version": 1,
+  "changelog": "v1: Initial eval set covering all 4 operations (listar-campos, buscar-campo, inspecionar, consulta com filtro) + edge case (modelo desconhecido)",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Quais campos tem o modelo stock.picking no Odoo? Quero ver a lista completa com tipos.",
+      "expected_output": "Lista de campos do modelo stock.picking com nome, tipo, descricao e indicacao de obrigatoriedade",
+      "files": [],
+      "expectations": [
+        "Executou descobrindo.py com --modelo stock.picking --listar-campos",
+        "Retornou lista de campos com nome e tipo para cada campo",
+        "Incluiu campos conhecidos como 'name', 'partner_id', 'state', 'origin' na listagem",
+        "Informou o total de campos encontrados",
+        "NAO inventou campos que nao existem no output do script",
+        "Apresentou resultado organizado (nao apenas JSON bruto)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Qual campo guarda o CNPJ no res.partner do Odoo?",
+      "expected_output": "Campo(s) relacionado(s) a CNPJ no modelo res.partner, com nome exato e tipo",
+      "files": [],
+      "expectations": [
+        "Executou descobrindo.py com --modelo res.partner --buscar-campo cnpj",
+        "Retornou campo(s) que contém 'cnpj' no nome ou descricao",
+        "Informou o nome EXATO do campo (ex: l10n_br_cnpj ou cnpj_cpf) conforme retornado pelo script",
+        "Informou o tipo do campo (char, etc)",
+        "NAO inventou nome de campo diferente do retornado pelo script",
+        "Se mais de um campo foi encontrado, listou todos sem omitir"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Mostra todos os dados do registro 1 do modelo res.company no Odoo.",
+      "expected_output": "Todos os campos e valores do registro ID=1 de res.company",
+      "files": [],
+      "expectations": [
+        "Executou descobrindo.py com --modelo res.company --inspecionar 1",
+        "Retornou dados do registro com campos e valores",
+        "Incluiu campos basicos como 'name', 'id' nos dados retornados",
+        "NAO omitiu campos relevantes que estavam no output do script",
+        "NAO inventou valores que nao estavam no output real do script",
+        "Apresentou dados de forma legivel (nao apenas dump JSON gigante sem formatacao)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Busca no Odoo todos os produtos que tem 'palmito' no nome. Mostra id, nome e codigo de barras.",
+      "expected_output": "Lista de produtos com nome contendo 'palmito', mostrando id, nome e barcode",
+      "files": [],
+      "expectations": [
+        "Executou descobrindo.py com --modelo product.product --filtro contendo ilike e palmito",
+        "Usou --campos com lista incluindo 'id', 'name' e campo de barcode",
+        "Retornou registros encontrados com os campos solicitados",
+        "Informou total de registros encontrados",
+        "Se nenhum resultado, reportou claramente '0 registros' sem inventar dados",
+        "Valores retornados correspondem EXATAMENTE ao output do script"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quais campos tem o modelo ficticio.nao.existe no Odoo?",
+      "expected_output": "Mensagem de erro indicando que o modelo nao foi encontrado ou nao existe",
+      "files": [],
+      "expectations": [
+        "Executou descobrindo.py com --modelo ficticio.nao.existe --listar-campos",
+        "Script retornou erro (sucesso=false ou excecao)",
+        "Agente reportou o erro ao usuario de forma clara",
+        "NAO inventou campos para o modelo inexistente",
+        "NAO tratou a falha como se fosse sucesso"
+      ]
+    }
+  ]
+}

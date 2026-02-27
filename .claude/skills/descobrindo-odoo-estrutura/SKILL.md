@@ -54,17 +54,24 @@ Skill de **ULTIMO RECURSO** para descoberta de campos e estrutura de modelos Odo
 3. **Debug de valor** → `--inspecionar ID` para ver todos os campos de um registro
 4. **Consulta com dados** → `--filtro` + `--campos` + `--limit`
 
-## Regras de Negocio (Anti-Alucinacao)
+## Regras de Fidelidade de Dados (Anti-Alucinacao)
+
+### OBRIGATORIO — Fidelidade ao Output
+- **SEMPRE** usar `--json 2>/dev/null` para capturar output limpo (stderr tem mensagens de diagnostico)
+- **NUNCA** citar campos, valores ou totais que NAO aparecem no output JSON do script
+- **NUNCA** inventar nomes de campos. Se o output mostra `l10n_br_cnpj`, NAO dizer `cnpj` ou `cnpj_cpf`
+- Se `sucesso=false`, reportar o erro EXATAMENTE como retornado, NAO inventar dados
 
 ### O Agente PODE Afirmar
-- Nomes e tipos de campos retornados pelo Odoo
-- Valores de registros inspecionados
-- Resultados de consultas com filtro
+- Nomes e tipos de campos retornados pelo Odoo (exatamente como no JSON)
+- Valores de registros inspecionados (exatamente como no JSON)
+- Total de campos/registros (exatamente como no JSON)
 
 ### O Agente NAO PODE Inventar
 - Campos que nao existem no modelo (sem verificar)
 - Relacionamentos nao retornados pela API
 - Valores de campos nao consultados
+- Nomes "normalizados" diferentes do retornado (ex: dizer `cnpj` quando o campo e `l10n_br_cnpj`)
 
 ---
 
@@ -74,8 +81,10 @@ Skill de **ULTIMO RECURSO** para descoberta de campos e estrutura de modelos Odo
 
 ```bash
 source .venv/bin/activate && \
-python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes]
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes] --json 2>/dev/null
 ```
+
+> **IMPORTANTE**: SEMPRE usar `--json 2>/dev/null` para capturar output parseavel. O stderr contem mensagens de diagnostico do PostgreSQL/Flask que poluem o output.
 
 ### Operacoes Disponiveis
 
@@ -95,7 +104,7 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes]
 | `--buscar-campo` | Nao | Termo para buscar nos nomes/descricoes dos campos |
 | `--inspecionar` | Nao | ID do registro para inspecionar |
 | `--filtro` | Nao | Filtro em formato JSON |
-| `--campos` | Nao | Campos a retornar (JSON), usado com --filtro |
+| `--campos` | Nao | Campos a retornar (**JSON array**, ex: `'["id","name"]'`), usado com --filtro. NAO usar CSV |
 | `--limit` | Nao | Limite de resultados (padrao: 10) |
 | `--json` | Nao | Saida em formato JSON |
 
@@ -103,17 +112,17 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py [opcoes]
 
 ### Descobrir campos de um modelo
 ```bash
-python .../descobrindo.py --modelo l10n_br_ciel_it_account.dfe --listar-campos
+python .../descobrindo.py --modelo l10n_br_ciel_it_account.dfe --listar-campos --json 2>/dev/null
 ```
 
 ### Buscar campo especifico
 ```bash
-python .../descobrindo.py --modelo res.partner --buscar-campo cnpj
+python .../descobrindo.py --modelo res.partner --buscar-campo cnpj --json 2>/dev/null
 ```
 
 ### Inspecionar registro
 ```bash
-python .../descobrindo.py --modelo res.partner --inspecionar 123
+python .../descobrindo.py --modelo res.partner --inspecionar 123 --json 2>/dev/null
 ```
 
 ### Consulta generica com filtro
@@ -122,7 +131,7 @@ python .../descobrindo.py \
   --modelo res.partner \
   --filtro '[["vat","ilike","93209765"]]' \
   --campos '["id","name","vat"]' \
-  --limit 5
+  --limit 5 --json 2>/dev/null
 ```
 
 ---
@@ -170,31 +179,53 @@ python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
 **Situacao**: "Preciso criar integracao com modelo stock.picking (movimentacao de estoque)"
 
 ```bash
+source .venv/bin/activate
+
 # Passo 1: Listar TODOS os campos do modelo
-source .venv/bin/activate && \
 python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
   --modelo stock.picking \
   --listar-campos \
-  --json > /tmp/stock_picking_campos.json
+  --json 2>/dev/null > /tmp/stock_picking_campos.json
 
 # Passo 2: Buscar campos especificos de interesse
 python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
   --modelo stock.picking \
-  --buscar-campo partner
+  --buscar-campo partner --json 2>/dev/null
 
-python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
-  --modelo stock.picking \
-  --buscar-campo origin
-
-# Passo 3: Pegar um registro de exemplo para entender estrutura
+# Passo 3: Pegar um registro de exemplo (primeiro buscar IDs, depois inspecionar)
 python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
   --modelo stock.picking \
   --filtro '[["state","=","done"]]' \
-  --limit 1 \
-  --inspecionar
+  --campos '["id","name","origin"]' \
+  --limit 1 --json 2>/dev/null
+
+# Passo 4: Inspecionar o registro encontrado (usa ID do passo anterior)
+python .claude/skills/descobrindo-odoo-estrutura/scripts/descobrindo.py \
+  --modelo stock.picking \
+  --inspecionar 12345 --json 2>/dev/null
 ```
 
+> **NOTA**: `--filtro` e `--inspecionar` sao MUTUAMENTE EXCLUSIVOS. Para ver detalhes de um registro, primeiro busque IDs com `--filtro`, depois use `--inspecionar ID`.
+
 **Proximo passo**: Usar skill `integracao-odoo` para criar o Service com os campos descobertos.
+
+---
+
+### Cenario 4: Modelo inexistente (tratamento de erro)
+
+**Situacao**: Script retorna `sucesso=false` com mensagem de erro
+
+```json
+{
+  "sucesso": false,
+  "modelo": "ficticio.nao.existe",
+  "total": 0,
+  "campos": [],
+  "erro": "<Fault 2: 'O objeto ficticio.nao.existe não existe'>"
+}
+```
+
+**Acao**: Reportar o erro EXATAMENTE como retornado. NAO inventar campos para modelo inexistente.
 
 ## Modelos Conhecidos (Referencia)
 
