@@ -1,0 +1,22 @@
+[
+  {"query": "Como esta a CarVia? Me da um resumo geral.", "should_trigger": true},
+  {"query": "Quais operacoes CarVia estao confirmadas?", "should_trigger": true},
+  {"query": "Tem subcontrato pendente na CarVia?", "should_trigger": true},
+  {"query": "Mostra as faturas da transportadora com conferencia.", "should_trigger": true},
+  {"query": "Quero ver as faturas cliente CarVia pendentes.", "should_trigger": true},
+  {"query": "Qual o status da operacao CarVia 456?", "should_trigger": true},
+  {"query": "Cotar frete subcontratado para SP via Braspress.", "should_trigger": true},
+  {"query": "Subcontratos da transportadora Rodonaves na CarVia.", "should_trigger": true},
+  {"query": "Faturas CarVia do Atacadao, tem alguma em aberto?", "should_trigger": true},
+  {"query": "Listar opcoes de transportadora para operacao CarVia 789.", "should_trigger": true},
+  {"query": "Quanto custa o frete do pedido VCD12345 para Manaus?", "should_trigger": false},
+  {"query": "Qual transportadora mais barata para SP 5000kg?", "should_trigger": false},
+  {"query": "Como esta o banco de dados? Tem queries lentas?", "should_trigger": false},
+  {"query": "Tem pedido do Atacadao na carteira?", "should_trigger": false},
+  {"query": "NF 12345 foi entregue? Tem canhoto?", "should_trigger": false},
+  {"query": "Como cadastrar unidade no SSW opcao 401?", "should_trigger": false},
+  {"query": "Top 10 clientes por valor de frete este mes.", "should_trigger": false},
+  {"query": "Rastreie a NF 67890 no Odoo.", "should_trigger": false},
+  {"query": "Crie separacao do VCD99999 para amanha.", "should_trigger": false},
+  {"query": "Exporte o razao geral do Odoo em Excel.", "should_trigger": false}
+]

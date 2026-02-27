@@ -39,6 +39,56 @@ Skill para diagnosticos de saude, performance e otimizacao do banco PostgreSQL.
 
 ---
 
+## REGRAS CRITICAS
+
+### R1: FIDELIDADE AO OUTPUT DO SCRIPT
+```
+OBRIGATORIO: Toda informacao apresentada ao usuario DEVE vir EXATAMENTE
+dos campos do JSON retornado pelo script.
+
+PROIBIDO:
+- Inventar valores que nao existem no JSON (ex: "shared_buffers = 256MB")
+- Arredondar ou alterar percentuais do JSON (usar EXATAMENTE hit_rate_pct)
+- Especular causa de problemas sem evidencia no JSON
+- Inventar recomendacoes com valores especificos (ex: "aumente para 512MB")
+
+PERMITIDO:
+- Usar as faixas de interpretacao da SKILL.md (cache >= 99% = EXCELENTE)
+- Citar a acao_sugerida que JA EXISTE no JSON de cada check
+- Alertar sobre dados criticos (sequences > 50%, cache < 90%)
+```
+
+### R2: MODO DE EXECUCAO
+```
+AMBIENTE LOCAL (Claude Code / dev):
+  → Executar health_check_banco.py via Bash
+
+AMBIENTE PRODUCAO (agente web / Render):
+  → Usar mcp__render__query_render_postgres com postgresId
+  → SQLs prontas na secao "SQL Templates para Render MCP"
+
+NUNCA: Executar o script Python em producao (nao tem acesso ao banco)
+NUNCA: Usar mcp__render__ em ambiente local
+```
+
+### R3: RESULTADOS VAZIOS OU ERROS
+```
+Se o script retorna "dados": [] ou total: 0:
+  → Informar CLARAMENTE: "Nenhum [tipo] encontrado"
+  → NAO inventar explicacao para resultado vazio
+
+Se o script falha (erro de conexao, permissao):
+  → Mostrar a mensagem de erro EXATA
+  → Sugerir verificar conexao com o banco
+  → NAO tentar adivinhar a causa
+
+Se pg_stat_statements nao esta disponivel:
+  → Informar: "pg_stat_statements nao habilitado"
+  → NAO inventar dados de queries lentas
+```
+
+---
+
 ## DECISION TREE — Qual Check Usar?
 
 | Se a pergunta menciona... | Use este check | O que retorna |
@@ -63,6 +113,15 @@ health_check_banco.py --check unused_indexes cache_hit_rate connections
 # Todos com resumo executivo
 health_check_banco.py --all --resumo
 ```
+
+### Cenarios Compostos
+
+Quando o usuario pede "diagnostico completo" ou "o que precisa de atencao":
+
+1. Executar `--all --resumo` primeiro
+2. Se `resumo_executivo.total_problemas > 0`: detalhar cada problema
+3. Se `saude_geral == "CRITICO"`: alertar imediatamente
+4. Priorizar problemas: sequences > 50% → cache < 90% → vacuum > 10% → indices
 
 ---
 
@@ -169,6 +228,13 @@ ORDER BY last_value DESC;
 | 5-10% | Atencao | Verificar autovacuum config |
 | > 10% | Problema | Executar VACUUM ANALYZE manual |
 
+### Conexoes
+| Utilizacao | Status | Acao |
+|------------|--------|------|
+| < 50% | OK | Normal |
+| 50-80% | Atencao | Monitorar pool |
+| > 80% | Critico | Verificar pool e conexoes idle |
+
 ---
 
 ## Script Principal
@@ -181,6 +247,33 @@ python .claude/skills/diagnosticando-banco/scripts/health_check_banco.py [opcoes
 ```
 
 **Para parametros completos, retornos JSON e exemplos**: LER `SCRIPTS.md`
+
+---
+
+## Formato de Resposta ao Usuario
+
+### Diagnostico Completo (--all)
+```
+## Saude do Banco: [STATUS do resumo_executivo.saude_geral]
+
+### Problemas Encontrados
+- [Listar resumo_executivo.problemas — EXATAMENTE como vem do JSON]
+
+### Destaques
+- [Listar resumo_executivo.destaques — EXATAMENTE como vem do JSON]
+
+### Detalhes [se solicitado]
+[Expandir checks individuais com dados EXATOS do JSON]
+```
+
+### Check Especifico
+```
+## [Nome do Check]: [Status/Resultado principal]
+
+[Dados EXATOS do JSON formatados para leitura humana]
+
+Acao sugerida: [EXATAMENTE o campo acao_sugerida do JSON]
+```
 
 ---
 

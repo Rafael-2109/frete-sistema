@@ -122,12 +122,12 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 | # | Skill | Scripts | Size | Status | Data |
 |---|-------|---------|------|--------|------|
-| 7 | `gerindo-carvia` | 3 | 100KB | IN_PROGRESS | 2026-02-26 |
+| 7 | `gerindo-carvia` | 3 | 100KB | DONE | 2026-02-26 |
 | 8 | `monitorando-entregas` | 3 | 88KB | DONE | 2026-02-26 |
 | 9 | `integracao-odoo` | 4 | 76KB | DONE | 2026-02-26 |
 | 10 | `visao-produto` | 2 | 48KB | DONE | 2026-02-26 |
 | 11 | `acessando-ssw` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |
-| 12 | `diagnosticando-banco` | 1 | 44KB | IN_PROGRESS | 2026-02-26 |
+| 12 | `diagnosticando-banco` | 1 | 44KB | DONE | 2026-02-26 |
 
 ### P3 — Simples (1 script)
 
@@ -135,7 +135,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 |---|-------|---------|------|--------|------|
 | 13 | `exportando-arquivos` | 1 | 36KB | DONE | 2026-02-26 |
 | 14 | `lendo-arquivos` | 1 | 32KB | DONE | 2026-02-26 |
-| 15 | `memoria-usuario` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
+| 15 | `memoria-usuario` | 1 | 32KB | DONE | 2026-02-26 |
 | 16 | `descobrindo-odoo-estrutura` | 1 | 32KB | IN_PROGRESS | 2026-02-26 |
 | 17 | `buscando-rotas` | 1 | 16KB | IN_PROGRESS | 2026-02-26 |
 
@@ -146,7 +146,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | 18 | `executando-odoo-financeiro` | 3 | 64KB | DONE | 2026-02-26 |
 | 19 | `conciliando-odoo-po` | 3 | 56KB | IN_PROGRESS | 2026-02-26 |
 | 20 | `validacao-nf-po` | 2 | 48KB | IN_PROGRESS | 2026-02-26 |
-| 21 | `recebimento-fisico-odoo` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |
+| 21 | `recebimento-fisico-odoo` | 2 | 44KB | DONE | 2026-02-26 |
 | 22 | `frontend-design` | 2 | 44KB | IN_PROGRESS | 2026-02-26 |
 | 23 | `razao-geral-odoo` | 0 | 16KB | IN_PROGRESS | 2026-02-26 |
 

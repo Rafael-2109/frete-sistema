@@ -1,0 +1,77 @@
+{
+  "skill_name": "gerindo-carvia",
+  "version": 1,
+  "changelog": "v1: Initial evals covering 3 scripts (operacoes, faturas, cotacao) + domain confusion edge case",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Como esta a CarVia? Me da um resumo geral das operacoes e subcontratos.",
+      "expected_output": "Resumo com contadores por status de operacoes, subcontratos, valores CTe e faturas",
+      "files": [],
+      "expectations": [
+        "Executou consultando_operacoes_carvia.py com --resumo",
+        "Retornou operacoes_por_status com contadores por status (RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELADO)",
+        "Retornou subcontratos_por_status com contadores",
+        "Mostrou valor_cte_por_status quando disponivel",
+        "Incluiu informacoes sobre faturas_cliente e faturas_transportadora",
+        "NAO inventou dados que nao existem no JSON de saida do script",
+        "Apresentou valores em formato R$ brasileiro quando aplicavel"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Quais operacoes CarVia estao confirmadas? Preciso ver os detalhes.",
+      "expected_output": "Lista de operacoes com status CONFIRMADO, mostrando CTe, cliente, destino e peso",
+      "files": [],
+      "expectations": [
+        "Executou consultando_operacoes_carvia.py com --status CONFIRMADO",
+        "Retornou lista de operacoes filtradas por status CONFIRMADO",
+        "Mostrou para cada operacao: id, cte_numero, cte_valor, nome_cliente, destino, peso_utilizado",
+        "Informou o total de operacoes encontradas conforme campo total do script",
+        "NAO mostrou operacoes de outros status como se fossem CONFIRMADO",
+        "Valores monetarios correspondem EXATAMENTE ao JSON de saida do script"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Tem algum subcontrato pendente na CarVia? Quero ver quais precisam de acao.",
+      "expected_output": "Lista de subcontratos com status PENDENTE ou COTADO, com operacao, transportadora e valores",
+      "files": [],
+      "expectations": [
+        "Executou consultando_operacoes_carvia.py com --subcontratos-pendentes",
+        "Retornou lista de subcontratos com status PENDENTE ou COTADO",
+        "Mostrou para cada subcontrato: operacao_id, transportadora, valor_cotado, status, destino",
+        "Informou o total conforme campo total do script",
+        "NAO incluiu subcontratos CONFIRMADOS ou FATURADOS como pendentes",
+        "Tratou corretamente cenario de resultado vazio (total=0) sem inventar dados"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Quero ver as faturas da transportadora com o comparativo de conferencia. Alguma com divergencia?",
+      "expected_output": "Faturas transportadora com comparativo: valor_fatura vs soma_cotado vs soma_final, diferenca e percentual",
+      "files": [],
+      "expectations": [
+        "Executou consultando_faturas_carvia.py com --tipo transportadora --conferencia",
+        "Retornou faturas com campo conferencia contendo soma_valor_cotado, soma_valor_final, diferenca_vs_cotado",
+        "Calculou e mostrou diferenca entre valor_fatura e soma_valor_final",
+        "Destacou faturas com divergencia significativa (diferenca_vs_final != 0) quando existem",
+        "Usou status_conferencia (NAO status) conforme modelo CarviaFaturaTransportadora",
+        "NAO fabricou percentuais ou diferencas que nao vieram do JSON de saida"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quanto custa o frete do pedido VCD12345 para Sao Paulo? Qual transportadora mais barata?",
+      "expected_output": "Redirecionamento para a skill cotando-frete OU esclarecimento sobre dominio CarVia vs Nacom",
+      "files": [],
+      "expectations": [
+        "Identificou que pedido VCD pertence ao dominio NACOM (outbound), nao CarVia (inbound)",
+        "NAO executou scripts CarVia para cotacao de frete Nacom",
+        "Sugeriu usar a skill cotando-frete ou explicou a diferenca entre CarVia e Nacom",
+        "NAO inventou valores de cotacao para o pedido VCD12345",
+        "Demonstrou entendimento de que CarVia = subcontrato inbound, Nacom = industria outbound"
+      ]
+    }
+  ]
+}

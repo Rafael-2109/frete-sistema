@@ -14,10 +14,10 @@ description: >-
   - Faturas: "faturas pendentes", "conferencia da fatura X"
 
   NAO USAR QUANDO:
-  - Cotacao frete Nacom (industria, outbound) -> usar **cotando-frete**
-  - Documentacao SSW CarVia -> usar **acessando-ssw**
-  - Status entrega pos-faturamento Nacom -> usar **monitorando-entregas**
-  - Criar embarque/separacao Nacom -> usar **gerindo-expedicao**
+  - Cotacao frete Nacom (industria, outbound) = usar **cotando-frete**
+  - Documentacao SSW CarVia = usar **acessando-ssw**
+  - Status entrega pos-faturamento Nacom = usar **monitorando-entregas**
+  - Criar embarque/separacao Nacom = usar **gerindo-expedicao**
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -49,15 +49,55 @@ NAO USE para:
 **PROIBIDO** criar, calcular ou inferir dados que NAO foram retornados pelo script.
 Se precisar de dado que nao veio no script: EXECUTE o script com flag adequado ou PERGUNTE ao usuario.
 
-### 2. REGRA DE FALLBACK (NUNCA TRAVAR)
+Exemplos de violacao:
+- Inventar percentuais, tendencias ou comparativos nao presentes no JSON
+- Supor causa para dados vazios ("provavelmente nao ha operacoes porque...")
+- Fabricar nomes de transportadoras ou valores de cotacao
+
+### 2. FIDELIDADE AO OUTPUT DO SCRIPT
+Scripts retornam JSON estruturado. Sua resposta DEVE:
+- Usar EXATAMENTE os valores dos campos retornados (nao arredondar, nao converter)
+- Quando o script retorna `conferencia.diferenca_vs_cotado`, usar ESSE valor — NAO recalcular manualmente
+- Apresentar valores monetarios como R$ com formatacao brasileira (1.234,56)
+- Citar o campo do JSON quando houver duvida (ex: "campo `valor_cotado`")
+
+### 3. REGRA DE FALLBACK (NUNCA TRAVAR)
 Se um script falhar: SEMPRE responda ao usuario com erro e alternativa.
 **NUNCA:** Ficar em silencio, travar, ou tentar criar scripts customizados.
 
-### 3. DOMINIO CARVIA vs NACOM
+### 4. RESULTADOS VAZIOS
+Quando um script retorna `total: 0` ou `sucesso: false`:
+- Reportar claramente: "Nenhum resultado encontrado para [filtro]"
+- NAO inventar explicacoes para a ausencia de dados
+- Sugerir ajustar filtros (status diferente, nome parcial, sem filtro)
+- Se `sucesso: false`, mostrar o campo `erro` ao usuario
+
+### 5. DOMINIO CARVIA vs NACOM
 CarVia = transportadora que SUBCONTRATA frete (inbound).
 Nacom = industria que CONTRATA frete (outbound).
 Se o usuario perguntar sobre frete de embarque/pedido VCD: use `cotando-frete`.
 Se o usuario perguntar sobre subcontrato/operacao CarVia: use ESTA skill.
+
+**Dica de deteccao**: Se a pergunta menciona peso/cidade SEM operacao_id/subcontrato = provavelmente Nacom (outbound).
+Se menciona operacao, subcontrato, fatura transportadora CarVia = ESTA skill.
+
+### 6. CENARIOS COMPOSTOS
+Quando o usuario pede "resumo geral" ou "como esta a CarVia?":
+- Execute `--resumo` para visao geral
+- Se houver subcontratos PENDENTES/COTADOS no resumo, execute tambem `--subcontratos-pendentes`
+- Apresente ambos em sequencia: primeiro o panorama, depois os itens que precisam de acao
+
+### 7. CONFERENCIA — GOTCHAS
+Ao apresentar dados de conferencia (`--conferencia`):
+- `percentual_diferenca_cotado` pode ser `null` quando `soma_valor_cotado = 0` — reportar como "N/A (sem cotacoes)"
+- `diferenca_vs_cotado` positiva = fatura MAIOR que soma cotada. Negativa = fatura MENOR
+- Campo correto do modelo e `status_conferencia` (NAO `status`) — CarviaFaturaTransportadora
+- NAO recalcular diferencas/percentuais: usar EXATAMENTE os valores do JSON retornado
+
+### 8. STATUS DE OPERACOES
+Valores validos para `--status`: RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELADO
+- Fluxo normal: RASCUNHO → COTADO → CONFIRMADO → FATURADO
+- Cancelar: qualquer status exceto FATURADO
 
 ---
 
@@ -80,6 +120,8 @@ Se o usuario perguntar sobre subcontrato/operacao CarVia: use ESTA skill.
 | **Conferencia fatura** | `consultando_faturas_carvia.py` | `--tipo transportadora --conferencia` |
 | **Cotar subcontrato** | `cotando_subcontrato_carvia.py` | `--operacao 123 --transportadora "Braspress"` |
 | **Opcoes de transportadora** | `cotando_subcontrato_carvia.py` | `--operacao 123 --listar-opcoes` |
+| **Ranking todas transportadoras** | `cotando_subcontrato_carvia.py` | `--operacao 123 --todas` |
+| **Detalhe de fatura especifica** | `consultando_faturas_carvia.py` | `--fatura 456` |
 
 ### Regras de Decisao
 

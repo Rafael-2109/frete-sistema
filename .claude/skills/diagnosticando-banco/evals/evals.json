@@ -1,0 +1,80 @@
+{
+  "skill_name": "diagnosticando-banco",
+  "version": 1,
+  "changelog": "v1: Initial evals covering all 9 checks, combined mode, edge cases, and Render MCP mode",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Como esta a saude do banco? Faz um diagnostico completo.",
+      "expected_output": "Resumo executivo com saude_geral, problemas e destaques cobrindo cache, conexoes, indices, vacuum e sequences",
+      "files": [],
+      "expectations": [
+        "Executou health_check_banco.py com --all (e opcionalmente --resumo)",
+        "Apresentou saude_geral (EXCELENTE/BOM/ATENCAO/CRITICO) baseado EXATAMENTE no campo resumo_executivo.saude_geral do JSON",
+        "Listou problemas encontrados correspondendo ao campo resumo_executivo.problemas do JSON",
+        "Listou destaques positivos correspondendo ao campo resumo_executivo.destaques do JSON",
+        "Mencionou cache hit rate com percentual EXATO do JSON (heap.hit_rate_pct)",
+        "Mencionou conexoes com total/max_connections EXATOS do JSON",
+        "NAO inventou dados que nao existem no JSON de saida (ex: nao inventar tamanho do banco se nao executou table_sizes)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Quais indices nao estao sendo usados no banco? Tem algum duplicado tambem?",
+      "expected_output": "Lista de indices nao usados com tamanho desperdicado e indices duplicados se houver",
+      "files": [],
+      "expectations": [
+        "Executou health_check_banco.py com --check unused_indexes duplicate_indexes",
+        "Para unused_indexes: mostrou total de indices e espaco_desperdicado EXATOS do JSON",
+        "Para unused_indexes: listou indices com nome da tabela e tamanho de cada um",
+        "Para duplicate_indexes: mostrou total de grupos duplicados do JSON",
+        "Se nao houver duplicados (total=0), informou claramente que nao ha duplicados",
+        "NAO sugeriu remover indices sem base no JSON (ex: nao disse 'remova idx_X' se idx_X nao aparece na lista)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "O cache do banco ta bom? E como estao as conexoes?",
+      "expected_output": "Cache hit rate com status e conexoes por estado com utilizacao percentual",
+      "files": [],
+      "expectations": [
+        "Executou health_check_banco.py com --check cache_hit_rate connections",
+        "Mostrou hit_rate_pct do heap E do index com valores EXATOS do JSON",
+        "Classificou status do cache (EXCELENTE/BOM/ATENCAO/CRITICO) usando EXATAMENTE o campo status do JSON",
+        "Mostrou total_ativas e max_connections EXATOS do JSON",
+        "Mostrou utilizacao_pct EXATO do JSON",
+        "Listou breakdown por estado (active, idle, idle in transaction) conforme campo por_estado do JSON",
+        "NAO inventou recomendacoes de shared_buffers com valores especificos que nao existem no JSON"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Tem alguma tabela precisando de vacuum? E quais sao as maiores tabelas?",
+      "expected_output": "Tabelas com dead tuples altos e ranking das maiores tabelas com tamanho",
+      "files": [],
+      "expectations": [
+        "Executou health_check_banco.py com --check vacuum_stats table_sizes",
+        "Para vacuum_stats: mostrou total_com_dead e total_problematicas EXATOS do JSON",
+        "Para vacuum_stats: listou tabelas com dead_ratio_pct e indicou quais precisam de VACUUM (dead_ratio > 10%)",
+        "Para table_sizes: mostrou tamanho_total_top EXATO do JSON",
+        "Para table_sizes: listou tabelas com tamanho_total, linhas_vivas e dead_ratio_pct",
+        "NAO executou VACUUM nem sugeriu executar sem que o usuario pedisse explicitamente"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Tem alguma sequence proxima do limite de INTEGER? Preciso saber se tem risco de overflow.",
+      "expected_output": "Lista de sequences com uso percentual, alertas criticos e atencao",
+      "files": [],
+      "expectations": [
+        "Executou health_check_banco.py com --check sequence_capacity",
+        "Mostrou total_sequences, alertas_criticos e atencao EXATOS do JSON",
+        "Listou sequences com uso_pct, tipo (integer/bigint) e valor_atual",
+        "Identificou sequences com uso > 50% como alertas CRITICOS (se houver)",
+        "Identificou sequences entre 10-50% como ATENCAO (se houver)",
+        "Se nao houver alertas, informou claramente que nenhuma sequence esta em risco",
+        "NAO inventou valores de uso_pct que nao existem no JSON"
+      ]
+    }
+  ]
+}

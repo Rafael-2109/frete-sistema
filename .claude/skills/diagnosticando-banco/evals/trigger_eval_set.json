@@ -1,0 +1,22 @@
+[
+  {"query": "Como esta a saude do banco?", "should_trigger": true},
+  {"query": "Tem indices nao usados no banco?", "should_trigger": true},
+  {"query": "Qual o cache hit rate do PostgreSQL?", "should_trigger": true},
+  {"query": "Quantas conexoes ativas tem no banco?", "should_trigger": true},
+  {"query": "Precisa rodar vacuum em alguma tabela?", "should_trigger": true},
+  {"query": "Tem alguma sequence proxima do limite de INTEGER?", "should_trigger": true},
+  {"query": "Quais sao as maiores tabelas do banco?", "should_trigger": true},
+  {"query": "Tem indice duplicado no banco?", "should_trigger": true},
+  {"query": "Quais as queries mais lentas do banco?", "should_trigger": true},
+  {"query": "O banco ta com bloat nos indices?", "should_trigger": true},
+  {"query": "Quais os top 10 clientes por valor de frete?", "should_trigger": false},
+  {"query": "A NF 12345 ja foi entregue?", "should_trigger": false},
+  {"query": "Exporte a carteira de pedidos para Excel", "should_trigger": false},
+  {"query": "Qual o status do deploy no Render?", "should_trigger": false},
+  {"query": "Quanto custa enviar 500kg para Manaus?", "should_trigger": false},
+  {"query": "Qual o consumo de CPU do servico web?", "should_trigger": false},
+  {"query": "Me mostra os logs de erro da aplicacao", "should_trigger": false},
+  {"query": "Cadastra a transportadora XYZ na SSW", "should_trigger": false},
+  {"query": "Qual a margem do pedido 45678?", "should_trigger": false},
+  {"query": "Reconcilia os pagamentos do Odoo de ontem", "should_trigger": false}
+]
