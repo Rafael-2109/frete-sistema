@@ -497,7 +497,7 @@ i.text-muted,
 
 /* Warning - Amarelo/Amber */
 .btn-outline-warning {
-    color: var(--amber-50);
+    color: var(--warning-outline-text, var(--amber-50));
     border-color: var(--amber-50);
     transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }

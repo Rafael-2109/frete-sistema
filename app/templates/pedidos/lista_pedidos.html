@@ -225,6 +225,16 @@
                 <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
                     <i class="fas fa-times"></i> Limpar Filtros
                 </a>
+                <a href="{{ filtro_url(status='agend_pendente') }}"
+                    class="btn filtro-status ms-2
+                    {% if filtro_status_ativo == 'agend_pendente' %}
+                        {% if contadores_status.agend_pendente > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                    {% else %}
+                        {% if contadores_status.agend_pendente > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                    {% endif %}">
+                    <i class="fas fa-calendar-times"></i> Agend. Pendente
+                    <span class="badge badge-contador-theme">{{ contadores_status.agend_pendente }}</span>
+                </a>
                 </div>
 
                             {# ▸ CENTRO – Datas + Aberto mais compactos #}
@@ -394,18 +404,6 @@
                             {% endif %}">
                             <i class="fas fa-undo"></i> NF no CD
                             <span class="badge badge-contador-theme">{{ contadores_status.nf_cd }}</span>
-                        </a>
-                        
-                        <!-- ✅ NOVO: Botão Agend. Pendente -->
-                        <a href="{{ filtro_url(status='agend_pendente') }}"
-                            class="btn btn-sm filtro-status
-                            {% if filtro_status_ativo == 'agend_pendente' %}
-                                {% if contadores_status.agend_pendente > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
-                            {% else %}
-                                {% if contadores_status.agend_pendente > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
-                            {% endif %}">
-                            <i class="fas fa-calendar-times"></i> Agend. Pendente
-                            <span class="badge badge-contador-theme">{{ contadores_status.agend_pendente }}</span>
                         </a>
                         
                         <!-- Contador de pedidos selecionados -->

@@ -82,6 +82,9 @@
     --text: hsl(0 0% 95%);
     --text-muted: hsl(0 0% 70%);
 
+    /* Warning outline: texto legível no dark mode */
+    --warning-outline-text: var(--amber-50);
+
     /* Borda (30%) */
     --border: hsl(0 0% 30%);
 
@@ -135,6 +138,9 @@
     /* 2 tons de texto (10% → 40%) */
     --text: hsl(0 0% 10%);
     --text-muted: hsl(0 0% 40%);
+
+    /* Warning outline: texto legível no light mode */
+    --warning-outline-text: hsl(45 100% 30%);
 
     /* Borda (85% - sutil) */
     --border: hsl(0 0% 85%);

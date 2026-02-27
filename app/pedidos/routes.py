@@ -18,6 +18,7 @@ from app.utils.embarque_numero import obter_proximo_numero_embarque
 from datetime import datetime
 from app.utils.timezone import agora_utc_naive
 from app.utils.tabela_frete_manager import TabelaFreteManager
+from app.pedidos.services.counter_service import CNPJS_EXCLUIR_AGENDAMENTO
 
 
 # routes.py
@@ -116,14 +117,17 @@ def lista_pedidos():
                 Pedido.expedicao < hoje
             )
         elif filtro_status == 'agend_pendente':
-            # ✅ NOVO: Filtro para pedidos com agendamento pendente
+            # Filtro para pedidos com agendamento pendente (SP + FOB, excluindo CNPJs)
             if cnpjs_validos_agendamento:
+                cnpj_raiz = func.left(func.regexp_replace(Pedido.cnpj_cpf, '[^0-9]', '', 'g'), 8)
                 query = query.filter(
                     Pedido.cnpj_cpf.in_(cnpjs_validos_agendamento),
                     (Pedido.agendamento.is_(None)),  # Sem data de agendamento
                     Pedido.nf_cd == False,  # Não está no CD
                     (Pedido.nf.is_(None)) | (Pedido.nf == ""),  # Sem NF
-                    Pedido.data_embarque.is_(None)  # Não embarcado
+                    Pedido.data_embarque.is_(None),  # Não embarcado
+                    (Pedido.cod_uf == 'SP') | (Pedido.rota == 'FOB'),
+                    ~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO)
                 )
             else:
                 # Se não há CNPJs válidos, retorna query vazia

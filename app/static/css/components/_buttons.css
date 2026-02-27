@@ -192,7 +192,7 @@
 
 .btn-outline-warning {
     --_btn-bg: transparent;
-    --_btn-color: var(--amber-50);
+    --_btn-color: var(--warning-outline-text, var(--amber-50));
     --_btn-border: var(--amber-50);
 }
 

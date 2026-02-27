@@ -22,6 +22,9 @@ from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
+# Raiz CNPJ (8 primeiros dígitos) de clientes excluídos do filtro Agend. Pendente
+CNPJS_EXCLUIR_AGENDAMENTO = ['93209765', '75315333', '00063960', '01157555', '06057223']
+
 CACHE_KEY = "pedidos:contadores:v1"
 CACHE_TTL = 45  # segundos
 
@@ -224,16 +227,20 @@ class PedidosCounterService:
 
     @staticmethod
     def _contar_agend_pendente(cnpjs_agendamento: List[str]) -> int:
-        """Conta pedidos com agendamento pendente."""
+        """Conta pedidos com agendamento pendente (SP + FOB, excluindo CNPJs específicos)."""
         if not cnpjs_agendamento:
             return 0
+
+        cnpj_raiz = func.left(func.regexp_replace(Pedido.cnpj_cpf, '[^0-9]', '', 'g'), 8)
 
         return Pedido.query.filter(
             Pedido.cnpj_cpf.in_(cnpjs_agendamento),
             Pedido.agendamento.is_(None),
             Pedido.nf_cd == False,
             (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.data_embarque.is_(None)
+            Pedido.data_embarque.is_(None),
+            (Pedido.cod_uf == 'SP') | (Pedido.rota == 'FOB'),
+            ~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO)
         ).count()
 
     @staticmethod
