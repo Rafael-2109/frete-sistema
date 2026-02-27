@@ -56,6 +56,11 @@
       "default": 1.0
     },
     {
+      "name": "odoo_product_uom_id",
+      "type": "integer",
+      "description": "ID da UoM em uom.uom do Odoo"
+    },
+    {
       "name": "ativo",
       "type": "boolean",
       "description": "True = registro ativo",
@@ -97,16 +102,16 @@
   ],
   "indices": [
     {
-      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
+      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
       "columns": [
-        "cod_produto_fornecedor"
+        "cod_produto_interno"
       ],
       "unique": false
     },
     {
-      "name": "ix_produto_fornecedor_depara_cod_produto_interno",
+      "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
       "columns": [
-        "cod_produto_interno"
+        "cod_produto_fornecedor"
       ],
       "unique": false
     },

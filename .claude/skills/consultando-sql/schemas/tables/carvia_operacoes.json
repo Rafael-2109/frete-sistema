@@ -145,16 +145,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_cnpj_cliente",
+      "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
-        "cnpj_cliente"
+        "fatura_cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_fatura_cliente_id",
+      "name": "ix_carvia_operacoes_cnpj_cliente",
       "columns": [
-        "fatura_cliente_id"
+        "cnpj_cliente"
       ],
       "unique": false
     }
