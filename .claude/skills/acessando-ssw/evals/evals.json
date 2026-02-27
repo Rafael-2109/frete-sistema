@@ -1,0 +1,72 @@
+{
+  "skill_name": "acessando-ssw",
+  "version": 2,
+  "changelog": "v2: Fixed eval 3 — SSW actually HAS GPS features (opcao 135, SSWMobile, satellite). Rewritten expectations to test nuanced GPS differentiation instead of 'not found' behavior. v1: Initial evals covering resolver_opcao (by number/name), consultar_documentacao (text search), edge case (no results), and CarVia contextualization",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "O que e a opcao 436 no SSW? Para que serve e qual o POP relacionado?",
+      "expected_output": "Descricao da opcao 436 (Faturamento Geral), arquivo .md fonte, e POP-E03-faturamento-automatico como POP relacionado",
+      "files": [],
+      "expectations": [
+        "Executou resolver_opcao_ssw.py com --numero 436",
+        "Informou que a opcao 436 e 'Faturamento Geral' com base no arquivo financeiro/436-faturamento-geral.md",
+        "Mencionou o POP relacionado POP-E03-faturamento-automatico.md como fonte de passo-a-passo",
+        "Citou a fonte do arquivo .md consultado (nao inventou campos ou telas)",
+        "NAO confundiu com opcao 435 (pre-faturamento) ou 437 (faturamento manual)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Qual a opcao de contas a pagar no SSW? Quero saber o passo a passo.",
+      "expected_output": "Identifica opcao 475 (Contas a Pagar), mostra POP-F01, e apresenta passo-a-passo baseado no doc",
+      "files": [],
+      "expectations": [
+        "Executou resolver_opcao_ssw.py com --nome 'contas a pagar' OU consultar_documentacao_ssw.py com --busca 'contas a pagar'",
+        "Identificou a opcao 475 como 'Contas a Pagar (Programacao de Despesas)' baseado no output do script",
+        "Mencionou o POP-F01 (Lancar Contas a Pagar) que apareceu nos resultados",
+        "Leu o arquivo POP ou doc para apresentar passos ao usuario (nao inventou passos)",
+        "Citou fonte do arquivo consultado"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Como emitir MDF-e no SSW? Preciso do fluxo completo.",
+      "expected_output": "Busca na documentacao SSW por MDF-e, encontra docs relevantes (opcao 020/025, POP-D03), e apresenta fluxo",
+      "files": [],
+      "expectations": [
+        "Executou consultar_documentacao_ssw.py com --busca 'MDF-e' (modo regex ou hibrida)",
+        "Encontrou documentos relacionados a MDF-e/manifesto nos resultados",
+        "Mencionou opcao 020 ou 025 (manifesto/MDF-e) ou POP-D03 como referencia",
+        "Leu o documento encontrado para apresentar o fluxo (nao inventou etapas)",
+        "NAO confundiu MDF-e com CT-e (sao documentos fiscais diferentes)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "O SSW tem funcionalidade de rastreamento GPS de frota em tempo real?",
+      "expected_output": "Encontra documentacao sobre GPS no SSW (opcao 135 GPS navigator, SSWMobile com localizacao, gerenciadora de risco com satelite) e diferencia entre rastreamento pre-carregado vs tempo real",
+      "files": [],
+      "expectations": [
+        "Executou consultar_documentacao_ssw.py com --busca contendo 'GPS' ou 'rastreamento'",
+        "Encontrou documentacao sobre funcionalidades GPS do SSW (opcao 135, SSWMobile, ou gerenciadora de risco)",
+        "Diferenciou entre GPS pre-carregado (opcao 135 navigator) e rastreamento em tempo real (SSWMobile/satelite)",
+        "Leu pelo menos um documento fonte para fundamentar a resposta (nao inventou funcionalidades)",
+        "Apresentou resposta com nuances sobre limitacoes vs funcionalidades dedicadas de telemetria"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Passo a passo para emitir CT-e de carga fracionada no SSW. A CarVia ja usa esse processo?",
+      "expected_output": "Encontra POP-C01 (CT-e fracionado), apresenta passos, e consulta CARVIA_STATUS para informar adocao",
+      "files": [],
+      "expectations": [
+        "Executou consultar_documentacao_ssw.py ou resolver_opcao_ssw.py para encontrar docs de CT-e fracionado",
+        "Encontrou referencia ao POP-C01-emitir-cte-fracionado.md ou opcao 004/007",
+        "Leu o POP/doc para apresentar o passo-a-passo real (nao inventou etapas)",
+        "Consultou CARVIA_STATUS.md (via Read ou busca) para informar se CarVia ja usa o processo",
+        "Respondeu sobre o status de adocao da CarVia baseado no arquivo (nao inventou status)"
+      ]
+    }
+  ]
+}

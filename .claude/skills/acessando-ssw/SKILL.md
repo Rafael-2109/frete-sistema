@@ -1,21 +1,17 @@
 ---
 name: acessando-ssw
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta "como fazer X no SSW?",
-  "o que e opcao NNN?", "passo a passo para...", menciona "CarVia", "CTRC",
-  "MDF-e", "POP", ou precisa de documentacao e processos do sistema SSW.
-  Nao usar para cotacao de frete interna Nacom (usar cotando-frete), status
-  de entrega no sistema local (usar monitorando-entregas), ou operacoes de
-  escrita no SSW como cadastros (usar operando-ssw).
-  - Navegacao SSW: "acesse o SSW e preencha...", "navegue ate opcao 004"
-  - Regras legais: "sequencia obrigatoria carga direta", "preciso de MDF-e?"
+  Base de conhecimento do sistema SSW. Use esta skill sempre que alguem
+  perguntar qualquer coisa sobre o SSW — como fazer algo no SSW, o que uma
+  opcao numerada faz (opcao 004, opcao 436, etc.), guias passo-a-passo (POPs),
+  fluxos de documentos fiscais de transporte (CT-e, MDF-e, CTRC), romaneio,
+  faturamento, contas a pagar, transferencias entre filiais, ou se a CarVia
+  usa determinado recurso do SSW. Se a pergunta menciona SSW ou envolve
+  entender/navegar processos do SSW, use esta skill.
 
-  NAO USAR QUANDO:
-  - Cotacao de frete interna (Sistema Fretes) → usar **cotando-frete**
-  - Estoque/separacao/embarque → usar **gerindo-expedicao**
-  - Status de entrega pos-NF → usar **monitorando-entregas**
-  - Operacoes Odoo → usar **rastreando-odoo** ou **especialista-odoo**
-  - Consultas analiticas SQL → usar **consultando-sql**
+  Nao usar para: cotacao de frete interna Nacom → cotando-frete; rastreamento
+  de entregas pos-NF → monitorando-entregas; operacoes Odoo → especialista-odoo;
+  consultas SQL → consultando-sql; cadastros/escrita no SSW → operando-ssw.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -139,6 +135,29 @@ python scripts/resolver_opcao_ssw.py --numero 062
 4. **Use url-map.json para URLs**: Nunca construa URLs de ajuda SSW manualmente
 5. **POPs > docs de opcao**: Se existe POP para o processo, prefira ele (mais detalhado e CarVia-aware)
 6. **Opcoes com [CONFIRMAR]**: Se doc existe mas tem marcadores [CONFIRMAR], informar ao usuario que campos sao inferidos e sugerir verificacao via Playwright
+
+---
+
+## Regras Anti-Alucinacao
+
+7. **NUNCA invente numeros de opcao**: So cite opcoes que apareceram no output dos scripts ou nos docs lidos. Se o script retornou `"sucesso": true` com opcao 436, use 436 — NAO invente 438 ou 440.
+8. **NUNCA invente codigos de POP**: So cite POPs presentes em `pop_relacionado` do script ou encontrados via busca. O mapping opcao→POP e feito pelo script, nao por inferencia.
+9. **Fidelidade ao output dos scripts**: Dados do JSON de saida (nomes, numeros, caminhos) devem ser usados EXATAMENTE como retornados. Nao parafrasear nomes de opcao ou caminhos de arquivo.
+10. **Busca sem resultados — retry com termos mais simples**: Se `consultar_documentacao_ssw.py` retornar `total_encontrados: 0`, tentar termos mais curtos/simples antes de concluir que nao existe documentacao. Exemplo: "GPS rastreamento frota" → 0 resultados → tentar "GPS" ou "rastreamento" separadamente.
+11. **NAO confundir documentos fiscais**: CT-e, MDF-e, NF-e, DACTE e DAMDFE sao documentos diferentes. Nunca use um no lugar do outro.
+
+---
+
+## Estrategia para Queries Compostas
+
+Para perguntas que combinam multiplos temas (ex: "passo a passo CT-e + CarVia ja usa?"):
+
+1. **Executar scripts PRIMEIRO** — scripts dao pontos de entrada estruturados (doc .md + POP + URL)
+2. **Ler os docs identificados** — o script indica QUAL doc ler, ler ele para obter conteudo
+3. **Consultar CARVIA_STATUS.md** — para a parte "CarVia usa?" (sempre, mesmo se nao perguntou)
+4. **Montar resposta unificada** — combinar informacoes de todas as fontes
+
+NAO pule o passo 1 (scripts) e va direto para Grep manual. Os scripts reduzem de ~15 operacoes para ~3.
 
 ---
 

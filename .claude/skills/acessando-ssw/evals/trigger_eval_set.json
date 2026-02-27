@@ -1,0 +1,22 @@
+[
+  {"query": "O que e a opcao 436 no SSW?", "should_trigger": true},
+  {"query": "Como emitir CT-e no SSW?", "should_trigger": true},
+  {"query": "Passo a passo para criar MDF-e", "should_trigger": true},
+  {"query": "O que e CTRC no sistema?", "should_trigger": true},
+  {"query": "A CarVia usa a opcao 004?", "should_trigger": true},
+  {"query": "Qual o POP de faturamento no SSW?", "should_trigger": true},
+  {"query": "Como funciona o romaneio de entregas no SSW?", "should_trigger": true},
+  {"query": "Sequencia legal obrigatoria para carga direta", "should_trigger": true},
+  {"query": "Como cadastrar fornecedor na opcao 478?", "should_trigger": true},
+  {"query": "Fluxo completo de contas a pagar no SSW", "should_trigger": true},
+  {"query": "Quanto custa enviar 3000kg para Manaus?", "should_trigger": false},
+  {"query": "Quantos pedidos pendentes tem o Atacadao?", "should_trigger": false},
+  {"query": "NF 12345 foi entregue?", "should_trigger": false},
+  {"query": "Rastreie o PO00789 no Odoo", "should_trigger": false},
+  {"query": "Qual o estoque de palmito hoje?", "should_trigger": false},
+  {"query": "Crie pagamento para NF 5678 no Odoo", "should_trigger": false},
+  {"query": "Top 10 clientes por valor de frete", "should_trigger": false},
+  {"query": "Exporte o razao geral de janeiro", "should_trigger": false},
+  {"query": "Visao 360 do produto palmito", "should_trigger": false},
+  {"query": "Como esta o banco? Cache hit rate?", "should_trigger": false}
+]
