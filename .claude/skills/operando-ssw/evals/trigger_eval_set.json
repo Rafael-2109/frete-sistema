@@ -1,0 +1,26 @@
+{
+  "skill_name": "operando-ssw",
+  "version": 1,
+  "queries": [
+    {"query": "cadastre unidade CGR no SSW como terceiro", "should_trigger": true},
+    {"query": "importar cidades da Bahia na 402 via CSV", "should_trigger": true},
+    {"query": "cotar frete na 002 para Manaus, 2000kg, R$30.000", "should_trigger": true},
+    {"query": "criar comissao 408 para unidade BVH com CNPJ 62312605000175", "should_trigger": true},
+    {"query": "exportar cidades de todas as UFs da 402 em CSV", "should_trigger": true},
+    {"query": "cadastrar CNPJ como fornecedor na 478", "should_trigger": true},
+    {"query": "registrar transportadora no SSW", "should_trigger": true},
+    {"query": "gerar CSV de comissao por cidade para unidade MAO", "should_trigger": true},
+    {"query": "implantar nova rota completa POP-A10 para Campo Grande", "should_trigger": true},
+    {"query": "importar CSV de comissao por cidade no SSW", "should_trigger": true},
+    {"query": "como funciona a opcao 401 do SSW?", "should_trigger": false},
+    {"query": "qual o prazo para Manaus 3 toneladas?", "should_trigger": false},
+    {"query": "tem pedido do Atacadao pendente?", "should_trigger": false},
+    {"query": "rastreie NF 12345 no Odoo", "should_trigger": false},
+    {"query": "o que e CTRC no SSW?", "should_trigger": false},
+    {"query": "quais cidades a 402 atende em SP?", "should_trigger": false},
+    {"query": "exporte planilha de fretes pagos", "should_trigger": false},
+    {"query": "qual transportadora mais barata para RJ?", "should_trigger": false},
+    {"query": "me explica o POP de cadastro de unidade", "should_trigger": false},
+    {"query": "qual o passo a passo da opcao 485?", "should_trigger": false}
+  ]
+}

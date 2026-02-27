@@ -1,0 +1,79 @@
+{
+  "skill_name": "operando-ssw",
+  "version": 1,
+  "changelog": "v1: Initial evals covering cadastro 401, cidades 402 CSV workflow, cotacao 002, fluxo nova rota completa, e cenario de borda (boundary com acessando-ssw)",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Preciso cadastrar uma nova unidade parceira no SSW com sigla POA, tipo terceiro. A razao social e TRANSMENEZES - PORTO ALEGRE/RS.",
+      "expected_output": "Agente identifica script cadastrar_unidade_401.py, monta comando com --sigla POA --tipo T --razao-social, executa primeiro com --dry-run, e pede confirmacao antes de executar sem --dry-run",
+      "files": [],
+      "expectations": [
+        "Identificou cadastrar_unidade_401.py como o script correto (NAO cadastrar_cidades_402 ou outro)",
+        "Usou --sigla POA e --tipo T (terceiro = T, nao F ou M)",
+        "Incluiu --razao-social com o valor fornecido",
+        "Executou PRIMEIRO com --dry-run obrigatorio",
+        "Perguntou ao usuario para confirmar antes de executar sem --dry-run",
+        "NAO inventou campos nao fornecidos pelo usuario (ex: CNPJ, CEP) — usou defaults do ssw_defaults.json"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Preciso alterar as cidades atendidas do estado da Bahia na 402 do SSW. Quero mudar o prazo de varias cidades. Como faco?",
+      "expected_output": "Agente recomenda workflow CSV: exportar_cidades_402.py --uf BA, modificar CSV, importar_cidades_402.py --csv. NAO recomenda cadastrar_cidades_402.py por ser limitado a 1-3 cidades no viewport",
+      "files": [],
+      "expectations": [
+        "Recomendou o workflow CSV (exportar -> modificar -> importar) como abordagem preferida",
+        "Mencionou exportar_cidades_402.py com --uf BA como primeiro passo",
+        "Mencionou importar_cidades_402.py --csv como passo final",
+        "Explicou a LIMITACAO de cadastrar_cidades_402.py (virtual scroll, so funciona com 1-3 cidades no viewport)",
+        "Usou --dry-run em cada execucao",
+        "NAO sugeriu cadastrar_cidades_402.py como unica opcao para alterar varias cidades"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Quero cotar um frete no SSW para o CNPJ 33119545000251, destino CEP 69000-000, peso 1500kg, valor R$25.000. A gente nao vai coletar, o cliente traz na CarVia.",
+      "expected_output": "Agente usa cotar_frete_ssw_002.py com --cnpj-pagador, --cep-destino 69000000, --peso 1500, --valor 25000, --coletar N. Auto-resolve CEP origem como CEP da CarVia (06530581). Executa com --dry-run primeiro.",
+      "files": [],
+      "expectations": [
+        "Identificou cotar_frete_ssw_002.py como script correto",
+        "Usou --cnpj-pagador 33119545000251",
+        "Usou --cep-destino 69000000 (sem traco)",
+        "Usou --peso 1500 e --valor 25000",
+        "Entendeu que coletar=N e auto-resolveu CEP origem como CEP CarVia (06530581 do ssw_defaults.json)",
+        "NAO pediu CEP origem ao usuario (regra: coletar=N implica origem = CarVia)",
+        "Executou com --dry-run primeiro e mostrou parametros_assumidos antes de confirmar"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Vamos implantar uma nova rota completa para Campo Grande (CGR). O parceiro e a empresa ALEMAR, CNPJ 62312605000175. Me guia no processo completo.",
+      "expected_output": "Agente apresenta fluxo POP-A10 completo na ordem correta: 401 (unidade) -> 402 (cidades) -> 478 (fornecedor) -> 485 (transportadora) -> 408 (comissao). Cada etapa com --dry-run primeiro.",
+      "files": [],
+      "expectations": [
+        "Apresentou a sequencia COMPLETA: 401 -> 402 -> 478 -> 485 -> 408",
+        "NAO inverteu a ordem (ex: 485 antes de 478 e ERRADO)",
+        "Para 401: usou --sigla CGR, --tipo T, --razao-social com ALEMAR",
+        "Para 478: usou --cnpj 62312605000175 e --especialidade TRANSPORTADORA",
+        "Para 485: usou --cnpj do parceiro ALEMAR",
+        "Cada etapa tem --dry-run obrigatorio",
+        "Mencionou que 403 (rota) e 420 (tabelas preco) sao manuais ou futuros"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quero exportar as cidades atendidas de todas as UFs do Brasil em CSV e depois consolidar em um unico arquivo.",
+      "expected_output": "Agente usa exportar_todas_cidades_402.py para batch de 27 UFs, depois agrupar_csvs.py para merge. NAO usa exportar_cidades_402.py 27 vezes.",
+      "files": [],
+      "expectations": [
+        "Identificou exportar_todas_cidades_402.py (batch) como script correto, NAO exportar_cidades_402.py chamado 27 vezes",
+        "Usou --output-dir com path temporario (ex: /tmp/402_export_all/)",
+        "Executou com --dry-run primeiro",
+        "Usou agrupar_csvs.py --input-dir e --output para merge dos CSVs",
+        "Usou --pattern '*_402_export.csv' no agrupar_csvs.py",
+        "NAO tentou concatenar manualmente os CSVs com comandos shell"
+      ]
+    }
+  ]
+}
