@@ -17,6 +17,14 @@ allowed-tools: Read, Bash, Glob, Grep
 - Rastrear fluxo documental de NF/PO/SO (esta skill gera relatorio contabil, nao rastreia documentos)
 - Explorar modelo Odoo desconhecido (esta skill trabalha exclusivamente com account.move.line)
 
+## REGRAS ANTI-ALUCINACAO
+
+> **CRITICO**: Ao responder perguntas sobre troubleshooting ou melhorias do razao geral:
+> - **SOMENTE** referencie mecanismos que EXISTEM no codigo (`timeout_override`, `conta_filter`, `BATCH_SIZE`, ID-cursor)
+> - **NUNCA** sugira RQ/filas, cache de saldos, processamento async, novas tabelas, ou qualquer feature que NAO exista em `razao_geral_service.py`
+> - **NUNCA** invente parametros de funcao — use APENAS os documentados nesta skill
+> - Se o usuario perguntar sobre uma feature que NAO existe, responda: "Essa feature nao esta implementada atualmente no razao geral"
+
 # Razão Geral do Odoo (General Ledger)
 
 Skill para **exportação do relatório Razão Geral** a partir do Odoo via XML-RPC.
@@ -263,3 +271,25 @@ valor = reg.get('ref') or '' if reg.get('ref') is not False else ''
 | Valores False | Campos vazios no Odoo | Tratar com `or ''` / `or 0` |
 | Saldo não bate | Lançamentos draft incluídos | Verificar filtro `parent_state='posted'` |
 | Conta não aparece | Sem movimentos no período | Normal - só lista contas com movimento |
+
+### Timeout — Passo a Passo de Diagnóstico
+
+1. **Testar com período pequeno**: 1 dia, 1 empresa → se funcionar, problema é volume
+2. **Aumentar gradualmente**: 1 semana → 1 mês → adicionar empresas
+3. **Usar `conta_filter`**: Reduz volume filtrando por código de conta (ex: `conta_filter='1010'`)
+4. **Aumentar `timeout_override`**: No `razao_geral_service.py`, ajustar de 120→240 (search_read) ou 180→300 (read_group)
+
+> **IMPORTANTE**: Os únicos mecanismos de otimização que EXISTEM no código são:
+> - `timeout_override` (ajustável)
+> - `conta_filter` (filtro por conta)
+> - `BATCH_SIZE` (3000, ajustável com cuidado)
+> - Reduzir período ou número de empresas
+> - Paginação ID-cursor (já implementada, performance O(1) por batch)
+
+---
+
+## Requisitos de Execução
+
+- **OBRIGATÓRIO**: Ativar venv antes de executar scripts: `source .venv/bin/activate`
+- **Conexão Odoo**: Requer credenciais configuradas no `.env` (ODOO_URL, ODOO_DB, ODOO_USER, ODOO_PASSWORD)
+- **Dependências**: `xlsxwriter` (geração Excel), `xmlrpc.client` (stdlib)

@@ -1,0 +1,102 @@
+[
+  {
+    "query": "exporte o razao geral de janeiro 2025",
+    "should_trigger": true,
+    "reason": "Pedido direto de exportacao do razao geral"
+  },
+  {
+    "query": "gere o balancete das contas da empresa CD",
+    "should_trigger": true,
+    "reason": "Balancete e sinonimo de razao geral contabil"
+  },
+  {
+    "query": "preciso consultar account.move.line em massa para todas as empresas",
+    "should_trigger": true,
+    "reason": "Consulta em massa de account.move.line e o core desta skill"
+  },
+  {
+    "query": "relatorio contabil do Odoo para agosto 2024",
+    "should_trigger": true,
+    "reason": "Relatorio contabil via Odoo e o dominio desta skill"
+  },
+  {
+    "query": "quais contas patrimoniais tem saldo inicial no razao geral?",
+    "should_trigger": true,
+    "reason": "Pergunta sobre logica de saldo inicial de contas patrimoniais"
+  },
+  {
+    "query": "como filtrar o razao geral por conta 1010?",
+    "should_trigger": true,
+    "reason": "Filtragem por conta contabil no razao geral"
+  },
+  {
+    "query": "timeout ao gerar razao geral, o que fazer?",
+    "should_trigger": true,
+    "reason": "Troubleshooting do razao geral"
+  },
+  {
+    "query": "exportar movimentos contabeis do periodo para Excel",
+    "should_trigger": true,
+    "reason": "Exportacao de movimentos contabeis em Excel e a funcionalidade principal"
+  },
+  {
+    "query": "saldo acumulado das contas do Odoo de fevereiro 2025",
+    "should_trigger": true,
+    "reason": "Saldo acumulado e feature do razao geral"
+  },
+  {
+    "query": "general ledger da Nacom Goya FB e SC",
+    "should_trigger": true,
+    "reason": "General ledger e o nome tecnico do razao geral"
+  },
+  {
+    "query": "rastreie a NF 12345 no Odoo",
+    "should_trigger": false,
+    "reason": "Rastreamento de NF e dominio do rastreando-odoo, nao do razao geral"
+  },
+  {
+    "query": "crie um pagamento para a NF 67890",
+    "should_trigger": false,
+    "reason": "Operacao financeira e dominio do executando-odoo-financeiro"
+  },
+  {
+    "query": "quais campos tem stock.picking no Odoo?",
+    "should_trigger": false,
+    "reason": "Exploracao de modelo Odoo e dominio do descobrindo-odoo-estrutura"
+  },
+  {
+    "query": "top 10 clientes por valor de frete",
+    "should_trigger": false,
+    "reason": "Consulta analitica SQL ao banco local, nao ao Odoo"
+  },
+  {
+    "query": "quanto faturamos para o Atacadao este mes?",
+    "should_trigger": false,
+    "reason": "Consulta SQL local, nao exportacao contabil do Odoo"
+  },
+  {
+    "query": "reconcilie o extrato bancario do Bradesco",
+    "should_trigger": false,
+    "reason": "Reconciliacao bancaria e dominio do executando-odoo-financeiro"
+  },
+  {
+    "query": "quais pedidos do Assai estao pendentes?",
+    "should_trigger": false,
+    "reason": "Pedidos pendentes e dominio do gerindo-expedicao"
+  },
+  {
+    "query": "consolide os POs da nota fiscal 98765",
+    "should_trigger": false,
+    "reason": "Consolidacao de PO e dominio do conciliando-odoo-po"
+  },
+  {
+    "query": "cadastre a transportadora TAC no SSW",
+    "should_trigger": false,
+    "reason": "Cadastro SSW e dominio do operando-ssw"
+  },
+  {
+    "query": "qual o preco de frete para Manaus 3 toneladas?",
+    "should_trigger": false,
+    "reason": "Cotacao de frete e dominio do cotando-frete"
+  }
+]

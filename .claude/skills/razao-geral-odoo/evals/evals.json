@@ -1,0 +1,59 @@
+[
+  {
+    "id": "eval-1-gerar-razao-geral-periodo",
+    "prompt": "Preciso gerar o razao geral de janeiro de 2025 para as empresas CD e FB. Como faco?",
+    "expected_output": "Instrucoes para usar o script standalone ou o service buscar_movimentos_razao + gerar_excel_razao com data_ini='2025-01-01', data_fim='2025-01-31', company_ids=[4, 1]",
+    "expectations": [
+      "Menciona o script scripts/exportar_razao_geral.py OU o service razao_geral_service.py",
+      "Identifica corretamente os company_ids: CD=4, FB=1",
+      "Indica as datas corretas: 2025-01-01 a 2025-01-31",
+      "Menciona que precisa ativar o venv antes de executar",
+      "NAO inventa campos ou parametros inexistentes"
+    ]
+  },
+  {
+    "id": "eval-2-filtrar-conta-contabil",
+    "prompt": "Quero exportar o razao geral apenas da conta 1010 (caixa) para agosto 2024, todas as empresas.",
+    "expected_output": "Instrucoes usando o parametro conta_filter='1010' na funcao buscar_movimentos_razao, ou orientacao para usar a tela web com o campo conta contabil",
+    "expectations": [
+      "Menciona o parametro conta_filter da funcao buscar_movimentos_razao",
+      "Indica company_ids=[4, 1, 3] para todas as empresas (ou inclui 5 para La Famiglia)",
+      "Explica que o filtro usa ilike (busca parcial por codigo)",
+      "NAO inventa um parametro diferente de conta_filter"
+    ]
+  },
+  {
+    "id": "eval-3-patrimonial-vs-resultado",
+    "prompt": "Por que algumas contas no razao geral tem saldo inicial e outras nao?",
+    "expected_output": "Explicacao sobre contas patrimoniais (asset_*, liability_*, equity*) que recebem saldo inicial via read_group, vs contas de resultado (income*, expense*) que nao recebem",
+    "expectations": [
+      "Diferencia contas patrimoniais de contas de resultado",
+      "Lista exemplos de account_types patrimoniais (asset_receivable, asset_cash, etc.)",
+      "Explica que o saldo inicial e calculado via read_group com movimentos anteriores ao periodo",
+      "Menciona que contas de resultado (income, expense) NAO recebem saldo inicial",
+      "NAO inventa tipos de conta que nao existem no sistema"
+    ]
+  },
+  {
+    "id": "eval-4-troubleshooting-timeout",
+    "prompt": "O razao geral esta dando timeout ao buscar os dados do Odoo. O que posso fazer?",
+    "expected_output": "Orientacao sobre ajustar timeout_override, reduzir periodo, ou usar conta_filter para reduzir volume",
+    "expectations": [
+      "Menciona o timeout_override existente (120s para search_read, 180s para read_group)",
+      "Sugere reduzir o periodo de consulta",
+      "Sugere usar filtro de conta (conta_filter) para reduzir volume",
+      "Menciona a paginacao ID-cursor como mecanismo ja em uso",
+      "NAO sugere solucoes que nao existem no codigo (ex: cache, async)"
+    ]
+  },
+  {
+    "id": "eval-5-tela-web-acesso",
+    "prompt": "Onde fica a tela do razao geral no sistema? Qual a URL?",
+    "expected_output": "URL /relatorios-fiscais/razao-geral, menu Financeiro > Central Financeira > Relatorios Contabeis > Razao Geral",
+    "expectations": [
+      "Indica a URL correta: /relatorios-fiscais/razao-geral",
+      "Menciona o caminho no menu ou o blueprint relatorios_fiscais",
+      "NAO inventa URLs ou caminhos de menu incorretos"
+    ]
+  }
+]
