@@ -1,0 +1,71 @@
+{
+  "skill_name": "memoria-usuario",
+  "version": 1,
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Lembre que eu prefiro respostas curtas e diretas, sem enrolacao.",
+      "expected_output": "Salva preferencia de comunicacao em /memories/preferences.xml com conteudo XML contendo a preferencia",
+      "files": [],
+      "expectations": [
+        "Executou memoria.py save com --path contendo /memories/ e --content com XML ou texto sobre preferencia de respostas curtas",
+        "Usou --user-id correto (perguntou ao usuario se nao tinha ou usou ID da sessao)",
+        "Confirmou ao usuario que a preferencia foi salva",
+        "NAO inventou memorias adicionais que o usuario nao pediu",
+        "Path usado segue a estrutura recomendada (ex: /memories/preferences.xml ou /memories/learned/)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "O que voce sabe sobre mim? Mostra todas as minhas memorias.",
+      "expected_output": "Lista todas as memorias salvas do usuario, organizada por path/categoria",
+      "files": [],
+      "expectations": [
+        "Executou memoria.py view com --user-id do usuario",
+        "Se ha memorias: listou cada path e seu conteudo de forma organizada",
+        "Se nao ha memorias: informou claramente que nenhuma memoria foi encontrada (nao inventou dados)",
+        "NAO fabricou memorias fictícias sobre o usuario",
+        "Apresentou resultado de forma legivel, nao como output bruto do script"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Esqueca minhas preferencias de comunicacao.",
+      "expected_output": "Deleta o arquivo de preferencias do usuario",
+      "files": [],
+      "expectations": [
+        "Executou memoria.py delete com --path /memories/preferences.xml (ou path equivalente de preferencias)",
+        "Usou --user-id correto",
+        "Confirmou ao usuario que as preferencias foram removidas",
+        "NAO deletou memorias que nao foram pedidas (ex: nao fez clear de tudo)",
+        "Se o arquivo nao existia, informou claramente sem erro"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Atualize meu cargo: agora sou gerente de logistica, nao mais analista.",
+      "expected_output": "Atualiza memoria existente com str_replace de analista para gerente de logistica",
+      "files": [],
+      "expectations": [
+        "Tentou usar memoria.py update com --old contendo 'analista' e --new contendo 'gerente de logistica'",
+        "Se nao existia memoria de cargo: usou save para criar nova com o cargo correto",
+        "Usou path apropriado (ex: /memories/user.xml ou /memories/context/role.xml)",
+        "Confirmou a atualizacao ao usuario",
+        "NAO criou memorias duplicadas sobre o mesmo fato"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Limpa todas as minhas memorias, quero comecar do zero.",
+      "expected_output": "Executa clear para remover todas as memorias do usuario apos confirmacao",
+      "files": [],
+      "expectations": [
+        "Pediu confirmacao antes de limpar TUDO (operacao destrutiva)",
+        "Executou memoria.py clear com --user-id correto",
+        "Confirmou ao usuario quantos itens foram removidos",
+        "NAO executou clear sem confirmacao previa",
+        "Informou que a operacao e irreversivel"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "skill_name": "memoria-usuario",
+  "version": 1,
+  "trigger_evals": [
+    {
+      "query": "Lembre que eu prefiro respostas curtas e diretas",
+      "should_trigger": true
+    },
+    {
+      "query": "Salva essa informacao: meu nome e Rafael e sou gerente de logistica",
+      "should_trigger": true
+    },
+    {
+      "query": "O que voce sabe sobre mim?",
+      "should_trigger": true
+    },
+    {
+      "query": "Esqueca minhas preferencias",
+      "should_trigger": true
+    },
+    {
+      "query": "Pode guardar que eu sempre verifico estoque antes de separacao?",
+      "should_trigger": true
+    },
+    {
+      "query": "Apaga tudo que voce sabe sobre mim, quero comecar do zero",
+      "should_trigger": true
+    },
+    {
+      "query": "Atualiza: agora sou gerente, nao mais analista",
+      "should_trigger": true
+    },
+    {
+      "query": "Quais memorias voce tem salvas para o usuario 1?",
+      "should_trigger": true
+    },
+    {
+      "query": "Nao gosto de emojis nas respostas, lembra disso",
+      "should_trigger": true
+    },
+    {
+      "query": "Anota que meu cliente principal e o Atacadao",
+      "should_trigger": true
+    },
+    {
+      "query": "Quantos pedidos pendentes tem para o Atacadao?",
+      "should_trigger": false
+    },
+    {
+      "query": "Quanto sai o frete para Manaus?",
+      "should_trigger": false
+    },
+    {
+      "query": "Rastreie a NF 12345 no Odoo",
+      "should_trigger": false
+    },
+    {
+      "query": "Exporte os dados para Excel",
+      "should_trigger": false
+    },
+    {
+      "query": "Qual o historico de conversas de ontem?",
+      "should_trigger": false
+    },
+    {
+      "query": "Como esta o banco de dados? Cache hit rate?",
+      "should_trigger": false
+    },
+    {
+      "query": "Crie uma tela de dashboard para entregas",
+      "should_trigger": false
+    },
+    {
+      "query": "Analise essa planilha Excel que enviei",
+      "should_trigger": false
+    },
+    {
+      "query": "Top 10 clientes por valor de frete",
+      "should_trigger": false
+    },
+    {
+      "query": "Cadastre a unidade CGR no SSW",
+      "should_trigger": false
+    }
+  ]
+}

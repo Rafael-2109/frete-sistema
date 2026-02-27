@@ -1,0 +1,75 @@
+{
+  "skill_name": "recebimento-fisico-odoo",
+  "version": 1,
+  "changelog": "v1: Initial evals covering worker flow, common errors, API gotchas, cross-phase validation, and multi-lot scenarios",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Estou recebendo o erro 'cannot marshal None unless allow_none is enabled' ao chamar button_validate no picking IN/00456. O que ta acontecendo? O recebimento deu errado?",
+      "expected_output": "Explicacao de que 'cannot marshal None' e SUCESSO (padrao conhecido do Odoo), nao erro real. Codigo correto com try/except que trata este caso.",
+      "files": [],
+      "expectations": [
+        "Identificou que 'cannot marshal None' significa SUCESSO no button_validate do Odoo",
+        "Explicou que button_validate retorna None e xmlrpc nao serializa None por padrao",
+        "Mostrou codigo com try/except que trata 'cannot marshal None' como pass (sucesso)",
+        "Referenciou o arquivo erros-comuns.md ou a SKILL.md como fonte",
+        "NAO disse que o recebimento falhou ou que ha erro real"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Preciso escrever codigo para preencher lotes no Odoo via XML-RPC. O produto tem tracking=lot e use_expiration_date=True. Como faco para criar o lote e atribuir ao move_line?",
+      "expected_output": "Fluxo completo: buscar stock.lot existente, criar se nao existir com expiration_date, usar lot_id (NAO lot_name) no write do move.line",
+      "files": [],
+      "expectations": [
+        "Explicou que com use_expiration_date=True, deve-se criar stock.lot MANUALMENTE (nao via lot_name)",
+        "Mostrou busca de lote existente: search('stock.lot', [name, product_id, company_id])",
+        "Mostrou create('stock.lot', {name, product_id, company_id, expiration_date})",
+        "Usou lot_id (NAO lot_name) no write do stock.move.line",
+        "Usou execute_kw como metodo (NAO execute que nao existe)",
+        "Incluiu location_id e location_dest_id como campos obrigatorios no create de move.line"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Quais sao os 8 passos do worker de recebimento fisico? E o que acontece se o passo 4 (quality check passfail) falhar?",
+      "expected_output": "Lista completa dos 8 passos do worker e explicacao do fluxo de erro com retry e status",
+      "files": [],
+      "expectations": [
+        "Listou os 8 passos na ordem correta: (1) conectar Odoo e verificar state, (2) resolver lotes com expiration_date, (3) preencher lotes em move.line, (4) quality checks passfail, (5) quality checks measure, (6) button_validate, (7) verificar resultado, (8) atualizar status local",
+        "Explicou que o worker RQ tem retry automatico (3 tentativas com backoff)",
+        "Mencionou que status muda para 'erro' apenas apos esgotar retentativas",
+        "Indicou que cada tentativa loga o passo exato que falhou",
+        "NAO inventou passos que nao existem no fluxo documentado"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Um picking esta bloqueado na validacao cross-phase. O status da ValidacaoNfPoDfe e 'aprovado'. Posso receber esse picking?",
+      "expected_output": "NAO pode receber. status='aprovado' significa pronto para consolidar (Fase 3), nao que esta liberado para recebimento. A consolidacao AINDA precisa ser executada.",
+      "files": [],
+      "expectations": [
+        "Respondeu claramente que NAO pode receber o picking",
+        "Explicou que status='aprovado' significa 'pronto para consolidar' (Fase 3 pendente)",
+        "Mencionou que a consolidacao (Fase 3) cria um PO Conciliador novo e SEMPRE precisa ser executada",
+        "Explicou que pular a Fase 3 causa: NF desvinculada e estoque duplicado",
+        "Mencionou os tipos de liberacao validos: 'full', 'finalizado_odoo', ou 'legacy'",
+        "Referenciou CrossPhaseValidationService ou a regra critica da SKILL.md"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quero fazer um recebimento multi-lote: Picking IN/00789 tem 1000un do produto Y (tracking=lot). Preciso dividir em Lote A (600un) e Lote B (400un). Qual o codigo?",
+      "expected_output": "Codigo mostrando write na move.line existente para Lote A + create de nova move.line para Lote B com todos campos obrigatorios",
+      "files": [],
+      "expectations": [
+        "Mostrou write na move_line existente para o 1o lote (600un) com lot_name",
+        "Mostrou create de nova stock.move.line para o 2o lote (400un)",
+        "Incluiu campos obrigatorios no create: picking_id, move_id, product_id, lot_name, quantity, location_id, location_dest_id",
+        "Buscou location_id e location_dest_id do picking pai",
+        "Usou odoo.write() ou odoo.execute_kw() (NAO odoo.execute())",
+        "NAO usou campo reserved_uom_qty (nao existe nesta versao do Odoo)"
+      ]
+    }
+  ]
+}

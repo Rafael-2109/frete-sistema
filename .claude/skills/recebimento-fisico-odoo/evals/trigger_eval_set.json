@@ -1,0 +1,107 @@
+{
+  "skill_name": "recebimento-fisico-odoo",
+  "version": 1,
+  "description": "Trigger eval set para otimizacao de description. 10 true positives + 10 true negatives.",
+  "queries": [
+    {
+      "query": "erro ao validar picking no Odoo, button_validate falhou",
+      "should_trigger": true,
+      "rationale": "Debug de erro no button_validate e caso central desta skill"
+    },
+    {
+      "query": "lote duplicado no recebimento, ValidationError stock.lot",
+      "should_trigger": true,
+      "rationale": "Erro de lote duplicado documentado em erros-comuns.md"
+    },
+    {
+      "query": "quality check falhou, picking nao vai pra done",
+      "should_trigger": true,
+      "rationale": "Quality check e passo 4-5 do worker, caso core"
+    },
+    {
+      "query": "como funciona o worker de recebimento fisico?",
+      "should_trigger": true,
+      "rationale": "Pergunta sobre arquitetura do worker RQ"
+    },
+    {
+      "query": "picking bloqueado na validacao cross-phase, status aprovado",
+      "should_trigger": true,
+      "rationale": "Cross-phase validation e secao critica da SKILL.md"
+    },
+    {
+      "query": "reserved_uom_qty nao existe em stock.move.line",
+      "should_trigger": true,
+      "rationale": "Gotcha documentado: campo nao existe nesta versao"
+    },
+    {
+      "query": "como preencher lotes com data de validade no recebimento Odoo?",
+      "should_trigger": true,
+      "rationale": "Cenario use_expiration_date=True com stock.lot manual"
+    },
+    {
+      "query": "lock Redis impede processamento do recebimento",
+      "should_trigger": true,
+      "rationale": "Erro 8 documentado: lock anti-duplicata"
+    },
+    {
+      "query": "quais tabelas de cache o sync de pickings usa?",
+      "should_trigger": true,
+      "rationale": "Tabelas picking_recebimento_* sao core da skill"
+    },
+    {
+      "query": "cannot marshal None no button_validate do stock.picking",
+      "should_trigger": true,
+      "rationale": "Erro 1 mais comum, caso classico"
+    },
+    {
+      "query": "qual o preco do frete para Manaus?",
+      "should_trigger": false,
+      "rationale": "Cotacao de frete e skill cotando-frete"
+    },
+    {
+      "query": "rastreie a NF 12345 no Odoo",
+      "should_trigger": false,
+      "rationale": "Rastreamento documental e skill rastreando-odoo"
+    },
+    {
+      "query": "crie pagamento para NF no Odoo",
+      "should_trigger": false,
+      "rationale": "Operacao financeira e skill executando-odoo-financeiro"
+    },
+    {
+      "query": "consolide os POs da NF 56789",
+      "should_trigger": false,
+      "rationale": "Consolidacao PO (Fase 3) e skill conciliando-odoo-po"
+    },
+    {
+      "query": "erro ao validar DFE na Fase 2",
+      "should_trigger": false,
+      "rationale": "Match NF x PO (Fase 2) e skill validacao-nf-po"
+    },
+    {
+      "query": "quais campos tem o modelo res.partner?",
+      "should_trigger": false,
+      "rationale": "Explorar modelo Odoo generico e skill descobrindo-odoo-estrutura"
+    },
+    {
+      "query": "tem pedido do Atacadao pendente?",
+      "should_trigger": false,
+      "rationale": "Carteira pre-faturamento e skill gerindo-expedicao"
+    },
+    {
+      "query": "gere planilha com os dados de faturamento",
+      "should_trigger": false,
+      "rationale": "Exportacao de arquivo e skill exportando-arquivos"
+    },
+    {
+      "query": "como criar novo service de integracao Odoo?",
+      "should_trigger": false,
+      "rationale": "Desenvolvimento de integracao e skill integracao-odoo"
+    },
+    {
+      "query": "exporte o razao geral do Odoo em Excel",
+      "should_trigger": false,
+      "rationale": "Exportacao contabil e skill razao-geral-odoo"
+    }
+  ]
+}

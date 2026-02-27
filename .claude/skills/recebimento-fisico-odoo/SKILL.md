@@ -12,12 +12,42 @@ description: >-
   - Problema com lotes: "lote duplicado", "quantidade errada", "move.line nao criou"
 
   NAO USAR QUANDO:
-  - Rastrear documentos fiscais (NF, PO, SO) -> usar **rastreando-odoo**
-  - Descobrir campos de modelo Odoo desconhecido -> usar **descobrindo-odoo-estrutura**
-  - Criar pagamentos ou reconciliar extratos -> usar **executando-odoo-financeiro**
-  - Depurar match NF x PO (Fase 2) -> usar **validacao-nf-po**
-  - Conciliar POs por split/consolidacao (Fase 3) -> usar **conciliando-odoo-po**
+  - Rastrear documentos fiscais (NF, PO, SO): usar **rastreando-odoo**
+  - Descobrir campos de modelo Odoo desconhecido: usar **descobrindo-odoo-estrutura**
+  - Criar pagamentos ou reconciliar extratos: usar **executando-odoo-financeiro**
+  - Depurar match NF x PO (Fase 2): usar **validacao-nf-po**
+  - Conciliar POs por split/consolidacao (Fase 3): usar **conciliando-odoo-po**
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+---
+
+## REFERENCIA RAPIDA — TOP 3 GOTCHAS
+
+> **LER PRIMEIRO antes de responder qualquer pergunta sobre recebimento.**
+
+### 1. "cannot marshal None" = SUCESSO (NAO e erro!)
+O `button_validate` do Odoo retorna `None`. XML-RPC nao serializa `None` por padrao.
+A excecao `cannot marshal None unless allow_none is enabled` significa que o picking FOI validado com sucesso.
+**Codigo correto**: `try/except` com `pass` quando `'cannot marshal None' in str(e)`.
+**NUNCA diga ao usuario que o recebimento falhou por causa desse erro.**
+
+### 2. status='aprovado' NAO libera recebimento
+`ValidacaoNfPoDfe.status='aprovado'` = "pronto para consolidar" (Fase 3 pendente).
+O picking so pode ser recebido quando `tipo_liberacao` e `'full'`, `'finalizado_odoo'` ou `'legacy'`.
+**NUNCA diga que status='aprovado' permite receber.**
+
+### 3. `reserved_uom_qty` NAO existe nesta versao do Odoo
+Usar `quantity` (reservada) e `qty_done` (realizada). `odoo.execute()` tambem NAO existe — usar `odoo.execute_kw()`.
+
+---
+
+## REGRAS ANTI-ALUCINACAO
+
+1. **NAO inventar campos Odoo** — consultar tabela "Campos stock.move.line" abaixo antes de gerar codigo
+2. **NAO assumir que erros XML-RPC sao falhas** — verificar erros-comuns.md primeiro
+3. **NAO recomendar `allow_none=True` no ServerProxy** — o sistema ja trata via try/except (padrao correto)
+4. **NAO pular fases do pipeline** — SEMPRE verificar cross-phase validation antes de sugerir recebimento
+5. **Citar fonte**: toda afirmacao deve referenciar SKILL.md, erros-comuns.md ou modelos-odoo.md
+
 ---
 
 ## QUANDO NAO USAR ESTA SKILL
@@ -299,6 +329,17 @@ Worker:
   3. execute_kw('quality.check', 'do_measure', [[check_id]])
   4. button_validate
 ```
+
+## Quick Reference: Status → Pode Receber?
+
+| ValidacaoNfPoDfe.status | Pode Receber? | Significado | Proximo Passo |
+|-------------------------|---------------|-------------|---------------|
+| `'aprovado'` | **NAO** | Pronto para consolidar (Fase 3 pendente) | Executar Fase 3 (Compras) |
+| `'consolidado'` | **SIM** | Fase 3 executada, tipo_liberacao='full' | Receber normalmente |
+| `'finalizado_odoo'` | **SIM** | Odoo ja vinculou PO correto | Receber normalmente |
+| `'pendente'` | **NAO** | Fase 2 nao concluida | Completar match NF×PO |
+| `'divergencia'` | **NAO** | Fase 2 com problema | Resolver divergencia fiscal |
+| Sem DFE/PO | **SIM** | Legacy, tipo_liberacao='legacy' | Receber normalmente |
 
 ## Validacao Cross-Phase (Pipeline Obrigatorio)
 

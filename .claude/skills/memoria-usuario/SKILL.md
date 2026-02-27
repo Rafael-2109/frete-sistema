@@ -8,110 +8,71 @@ description: >-
   Nao usar para buscar em sessoes anteriores (usar mcp__sessions__search_sessions),
   salvar dados de negocio no banco (usar SQL), ou buscar contexto da conversa
   atual (usar historico recente do SDK).
-
-  NAO USAR QUANDO:
-  - Historico de conversas -> ja e salvo automaticamente
-  - Dados de negocio -> usar skill de consulta apropriada
+  NAO USAR QUANDO: Historico de conversas (ja e salvo automaticamente),
+  dados de negocio (usar skill de consulta apropriada).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
-# Skill: Memória do Usuário
+# Skill: Memoria do Usuario
 
-Esta skill gerencia a memória persistente por usuário, permitindo que Claude lembre informações entre sessões diferentes.
-
----
-
-## USO PROATIVO (IMPORTANTE!)
-
-### Quando CONSULTAR memórias automaticamente:
-
-1. **Início de sessão/conversa nova**
-   - Sempre verifique se há memórias salvas para o usuário
-   - Adapte seu comportamento baseado nas preferências encontradas
-
-2. **Antes de fazer perguntas**
-   - Verifique se a resposta já está nas memórias
-   - Exemplo: Se usuário já disse que é dono da empresa, não pergunte novamente
-
-3. **Ao receber contexto sobre o usuário**
-   - Verifique se já sabe algo relacionado
-   - Conecte informações novas com as existentes
-
-### Quando SALVAR memórias automaticamente:
-
-1. **Preferências de comunicação**
-   - "Prefiro respostas curtas" → SALVAR
-   - "Pode ser mais detalhado" → SALVAR
-   - "Não gosto de emojis" → SALVAR
-
-2. **Fatos sobre o usuário**
-   - Nome, cargo, responsabilidades → SALVAR
-   - Clientes que gerencia → SALVAR
-   - Produtos com que trabalha mais → SALVAR
-
-3. **Padrões de comportamento observados**
-   - Sempre pergunta sobre Atacadão primeiro → SALVAR
-   - Prefere ver estoque antes de criar separação → SALVAR
-   - Costuma verificar palmito frequentemente → SALVAR
-
-4. **Correções e esclarecimentos**
-   - "Não é assim que funciona aqui" → SALVAR a regra correta
-   - "Esse campo se chama X, não Y" → SALVAR correção
-   - "Aqui usamos o termo Z" → SALVAR terminologia
-
-5. **Decisões tomadas**
-   - "Atacadão 183 sempre fica por último" → SALVAR regra
-   - "FOB sempre manda completo" → SALVAR (se não estiver no CLAUDE.md)
-
-### Quando ATUALIZAR memórias:
-
-1. **Informação mudou**
-   - "Agora sou gerente" (antes era analista) → ATUALIZAR
-   - "Mudamos o processo" → ATUALIZAR
-
-2. **Preferência mudou**
-   - "Agora pode usar emojis" → ATUALIZAR
+Gerencia memoria persistente por usuario via banco de dados (tabela `agent_memories`).
+Permite que o agente lembre informacoes entre sessoes diferentes.
 
 ---
 
-## USO REATIVO (Quando usuário pede)
+## REGRAS CRITICAS
 
-- Usuário pede para lembrar algo: "Lembre que prefiro respostas diretas"
-- Usuário pergunta o que Claude sabe: "O que você sabe sobre mim?"
-- Usuário quer apagar memórias: "Esqueça minhas preferências"
+### R1: NUNCA INVENTAR MEMORIAS
+- NAO fabricar memorias que nao foram retornadas pelo script `view`
+- Se `view` retornar "(empty)" ou "ERRO", reportar EXATAMENTE isso ao usuario
+- NAO assumir que existem memorias sem executar `view` primeiro
+- NAO inferir preferencias do usuario sem confirmar com ele
+
+### R2: CONFIRMACAO PARA OPERACOES DESTRUTIVAS
+- `delete` de um path: informar ao usuario QUAL path sera deletado antes de executar
+- `clear` (todas as memorias): OBRIGATORIAMENTE pedir confirmacao explicita antes de executar
+- NUNCA executar `clear` automaticamente ou proativamente
+
+### R3: OUTPUT DO SCRIPT = TEXTO LIVRE
+- O script `memoria.py` retorna texto livre no stdout (NAO JSON)
+- Mensagens de sucesso: "Criado: /path", "Atualizado: /path", "Deletado: /path"
+- Mensagens de erro: "ERRO: ..." (saem no stderr com exit code 1)
+- NAO tentar parsear como JSON
+
+### R4: USER_ID OBRIGATORIO
+- Todo comando requer `--user-id`
+- Se o user_id nao estiver disponivel na sessao, PERGUNTAR ao usuario
+- Em contexto do Agente Web: usar o `user_id` da sessao ativa
+- NAO usar user_id=0 ou valores ficticios
+
+### R5: PATH DEVE COMECAR COM /memories
+- O script rejeita paths que nao comecam com `/memories`
+- Seguir a estrutura de paths recomendada abaixo
 
 ---
 
-## Scripts Disponíveis
+## Scripts Disponiveis
 
-### Ver Memórias
+Script unico: `.claude/skills/memoria-usuario/scripts/memoria.py`
 
-```bash
-source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID
-source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID --path /memories/preferences.xml
-```
+Detalhes de parametros: ver `SCRIPTS.md`
 
-### Salvar Memória
+### Comandos
 
 ```bash
-source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py save --user-id USER_ID --path /memories/preferences.xml --content "<preferences>...</preferences>"
-```
+# Ver memorias (raiz ou path especifico)
+source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py view --user-id USER_ID [--path /memories/preferences.xml]
 
-### Atualizar Memória (substituir texto)
+# Salvar/criar memoria (cria novo ou sobrescreve existente)
+source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py save --user-id USER_ID --path /memories/preferences.xml --content "conteudo XML"
 
-```bash
+# Atualizar (str_replace — texto old deve ser unico no conteudo)
 source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py update --user-id USER_ID --path /memories/preferences.xml --old "texto antigo" --new "texto novo"
-```
 
-### Deletar Memória
-
-```bash
+# Deletar path especifico
 source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py delete --user-id USER_ID --path /memories/preferences.xml
-```
 
-### Limpar Todas as Memórias
-
-```bash
+# Limpar TUDO (pedir confirmacao antes!)
 source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memoria.py clear --user-id USER_ID
 ```
 
@@ -121,154 +82,81 @@ source .venv/bin/activate && python .claude/skills/memoria-usuario/scripts/memor
 
 ```
 /memories/
-├── user.xml              # Informações básicas do usuário
-├── preferences.xml       # Preferências de comunicação
-├── context/
-│   ├── company.xml       # Informações da empresa
-│   ├── role.xml          # Cargo/responsabilidades
-│   └── clients.xml       # Clientes que gerencia
-├── learned/
-│   ├── terms.xml         # Termos específicos aprendidos
-│   ├── rules.xml         # Regras de negócio aprendidas
-│   └── patterns.xml      # Padrões observados
-└── corrections/
-    └── mistakes.xml      # Correções de erros comuns
+  user.xml              # Nome, cargo, responsabilidades
+  preferences.xml       # Preferencias de comunicacao
+  context/
+    company.xml         # Informacoes da empresa
+    role.xml            # Cargo/responsabilidades
+    clients.xml         # Clientes que gerencia
+  learned/
+    terms.xml           # Termos especificos aprendidos
+    rules.xml           # Regras de negocio aprendidas
+    patterns.xml        # Padroes observados
+  corrections/
+    mistakes.xml        # Correcoes de erros comuns
 ```
 
 ---
 
-## Formato XML Recomendado
+## Tratamento de Erros
 
-```xml
-<!-- /memories/user.xml -->
-<user>
-    <name>Rafael</name>
-    <role>Dono da empresa</role>
-    <updated_at>2024-12-09</updated_at>
-</user>
-
-<!-- /memories/preferences.xml -->
-<preferences>
-    <communication>direto e objetivo</communication>
-    <detail_level>alto quando pedido</detail_level>
-    <language>portugues brasileiro</language>
-    <emojis>permitido</emojis>
-    <updated_at>2024-12-09</updated_at>
-</preferences>
-
-<!-- /memories/context/clients.xml -->
-<clients>
-    <managed>
-        <client name="Atacadao" priority="P4" gestor="Junior"/>
-        <client name="Assai" priority="P5" gestor="Junior/Miler"/>
-    </managed>
-    <frequent_queries>palmito, azeitona verde</frequent_queries>
-</clients>
-
-<!-- /memories/learned/patterns.xml -->
-<patterns>
-    <pattern type="workflow">
-        <description>Usuario sempre verifica estoque antes de criar separacao</description>
-        <learned_at>2024-12-09</learned_at>
-    </pattern>
-    <pattern type="preference">
-        <description>Prefere ver disponibilidade por grupo antes de pedido individual</description>
-        <learned_at>2024-12-09</learned_at>
-    </pattern>
-</patterns>
-
-<!-- /memories/corrections/mistakes.xml -->
-<corrections>
-    <correction>
-        <wrong>data_agendamento_pedido</wrong>
-        <right>agendamento (campo da Separacao, nao da Carteira)</right>
-        <learned_at>2024-12-09</learned_at>
-    </correction>
-</corrections>
-```
+| Erro do script | Acao do agente |
+|----------------|----------------|
+| "ERRO: Path nao encontrado" | Informar usuario que memoria nao existe. Para `update`: usar `save` para criar. |
+| "ERRO: Texto nao encontrado" | Executar `view` para ver conteudo atual, depois tentar `update` com texto correto. |
+| "ERRO: Texto aparece N vezes" | Fornecer mais contexto no `--old` para tornar unico. |
+| "(empty)" no `view` | Informar usuario que nenhuma memoria foi salva ainda. NAO inventar dados. |
 
 ---
 
-## Fluxo de Uso Proativo
+## Quando SALVAR (Proativamente)
+
+| Categoria | Exemplos | Path |
+|-----------|----------|------|
+| Preferencias de comunicacao | "prefiro respostas curtas", "pode detalhar mais" | `/memories/preferences.xml` |
+| Fatos pessoais | nome, cargo, responsabilidades | `/memories/user.xml` |
+| Clientes que gerencia | "trabalho com Atacadao e Assai" | `/memories/context/clients.xml` |
+| Correcoes | "o campo e X, nao Y" | `/memories/corrections/mistakes.xml` |
+| Padroes observados | verifica estoque antes de separacao (apos 3+ ocorrencias) | `/memories/learned/patterns.xml` |
+| Regras de negocio | "FOB sempre manda completo" (se nao esta no CLAUDE.md) | `/memories/learned/rules.xml` |
+
+### Quando NAO salvar:
+- Dados de negocio (estoques, pedidos, valores) → pertencem ao banco via SQL
+- Historico de conversas → ja e salvo automaticamente pelo SDK
+- Fatos do CLAUDE.md → ja estao documentados no projeto
+
+---
+
+## Quando ATUALIZAR vs CRIAR NOVO
+
+- **ATUALIZAR** (`update`): Informacao no MESMO path mudou (ex: cargo mudou de analista para gerente)
+- **CRIAR NOVO** (`save`): Informacao em path que ainda nao existe
+- **NAO duplicar**: Se ja existe `/memories/user.xml` com cargo, fazer `update` nele — NAO criar `/memories/context/role.xml` separado
+
+---
+
+## Formato de Conteudo Recomendado
+
+Usar XML simples com `updated_at` para rastreabilidade:
 
 ```
-INÍCIO DA SESSÃO
-      │
-      ▼
-┌─────────────────────────────┐
-│ Verificar memórias do user  │
-│ view --user-id X            │
-└─────────────────────────────┘
-      │
-      ▼
-┌─────────────────────────────┐
-│ Há memórias?                │
-│ SIM → Carregar e adaptar    │
-│ NAO → Comportamento padrão  │
-└─────────────────────────────┘
-      │
-      ▼
-DURANTE A CONVERSA
-      │
-      ▼
-┌─────────────────────────────┐
-│ Usuário disse algo novo?    │
-│ - Preferência → SALVAR      │
-│ - Fato pessoal → SALVAR     │
-│ - Correção → SALVAR         │
-│ - Padrão observado → SALVAR │
-└─────────────────────────────┘
-      │
-      ▼
-┌─────────────────────────────┐
-│ Informação mudou?           │
-│ SIM → ATUALIZAR memória     │
-└─────────────────────────────┘
+Exemplo user.xml:
+  tag user com name, role, updated_at
+
+Exemplo preferences.xml:
+  tag preferences com communication, detail_level, language, updated_at
+
+Exemplo patterns.xml:
+  tag patterns com pattern (type, description, learned_at)
 ```
+
+Sempre incluir `updated_at` (formato YYYY-MM-DD) para saber quando a memoria foi criada/atualizada.
 
 ---
 
 ## Importante
 
-- Memórias são isoladas por usuário (user_id)
-- Persistem entre sessões diferentes
-- NÃO armazene histórico de conversas (já é feito automaticamente)
-- Use para FATOS, PREFERÊNCIAS e PADRÕES
-- Sempre inclua `updated_at` ou `learned_at` para rastreabilidade
-- Pergunte ao usuário se não tiver user_id definido
-
----
-
-## Exemplos de Uso Proativo
-
-### Cenário 1: Início de sessão
-```
-Usuário: "Olá, preciso analisar a carteira"
-
-Claude (internamente):
-1. Verificar memórias do usuário
-2. Encontra: preferência por respostas diretas
-3. Encontra: costuma focar em Atacadão primeiro
-4. Adapta resposta para ser direta e começar por Atacadão
-```
-
-### Cenário 2: Aprendendo preferência
-```
-Usuário: "Pode ser mais resumido? Não precisa de tanto detalhe"
-
-Claude:
-1. Entende preferência
-2. SALVA em /memories/preferences.xml
-3. Adapta resposta atual
-4. Lembra nas próximas sessões
-```
-
-### Cenário 3: Aprendendo padrão
-```
-(Claude observa que usuário SEMPRE pergunta sobre palmito primeiro)
-
-Claude (internamente):
-1. Detecta padrão após 3+ ocorrências
-2. SALVA em /memories/learned/patterns.xml
-3. Nas próximas sessões, pode sugerir proativamente
-```
+- Memorias sao isoladas por usuario (user_id) — um usuario NAO ve memorias de outro
+- Persistem entre sessoes diferentes
+- NAO armazenar historico de conversas (ja feito automaticamente)
+- Usar para FATOS, PREFERENCIAS e PADROES — nao para dados transacionais
