@@ -1,0 +1,82 @@
+[
+  {
+    "query": "onde fica a tela de contas a pagar?",
+    "should_trigger": true
+  },
+  {
+    "query": "qual a URL do dashboard de BI?",
+    "should_trigger": true
+  },
+  {
+    "query": "quais APIs existem para fretes?",
+    "should_trigger": true
+  },
+  {
+    "query": "em que menu esta o recebimento?",
+    "should_trigger": true
+  },
+  {
+    "query": "como acesso a carteira de pedidos no sistema?",
+    "should_trigger": true
+  },
+  {
+    "query": "endpoint de filtro de separacoes, qual a URL?",
+    "should_trigger": true
+  },
+  {
+    "query": "todas as telas do modulo financeiro",
+    "should_trigger": true
+  },
+  {
+    "query": "qual a rota para a pagina de embarques?",
+    "should_trigger": true
+  },
+  {
+    "query": "existe alguma tela de devolucao no sistema?",
+    "should_trigger": true
+  },
+  {
+    "query": "rotas e paginas do modulo de pallet",
+    "should_trigger": true
+  },
+  {
+    "query": "top 10 clientes por valor faturado no mes",
+    "should_trigger": false
+  },
+  {
+    "query": "NF 12345 foi entregue? quando chegou?",
+    "should_trigger": false
+  },
+  {
+    "query": "rastreie PO00789 no Odoo, fluxo completo",
+    "should_trigger": false
+  },
+  {
+    "query": "crie separacao do VCD456 pra amanha",
+    "should_trigger": false
+  },
+  {
+    "query": "quanto custa frete para Manaus 5000kg?",
+    "should_trigger": false
+  },
+  {
+    "query": "cadastre transportadora no SSW opcao 485",
+    "should_trigger": false
+  },
+  {
+    "query": "tudo sobre palmito, producao vs programado",
+    "should_trigger": false
+  },
+  {
+    "query": "exporte razao geral do Odoo de janeiro",
+    "should_trigger": false
+  },
+  {
+    "query": "operacoes da CarVia, subcontratos pendentes",
+    "should_trigger": false
+  },
+  {
+    "query": "crie pagamento para NF 12345 no Odoo",
+    "should_trigger": false
+  }
+]

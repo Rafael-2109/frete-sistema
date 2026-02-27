@@ -1,0 +1,62 @@
+{
+  "skill_name": "buscando-rotas",
+  "version": 1,
+  "changelog": "v1: Initial evals covering buscar_rotas.py — tela by name, API filter, concept search, edge case (no results)",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Onde fica a tela de contas a pagar no sistema? Qual a URL e em que menu ela esta?",
+      "expected_output": "URL /financeiro/contas-pagar/, menu Financeiro, template financeiro/contas_pagar.html",
+      "files": [],
+      "expectations": [
+        "Executou buscar_rotas.py com query 'contas a pagar' (ou equivalente semantico)",
+        "Retornou sucesso=true com pelo menos 1 resultado",
+        "Informou url_path contendo '/financeiro/' no resultado mais relevante",
+        "Informou blueprint_name='financeiro' ou mencionou modulo Financeiro",
+        "Apresentou menu_path ou indicou onde acessar no menu do sistema",
+        "NAO inventou URLs, templates ou caminhos que nao existem no JSON de saida do script"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Quais APIs existem para fretes? Quero ver apenas endpoints de API, nao telas.",
+      "expected_output": "Lista de rotas do tipo rota_api no blueprint fretes com URLs e metodos HTTP",
+      "files": [],
+      "expectations": [
+        "Executou buscar_rotas.py com query 'fretes' e --tipo rota_api",
+        "Retornou sucesso=true com resultados filtrados por tipo=rota_api",
+        "Listou url_path e http_methods para cada API encontrada",
+        "Todos os resultados apresentados sao do tipo rota_api (nao rota_template)",
+        "Informou source_file ou function_name para pelo menos uma API",
+        "NAO misturou rotas de template (telas HTML) com APIs na resposta"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Quero ver todas as telas do modulo de recebimento. Quais paginas existem?",
+      "expected_output": "Lista de rotas do tipo rota_template no blueprint recebimento com URLs, templates e menus",
+      "files": [],
+      "expectations": [
+        "Executou buscar_rotas.py com query 'recebimento' e --tipo rota_template (ou sem tipo mas focou em telas)",
+        "Retornou sucesso=true com multiplos resultados",
+        "Listou url_path para cada tela encontrada, todas contendo '/recebimento/'",
+        "Informou template_path ou menu_path quando disponivel",
+        "Apresentou resultado organizado (lista ou tabela) com pelo menos 2 telas do recebimento",
+        "NAO inventou telas que nao existem no JSON de saida do script"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Onde vejo um dashboard de BI ou analytics no sistema?",
+      "expected_output": "Rota(s) do modulo BI com URL /bi/ e template_path relevante, ou informacao que nao foram encontrados resultados relevantes",
+      "files": [],
+      "expectations": [
+        "Executou buscar_rotas.py com query 'dashboard BI analytics' (ou equivalente semantico)",
+        "Tratou resultado corretamente: se encontrou resultados, apresentou url_path e template; se nao encontrou, informou claramente",
+        "NAO inventou URLs ou telas de BI que nao existem no JSON de saida do script",
+        "Se resultados existiram, informou similarity ou relevancia dos resultados",
+        "Resposta distinguiu entre resultados de alta e baixa relevancia (similarity)"
+      ]
+    }
+  ]
+}

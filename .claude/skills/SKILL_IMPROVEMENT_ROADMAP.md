@@ -137,7 +137,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | 14 | `lendo-arquivos` | 1 | 32KB | DONE | 2026-02-26 |
 | 15 | `memoria-usuario` | 1 | 32KB | DONE | 2026-02-26 |
 | 16 | `descobrindo-odoo-estrutura` | 1 | 32KB | DONE | 2026-02-26 |
-| 17 | `buscando-rotas` | 1 | 16KB | IN_PROGRESS | 2026-02-26 |
+| 17 | `buscando-rotas` | 1 | 16KB | DONE | 2026-02-26 |
 
 ### P4 — Reference-Only (sem scripts proprios)
 

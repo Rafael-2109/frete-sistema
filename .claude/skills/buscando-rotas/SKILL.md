@@ -41,19 +41,23 @@ USE buscando-rotas:
     "Rotas do modulo de carteira"
 ```
 
-## Mapeamento Rapido
+## Mapeamento Rapido de Modulos
 
-Antes de executar o script, tente estes atalhos:
+**ANTES de executar o script**, tente estes atalhos — cobrem 90% das buscas:
 
-| Modulo | Prefixo de URL | Blueprint |
-|--------|---------------|-----------|
-| Financeiro | `/financeiro/` | `financeiro` |
-| Carteira | `/carteira/` | `carteira` |
-| Fretes | `/fretes/` | `fretes` |
-| Recebimento | `/recebimento/` | `recebimento` |
-| Embarque | `/embarque/` | `embarque` |
-| BI/Analytics | `/bi/` | `bi` |
-| Pallet | `/pallet/` | `pallet` |
+| Modulo | Prefixo de URL | Blueprint | Telas principais |
+|--------|---------------|-----------|------------------|
+| Financeiro | `/financeiro/` | `financeiro` | contas-pagar, contas-receber, extratos, dashboard |
+| Carteira | `/carteira/` | `carteira` | principal, separacoes, agendamentos |
+| Fretes | `/fretes/` | `fretes` | fretes, cotacao, tabelas |
+| Recebimento | `/recebimento/` | `recebimento` | nf, validacao, conferencia |
+| Embarque | `/embarque/` | `embarque` | embarques, romaneios |
+| BI/Analytics | `/bi/` | `bi` | dashboard, relatorios |
+| Pallet | `/pallet/` | `pallet` | controle, movimentacao |
+| CarVia | `/carvia/` | `carvia` | operacoes, subcontratos, faturas |
+| Devolucao | `/devolucao/` | `devolucao` | lista, detalhe |
+| Custeio | `/custeio/` | `custeio` | dashboard, analise |
+| Comercial | `/comercial/` | `comercial` | clientes, propostas |
 
 ## Scripts
 
@@ -110,9 +114,54 @@ python .claude/skills/buscando-rotas/scripts/buscar_rotas.py "dashboard" --tipo 
 python .claude/skills/buscando-rotas/scripts/buscar_rotas.py "onde vejo entregas pendentes"
 ```
 
+## Diagnostico: Script Retorna 0 Resultados
+
+**ATENCAO:** O script retorna `sucesso: true, total: 0` em dois cenarios:
+
+1. **Tabela `route_template_embeddings` nao existe** — indexador nunca foi executado
+2. **Feature flag `ROUTE_TEMPLATE_SEMANTIC_SEARCH` desabilitada**
+
+### Fallback Obrigatorio (quando script retorna 0 resultados)
+
+Se o script retornar `total: 0`, **NAO diga "nao encontrei"**. Use o fallback:
+
+```bash
+# Fallback 1: Grep direto nas rotas
+grep -rn "def " app/*/routes/*.py | grep -i "TERMO_BUSCA"
+
+# Fallback 2: Buscar blueprint registration
+grep -rn "Blueprint\|register_blueprint" app/*/routes/*.py app/*/__init__.py | grep -i "MODULO"
+
+# Fallback 3: Buscar URLs nos templates
+grep -rn "url_for\|href=" app/templates/**/*.html | grep -i "TERMO_BUSCA"
+
+# Fallback 4: Listar todas as rotas de um blueprint
+grep -rn "@.*\.route\|@.*\.get\|@.*\.post" app/MODULO/routes/*.py
+```
+
+**SEMPRE informe ao usuario que a busca semantica esta indisponivel e esta usando busca textual.**
+
+## Regras de Fidelidade
+
+### NUNCA:
+- Inventar URLs que nao aparecem no output do script ou no grep
+- Assumir template_path sem verificar (pode ser None para APIs)
+- Omitir o campo `tipo` (rota_template vs rota_api)
+- Apresentar similarity score sem que o script o tenha retornado
+- Confundir menu_path (hierarquia no menu) com url_path (URL HTTP)
+
+### SEMPRE:
+- Citar url_path EXATAMENTE como o script retornou
+- Informar o tipo de rota (tela vs API) ao usuario
+- Mencionar blueprint_name para contexto de modulo
+- Se retornou 0 resultados, executar fallback com Grep/Glob
+- Se o fallback tambem nao encontrou, dizer claramente que nao existe
+
 ## Pre-requisitos
 
 1. Tabela `route_template_embeddings` criada (migration existente)
 2. Indexer executado: `python -m app.embeddings.indexers.route_template_indexer`
 3. Feature flag `ROUTE_TEMPLATE_SEMANTIC_SEARCH` habilitada (default: `true`)
 4. Voyage AI configurado (`VOYAGE_API_KEY` em `.env`)
+
+**Se pre-requisitos nao estiverem atendidos:** skill degrada graciosamente para fallback textual.
