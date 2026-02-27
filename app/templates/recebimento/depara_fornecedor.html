@@ -13,7 +13,10 @@
                 <i class="fas fa-plus"></i> Novo De-Para
             </button>
             <button type="button" class="btn btn-outline-success me-2" onclick="abrirModalImportarExcel()">
-                <i class="fas fa-file-excel"></i> Importar Excel
+                <i class="fas fa-file-upload"></i> Importar Excel
+            </button>
+            <button type="button" class="btn btn-outline-secondary me-2" onclick="exportarExcel()">
+                <i class="fas fa-file-download"></i> Exportar Excel
             </button>
             <button type="button" class="btn btn-outline-info me-2" onclick="importarDoOdoo()">
                 <i class="fas fa-download"></i> Importar do Odoo
@@ -289,12 +292,17 @@
 
                             <input type="hidden" id="odooProductId" name="odoo_product_id">
 
+                            <input type="hidden" id="odooProductUomId" name="odoo_product_uom_id">
+
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">UM Fornecedor</label>
-                                        <input type="text" class="form-control" id="umFornecedor" name="um_fornecedor"
-                                               placeholder="Ex: ML, MI, MIL" onchange="sugerirFator()">
+                                        <select class="form-select" id="umFornecedor" name="um_fornecedor" onchange="onUomChange()">
+                                            <option value="">Selecione...</option>
+                                            <!-- Populado via JS ao abrir modal -->
+                                        </select>
+                                        <small class="text-muted">UoMs carregadas do Odoo</small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -425,42 +433,94 @@
 const modalDepara = new bootstrap.Modal(document.getElementById('modalDepara'));
 const modalImportarExcel = new bootstrap.Modal(document.getElementById('modalImportarExcel'));
 
-function abrirModalNovo() {
+// Cache de UoMs carregadas do Odoo
+let uomsOdooCache = null;
+
+async function carregarUomsOdoo() {
+    if (uomsOdooCache) return uomsOdooCache;
+    try {
+        const resp = await fetch('/api/recebimento/depara/uoms-odoo');
+        const data = await resp.json();
+        if (data.sucesso) {
+            uomsOdooCache = data.uoms;
+            return data.uoms;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar UoMs do Odoo:', e);
+    }
+    return [];
+}
+
+async function popularSelectUom(valorAtual, idAtual) {
+    const select = document.getElementById('umFornecedor');
+    const uoms = await carregarUomsOdoo();
+    select.innerHTML = '<option value="">Selecione...</option>';
+    uoms.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.name;
+        opt.dataset.uomId = u.id;
+        opt.textContent = u.name;
+        if (idAtual && u.id == idAtual) opt.selected = true;
+        else if (valorAtual && u.name === valorAtual) opt.selected = true;
+        select.appendChild(opt);
+    });
+    // Atualizar hidden com ID da opcao selecionada
+    atualizarUomIdHidden();
+}
+
+function atualizarUomIdHidden() {
+    const select = document.getElementById('umFornecedor');
+    const selected = select.options[select.selectedIndex];
+    document.getElementById('odooProductUomId').value = selected?.dataset?.uomId || '';
+}
+
+function onUomChange() {
+    atualizarUomIdHidden();
+    sugerirFator();
+}
+
+async function abrirModalNovo() {
     document.getElementById('modalDeparaTitle').textContent = 'Novo De-Para';
     document.getElementById('formDepara').reset();
     document.getElementById('deparaId').value = '';
     document.getElementById('fatorConversao').value = '1';
+    document.getElementById('odooProductUomId').value = '';
+    await popularSelectUom(null, null);
     modalDepara.show();
 }
 
-function editarDepara(id) {
-    fetch(`/api/recebimento/depara/${id}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.sucesso) {
-                const d = data.depara;
-                document.getElementById('modalDeparaTitle').textContent = 'Editar De-Para';
-                document.getElementById('deparaId').value = d.id;
-                document.getElementById('cnpjFornecedor').value = d.cnpj_fornecedor;
-                document.getElementById('razaoFornecedor').value = d.razao_fornecedor || '';
-                document.getElementById('codProdutoFornecedor').value = d.cod_produto_fornecedor;
-                document.getElementById('descProdutoFornecedor').value = d.descricao_produto_fornecedor || '';
-                document.getElementById('codProdutoInterno').value = d.cod_produto_interno;
-                document.getElementById('nomeProdutoInterno').value = d.nome_produto_interno || '';
-                document.getElementById('odooProductId').value = d.odoo_product_id || '';
-                document.getElementById('umFornecedor').value = d.um_fornecedor || '';
-                document.getElementById('fatorConversao').value = d.fator_conversao || 1;
-                modalDepara.show();
-            } else {
-                alert('Erro ao buscar De-Para: ' + data.erro);
-            }
-        });
+async function editarDepara(id) {
+    try {
+        const resp = await fetch(`/api/recebimento/depara/${id}`);
+        const data = await resp.json();
+        if (data.sucesso) {
+            const d = data.depara;
+            document.getElementById('modalDeparaTitle').textContent = 'Editar De-Para';
+            document.getElementById('deparaId').value = d.id;
+            document.getElementById('cnpjFornecedor').value = d.cnpj_fornecedor;
+            document.getElementById('razaoFornecedor').value = d.razao_fornecedor || '';
+            document.getElementById('codProdutoFornecedor').value = d.cod_produto_fornecedor;
+            document.getElementById('descProdutoFornecedor').value = d.descricao_produto_fornecedor || '';
+            document.getElementById('codProdutoInterno').value = d.cod_produto_interno;
+            document.getElementById('nomeProdutoInterno').value = d.nome_produto_interno || '';
+            document.getElementById('odooProductId').value = d.odoo_product_id || '';
+            document.getElementById('fatorConversao').value = d.fator_conversao || 1;
+            await popularSelectUom(d.um_fornecedor, d.odoo_product_uom_id);
+            modalDepara.show();
+        } else {
+            alert('Erro ao buscar De-Para: ' + data.erro);
+        }
+    } catch (e) {
+        alert('Erro de comunicacao: ' + e.message);
+    }
 }
 
 function salvarDepara() {
     const id = document.getElementById('deparaId').value;
     const method = id ? 'PUT' : 'POST';
     const url = id ? `/api/recebimento/depara/${id}` : '/api/recebimento/depara';
+
+    const uomIdValue = document.getElementById('odooProductUomId').value;
 
     const dados = {
         cnpj_fornecedor: document.getElementById('cnpjFornecedor').value,
@@ -471,6 +531,7 @@ function salvarDepara() {
         nome_produto_interno: document.getElementById('nomeProdutoInterno').value,
         odoo_product_id: document.getElementById('odooProductId').value || null,
         um_fornecedor: document.getElementById('umFornecedor').value,
+        odoo_product_uom_id: uomIdValue ? parseInt(uomIdValue) : null,
         fator_conversao: parseFloat(document.getElementById('fatorConversao').value) || 1
     };
 
@@ -502,6 +563,10 @@ function excluirDepara(id) {
                 alert('Erro: ' + data.erro);
             }
         });
+}
+
+function exportarExcel() {
+    window.location.href = '/api/recebimento/depara/exportar-excel';
 }
 
 function reativarDepara(id) {

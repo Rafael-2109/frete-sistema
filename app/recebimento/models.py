@@ -580,6 +580,7 @@ class ProdutoFornecedorDepara(db.Model):
     um_fornecedor = db.Column(db.String(20), nullable=True)  # det_prod_ucom (ML, MI, MIL)
     um_interna = db.Column(db.String(20), default='UNITS')   # product_uom
     fator_conversao = db.Column(db.Numeric(10, 4), default=1.0000)  # 1000 para Milhar
+    odoo_product_uom_id = db.Column(db.Integer, nullable=True)  # ID da UoM em uom.uom do Odoo
 
     # Controle
     ativo = db.Column(db.Boolean, default=True)
@@ -615,6 +616,7 @@ class ProdutoFornecedorDepara(db.Model):
             'um_fornecedor': self.um_fornecedor,
             'um_interna': self.um_interna,
             'fator_conversao': float(self.fator_conversao) if self.fator_conversao else 1.0,
+            'odoo_product_uom_id': self.odoo_product_uom_id,
             'ativo': self.ativo,
             'sincronizado_odoo': self.sincronizado_odoo,
             'criado_em': self.criado_em.isoformat() if self.criado_em else None,

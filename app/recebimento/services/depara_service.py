@@ -159,6 +159,7 @@ class DeparaService:
         um_fornecedor: Optional[str] = None,
         um_interna: str = 'UNITS',
         fator_conversao: Decimal = Decimal('1.0000'),
+        odoo_product_uom_id: Optional[int] = None,
         criado_por: Optional[str] = None,
         auto_sync_odoo: bool = True
     ) -> Dict[str, Any]:
@@ -215,6 +216,7 @@ class DeparaService:
                     existente.um_fornecedor = um_fornecedor
                     existente.um_interna = um_interna
                     existente.fator_conversao = fator_conversao
+                    existente.odoo_product_uom_id = odoo_product_uom_id
                     existente.sincronizado_odoo = False
                     existente.atualizado_por = criado_por
                     existente.atualizado_em = agora_utc_naive()
@@ -271,6 +273,10 @@ class DeparaService:
                     f"{um_fornecedor} = {fator_conversao} unidades"
                 )
 
+            # Resolver odoo_product_uom_id se nao informado mas tem um_fornecedor
+            if not odoo_product_uom_id and um_fornecedor:
+                odoo_product_uom_id = self.resolver_uom_por_nome(um_fornecedor)
+
             # Criar registro
             novo = ProdutoFornecedorDepara(
                 cnpj_fornecedor=cnpj_limpo,
@@ -283,6 +289,7 @@ class DeparaService:
                 um_fornecedor=um_fornecedor,
                 um_interna=um_interna,
                 fator_conversao=fator_conversao,
+                odoo_product_uom_id=odoo_product_uom_id,
                 ativo=True,
                 sincronizado_odoo=False,
                 criado_por=criado_por,
@@ -340,6 +347,7 @@ class DeparaService:
         um_fornecedor: Optional[str] = None,
         um_interna: Optional[str] = None,
         fator_conversao: Optional[Decimal] = None,
+        odoo_product_uom_id: Optional[int] = None,
         ativo: Optional[bool] = None,
         atualizado_por: Optional[str] = None,
         auto_sync_odoo: bool = True
@@ -356,6 +364,7 @@ class DeparaService:
             um_fornecedor: Nova UM do fornecedor
             um_interna: Nova UM interna
             fator_conversao: Novo fator de conversao
+            odoo_product_uom_id: ID da UoM no Odoo (uom.uom)
             ativo: Novo status
             atualizado_por: Usuario que atualizou
             auto_sync_odoo: Se True, sincroniza automaticamente com Odoo (default: True)
@@ -390,6 +399,11 @@ class DeparaService:
                 # Auto-detectar fator se Milhar
                 if um_fornecedor.upper() in UOMS_MILHAR and fator_conversao is None:
                     item.fator_conversao = FATOR_MILHAR
+                # Resolver novo UoM ID se mudou
+                if odoo_product_uom_id:
+                    item.odoo_product_uom_id = odoo_product_uom_id
+                elif um_fornecedor:
+                    item.odoo_product_uom_id = self.resolver_uom_por_nome(um_fornecedor)
 
             if um_interna is not None:
                 item.um_interna = um_interna
@@ -872,11 +886,12 @@ class DeparaService:
                 'partner_id': partner_id,
                 'product_id': item.odoo_product_id,
                 'product_code': item.cod_produto_fornecedor,
+                'fator_un': float(item.fator_conversao) if item.fator_conversao else 1.0,
             }
 
-            # Adicionar fator_un se definido (campo customizado do Odoo BR)
-            if item.fator_conversao and float(item.fator_conversao) != 1.0:
-                supplierinfo_data['fator_un'] = float(item.fator_conversao)
+            # Incluir product_uom se tiver ID salvo localmente
+            if item.odoo_product_uom_id:
+                supplierinfo_data['product_uom'] = item.odoo_product_uom_id
 
             # Adicionar descricao do produto do fornecedor se definida
             if item.descricao_produto_fornecedor:
@@ -1125,7 +1140,9 @@ class DeparaService:
                     # Extrair UM do fornecedor (product_uom é many2one: [id, nome])
                     product_uom = si.get('product_uom')
                     um_fornecedor = None
+                    odoo_product_uom_id = None
                     if product_uom and isinstance(product_uom, (list, tuple)) and len(product_uom) >= 2:
+                        odoo_product_uom_id = product_uom[0]  # ID numerico da UoM
                         um_fornecedor = product_uom[1]  # Ex: [182, "PL"] → "PL"
                     elif product_uom and isinstance(product_uom, str):
                         um_fornecedor = product_uom
@@ -1140,6 +1157,7 @@ class DeparaService:
                         existente.descricao_produto_fornecedor = descricao_fornecedor
                         existente.odoo_product_id = odoo_product_id
                         existente.odoo_supplierinfo_id = si['id']
+                        existente.odoo_product_uom_id = odoo_product_uom_id
                         existente.fator_conversao = fator_conversao
                         existente.um_fornecedor = um_fornecedor
                         existente.sincronizado_odoo = True
@@ -1158,6 +1176,7 @@ class DeparaService:
                             nome_produto_interno=product.get('name', ''),
                             odoo_product_id=odoo_product_id,
                             odoo_supplierinfo_id=si['id'],
+                            odoo_product_uom_id=odoo_product_uom_id,
                             um_fornecedor=um_fornecedor,
                             fator_conversao=fator_conversao,
                             sincronizado_odoo=True,
@@ -1203,6 +1222,40 @@ class DeparaService:
     # =========================================================================
     # HELPER METHODS
     # =========================================================================
+
+    def resolver_uom_por_nome(self, um_fornecedor: str) -> Optional[int]:
+        """
+        Busca ID da UoM no Odoo pelo nome (uom.uom).
+        Usado para preencher odoo_product_uom_id ao criar/atualizar De-Para pela UI.
+
+        Args:
+            um_fornecedor: Nome da UoM (ex: 'MIL', 'ML', 'Units')
+
+        Returns:
+            ID da UoM no Odoo ou None se nao encontrar
+        """
+        try:
+            odoo = get_odoo_connection()
+            if not odoo.authenticate():
+                logger.warning("Falha ao autenticar no Odoo para resolver UoM")
+                return None
+
+            # Busca exata (case-insensitive)
+            uom_ids = odoo.search('uom.uom', [('name', '=ilike', um_fornecedor)], limit=1)
+            if uom_ids:
+                return uom_ids[0]
+
+            # Fallback: se for variante de Milhar, tentar nomes alternativos
+            if um_fornecedor.upper() in UOMS_MILHAR:
+                for variante in ['MIL', 'MI', 'ML']:
+                    uom_ids = odoo.search('uom.uom', [('name', '=ilike', variante)], limit=1)
+                    if uom_ids:
+                        return uom_ids[0]
+
+            return None
+        except Exception as e:
+            logger.warning(f"Erro ao resolver UoM '{um_fornecedor}' no Odoo: {e}")
+            return None
 
     def _limpar_cnpj(self, cnpj: str) -> str:
         """Remove pontuacao do CNPJ/CPF."""
@@ -1302,6 +1355,7 @@ class DeparaService:
             'um_fornecedor': item.um_fornecedor,
             'um_interna': item.um_interna,
             'fator_conversao': float(item.fator_conversao) if item.fator_conversao else 1.0,
+            'odoo_product_uom_id': item.odoo_product_uom_id,
             'ativo': item.ativo,
             'sincronizado_odoo': item.sincronizado_odoo,
             'odoo_supplierinfo_id': item.odoo_supplierinfo_id,
