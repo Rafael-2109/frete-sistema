@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-file-alt"></i> NF {{ nf.numero_nf }}
+                <span class="badge bg-secondary">{{ nf.tipo_fonte }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                {% if nf.serie_nf %}Serie {{ nf.serie_nf }} | {% endif %}
+                Importada em {{ nf.criado_em|formatar_data_hora_brasil if nf.criado_em else '-' }}
+                por {{ nf.criado_por }}
+            </p>
+        </div>
+        <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Dados da NF -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da NF</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Numero</small>
+                            <strong>{{ nf.numero_nf }}</strong>
+                            {% if nf.serie_nf %}<span class="text-muted"> (Serie {{ nf.serie_nf }})</span>{% endif %}
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data Emissao</small>
+                            <strong>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</strong>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted d-block">Chave de Acesso</small>
+                            <code class="small">{{ nf.chave_acesso_nf or 'Nao disponivel' }}</code>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Emitente</small>
+                            <strong>{{ nf.nome_emitente or '-' }}</strong>
+                            <div class="cnpj-col small text-muted">{{ nf.cnpj_emitente }}</div>
+                            {% if nf.cidade_emitente %}
+                            <div class="small text-muted">{{ nf.cidade_emitente }}/{{ nf.uf_emitente }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Destinatario</small>
+                            <strong>{{ nf.nome_destinatario or '-' }}</strong>
+                            <div class="cnpj-col small text-muted">{{ nf.cnpj_destinatario or '-' }}</div>
+                            {% if nf.cidade_destinatario %}
+                            <div class="small text-muted">{{ nf.cidade_destinatario }}/{{ nf.uf_destinatario }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <small class="text-muted d-block">Valor Total</small>
+                            <strong class="text-success">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Peso Bruto</small>
+                            <strong>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Volumes</small>
+                            <strong>{{ nf.quantidade_volumes or '-' }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTes CarVia Vinculados -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTes CarVia Vinculados ({{ operacoes|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if operacoes %}
+                    <div class="list-group list-group-flush">
+                        {% for op in operacoes %}
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>CTe CarVia #{{ op.id }}</strong>
+                                    {% if op.cte_numero %}
+                                    <span class="text-muted">— CTe {{ op.cte_numero }}</span>
+                                    {% endif %}
+                                </div>
+                                <span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span>
+                            </div>
+                            <div class="small text-muted">
+                                {{ op.nome_cliente or op.cnpj_cliente }} |
+                                {{ op.cidade_destino }}/{{ op.uf_destino }} |
+                                {{ op.cte_valor|valor_br if op.cte_valor else '-' }}
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">Nenhum CTe CarVia vinculado a esta NF.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Itens de Produto -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-boxes"></i> Itens de Produto ({{ itens|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if itens %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Codigo</th>
+                            <th>Descricao</th>
+                            <th>NCM</th>
+                            <th>CFOP</th>
+                            <th>Unidade</th>
+                            <th>Quantidade</th>
+                            <th>Valor Unit.</th>
+                            <th>Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td><code>{{ item.codigo_produto or '-' }}</code></td>
+                            <td>{{ item.descricao or '-' }}</td>
+                            <td><small>{{ item.ncm or '-' }}</small></td>
+                            <td><small>{{ item.cfop or '-' }}</small></td>
+                            <td>{{ item.unidade or '-' }}</td>
+                            <td class="valor-col">{{ item.quantidade|numero_br(4) if item.quantidade else '-' }}</td>
+                            <td class="valor-col">{{ item.valor_unitario|valor_br(4) if item.valor_unitario else '-' }}</td>
+                            <td class="valor-col"><strong>{{ item.valor_total_item|valor_br if item.valor_total_item else '-' }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">
+                <p class="mb-0">Nenhum item de produto extraido desta NF.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

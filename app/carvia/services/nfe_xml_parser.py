@@ -198,6 +198,42 @@ class NFeXMLParser:
             'quantidade_volumes': self._to_int(self._get_tag_text('qVol', root=vol)),
         }
 
+    def get_itens(self) -> List[Dict]:
+        """Extrai itens de produto (<det><prod>)
+
+        Estrutura XML:
+            <det nItem="1">
+                <prod>
+                    <cProd>JET MOTO CHEFE</cProd>
+                    <xProd>JET MOTO CHEFE</xProd>
+                    <NCM>87116000</NCM>
+                    <CFOP>5405</CFOP>
+                    <uCom>UN</uCom>
+                    <qCom>3.0000</qCom>
+                    <vUnCom>7220.0000</vUnCom>
+                    <vProd>21660.00</vProd>
+                </prod>
+            </det>
+        """
+        itens = []
+        dets = self._find_all_tags('det')
+        for det in dets:
+            prod = self._find_tag('prod', root=det)
+            if prod is None:
+                continue
+
+            itens.append({
+                'codigo_produto': self._get_tag_text('cProd', root=prod),
+                'descricao': self._get_tag_text('xProd', root=prod),
+                'ncm': self._get_tag_text('NCM', root=prod),
+                'cfop': self._get_tag_text('CFOP', root=prod),
+                'unidade': self._get_tag_text('uCom', root=prod),
+                'quantidade': self._to_float(self._get_tag_text('qCom', root=prod)),
+                'valor_unitario': self._to_float(self._get_tag_text('vUnCom', root=prod)),
+                'valor_total_item': self._to_float(self._get_tag_text('vProd', root=prod)),
+            })
+        return itens
+
     def get_todas_informacoes(self) -> Dict:
         """Extrai todas as informacoes relevantes em um unico dict"""
         ide = self.get_ide()
@@ -223,6 +259,7 @@ class NFeXMLParser:
             'peso_bruto': transp.get('peso_bruto'),
             'peso_liquido': transp.get('peso_liquido'),
             'quantidade_volumes': transp.get('quantidade_volumes'),
+            'itens': self.get_itens(),
             'tipo_fonte': 'XML_NFE',
         }
 

@@ -66,6 +66,43 @@ class CarviaNf(db.Model):
         return f'<CarviaNf {self.numero_nf} ({self.tipo_fonte})>'
 
 
+class CarviaNfItem(db.Model):
+    """Itens de produto da NF — extraidos do DANFE PDF ou XML NF-e"""
+    __tablename__ = 'carvia_nf_itens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nf_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id'),
+        nullable=False,
+        index=True
+    )
+
+    # Produto
+    codigo_produto = db.Column(db.String(60))
+    descricao = db.Column(db.String(255))
+    ncm = db.Column(db.String(10))
+    cfop = db.Column(db.String(10))
+
+    # Quantidades e valores
+    unidade = db.Column(db.String(10))
+    quantidade = db.Column(db.Numeric(15, 4))
+    valor_unitario = db.Column(db.Numeric(15, 4))
+    valor_total_item = db.Column(db.Numeric(15, 2))
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+    # Relacionamento
+    nf = db.relationship(
+        'CarviaNf',
+        backref=db.backref('itens', lazy='dynamic', cascade='all, delete-orphan')
+    )
+
+    def __repr__(self):
+        return f'<CarviaNfItem {self.codigo_produto} qtd={self.quantidade}>'
+
+
 class CarviaOperacao(db.Model):
     """Operacao principal — 1 CTe CarVia = N NFs do mesmo cliente/destino"""
     __tablename__ = 'carvia_operacoes'
@@ -211,6 +248,9 @@ class CarviaSubcontrato(db.Model):
         nullable=False,
         index=True
     )
+
+    # Numeracao sequencial por transportadora (auto-increment logico)
+    numero_sequencial_transportadora = db.Column(db.Integer, nullable=True)
 
     # CTe do subcontratado (pode ser NULL para freteiro)
     cte_numero = db.Column(db.String(20), index=True)

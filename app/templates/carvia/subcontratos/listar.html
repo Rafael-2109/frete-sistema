@@ -3,18 +3,10 @@
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-file-invoice"></i> CTe CarVia</h2>
-        <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary btn-sm">
-                <i class="fas fa-upload"></i> Importar
-            </a>
-            <a href="{{ url_for('carvia.criar_operacao_manual') }}" class="btn btn-success btn-sm">
-                <i class="fas fa-plus"></i> Manual
-            </a>
-            <a href="{{ url_for('carvia.criar_operacao_freteiro') }}" class="btn btn-outline-warning btn-sm">
-                <i class="fas fa-truck-loading"></i> Freteiro
-            </a>
-        </div>
+        <h2><i class="fas fa-handshake"></i> CTe Subcontrato</h2>
+        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Dashboard
+        </a>
     </div>
 
     <!-- Filtros -->
@@ -25,17 +17,18 @@
                     <label class="form-label small">Status</label>
                     <select name="status" class="form-select form-select-sm">
                         <option value="">Todos</option>
-                        <option value="RASCUNHO" {{ 'selected' if status_filtro == 'RASCUNHO' }}>Rascunho</option>
+                        <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
                         <option value="COTADO" {{ 'selected' if status_filtro == 'COTADO' }}>Cotado</option>
                         <option value="CONFIRMADO" {{ 'selected' if status_filtro == 'CONFIRMADO' }}>Confirmado</option>
                         <option value="FATURADO" {{ 'selected' if status_filtro == 'FATURADO' }}>Faturado</option>
+                        <option value="CONFERIDO" {{ 'selected' if status_filtro == 'CONFERIDO' }}>Conferido</option>
                         <option value="CANCELADO" {{ 'selected' if status_filtro == 'CANCELADO' }}>Cancelado</option>
                     </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Cliente, CNPJ, CTe, cidade..." value="{{ busca }}">
+                           placeholder="Transportadora, CTe, cliente, cidade..." value="{{ busca }}">
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
@@ -44,7 +37,7 @@
                 </div>
                 {% if status_filtro or busca %}
                 <div class="col-md-2">
-                    <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-sm btn-outline-secondary w-100">
+                    <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i> Limpar
                     </a>
                 </div>
@@ -56,45 +49,59 @@
     <!-- Tabela -->
     <div class="card">
         <div class="card-body p-0">
-            {% if operacoes %}
+            {% if subcontratos %}
             <div class="table-responsive">
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
                             <th>#</th>
+                            <th>Seq</th>
+                            <th>Transportadora</th>
                             <th>CTe CarVia</th>
-                            <th>Cliente</th>
-                            <th>Destino</th>
-                            <th>Peso (kg)</th>
-                            <th>Valor CTe</th>
-                            <th>Tipo</th>
+                            <th>Cliente/Destino</th>
+                            <th>Valor Final</th>
                             <th>Status</th>
                             <th>Criado em</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for op in operacoes %}
+                        {% for sub in subcontratos %}
                         <tr>
-                            <td>{{ op.id }}</td>
-                            <td>{{ op.cte_numero or '-' }}</td>
+                            <td>{{ sub.id }}</td>
                             <td>
-                                <span title="{{ op.cnpj_cliente }}" class="cnpj-col">
-                                    {{ op.nome_cliente or op.cnpj_cliente }}
+                                {% if sub.numero_sequencial_transportadora %}
+                                <span class="badge bg-info">{{ sub.numero_sequencial_transportadora }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ sub.transportadora.razao_social if sub.transportadora else '-' }}</strong>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}">
+                                    #{{ sub.operacao_id }}
+                                </a>
+                                {% if sub.cte_numero %}
+                                <small class="text-muted">CTe {{ sub.cte_numero }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="small">
+                                    {{ sub.operacao.nome_cliente if sub.operacao else '-' }} |
+                                    {{ sub.operacao.cidade_destino + '/' + sub.operacao.uf_destino if sub.operacao else '-' }}
                                 </span>
                             </td>
-                            <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
-                            <td class="valor-col">{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}</td>
-                            <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
-                            <td><small class="text-muted">{{ op.tipo_entrada }}</small></td>
+                            <td class="valor-col">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</td>
                             <td>
-                                <span class="badge carvia-badge-{{ op.status|lower }}">
-                                    {{ op.status }}
+                                <span class="badge carvia-badge-{{ sub.status|lower }}">
+                                    {{ sub.status }}
                                 </span>
                             </td>
-                            <td><small>{{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}</small></td>
+                            <td><small>{{ sub.criado_em|formatar_data_hora_brasil if sub.criado_em else '-' }}</small></td>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"
+                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="Detalhes">
                                     <i class="fas fa-eye"></i>
                                 </a>
@@ -111,7 +118,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.prev_num, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.prev_num, status=status_filtro, busca=busca) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -119,7 +126,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=p, status=status_filtro, busca=busca) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=p, status=status_filtro, busca=busca) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -127,7 +134,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.next_num, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.next_num, status=status_filtro, busca=busca) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>
@@ -137,8 +144,8 @@
             {% endif %}
             {% else %}
             <div class="text-center py-5 text-muted">
-                <i class="fas fa-search fa-3x mb-3 d-block opacity-50"></i>
-                <p>Nenhum CTe CarVia encontrado.</p>
+                <i class="fas fa-handshake fa-3x mb-3 d-block opacity-50"></i>
+                <p>Nenhum CTe Subcontrato encontrado.</p>
             </div>
             {% endif %}
         </div>

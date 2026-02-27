@@ -11,22 +11,30 @@
         </div>
         <div>
             <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary">
-                <i class="fas fa-upload"></i> Importar NFs/CTes
+                <i class="fas fa-upload"></i> Importar Documentos
             </a>
         </div>
     </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Cards — Documentos -->
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
-                    <div class="stat-value text-primary">{{ stats.total_operacoes }}</div>
-                    <div class="stat-label text-muted">Total Operacoes</div>
+                    <div class="stat-value text-secondary">{{ stats.total_nfs }}</div>
+                    <div class="stat-label text-muted">NFs Venda</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-primary">{{ stats.total_operacoes }}</div>
+                    <div class="stat-label text-muted">CTes CarVia</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
                     <div class="stat-value text-warning">{{ stats.operacoes_rascunho }}</div>
@@ -34,7 +42,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
                     <div class="stat-value text-info">{{ stats.operacoes_cotadas }}</div>
@@ -42,7 +50,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
                     <div class="stat-value text-success">{{ stats.operacoes_confirmadas }}</div>
@@ -52,36 +60,45 @@
         </div>
     </div>
 
+    <!-- Stats Cards — Subcontratos e Faturas -->
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
                     <div class="stat-value">{{ stats.total_subcontratos }}</div>
-                    <div class="stat-label text-muted">Subcontratos</div>
+                    <div class="stat-label text-muted">CTes Subcontrato</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
                     <div class="stat-value text-warning">{{ stats.subcontratos_pendentes }}</div>
-                    <div class="stat-label text-muted">Subcontr. Pendentes</div>
+                    <div class="stat-label text-muted">Sub. Pendentes</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
-                    <div class="stat-value text-info">{{ stats.faturas_cliente_pendentes }}</div>
-                    <div class="stat-label text-muted">Fat. Cliente Pend.</div>
+                    <div class="stat-value text-info">{{ stats.subcontratos_cotados }}</div>
+                    <div class="stat-label text-muted">Sub. Cotados</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
-                    <div class="stat-value text-danger">{{ stats.faturas_transp_pendentes }}</div>
-                    <div class="stat-label text-muted">Fat. Transp. Pend.</div>
+                    <div class="stat-value text-primary">{{ stats.faturas_carvia_pendentes }}</div>
+                    <div class="stat-label text-muted">Fat. CarVia Pend.</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-danger">{{ stats.faturas_sub_pendentes }}</div>
+                    <div class="stat-label text-muted">Fat. Sub. Pend.</div>
                 </div>
             </div>
         </div>
@@ -93,9 +110,9 @@
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title"><i class="fas fa-upload text-primary"></i> Importar</h5>
-                    <p class="card-text text-muted small">Upload de NFs (PDF/XML) e CTes para criar operacoes automaticamente.</p>
+                    <p class="card-text text-muted small">Upload de NFs (PDF/XML) e CTes. Classificacao automatica.</p>
                     <a href="{{ url_for('carvia.importar') }}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-arrow-right"></i> Importar Arquivos
+                        <i class="fas fa-arrow-right"></i> Importar Documentos
                     </a>
                 </div>
             </div>
@@ -103,11 +120,19 @@
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-list text-info"></i> Operacoes</h5>
-                    <p class="card-text text-muted small">Gerenciar operacoes, subcontratos e cotacoes de frete.</p>
-                    <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-info btn-sm">
-                        <i class="fas fa-arrow-right"></i> Ver Operacoes
-                    </a>
+                    <h5 class="card-title"><i class="fas fa-file-alt text-info"></i> Documentos</h5>
+                    <p class="card-text text-muted small">NFs de venda, CTes CarVia e CTes de subcontratados.</p>
+                    <div class="d-flex flex-wrap gap-1">
+                        <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-outline-secondary btn-sm">
+                            NF Venda
+                        </a>
+                        <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-info btn-sm">
+                            CTe CarVia
+                        </a>
+                        <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-outline-warning btn-sm">
+                            CTe Subcontrato
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -115,13 +140,13 @@
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title"><i class="fas fa-file-invoice-dollar text-success"></i> Faturas</h5>
-                    <p class="card-text text-muted small">Gestao de faturas ao cliente e recebidas dos transportadores.</p>
-                    <div>
-                        <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-success btn-sm me-1">
-                            <i class="fas fa-arrow-right"></i> Cliente
+                    <p class="card-text text-muted small">Faturas ao cliente (CarVia) e recebidas dos subcontratados.</p>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-success btn-sm">
+                            Fatura CarVia
                         </a>
-                        <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-success btn-sm">
-                            <i class="fas fa-arrow-right"></i> Transportadora
+                        <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-danger btn-sm">
+                            Fatura Subcontrato
                         </a>
                     </div>
                 </div>
@@ -129,12 +154,12 @@
         </div>
     </div>
 
-    <!-- Ultimas Operacoes -->
+    <!-- Ultimos CTes CarVia -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="fas fa-clock"></i> Ultimas Operacoes</h5>
+            <h5 class="mb-0"><i class="fas fa-clock"></i> Ultimos CTes CarVia</h5>
             <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-sm btn-outline-secondary">
-                Ver todas
+                Ver todos
             </a>
         </div>
         <div class="card-body p-0">
@@ -180,7 +205,7 @@
             {% else %}
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-inbox fa-3x mb-3 d-block opacity-50"></i>
-                <p>Nenhuma operacao ainda. Comece importando NFs/CTes.</p>
+                <p>Nenhum CTe CarVia ainda. Comece importando documentos.</p>
                 <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary btn-sm">
                     <i class="fas fa-upload"></i> Importar Arquivos
                 </a>

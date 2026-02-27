@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**16 arquivos** | **3.3K LOC** | **16 templates** | **Atualizado**: 26/02/2026
+**20 arquivos** | **~4.5K LOC** | **20 templates** | **Atualizado**: 27/02/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -9,16 +9,46 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 
 ---
 
-## Estrutura
+## Estrutura de Telas (5 documentos + 1 importacao)
+
+| # | Documento | Entidade | URL | Tela |
+|---|-----------|----------|-----|------|
+| 1 | **NF Venda** | `CarviaNf` | `/carvia/nfs` | Lista + Detalhe (com itens de produto) |
+| 2 | **CTe CarVia** | `CarviaOperacao` | `/carvia/operacoes` | Lista + Detalhe + Criar/Editar |
+| 3 | **CTe Subcontrato** | `CarviaSubcontrato` | `/carvia/subcontratos` | Lista + Detalhe |
+| 4 | **Fatura CarVia** | `CarviaFaturaCliente` | `/carvia/faturas-cliente` | Lista + Nova + Detalhe |
+| 5 | **Fatura Subcontrato** | `CarviaFaturaTransportadora` | `/carvia/faturas-transportadora` | Lista + Nova + Detalhe |
+| 6 | **Importacao** | `ImportacaoService` | `/carvia/importar` | Upload + Review + Confirmar |
+
+### Cross-links entre documentos
+
+```
+NF Venda ──────────── CTe CarVia ──────────── Fatura CarVia
+    (via junction)    │    (via fatura_cliente_id)
+                      │
+                CTe Subcontrato ────────── Fatura Subcontrato
+               (via operacao_id)    (via fatura_transportadora_id)
+```
+
+---
+
+## Estrutura de Arquivos
 
 ```
 app/carvia/
-  ├── routes/          # 5 sub-rotas (dashboard, importacao, operacao, fatura, api)
+  ├── routes/          # 7 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api)
   ├── services/        # 6 services (parsers, matching, importacao, cotacao)
-  ├── models.py        # 6 models (NF, Operacao, Junction, Subcontrato, 2 Faturas)
+  ├── models.py        # 7 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas)
   └── forms.py         # 4 forms WTForms
 
-app/templates/carvia/  # 16 templates (dashboard, operacoes, faturas, subcontrato)
+app/templates/carvia/
+  ├── dashboard.html
+  ├── importar.html, importar_resultado.html
+  ├── nfs/             # listar.html, detalhe.html
+  ├── listar_operacoes.html, detalhe_operacao.html, criar_manual.html, etc.
+  ├── subcontratos/    # listar.html, detalhe.html
+  ├── faturas_cliente/  # listar.html, nova.html, detalhe.html
+  └── faturas_transportadora/  # listar.html, nova.html, detalhe.html
 ```
 
 ---
@@ -45,15 +75,26 @@ Cotacao usa `peso_utilizado` — valor stale = cotacao errada.
 
 ### R4: Fluxo de Status e Irreversivel (exceto cancelamento)
 ```
-Operacao: RASCUNHO → COTADO → CONFIRMADO → FATURADO    [CANCELADO de qualquer estado exceto FATURADO]
-Subcontrato: PENDENTE → COTADO → CONFIRMADO → FATURADO → CONFERIDO  [CANCELADO exceto FATURADO]
+CTe CarVia: RASCUNHO → COTADO → CONFIRMADO → FATURADO    [CANCELADO de qualquer estado exceto FATURADO]
+CTe Subcontrato: PENDENTE → COTADO → CONFIRMADO → FATURADO → CONFERIDO  [CANCELADO exceto FATURADO]
 ```
 NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
 ### R5: Fatura vincula por status CONFIRMADO + fatura_id IS NULL
-Faturas cliente selecionam operacoes `status=CONFIRMADO, fatura_cliente_id IS NULL`.
-Faturas transportadora selecionam subcontratos `status=CONFIRMADO, fatura_transportadora_id IS NULL`.
+Faturas CarVia selecionam operacoes `status=CONFIRMADO, fatura_cliente_id IS NULL`.
+Faturas Subcontrato selecionam subcontratos `status=CONFIRMADO, fatura_transportadora_id IS NULL`.
 Ao vincular, status muda para FATURADO. NUNCA desvincular apos faturamento.
+
+### R6: Classificacao de CTe por CNPJ emitente
+Na importacao, CTes sao classificados automaticamente:
+- CNPJ emitente == `CARVIA_CNPJ` (env var) → **CTe CarVia** (CarviaOperacao)
+- CNPJ emitente != `CARVIA_CNPJ` → **CTe Subcontrato** (CarviaSubcontrato)
+Se `CARVIA_CNPJ` nao configurado, todos CTes sao tratados como CarVia (compatibilidade).
+
+### R7: numero_sequencial_transportadora — auto-increment logico
+Cada subcontrato recebe numero sequencial por transportadora.
+Gerado via `MAX(numero_sequencial_transportadora) + 1` filtrado por `transportadora_id`.
+Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHERE NOT NULL`.
 
 ---
 
@@ -64,11 +105,31 @@ Ao vincular, status muda para FATURADO. NUNCA desvincular apos faturamento.
 | Modelo | Tabela | Gotchas |
 |--------|--------|---------|
 | CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL |
+| CarviaNfItem | `carvia_nf_itens` | Itens de produto da NF. FK `nf_id`. Cascade delete-orphan |
 | CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id` |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
-| CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id` |
+| CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7) |
 | CarviaFaturaCliente | `carvia_faturas_cliente` | Status: PENDENTE, EMITIDA, PAGA, CANCELADA |
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | `status_conferencia` (nao `status`). `conferido_por`/`conferido_em` preenchidos na conferencia |
+
+---
+
+## Importacao — Fluxo de Classificacao
+
+```
+Upload (NF-e XML, CTe XML, DANFE PDF)
+    │
+    ├── NF-e XML / PDF DANFE → CarviaNf + CarviaNfItem
+    │
+    └── CTe XML → Classificar por CNPJ emitente (R6)
+        ├── CNPJ == CARVIA_CNPJ → CarviaOperacao (CTe CarVia)
+        │   └── Vincular NFs via junction (matching por chave de acesso)
+        └── CNPJ != CARVIA_CNPJ → CarviaSubcontrato (CTe Subcontrato)
+            └── Vincular a CarviaOperacao via NFs compartilhadas
+                Se nao encontrar operacao → erro/warning
+```
+
+**Env var necessaria**: `CARVIA_CNPJ` (apenas digitos, ex: `12345678000199`)
 
 ---
 
@@ -76,8 +137,8 @@ Ao vincular, status muda para FATURADO. NUNCA desvincular apos faturamento.
 
 | Parser | Confiabilidade | Notas |
 |--------|---------------|-------|
-| `nfe_xml_parser.py` | Alta | Namespace-agnostic. Fonte de verdade para NF-e |
-| `cte_xml_parser_carvia.py` | Alta | Herda CTeXMLParser. `get_nfs_referenciadas()` para matching |
+| `nfe_xml_parser.py` | Alta | Namespace-agnostic. Fonte de verdade para NF-e. Extrai itens de produto |
+| `cte_xml_parser_carvia.py` | Alta | Herda CTeXMLParser. `get_nfs_referenciadas()` para matching. `get_emitente()` para classificacao |
 | `danfe_pdf_parser.py` | Media | Regex-based com pdfplumber+pypdf fallback. Campo `confianca` (0.0-1.0) |
 
 ---
@@ -124,5 +185,6 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 
 ## Migrations
 
-- `scripts/migrations/criar_tabelas_carvia.py` + `.sql` — 6 tabelas, 18 indices
+- `scripts/migrations/criar_tabelas_carvia.py` + `.sql` — 6 tabelas base, 18 indices
 - `scripts/migrations/adicionar_sistema_carvia_usuarios.py` + `.sql` — Campo no Usuario
+- `scripts/migrations/adicionar_seq_subcontrato.py` + `.sql` — `numero_sequencial_transportadora` + unique index parcial + backfill

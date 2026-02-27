@@ -5,7 +5,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2>
-                <i class="fas fa-file-invoice"></i> Operacao #{{ operacao.id }}
+                <i class="fas fa-file-invoice"></i> CTe CarVia #{{ operacao.id }}
                 <span class="badge carvia-badge-{{ operacao.status|lower }}">{{ operacao.status }}</span>
             </h2>
             <p class="text-muted mb-0">
@@ -37,7 +37,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Operacao</h5>
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados do CTe CarVia</h5>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
@@ -110,7 +110,9 @@
                         <div class="nf-item">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <strong>NF {{ nf.numero_nf }}</strong>
+                                    <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}" class="text-decoration-none">
+                                        <strong>NF {{ nf.numero_nf }}</strong>
+                                    </a>
                                     {% if nf.serie_nf %}<small class="text-muted">Serie {{ nf.serie_nf }}</small>{% endif %}
                                     <span class="badge bg-secondary">{{ nf.tipo_fonte }}</span>
                                 </div>
@@ -153,8 +155,13 @@
                         <div class="card-body">
                             <div class="d-flex justify-content-between mb-2">
                                 <h6 class="mb-0">
-                                    <i class="fas fa-truck"></i>
-                                    {{ sub.transportadora.razao_social if sub.transportadora else 'Transportadora #' + sub.transportadora_id|string }}
+                                    <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" class="text-decoration-none">
+                                        <i class="fas fa-truck"></i>
+                                        {{ sub.transportadora.razao_social if sub.transportadora else 'Transportadora #' + sub.transportadora_id|string }}
+                                    </a>
+                                    {% if sub.numero_sequencial_transportadora %}
+                                    <small class="text-muted ms-1">#{{ sub.numero_sequencial_transportadora }}</small>
+                                    {% endif %}
                                 </h6>
                                 <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
                             </div>

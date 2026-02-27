@@ -3,16 +3,13 @@
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-file-invoice"></i> CTe CarVia</h2>
+        <h2><i class="fas fa-file-alt"></i> NF Venda</h2>
         <div class="d-flex gap-2">
             <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary btn-sm">
                 <i class="fas fa-upload"></i> Importar
             </a>
-            <a href="{{ url_for('carvia.criar_operacao_manual') }}" class="btn btn-success btn-sm">
-                <i class="fas fa-plus"></i> Manual
-            </a>
-            <a href="{{ url_for('carvia.criar_operacao_freteiro') }}" class="btn btn-outline-warning btn-sm">
-                <i class="fas fa-truck-loading"></i> Freteiro
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
             </a>
         </div>
     </div>
@@ -21,30 +18,28 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small">Status</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <option value="RASCUNHO" {{ 'selected' if status_filtro == 'RASCUNHO' }}>Rascunho</option>
-                        <option value="COTADO" {{ 'selected' if status_filtro == 'COTADO' }}>Cotado</option>
-                        <option value="CONFIRMADO" {{ 'selected' if status_filtro == 'CONFIRMADO' }}>Confirmado</option>
-                        <option value="FATURADO" {{ 'selected' if status_filtro == 'FATURADO' }}>Faturado</option>
-                        <option value="CANCELADO" {{ 'selected' if status_filtro == 'CANCELADO' }}>Cancelado</option>
-                    </select>
-                </div>
                 <div class="col-md-4">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Cliente, CNPJ, CTe, cidade..." value="{{ busca }}">
+                           placeholder="Numero, emitente, CNPJ, chave..." value="{{ busca }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Tipo Fonte</label>
+                    <select name="tipo_fonte" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="XML_NFE" {{ 'selected' if tipo_filtro == 'XML_NFE' }}>XML NF-e</option>
+                        <option value="PDF_DANFE" {{ 'selected' if tipo_filtro == 'PDF_DANFE' }}>PDF DANFE</option>
+                        <option value="MANUAL" {{ 'selected' if tipo_filtro == 'MANUAL' }}>Manual</option>
+                    </select>
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-search"></i> Filtrar
                     </button>
                 </div>
-                {% if status_filtro or busca %}
+                {% if busca or tipo_filtro %}
                 <div class="col-md-2">
-                    <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-sm btn-outline-secondary w-100">
+                    <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i> Limpar
                     </a>
                 </div>
@@ -56,45 +51,43 @@
     <!-- Tabela -->
     <div class="card">
         <div class="card-body p-0">
-            {% if operacoes %}
+            {% if nfs %}
             <div class="table-responsive">
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>CTe CarVia</th>
-                            <th>Cliente</th>
-                            <th>Destino</th>
+                            <th>Numero NF</th>
+                            <th>Emitente</th>
+                            <th>Destinatario</th>
+                            <th>Valor</th>
                             <th>Peso (kg)</th>
-                            <th>Valor CTe</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Criado em</th>
+                            <th>Fonte</th>
+                            <th>Data Emissao</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for op in operacoes %}
+                        {% for nf in nfs %}
                         <tr>
-                            <td>{{ op.id }}</td>
-                            <td>{{ op.cte_numero or '-' }}</td>
+                            <td>{{ nf.id }}</td>
+                            <td><strong>{{ nf.numero_nf }}</strong>{% if nf.serie_nf %} <small class="text-muted">S{{ nf.serie_nf }}</small>{% endif %}</td>
                             <td>
-                                <span title="{{ op.cnpj_cliente }}" class="cnpj-col">
-                                    {{ op.nome_cliente or op.cnpj_cliente }}
+                                <span title="{{ nf.cnpj_emitente }}" class="cnpj-col">
+                                    {{ nf.nome_emitente or nf.cnpj_emitente }}
                                 </span>
                             </td>
-                            <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
-                            <td class="valor-col">{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}</td>
-                            <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
-                            <td><small class="text-muted">{{ op.tipo_entrada }}</small></td>
                             <td>
-                                <span class="badge carvia-badge-{{ op.status|lower }}">
-                                    {{ op.status }}
+                                <span title="{{ nf.cnpj_destinatario }}" class="cnpj-col">
+                                    {{ nf.nome_destinatario or nf.cnpj_destinatario or '-' }}
                                 </span>
                             </td>
-                            <td><small>{{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}</small></td>
+                            <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
+                            <td class="valor-col">{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }}</td>
+                            <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
+                            <td><small>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</small></td>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"
+                                <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="Detalhes">
                                     <i class="fas fa-eye"></i>
                                 </a>
@@ -111,7 +104,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.prev_num, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -119,7 +112,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=p, status=status_filtro, busca=busca) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -127,7 +120,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.next_num, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>
@@ -137,8 +130,11 @@
             {% endif %}
             {% else %}
             <div class="text-center py-5 text-muted">
-                <i class="fas fa-search fa-3x mb-3 d-block opacity-50"></i>
-                <p>Nenhum CTe CarVia encontrado.</p>
+                <i class="fas fa-file-alt fa-3x mb-3 d-block opacity-50"></i>
+                <p>Nenhuma NF encontrada.</p>
+                <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-upload"></i> Importar Documentos
+                </a>
             </div>
             {% endif %}
         </div>

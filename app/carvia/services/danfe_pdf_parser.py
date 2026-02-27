@@ -27,6 +27,12 @@ logger = logging.getLogger(__name__)
 class DanfePDFParser:
     """Parser para extrair informacoes de DANFE em PDF"""
 
+    _UFS_BRASIL = frozenset({
+        'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+        'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN',
+        'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
+    })
+
     def __init__(self, pdf_path: str = None, pdf_bytes: bytes = None):
         """
         Args:
@@ -471,14 +477,324 @@ class DanfePDFParser:
         return None
 
     def get_nome_emitente(self) -> Optional[str]:
-        """Extrai nome/razao social do emitente"""
-        # Dificil extrair com confianca de PDF — retorna None
-        # O caller deve resolver via CNPJ no banco
+        """Extrai nome/razao social do emitente
+
+        Strategy 1: 'Recebemos de [NOME] os produtos' (canhoto)
+        Strategy 2: Texto antes de 'DANFE' na mesma linha (header)
+        """
+        # Strategy 1: canhoto
+        match = re.search(
+            r'Recebemos\s+de\s+(.+?)\s+os\s+produtos',
+            self.texto_completo,
+            re.IGNORECASE,
+        )
+        if match:
+            nome = match.group(1).strip()
+            if len(nome) >= 3:
+                return nome
+
+        # Strategy 2: texto antes de 'DANFE' na mesma linha
+        linhas = self._linhas()
+        for linha in linhas[:15]:  # Apenas area do header
+            if 'DANFE' in linha.upper():
+                parts = re.split(r'\s+DANFE\b', linha, flags=re.IGNORECASE)
+                if parts and parts[0].strip():
+                    nome = parts[0].strip()
+                    if len(nome) >= 3:
+                        return nome
+
         return None
+
+    def get_nome_destinatario(self) -> Optional[str]:
+        """Extrai nome/razao social do destinatario
+
+        Strategy 1: Apos DESTINATARIO, localizar 'NOME / RAZAO SOCIAL' header,
+                    extrair texto da proxima linha antes do CNPJ
+        Strategy 2: 'Dest/Reme:' pattern no canhoto
+        """
+        # Strategy 1: secao DESTINATARIO tabular
+        dest_idx = self._encontrar_linha('DESTINAT')
+        if dest_idx is not None:
+            linhas = self._linhas()
+            nome_idx = None
+            for i in range(dest_idx, min(dest_idx + 5, len(linhas))):
+                upper = linhas[i].upper()
+                if 'NOME' in upper and ('RAZ' in upper or 'SOCIAL' in upper):
+                    nome_idx = i
+                    break
+
+            if nome_idx is not None and nome_idx + 1 < len(linhas):
+                prox_linha = linhas[nome_idx + 1]
+                # Extrair texto antes do padrao CNPJ
+                cnpj_match = re.search(r'\d{2}\.?\d{3}\.?\d{3}/\d{4}', prox_linha)
+                if cnpj_match:
+                    nome = prox_linha[:cnpj_match.start()].strip()
+                    if len(nome) >= 3:
+                        return nome
+                else:
+                    nome = prox_linha.strip()
+                    if len(nome) >= 3:
+                        return nome
+
+        # Strategy 2: canhoto 'Dest/Reme:'
+        match = re.search(
+            r'Dest/Reme:\s*(.+?)(?:\s+Valor\s+Total|\s*$)',
+            self.texto_completo,
+            re.IGNORECASE,
+        )
+        if match:
+            nome = match.group(1).strip().rstrip('.')
+            if len(nome) >= 3:
+                return nome
+
+        return None
+
+    def get_uf_cidade_emitente(self) -> tuple:
+        """Extrai UF e cidade do emitente (combinado para evitar busca duplicada)
+
+        Strategy 1: Pattern 'CIDADE - UF - CEP:' na area do header (antes de DESTINATARIO)
+        Strategy 2: Pattern 'CIDADE/UF' ou 'CIDADE - UF' com CEP proximo
+
+        Returns:
+            (uf, cidade) — qualquer um pode ser None
+        """
+        dest_idx = self._encontrar_linha('DESTINAT')
+        linhas = self._linhas()
+        limite = dest_idx if dest_idx else min(20, len(linhas))
+
+        # Strategy 1: 'CIDADE - UF - CEP:'
+        for i in range(limite):
+            match = re.search(
+                r'([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s*-\s*([A-Z]{2})\s*-\s*CEP',
+                linhas[i],
+            )
+            if match:
+                cidade = match.group(1).strip()
+                uf = match.group(2)
+                if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    return (uf, cidade)
+
+        # Strategy 2: 'CIDADE/UF' pattern (sem hifen)
+        for i in range(limite):
+            match = re.search(
+                r'([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s*/\s*([A-Z]{2})\b',
+                linhas[i],
+            )
+            if match:
+                cidade = match.group(1).strip()
+                uf = match.group(2)
+                if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    return (uf, cidade)
+
+        return (None, None)
+
+    def get_uf_cidade_destinatario(self) -> tuple:
+        """Extrai UF e cidade do destinatario (combinado)
+
+        Strategy 1: Apos DESTINATARIO, localizar 'MUNICIPIO' + 'UF' header,
+                    extrair cidade e UF da proxima linha
+        Strategy 2: Tokens com UF valida na proxima linha apos MUNICIPIO
+
+        Returns:
+            (uf, cidade) — qualquer um pode ser None
+        """
+        dest_idx = self._encontrar_linha('DESTINAT')
+        if dest_idx is None:
+            return (None, None)
+
+        linhas = self._linhas()
+
+        # Encontrar header MUNICIPIO + UF apos DESTINATARIO
+        mun_idx = None
+        # Limitar busca: parar antes de TRANSPORTADOR ou FATURA
+        limite_fim = len(linhas)
+        for i in range(dest_idx + 1, len(linhas)):
+            upper = linhas[i].upper()
+            if 'TRANSPORTAD' in upper or 'FATURA' in upper:
+                limite_fim = i
+                break
+
+        for i in range(dest_idx + 1, limite_fim):
+            upper = linhas[i].upper()
+            if 'MUNIC' in upper and 'UF' in upper:
+                mun_idx = i
+                break
+
+        if mun_idx is None or mun_idx + 1 >= len(linhas):
+            return (None, None)
+
+        prox_linha = linhas[mun_idx + 1]
+        tokens = prox_linha.split()
+
+        # Encontrar primeiro token que e UF valida
+        cidade_parts = []
+        uf_encontrada = None
+        for token in tokens:
+            token_upper = token.strip().upper()
+            if token_upper in self._UFS_BRASIL and not cidade_parts:
+                # UF antes de qualquer texto de cidade — improvavel, skip
+                continue
+            if token_upper in self._UFS_BRASIL and cidade_parts:
+                uf_encontrada = token_upper
+                break
+            cidade_parts.append(token)
+
+        cidade = ' '.join(cidade_parts).strip() if cidade_parts else None
+        if cidade and len(cidade) < 2:
+            cidade = None
+
+        return (uf_encontrada, cidade)
+
+    def get_itens_produto(self) -> List[Dict]:
+        """Extrai itens de produto da secao DADOS DOS PRODUTOS / SERVICOS
+
+        Layout tabular tipico (pdfplumber extrai colunas lado a lado):
+            CODIGO PRODUTO | DESCRICAO | NCM | CST | CFOP | UNID | QTDE | V.UNIT | ...
+            JET MOTO CHEFE | JET MOTO CHEFE | 87116000 | 460 | 5405 | UN | 3,00 | 7.220,0000 | ...
+
+        Ancora: NCM (8 digitos) + CST (2-3 digitos) + CFOP (4 digitos).
+        Linhas com NCM = inicio de produto. Linhas sem NCM = continuacao
+        (codigo do produto wrapping na coluna estreita).
+
+        Returns:
+            Lista de dicts com: codigo_produto, descricao, ncm, cfop, unidade,
+                                quantidade, valor_unitario, valor_total_item
+        """
+        itens = []
+
+        # Encontrar inicio e fim da secao de produtos
+        prod_idx = self._encontrar_linha('DADOS', 'PRODUTOS')
+        if prod_idx is None:
+            return itens
+
+        linhas = self._linhas()
+
+        fim_idx = len(linhas)
+        for i in range(prod_idx + 1, len(linhas)):
+            upper = linhas[i].upper()
+            if 'DADOS ADICIONAIS' in upper or 'INFORMAÇÕES COMPLEMENTARES' in upper:
+                fim_idx = i
+                break
+
+        # Agrupar por produto: linha com NCM inicia produto, linhas sem NCM sao continuacao
+        ncm_pattern = re.compile(r'\d{8}\s+\d{2,3}\s+\d{4}')
+        blocos = []  # [(ncm_line, [continuations])]
+        ncm_line_atual = None
+        continuacoes = []
+
+        for i in range(prod_idx + 1, fim_idx):
+            linha = linhas[i].strip()
+            if not linha:
+                continue
+
+            if ncm_pattern.search(linha):
+                # Nova linha de produto — salvar bloco anterior
+                if ncm_line_atual:
+                    blocos.append((ncm_line_atual, continuacoes))
+                ncm_line_atual = linha
+                continuacoes = []
+            elif ncm_line_atual:
+                # Continuacao do produto atual (codigo wrapping)
+                continuacoes.append(linha)
+            # else: linha de cabecalho antes do primeiro produto — ignorar
+
+        if ncm_line_atual:
+            blocos.append((ncm_line_atual, continuacoes))
+
+        # Parsear cada bloco
+        for ncm_line, conts in blocos:
+            item = self._parsear_linha_produto(ncm_line, conts)
+            if item:
+                itens.append(item)
+
+        return itens
+
+    def _separar_codigo_descricao(self, texto: str) -> tuple:
+        """Separa codigo e descricao do texto mesclado antes do NCM
+
+        pdfplumber extrai colunas lado a lado: 'COD DESC' vira 'COD DESC' ou
+        'COD1 COD2 DESC1 DESC2' quando codigo e descricao compartilham palavras.
+        Heuristica: encontrar onde o primeiro token se repete — marca inicio da descricao.
+
+        Ex: 'JET MOTO JET MOTO CHEFE' → codigo='JET MOTO', descricao='JET MOTO CHEFE'
+
+        Returns: (codigo, descricao)
+        """
+        tokens = texto.split()
+        if not tokens:
+            return (texto, texto)
+
+        primeiro = tokens[0].upper()
+        for i in range(1, len(tokens)):
+            if tokens[i].upper() == primeiro:
+                codigo = ' '.join(tokens[:i])
+                descricao = ' '.join(tokens[i:])
+                return (codigo, descricao)
+
+        # Sem repeticao — codigo e descricao sao o mesmo texto
+        return (texto, texto)
+
+    def _parsear_linha_produto(self, ncm_line: str, continuacoes: Optional[List[str]] = None) -> Optional[Dict]:
+        """Parseia uma linha de produto usando NCM como ancora
+
+        Args:
+            ncm_line: Linha principal contendo NCM + dados numericos
+            continuacoes: Linhas extras (codigo do produto wrapping)
+
+        Formato tipico ncm_line:
+        'JET MOTO JET MOTO CHEFE 87116000 460 5405 UN 3,00 7.220,0000 0,00 21.660,00 ...'
+                                  ^NCM    ^CST^CFOP^UN^QTD ^V.UNIT    ^DESC^V.LIQ
+        """
+        if not continuacoes:
+            continuacoes = []
+
+        # Encontrar NCM (8 digitos) + CST (2-3 digitos) + CFOP (4 digitos)
+        match = re.search(
+            r'(\d{8})\s+(\d{2,3})\s+(\d{4})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+            ncm_line,
+        )
+        if not match:
+            return None
+
+        ncm = match.group(1)
+        cfop = match.group(3)
+        unidade = match.group(4)
+        quantidade = self._parse_valor_br(match.group(5))
+        valor_unitario = self._parse_valor_br(match.group(6))
+
+        # Extrair valor total: numeros apos NCM
+        texto_apos = ncm_line[match.start():]
+        numeros = re.findall(r'[\d.,]+', texto_apos)
+        # [NCM, CST, CFOP, QTD, V.UNIT, V.DESC, V.LIQ, BASE_ICMS, V.ICMS, V.IPI, ...]
+        valor_total_item = None
+        if len(numeros) >= 7:
+            valor_total_item = self._parse_valor_br(numeros[6])
+
+        # Texto antes do NCM = codigo + descricao mesclados
+        texto_antes = ncm_line[:match.start()].strip()
+        codigo, descricao = self._separar_codigo_descricao(texto_antes)
+
+        # Continuacoes = codigo wrapping — anexar ao codigo
+        if continuacoes:
+            codigo = codigo + ' ' + ' '.join(continuacoes)
+
+        return {
+            'codigo_produto': codigo.strip(),
+            'descricao': descricao.strip(),
+            'ncm': ncm,
+            'cfop': cfop,
+            'unidade': unidade,
+            'quantidade': quantidade,
+            'valor_unitario': valor_unitario,
+            'valor_total_item': valor_total_item,
+        }
 
     def get_todas_informacoes(self) -> Dict:
         """Extrai todas as informacoes disponiveis"""
         self.confianca = 0.0
+
+        uf_emit, cidade_emit = self.get_uf_cidade_emitente()
+        uf_dest, cidade_dest = self.get_uf_cidade_destinatario()
 
         resultado = {
             'chave_acesso_nf': self.get_chave_acesso(),
@@ -488,16 +804,17 @@ class DanfePDFParser:
             'data_emissao': None,
             'cnpj_emitente': self.get_cnpj_emitente(),
             'nome_emitente': self.get_nome_emitente(),
-            'uf_emitente': None,
-            'cidade_emitente': None,
+            'uf_emitente': uf_emit,
+            'cidade_emitente': cidade_emit,
             'cnpj_destinatario': self.get_cnpj_destinatario(),
-            'nome_destinatario': None,
-            'uf_destinatario': None,
-            'cidade_destinatario': None,
+            'nome_destinatario': self.get_nome_destinatario(),
+            'uf_destinatario': uf_dest,
+            'cidade_destinatario': cidade_dest,
             'valor_total': self.get_valor_total(),
             'peso_bruto': self.get_peso_bruto(),
             'peso_liquido': self.get_peso_liquido(),
             'quantidade_volumes': self.get_quantidade_volumes(),
+            'itens': self.get_itens_produto(),
             'tipo_fonte': 'PDF_DANFE',
             'confianca': round(self.confianca, 2),
         }

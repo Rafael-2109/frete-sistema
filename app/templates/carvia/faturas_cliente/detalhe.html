@@ -9,7 +9,7 @@
                 <span class="badge carvia-badge-{{ fatura.status|lower }}">{{ fatura.status }}</span>
             </h2>
             <p class="text-muted mb-0">
-                Fatura ao cliente | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
+                Fatura CarVia | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
                 por {{ fatura.criado_por }}
             </p>
         </div>

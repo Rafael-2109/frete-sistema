@@ -347,9 +347,17 @@ def register_operacao_routes(bp):
                     transportadora_id=transportadora_id,
                 )
 
+                # Gerar numero sequencial por transportadora
+                max_seq = db.session.query(
+                    db.func.max(CarviaSubcontrato.numero_sequencial_transportadora)
+                ).filter(
+                    CarviaSubcontrato.transportadora_id == transportadora_id,
+                ).scalar() or 0
+
                 subcontrato = CarviaSubcontrato(
                     operacao_id=operacao_id,
                     transportadora_id=transportadora_id,
+                    numero_sequencial_transportadora=max_seq + 1,
                     valor_cotado=cotacao.get('valor_cotado') if cotacao.get('sucesso') else None,
                     tabela_frete_id=cotacao.get('tabela_frete_id') if cotacao.get('sucesso') else None,
                     valor_acertado=valor_acertado if valor_acertado else None,

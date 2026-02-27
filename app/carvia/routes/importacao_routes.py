@@ -85,9 +85,15 @@ def register_importacao_routes(bp):
         session.pop('carvia_importacao_arquivos', None)
 
         if resultado_salvo.get('sucesso'):
+            partes = [
+                f'{resultado_salvo["nfs_criadas"]} NFs',
+                f'{resultado_salvo["operacoes_criadas"]} CTes CarVia',
+            ]
+            subs = resultado_salvo.get('subcontratos_criados', 0)
+            if subs:
+                partes.append(f'{subs} CTes Subcontrato')
             flash(
-                f'Importacao concluida: {resultado_salvo["nfs_criadas"]} NFs, '
-                f'{resultado_salvo["operacoes_criadas"]} operacoes criadas.',
+                f'Importacao concluida: {", ".join(partes)}.',
                 'success'
             )
             if resultado_salvo.get('erros'):

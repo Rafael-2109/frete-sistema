@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-handshake"></i> CTe Subcontrato #{{ sub.id }}
+                <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                {% if sub.numero_sequencial_transportadora %}
+                Seq. {{ sub.numero_sequencial_transportadora }} |
+                {% endif %}
+                Criado em {{ sub.criado_em|formatar_data_hora_brasil if sub.criado_em else '-' }}
+                por {{ sub.criado_por }}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-file-invoice"></i> Ver CTe CarVia
+            </a>
+            <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Dados do Subcontrato -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados do Subcontrato</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Transportadora</small>
+                            <strong>{{ sub.transportadora.razao_social if sub.transportadora else '-' }}</strong>
+                            <div class="cnpj-col small text-muted">{{ sub.transportadora.cnpj if sub.transportadora else '-' }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Numero Sequencial</small>
+                            <strong>{{ sub.numero_sequencial_transportadora or '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">CTe Subcontratado</small>
+                            <strong>{{ sub.cte_numero or 'Sem CTe' }}</strong>
+                            {% if sub.cte_data_emissao %}
+                            <div class="small text-muted">{{ sub.cte_data_emissao.strftime('%d/%m/%Y') }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor CTe</small>
+                            <strong>{{ sub.cte_valor|valor_br if sub.cte_valor else '-' }}</strong>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <small class="text-muted d-block">Valor Cotado</small>
+                            <strong>{{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Valor Acertado</small>
+                            <strong>{{ sub.valor_acertado|valor_br if sub.valor_acertado else '-' }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Valor Final</small>
+                            <strong class="text-primary">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</strong>
+                        </div>
+                    </div>
+                    {% if sub.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ sub.observacoes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- CTe CarVia vinculado -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTe CarVia Vinculado</h5>
+                </div>
+                <div class="card-body">
+                    {% if operacao %}
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">CTe CarVia</small>
+                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}">
+                                <strong>#{{ operacao.id }} — {{ operacao.cte_numero or 'Sem CTe' }}</strong>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Status</small>
+                            <span class="badge carvia-badge-{{ operacao.status|lower }}">{{ operacao.status }}</span>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Cliente</small>
+                            <strong>{{ operacao.nome_cliente or '-' }}</strong>
+                            <div class="cnpj-col small text-muted">{{ operacao.cnpj_cliente }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Rota</small>
+                            <strong>{{ operacao.cidade_origem or '-' }}/{{ operacao.uf_origem or '-' }} → {{ operacao.cidade_destino }}/{{ operacao.uf_destino }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Peso Utilizado</small>
+                            <strong>{{ operacao.peso_utilizado|numero_br(1) if operacao.peso_utilizado else '-' }} kg</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor CTe CarVia</small>
+                            <strong class="text-success">{{ operacao.cte_valor|valor_br if operacao.cte_valor else '-' }}</strong>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">CTe CarVia nao encontrado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fatura Subcontrato vinculada -->
+    {% if sub.fatura_transportadora %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Fatura Subcontrato</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Fatura</small>
+                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=sub.fatura_transportadora.id) }}">
+                        <strong>{{ sub.fatura_transportadora.numero_fatura }}</strong>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor</small>
+                    <strong>{{ sub.fatura_transportadora.valor_total|valor_br }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Conferencia</small>
+                    <span class="badge carvia-badge-{{ sub.fatura_transportadora.status_conferencia|lower|replace('_', '-') }}">
+                        {{ sub.fatura_transportadora.status_conferencia }}
+                    </span>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Vencimento</small>
+                    <strong>{{ sub.fatura_transportadora.vencimento.strftime('%d/%m/%Y') if sub.fatura_transportadora.vencimento else '-' }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

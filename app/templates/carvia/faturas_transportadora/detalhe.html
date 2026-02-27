@@ -11,7 +11,7 @@
                 </span>
             </h2>
             <p class="text-muted mb-0">
-                Fatura da transportadora | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
+                Fatura Subcontrato | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
                 por {{ fatura.criado_por }}
             </p>
         </div>
@@ -135,7 +135,7 @@
                 <table class="table table-sm table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>Operacao</th>
+                            <th>Subcontrato</th>
                             <th>Cliente</th>
                             <th>Destino</th>
                             <th>CTe Sub</th>
@@ -149,9 +149,12 @@
                         {% for sub in subcontratos %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}">
-                                    <strong>#{{ sub.operacao_id }}</strong>
+                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" title="Ver CTe Subcontrato">
+                                    <strong>#{{ sub.id }}</strong>
                                 </a>
+                                <small class="text-muted">
+                                    (<a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}">CTe #{{ sub.operacao_id }}</a>)
+                                </small>
                             </td>
                             <td>{{ sub.operacao.nome_cliente if sub.operacao else '-' }}</td>
                             <td>{{ sub.operacao.cidade_destino + '/' + sub.operacao.uf_destino if sub.operacao else '-' }}</td>

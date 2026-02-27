@@ -110,10 +110,10 @@
                     <thead>
                         <tr>
                             <th>CTe</th>
-                            <th>Tipo</th>
+                            <th>Classificacao</th>
                             <th>Rota</th>
                             <th>Valor Prestacao</th>
-                            <th>Remetente</th>
+                            <th>Emitente</th>
                             <th>NFs Ref.</th>
                         </tr>
                     </thead>
@@ -121,7 +121,13 @@
                         {% for cte in resultado.ctes_parseados %}
                         <tr>
                             <td><strong>{{ cte.cte_numero or '-' }}</strong></td>
-                            <td>{{ cte.tipo_cte_descricao or 'Normal' }}</td>
+                            <td>
+                                {% if cte.classificacao == 'CTE_SUBCONTRATO' %}
+                                <span class="badge bg-warning text-dark">CTe Subcontrato</span>
+                                {% else %}
+                                <span class="badge bg-primary">CTe CarVia</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {{ cte.cidade_origem or '?' }}/{{ cte.uf_origem or '?' }}
                                 &rarr;
@@ -130,7 +136,7 @@
                             <td class="valor-col">
                                 {% if cte.cte_valor %}R$ {{ "%.2f"|format(cte.cte_valor) }}{% else %}-{% endif %}
                             </td>
-                            <td>{{ (cte.remetente or {}).get('nome', '-') }}</td>
+                            <td>{{ (cte.emitente or {}).get('nome', '-') }}</td>
                             <td>
                                 <span class="badge bg-info">{{ (cte.nfs_referenciadas or [])|length }}</span>
                             </td>
