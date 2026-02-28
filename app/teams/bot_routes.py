@@ -230,6 +230,11 @@ def bot_task_status(task_id: str):
     elif task.status == 'error':
         result["resposta"] = task.resposta or "Erro ao processar mensagem."
 
+    elif task.status == 'processing':
+        # Progressive streaming: retorna texto parcial se disponivel
+        if task.resposta:
+            result["resposta_parcial"] = task.resposta
+
     elif task.status == 'awaiting_user_input':
         result["questions"] = task.pending_questions or []
         result["task_id"] = task.id

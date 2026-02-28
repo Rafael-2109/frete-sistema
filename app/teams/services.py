@@ -13,7 +13,7 @@ import re
 import hashlib
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.utils.timezone import agora_utc_naive
 from typing import Optional, Tuple
@@ -605,6 +605,252 @@ def _sanitizar_texto(texto: str) -> str:
     return texto.strip()
 
 
+def _sanitizar_texto_parcial(texto: str) -> str:
+    """
+    Sanitiza texto parcial (streaming em progresso) para persistencia no DB.
+
+    Igual a _sanitizar_texto() mas SEM truncagem a 3800 chars — o texto
+    ainda esta crescendo e sera substituido pela versao final.
+
+    Args:
+        texto: Texto bruto parcial
+
+    Returns:
+        str: Texto sanitizado sem truncagem
+    """
+    if not texto:
+        return ""
+
+    if isinstance(texto, bytes):
+        texto = texto.decode('utf-8', errors='replace')
+
+    # Remove caracteres de controle (exceto newline e tab)
+    texto = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', texto)
+
+    # Converte aspas curvas para retas
+    texto = texto.replace('\u201c', '"').replace('\u201d', '"')
+    texto = texto.replace('\u2018', "'").replace('\u2019', "'")
+
+    # Normaliza quebras de linha
+    texto = texto.replace('\r\n', '\n').replace('\r', '\n')
+
+    # Remove multiplas quebras de linha consecutivas
+    texto = re.sub(r'\n{3,}', '\n\n', texto)
+
+    return texto.strip()
+
+
+def _flush_partial_to_db(task_id: str, partial_text: str) -> None:
+    """
+    Persiste texto parcial em TeamsTask.resposta via raw SQL UPDATE.
+
+    Usa raw SQL para evitar contaminacao da sessao ORM principal.
+    O commit final em process_teams_task_async sobrescreve com texto
+    definitivo via ORM.
+
+    Args:
+        task_id: ID da TeamsTask
+        partial_text: Texto parcial acumulado ate o momento
+    """
+    from app import db
+    from sqlalchemy import text as sql_text
+
+    sanitized = _sanitizar_texto_parcial(partial_text)
+    if not sanitized:
+        return
+
+    try:
+        db.session.execute(
+            sql_text(
+                "UPDATE teams_tasks SET resposta = :resposta, updated_at = :now "
+                "WHERE id = :task_id AND status = 'processing'"
+            ),
+            {'resposta': sanitized, 'task_id': task_id, 'now': agora_utc_naive()},
+        )
+        db.session.commit()
+    except Exception as e:
+        logger.warning(f"[TEAMS-STREAM] Erro ao flush parcial (ignorado): {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _obter_resposta_agente_streaming(
+    mensagem: str,
+    usuario: str,
+    task_id: str,
+    sdk_session_id: str = None,
+    user_id: int = None,
+    can_use_tool=None,
+    session=None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Obtem resposta do Agente Claude SDK com flush parcial progressivo ao DB.
+
+    Mesmo contrato que _obter_resposta_agente() mas:
+    - Itera sobre stream_response() em vez de get_response()
+    - A cada TEAMS_STREAM_FLUSH_INTERVAL segundos, persiste texto parcial no DB
+    - Flush imediato antes de tool_call (texto fica visivel enquanto tool executa)
+
+    Args:
+        mensagem: Mensagem do usuario
+        usuario: Nome do usuario
+        task_id: ID da TeamsTask (para flush parcial)
+        sdk_session_id: ID da sessao SDK para resume (opcional)
+        user_id: ID real do usuario na tabela usuarios (para memorias)
+        can_use_tool: Callback de permissao (para AskUserQuestion no Teams)
+        session: AgentSession para backup/restore de transcript (Bug Teams #1)
+
+    Returns:
+        Tuple[resposta_texto, new_sdk_session_id]
+    """
+    from app.agente.config.feature_flags import (
+        TEAMS_DEFAULT_MODEL,
+        TEAMS_STREAM_FLUSH_INTERVAL,
+    )
+
+    try:
+        from app.agente.sdk import get_client
+        client = get_client()
+    except Exception as e:
+        logger.error(f"[TEAMS-STREAM] Erro ao obter client: {e}")
+        return None, None
+
+    # Bug Teams #1: Restaurar transcript do DB se arquivo JSONL nao existe no disco
+    if sdk_session_id and session:
+        try:
+            transcript = session.get_transcript()
+            if transcript:
+                from app.agente.sdk.session_persistence import restore_session_transcript
+                restored = restore_session_transcript(sdk_session_id, transcript)
+                if restored:
+                    logger.info(
+                        f"[TEAMS-STREAM] Session transcript restaurado do DB: "
+                        f"{sdk_session_id[:12]}... ({len(transcript)} bytes)"
+                    )
+        except Exception as e:
+            logger.warning(f"[TEAMS-STREAM] Erro ao restaurar transcript: {e}")
+
+    # Contexto especial para Teams
+    contexto_teams = _get_teams_context()
+    prompt_completo = contexto_teams + mensagem
+
+    MAX_TEAMS_RESPONSE_SECONDS = 240
+
+    try:
+        async def _stream_with_flush():
+            full_text = ""
+            result_session_id = sdk_session_id
+            errors = []
+            last_flush_time = time.monotonic()
+
+            async for event in client.stream_response(
+                prompt=prompt_completo,
+                user_name=usuario,
+                model=TEAMS_DEFAULT_MODEL,
+                sdk_session_id=sdk_session_id,
+                can_use_tool=can_use_tool,
+                user_id=user_id,
+            ):
+                if event.type == 'init':
+                    result_session_id = event.content.get('session_id')
+
+                elif event.type == 'text':
+                    full_text += event.content
+
+                    # Flush periodico ao DB
+                    now = time.monotonic()
+                    if now - last_flush_time >= TEAMS_STREAM_FLUSH_INTERVAL:
+                        _flush_partial_to_db(task_id, full_text)
+                        last_flush_time = now
+                        logger.debug(
+                            f"[TEAMS-STREAM] Flush parcial: "
+                            f"task={task_id[:8]}... chars={len(full_text)}"
+                        )
+
+                elif event.type == 'tool_call':
+                    # Flush imediato antes de tool_call — texto fica visivel
+                    # enquanto tool executa (pode levar 5-30s)
+                    if full_text:
+                        _flush_partial_to_db(task_id, full_text)
+                        last_flush_time = time.monotonic()
+                        logger.debug(
+                            f"[TEAMS-STREAM] Flush pre-tool: "
+                            f"task={task_id[:8]}... tool={event.content}"
+                        )
+
+                elif event.type == 'error':
+                    error_content = event.content if isinstance(event.content, str) else str(event.content)
+                    errors.append(error_content)
+                    logger.warning(
+                        f"[TEAMS-STREAM] Error event: {error_content[:200]}"
+                    )
+
+                elif event.type == 'done':
+                    done_session_id = event.content.get('session_id')
+                    if done_session_id:
+                        result_session_id = done_session_id
+
+            # Se full_text vazio mas houve errors, montar texto sintetico
+            if not full_text and errors:
+                full_text = (
+                    "Desculpe, ocorreu um erro ao processar sua mensagem. "
+                    "Tente novamente."
+                )
+                logger.warning(
+                    f"[TEAMS-STREAM] text vazio com {len(errors)} errors. "
+                    f"Errors: {'; '.join(errors[:3])}"
+                )
+
+            return full_text, result_session_id
+
+        async def _stream_with_timeout():
+            return await asyncio.wait_for(
+                _stream_with_flush(),
+                timeout=MAX_TEAMS_RESPONSE_SECONDS,
+            )
+
+        resposta_texto, new_sdk_session_id = asyncio.run(_stream_with_timeout())
+
+        # Extrair e sanitizar resposta
+        if resposta_texto:
+            resposta_texto = _sanitizar_texto(resposta_texto)
+
+        # Bug Teams #1: Backup transcript JSONL do disco para o DB
+        if new_sdk_session_id and session:
+            try:
+                from app.agente.sdk.session_persistence import backup_session_transcript
+                transcript = backup_session_transcript(new_sdk_session_id)
+                if transcript:
+                    session.save_transcript(transcript)
+                    logger.info(
+                        f"[TEAMS-STREAM] Session transcript salvo no DB: "
+                        f"{new_sdk_session_id[:12]}... ({len(transcript)} bytes)"
+                    )
+            except Exception as e:
+                logger.warning(f"[TEAMS-STREAM] Erro ao salvar transcript: {e}")
+
+        return resposta_texto, new_sdk_session_id
+
+    except asyncio.TimeoutError:
+        logger.error("[TEAMS-STREAM] Timeout ao aguardar resposta do agente")
+        return (
+            "Desculpe, a consulta demorou muito. "
+            "Tente novamente com uma pergunta mais especifica."
+        ), None
+
+    except Exception as e:
+        logger.error(
+            f"[TEAMS-STREAM] Erro ao obter resposta do agente: {e}",
+            exc_info=True,
+        )
+        return (
+            "Desculpe, ocorreu um erro ao processar sua mensagem. "
+            "Tente novamente."
+        ), None
+
+
 # ═══════════════════════════════════════════════════════════════
 # PROCESSAMENTO ASSÍNCRONO (non-daemon threads)
 # ═══════════════════════════════════════════════════════════════
@@ -685,16 +931,29 @@ def process_teams_task_async(
             new_sdk_session_id = None
             max_retries = 2
 
+            from app.agente.config.feature_flags import TEAMS_PROGRESSIVE_STREAMING
+
             for attempt in range(max_retries):
                 try:
-                    resposta_texto, new_sdk_session_id = _obter_resposta_agente(
-                        mensagem=mensagem,
-                        usuario=usuario,
-                        sdk_session_id=sdk_session_id,
-                        user_id=teams_user_id,
-                        can_use_tool=agent_can_use_tool,
-                        session=session,
-                    )
+                    if TEAMS_PROGRESSIVE_STREAMING:
+                        resposta_texto, new_sdk_session_id = _obter_resposta_agente_streaming(
+                            mensagem=mensagem,
+                            usuario=usuario,
+                            task_id=task_id,
+                            sdk_session_id=sdk_session_id,
+                            user_id=teams_user_id,
+                            can_use_tool=agent_can_use_tool,
+                            session=session,
+                        )
+                    else:
+                        resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+                            mensagem=mensagem,
+                            usuario=usuario,
+                            sdk_session_id=sdk_session_id,
+                            user_id=teams_user_id,
+                            can_use_tool=agent_can_use_tool,
+                            session=session,
+                        )
                     if resposta_texto:
                         break
                     if attempt < max_retries - 1:

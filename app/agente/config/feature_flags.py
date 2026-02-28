@@ -182,6 +182,14 @@ TEAMS_ASYNC_MODE = os.getenv("TEAMS_ASYNC_MODE", "true").lower() == "true"
 # Default 120s (2 minutos) — maior que web (55s) pois Teams e mais lento
 TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "120"))
 
+# Progressive streaming: flush texto parcial ao DB durante processamento
+# Quando true: polling retorna resposta_parcial enquanto status='processing'
+# Quando false: comportamento atual (resposta so no final)
+TEAMS_PROGRESSIVE_STREAMING = os.getenv("TEAMS_PROGRESSIVE_STREAMING", "true").lower() == "true"
+
+# Intervalo em segundos entre flushes de texto parcial ao DB
+TEAMS_STREAM_FLUSH_INTERVAL = float(os.getenv("TEAMS_STREAM_FLUSH_INTERVAL", "4.0"))
+
 # ====================================================================
 # Hooks Expandidos (P3)
 # ====================================================================

@@ -482,6 +482,11 @@ async def _poll_and_respond(
     consecutive_errors = 0
     MAX_CONSECUTIVE_ERRORS = 5
 
+    # Progressive streaming state
+    progressive_activity_id = None   # Activity ID da msg parcial (para update_activity)
+    last_partial_text = ""           # Ultimo texto parcial enviado
+    partial_suffix = "\n\n_...digitando_"  # Indicador visual
+
     while poll_count < POLL_MAX_ATTEMPTS:
         try:
             await asyncio.sleep(interval)
@@ -505,27 +510,111 @@ async def _poll_and_respond(
                         f"task={task_id[:8]}..."
                     )
 
-                # Refresh typing indicator a cada 3 polls (~9s)
-                if poll_count % 3 == 0:
-                    try:
-                        await turn_context.send_activity(
-                            Activity(type=ActivityTypes.typing)
-                        )
-                    except Exception:
-                        pass  # Typing pode falhar silenciosamente
+                # Progressive streaming: detectar texto parcial
+                partial_text = result.get("resposta_parcial", "")
+
+                if partial_text and partial_text != last_partial_text:
+                    display_text = partial_text + partial_suffix
+
+                    if progressive_activity_id is None:
+                        # Primeira vez: enviar como nova mensagem
+                        try:
+                            response = await turn_context.send_activity(display_text)
+                            if response and response.id:
+                                progressive_activity_id = response.id
+                                last_partial_text = partial_text
+                                logger.info(
+                                    f"[BOT] Progressive msg criada: "
+                                    f"task={task_id[:8]}... "
+                                    f"activity_id={progressive_activity_id} "
+                                    f"chars={len(partial_text)}"
+                                )
+                            else:
+                                logger.warning(
+                                    "[BOT] send_activity nao retornou activity_id "
+                                    "— fallback para typing"
+                                )
+                        except Exception as send_err:
+                            logger.warning(
+                                f"[BOT] Erro ao criar progressive msg: {send_err}"
+                            )
+                    else:
+                        # Vez seguinte: atualizar mensagem existente in-place
+                        try:
+                            update = Activity(
+                                id=progressive_activity_id,
+                                type=ActivityTypes.message,
+                                text=display_text,
+                            )
+                            await turn_context.update_activity(update)
+                            last_partial_text = partial_text
+                            logger.debug(
+                                f"[BOT] Progressive update: "
+                                f"task={task_id[:8]}... chars={len(partial_text)}"
+                            )
+                        except Exception as update_err:
+                            logger.warning(
+                                f"[BOT] Erro ao atualizar progressive msg "
+                                f"(ignorado): {update_err}"
+                            )
+                elif not partial_text:
+                    # Sem texto parcial: typing indicator classico a cada 3 polls (~9s)
+                    if poll_count % 3 == 0:
+                        try:
+                            await turn_context.send_activity(
+                                Activity(type=ActivityTypes.typing)
+                            )
+                        except Exception:
+                            pass  # Typing pode falhar silenciosamente
                 continue
 
             elif status == "completed":
                 resposta = result.get("resposta", "Sem resposta do sistema.")
-                await _send_split_response(turn_context, resposta)
-                logger.info(
-                    f"[BOT] Resposta enviada para task={task_id[:8]}... "
-                    f"({len(resposta)} chars, {poll_count} polls)"
-                )
+
+                if progressive_activity_id:
+                    # Atualizar mensagem existente com texto final (sem sufixo)
+                    try:
+                        update = Activity(
+                            id=progressive_activity_id,
+                            type=ActivityTypes.message,
+                            text=resposta,
+                        )
+                        await turn_context.update_activity(update)
+                        logger.info(
+                            f"[BOT] Progressive final update: "
+                            f"task={task_id[:8]}... "
+                            f"({len(resposta)} chars, {poll_count} polls)"
+                        )
+                    except Exception as update_err:
+                        # Fallback: enviar como nova mensagem se update falhar
+                        logger.warning(
+                            f"[BOT] Erro ao atualizar progressive msg final, "
+                            f"enviando como nova: {update_err}"
+                        )
+                        await _send_split_response(turn_context, resposta)
+                else:
+                    await _send_split_response(turn_context, resposta)
+                    logger.info(
+                        f"[BOT] Resposta enviada para task={task_id[:8]}... "
+                        f"({len(resposta)} chars, {poll_count} polls)"
+                    )
                 return
 
             elif status == "error":
                 resposta = result.get("resposta", "Erro ao processar mensagem.")
+
+                # Se tinha progressive msg, atualizar com texto de erro antes do card
+                if progressive_activity_id:
+                    try:
+                        update = Activity(
+                            id=progressive_activity_id,
+                            type=ActivityTypes.message,
+                            text=last_partial_text + "\n\n_Erro no processamento._",
+                        )
+                        await turn_context.update_activity(update)
+                    except Exception:
+                        pass  # Best effort
+
                 await turn_context.send_activity(
                     MessageFactory.attachment(
                         CardFactory.adaptive_card(
@@ -573,6 +662,18 @@ async def _poll_and_respond(
                 continue
 
             elif status == "timeout":
+                # Se tinha progressive msg, atualizar
+                if progressive_activity_id:
+                    try:
+                        update = Activity(
+                            id=progressive_activity_id,
+                            type=ActivityTypes.message,
+                            text=last_partial_text + "\n\n_Tempo limite excedido._",
+                        )
+                        await turn_context.update_activity(update)
+                    except Exception:
+                        pass
+
                 await turn_context.send_activity(
                     "Tempo limite excedido. O sistema demorou muito para responder. "
                     "Tente novamente com uma pergunta mais simples."
@@ -599,6 +700,18 @@ async def _poll_and_respond(
 
             # Circuit breaker: aborta apos N erros consecutivos (backend provavelmente DOWN)
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                # Se tinha progressive msg, atualizar com erro
+                if progressive_activity_id:
+                    try:
+                        update = Activity(
+                            id=progressive_activity_id,
+                            type=ActivityTypes.message,
+                            text=last_partial_text + "\n\n_Sistema indisponivel._",
+                        )
+                        await turn_context.update_activity(update)
+                    except Exception:
+                        pass
+
                 await turn_context.send_activity(
                     "O sistema esta temporariamente indisponivel. "
                     "Tente novamente em alguns minutos."
@@ -610,6 +723,17 @@ async def _poll_and_respond(
                 return
 
     # Timeout de polling (5 min)
+    if progressive_activity_id:
+        try:
+            update = Activity(
+                id=progressive_activity_id,
+                type=ActivityTypes.message,
+                text=last_partial_text + "\n\n_Tempo limite excedido._",
+            )
+            await turn_context.update_activity(update)
+        except Exception:
+            pass
+
     await turn_context.send_activity(
         "Tempo limite excedido aguardando resposta. "
         "O processamento pode ter sido mais complexo do que o esperado. "
