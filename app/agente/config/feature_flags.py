@@ -127,6 +127,12 @@ USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "true").lower() == 
 # Para desativar: AGENT_AUTO_MEMORY_INJECTION=false
 USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").lower() == "true"
 
+# Threshold minimo de similaridade para injecao de memorias semanticas
+# Memorias com score abaixo deste valor NAO sao injetadas (Tier 2)
+# Memorias protegidas (user.xml, preferences.xml) sao SEMPRE injetadas (Tier 1)
+# Ajustar em producao sem deploy: AGENT_MEMORY_MIN_SIMILARITY=0.50
+MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY", "0.45"))
+
 # Consolidacao periodica de memorias via Haiku
 # Quando usuario excede thresholds, consolida memorias redundantes em resumos compactos
 # Custo: ~$0.002 por consolidacao (~4K input + ~800 output Haiku)

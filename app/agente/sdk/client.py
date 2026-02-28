@@ -56,9 +56,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
     Chamado pelo UserPromptSubmit hook para injetar memórias
     automaticamente no início de cada turno via additionalContext.
 
-    Quando busca semântica está habilitada e prompt disponível,
-    seleciona memórias por relevância ao prompt atual.
-    Fallback: memórias mais recentes (comportamento original).
+    Arquitetura em 2 tiers:
+    - Tier 1 (SEMPRE): user.xml e preferences.xml — garante identidade/preferências
+    - Tier 2 (semântica): memórias relevantes ao prompt, excluindo Tier 1
+    - Fallback: memórias mais recentes se semântica não retornar nada
 
     Args:
         user_id: ID do usuário no banco
@@ -83,51 +84,83 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
 
         def _load():
             from ..models import AgentMemory
+            from ..config.feature_flags import MEMORY_INJECTION_MIN_SIMILARITY
 
-            memories = None
+            # ── Tier 1: SEMPRE injetar memórias protegidas ──
+            PROTECTED_PATHS = ["/memories/user.xml", "/memories/preferences.xml"]
+            protected_memories = AgentMemory.query.filter(
+                AgentMemory.user_id == user_id,
+                AgentMemory.path.in_(PROTECTED_PATHS),
+                AgentMemory.is_directory == False,  # noqa: E712
+            ).all()
 
-            # ── Tentativa 1: Busca semântica (se flag ativa + prompt disponível) ──
+            protected_ids = {m.id for m in protected_memories}
+
+            # ── Tier 2: Busca semântica (excluindo protegidas) ──
+            additional_memories = []
+            semantic_count = 0
+            avg_similarity = 0.0
+            used_fallback = False
+
             try:
                 from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
 
                 if MEMORY_SEMANTIC_SEARCH and prompt and user_id:
                     from app.embeddings.memory_search import buscar_memorias_semantica
                     resultados = buscar_memorias_semantica(
-                        prompt, user_id, limite=10, min_similarity=0.30
+                        prompt, user_id,
+                        limite=10,
+                        min_similarity=MEMORY_INJECTION_MIN_SIMILARITY,
                     )
 
                     if resultados:
-                        # Buscar conteúdo real das memórias via IDs
-                        memory_ids = [r['memory_id'] for r in resultados]
-                        memories = AgentMemory.query.filter(
-                            AgentMemory.id.in_(memory_ids),
-                            AgentMemory.is_directory == False,  # noqa: E712
-                        ).all()
+                        # Filtrar memórias protegidas (já no Tier 1)
+                        filtered = [
+                            r for r in resultados
+                            if r['memory_id'] not in protected_ids
+                        ]
+                        semantic_count = len(filtered)
 
-                        # Ordenar por relevância semântica (mesma ordem dos resultados)
-                        id_order = {mid: i for i, mid in enumerate(memory_ids)}
-                        memories.sort(key=lambda m: id_order.get(m.id, 999))
+                        if filtered:
+                            avg_similarity = sum(
+                                r.get('similarity', 0) for r in filtered
+                            ) / len(filtered)
 
-                        logger.info(
-                            f"[MEMORY_INJECT] Semântica: {len(memories)} memórias "
-                            f"selecionadas por relevância ao prompt"
-                        )
-                    else:
-                        memories = None  # Sem resultados semânticos → fallback
+                            memory_ids = [r['memory_id'] for r in filtered]
+                            additional_memories = AgentMemory.query.filter(
+                                AgentMemory.id.in_(memory_ids),
+                                AgentMemory.is_directory == False,  # noqa: E712
+                            ).all()
+
+                            # Ordenar por relevância semântica
+                            id_order = {mid: i for i, mid in enumerate(memory_ids)}
+                            additional_memories.sort(
+                                key=lambda m: id_order.get(m.id, 999)
+                            )
             except Exception as sem_err:
                 logger.warning(
                     f"[MEMORY_INJECT] Semantic fallback to recency: {sem_err}"
                 )
-                memories = None
 
-            # ── Tentativa 2: Fallback por recência (comportamento original) ──
-            if memories is None:
-                memories = AgentMemory.query.filter_by(
-                    user_id=user_id,
-                    is_directory=False,
-                ).order_by(AgentMemory.updated_at.desc()).limit(20).all()
+            # ── Fallback: recência se semântica não retornou nada ──
+            if not additional_memories:
+                used_fallback = True
+                fallback_query = AgentMemory.query.filter(
+                    AgentMemory.user_id == user_id,
+                    AgentMemory.is_directory == False,  # noqa: E712
+                )
+                if protected_ids:
+                    fallback_query = fallback_query.filter(
+                        ~AgentMemory.id.in_(protected_ids)
+                    )
+                additional_memories = fallback_query.order_by(
+                    AgentMemory.updated_at.desc()
+                ).limit(15).all()
 
-            if not memories:
+            # ── Montar resultado: protegidas primeiro, depois relevantes ──
+            all_memories = protected_memories + additional_memories
+
+            if not all_memories:
                 return None
 
             parts = [
@@ -135,7 +168,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
                 "<!-- Memórias persistentes do usuário — use para personalizar respostas -->",
             ]
 
-            for mem in memories:
+            for mem in all_memories:
                 path = mem.path
                 content = (mem.content or "").strip()
                 if content:
@@ -148,6 +181,22 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
             # Limitar a 4000 chars para controle de tokens (~1000 tokens)
             if len(result) > 4000:
                 result = result[:4000] + "\n... (memórias truncadas)"
+
+            total_chars = len(result)
+
+            # ── B1: Log detalhado de injeção ──
+            logger.info(
+                f"[MEMORY_INJECT] "
+                f"user_id={user_id} | "
+                f"protected={len(protected_memories)} | "
+                f"semantic={semantic_count} | "
+                f"fallback={used_fallback} | "
+                f"total_injected={len(all_memories)} | "
+                f"total_chars={total_chars} | "
+                f"avg_similarity={avg_similarity:.2f} | "
+                f"min_similarity_threshold={MEMORY_INJECTION_MIN_SIMILARITY} | "
+                f"prompt_preview={prompt[:50] if prompt else 'None'}"
+            )
 
             return result
 
@@ -823,7 +872,13 @@ Nunca invente informações."""
                 try:
                     from ..config.feature_flags import USE_STRUCTURED_COMPACTION
 
-                    logger.info("[COMPACTION] PreCompact hook ativado — contexto será compactado")
+                    # B3: Log enriquecido de compactação
+                    sdk_session = hook_input.get('session_id', 'unknown')
+                    logger.info(
+                        f"[COMPACTION] session={sdk_session[:12] if sdk_session != 'unknown' else 'unknown'} | "
+                        f"reason=context_window_full | "
+                        f"structured={USE_STRUCTURED_COMPACTION}"
+                    )
 
                     if not USE_STRUCTURED_COMPACTION:
                         return {
@@ -890,7 +945,7 @@ Nunca invente informações."""
                     if not USE_EXPANDED_HOOKS:
                         return {}
 
-                    session_id = hook_input.get('session_id', 'unknown')
+                    sdk_sid = hook_input.get('session_id', 'unknown')
                     stop_active = hook_input.get('stop_hook_active', False)
 
                     # CLI 2.1.47+: last_assistant_message disponível em runtime
@@ -902,9 +957,18 @@ Nunca invente informações."""
 
                     logger.info(
                         f"[HOOK:Stop] Sessão encerrada: "
-                        f"session={session_id[:12]}... | "
+                        f"session={sdk_sid[:12]}... | "
                         f"stop_hook_active={stop_active}"
                         f"{last_msg_preview}"
+                    )
+
+                    # B4: Log de stats da sessão para análise futura
+                    # Nota: session_id (nosso UUID) não está no escopo de _build_options.
+                    # Stats são logados via [MEMORY_INJECT] a cada turno e podem ser
+                    # agregados via parsing de logs.
+                    logger.info(
+                        f"[HOOK:Stop] user_id={user_id or 'None'} | "
+                        f"sdk_session={sdk_sid[:12] if sdk_sid != 'unknown' else 'unknown'}"
                     )
 
                     return {}
@@ -961,9 +1025,14 @@ Nunca invente informações."""
                             )
 
                     if additional_context:
+                        # B2: Log de context budget por categoria
+                        memory_tokens_est = len(additional_context) // 4
                         logger.info(
-                            f"[HOOK:UserPromptSubmit] Memórias injetadas: "
-                            f"{len(additional_context)} chars"
+                            f"[CONTEXT_BUDGET] "
+                            f"user_id={user_id or 'None'} | "
+                            f"memory_chars={len(additional_context)} | "
+                            f"memory_tokens_est={memory_tokens_est} | "
+                            f"prompt_len={len(prompt)}"
                         )
                         return {
                             "hookSpecificOutput": {
