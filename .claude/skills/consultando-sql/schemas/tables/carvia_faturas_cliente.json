@@ -44,6 +44,63 @@
       "type": "varchar(255)"
     },
     {
+      "name": "tipo_frete",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "quantidade_documentos",
+      "type": "integer"
+    },
+    {
+      "name": "valor_mercadoria",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_icms",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "aliquota_icms",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "valor_pedagio",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "vencimento_original",
+      "type": "date"
+    },
+    {
+      "name": "cancelada",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "pagador_endereco",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "pagador_cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "pagador_cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "pagador_uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "pagador_ie",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "pagador_telefone",
+      "type": "varchar(30)"
+    },
+    {
       "name": "status",
       "type": "varchar(20)",
       "default": "PENDENTE"
@@ -65,16 +122,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_faturas_cliente_numero_fatura",
+      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
       "columns": [
-        "numero_fatura"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
+      "name": "ix_carvia_faturas_cliente_numero_fatura",
       "columns": [
-        "cnpj_cliente"
+        "numero_fatura"
       ],
       "unique": false
     }

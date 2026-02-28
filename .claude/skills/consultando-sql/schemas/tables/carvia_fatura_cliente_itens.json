@@ -1,0 +1,85 @@
+{
+  "name": "carvia_fatura_cliente_itens",
+  "description": "Tabela carvia_fatura_cliente_itens",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "fatura_cliente_id",
+      "type": "integer",
+      "description": "FK → carvia_faturas_cliente.id",
+      "nullable": false
+    },
+    {
+      "name": "cte_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "cte_data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "contraparte_cnpj",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "contraparte_nome",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "nf_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "valor_mercadoria",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "peso_kg",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "base_calculo",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "icms",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "iss",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "st",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "frete",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "fatura_cliente_id",
+      "references": "carvia_faturas_cliente.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
+      "columns": [
+        "fatura_cliente_id"
+      ],
+      "unique": false
+    }
+  ]
+}

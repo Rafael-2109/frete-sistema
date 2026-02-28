@@ -165,9 +165,9 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_status",
+      "name": "ix_despesas_extras_despesa_cte_id",
       "columns": [
-        "status"
+        "despesa_cte_id"
       ],
       "unique": false
     },
@@ -200,9 +200,9 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_despesa_cte_id",
+      "name": "ix_despesas_extras_status",
       "columns": [
-        "despesa_cte_id"
+        "status"
       ],
       "unique": false
     }

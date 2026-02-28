@@ -121,17 +121,17 @@
   ],
   "indices": [
     {
-      "name": "idx_documento_emissor",
+      "name": "idx_documento_validade",
       "columns": [
-        "cnpj_emissor",
-        "tipo"
+        "data_validade"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_documentos_credito_id",
+      "name": "idx_documento_emissor",
       "columns": [
-        "credito_id"
+        "cnpj_emissor",
+        "tipo"
       ],
       "unique": false
     },
@@ -151,9 +151,9 @@
       "unique": false
     },
     {
-      "name": "idx_documento_validade",
+      "name": "ix_pallet_documentos_credito_id",
       "columns": [
-        "data_validade"
+        "credito_id"
       ],
       "unique": false
     }
