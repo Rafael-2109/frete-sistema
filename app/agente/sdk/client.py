@@ -1360,6 +1360,7 @@ Nunca invente informações."""
             StreamEvent com tipo e conteúdo
         """
         full_text = ""
+        had_tool_between_texts = False  # Separador entre segmentos pós-tool
         tool_calls = []
         input_tokens = 0
         output_tokens = 0
@@ -1511,7 +1512,11 @@ Nunca invente informações."""
                             # Texto
                             if isinstance(block, TextBlock):
                                 text_chunk = block.text
+                                # Adiciona separador entre segmentos de texto (após tool calls)
+                                if full_text and had_tool_between_texts:
+                                    text_chunk = '\n\n' + text_chunk
                                 full_text += text_chunk
+                                had_tool_between_texts = False
                                 yield StreamEvent(
                                     type='text',
                                     content=text_chunk
@@ -1519,6 +1524,7 @@ Nunca invente informações."""
 
                             # Tool call
                             elif isinstance(block, ToolUseBlock):
+                                had_tool_between_texts = True
                                 tool_call = ToolCall(
                                     id=block.id,
                                     name=block.name,
