@@ -19,7 +19,7 @@ import json
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 from botbuilder.core import (
@@ -31,7 +31,14 @@ from botbuilder.core import (
     MessageFactory,
 )
 from botbuilder.schema import Activity, ActivityTypes
-from app.utils.timezone import agora_utc_naive
+
+# Timezone Brasil (UTC-3) — implementação local para não depender do pacote Flask (app/)
+_BRASIL_TZ = timezone(timedelta(hours=-3))
+
+
+def agora_utc_naive():
+    """Retorna datetime Brasil naive (sem tzinfo), equivalente a app.utils.timezone."""
+    return datetime.now(_BRASIL_TZ).replace(tzinfo=None)
 
 logger = logging.getLogger(__name__)
 

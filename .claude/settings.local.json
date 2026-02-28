@@ -125,7 +125,11 @@
       "WebFetch(domain:onlyoneaman.medium.com)",
       "WebFetch(domain:unstract.com)",
       "WebFetch(domain:pymupdf.readthedocs.io)",
-      "WebFetch(domain:docs.openclaw.ai)"
+      "WebFetch(domain:docs.openclaw.ai)",
+      "Bash(az functionapp:*)",
+      "Bash(az account:*)",
+      "Bash(az monitor:*)",
+      "WebFetch(domain:www.clawctl.com)"
     ],
     "deny": []
   },
