@@ -63,12 +63,13 @@
                             <th>Valor</th>
                             <th>Peso (kg)</th>
                             <th>Fonte</th>
+                            <th>CTe</th>
                             <th>Data Emissao</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for nf in nfs %}
+                        {% for nf, qtd_ctes in nfs %}
                         <tr>
                             <td>{{ nf.id }}</td>
                             <td><strong>{{ nf.numero_nf }}</strong>{% if nf.serie_nf %} <small class="text-muted">S{{ nf.serie_nf }}</small>{% endif %}</td>
@@ -85,6 +86,13 @@
                             <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
                             <td class="valor-col">{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }}</td>
                             <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
+                            <td>
+                                {% if qtd_ctes %}
+                                <span class="badge bg-success">{{ qtd_ctes }} CTe{{ 's' if qtd_ctes > 1 }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Sem CTe</span>
+                                {% endif %}
+                            </td>
                             <td><small>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</small></td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}"

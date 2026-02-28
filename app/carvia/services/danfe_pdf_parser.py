@@ -123,6 +123,55 @@ class DanfePDFParser:
                 return i
         return None
 
+    def _encontrar_secao_destinatario(self) -> Optional[int]:
+        """Encontra a SECAO DESTINATARIO/REMETENTE (ignora 'DESTINATARIO' do canhoto).
+
+        DANFEs reais tem 'DESTINATARIO' no canhoto (primeiras linhas) e
+        'DESTINATARIO/REMETENTE' na secao formal. Usar primeira ocorrencia
+        como ancora causa bugs em cnpj, nome, uf/cidade.
+        """
+        # Preferir "DESTINATARIO/REMETENTE" (secao formal com barra)
+        idx = self._encontrar_linha('DESTINAT', 'REMETENTE')
+        if idx is not None:
+            return idx
+        # Fallback: "DESTINATARIO" que NAO esteja no canhoto (primeiras 5 linhas)
+        linhas = self._linhas()
+        for i, linha in enumerate(linhas):
+            if i < 5:
+                continue
+            if 'DESTINAT' in linha.upper():
+                return i
+        # Ultimo recurso: qualquer ocorrencia
+        return self._encontrar_linha('DESTINAT')
+
+    def _completar_cidade_cross_line(self, linhas: List[str], linha_idx: int, cidade: str) -> str:
+        """Verifica se nome da cidade foi cortado entre linhas e completa se necessario.
+
+        Problema: pdfplumber pode dividir "RIO DE JANEIRO" em:
+          L007: "... - RIO DE 0 - ENTRADA ..."
+          L008: "JANEIRO - RJ - CEP: ..."
+        Strategy 1a/1b captura "JANEIRO" mas o prefixo "RIO DE" esta na linha anterior.
+
+        Fix: busca na linha anterior por pattern "[CIDADE] D[EOA]S? <digito>" antes
+        de checkbox entrada/saida, e prefixa ao nome da cidade.
+        """
+        if linha_idx <= 0:
+            return cidade
+        prev = linhas[linha_idx - 1]
+        # Buscar "PALAVRA(S) DE|DO|DA|DOS|DAS" seguido de digito (checkbox entrada/saida)
+        prefix_m = re.search(
+            r'([A-ZÀ-Ú][A-ZÀ-Ú\s]*\s+D[EOA]S?)\s+\d',
+            prev,
+        )
+        if prefix_m:
+            prefix = prefix_m.group(1).strip()
+            # Evitar falsos positivos: "CHAVE DE", "BASE DE" etc nao sao cidades
+            skip_words = {'CHAVE', 'BASE', 'NOTA', 'DATA', 'INSCRIÇÃO', 'VALOR'}
+            first_word = prefix.split()[0].upper() if prefix else ''
+            if first_word not in skip_words:
+                cidade = prefix + ' ' + cidade
+        return cidade
+
     def _tokens_numericos(self, linha: str) -> List[str]:
         """Extrai todos os tokens que parecem numeros (ex: '7.360,87', '64,000', '1')"""
         return re.findall(r'\d[\d.,]*\d|\d', linha)
@@ -255,10 +304,13 @@ class DanfePDFParser:
         """
         cnpj_pattern = r'\d{2}\.?\d{3}\.?\d{3}/\d{4}-?\d{2}'
 
-        # Buscar apos marcador de destinatario
-        dest_match = re.search(r'DESTINAT[AÁ]RIO', self.texto_completo, re.IGNORECASE)
-        if dest_match:
-            texto_dest = self.texto_completo[dest_match.start():]
+        # Buscar apos SECAO DESTINATARIO/REMETENTE (ignora canhoto)
+        dest_idx = self._encontrar_secao_destinatario()
+        if dest_idx is not None:
+            linhas = self._linhas()
+            # Converter indice de linha para posicao de caractere
+            offset = sum(len(l) + 1 for l in linhas[:dest_idx])
+            texto_dest = self.texto_completo[offset:]
             matches = re.findall(cnpj_pattern, texto_dest)
             if matches:
                 cnpj = re.sub(r'\D', '', matches[0])
@@ -422,7 +474,9 @@ class DanfePDFParser:
         patterns_sameline = [
             r'QUANTIDADE[^\S\n]*[:.]?[^\S\n]*(\d+)',
             r'QTD[^\S\n]*[:.]?[^\S\n]*(\d+)',
-            r'VOLUMES?[^\S\n]*[:.]?[^\S\n]*(\d+)',
+            # VOLUMES? REMOVIDO: "Volumes" como ESPECIE na linha de valores
+            # capturava "13" de "13.176,000" (peso bruto) em vez da quantidade real.
+            # Strategy 2 (tabular com guard ESPECIE) trata esse caso corretamente.
         ]
         for pattern in patterns_sameline:
             match = re.search(pattern, self.texto_completo, re.IGNORECASE)
@@ -512,8 +566,8 @@ class DanfePDFParser:
                     extrair texto da proxima linha antes do CNPJ
         Strategy 2: 'Dest/Reme:' pattern no canhoto
         """
-        # Strategy 1: secao DESTINATARIO tabular
-        dest_idx = self._encontrar_linha('DESTINAT')
+        # Strategy 1: secao DESTINATARIO tabular (ignora canhoto)
+        dest_idx = self._encontrar_secao_destinatario()
         if dest_idx is not None:
             linhas = self._linhas()
             nome_idx = None
@@ -558,11 +612,11 @@ class DanfePDFParser:
         Returns:
             (uf, cidade) — qualquer um pode ser None
         """
-        dest_idx = self._encontrar_linha('DESTINAT')
+        dest_idx = self._encontrar_secao_destinatario()
         linhas = self._linhas()
         limite = dest_idx if dest_idx else min(20, len(linhas))
 
-        # Strategy 1: 'CIDADE - UF - CEP:'
+        # Strategy 1a: 'CIDADE - UF - CEP:' (all-uppercase city)
         for i in range(limite):
             match = re.search(
                 r'([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s*-\s*([A-Z]{2})\s*-\s*CEP',
@@ -572,6 +626,23 @@ class DanfePDFParser:
                 cidade = match.group(1).strip()
                 uf = match.group(2)
                 if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    # Cross-line fix: cidade pode ter sido cortada entre linhas
+                    # Ex: L007 "... RIO DE 0 - ENTRADA" + L008 "JANEIRO - RJ - CEP:"
+                    cidade = self._completar_cidade_cross_line(linhas, i, cidade)
+                    return (uf, cidade)
+
+        # Strategy 1b: '... - Cidade Mixed Case - UF - CEP:' (mixed case)
+        # DANFEs podem ter enderecos em mixed case: "Santana de Parnaiba - SP - CEP"
+        for i in range(limite):
+            match = re.search(
+                r'-\s*([^-]{2,}?)\s*-\s*([A-Z]{2})\s*-\s*CEP',
+                linhas[i],
+            )
+            if match:
+                cidade = match.group(1).strip()
+                uf = match.group(2)
+                if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    cidade = self._completar_cidade_cross_line(linhas, i, cidade)
                     return (uf, cidade)
 
         # Strategy 2: 'CIDADE/UF' pattern (sem hifen)
@@ -586,6 +657,37 @@ class DanfePDFParser:
                 if uf in self._UFS_BRASIL and len(cidade) >= 2:
                     return (uf, cidade)
 
+        # Strategy 3: Multi-line layout (pdfplumber split cells em linhas separadas)
+        # Ex Nacom: L012 "Santana de Parnaiba 0 - Entrada ...", L014 "SP", L016 "CEP: 06530-581"
+        # UF aparece sozinha numa linha, CEP em outra, cidade acima
+        cep_idx = None
+        for i in range(limite):
+            if re.search(r'CEP[:\s]*\d{5}', linhas[i], re.IGNORECASE):
+                cep_idx = i
+                break
+
+        if cep_idx is not None:
+            # Buscar UF backward a partir da linha do CEP
+            uf_found = None
+            uf_line_idx = None
+            for i in range(cep_idx - 1, max(0, cep_idx - 5), -1):
+                token = linhas[i].strip()
+                if len(token) == 2 and token.upper() in self._UFS_BRASIL:
+                    uf_found = token.upper()
+                    uf_line_idx = i
+                    break
+
+            if uf_found and uf_line_idx is not None:
+                # Cidade esta acima da linha da UF
+                for i in range(uf_line_idx - 1, max(0, uf_line_idx - 4), -1):
+                    line = linhas[i].strip()
+                    # Extrair texto antes do primeiro digito (ex: "Santana de Parnaiba 0 - Entrada")
+                    m = re.match(r'([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)(?:\s+\d|\s*-\s*(?:Entrada|Sa[ií]da)|\s*$)', line, re.IGNORECASE)
+                    if m:
+                        cidade = m.group(1).strip()
+                        if len(cidade) >= 3:
+                            return (uf_found, cidade)
+
         return (None, None)
 
     def get_uf_cidade_destinatario(self) -> tuple:
@@ -598,7 +700,7 @@ class DanfePDFParser:
         Returns:
             (uf, cidade) — qualquer um pode ser None
         """
-        dest_idx = self._encontrar_linha('DESTINAT')
+        dest_idx = self._encontrar_secao_destinatario()
         if dest_idx is None:
             return (None, None)
 
@@ -627,8 +729,11 @@ class DanfePDFParser:
         tokens = prox_linha.split()
 
         # Encontrar primeiro token que e UF valida
+        # Layout: "Jaboatao dos Guararapes (81) 3224-0703 PE 099769654 11:10:54"
+        # Cidade = tokens ate telefone, UF = token 2-letras valido APOS telefone
         cidade_parts = []
         uf_encontrada = None
+        past_phone = False
         for token in tokens:
             token_upper = token.strip().upper()
             if token_upper in self._UFS_BRASIL and not cidade_parts:
@@ -637,7 +742,12 @@ class DanfePDFParser:
             if token_upper in self._UFS_BRASIL and cidade_parts:
                 uf_encontrada = token_upper
                 break
-            cidade_parts.append(token)
+            # Telefone/fax — ex: '(81)', '3224-0703' — nao acumular, mas CONTINUAR buscando UF
+            if token.startswith('(') or re.match(r'^\d+-\d+', token):
+                past_phone = True
+                continue
+            if not past_phone:
+                cidade_parts.append(token)
 
         cidade = ' '.join(cidade_parts).strip() if cidade_parts else None
         if cidade and len(cidade) < 2:
@@ -661,62 +771,154 @@ class DanfePDFParser:
                                 quantidade, valor_unitario, valor_total_item
         """
         itens = []
-
-        # Encontrar inicio e fim da secao de produtos
-        prod_idx = self._encontrar_linha('DADOS', 'PRODUTOS')
-        if prod_idx is None:
-            return itens
-
         linhas = self._linhas()
 
+        # Encontrar TODAS as secoes de produtos (multi-pagina: header repetido em cada pagina)
+        # DANFEs usam "DADOS DOS PRODUTOS" (plural) ou "DADOS DO PRODUTO" (singular)
+        # re.match exige "DADOS" no INICIO da linha — evita falso positivo tipo
+        # "TRANSPORTADOR / VOLUMES TRANSPORTADOS DADOS DO PRODUTO" (pdfplumber merge)
+        prod_starts = []
+        for i, linha in enumerate(linhas):
+            upper = linha.upper().strip()
+            if re.match(r'DADOS\s+D[OE]S?\s+PRODUTO', upper):
+                prod_starts.append(i)
+
+        if not prod_starts:
+            logger.debug("get_itens_produto: secao DADOS PRODUTO(S) nao encontrada")
+            return itens
+
+        # Range de busca: do primeiro header de produto ate o primeiro DADOS ADICIONAIS
+        # apos o ultimo prod_start. Isso evita que "CONTINUACAO DAS INFORMACOES"
+        # na pagina 2 (sem produtos) estenda o range para texto nao-produto.
+        # Para multi-pagina com produtos em ambas paginas (NOTCO), section_boundary
+        # PARA coleta de continuacoes ao atingir ISSQN/DADOS ADICIONAIS/header,
+        # enquanto inline_metadata pula linhas de lote/pedido sem interromper.
+        inicio = prod_starts[0]
+        last_prod_start = prod_starts[-1]
         fim_idx = len(linhas)
-        for i in range(prod_idx + 1, len(linhas)):
-            upper = linhas[i].upper()
+        for i in range(last_prod_start + 1, len(linhas)):
+            upper = linhas[i].upper().strip()
             if 'DADOS ADICIONAIS' in upper or 'INFORMAÇÕES COMPLEMENTARES' in upper:
                 fim_idx = i
                 break
 
+        logger.debug(f"get_itens_produto: {len(prod_starts)} secao(oes) produto, range L{inicio}..L{fim_idx}")
+
         # Agrupar por produto: linha com NCM inicia produto, linhas sem NCM sao continuacao
-        ncm_pattern = re.compile(r'\d{8}\s+\d{2,3}\s+\d{4}')
+        # NCM (8 dig) + O/CST (1-3 dig, possivelmente split: "3 00") + CFOP (4 dig)
+        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:\s+\d{2})?\s+\d{4}')
+
+        # --- Dois niveis de filtro para linhas sem NCM ---
+
+        # SECTION BOUNDARIES: indicam fim da area de produtos.
+        # Quando encontradas, PARAR de coletar continuacoes do item atual.
+        # Multi-pagina NOTCO: ISSQN + DADOS ADICIONAIS + header pag.2 aparecem
+        # ENTRE o ultimo produto da pag.1 e o primeiro da pag.2.
+        section_boundary = re.compile(
+            r'C[AÁ]LCULO DO ISSQN|DADOS ADICIONAIS|'
+            r'INFORMA[ÇC][ÕO]ES COMPLEMENTARES|RESERVADO AO FISCO|'
+            r'\bDANFE\b|DOCUMENTO AUXILIAR|NOTA FISCAL ELETR|'
+            r'DADOS\s+D[OE]S?\s+PRODUTO|'
+            r'FOLHA\s+\d|CHAVE DE ACESSO|PROTOCOLO DE AUTORIZA|'
+            r'NATUREZA DA OPERA|'
+            r'INSCRIÇÃO ESTADUAL|INSCRI[ÇC][AÃ]O MUNICIPAL|'
+            r'CONSULTA DE AUTENTICIDADE|'
+            r'TRANSPORTADOR\s*/\s*VOLUMES|'
+            r'VALOR TOTAL DOS SERVI',
+            re.IGNORECASE,
+        )
+
+        # INLINE METADATA: info de lote/pedido/logistica impressa logo apos o produto.
+        # Pular a linha mas CONTINUAR coletando continuacoes.
+        inline_metadata = re.compile(
+            r'ICMS|FCP|MVA|Base\s+.+ST|Al[ií]quota|Redu[çc][aã]o|'
+            r'Lote:|Data de Validade|'
+            r'No Ped:|Dep\.\s*de\s*Sa[ií]da|Venc:|Cod\s*Material|'
+            r'Inf\.\s*Contribuinte|LOCAL DE SA[IÍ]DA|Material Novo:|'
+            r'SITUADA\s+N[OA]\s|COD\.?\s*PROD|DESCRI[ÇC][ÃA]O DO PRODUTO|'
+            r'www\.\w+\.gov\.br',
+            re.IGNORECASE,
+        )
         blocos = []  # [(ncm_line, [continuations])]
         ncm_line_atual = None
         continuacoes = []
+        # Limite de continuacoes por produto: descricoes DANFE raramente wrappam
+        # mais que 2 linhas. Excesso = lixo (ISSQN, header pag.2, etc.)
+        MAX_CONTINUACOES = 3
 
-        for i in range(prod_idx + 1, fim_idx):
+        for i in range(inicio + 1, fim_idx):
             linha = linhas[i].strip()
             if not linha:
                 continue
 
-            if ncm_pattern.search(linha):
+            has_ncm = ncm_pattern.search(linha)
+
+            if has_ncm:
                 # Nova linha de produto — salvar bloco anterior
                 if ncm_line_atual:
                     blocos.append((ncm_line_atual, continuacoes))
                 ncm_line_atual = linha
                 continuacoes = []
-            elif ncm_line_atual:
-                # Continuacao do produto atual (codigo wrapping)
+            elif ncm_line_atual and len(continuacoes) < MAX_CONTINUACOES:
+                # SECTION BOUNDARY: saimos da area de produtos → finalizar item atual.
+                # Multi-pagina: ISSQN + DADOS ADICIONAIS + header pag.2 aparecem entre
+                # o ultimo produto da pag.1 e o primeiro da pag.2. Sem esse break,
+                # texto de endereco/cabecalho vira continuacao do ultimo produto.
+                if section_boundary.search(linha):
+                    blocos.append((ncm_line_atual, continuacoes))
+                    ncm_line_atual = None
+                    continuacoes = []
+                    continue
+                # INLINE METADATA: info lote/pedido — pular mas continuar coletando
+                if inline_metadata.search(linha):
+                    continue
+                # Filtrar fragmentos curtos numericos (date wrapping: "26" de "01/04/2026")
+                if len(linha) <= 4 and linha.isdigit():
+                    continue
+                # Filtrar linhas puramente numericas 5+ dig — "Cod Material Novo" orphan
+                # Ex: "10000606" sozinho na linha (layout estreito NOTCO)
+                if re.match(r'^\d{5,}$', linha):
+                    continue
+                # Filtrar datas standalone DD/MM/YYYY — "Venc:" orphan
+                # Ex: "19/08/2026" sozinho na linha (layout estreito NOTCO)
+                if re.match(r'^\d{1,2}/\d{2}/\d{4}$', linha):
+                    continue
+                # Filtrar linhas de dados fiscais: 3+ valores decimais (ISSQN/imposto)
+                # Ex: "140172 0,00 0,00 0,00" ou "0,00 0,00 0,00 0,00"
+                if len(re.findall(r'\d+,\d+', linha)) >= 3:
+                    continue
+                # Filtrar linhas com CNPJ (XX.XXX.XXX/XXXX-XX) — secao complementar
+                if re.search(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', linha):
+                    continue
+                # Continuacao do produto atual (descricao wrapping)
                 continuacoes.append(linha)
             # else: linha de cabecalho antes do primeiro produto — ignorar
 
         if ncm_line_atual:
             blocos.append((ncm_line_atual, continuacoes))
 
+        logger.debug(f"get_itens_produto: {len(blocos)} blocos NCM encontrados")
+
         # Parsear cada bloco
-        for ncm_line, conts in blocos:
+        for idx, (ncm_line, conts) in enumerate(blocos):
             item = self._parsear_linha_produto(ncm_line, conts)
             if item:
                 itens.append(item)
+            else:
+                logger.warning(f"get_itens_produto: bloco {idx} FALHOU parse: {ncm_line[:100]}")
 
         return itens
 
     def _separar_codigo_descricao(self, texto: str) -> tuple:
         """Separa codigo e descricao do texto mesclado antes do NCM
 
-        pdfplumber extrai colunas lado a lado: 'COD DESC' vira 'COD DESC' ou
-        'COD1 COD2 DESC1 DESC2' quando codigo e descricao compartilham palavras.
-        Heuristica: encontrar onde o primeiro token se repete — marca inicio da descricao.
+        pdfplumber extrai colunas CODIGO PRODUTO e DESCRICAO lado a lado, produzindo
+        texto mesclado. 4 heuristicas em ordem de especificidade:
 
-        Ex: 'JET MOTO JET MOTO CHEFE' → codigo='JET MOTO', descricao='JET MOTO CHEFE'
+        H1: Codigo numerico 5+ digitos (Nacom: "421016 AZEITONA...")
+        H2: Codigo com dash (Laiouns: "MT-B2 BIKE ELETRICA B2")
+        H3: Repeat detection (Q.p.a: "X12 MOTO X12 MOTO CHEFE")
+        H4: Codigo alfanumerico curto (letras+digitos, <=10 chars)
 
         Returns: (codigo, descricao)
         """
@@ -724,14 +926,40 @@ class DanfePDFParser:
         if not tokens:
             return (texto, texto)
 
-        primeiro = tokens[0].upper()
+        primeiro = tokens[0]
+        resto = ' '.join(tokens[1:]) if len(tokens) > 1 else ''
+
+        # H1: Codigo puramente numerico (5+ digitos) — ex: "421016" (Nacom)
+        if re.match(r'^\d{5,}$', primeiro):
+            return (primeiro, resto or primeiro)
+
+        # H1b: Codigo numerico concatenado com descricao (sem espaco)
+        # Ex: "00000000001000126NotMilk" → cod="00000000001000126", desc="NotMilk ..."
+        m = re.match(r'^(\d{5,})([A-Za-z].*)$', primeiro)
+        if m:
+            codigo = m.group(1)
+            desc_start = m.group(2)
+            desc_full = desc_start + (' ' + resto if resto else '')
+            return (codigo, desc_full)
+
+        # H2: Codigo com dash — ex: "MT-B2", "X11-MINI" (Laiouns)
+        if '-' in primeiro and len(primeiro) <= 15:
+            return (primeiro, resto or primeiro)
+
+        # H3: Repeat detection — pdfplumber mergeou code+desc duas vezes
+        # Ex: "X12 MOTO X12 MOTO CHEFE" → code="X12 MOTO", desc="X12 MOTO CHEFE"
+        primeiro_upper = primeiro.upper()
         for i in range(1, len(tokens)):
-            if tokens[i].upper() == primeiro:
+            if tokens[i].upper() == primeiro_upper:
                 codigo = ' '.join(tokens[:i])
                 descricao = ' '.join(tokens[i:])
                 return (codigo, descricao)
 
-        # Sem repeticao — codigo e descricao sao o mesmo texto
+        # H4: Codigo alfanumerico curto (tem letras E digitos, <=10 chars)
+        if len(primeiro) <= 10 and re.search(r'\d', primeiro) and re.search(r'[A-Za-z]', primeiro):
+            return (primeiro, resto or primeiro)
+
+        # Fallback: sem separacao confiavel — ambos recebem texto completo
         return (texto, texto)
 
     def _parsear_linha_produto(self, ncm_line: str, continuacoes: Optional[List[str]] = None) -> Optional[Dict]:
@@ -739,28 +967,32 @@ class DanfePDFParser:
 
         Args:
             ncm_line: Linha principal contendo NCM + dados numericos
-            continuacoes: Linhas extras (codigo do produto wrapping)
+            continuacoes: Linhas extras (descricao wrapping para proximas linhas)
 
         Formato tipico ncm_line:
         'JET MOTO JET MOTO CHEFE 87116000 460 5405 UN 3,00 7.220,0000 0,00 21.660,00 ...'
                                   ^NCM    ^CST^CFOP^UN^QTD ^V.UNIT    ^DESC^V.LIQ
+
+        Texto antes do NCM = codigo + descricao mesclados (pdfplumber merge colunas).
+        Continuacoes = wrapping da coluna descricao (anexadas a desc, NAO ao codigo).
         """
         if not continuacoes:
             continuacoes = []
 
-        # Encontrar NCM (8 digitos) + CST (2-3 digitos) + CFOP (4 digitos)
+        # Encontrar NCM (8 dig) + O/CST skip (1-3 dig, possivelmente split) + CFOP (4 dig)
+        # Ex: "20057000 3 00 6101" ou "87116000 460 5405" — ambos devem funcionar
         match = re.search(
-            r'(\d{8})\s+(\d{2,3})\s+(\d{4})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+            r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+(\d{4})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
             ncm_line,
         )
         if not match:
             return None
 
         ncm = match.group(1)
-        cfop = match.group(3)
-        unidade = match.group(4)
-        quantidade = self._parse_valor_br(match.group(5))
-        valor_unitario = self._parse_valor_br(match.group(6))
+        cfop = match.group(2)
+        unidade = match.group(3)
+        quantidade = self._parse_valor_br(match.group(4))
+        valor_unitario = self._parse_valor_br(match.group(5))
 
         # Extrair valor total: numeros apos NCM
         texto_apos = ncm_line[match.start():]
@@ -774,13 +1006,24 @@ class DanfePDFParser:
         texto_antes = ncm_line[:match.start()].strip()
         codigo, descricao = self._separar_codigo_descricao(texto_antes)
 
-        # Continuacoes = codigo wrapping — anexar ao codigo
+        # Continuacoes = descricao wrapping (nao codigo).
+        # Em DANFEs, o codigo e curto e cabe em 1 linha. Continuacoes sao texto
+        # da coluna descricao que nao coube na linha do NCM.
+        # Dedup: se descricao ja termina com o texto da continuacao, pular (overlap pdfplumber).
         if continuacoes:
-            codigo = codigo + ' ' + ' '.join(continuacoes)
+            desc_strip = descricao.strip()
+            for cont in continuacoes:
+                cont_strip = cont.strip()
+                if cont_strip and not desc_strip.endswith(cont_strip):
+                    desc_strip = desc_strip + ' ' + cont_strip
+            descricao = desc_strip
+
+        # Defesa em profundidade: truncar para 60 chars (limite da coluna carvia_nf_itens.codigo_produto)
+        codigo_final = codigo.strip()[:60]
 
         return {
-            'codigo_produto': codigo.strip(),
-            'descricao': descricao.strip(),
+            'codigo_produto': codigo_final,
+            'descricao': descricao.strip()[:255],  # varchar(255)
             'ncm': ncm,
             'cfop': cfop,
             'unidade': unidade,

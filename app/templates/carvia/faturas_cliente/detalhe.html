@@ -82,7 +82,7 @@
                     <hr>
                     <h6>Operacoes Vinculadas: {{ operacoes|length }}</h6>
                     <p class="text-muted small mb-0">
-                        Soma CTe: R$ {{ "%.2f"|format(operacoes|sum(attribute='cte_valor', default=0)) }}
+                        Soma CTe: R$ {{ "%.2f"|format(operacoes|selectattr('cte_valor')|map(attribute='cte_valor')|sum) }}
                     </p>
                 </div>
             </div>

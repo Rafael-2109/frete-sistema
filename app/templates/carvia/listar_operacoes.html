@@ -62,6 +62,7 @@
                     <thead>
                         <tr>
                             <th>#</th>
+                            <th>NFs</th>
                             <th>CTe CarVia</th>
                             <th>Cliente</th>
                             <th>Destino</th>
@@ -74,9 +75,16 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for op in operacoes %}
+                        {% for op, qtd_nfs in operacoes %}
                         <tr>
                             <td>{{ op.id }}</td>
+                            <td>
+                                {% if qtd_nfs %}
+                                <span class="badge bg-info">{{ qtd_nfs }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ op.cte_numero or '-' }}</td>
                             <td>
                                 <span title="{{ op.cnpj_cliente }}" class="cnpj-col">

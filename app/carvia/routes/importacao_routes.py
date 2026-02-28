@@ -78,6 +78,7 @@ def register_importacao_routes(bp):
             ctes_data=resultado.get('ctes_parseados', []),
             matches=resultado.get('matches', {}),
             criado_por=current_user.email,
+            faturas_data=resultado.get('faturas_parseadas', []),
         )
 
         # Limpar sessao
@@ -92,6 +93,12 @@ def register_importacao_routes(bp):
             subs = resultado_salvo.get('subcontratos_criados', 0)
             if subs:
                 partes.append(f'{subs} CTes Subcontrato')
+            fats = resultado_salvo.get('faturas_criadas', 0)
+            if fats:
+                partes.append(f'{fats} Faturas')
+            nfs_sem_cte = resultado_salvo.get('nfs_sem_cte', 0)
+            if nfs_sem_cte:
+                partes.append(f'{nfs_sem_cte} NFs aguardando CTe')
             flash(
                 f'Importacao concluida: {", ".join(partes)}.',
                 'success'
@@ -104,4 +111,13 @@ def register_importacao_routes(bp):
             for erro in resultado_salvo.get('erros', []):
                 flash(erro, 'danger')
 
-        return redirect(url_for('carvia.listar_operacoes'))
+        # Redirect inteligente:
+        # - Se criou operacoes -> listagem de operacoes
+        # - Se criou faturas (sem operacoes) -> listagem de faturas (cliente por padrao)
+        # - Se so NFs -> listagem de NFs
+        if resultado_salvo.get('operacoes_criadas', 0) > 0:
+            return redirect(url_for('carvia.listar_operacoes'))
+        elif resultado_salvo.get('faturas_criadas', 0) > 0:
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+        else:
+            return redirect(url_for('carvia.listar_nfs'))

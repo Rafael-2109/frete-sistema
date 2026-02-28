@@ -5,6 +5,7 @@ Rotas de Operacoes CarVia — CRUD operacoes + subcontratos
 import logging
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
+from sqlalchemy import func
 
 from app import db
 from app.carvia.models import (
@@ -30,7 +31,17 @@ def register_operacao_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
 
-        query = db.session.query(CarviaOperacao)
+        # Subquery: contar NFs vinculadas a cada operacao
+        subq_nfs = db.session.query(
+            CarviaOperacaoNf.operacao_id,
+            func.count(CarviaOperacaoNf.nf_id).label('qtd_nfs')
+        ).group_by(CarviaOperacaoNf.operacao_id).subquery()
+
+        query = db.session.query(
+            CarviaOperacao, subq_nfs.c.qtd_nfs
+        ).outerjoin(
+            subq_nfs, CarviaOperacao.id == subq_nfs.c.operacao_id
+        )
 
         if status_filtro:
             query = query.filter(CarviaOperacao.status == status_filtro)

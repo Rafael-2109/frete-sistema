@@ -13,8 +13,9 @@
     </div>
 
     <!-- Resumo -->
+    {% set faturas = resultado.get('faturas_parseadas', []) %}
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
+        <div class="{{ 'col-md-3' if faturas else 'col-md-4' }}">
             <div class="card border-primary">
                 <div class="card-body text-center">
                     <h3 class="text-primary">{{ resultado.nfs_parseadas|length }}</h3>
@@ -22,7 +23,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="{{ 'col-md-3' if faturas else 'col-md-4' }}">
             <div class="card border-info">
                 <div class="card-body text-center">
                     <h3 class="text-info">{{ resultado.ctes_parseados|length }}</h3>
@@ -30,7 +31,17 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        {% if faturas %}
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h3 class="text-warning">{{ faturas|length }}</h3>
+                    <small class="text-muted">Faturas Extraidas</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="{{ 'col-md-3' if faturas else 'col-md-4' }}">
             <div class="card {{ 'border-danger' if resultado.erros else 'border-success' }}">
                 <div class="card-body text-center">
                     <h3 class="{{ 'text-danger' if resultado.erros else 'text-success' }}">
@@ -149,6 +160,145 @@
     </div>
     {% endif %}
 
+    <!-- Faturas Extraidas -->
+    {% if faturas %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas Extraidas ({{ faturas|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Pagador</th>
+                            <th>CNPJ Pagador</th>
+                            <th>Valor</th>
+                            <th>Frete</th>
+                            <th>Emissao</th>
+                            <th>Vencimento</th>
+                            <th>CTes Ref.</th>
+                            <th>Metodo</th>
+                            <th>Confianca</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fat in faturas %}
+                        {% set fat_id = loop.index %}
+                        <tr{% if fat.get('cancelada') %} class="table-danger"{% endif %}>
+                            <td>
+                                <strong>{{ fat.numero_fatura or '-' }}</strong>
+                                {% if fat.get('cancelada') %}
+                                    <span class="badge bg-danger ms-1">CANCELADA</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ fat.get('nome_pagador') or fat.get('nome_emissor') or '-' }}</td>
+                            <td class="cnpj-col">
+                                {% set c = fat.get('cnpj_pagador') or fat.get('cnpj_emissor') %}
+                                {% if c %}
+                                    {% if c|length == 14 %}
+                                        {{ c[:2] }}.{{ c[2:5] }}.{{ c[5:8] }}/{{ c[8:12] }}-{{ c[12:] }}
+                                    {% else %}
+                                        {{ c }}
+                                    {% endif %}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="valor-col">
+                                {% if fat.valor_total is not none %}R$ {{ "%.2f"|format(fat.valor_total) }}{% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% set tf = fat.get('tipo_frete') %}
+                                {% if tf == 'CIF' %}
+                                    <span class="badge bg-success">CIF</span>
+                                {% elif tf == 'FOB' %}
+                                    <span class="badge bg-primary">FOB</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>{{ fat.data_emissao or '-' }}</td>
+                            <td>
+                                {{ fat.vencimento or '-' }}
+                                {% if fat.get('vencimento_original') and fat.get('vencimento_original') != fat.get('vencimento') %}
+                                    <br><small class="text-muted" title="Vencimento original">orig: {{ fat.vencimento_original }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set ctes_ref = fat.get('ctes_referenciados', []) %}
+                                {% set itens = fat.get('itens_detalhe', []) %}
+                                {% if itens %}
+                                    <a class="badge bg-info text-decoration-none" data-bs-toggle="collapse" href="#itens-{{ fat_id }}" role="button">
+                                        {{ itens|length }} <i class="fas fa-chevron-down fa-xs"></i>
+                                    </a>
+                                {% elif ctes_ref %}
+                                    <span class="badge bg-info" title="{{ ctes_ref|join(', ') }}">
+                                        {{ ctes_ref|length }}
+                                    </span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% set metodo = fat.get('metodo_extracao', 'REGEX') %}
+                                {% if metodo == 'REGEX' %}
+                                    <span class="badge bg-success">REGEX</span>
+                                {% elif metodo == 'HAIKU' %}
+                                    <span class="badge bg-info">HAIKU</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">SONNET</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set conf = fat.get('confianca', 0) %}
+                                {% if conf >= 0.6 %}
+                                    <span class="badge bg-success">{{ "%.0f"|format(conf * 100) }}%</span>
+                                {% elif conf >= 0.3 %}
+                                    <span class="badge bg-warning text-dark">{{ "%.0f"|format(conf * 100) }}%</span>
+                                {% else %}
+                                    <span class="badge bg-danger">{{ "%.0f"|format(conf * 100) }}%</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if fat.get('itens_detalhe') %}
+                        <tr class="collapse" id="itens-{{ fat_id }}">
+                            <td colspan="10" class="p-0">
+                                <div class="p-2 bg-body-secondary">
+                                    <small class="fw-bold">Itens CTe — Fatura {{ fat.numero_fatura }}</small>
+                                    <table class="table table-sm table-bordered mb-0 mt-1" style="font-size: 0.8rem;">
+                                        <thead>
+                                            <tr>
+                                                <th>CTe</th>
+                                                <th>Data</th>
+                                                <th>Contraparte</th>
+                                                <th>NF</th>
+                                                <th>Valor Merc.</th>
+                                                <th>Peso</th>
+                                                <th>Frete</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in fat.itens_detalhe %}
+                                            <tr>
+                                                <td>{{ item.cte_numero or '-' }}</td>
+                                                <td>{{ item.cte_data_emissao or '-' }}</td>
+                                                <td>{{ item.contraparte_nome or '-' }}</td>
+                                                <td>{{ item.nf_numero or '-' }}</td>
+                                                <td>{% if item.valor_mercadoria is not none %}{{ "%.2f"|format(item.valor_mercadoria) }}{% else %}-{% endif %}</td>
+                                                <td>{% if item.peso_kg is not none %}{{ "%.1f"|format(item.peso_kg) }}{% else %}-{% endif %}</td>
+                                                <td>{% if item.frete is not none %}{{ "%.2f"|format(item.frete) }}{% else %}-{% endif %}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Matching -->
     {% if resultado.matches %}
     <div class="card mb-4">
@@ -199,7 +349,7 @@
 
     <!-- Acoes -->
     <div class="d-flex gap-2">
-        {% if resultado.nfs_parseadas or resultado.ctes_parseados %}
+        {% if resultado.nfs_parseadas or resultado.ctes_parseados or faturas %}
         <form method="POST" action="{{ url_for('carvia.importar_confirmar') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-success btn-lg">

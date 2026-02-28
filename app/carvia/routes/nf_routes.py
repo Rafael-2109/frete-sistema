@@ -5,9 +5,10 @@ Rotas de NF Venda CarVia — Listagem e detalhe de NFs importadas
 import logging
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
+from sqlalchemy import func
 
 from app import db
-from app.carvia.models import CarviaNf
+from app.carvia.models import CarviaNf, CarviaOperacaoNf
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,17 @@ def register_nf_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo_fonte', '')
 
-        query = db.session.query(CarviaNf)
+        # Subquery: contar CTes vinculados a cada NF
+        subq_ctes = db.session.query(
+            CarviaOperacaoNf.nf_id,
+            func.count(CarviaOperacaoNf.operacao_id).label('qtd_ctes')
+        ).group_by(CarviaOperacaoNf.nf_id).subquery()
+
+        query = db.session.query(
+            CarviaNf, subq_ctes.c.qtd_ctes
+        ).outerjoin(
+            subq_ctes, CarviaNf.id == subq_ctes.c.nf_id
+        )
 
         if tipo_filtro:
             query = query.filter(CarviaNf.tipo_fonte == tipo_filtro)

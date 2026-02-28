@@ -118,7 +118,14 @@
       "WebFetch(domain:www.philschmid.de)",
       "WebFetch(domain:blog.langchain.com)",
       "WebFetch(domain:www.llamaindex.ai)",
-      "WebFetch(domain:rlancemartin.github.io)"
+      "WebFetch(domain:rlancemartin.github.io)",
+      "Bash(/tmp/test_e2e_fatura.py:*)",
+      "WebFetch(domain:procycons.com)",
+      "WebFetch(domain:www.f22labs.com)",
+      "WebFetch(domain:onlyoneaman.medium.com)",
+      "WebFetch(domain:unstract.com)",
+      "WebFetch(domain:pymupdf.readthedocs.io)",
+      "WebFetch(domain:docs.openclaw.ai)"
     ],
     "deny": []
   },

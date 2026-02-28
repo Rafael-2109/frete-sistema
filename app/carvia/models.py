@@ -319,6 +319,24 @@ class CarviaFaturaCliente(db.Model):
     arquivo_pdf_path = db.Column(db.String(500))
     arquivo_nome_original = db.Column(db.String(255))
 
+    # Campos adicionais extraidos do PDF SSW
+    tipo_frete = db.Column(db.String(10))  # CIF ou FOB
+    quantidade_documentos = db.Column(db.Integer)
+    valor_mercadoria = db.Column(db.Numeric(15, 2))
+    valor_icms = db.Column(db.Numeric(15, 2))
+    aliquota_icms = db.Column(db.String(20))  # Ex: "12.00%"
+    valor_pedagio = db.Column(db.Numeric(15, 2))
+    vencimento_original = db.Column(db.Date)
+    cancelada = db.Column(db.Boolean, default=False)
+
+    # Dados do pagador (cliente que paga a fatura)
+    pagador_endereco = db.Column(db.String(500))
+    pagador_cep = db.Column(db.String(10))
+    pagador_cidade = db.Column(db.String(100))
+    pagador_uf = db.Column(db.String(2))
+    pagador_ie = db.Column(db.String(20))
+    pagador_telefone = db.Column(db.String(30))
+
     # PENDENTE, EMITIDA, PAGA, CANCELADA
     status = db.Column(db.String(20), default='PENDENTE')
 
@@ -326,8 +344,55 @@ class CarviaFaturaCliente(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
 
+    # Relacionamentos
+    itens = db.relationship(
+        'CarviaFaturaClienteItem',
+        backref='fatura_cliente',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
     def __repr__(self):
         return f'<CarviaFaturaCliente {self.numero_fatura} ({self.status})>'
+
+
+class CarviaFaturaClienteItem(db.Model):
+    """Itens de detalhe por CTe de uma fatura cliente SSW"""
+    __tablename__ = 'carvia_fatura_cliente_itens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fatura_cliente_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_faturas_cliente.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    # CTe referenciado
+    cte_numero = db.Column(db.String(20))
+    cte_data_emissao = db.Column(db.Date)
+
+    # Contraparte: Remetente (FOB) ou Destinatario (CIF)
+    contraparte_cnpj = db.Column(db.String(20))
+    contraparte_nome = db.Column(db.String(255))
+
+    # NF referenciada
+    nf_numero = db.Column(db.String(20))
+
+    # Valores
+    valor_mercadoria = db.Column(db.Numeric(15, 2))
+    peso_kg = db.Column(db.Numeric(15, 3))
+    base_calculo = db.Column(db.Numeric(15, 2))
+    icms = db.Column(db.Numeric(15, 2))
+    iss = db.Column(db.Numeric(15, 2))
+    st = db.Column(db.Numeric(15, 2))
+    frete = db.Column(db.Numeric(15, 2))
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+    def __repr__(self):
+        return f'<CarviaFaturaClienteItem cte={self.cte_numero} fatura={self.fatura_cliente_id}>'
 
 
 class CarviaFaturaTransportadora(db.Model):

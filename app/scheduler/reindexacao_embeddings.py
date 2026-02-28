@@ -11,8 +11,7 @@ Orquestra todos os indexers em sequencia:
 7. Devolucao Reasons (motivos de devolucao classificados)
 8. Carriers (transportadoras com aliases)
 9. Route/Templates (rotas Flask + menus + AJAX — via AST, sem app context)
-
-SSW docs sao estaticos — reindexar manualmente quando necessario.
+10. SSW Documents (semanal — docs estaticos, so mudam com commits)
 
 Duas formas de execucao:
 
@@ -20,6 +19,7 @@ Duas formas de execucao:
    - Chamado dentro de executar_sincronizacao(), app context ja ativo
    - Segue padrao do scheduler: cleanup db entre etapas
    - Frequencia: diaria, controlada pelo scheduler principal
+   - SSW roda apenas 1x/semana (dia configuravel via SSW_REINDEX_WEEKDAY, default domingo=6)
 
 2. Standalone (CLI/teste): executar_reindexacao()
    - Cria proprio create_app() + app_context()
@@ -30,13 +30,17 @@ Duas formas de execucao:
 Cada indexer tem stale detection (content_hash ou texto_embedado) — apenas
 itens novos ou modificados sao re-embeddados.
 
-Custo estimado: ~$0.032/dia, ~$0.96/mes
+Custo estimado: ~$0.032/dia, ~$0.96/mes (+$0.01/semana SSW)
 """
 
 import logging
+import os
 import time
 
 from app.utils.timezone import agora_utc_naive
+
+# Dia da semana para reindexar SSW docs (0=segunda, 6=domingo)
+SSW_REINDEX_WEEKDAY = int(os.environ.get("SSW_REINDEX_WEEKDAY", "6"))
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,7 @@ def executar_reindexacao_no_contexto():
     logger.info("   REINDEXACAO DE EMBEDDINGS")
     logger.info("   Inicio: %s", agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S'))
 
-    total_steps = 9
+    total_steps = 10
 
     # ── 1. Products (com aliases de_para) ──
     try:
@@ -285,6 +289,50 @@ def executar_reindexacao_no_contexto():
         logger.error("      Erro em route_templates: %s", e, exc_info=True)
         resultados['route_templates'] = {'error': str(e)}
 
+    _cleanup_db()
+
+    # ── 10. SSW Documents (semanal — docs estaticos) ──
+    # Se tabela vazia (primeira execucao), roda independente do dia
+    try:
+        from app import db as _db
+        from sqlalchemy import text as _text
+        ssw_count = _db.session.execute(
+            _text("SELECT COUNT(*) FROM ssw_document_embeddings")
+        ).scalar() or 0
+        tabela_vazia = ssw_count == 0
+    except Exception:
+        tabela_vazia = False
+
+    try:
+        dia_semana = agora_utc_naive().weekday()  # 0=segunda, 6=domingo
+        e_dia_ssw = dia_semana == SSW_REINDEX_WEEKDAY or tabela_vazia
+
+        if tabela_vazia:
+            logger.info("   [10/%d] SSW vazio — populacao inicial (independente do dia)", total_steps)
+        if e_dia_ssw:
+            logger.info("   [10/%d] Reindexando documentos SSW (semanal)...", total_steps)
+            from app.embeddings.indexers.ssw_indexer import collect_all_chunks, index_chunks
+
+            chunks, file_count = collect_all_chunks()
+            if chunks:
+                stats = index_chunks(chunks, reindex=False)
+                resultados['ssw_documents'] = stats
+                logger.info("      SSW: %d novos, %d skipped (%d arquivos, %d chunks total)",
+                            stats.get('embedded', 0), stats.get('skipped', 0),
+                            file_count, len(chunks))
+            else:
+                resultados['ssw_documents'] = {'embedded': 0, 'skipped': 0}
+                logger.info("      Nenhum doc SSW encontrado")
+        else:
+            logger.info("   [10/%d] SSW semanal — hoje=%s, agendado=%s (skipped)",
+                        total_steps,
+                        ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'][dia_semana],
+                        ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'][SSW_REINDEX_WEEKDAY])
+            resultados['ssw_documents'] = {'skipped_schedule': True}
+    except Exception as e:
+        logger.error("      Erro em ssw_documents: %s", e, exc_info=True)
+        resultados['ssw_documents'] = {'error': str(e)}
+
     # ── Resumo ──
     elapsed = time.time() - inicio
     erros = sum(1 for v in resultados.values() if 'error' in v)
@@ -295,6 +343,8 @@ def executar_reindexacao_no_contexto():
             logger.info("      %s: ERRO - %s", key, str(stats['error'])[:80])
         elif 'skipped_flag' in stats:
             logger.info("      %s: desabilitado por flag", key)
+        elif 'skipped_schedule' in stats:
+            logger.info("      %s: fora do agendamento semanal", key)
         else:
             logger.info("      %s: %d embedded, %d skipped",
                         key, stats.get('embedded', 0), stats.get('skipped', 0))
