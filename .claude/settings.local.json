@@ -114,7 +114,11 @@
       "WebFetch(domain:docplayer.com.br)",
       "WebFetch(domain:sysmiddle.com.br)",
       "WebFetch(domain:docs.fluidapi.io)",
-      "WebFetch(domain:lx-degust-api-integracao-hmg.azurewebsites.net)"
+      "WebFetch(domain:lx-degust-api-integracao-hmg.azurewebsites.net)",
+      "WebFetch(domain:www.philschmid.de)",
+      "WebFetch(domain:blog.langchain.com)",
+      "WebFetch(domain:www.llamaindex.ai)",
+      "WebFetch(domain:rlancemartin.github.io)"
     ],
     "deny": []
   },
