@@ -121,6 +121,10 @@ def register_fatura_routes(bp):
                     op.fatura_cliente_id = fatura.id
                     op.status = 'FATURADO'
 
+                # Gerar itens de detalhe a partir das operacoes
+                from app.carvia.services.linking_service import LinkingService
+                LinkingService().criar_itens_fatura_cliente_from_operacoes(fatura.id)
+
                 db.session.commit()
 
                 flash(
@@ -184,10 +188,49 @@ def register_fatura_routes(bp):
             CarviaOperacao.fatura_cliente_id == fatura_id
         ).order_by(CarviaOperacao.criado_em.desc()).all()
 
+        # Cross-links: itens, NFs, subcontratos, faturas transportadora
+        from app.carvia.models import (
+            CarviaFaturaClienteItem, CarviaNf, CarviaOperacaoNf,
+        )
+        itens = CarviaFaturaClienteItem.query.filter_by(
+            fatura_cliente_id=fatura_id
+        ).all()
+
+        # NFs via operacoes
+        op_ids = [op.id for op in operacoes]
+        nfs = []
+        if op_ids:
+            nf_ids = db.session.query(CarviaOperacaoNf.nf_id).filter(
+                CarviaOperacaoNf.operacao_id.in_(op_ids)
+            ).distinct().all()
+            nf_id_list = [r[0] for r in nf_ids]
+            if nf_id_list:
+                nfs = CarviaNf.query.filter(CarviaNf.id.in_(nf_id_list)).all()
+
+        # Subcontratos via operacoes
+        subcontratos = db.session.query(CarviaSubcontrato).filter(
+            CarviaSubcontrato.operacao_id.in_(op_ids)
+        ).all() if op_ids else []
+
+        # Faturas transportadora via subcontratos
+        fat_transp_ids = {
+            s.fatura_transportadora_id for s in subcontratos
+            if s.fatura_transportadora_id
+        }
+        faturas_transportadora = []
+        if fat_transp_ids:
+            faturas_transportadora = CarviaFaturaTransportadora.query.filter(
+                CarviaFaturaTransportadora.id.in_(fat_transp_ids)
+            ).all()
+
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
             fatura=fatura,
             operacoes=operacoes,
+            itens=itens,
+            nfs=nfs,
+            subcontratos=subcontratos,
+            faturas_transportadora=faturas_transportadora,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>/status', methods=['POST'])
@@ -319,6 +362,10 @@ def register_fatura_routes(bp):
                     sub.fatura_transportadora_id = fatura.id
                     sub.status = 'FATURADO'
 
+                # Gerar itens de detalhe a partir dos subcontratos
+                from app.carvia.services.linking_service import LinkingService
+                LinkingService().criar_itens_fatura_transportadora(fatura.id)
+
                 db.session.commit()
 
                 flash(
@@ -391,12 +438,48 @@ def register_fatura_routes(bp):
         valor_cotado_total = sum(float(s.valor_cotado or 0) for s in subcontratos)
         valor_acertado_total = sum(float(s.valor_final or 0) for s in subcontratos)
 
+        # Cross-links: itens, NFs, faturas cliente
+        from app.carvia.models import (
+            CarviaFaturaTransportadoraItem, CarviaNf,
+            CarviaOperacaoNf, CarviaFaturaCliente,
+        )
+        itens = CarviaFaturaTransportadoraItem.query.filter_by(
+            fatura_transportadora_id=fatura_id
+        ).all()
+
+        # NFs via subcontratos -> operacoes
+        op_ids = list({s.operacao_id for s in subcontratos if s.operacao_id})
+        nfs = []
+        if op_ids:
+            nf_ids = db.session.query(CarviaOperacaoNf.nf_id).filter(
+                CarviaOperacaoNf.operacao_id.in_(op_ids)
+            ).distinct().all()
+            nf_id_list = [r[0] for r in nf_ids]
+            if nf_id_list:
+                nfs = CarviaNf.query.filter(CarviaNf.id.in_(nf_id_list)).all()
+
+        # Faturas cliente via operacoes
+        faturas_cliente = []
+        if op_ids:
+            fat_cli_ids = db.session.query(CarviaOperacao.fatura_cliente_id).filter(
+                CarviaOperacao.id.in_(op_ids),
+                CarviaOperacao.fatura_cliente_id.isnot(None),
+            ).distinct().all()
+            fat_cli_id_list = [r[0] for r in fat_cli_ids]
+            if fat_cli_id_list:
+                faturas_cliente = CarviaFaturaCliente.query.filter(
+                    CarviaFaturaCliente.id.in_(fat_cli_id_list)
+                ).all()
+
         return render_template(
             'carvia/faturas_transportadora/detalhe.html',
             fatura=fatura,
             subcontratos=subcontratos,
             valor_cotado_total=valor_cotado_total,
             valor_acertado_total=valor_acertado_total,
+            itens=itens,
+            nfs=nfs,
+            faturas_cliente=faturas_cliente,
         )
 
     @bp.route('/faturas-transportadora/<int:fatura_id>/conferencia', methods=['POST'])

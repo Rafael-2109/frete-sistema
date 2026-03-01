@@ -125,6 +125,125 @@
         </div>
     </div>
 
+    <!-- Itens de Detalhe -->
+    {% if itens %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-list-alt"></i> Itens de Detalhe ({{ itens|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>CTe Sub</th>
+                            <th>NF</th>
+                            <th>Cliente</th>
+                            <th>Peso</th>
+                            <th>Valor Cotado</th>
+                            <th>Valor Acertado</th>
+                            <th>Valor Frete</th>
+                            <th>Links</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td>{{ item.cte_numero or '-' }}</td>
+                            <td>{{ item.nf_numero or '-' }}</td>
+                            <td>
+                                <span title="{{ item.contraparte_cnpj or '' }}">{{ item.contraparte_nome or item.contraparte_cnpj or '-' }}</span>
+                            </td>
+                            <td class="valor-col">{{ item.peso_kg|numero_br(1) if item.peso_kg else '-' }} kg</td>
+                            <td class="valor-col">{{ item.valor_cotado|valor_br if item.valor_cotado else '-' }}</td>
+                            <td class="valor-col">{{ item.valor_acertado|valor_br if item.valor_acertado else '-' }}</td>
+                            <td class="valor-col"><strong>{{ item.valor_frete|valor_br if item.valor_frete else '-' }}</strong></td>
+                            <td>
+                                {% if item.subcontrato_id %}
+                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=item.subcontrato_id) }}"
+                                   class="btn btn-sm btn-outline-warning py-0 px-1" title="CTe Subcontrato">
+                                    <i class="fas fa-handshake"></i>
+                                </a>
+                                {% endif %}
+                                {% if item.operacao_id %}
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=item.operacao_id) }}"
+                                   class="btn btn-sm btn-outline-primary py-0 px-1" title="CTe CarVia">
+                                    <i class="fas fa-file-invoice"></i>
+                                </a>
+                                {% endif %}
+                                {% if item.nf_id %}
+                                <a href="{{ url_for('carvia.detalhe_nf', nf_id=item.nf_id) }}"
+                                   class="btn btn-sm btn-outline-secondary py-0 px-1" title="NF">
+                                    <i class="fas fa-file-alt"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Documentos Relacionados -->
+    <div class="row g-4 mt-0">
+        <!-- NFs -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-alt"></i> NFs ({{ nfs|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if nfs %}
+                    <div class="list-group list-group-flush">
+                        {% for nf in nfs %}
+                        <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between">
+                                <strong>NF {{ nf.numero_nf }}</strong>
+                                <span>{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</span>
+                            </div>
+                            <div class="small text-muted">{{ nf.nome_emitente or nf.cnpj_emitente }}</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhuma NF vinculada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Faturas Cliente -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas Cliente ({{ faturas_cliente|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if faturas_cliente %}
+                    <div class="list-group list-group-flush">
+                        {% for fat in faturas_cliente %}
+                        <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fat.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>{{ fat.numero_fatura }}</strong>
+                                <span class="badge carvia-badge-{{ fat.status|lower }}">{{ fat.status }}</span>
+                            </div>
+                            <div class="small text-muted">{{ fat.nome_cliente or '-' }} | {{ fat.valor_total|valor_br }}</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura cliente vinculada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Subcontratos da fatura -->
     <div class="card mt-4">
         <div class="card-header">

@@ -62,6 +62,24 @@ class CarviaNf(db.Model):
         lazy='dynamic'
     )
 
+    def get_faturas_cliente(self):
+        """Retorna faturas cliente que referenciam esta NF via itens."""
+        return CarviaFaturaCliente.query.join(
+            CarviaFaturaClienteItem,
+            CarviaFaturaClienteItem.fatura_cliente_id == CarviaFaturaCliente.id
+        ).filter(
+            CarviaFaturaClienteItem.nf_id == self.id
+        ).all()
+
+    def get_faturas_transportadora(self):
+        """Retorna faturas transportadora que referenciam esta NF via itens."""
+        return CarviaFaturaTransportadora.query.join(
+            CarviaFaturaTransportadoraItem,
+            CarviaFaturaTransportadoraItem.fatura_transportadora_id == CarviaFaturaTransportadora.id
+        ).filter(
+            CarviaFaturaTransportadoraItem.nf_id == self.id
+        ).all()
+
     def __repr__(self):
         return f'<CarviaNf {self.numero_nf} ({self.tipo_fonte})>'
 
@@ -379,6 +397,20 @@ class CarviaFaturaClienteItem(db.Model):
     # NF referenciada
     nf_numero = db.Column(db.String(20))
 
+    # FKs para linking cross-documento
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id'),
+        nullable=True,
+        index=True
+    )
+    nf_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id'),
+        nullable=True,
+        index=True
+    )
+
     # Valores
     valor_mercadoria = db.Column(db.Numeric(15, 2))
     peso_kg = db.Column(db.Numeric(15, 3))
@@ -391,8 +423,74 @@ class CarviaFaturaClienteItem(db.Model):
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
+    # Relacionamentos de linking
+    operacao = db.relationship('CarviaOperacao', lazy='joined')
+    nf = db.relationship('CarviaNf', lazy='joined')
+
     def __repr__(self):
         return f'<CarviaFaturaClienteItem cte={self.cte_numero} fatura={self.fatura_cliente_id}>'
+
+
+class CarviaFaturaTransportadoraItem(db.Model):
+    """Itens de detalhe por subcontrato de uma fatura transportadora"""
+    __tablename__ = 'carvia_fatura_transportadora_itens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fatura_transportadora_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_faturas_transportadora.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    # FKs para linking cross-documento
+    subcontrato_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_subcontratos.id'),
+        nullable=True,
+        index=True
+    )
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id'),
+        nullable=True,
+        index=True
+    )
+    nf_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id'),
+        nullable=True,
+        index=True
+    )
+
+    # CTe referenciado (display)
+    cte_numero = db.Column(db.String(20))
+    cte_data_emissao = db.Column(db.Date)
+
+    # Contraparte: cliente da operacao
+    contraparte_cnpj = db.Column(db.String(20))
+    contraparte_nome = db.Column(db.String(255))
+
+    # NF referenciada (display)
+    nf_numero = db.Column(db.String(20))
+
+    # Valores
+    valor_mercadoria = db.Column(db.Numeric(15, 2))
+    peso_kg = db.Column(db.Numeric(15, 3))
+    valor_frete = db.Column(db.Numeric(15, 2))
+    valor_cotado = db.Column(db.Numeric(15, 2))
+    valor_acertado = db.Column(db.Numeric(15, 2))
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+    # Relacionamentos
+    subcontrato = db.relationship('CarviaSubcontrato', lazy='joined')
+    operacao = db.relationship('CarviaOperacao', lazy='joined')
+    nf = db.relationship('CarviaNf', lazy='joined')
+
+    def __repr__(self):
+        return f'<CarviaFaturaTransportadoraItem sub={self.subcontrato_id} fatura={self.fatura_transportadora_id}>'
 
 
 class CarviaFaturaTransportadora(db.Model):
@@ -423,6 +521,12 @@ class CarviaFaturaTransportadora(db.Model):
 
     # Relacionamentos
     transportadora = db.relationship('Transportadora', lazy='joined')
+    itens = db.relationship(
+        'CarviaFaturaTransportadoraItem',
+        backref='fatura_transportadora',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'

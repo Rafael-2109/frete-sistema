@@ -348,17 +348,40 @@ class ImportacaoService:
 
                         # Gravar itens de detalhe CTe (apenas para CarviaFaturaCliente)
                         if isinstance(fatura, CarviaFaturaCliente):
+                            from app.carvia.services.linking_service import LinkingService
+                            linker = LinkingService()
+
                             itens_detalhe = fat_data.get('itens_detalhe', [])
                             for item_data in itens_detalhe:
+                                # Resolver FKs via linking
+                                operacao_id = None
+                                nf_id = None
+                                cte_num = item_data.get('cte_numero')
+                                nf_num = item_data.get('nf_numero')
+                                cnpj_contraparte = item_data.get('contraparte_cnpj')
+
+                                if cte_num:
+                                    op = linker.resolver_operacao_por_cte(cte_num)
+                                    if op:
+                                        operacao_id = op.id
+                                if nf_num:
+                                    nf_obj = linker.resolver_nf_por_numero(
+                                        nf_num, cnpj_contraparte
+                                    )
+                                    if nf_obj:
+                                        nf_id = nf_obj.id
+
                                 item = CarviaFaturaClienteItem(
                                     fatura_cliente_id=fatura.id,
-                                    cte_numero=item_data.get('cte_numero'),
+                                    cte_numero=cte_num,
                                     cte_data_emissao=self._parsear_data_fatura(
                                         item_data.get('cte_data_emissao')
                                     ),
-                                    contraparte_cnpj=item_data.get('contraparte_cnpj'),
+                                    contraparte_cnpj=cnpj_contraparte,
                                     contraparte_nome=item_data.get('contraparte_nome'),
-                                    nf_numero=item_data.get('nf_numero'),
+                                    nf_numero=nf_num,
+                                    operacao_id=operacao_id,
+                                    nf_id=nf_id,
                                     valor_mercadoria=item_data.get('valor_mercadoria'),
                                     peso_kg=item_data.get('peso_kg'),
                                     base_calculo=item_data.get('base_calculo'),

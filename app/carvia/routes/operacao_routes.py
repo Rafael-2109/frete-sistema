@@ -88,11 +88,24 @@ def register_operacao_routes(bp):
         nfs = operacao.nfs.all()
         subcontratos = operacao.subcontratos.all()
 
+        # Cross-links: faturas transportadora via subcontratos
+        from app.carvia.models import CarviaFaturaTransportadora
+        fat_transp_ids = {
+            s.fatura_transportadora_id for s in subcontratos
+            if s.fatura_transportadora_id
+        }
+        faturas_transportadora = []
+        if fat_transp_ids:
+            faturas_transportadora = CarviaFaturaTransportadora.query.filter(
+                CarviaFaturaTransportadora.id.in_(fat_transp_ids)
+            ).all()
+
         return render_template(
             'carvia/detalhe_operacao.html',
             operacao=operacao,
             nfs=nfs,
             subcontratos=subcontratos,
+            faturas_transportadora=faturas_transportadora,
         )
 
     # ==================== CRIAR OPERACAO MANUAL ====================

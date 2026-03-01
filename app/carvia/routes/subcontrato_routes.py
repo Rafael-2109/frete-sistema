@@ -77,8 +77,24 @@ def register_subcontrato_routes(bp):
 
         operacao = db.session.get(CarviaOperacao, sub.operacao_id)
 
+        # Cross-links: NFs via operacao, fatura cliente via operacao
+        from app.carvia.models import CarviaNf, CarviaOperacaoNf, CarviaFaturaCliente
+        nfs = []
+        fatura_cliente = None
+        if operacao:
+            nf_ids = db.session.query(CarviaOperacaoNf.nf_id).filter(
+                CarviaOperacaoNf.operacao_id == operacao.id
+            ).all()
+            nf_id_list = [r[0] for r in nf_ids]
+            if nf_id_list:
+                nfs = CarviaNf.query.filter(CarviaNf.id.in_(nf_id_list)).all()
+            if operacao.fatura_cliente_id:
+                fatura_cliente = db.session.get(CarviaFaturaCliente, operacao.fatura_cliente_id)
+
         return render_template(
             'carvia/subcontratos/detalhe.html',
             sub=sub,
             operacao=operacao,
+            nfs=nfs,
+            fatura_cliente=fatura_cliente,
         )

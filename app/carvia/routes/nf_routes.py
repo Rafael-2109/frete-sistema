@@ -84,9 +84,24 @@ def register_nf_routes(bp):
         # Operacoes vinculadas (CTes CarVia) via junction
         operacoes = nf.operacoes.all()
 
+        # Cross-links: subcontratos, faturas cliente, faturas transportadora
+        from app.carvia.models import CarviaSubcontrato
+        op_ids = [op.id for op in operacoes]
+        subcontratos = []
+        if op_ids:
+            subcontratos = CarviaSubcontrato.query.filter(
+                CarviaSubcontrato.operacao_id.in_(op_ids)
+            ).all()
+
+        faturas_cliente = nf.get_faturas_cliente()
+        faturas_transportadora = nf.get_faturas_transportadora()
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
             itens=itens,
             operacoes=operacoes,
+            subcontratos=subcontratos,
+            faturas_cliente=faturas_cliente,
+            faturas_transportadora=faturas_transportadora,
         )

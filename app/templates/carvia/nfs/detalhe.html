@@ -117,6 +117,95 @@
         </div>
     </div>
 
+    <!-- Documentos Relacionados -->
+    <div class="row g-4 mt-0">
+        <!-- Subcontratos -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-handshake"></i> CTes Subcontrato ({{ subcontratos|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if subcontratos %}
+                    <div class="list-group list-group-flush">
+                        {% for sub in subcontratos %}
+                        <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ sub.transportadora.razao_social if sub.transportadora else '-' }}</strong>
+                                    {% if sub.cte_numero %}<small class="text-muted ms-1">CTe {{ sub.cte_numero }}</small>{% endif %}
+                                </div>
+                                <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
+                            </div>
+                            <div class="small text-muted">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhum subcontrato vinculado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Faturas Cliente -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas Cliente ({{ faturas_cliente|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if faturas_cliente %}
+                    <div class="list-group list-group-flush">
+                        {% for fat in faturas_cliente %}
+                        <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fat.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>{{ fat.numero_fatura }}</strong>
+                                <span class="badge carvia-badge-{{ fat.status|lower }}">{{ fat.status }}</span>
+                            </div>
+                            <div class="small text-muted">{{ fat.nome_cliente or '-' }} | {{ fat.valor_total|valor_br }}</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura cliente vinculada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Faturas Transportadora -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-truck"></i> Faturas Transportadora ({{ faturas_transportadora|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if faturas_transportadora %}
+                    <div class="list-group list-group-flush">
+                        {% for fat in faturas_transportadora %}
+                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fat.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>{{ fat.numero_fatura }}</strong>
+                                <span class="badge carvia-badge-{{ fat.status_conferencia|lower|replace('_', '-') }}">
+                                    {{ fat.status_conferencia }}
+                                </span>
+                            </div>
+                            <div class="small text-muted">{{ fat.transportadora.razao_social if fat.transportadora else '-' }} | {{ fat.valor_total|valor_br }}</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura transportadora vinculada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Itens de Produto -->
     <div class="card mt-4">
         <div class="card-header">

@@ -125,6 +125,69 @@
         </div>
     </div>
 
+    <!-- Documentos Relacionados -->
+    <div class="row g-4 mt-0">
+        <!-- NFs Vinculadas (via operacao) -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-alt"></i> NFs Vinculadas ({{ nfs|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if nfs %}
+                    <div class="list-group list-group-flush">
+                        {% for nf in nfs %}
+                        <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>NF {{ nf.numero_nf }}</strong>
+                                    <span class="badge bg-secondary ms-1">{{ nf.tipo_fonte }}</span>
+                                </div>
+                                <strong>{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</strong>
+                            </div>
+                            <div class="small text-muted">
+                                {{ nf.nome_emitente or nf.cnpj_emitente }} |
+                                Peso: {{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhuma NF vinculada a operacao.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Fatura Cliente (via operacao) -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Fatura Cliente</h5>
+                </div>
+                <div class="card-body">
+                    {% if fatura_cliente %}
+                    <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_cliente.id) }}"
+                       class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>{{ fatura_cliente.numero_fatura }}</strong>
+                            <span class="badge carvia-badge-{{ fatura_cliente.status|lower }}">{{ fatura_cliente.status }}</span>
+                        </div>
+                        <div class="small text-muted">
+                            {{ fatura_cliente.nome_cliente or '-' }} |
+                            {{ fatura_cliente.valor_total|valor_br }} |
+                            {{ fatura_cliente.data_emissao.strftime('%d/%m/%Y') if fatura_cliente.data_emissao else '-' }}
+                        </div>
+                    </a>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura cliente vinculada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Fatura Subcontrato vinculada -->
     {% if sub.fatura_transportadora %}
     <div class="card mt-4">
