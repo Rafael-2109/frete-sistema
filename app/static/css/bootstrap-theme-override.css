@@ -2,11 +2,10 @@
  * Bootstrap Theme Override
  *
  * Este arquivo DEVE ficar FORA do layer system (@layer) porque precisa
- * sobrescrever as variáveis do Bootstrap CDN que também está fora de layers.
+ * sobrescrever as variáveis do Bootstrap que está dentro de @layer bootstrap.
  *
  * CSS fora de layers tem prioridade sobre CSS dentro de layers (CSS spec).
- *
- * Carregado LOGO APÓS o Bootstrap CDN no base.html.
+ * Bootstrap é self-hosted via @import layer(bootstrap) em main.css.
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -302,4 +301,15 @@ tr.rec-row-expanded > td:first-child {
 [data-bs-theme="dark"] .rec-divergencias-row > td {
     background-color: hsla(0 0% 100% / 0.03);
     border-top-color: var(--amber-50);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE SORTABLE HEADER HOVER
+   Needs to be outside @layer to beat Bootstrap CDN's table-dark specificity.
+   Moved from inline <style> in saldo_estoque.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+thead.table-dark th.sortable:hover {
+    background-color: var(--bs-secondary) !important;
+    transition: background-color 0.2s;
 }

@@ -5,12 +5,13 @@
  * all stylesheets in the correct priority sequence.
  *
  * Layer Priority (lowest to highest):
- * 1. reset     - Browser normalization
- * 2. tokens    - Design tokens (colors, spacing, typography)
- * 3. base      - Bootstrap overrides, global defaults
- * 4. components - Reusable UI components (buttons, cards, etc.)
- * 5. modules   - Feature-specific styles (carteira, financeiro, etc.)
- * 6. utilities - Utility classes (spacing, visibility, etc.)
+ * 1. bootstrap - Self-hosted Bootstrap 5.3.3 (lowest priority)
+ * 2. reset     - Browser normalization
+ * 3. tokens    - Design tokens (colors, spacing, typography)
+ * 4. base      - Bootstrap overrides, global defaults
+ * 5. components - Reusable UI components (buttons, cards, etc.)
+ * 6. modules   - Feature-specific styles (carteira, financeiro, etc.)
+ * 7. utilities - Utility classes (spacing, visibility, etc.)
  *
  * IMPORTANT: The @layer statement MUST be the first rule.
  * All @import statements MUST come after @layer and before any other rules.
@@ -24,7 +25,14 @@
    Lower layers have lower specificity, higher layers can override without !important
    ═══════════════════════════════════════════════════════════════════════════ */
 
-@layer reset, tokens, base, components, modules, utilities;
+@layer bootstrap, reset, tokens, base, components, modules, utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOTSTRAP (self-hosted, lowest layer)
+   Loaded inside @layer so our components/modules can override without !important
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@import url('./vendor/bootstrap.min.css') layer(bootstrap);
 
 /* ═══════════════════════════════════════════════════════════════════════════
    FONTS (unlayered - must be available to all layers)

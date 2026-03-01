@@ -57,74 +57,61 @@
     opacity: 0.85;
 }
 
-/* Severity Badges */
+/* Severity Badges — aligned with _badges.css token system */
 .seg-badge-critica {
-    --_badge-bg: var(--bs-danger, #dc3545);
-    --_badge-color: #fff;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: var(--semantic-danger);
+    --_badge-color: hsl(0 0% 100%);
 }
 
 .seg-badge-alta {
-    --_badge-bg: var(--bs-warning, #ffc107);
-    --_badge-color: #000;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
 }
 
 .seg-badge-media {
-    --_badge-bg: var(--bs-info, #0dcaf0);
-    --_badge-color: #000;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: hsl(0 0% 45%);
+    --_badge-color: hsl(0 0% 100%);
 }
 
 .seg-badge-baixa {
-    --_badge-bg: var(--bs-secondary-bg, #6c757d);
-    --_badge-color: #fff;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: hsl(0 0% 40%);
+    --_badge-color: hsl(0 0% 100%);
 }
 
 .seg-badge-info {
-    --_badge-bg: var(--bs-light, #f8f9fa);
-    --_badge-color: var(--bs-dark, #212529);
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: var(--bg-light);
+    --_badge-color: var(--text);
+    --_badge-border: var(--border);
 }
 
-/* Status Badges */
+/* Status Badges — aligned with _badges.css token system */
 .seg-badge-status-aberta {
-    --_badge-bg: var(--bs-danger, #dc3545);
-    --_badge-color: #fff;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: var(--semantic-danger);
+    --_badge-color: hsl(0 0% 100%);
 }
 
 .seg-badge-status-em_andamento {
-    --_badge-bg: var(--bs-warning, #ffc107);
-    --_badge-color: #000;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
 }
 
 .seg-badge-status-resolvida {
-    --_badge-bg: var(--bs-success, #198754);
-    --_badge-color: #fff;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
 }
 
 .seg-badge-status-aceita {
-    --_badge-bg: var(--bs-info, #0dcaf0);
-    --_badge-color: #000;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: hsl(0 0% 45%);
+    --_badge-color: hsl(0 0% 100%);
 }
 
 .seg-badge-status-falso_positivo {
-    --_badge-bg: var(--bs-secondary-bg, #6c757d);
-    --_badge-color: #fff;
-    background: var(--_badge-bg);
-    color: var(--_badge-color);
+    --_badge-bg: hsl(0 0% 40%);
+    --_badge-color: hsl(0 0% 100%);
+}
+
+/* Light mode adjustments — WCAG contrast */
+[data-bs-theme="light"] .seg-badge-status-resolvida,
+[data-theme="light"] .seg-badge-status-resolvida {
+    --_badge-bg: hsl(145 65% 35%);
 }

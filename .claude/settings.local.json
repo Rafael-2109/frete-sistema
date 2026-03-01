@@ -132,7 +132,8 @@
       "WebFetch(domain:www.clawctl.com)",
       "WebFetch(domain:openclaw.ai)",
       "WebFetch(domain:spiderfoot.org)",
-      "WebFetch(domain:www.kali.org)"
+      "WebFetch(domain:www.kali.org)",
+      "Bash(tr ;:*)"
     ],
     "deny": []
   },

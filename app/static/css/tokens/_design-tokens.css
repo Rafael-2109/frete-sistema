@@ -6,7 +6,7 @@
    - body:    --bg-dark   (mais escuro - base)
    - surface: --bg        (intermediário)
    - cards:   --bg-light  (mais claro - elevado)
-   - buttons: --bg-button (máximo no dark, branco no light)
+   - buttons: --bg-button (máximo no dark, cinza sutil no light)
 
    VARIÁVEIS POR TEMA:
    DARK MODE:                    LIGHT MODE:
@@ -133,7 +133,7 @@
     --bg-dark: hsl(0 0% 95%);     /* body - sutil cinza */
     --bg: hsl(0 0% 98%);          /* surfaces intermediárias */
     --bg-light: hsl(0 0% 100%);   /* cards, inputs - elevados (branco) */
-    --bg-button: hsl(0 0% 100%);  /* botões (máximo no light) */
+    --bg-button: hsl(0 0% 96%);   /* botões - 4% abaixo do card (100%) para distinção visual */
 
     /* 2 tons de texto (10% → 40%) */
     --text: hsl(0 0% 10%);

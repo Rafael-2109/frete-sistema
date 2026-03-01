@@ -553,7 +553,7 @@
 
             if (btnAplicarFiltros) {
                 btnAplicarFiltros.classList.add('btn-success');
-                btnAplicarFiltros.classList.remove('btn-primary');
+                btnAplicarFiltros.classList.remove('btn-secondary');
             }
 
             console.log(`✅ ${Object.keys(state.filtrosAplicados).length} filtro(s) ativo(s)`);
@@ -567,7 +567,7 @@
 
             if (btnAplicarFiltros) {
                 btnAplicarFiltros.classList.remove('btn-success');
-                btnAplicarFiltros.classList.add('btn-primary');
+                btnAplicarFiltros.classList.add('btn-secondary');
             }
         }
     }

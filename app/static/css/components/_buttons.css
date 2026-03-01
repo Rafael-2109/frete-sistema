@@ -308,6 +308,24 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXTUAL: btn-outline-light inside bg-primary (amber header)
+   Forces white contrast against amber background — works in both themes.
+   ~20 templates use this pattern (estoque, carteira, etc.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bg-primary .btn-outline-light {
+    --_btn-color: hsl(0 0% 100%);
+    --_btn-border: hsla(0 0% 100% / 0.5);
+}
+
+.bg-primary .btn-outline-light:where(:hover:not(:disabled)) {
+    background: hsla(0 0% 100% / 0.15);
+    border-color: hsl(0 0% 100%);
+    color: hsl(0 0% 100%);
+    box-shadow: 0 0 6px 1px hsla(0 0% 100% / 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    CLOSE BUTTON OVERRIDE
    Bootstrap's btn-close needs special handling
    ═══════════════════════════════════════════════════════════════════════════ */
