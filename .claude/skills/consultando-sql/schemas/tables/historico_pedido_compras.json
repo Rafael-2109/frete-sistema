@@ -188,13 +188,6 @@
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_pedido_compra_id",
-      "columns": [
-        "pedido_compra_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_historico_pedido_compras_num_pedido",
       "columns": [
         "num_pedido"
@@ -205,6 +198,13 @@
       "name": "ix_historico_pedido_compras_alterado_em",
       "columns": [
         "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_pedido_compras_pedido_compra_id",
+      "columns": [
+        "pedido_compra_id"
       ],
       "unique": false
     },

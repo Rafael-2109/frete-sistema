@@ -1,6 +1,6 @@
 {
-  "name": "carvia_fatura_cliente_itens",
-  "description": "Tabela carvia_fatura_cliente_itens",
+  "name": "carvia_fatura_transportadora_itens",
+  "description": "Tabela carvia_fatura_transportadora_itens",
   "fields": [
     {
       "name": "id",
@@ -8,10 +8,25 @@
       "description": "Primary key"
     },
     {
-      "name": "fatura_cliente_id",
+      "name": "fatura_transportadora_id",
       "type": "integer",
-      "description": "FK → carvia_faturas_cliente.id",
+      "description": "FK → carvia_faturas_transportadora.id",
       "nullable": false
+    },
+    {
+      "name": "subcontrato_id",
+      "type": "integer",
+      "description": "FK → carvia_subcontratos.id"
+    },
+    {
+      "name": "operacao_id",
+      "type": "integer",
+      "description": "FK → carvia_operacoes.id"
+    },
+    {
+      "name": "nf_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id"
     },
     {
       "name": "cte_numero",
@@ -34,16 +49,6 @@
       "type": "varchar(20)"
     },
     {
-      "name": "operacao_id",
-      "type": "integer",
-      "description": "FK → carvia_operacoes.id"
-    },
-    {
-      "name": "nf_id",
-      "type": "integer",
-      "description": "FK → carvia_nfs.id"
-    },
-    {
       "name": "valor_mercadoria",
       "type": "numeric(15,2)"
     },
@@ -52,23 +57,15 @@
       "type": "numeric(15,3)"
     },
     {
-      "name": "base_calculo",
+      "name": "valor_frete",
       "type": "numeric(15,2)"
     },
     {
-      "name": "icms",
+      "name": "valor_cotado",
       "type": "numeric(15,2)"
     },
     {
-      "name": "iss",
-      "type": "numeric(15,2)"
-    },
-    {
-      "name": "st",
-      "type": "numeric(15,2)"
-    },
-    {
-      "name": "frete",
+      "name": "valor_acertado",
       "type": "numeric(15,2)"
     },
     {
@@ -79,8 +76,12 @@
   ],
   "foreign_keys": [
     {
-      "column": "fatura_cliente_id",
-      "references": "carvia_faturas_cliente.id"
+      "column": "fatura_transportadora_id",
+      "references": "carvia_faturas_transportadora.id"
+    },
+    {
+      "column": "subcontrato_id",
+      "references": "carvia_subcontratos.id"
     },
     {
       "column": "operacao_id",
@@ -93,23 +94,30 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fatura_cliente_itens_nf_id",
+      "name": "ix_carvia_fatura_transportadora_itens_operacao_id",
+      "columns": [
+        "operacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_fatura_transportadora_itens_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_fatura_transportadora_itens_nf_id",
       "columns": [
         "nf_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
+      "name": "ix_carvia_fatura_transportadora_itens_subcontrato_id",
       "columns": [
-        "fatura_cliente_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_fatura_cliente_itens_operacao_id",
-      "columns": [
-        "operacao_id"
+        "subcontrato_id"
       ],
       "unique": false
     }

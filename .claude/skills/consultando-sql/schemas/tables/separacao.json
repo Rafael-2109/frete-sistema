@@ -244,16 +244,10 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "idx_sep_falta_pgto_sync",
       "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_separacao_status",
-      "columns": [
-        "status"
+        "falta_pagamento",
+        "sincronizado_nf"
       ],
       "unique": false
     },
@@ -267,10 +261,16 @@
       "unique": false
     },
     {
-      "name": "idx_sep_falta_pgto_sync",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "falta_pagamento",
-        "sincronizado_nf"
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -321,10 +321,10 @@
       "unique": false
     },
     {
-      "name": "idx_sep_lote_status",
+      "name": "idx_sep_lote_sync",
       "columns": [
         "separacao_lote_id",
-        "status"
+        "sincronizado_nf"
       ],
       "unique": false
     },
@@ -337,9 +337,9 @@
       "unique": false
     },
     {
-      "name": "idx_sep_lote_sync",
+      "name": "idx_sep_falta_item_sync",
       "columns": [
-        "separacao_lote_id",
+        "falta_item",
         "sincronizado_nf"
       ],
       "unique": false
@@ -353,10 +353,10 @@
       "unique": false
     },
     {
-      "name": "idx_sep_falta_item_sync",
+      "name": "idx_sep_lote_status",
       "columns": [
-        "falta_item",
-        "sincronizado_nf"
+        "separacao_lote_id",
+        "status"
       ],
       "unique": false
     },

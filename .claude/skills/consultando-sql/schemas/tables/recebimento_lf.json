@@ -185,6 +185,13 @@
       "unique": false
     },
     {
+      "name": "ix_recebimento_lf_chave_nfe",
+      "columns": [
+        "chave_nfe"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_recebimento_lf_odoo_lf_invoice_id",
       "columns": [
         "odoo_lf_invoice_id"
@@ -197,13 +204,6 @@
         "odoo_dfe_id"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_recebimento_lf_chave_nfe",
-      "columns": [
-        "chave_nfe"
-      ],
-      "unique": false
     }
   ]
 }

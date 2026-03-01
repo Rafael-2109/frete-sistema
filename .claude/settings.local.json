@@ -129,7 +129,10 @@
       "Bash(az functionapp:*)",
       "Bash(az account:*)",
       "Bash(az monitor:*)",
-      "WebFetch(domain:www.clawctl.com)"
+      "WebFetch(domain:www.clawctl.com)",
+      "WebFetch(domain:openclaw.ai)",
+      "WebFetch(domain:spiderfoot.org)",
+      "WebFetch(domain:www.kali.org)"
     ],
     "deny": []
   },

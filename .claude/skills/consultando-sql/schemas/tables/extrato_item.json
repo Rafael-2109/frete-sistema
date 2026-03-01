@@ -259,41 +259,6 @@
   ],
   "indices": [
     {
-      "name": "idx_extrato_item_odoo_partner",
-      "columns": [
-        "odoo_partner_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_lote",
-      "columns": [
-        "lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_statement_line_id",
-      "columns": [
-        "statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_cnpj_pagador",
-      "columns": [
-        "cnpj_pagador"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_item_status",
       "columns": [
         "status"
@@ -315,16 +280,16 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_item_favorecido_cnpj",
+      "name": "ix_extrato_item_status_match",
       "columns": [
-        "favorecido_cnpj"
+        "status_match"
       ],
       "unique": false
     },
     {
-      "name": "ix_extrato_item_status_match",
+      "name": "idx_extrato_item_favorecido_cnpj",
       "columns": [
-        "status_match"
+        "favorecido_cnpj"
       ],
       "unique": false
     },
@@ -339,6 +304,41 @@
       "name": "idx_extrato_item_categoria_pag",
       "columns": [
         "categoria_pagamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_odoo_partner",
+      "columns": [
+        "odoo_partner_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_cnpj_pagador",
+      "columns": [
+        "cnpj_pagador"
       ],
       "unique": false
     }

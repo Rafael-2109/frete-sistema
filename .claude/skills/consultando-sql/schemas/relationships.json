@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 199,
+  "total_relationships": 205,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -72,6 +72,42 @@
       "from_table": "carvia_fatura_cliente_itens",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_cliente_itens",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_cliente_itens",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_transportadora_itens",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_transportadora_itens",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_transportadora_itens",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_transportadora_itens",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
       "to_column": "id"
     },
     {

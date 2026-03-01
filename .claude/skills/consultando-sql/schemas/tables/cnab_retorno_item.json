@@ -172,16 +172,16 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_extrato_item_id",
+      "name": "ix_cnab_retorno_item_status_match",
       "columns": [
-        "extrato_item_id"
+        "status_match"
       ],
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_status_match",
+      "name": "ix_cnab_retorno_item_extrato_item_id",
       "columns": [
-        "status_match"
+        "extrato_item_id"
       ],
       "unique": false
     },

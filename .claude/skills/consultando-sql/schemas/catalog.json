@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 130,
+  "total_tabelas": 131,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -202,6 +202,15 @@
         "fatura_cliente_id",
         "cte_numero",
         "cte_data_emissao"
+      ]
+    },
+    {
+      "name": "carvia_fatura_transportadora_itens",
+      "description": "Tabela carvia_fatura_transportadora_itens",
+      "key_fields": [
+        "fatura_transportadora_id",
+        "subcontrato_id",
+        "operacao_id"
       ]
     },
     {
