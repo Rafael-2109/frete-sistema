@@ -823,6 +823,10 @@ def create_app(config_name=None):
     from app.carvia import init_app as init_carvia
     init_carvia(app)
 
+    # 🔒 Seguranca - Monitoramento de Vulnerabilidades
+    from app.seguranca import init_app as init_seguranca
+    init_seguranca(app)
+
     # 🤖 Agente Logístico - Claude Agent SDK (substitui Claude AI Lite)
     try:
         from app.agente import init_app as init_agente

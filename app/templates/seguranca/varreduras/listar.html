@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-history"></i> Historico de Varreduras</h2>
+            <p class="text-muted mb-0">{{ varreduras|length }} varreduras registradas</p>
+        </div>
+        <div class="d-flex gap-2">
+            <form method="POST" action="{{ url_for('seguranca.executar_varredura') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tipo" value="FULL_SCAN">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-play"></i> Nova Varredura
+                </button>
+            </form>
+            <a href="{{ url_for('seguranca.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Iniciado</th>
+                            <th>Concluido</th>
+                            <th>Verificados</th>
+                            <th>Vulnerabilidades</th>
+                            <th>Disparado por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in varreduras %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('seguranca.detalhe_varredura', varredura_id=v.id) }}">
+                                    {{ v.id }}
+                                </a>
+                            </td>
+                            <td><small>{{ v.tipo }}</small></td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if v.status == 'CONCLUIDA' else ('danger' if v.status == 'FALHOU' else 'info') }}">
+                                    {{ v.status }}
+                                </span>
+                            </td>
+                            <td>{{ v.iniciado_em|formatar_data_hora_brasil if v.iniciado_em else '-' }}</td>
+                            <td>{{ v.concluido_em|formatar_data_hora_brasil if v.concluido_em else '-' }}</td>
+                            <td>{{ v.total_verificados }}</td>
+                            <td>
+                                {% if v.total_vulnerabilidades > 0 %}
+                                <span class="text-danger fw-bold">{{ v.total_vulnerabilidades }}</span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ v.disparado_por or 'Automatica' }}</small></td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                Nenhuma varredura executada ainda.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

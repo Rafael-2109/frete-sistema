@@ -55,6 +55,7 @@ Flask-Compress==1.23  # Compressao gzip de respostas dinamicas (HTML, JSON)
 # ==========================================
 dnspython==2.8.0
 email-validator==2.3.0
+zxcvbn>=4.4.28              # Password strength estimation (seguranca module)
 
 # ==========================================
 # AI & CLAUDE INTEGRATION

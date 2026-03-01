@@ -127,6 +127,7 @@ Documentos adicionais:
 |--------|-------------------|
 | Carteira de Pedidos | `app/carteira/routes/`, `app/carteira/services/`, `app/carteira/utils/`, `app/templates/carteira/` |
 | Agente Web | `app/agente/` (Claude Agent SDK) |
+| Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` |
 | **OBSOLETO** | `app/carteira/main_routes.py` — NAO usar |
 
 ---
@@ -178,6 +179,7 @@ Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de de
 - `app/financeiro/CLAUDE.md` — ~43.5K LOC, 70 arquivos
 - `app/odoo/CLAUDE.md` — ~17.9K LOC, 31 arquivos
 - `app/agente/CLAUDE.md` — ~15.4K LOC, 35 arquivos
+- `app/seguranca/CLAUDE.md` — ~2.5K LOC, 14 arquivos, 8 templates
 
 **Planejados:**
 - `app/recebimento/CLAUDE.md` — P0 (27.3K LOC, 28 arquivos)

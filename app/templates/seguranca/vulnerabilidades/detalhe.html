@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <span class="badge seg-badge-{{ vuln.severidade|lower }} me-2">{{ vuln.severidade }}</span>
+                Vulnerabilidade #{{ vuln.id }}
+            </h2>
+            <p class="text-muted mb-0">{{ vuln.categoria }} — {{ vuln.titulo }}</p>
+        </div>
+        <a href="{{ url_for('seguranca.listar_vulnerabilidades') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Info Principal -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Detalhes</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Colaborador</dt>
+                        <dd class="col-sm-9">
+                            <a href="{{ url_for('seguranca.perfil_seguranca_usuario', user_id=vuln.user_id) }}">
+                                {{ vuln.usuario.nome if vuln.usuario else 'N/A' }}
+                            </a>
+                            {% if vuln.usuario %}
+                            <small class="text-muted">({{ vuln.usuario.email }})</small>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Categoria</dt>
+                        <dd class="col-sm-9">{{ vuln.categoria }}</dd>
+
+                        <dt class="col-sm-3">Severidade</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge seg-badge-{{ vuln.severidade|lower }}">{{ vuln.severidade }}</span>
+                        </dd>
+
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge seg-badge-status-{{ vuln.status|lower }}">{{ vuln.status }}</span>
+                        </dd>
+
+                        <dt class="col-sm-3">Detectado em</dt>
+                        <dd class="col-sm-9">{{ vuln.criado_em|formatar_data_hora_brasil if vuln.criado_em else 'N/A' }}</dd>
+
+                        <dt class="col-sm-3">Atualizado em</dt>
+                        <dd class="col-sm-9">{{ vuln.atualizado_em|formatar_data_hora_brasil if vuln.atualizado_em else 'N/A' }}</dd>
+
+                        {% if vuln.notificado %}
+                        <dt class="col-sm-3">Notificado em</dt>
+                        <dd class="col-sm-9">{{ vuln.notificado_em|formatar_data_hora_brasil if vuln.notificado_em else 'Sim' }}</dd>
+                        {% endif %}
+
+                        {% if vuln.varredura %}
+                        <dt class="col-sm-3">Varredura</dt>
+                        <dd class="col-sm-9">
+                            <a href="{{ url_for('seguranca.detalhe_varredura', varredura_id=vuln.varredura_id) }}">
+                                #{{ vuln.varredura_id }}
+                            </a>
+                        </dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Descricao -->
+            {% if vuln.descricao %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Descricao</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">{{ vuln.descricao }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Dados tecnicos (JSONB) -->
+            {% if vuln.dados %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Dados Tecnicos</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0 small" style="max-height: 300px; overflow-y: auto;">{{ vuln.dados|tojson(indent=2) }}</pre>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar: Remediacao -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-wrench"></i> Remediacao</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('seguranca.remediar_vulnerabilidade', vuln_id=vuln.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label class="form-label">Alterar Status</label>
+                            <select name="status" class="form-select">
+                                {% for s in ['ABERTA', 'EM_ANDAMENTO', 'RESOLVIDA', 'ACEITA', 'FALSO_POSITIVO'] %}
+                                <option value="{{ s }}" {{ 'selected' if vuln.status == s }}>{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recomendacoes por categoria -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-lightbulb"></i> Recomendacoes</h5>
+                </div>
+                <div class="card-body small">
+                    {% if vuln.categoria == 'EMAIL_BREACH' %}
+                    <ul class="mb-0">
+                        <li>Alterar a senha do email comprometido</li>
+                        <li>Ativar autenticacao em dois fatores (2FA)</li>
+                        <li>Verificar atividade suspeita na conta</li>
+                        <li>Nao reutilizar a senha em outros servicos</li>
+                    </ul>
+                    {% elif vuln.categoria in ('SENHA_FRACA', 'SENHA_VAZADA') %}
+                    <ul class="mb-0">
+                        <li>Usar senha com pelo menos 12 caracteres</li>
+                        <li>Combinar maiusculas, minusculas, numeros e simbolos</li>
+                        <li>Usar gerenciador de senhas</li>
+                        <li>Nao usar dados pessoais ou palavras comuns</li>
+                    </ul>
+                    {% elif vuln.categoria.startswith('DOMINIO_') %}
+                    <ul class="mb-0">
+                        <li>Configurar registro SPF no DNS</li>
+                        <li>Implementar DMARC com politica reject</li>
+                        <li>Validar configuracao de MX</li>
+                        <li>Consultar equipe de TI para implementacao</li>
+                    </ul>
+                    {% else %}
+                    <p class="mb-0 text-muted">Sem recomendacoes especificas para esta categoria.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

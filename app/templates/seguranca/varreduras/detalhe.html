@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-search"></i> Varredura #{{ varredura.id }}</h2>
+            <p class="text-muted mb-0">
+                {{ varredura.tipo }} —
+                <span class="badge bg-{{ 'success' if varredura.status == 'CONCLUIDA' else ('danger' if varredura.status == 'FALHOU' else 'info') }}">
+                    {{ varredura.status }}
+                </span>
+            </p>
+        </div>
+        <a href="{{ url_for('seguranca.listar_varreduras') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Resumo</h5></div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-6">Tipo</dt>
+                        <dd class="col-sm-6">{{ varredura.tipo }}</dd>
+
+                        <dt class="col-sm-6">Iniciado</dt>
+                        <dd class="col-sm-6">{{ varredura.iniciado_em|formatar_data_hora_brasil if varredura.iniciado_em else '-' }}</dd>
+
+                        <dt class="col-sm-6">Concluido</dt>
+                        <dd class="col-sm-6">{{ varredura.concluido_em|formatar_data_hora_brasil if varredura.concluido_em else '-' }}</dd>
+
+                        <dt class="col-sm-6">Verificados</dt>
+                        <dd class="col-sm-6">{{ varredura.total_verificados }}</dd>
+
+                        <dt class="col-sm-6">Vulnerabilidades</dt>
+                        <dd class="col-sm-6">
+                            <span class="fw-bold text-{{ 'danger' if varredura.total_vulnerabilidades > 0 else 'success' }}">
+                                {{ varredura.total_vulnerabilidades }}
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-6">Disparado por</dt>
+                        <dd class="col-sm-6">{{ varredura.disparado_por or 'Automatica' }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <!-- Vulnerabilidades da varredura -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Vulnerabilidades Encontradas</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% set vulns = varredura.vulnerabilidades.all() %}
+                    {% if vulns %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Severidade</th>
+                                    <th>Colaborador</th>
+                                    <th>Titulo</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for v in vulns %}
+                                <tr>
+                                    <td><span class="badge seg-badge-{{ v.severidade|lower }}">{{ v.severidade }}</span></td>
+                                    <td>{{ v.usuario.nome if v.usuario else 'N/A' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('seguranca.detalhe_vulnerabilidade', vuln_id=v.id) }}">
+                                            {{ v.titulo|truncate(50) }}
+                                        </a>
+                                    </td>
+                                    <td><span class="badge seg-badge-status-{{ v.status|lower }}">{{ v.status }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        Nenhuma vulnerabilidade encontrada nesta varredura.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Detalhes tecnicos (JSONB) -->
+            {% if varredura.detalhes %}
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Detalhes Tecnicos</h5></div>
+                <div class="card-body">
+                    <pre class="mb-0 small" style="max-height: 400px; overflow-y: auto;">{{ varredura.detalhes|tojson(indent=2) }}</pre>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

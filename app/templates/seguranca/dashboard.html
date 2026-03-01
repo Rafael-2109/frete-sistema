@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block extra_css %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-shield-alt"></i> Seguranca — Dashboard</h2>
+            <p class="text-muted mb-0">Monitoramento de vulnerabilidades de colaboradores</p>
+        </div>
+        <div class="d-flex gap-2">
+            <form method="POST" action="{{ url_for('seguranca.executar_varredura') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tipo" value="FULL_SCAN">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-radar"></i> Executar Varredura
+                </button>
+            </form>
+            <a href="{{ url_for('seguranca.configuracao') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-cog"></i> Configuracao
+            </a>
+        </div>
+    </div>
+
+    <!-- Score Circle + Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center py-4">
+                    <div class="seg-score-circle seg-score-{{ 'success' if score_empresa.score >= 80 else ('warning' if score_empresa.score >= 50 else 'danger') }} mx-auto mb-3">
+                        <span class="seg-score-value">{{ score_empresa.score }}</span>
+                    </div>
+                    <h5 class="mb-1">Score da Empresa</h5>
+                    <p class="text-muted small mb-0">
+                        {% if score_empresa.score >= 80 %}Bom{% elif score_empresa.score >= 50 %}Atencao{% else %}Critico{% endif %}
+                        — {{ total_usuarios }} colaboradores
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="row g-3">
+                <!-- Componentes do score -->
+                {% for comp_nome, comp_label in [('email_breach', 'Email Breaches'), ('password_health', 'Saude de Senhas'), ('domain', 'Seguranca DNS'), ('remediacao', 'Remediacao')] %}
+                <div class="col-md-6">
+                    <div class="card seg-stat-card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">{{ comp_label }}</span>
+                                <span class="fw-bold">{{ score_empresa.componentes.get(comp_nome, 100) }}%</span>
+                            </div>
+                            <div class="progress mt-2" style="height: 6px;">
+                                {% set val = score_empresa.componentes.get(comp_nome, 100) %}
+                                <div class="progress-bar bg-{{ 'success' if val >= 80 else ('warning' if val >= 50 else 'danger') }}"
+                                     style="width: {{ val }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Severidade Cards -->
+    <div class="row g-3 mb-4">
+        {% for sev, label, cor in [('CRITICA', 'Criticas', 'danger'), ('ALTA', 'Altas', 'warning'), ('MEDIA', 'Medias', 'info'), ('BAIXA', 'Baixas', 'secondary')] %}
+        <div class="col">
+            <div class="card seg-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-{{ cor }}">{{ stats_severidade.get(sev, 0) }}</div>
+                    <div class="stat-label text-muted">{{ label }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        <div class="col">
+            <div class="card seg-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">{{ score_empresa.vulnerabilidades_abertas }}</div>
+                    <div class="stat-label text-muted">Total Abertas</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info da ultima varredura -->
+    {% if ultima_varredura %}
+    <div class="alert alert-light border mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-clock text-muted"></i>
+                <strong>Ultima varredura:</strong>
+                {{ ultima_varredura.iniciado_em|formatar_data_hora_brasil if ultima_varredura.iniciado_em else 'N/A' }}
+                — {{ ultima_varredura.tipo }}
+                <span class="badge bg-{{ 'success' if ultima_varredura.status == 'CONCLUIDA' else ('danger' if ultima_varredura.status == 'FALHOU' else 'info') }}">
+                    {{ ultima_varredura.status }}
+                </span>
+            </div>
+            <a href="{{ url_for('seguranca.listar_varreduras') }}" class="btn btn-sm btn-outline-secondary">
+                Historico
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Top Vulnerabilidades -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Vulnerabilidades Abertas</h5>
+            <a href="{{ url_for('seguranca.listar_vulnerabilidades') }}" class="btn btn-sm btn-outline-secondary">
+                Ver todas
+            </a>
+        </div>
+        <div class="card-body p-0">
+            {% if top_vulnerabilidades %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Severidade</th>
+                            <th>Colaborador</th>
+                            <th>Categoria</th>
+                            <th>Titulo</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in top_vulnerabilidades %}
+                        <tr>
+                            <td>
+                                <span class="badge seg-badge-{{ v.severidade|lower }}">
+                                    {{ v.severidade }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('seguranca.perfil_seguranca_usuario', user_id=v.user_id) }}">
+                                    {{ v.usuario.nome if v.usuario else 'N/A' }}
+                                </a>
+                            </td>
+                            <td><small>{{ v.categoria }}</small></td>
+                            <td>
+                                <a href="{{ url_for('seguranca.detalhe_vulnerabilidade', vuln_id=v.id) }}">
+                                    {{ v.titulo|truncate(60) }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge seg-badge-status-{{ v.status|lower }}">
+                                    {{ v.status }}
+                                </span>
+                            </td>
+                            <td><small class="text-muted">{{ v.criado_em|formatar_data_segura if v.criado_em else '-' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-check-circle fa-3x mb-3 d-block opacity-50 text-success"></i>
+                <p>Nenhuma vulnerabilidade aberta. Execute uma varredura para verificar.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Chart Trend -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-chart-line"></i> Tendencia do Score</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="scoreTrendChart" height="80"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('{{ url_for("seguranca.api_scores_trend") }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.labels && data.labels.length > 0) {
+                const ctx = document.getElementById('scoreTrendChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Score Empresa',
+                            data: data.scores,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { min: 0, max: 100 }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+            } else {
+                document.getElementById('scoreTrendChart').parentElement.innerHTML =
+                    '<p class="text-muted text-center py-3">Sem dados de tendencia ainda. Execute varreduras para gerar historico.</p>';
+            }
+        })
+        .catch(err => console.error('Erro ao carregar trend:', err));
+});
+</script>
+{% endblock %}

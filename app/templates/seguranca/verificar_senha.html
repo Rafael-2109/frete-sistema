@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-key"></i> Verificar Senha</h2>
+            <p class="text-muted mb-0">Teste a forca de uma senha. Resultado NAO e persistido.</p>
+        </div>
+        <a href="{{ url_for('seguranca.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="alert alert-info small mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        A senha e avaliada em memoria e <strong>NUNCA</strong> e armazenada ou logada.
+                        A verificacao HIBP usa k-anonymity (apenas 5 caracteres do hash sao enviados).
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Senha para verificar</label>
+                        <div class="input-group">
+                            <input type="password" id="senhaInput" class="form-control"
+                                   placeholder="Digite uma senha para testar..." autocomplete="off">
+                            <button class="btn btn-outline-secondary" type="button" id="toggleSenha">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="btnVerificar" class="btn btn-primary w-100" disabled>
+                        <i class="fas fa-search"></i> Verificar
+                    </button>
+
+                    <!-- Resultado -->
+                    <div id="resultado" class="mt-4 d-none">
+                        <hr>
+                        <div class="text-center mb-3">
+                            <h3 id="scoreLabel" class="mb-1"></h3>
+                            <div class="progress" style="height: 10px;">
+                                <div id="scoreBar" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div id="resultadoDetalhes" class="small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('senhaInput');
+    const btn = document.getElementById('btnVerificar');
+    const toggle = document.getElementById('toggleSenha');
+    const resultado = document.getElementById('resultado');
+    const scoreLabel = document.getElementById('scoreLabel');
+    const scoreBar = document.getElementById('scoreBar');
+    const detalhes = document.getElementById('resultadoDetalhes');
+
+    input.addEventListener('input', function() {
+        btn.disabled = !this.value;
+    });
+
+    toggle.addEventListener('click', function() {
+        const tipo = input.type === 'password' ? 'text' : 'password';
+        input.type = tipo;
+        this.querySelector('i').className = tipo === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+    });
+
+    btn.addEventListener('click', function() {
+        const senha = input.value;
+        if (!senha) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+
+        fetch('{{ url_for("seguranca.api_verificar_senha") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: JSON.stringify({ senha: senha }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            resultado.classList.remove('d-none');
+
+            // Score
+            const cores = ['danger', 'danger', 'warning', 'success', 'success'];
+            const cor = cores[data.score] || 'secondary';
+            const pct = (data.score / 4) * 100;
+
+            scoreLabel.textContent = data.score_label + ' (' + data.score + '/4)';
+            scoreLabel.className = 'mb-1 text-' + cor;
+            scoreBar.style.width = pct + '%';
+            scoreBar.className = 'progress-bar bg-' + cor;
+
+            // Detalhes
+            let html = '<ul class="list-unstyled">';
+            html += '<li><i class="fas fa-ruler"></i> Comprimento: ' + data.comprimento + ' caracteres</li>';
+
+            if (data.tempo_crack && data.tempo_crack !== 'N/A') {
+                html += '<li><i class="fas fa-clock"></i> Tempo para quebrar: ' + data.tempo_crack + '</li>';
+            }
+
+            if (data.vazada_hibp) {
+                html += '<li class="text-danger"><i class="fas fa-exclamation-triangle"></i> <strong>Vazada!</strong> '
+                      + data.ocorrencias_hibp.toLocaleString() + ' ocorrencias em vazamentos</li>';
+            } else if (!data.hibp_erro) {
+                html += '<li class="text-success"><i class="fas fa-check"></i> Nao encontrada em vazamentos conhecidos</li>';
+            }
+
+            if (data.na_lista_comum_br) {
+                html += '<li class="text-danger"><i class="fas fa-exclamation-triangle"></i> Na lista de senhas comuns brasileiras</li>';
+            }
+
+            if (data.problemas && data.problemas.length > 0) {
+                data.problemas.forEach(function(p) {
+                    html += '<li class="text-warning"><i class="fas fa-exclamation-circle"></i> ' + p + '</li>';
+                });
+            }
+
+            if (data.feedback_sugestoes && data.feedback_sugestoes.length > 0) {
+                html += '<li class="mt-2"><strong>Sugestoes:</strong></li>';
+                data.feedback_sugestoes.forEach(function(s) {
+                    html += '<li class="text-info"><i class="fas fa-lightbulb"></i> ' + s + '</li>';
+                });
+            }
+
+            html += '</ul>';
+            detalhes.innerHTML = html;
+        })
+        .catch(err => {
+            resultado.classList.remove('d-none');
+            detalhes.innerHTML = '<p class="text-danger">Erro ao verificar: ' + err.message + '</p>';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Verificar';
+        });
+    });
+
+    // Enter key
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !btn.disabled) btn.click();
+    });
+});
+</script>
+{% endblock %}

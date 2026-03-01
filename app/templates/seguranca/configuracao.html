@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-cog"></i> Configuracao de Seguranca</h2>
+            <p class="text-muted mb-0">Parametros do modulo de monitoramento</p>
+        </div>
+        <a href="{{ url_for('seguranca.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <!-- HIBP API Key -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-key"></i> HaveIBeenPwned</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">API Key HIBP</label>
+                            <input type="password" name="hibp_api_key" class="form-control"
+                                   value="{{ configs.get('hibp_api_key', {}).get('valor', '') }}"
+                                   placeholder="Opcional — necessaria para verificacao de email breaches">
+                            <div class="form-text">
+                                Obtenha em <code>haveibeenpwned.com/API/Key</code>.
+                                Sem API key, a verificacao de senhas (k-anonymity) funciona normalmente.
+                                Apenas a verificacao de breaches de email fica desabilitada.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Varredura -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-clock"></i> Varredura Automatica</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Varredura automatica</label>
+                                <select name="auto_scan_enabled" class="form-select">
+                                    <option value="true" {{ 'selected' if configs.get('auto_scan_enabled', {}).get('valor', 'true') == 'true' }}>Habilitada</option>
+                                    <option value="false" {{ 'selected' if configs.get('auto_scan_enabled', {}).get('valor', 'true') == 'false' }}>Desabilitada</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Intervalo (horas)</label>
+                                <input type="number" name="scan_interval_hours" class="form-control"
+                                       value="{{ configs.get('scan_interval_hours', {}).get('valor', '24') }}"
+                                       min="1" max="168">
+                                <div class="form-text">1h a 168h (7 dias). Padrao: 24h.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Senha -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-lock"></i> Politica de Senha</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Score minimo (zxcvbn 0-4)</label>
+                            <select name="password_min_entropy" class="form-select">
+                                {% for score, label in [(0, '0 — Muito Fraca'), (1, '1 — Fraca'), (2, '2 — Razoavel'), (3, '3 — Boa (Recomendado)'), (4, '4 — Forte')] %}
+                                <option value="{{ score }}" {{ 'selected' if configs.get('password_min_entropy', {}).get('valor', '3') == score|string }}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Senhas abaixo deste score geram vulnerabilidade.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dominios -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-globe"></i> Dominios</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Dominios adicionais para monitorar</label>
+                            <textarea name="domains_to_monitor" class="form-control" rows="3"
+                                      placeholder="empresa.com.br, outro-dominio.com">{{ configs.get('domains_to_monitor', {}).get('valor', '') }}</textarea>
+                            <div class="form-text">
+                                Separados por virgula. Dominios dos emails dos usuarios ja sao monitorados automaticamente.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Configuracoes
+                    </button>
+                </div>
+            </form>
+
+            <!-- Info de atualizacao -->
+            {% set any_updated = namespace(found=false) %}
+            {% for chave, config in configs.items() %}
+                {% if config.get('atualizado_por') %}
+                    {% set any_updated.found = true %}
+                {% endif %}
+            {% endfor %}
+            {% if any_updated.found %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Historico de Alteracoes</h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Configuracao</th>
+                                <th>Atualizado em</th>
+                                <th>Por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for chave, config in configs.items() %}
+                            {% if config.get('atualizado_por') %}
+                            <tr>
+                                <td><small>{{ chave }}</small></td>
+                                <td><small>{{ config.get('atualizado_em')|formatar_data_hora_brasil if config.get('atualizado_em') else '-' }}</small></td>
+                                <td><small>{{ config.get('atualizado_por', '-') }}</small></td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

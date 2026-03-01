@@ -59,6 +59,11 @@ EMBEDDINGS_REINDEX_ENABLED = os.environ.get("EMBEDDINGS_REINDEX_ENABLED", "true"
 EMBEDDINGS_REINDEX_HOUR = int(os.environ.get("EMBEDDINGS_REINDEX_HOUR", "3"))
 _ultima_reindexacao_embeddings = None  # Timestamp da ultima reindexacao bem-sucedida
 
+# Varredura diária de segurança (21º módulo)
+SEGURANCA_SCAN_ENABLED = os.environ.get("SEGURANCA_SCAN_ENABLED", "true").lower() == "true"
+SEGURANCA_SCAN_HOUR = int(os.environ.get("SEGURANCA_SCAN_HOUR", "4"))  # 4h da manhã (após embeddings às 3h)
+_ultima_varredura_seguranca = None  # Timestamp da ultima varredura bem-sucedida
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -143,7 +148,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1408,6 +1413,73 @@ def executar_sincronizacao():
                     except Exception:
                         pass
 
+        # ── 2️⃣1️⃣ VARREDURA DE SEGURANÇA (diário, 21º módulo) ──
+        sucesso_seguranca = False
+        seguranca_executou = False  # True = tentou rodar (hora certa + >24h)
+
+        if SEGURANCA_SCAN_ENABLED:
+            hora_atual_seg = agora_utc_naive().hour
+            hoje_seg = agora_utc_naive().date()
+
+            deve_rodar_seg = (
+                hora_atual_seg == SEGURANCA_SCAN_HOUR
+                and (_ultima_varredura_seguranca is None
+                     or _ultima_varredura_seguranca.date() < hoje_seg)
+            )
+
+            if deve_rodar_seg:
+                seguranca_executou = True
+
+                # Verificar se auto_scan está habilitado na config do módulo
+                scan_habilitado = True
+                try:
+                    from app.seguranca.models import SegurancaConfig
+                    auto_scan = SegurancaConfig.get_valor('auto_scan_enabled')
+                    if auto_scan is not None and str(auto_scan).lower() in ('false', '0', 'nao', 'não'):
+                        scan_habilitado = False
+                        logger.info("   Varredura de segurança desabilitada via config do módulo")
+                except Exception:
+                    pass  # Se módulo não existe ainda, pula silenciosamente
+
+                if scan_habilitado:
+                    # Cleanup antes (padrão do scheduler)
+                    try:
+                        db.session.remove()
+                        db.engine.dispose()
+                        logger.info("♻️ Reconexão antes de Varredura de Segurança")
+                    except Exception:
+                        pass
+
+                    try:
+                        logger.info("🛡️ Varredura diária de segurança...")
+                        from app.seguranca.services.scan_orchestrator import executar_varredura
+
+                        resultado_seguranca = executar_varredura(
+                            tipo='FULL_SCAN',
+                            disparado_por='scheduler'
+                        )
+
+                        if resultado_seguranca and resultado_seguranca.get('sucesso'):
+                            sucesso_seguranca = True
+                            total_vulns = resultado_seguranca.get('total_vulnerabilidades', 0)
+                            logger.info(f"✅ Varredura de segurança concluída! Vulnerabilidades: {total_vulns}")
+                        else:
+                            erro_seg = resultado_seguranca.get('erro', 'Erro desconhecido') if resultado_seguranca else 'Sem resultado'
+                            logger.warning(f"⚠️ Varredura de segurança: {erro_seg}")
+
+                        _ultima_varredura_seguranca = agora_utc_naive()
+
+                    except Exception as e:
+                        logger.error(f"❌ Erro na varredura de segurança: {e}")
+                        _ultima_varredura_seguranca = agora_utc_naive()
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                else:
+                    sucesso_seguranca = True  # Desabilitado não é falha
+                    _ultima_varredura_seguranca = agora_utc_naive()
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1422,6 +1494,9 @@ def executar_sincronizacao():
 
         if embeddings_executou:
             modulos_sync.append(sucesso_embeddings)
+
+        if seguranca_executou:
+            modulos_sync.append(sucesso_seguranca)
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)
@@ -1470,6 +1545,8 @@ def executar_sincronizacao():
                 logger.info("   ❌ Pickings Recebimento (Fase 4): FALHOU")
             if embeddings_executou and not sucesso_embeddings:
                 logger.info("   ❌ Embeddings Reindexação: FALHOU")
+            if seguranca_executou and not sucesso_seguranca:
+                logger.info("   ❌ Varredura Segurança: FALHOU")
         else:
             logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/{total_modulos} módulos OK")
         logger.info("=" * 60)
@@ -1544,6 +1621,7 @@ def main():
     logger.info("   2. Services instanciados FORA do contexto")
     logger.info("   3. Tratamento robusto de erros e reconexão")
     logger.info(f"   4. Embeddings: 20º módulo, diário às {EMBEDDINGS_REINDEX_HOUR:02d}:00 (enabled={EMBEDDINGS_REINDEX_ENABLED})")
+    logger.info(f"   5. Segurança: 21º módulo, diário às {SEGURANCA_SCAN_HOUR:02d}:00 (enabled={SEGURANCA_SCAN_ENABLED})")
     logger.info(f"   Próxima execução em {INTERVALO_MINUTOS} minutos...")
     logger.info("=" * 60)
 

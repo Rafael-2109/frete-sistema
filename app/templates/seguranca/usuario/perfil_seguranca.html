@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-user-shield"></i> Perfil de Seguranca</h2>
+            <p class="text-muted mb-0">{{ usuario.nome }} — {{ usuario.email }}</p>
+        </div>
+        <a href="{{ url_for('seguranca.listar_vulnerabilidades') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Score do usuario -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center py-4">
+                    {% if score %}
+                    <div class="seg-score-circle seg-score-{{ 'success' if score.score >= 80 else ('warning' if score.score >= 50 else 'danger') }} mx-auto mb-3">
+                        <span class="seg-score-value">{{ score.score }}</span>
+                    </div>
+                    <h5>Score Individual</h5>
+                    <p class="text-muted small mb-0">
+                        {{ score.vulnerabilidades_abertas }} abertas,
+                        {{ score.vulnerabilidades_criticas }} criticas
+                    </p>
+                    {% if score.componentes %}
+                    <hr>
+                    <div class="text-start">
+                        {% for comp, label in [('email_breach', 'Email'), ('password_health', 'Senha'), ('domain', 'Dominio'), ('remediacao', 'Remediacao')] %}
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>{{ label }}</span>
+                            <span class="fw-bold">{{ score.componentes.get(comp, 100) }}%</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-muted">
+                        <i class="fas fa-question-circle fa-3x mb-3 d-block opacity-50"></i>
+                        <p>Score nao calculado ainda.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Vulnerabilidades -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Vulnerabilidades ({{ vulnerabilidades|length }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if vulnerabilidades %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Severidade</th>
+                                    <th>Categoria</th>
+                                    <th>Titulo</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for v in vulnerabilidades %}
+                                <tr>
+                                    <td>
+                                        <span class="badge seg-badge-{{ v.severidade|lower }}">{{ v.severidade }}</span>
+                                    </td>
+                                    <td><small>{{ v.categoria }}</small></td>
+                                    <td>
+                                        <a href="{{ url_for('seguranca.detalhe_vulnerabilidade', vuln_id=v.id) }}">
+                                            {{ v.titulo|truncate(45) }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge seg-badge-status-{{ v.status|lower }}">{{ v.status }}</span>
+                                    </td>
+                                    <td><small class="text-muted">{{ v.criado_em|formatar_data_segura if v.criado_em else '-' }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-check-circle fa-2x mb-2 d-block text-success opacity-50"></i>
+                        <p class="mb-0">Nenhuma vulnerabilidade registrada para este colaborador.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

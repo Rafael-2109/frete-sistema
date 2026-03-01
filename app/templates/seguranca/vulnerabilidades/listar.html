@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-bug"></i> Vulnerabilidades</h2>
+            <p class="text-muted mb-0">{{ vulnerabilidades|length }} registros</p>
+        </div>
+        <a href="{{ url_for('seguranca.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Dashboard
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="TODAS" {{ 'selected' if filtro_status == 'TODAS' }}>Todas</option>
+                        {% for s in ['ABERTA', 'EM_ANDAMENTO', 'RESOLVIDA', 'ACEITA', 'FALSO_POSITIVO'] %}
+                        <option value="{{ s }}" {{ 'selected' if filtro_status == s }}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Categoria</label>
+                    <select name="categoria" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for c in ['EMAIL_BREACH', 'SENHA_FRACA', 'SENHA_VAZADA', 'DOMINIO_SPF', 'DOMINIO_DMARC', 'DOMINIO_MX'] %}
+                        <option value="{{ c }}" {{ 'selected' if filtro_categoria == c }}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Severidade</label>
+                    <select name="severidade" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for s in ['CRITICA', 'ALTA', 'MEDIA', 'BAIXA', 'INFO'] %}
+                        <option value="{{ s }}" {{ 'selected' if filtro_severidade == s }}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Colaborador</label>
+                    <select name="user_id" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for u in usuarios %}
+                        <option value="{{ u.id }}" {{ 'selected' if filtro_usuario == u.id|string }}>{{ u.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Severidade</th>
+                            <th>Colaborador</th>
+                            <th>Categoria</th>
+                            <th>Titulo</th>
+                            <th>Status</th>
+                            <th>Criado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in vulnerabilidades %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('seguranca.detalhe_vulnerabilidade', vuln_id=v.id) }}">
+                                    {{ v.id }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge seg-badge-{{ v.severidade|lower }}">
+                                    {{ v.severidade }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('seguranca.perfil_seguranca_usuario', user_id=v.user_id) }}">
+                                    {{ v.usuario.nome if v.usuario else 'N/A' }}
+                                </a>
+                            </td>
+                            <td><small>{{ v.categoria }}</small></td>
+                            <td>{{ v.titulo|truncate(50) }}</td>
+                            <td>
+                                <span class="badge seg-badge-status-{{ v.status|lower }}">
+                                    {{ v.status }}
+                                </span>
+                            </td>
+                            <td><small class="text-muted">{{ v.criado_em|formatar_data_segura if v.criado_em else '-' }}</small></td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                Nenhuma vulnerabilidade encontrada com os filtros aplicados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

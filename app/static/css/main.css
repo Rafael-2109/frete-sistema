@@ -72,6 +72,7 @@
 @import url('./modules/_monitoramento.css') layer(modules);
 @import url('./modules/_insights.css') layer(modules);
 @import url('./modules/_carvia.css') layer(modules);
+@import url('./modules/_seguranca.css') layer(modules);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);

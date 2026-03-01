@@ -332,6 +332,26 @@
                 </a></li>
               {% endif %}
 
+              {# ================================================================= #}
+              {# SEGURANCA — Monitoramento de Vulnerabilidades                     #}
+              {# ================================================================= #}
+              {% if current_user.perfil == 'administrador' %}
+              <li><hr class="dropdown-divider"></li>
+              <li><h6 class="dropdown-header"><i class="fas fa-shield-alt"></i> Seguranca</h6></li>
+              <li><a class="dropdown-item" href="{{ url_for('seguranca.dashboard') }}">
+                  <i class="fas fa-tachometer-alt"></i> Dashboard Seguranca
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('seguranca.listar_vulnerabilidades') }}">
+                  <i class="fas fa-bug"></i> Vulnerabilidades
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('seguranca.verificar_senha') }}">
+                  <i class="fas fa-key"></i> Verificar Senha
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('seguranca.configuracao') }}">
+                  <i class="fas fa-cog"></i> Configuracao
+                </a></li>
+              {% endif %}
+
             </ul>
           </li>
           {% endif %}
