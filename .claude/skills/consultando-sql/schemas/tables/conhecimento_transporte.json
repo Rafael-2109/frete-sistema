@@ -255,13 +255,6 @@
   ],
   "indices": [
     {
-      "name": "ix_conhecimento_transporte_cnpj_remetente",
-      "columns": [
-        "cnpj_remetente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_conhecimento_transporte_dfe_id",
       "columns": [
         "dfe_id"
@@ -427,6 +420,13 @@
       "name": "ix_conhecimento_transporte_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
       ],
       "unique": false
     }
