@@ -464,12 +464,12 @@ td .badge-incoterm-red,
 /* ═══════════════════════════════════════════════════════════════════════════
    BADGES GERAIS
    ═══════════════════════════════════════════════════════════════════════════ */
-.badge {
+.premium-page .badge {
     font-size: 0.75rem;
     font-weight: 500;
 }
 
-.badge.fs-6 {
+.premium-page .badge.fs-6 {
     font-size: 0.875rem !important;
 }
 
@@ -488,14 +488,14 @@ td .badge-incoterm-red,
     margin: 0 !important;
 }
 
-.dropdown-header {
+.premium-page .dropdown-header {
     background: var(--cart-dropdown-header-bg);
     color: white;
     font-weight: 600;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.dropdown-footer {
+.premium-page .dropdown-footer {
     background: var(--cart-dropdown-footer-bg);
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }

@@ -255,10 +255,9 @@ class UnificacaoCodigos(db.Model):
     __table_args__ = (
         # Evita duplicação: mesmo par origem-destino
         db.UniqueConstraint('codigo_origem', 'codigo_destino', name='uq_unificacao_origem_destino'),
-        # Evita ciclos: A->B e B->A simultaneamente  
-        db.Index('idx_unificacao_origem', 'codigo_origem'),
-        db.Index('idx_unificacao_destino', 'codigo_destino'),
-        db.Index('idx_unificacao_ativo', 'ativo'),
+        # NOTA: idx_unificacao_origem, idx_unificacao_destino e idx_unificacao_ativo
+        # foram removidos pois sao redundantes com ix_ auto-gerados pelo Column(index=True).
+        # Removidos em 01/03/2026 junto com 84 indices duplicados.
     )
 
     def __repr__(self):
