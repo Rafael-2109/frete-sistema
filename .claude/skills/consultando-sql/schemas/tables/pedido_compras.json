@@ -190,16 +190,9 @@
   ],
   "indices": [
     {
-      "name": "ix_pedido_compras_cnpj_fornecedor",
+      "name": "ix_pedido_compras_num_pedido",
       "columns": [
-        "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pedido_dfe",
-      "columns": [
-        "dfe_id"
+        "num_pedido"
       ],
       "unique": false
     },
@@ -275,9 +268,16 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_num_pedido",
+      "name": "ix_pedido_compras_cnpj_fornecedor",
       "columns": [
-        "num_pedido"
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_dfe",
+      "columns": [
+        "dfe_id"
       ],
       "unique": false
     }

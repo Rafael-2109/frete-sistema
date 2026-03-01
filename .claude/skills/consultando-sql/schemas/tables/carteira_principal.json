@@ -362,17 +362,10 @@
   ],
   "indices": [
     {
-      "name": "idx_carteira_produto_saldo",
+      "name": "idx_carteira_status_data",
       "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_num_pedido",
-      "columns": [
-        "num_pedido"
+        "status_pedido",
+        "data_pedido"
       ],
       "unique": false
     },
@@ -384,9 +377,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cnpj_cpf",
+      "name": "ix_carteira_principal_importante",
       "columns": [
-        "cnpj_cpf"
+        "importante"
       ],
       "unique": false
     },
@@ -394,13 +387,6 @@
       "name": "ix_carteira_principal_vendedor",
       "columns": [
         "vendedor"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_importante",
-      "columns": [
-        "importante"
       ],
       "unique": false
     },
@@ -419,17 +405,23 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_status_data",
+      "name": "ix_carteira_principal_cod_produto",
       "columns": [
-        "status_pedido",
-        "data_pedido"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cod_produto",
+      "name": "ix_carteira_principal_cnpj_cpf",
       "columns": [
-        "cod_produto"
+        "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_odoo_write_date",
+      "columns": [
+        "odoo_write_date"
       ],
       "unique": false
     },
@@ -442,9 +434,17 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "ix_carteira_principal_num_pedido",
       "columns": [
-        "odoo_write_date"
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_produto_saldo",
+      "columns": [
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     }
