@@ -118,13 +118,6 @@
   ],
   "indices": [
     {
-      "name": "ix_requisicao_compra_alocacao_odoo_allocation_id",
-      "columns": [
-        "odoo_allocation_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "idx_alocacao_odoo_ids",
       "columns": [
         "purchase_request_line_odoo_id",
@@ -189,6 +182,13 @@
         "purchase_state"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_odoo_allocation_id",
+      "columns": [
+        "odoo_allocation_id"
+      ],
+      "unique": true
     }
   ]
 }

@@ -197,6 +197,13 @@
       "unique": false
     },
     {
+      "name": "ix_pedido_compras_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pedido_compras_odoo_purchase_order_id",
       "columns": [
         "odoo_purchase_order_id"
@@ -264,13 +271,6 @@
       "columns": [
         "company_id",
         "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_cnpj_fornecedor",
-      "columns": [
-        "cnpj_fornecedor"
       ],
       "unique": false
     },

@@ -170,17 +170,17 @@
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_numero_nf",
-      "columns": [
-        "numero_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_faturamento_nf_produto",
       "columns": [
         "numero_nf",
         "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },
