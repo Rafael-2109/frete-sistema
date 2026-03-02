@@ -505,10 +505,14 @@ class DanfePDFParser:
         return None
 
     def get_data_emissao(self) -> Optional[str]:
-        """Extrai data de emissao"""
+        """Extrai data de emissao
+
+        Suporta ano com 2 ou 4 digitos (DD/MM/YY ou DD/MM/YYYY).
+        DANFEs compactas (ex: Laiouns) usam '06/01/26' em vez de '06/01/2026'.
+        """
         # Strategy 1: same-line regex (nao cruza \n)
         patterns = [
-            r'(?:DATA[^\S\n]*(?:DA[^\S\n]*)?EMISS[AÃ]O|EMITIDO[^\S\n]*EM)[^\S\n]*[:.]?[^\S\n]*(\d{2}[/.-]\d{2}[/.-]\d{4})',
+            r'(?:DATA[^\S\n]*(?:DA[^\S\n]*)?EMISS[AÃ]O|EMITIDO[^\S\n]*EM)[^\S\n]*[:.]?[^\S\n]*(\d{2}[/.-]\d{2}[/.-]\d{2,4})',
         ]
         for pattern in patterns:
             match = re.search(pattern, self.texto_completo, re.IGNORECASE)
@@ -520,12 +524,15 @@ class DanfePDFParser:
         if idx is not None:
             linhas = self._linhas()
             if idx + 1 < len(linhas):
-                date_match = re.search(r'\d{2}[/.-]\d{2}[/.-]\d{4}', linhas[idx + 1])
+                date_match = re.search(r'\d{2}[/.-]\d{2}[/.-]\d{2,4}', linhas[idx + 1])
                 if date_match:
                     return date_match.group(0)
 
-        # Fallback: primeira data no formato BR
+        # Fallback: primeira data no formato BR (4 digitos preferencial, depois 2)
         match = re.search(r'(\d{2}/\d{2}/\d{4})', self.texto_completo)
+        if match:
+            return match.group(1)
+        match = re.search(r'(\d{2}/\d{2}/\d{2})\b', self.texto_completo)
         if match:
             return match.group(1)
         return None
@@ -535,16 +542,38 @@ class DanfePDFParser:
 
         Strategy 1: 'Recebemos de [NOME] os produtos' (canhoto)
         Strategy 2: Texto antes de 'DANFE' na mesma linha (header)
+        Strategy 3: Backward search a partir do CNPJ emitente
         """
-        # Strategy 1: canhoto
+        # Headers/palavras que NAO sao nome de emitente
+        _REJECT_EMITENTE = frozenset({
+            'DANFE', 'MODELO', 'SERIE', 'NUMERO', 'FOLHA', 'FL', 'SAIDA',
+            'ENTRADA', 'DOCUMENTO', 'AUXILIAR', 'NOTA', 'FISCAL', 'ELETRONICA',
+            'PROTOCOLO', 'CHAVE', 'ACESSO', 'NATUREZA', 'OPERACAO',
+        })
+
+        def _is_valid_nome(nome: str) -> bool:
+            """Valida que nome nao e header/keyword DANFE"""
+            if not nome or len(nome) < 5:
+                return False
+            # Rejeitar se o nome inteiro e uma keyword
+            if nome.upper().strip() in _REJECT_EMITENTE:
+                return False
+            # Rejeitar se TODAS as palavras sao keywords (ex: "NOTA FISCAL ELETRONICA")
+            words = nome.upper().split()
+            if all(w in _REJECT_EMITENTE for w in words):
+                return False
+            return True
+
+        # Strategy 1: canhoto — "Recebemos de [NOME] os produtos"
+        # Variante: "REEBEMOS" (typo em DANFEs compactas)
         match = re.search(
-            r'Recebemos\s+de\s+(.+?)\s+os\s+produtos',
+            r'R[E]+CEBEMOS\s+de\s+(.+?)\s+os\s+produtos',
             self.texto_completo,
             re.IGNORECASE,
         )
         if match:
             nome = match.group(1).strip()
-            if len(nome) >= 3:
+            if _is_valid_nome(nome):
                 return nome
 
         # Strategy 2: texto antes de 'DANFE' na mesma linha
@@ -554,28 +583,84 @@ class DanfePDFParser:
                 parts = re.split(r'\s+DANFE\b', linha, flags=re.IGNORECASE)
                 if parts and parts[0].strip():
                     nome = parts[0].strip()
-                    if len(nome) >= 3:
+                    if _is_valid_nome(nome):
                         return nome
+
+        # Strategy 3: backward search a partir do CNPJ emitente
+        # DANFEs compactas: nome do emitente esta poucas linhas ACIMA do CNPJ
+        # Ex: L06 "Laiouns Importacao e Exportacao Ltda", L11 "CNPJ: 09.089.839/0001-12"
+        dest_idx = self._encontrar_secao_destinatario()
+        limite_cnpj = dest_idx if dest_idx else min(20, len(linhas))
+        cnpj_line_idx = None
+        for i in range(limite_cnpj):
+            if re.search(r'CNPJ[:\s]*\d{2}\.?\d{3}\.?\d{3}', linhas[i]):
+                cnpj_line_idx = i
+                break
+
+        if cnpj_line_idx is not None:
+            # Varrer backward: buscar linha com texto alfabetico >= 5 chars
+            for i in range(cnpj_line_idx - 1, max(0, cnpj_line_idx - 8), -1):
+                candidato = linhas[i].strip()
+                if not candidato:
+                    continue
+                # Pular linhas que sao puramente numericas ou contem CNPJ/CEP
+                if re.match(r'^[\d\s./-]+$', candidato):
+                    continue
+                if re.search(r'CEP[:\s]*\d{5}', candidato, re.IGNORECASE):
+                    continue
+                # Pular linhas de endereco (contem numero de rua + bairro)
+                if re.search(r'(?:RUA|AV|AVENIDA|ROD|RODOVIA|ESTRADA|LOTE|QUADRA)\b', candidato, re.IGNORECASE):
+                    continue
+                # Pular bairro: linha imediatamente ACIMA de "Cidade - UF - CEP"
+                # (bairro = palavra curta logo antes da cidade, ex: "Olaria" antes de "Rio de Janeiro - RJ - CEP")
+                if i + 1 < len(linhas) and re.search(r'-\s*[A-Z]{2}\s*-\s*CEP', linhas[i + 1]):
+                    continue
+                # Pular "CONTROLE DO FISCO" e similares
+                if re.search(r'CONTROLE|FISCO|INSCRI[ÇC]', candidato, re.IGNORECASE):
+                    continue
+                if _is_valid_nome(candidato):
+                    return candidato
 
         return None
 
     def get_nome_destinatario(self) -> Optional[str]:
         """Extrai nome/razao social do destinatario
 
-        Strategy 1: Apos DESTINATARIO, localizar 'NOME / RAZAO SOCIAL' header,
-                    extrair texto da proxima linha antes do CNPJ
-        Strategy 2: 'Dest/Reme:' pattern no canhoto
+        Strategy 1 (merged): Apos DESTINATARIO, buscar 'NOME <dados> MUNICIPIO' na mesma linha
+        Strategy 2 (tabular): Apos DESTINATARIO, localizar 'NOME' header, extrair proxima linha
+        Strategy 3: 'Dest/Reme:' pattern no canhoto
         """
-        # Strategy 1: secao DESTINATARIO tabular (ignora canhoto)
         dest_idx = self._encontrar_secao_destinatario()
         if dest_idx is not None:
             linhas = self._linhas()
+
+            # Strategy 1 (merged): NOME + dados + MUNICIPIO na mesma linha
+            # Ex: "NOME PABLO VASCONCELLOS LEAL MUNICIPIORIO GRANDE - RS CEP96210-080"
+            # Variante: "MUNICIPIO" ou "MUNICIP" (pdfplumber pode truncar/merge)
+            for i in range(dest_idx, min(dest_idx + 5, len(linhas))):
+                upper = linhas[i].upper()
+                if 'NOME' in upper and 'MUNIC' in upper:
+                    # Extrair texto entre NOME e MUNICIPIO
+                    match = re.search(
+                        r'NOME\s+(.+?)\s+MUNIC',
+                        linhas[i],
+                        re.IGNORECASE,
+                    )
+                    if match:
+                        nome = match.group(1).strip()
+                        if len(nome) >= 3:
+                            return nome
+
+            # Strategy 2 (tabular): header 'NOME' (com ou sem 'RAZAO SOCIAL'), dados na proxima linha
             nome_idx = None
             for i in range(dest_idx, min(dest_idx + 5, len(linhas))):
                 upper = linhas[i].upper()
-                if 'NOME' in upper and ('RAZ' in upper or 'SOCIAL' in upper):
-                    nome_idx = i
-                    break
+                # Aceitar "NOME / RAZAO SOCIAL" OU apenas "NOME"
+                if 'NOME' in upper:
+                    # Verificar que nao e a linha merged (Strategy 1 ja tentou)
+                    if 'MUNIC' not in upper:
+                        nome_idx = i
+                        break
 
             if nome_idx is not None and nome_idx + 1 < len(linhas):
                 prox_linha = linhas[nome_idx + 1]
@@ -590,7 +675,7 @@ class DanfePDFParser:
                     if len(nome) >= 3:
                         return nome
 
-        # Strategy 2: canhoto 'Dest/Reme:'
+        # Strategy 3: canhoto 'Dest/Reme:'
         match = re.search(
             r'Dest/Reme:\s*(.+?)(?:\s+Valor\s+Total|\s*$)',
             self.texto_completo,
@@ -615,6 +700,20 @@ class DanfePDFParser:
         dest_idx = self._encontrar_secao_destinatario()
         linhas = self._linhas()
         limite = dest_idx if dest_idx else min(20, len(linhas))
+
+        # Strategy 0: cidade mixed-case NO INICIO da linha + " - UF - CEP"
+        # Ex: "Rio de Janeiro - RJ - CEP: 21031-490" — cidade mixed-case sem "-" antes
+        for i in range(limite):
+            match = re.search(
+                r'^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s*-\s*([A-Z]{2})\s*-\s*CEP',
+                linhas[i],
+            )
+            if match:
+                cidade = match.group(1).strip()
+                uf = match.group(2)
+                if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    cidade = self._completar_cidade_cross_line(linhas, i, cidade)
+                    return (uf, cidade)
 
         # Strategy 1a: 'CIDADE - UF - CEP:' (all-uppercase city)
         for i in range(limite):
@@ -693,9 +792,8 @@ class DanfePDFParser:
     def get_uf_cidade_destinatario(self) -> tuple:
         """Extrai UF e cidade do destinatario (combinado)
 
-        Strategy 1: Apos DESTINATARIO, localizar 'MUNICIPIO' + 'UF' header,
-                    extrair cidade e UF da proxima linha
-        Strategy 2: Tokens com UF valida na proxima linha apos MUNICIPIO
+        Strategy 1 (merged): MUNICIPIO + cidade + UF + CEP na mesma linha
+        Strategy 2 (tabular): Header 'MUNICIPIO' + 'UF', dados na proxima linha
 
         Returns:
             (uf, cidade) — qualquer um pode ser None
@@ -706,8 +804,6 @@ class DanfePDFParser:
 
         linhas = self._linhas()
 
-        # Encontrar header MUNICIPIO + UF apos DESTINATARIO
-        mun_idx = None
         # Limitar busca: parar antes de TRANSPORTADOR ou FATURA
         limite_fim = len(linhas)
         for i in range(dest_idx + 1, len(linhas)):
@@ -716,6 +812,30 @@ class DanfePDFParser:
                 limite_fim = i
                 break
 
+        # Strategy 1 (merged): MUNICIPIO + cidade + " - UF" + CEP na mesma linha
+        # Ex: "NOME PABLO VASCONCELLOS LEAL MUNICIPIORIO GRANDE - RS CEP96210-080"
+        # pdfplumber pode colar "MUNICIPIO" com cidade: "MUNICIPIORIO GRANDE"
+        for i in range(dest_idx + 1, limite_fim):
+            upper = linhas[i].upper()
+            if 'MUNIC' in upper:
+                # Pattern: MUNICIPIO? + cidade + " - " + UF(2) + CEP/fim
+                # "MUNICIPIO?" captura "MUNICIPIO" colado ou separado
+                match = re.search(
+                    r'MUNIC[IÍ]PIO?\s*(.+?)\s*-\s*([A-Z]{2})\s*(?:CEP|$)',
+                    linhas[i],
+                    re.IGNORECASE,
+                )
+                if match:
+                    cidade = match.group(1).strip()
+                    uf = match.group(2).upper()
+                    if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                        # Limpar cidade: remover "UF" header residual
+                        cidade = re.sub(r'\bUF\b', '', cidade).strip()
+                        if len(cidade) >= 2:
+                            return (uf, cidade)
+
+        # Strategy 2 (tabular): header MUNICIPIO + UF, dados na proxima linha
+        mun_idx = None
         for i in range(dest_idx + 1, limite_fim):
             upper = linhas[i].upper()
             if 'MUNIC' in upper and 'UF' in upper:
@@ -805,8 +925,10 @@ class DanfePDFParser:
         logger.debug(f"get_itens_produto: {len(prod_starts)} secao(oes) produto, range L{inicio}..L{fim_idx}")
 
         # Agrupar por produto: linha com NCM inicia produto, linhas sem NCM sao continuacao
-        # NCM (8 dig) + O/CST (1-3 dig, possivelmente split: "3 00") + CFOP (4 dig)
-        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:\s+\d{2})?\s+\d{4}')
+        # NCM (8 dig) + O/CST (1-3 dig, possivelmente split: "3 00") + CFOP (4 dig, OPCIONAL)
+        # DANFEs compactas (ex: Laiouns) omitem CFOP. Guard: apos NCM+CST exigir unidade
+        # (1-5 chars alfa) em ate 2 tokens para evitar falsos positivos sem CFOP.
+        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:\s+\d{2})?(?:\s+\d{4}|\s+[A-Za-z]{1,5}\s)')
 
         # --- Dois niveis de filtro para linhas sem NCM ---
 
@@ -969,9 +1091,13 @@ class DanfePDFParser:
             ncm_line: Linha principal contendo NCM + dados numericos
             continuacoes: Linhas extras (descricao wrapping para proximas linhas)
 
-        Formato tipico ncm_line:
+        Formato tipico ncm_line (COM CFOP):
         'JET MOTO JET MOTO CHEFE 87116000 460 5405 UN 3,00 7.220,0000 0,00 21.660,00 ...'
                                   ^NCM    ^CST^CFOP^UN^QTD ^V.UNIT    ^DESC^V.LIQ
+
+        Formato compacto ncm_line (SEM CFOP):
+        'MT-X12 10 MOTO ELETR. X12-10 87116000 110 UN 5,0000 2.786,37 13.931,85 04,00'
+                                       ^NCM    ^CST^UN^QTD   ^V.UNIT  ^V.TOTAL  ^ALIQ
 
         Texto antes do NCM = codigo + descricao mesclados (pdfplumber merge colunas).
         Continuacoes = wrapping da coluna descricao (anexadas a desc, NAO ao codigo).
@@ -979,32 +1105,56 @@ class DanfePDFParser:
         if not continuacoes:
             continuacoes = []
 
-        # Encontrar NCM (8 dig) + O/CST skip (1-3 dig, possivelmente split) + CFOP (4 dig)
+        # Tentar com CFOP primeiro (mais especifico, menos falsos positivos)
+        # NCM (8 dig) + O/CST skip (1-3 dig, possivelmente split) + CFOP (4 dig)
         # Ex: "20057000 3 00 6101" ou "87116000 460 5405" — ambos devem funcionar
         match = re.search(
             r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+(\d{4})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
             ncm_line,
         )
-        if not match:
-            return None
+        if match:
+            ncm = match.group(1)
+            cfop = match.group(2)
+            unidade = match.group(3)
+            quantidade = self._parse_valor_br(match.group(4))
+            valor_unitario = self._parse_valor_br(match.group(5))
 
-        ncm = match.group(1)
-        cfop = match.group(2)
-        unidade = match.group(3)
-        quantidade = self._parse_valor_br(match.group(4))
-        valor_unitario = self._parse_valor_br(match.group(5))
+            # Extrair valor total: numeros apos NCM
+            texto_apos = ncm_line[match.start():]
+            numeros = re.findall(r'[\d.,]+', texto_apos)
+            # [NCM, CST, CFOP, QTD, V.UNIT, V.DESC, V.LIQ, BASE_ICMS, V.ICMS, V.IPI, ...]
+            valor_total_item = None
+            if len(numeros) >= 7:
+                valor_total_item = self._parse_valor_br(numeros[6])
 
-        # Extrair valor total: numeros apos NCM
-        texto_apos = ncm_line[match.start():]
-        numeros = re.findall(r'[\d.,]+', texto_apos)
-        # [NCM, CST, CFOP, QTD, V.UNIT, V.DESC, V.LIQ, BASE_ICMS, V.ICMS, V.IPI, ...]
-        valor_total_item = None
-        if len(numeros) >= 7:
-            valor_total_item = self._parse_valor_br(numeros[6])
+            texto_antes = ncm_line[:match.start()].strip()
+            codigo, descricao = self._separar_codigo_descricao(texto_antes)
+        else:
+            # Fallback SEM CFOP: NCM (8 dig) + CST (1-3 dig) + UNIDADE (alfa) + QTD + V.UNIT
+            # Ex: "87116000 110 UN 5,0000 2.786,37 13.931,85"
+            match_no_cfop = re.search(
+                r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+([A-Za-z]{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+                ncm_line,
+            )
+            if not match_no_cfop:
+                return None
 
-        # Texto antes do NCM = codigo + descricao mesclados
-        texto_antes = ncm_line[:match.start()].strip()
-        codigo, descricao = self._separar_codigo_descricao(texto_antes)
+            ncm = match_no_cfop.group(1)
+            cfop = None
+            unidade = match_no_cfop.group(2)
+            quantidade = self._parse_valor_br(match_no_cfop.group(3))
+            valor_unitario = self._parse_valor_br(match_no_cfop.group(4))
+
+            # Extrair valor total: numeros apos NCM
+            texto_apos = ncm_line[match_no_cfop.start():]
+            numeros = re.findall(r'[\d.,]+', texto_apos)
+            # SEM CFOP: [NCM, CST, QTD, V.UNIT, V.TOTAL, ...]
+            valor_total_item = None
+            if len(numeros) >= 5:
+                valor_total_item = self._parse_valor_br(numeros[4])
+
+            texto_antes = ncm_line[:match_no_cfop.start()].strip()
+            codigo, descricao = self._separar_codigo_descricao(texto_antes)
 
         # Continuacoes = descricao wrapping (nao codigo).
         # Em DANFEs, o codigo e curto e cabe em 1 linha. Continuacoes sao texto
@@ -1084,13 +1234,22 @@ class DanfePDFParser:
             return None
 
     def _parse_date_br(self, date_str: str):
-        """Converte data brasileira (DD/MM/YYYY) para date"""
+        """Converte data brasileira (DD/MM/YYYY ou DD/MM/YY) para date
+
+        Suporta ano com 2 digitos: YY < 100 → 20YY (ex: 26 → 2026).
+        """
         if not date_str:
             return None
         try:
             from datetime import datetime
             # Normalizar separadores
             date_str = date_str.replace('-', '/').replace('.', '/')
+            parts = date_str.split('/')
+            if len(parts) == 3 and len(parts[2]) == 2:
+                # Ano com 2 digitos — converter para 4 digitos
+                ano = int(parts[2])
+                parts[2] = str(2000 + ano)
+                date_str = '/'.join(parts)
             return datetime.strptime(date_str, '%d/%m/%Y').date()
         except (ValueError, TypeError):
             return None
