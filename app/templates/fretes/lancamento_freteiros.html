@@ -129,7 +129,11 @@
                                                     {% set _tabela = embarque_data.fretes[0].tabela_nome_tabela %}
                                                 {% endif %}
                                                 {% if _tabela %}
-                                                    <span class="badge bg-warning text-dark ms-1">{{ _tabela }}</span>
+                                                    {% if _tabela == 'Cotação Manual' %}
+                                                        <span class="badge bg-danger ms-1">{{ _tabela }}</span>
+                                                    {% else %}
+                                                        <span class="badge bg-warning text-dark ms-1">{{ _tabela }}</span>
+                                                    {% endif %}
                                                 {% endif %}
                                                 {% if embarque_data.embarque.data_embarque %}
                                                     {% set dias_atras = (hoje - embarque_data.embarque.data_embarque).days %}
