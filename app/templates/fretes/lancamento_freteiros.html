@@ -124,6 +124,13 @@
                                                    target="_blank" class="text-decoration-none">
                                                     Embarque {{ embarque_id }}
                                                 </a>
+                                                {% set _tabela = embarque_data.embarque.tabela_nome_tabela %}
+                                                {% if not _tabela and embarque_data.fretes %}
+                                                    {% set _tabela = embarque_data.fretes[0].tabela_nome_tabela %}
+                                                {% endif %}
+                                                {% if _tabela %}
+                                                    <span class="badge bg-warning text-dark ms-1">{{ _tabela }}</span>
+                                                {% endif %}
                                                 {% if embarque_data.embarque.data_embarque %}
                                                     {% set dias_atras = (hoje - embarque_data.embarque.data_embarque).days %}
                                                     <span class="ms-2 {% if dias_atras >= 7 %}text-danger fw-bold{% else %}text-muted{% endif %}"

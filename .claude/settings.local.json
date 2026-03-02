@@ -133,7 +133,8 @@
       "WebFetch(domain:openclaw.ai)",
       "WebFetch(domain:spiderfoot.org)",
       "WebFetch(domain:www.kali.org)",
-      "Bash(tr ;:*)"
+      "Bash(tr ;:*)",
+      "Skill(diagnosticando-banco)"
     ],
     "deny": []
   },
