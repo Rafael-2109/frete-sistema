@@ -233,6 +233,41 @@ def register_fatura_routes(bp):
             faturas_transportadora=faturas_transportadora,
         )
 
+    @bp.route('/faturas-cliente/<int:fatura_id>/editar-vencimento', methods=['POST'])
+    @login_required
+    def editar_vencimento_fatura_cliente(fatura_id):
+        """Edita vencimento de uma fatura cliente"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+
+        if fatura.status == 'CANCELADA':
+            flash('Nao e possivel editar vencimento de fatura cancelada.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        vencimento_str = request.form.get('vencimento', '').strip()
+        if not vencimento_str:
+            flash('Informe a data de vencimento.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        try:
+            fatura.vencimento = date.fromisoformat(vencimento_str)
+            db.session.commit()
+            flash(f'Vencimento atualizado para {fatura.vencimento.strftime("%d/%m/%Y")}.', 'success')
+        except ValueError:
+            flash('Data de vencimento invalida.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao editar vencimento fatura cliente {fatura_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
     @bp.route('/faturas-cliente/<int:fatura_id>/status', methods=['POST'])
     @login_required
     def atualizar_status_fatura_cliente(fatura_id):
@@ -489,6 +524,41 @@ def register_fatura_routes(bp):
             faturas_cliente=faturas_cliente,
             operacoes=operacoes,
         )
+
+    @bp.route('/faturas-transportadora/<int:fatura_id>/editar-vencimento', methods=['POST'])
+    @login_required
+    def editar_vencimento_fatura_transportadora(fatura_id):
+        """Edita vencimento de uma fatura transportadora"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
+
+        if fatura.status_conferencia == 'CONFERIDO':
+            flash('Nao e possivel editar vencimento de fatura ja conferida.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+        vencimento_str = request.form.get('vencimento', '').strip()
+        if not vencimento_str:
+            flash('Informe a data de vencimento.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+        try:
+            fatura.vencimento = date.fromisoformat(vencimento_str)
+            db.session.commit()
+            flash(f'Vencimento atualizado para {fatura.vencimento.strftime("%d/%m/%Y")}.', 'success')
+        except ValueError:
+            flash('Data de vencimento invalida.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao editar vencimento fatura transportadora {fatura_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
 
     @bp.route('/faturas-transportadora/<int:fatura_id>/conferencia', methods=['POST'])
     @login_required

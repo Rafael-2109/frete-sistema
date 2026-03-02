@@ -102,11 +102,22 @@
                 </div>
             </div>
         </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-warning">{{ stats.despesas_pendentes }}</div>
+                    <div class="stat-label text-muted">Desp. Pendentes</div>
+                    {% if stats.despesas_valor_pendente %}
+                    <div class="small text-muted">{{ stats.despesas_valor_pendente|valor_br }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Quick Actions -->
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title"><i class="fas fa-upload text-primary"></i> Importar</h5>
@@ -117,7 +128,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title"><i class="fas fa-file-alt text-info"></i> Documentos</h5>
@@ -136,7 +147,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body">
                     <h5 class="card-title"><i class="fas fa-file-invoice-dollar text-success"></i> Faturas</h5>
@@ -149,6 +160,17 @@
                             Fatura Subcontrato
                         </a>
                     </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-coins text-warning"></i> Despesas</h5>
+                    <p class="card-text text-muted small">Contabilidade, GRIS, seguro e outras despesas operacionais.</p>
+                    <a href="{{ url_for('carvia.listar_despesas') }}" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-arrow-right"></i> Despesas
+                    </a>
                 </div>
             </div>
         </div>

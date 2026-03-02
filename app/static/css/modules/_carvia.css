@@ -79,6 +79,11 @@
     --_badge-color: hsl(0 0% 100%);
 }
 
+.carvia-badge-pago {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+}
+
 .carvia-badge-cancelada {
     --_badge-bg: var(--semantic-danger);
     --_badge-color: hsl(0 0% 100%);
@@ -93,9 +98,11 @@
 [data-bs-theme="light"] .carvia-badge-confirmado,
 [data-bs-theme="light"] .carvia-badge-conferido,
 [data-bs-theme="light"] .carvia-badge-paga,
+[data-bs-theme="light"] .carvia-badge-pago,
 [data-theme="light"] .carvia-badge-confirmado,
 [data-theme="light"] .carvia-badge-conferido,
-[data-theme="light"] .carvia-badge-paga {
+[data-theme="light"] .carvia-badge-paga,
+[data-theme="light"] .carvia-badge-pago {
     --_badge-bg: hsl(145 65% 35%);
 }
 

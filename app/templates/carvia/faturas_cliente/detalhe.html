@@ -43,6 +43,13 @@
                         <div class="col-6">
                             <small class="text-muted d-block">Vencimento</small>
                             <strong>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</strong>
+                            {% if fatura.status != 'CANCELADA' %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
+                                    data-bs-toggle="modal" data-bs-target="#modalEditarVencimento"
+                                    title="Editar vencimento">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            {% endif %}
                         </div>
                         <div class="col-12">
                             <small class="text-muted d-block">Valor Total</small>
@@ -255,6 +262,30 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Vencimento -->
+<div class="modal fade" id="modalEditarVencimento" tabindex="-1" aria-labelledby="modalEditarVencimentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('carvia.editar_vencimento_fatura_cliente', fatura_id=fatura.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarVencimentoLabel">Editar Vencimento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="vencimento" class="form-label">Data de Vencimento</label>
+                    <input type="date" class="form-control" id="vencimento" name="vencimento"
+                           value="{{ fatura.vencimento.strftime('%Y-%m-%d') if fatura.vencimento else '' }}" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-edit"></i> Editar Despesa #{{ despesa.id }}</h2>
+        <a href="{{ url_for('carvia.detalhe_despesa', despesa_id=despesa.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('carvia.editar_despesa', despesa_id=despesa.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="tipo_despesa" class="form-label">Tipo de Despesa *</label>
+                                <select class="form-select" id="tipo_despesa" name="tipo_despesa" required>
+                                    <option value="">Selecione...</option>
+                                    {% for tipo in tipos_despesa %}
+                                    <option value="{{ tipo }}" {{ 'selected' if despesa.tipo_despesa == tipo }}>{{ tipo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="valor" class="form-label">Valor (R$) *</label>
+                                <input type="number" class="form-control" id="valor" name="valor"
+                                       step="0.01" min="0.01" required
+                                       value="{{ despesa.valor }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="descricao" class="form-label">Descricao</label>
+                                <input type="text" class="form-control" id="descricao" name="descricao"
+                                       maxlength="500" value="{{ despesa.descricao or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_despesa" class="form-label">Data da Despesa *</label>
+                                <input type="date" class="form-control" id="data_despesa" name="data_despesa"
+                                       required value="{{ despesa.data_despesa.strftime('%Y-%m-%d') if despesa.data_despesa else '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_vencimento" class="form-label">Data de Vencimento</label>
+                                <input type="date" class="form-control" id="data_vencimento" name="data_vencimento"
+                                       value="{{ despesa.data_vencimento.strftime('%Y-%m-%d') if despesa.data_vencimento else '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="observacoes" class="form-label">Observacoes</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes"
+                                          rows="3">{{ despesa.observacoes or '' }}</textarea>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <span class="badge carvia-badge-{{ despesa.status|lower }} align-self-center">
+                                {{ despesa.status }}
+                            </span>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('carvia.detalhe_despesa', despesa_id=despesa.id) }}" class="btn btn-secondary">Cancelar</a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Salvar Alteracoes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

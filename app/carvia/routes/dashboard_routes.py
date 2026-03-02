@@ -11,6 +11,7 @@ from app import db
 from app.carvia.models import (
     CarviaNf, CarviaOperacao, CarviaSubcontrato,
     CarviaFaturaCliente, CarviaFaturaTransportadora,
+    CarviaDespesa,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,15 @@ def register_dashboard_routes(bp):
                 func.count(CarviaFaturaTransportadora.id)
             ).filter(CarviaFaturaTransportadora.status_conferencia == 'PENDENTE').scalar() or 0
 
+            # Despesas
+            stats['despesas_pendentes'] = db.session.query(
+                func.count(CarviaDespesa.id)
+            ).filter(CarviaDespesa.status == 'PENDENTE').scalar() or 0
+
+            stats['despesas_valor_pendente'] = db.session.query(
+                func.coalesce(func.sum(CarviaDespesa.valor), 0)
+            ).filter(CarviaDespesa.status == 'PENDENTE').scalar() or 0
+
             # Ultimas operacoes
             stats['ultimas_operacoes'] = db.session.query(CarviaOperacao).order_by(
                 CarviaOperacao.criado_em.desc()
@@ -93,6 +103,8 @@ def register_dashboard_routes(bp):
                 'subcontratos_cotados': 0,
                 'faturas_carvia_pendentes': 0,
                 'faturas_sub_pendentes': 0,
+                'despesas_pendentes': 0,
+                'despesas_valor_pendente': 0,
                 'ultimas_operacoes': [],
             }
 
