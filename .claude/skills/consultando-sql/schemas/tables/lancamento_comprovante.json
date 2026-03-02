@@ -185,15 +185,9 @@
   ],
   "indices": [
     {
-      "name": "ix_lancamento_comprovante_odoo_move_line_id",
+      "name": "idx_lanc_comp_status",
       "columns": [
-        "odoo_move_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lancamento_comprovante_status",
-      "columns": [
+        "comprovante_id",
         "status"
       ],
       "unique": false
@@ -221,9 +215,15 @@
       "unique": false
     },
     {
-      "name": "idx_lanc_comp_status",
+      "name": "ix_lancamento_comprovante_odoo_move_line_id",
       "columns": [
-        "comprovante_id",
+        "odoo_move_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lancamento_comprovante_status",
+      "columns": [
         "status"
       ],
       "unique": false

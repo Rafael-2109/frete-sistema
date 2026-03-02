@@ -36,6 +36,14 @@
       "default": "PENDENTE"
     },
     {
+      "name": "pago_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "pago_em",
+      "type": "timestamp"
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },
@@ -56,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_despesas_tipo_despesa",
+      "name": "ix_carvia_despesas_status",
       "columns": [
-        "tipo_despesa"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_despesas_status",
+      "name": "ix_carvia_despesas_tipo_despesa",
       "columns": [
-        "status"
+        "tipo_despesa"
       ],
       "unique": false
     }

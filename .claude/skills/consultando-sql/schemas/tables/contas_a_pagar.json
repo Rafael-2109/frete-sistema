@@ -165,27 +165,6 @@
   ],
   "indices": [
     {
-      "name": "idx_conta_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_empresa",
-      "columns": [
-        "empresa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_conta_pagar_nf",
       "columns": [
         "titulo_nf"
@@ -193,9 +172,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_metodo_baixa",
+      "name": "idx_conta_pagar_cnpj",
       "columns": [
-        "metodo_baixa"
+        "cnpj"
       ],
       "unique": false
     },
@@ -207,16 +186,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_titulo_nf",
+      "name": "ix_contas_a_pagar_odoo_move_id",
       "columns": [
-        "titulo_nf"
+        "odoo_move_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_vencimento",
+      "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
-        "vencimento"
+        "titulo_nf"
       ],
       "unique": false
     },
@@ -228,16 +207,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_parcela",
+      "name": "ix_contas_a_pagar_vencimento",
       "columns": [
-        "parcela"
+        "vencimento"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_vencimento",
+      "name": "ix_contas_a_pagar_parcela",
       "columns": [
-        "vencimento"
+        "parcela"
       ],
       "unique": false
     },
@@ -249,9 +228,30 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_pagar_metodo_baixa",
+      "columns": [
+        "metodo_baixa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_cnpj",
       "columns": [
         "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_empresa",
+      "columns": [
+        "empresa"
       ],
       "unique": false
     },

@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 132,
+  "total_tabelas": 133,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -193,6 +193,15 @@
         "num_pedido",
         "cod_produto",
         "pedido_cliente"
+      ]
+    },
+    {
+      "name": "carvia_conta_movimentacoes",
+      "description": "Tabela carvia_conta_movimentacoes",
+      "key_fields": [
+        "tipo_doc",
+        "doc_id",
+        "tipo_movimento"
       ]
     },
     {
