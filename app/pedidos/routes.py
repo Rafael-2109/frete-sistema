@@ -86,7 +86,7 @@ def lista_pedidos():
         filtros_botao_aplicados = True
         if filtro_status == 'abertos':
             query = query.filter(
-                Pedido.status == 'ABERTO'  # ✅ Filtro APENAS por status
+                db.or_(Pedido.status == 'ABERTO', Pedido.nf_cd == True)  # ✅ Abertos + NF voltou ao CD
             )
         elif filtro_status == 'cotados':
             query = query.filter(

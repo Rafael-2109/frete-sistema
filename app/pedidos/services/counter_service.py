@@ -120,10 +120,10 @@ class PedidosCounterService:
                     (func.date(Pedido.expedicao) == d, 1)
                 ))
             )
-            # Abertos da data
+            # Abertos da data (inclui nf_cd=True)
             cases.append(
                 func.count(case(
-                    ((func.date(Pedido.expedicao) == d) & (Pedido.status == 'ABERTO'), 1)
+                    ((func.date(Pedido.expedicao) == d) & ((Pedido.status == 'ABERTO') | (Pedido.nf_cd == True)), 1)
                 ))
             )
 
@@ -147,9 +147,9 @@ class PedidosCounterService:
         resultado = db.session.query(
             # 0: todos
             func.count(),
-            # 1: abertos
+            # 1: abertos (inclui nf_cd=True)
             func.count(case(
-                (Pedido.status == 'ABERTO', 1)
+                ((Pedido.status == 'ABERTO') | (Pedido.nf_cd == True), 1)
             )),
             # 2: cotados
             func.count(case(
