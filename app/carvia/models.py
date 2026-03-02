@@ -539,6 +539,12 @@ class CarviaFaturaTransportadora(db.Model):
     conferido_por = db.Column(db.String(100))
     conferido_em = db.Column(db.DateTime)
 
+    # Status de pagamento (independente de status_conferencia)
+    # PENDENTE, PAGO
+    status_pagamento = db.Column(db.String(20), default='PENDENTE', index=True)
+    pago_por = db.Column(db.String(100))
+    pago_em = db.Column(db.DateTime)
+
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)

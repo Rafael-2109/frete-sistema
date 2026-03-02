@@ -178,3 +178,110 @@
     text-align: right;
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Fluxo de Caixa
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Accordion header row */
+.carvia-fluxo-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.carvia-fluxo-data {
+    font-weight: 600;
+    min-width: 10rem;
+    white-space: nowrap;
+}
+
+.carvia-fluxo-data .dia-semana {
+    font-weight: 400;
+    opacity: 0.7;
+    margin-left: 0.25rem;
+}
+
+.carvia-fluxo-valores {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+/* Badges de valores no header do accordion */
+.carvia-fluxo-badge-receber {
+    color: var(--semantic-success, #198754);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.carvia-fluxo-badge-pagar {
+    color: var(--semantic-danger, #dc3545);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.carvia-fluxo-badge-saldo {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-sm, 0.25rem);
+}
+
+.carvia-fluxo-badge-saldo.positivo {
+    color: var(--semantic-success, #198754);
+    background: hsla(145, 65%, 40%, 0.1);
+}
+
+.carvia-fluxo-badge-saldo.negativo {
+    color: var(--semantic-danger, #dc3545);
+    background: hsla(0, 65%, 50%, 0.1);
+}
+
+/* Accordion body */
+.carvia-fluxo-body {
+    padding: 0.5rem 0;
+}
+
+/* Borda lateral colorida por saldo */
+.accordion-item:has(.carvia-fluxo-badge-saldo.positivo) {
+    border-left: 3px solid var(--semantic-success, #198754);
+}
+
+.accordion-item:has(.carvia-fluxo-badge-saldo.negativo) {
+    border-left: 3px solid var(--semantic-danger, #dc3545);
+}
+
+/* Botao menor para acoes inline */
+.btn-xs {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    border-radius: var(--radius-sm, 0.25rem);
+}
+
+/* Lancamento pago — visual diferenciado */
+.carvia-fluxo-pago {
+    opacity: 0.6;
+}
+
+/* Segmented control para filtro */
+.carvia-fluxo-filtro-status .btn-check:checked + .btn {
+    font-weight: 600;
+}
+
+/* Light mode adjustments */
+[data-bs-theme="light"] .carvia-fluxo-badge-saldo.positivo {
+    color: hsl(145 65% 30%);
+}
+
+[data-bs-theme="light"] .carvia-fluxo-badge-saldo.negativo {
+    color: hsl(0 65% 40%);
+}

@@ -9,7 +9,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 
 ---
 
-## Estrutura de Telas (5 documentos + 1 importacao)
+## Estrutura de Telas (5 documentos + 1 importacao + 1 fluxo caixa)
 
 | # | Documento | Entidade | URL | Tela |
 |---|-----------|----------|-----|------|
@@ -19,6 +19,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 | 4 | **Fatura CarVia** | `CarviaFaturaCliente` | `/carvia/faturas-cliente` | Lista + Nova + Detalhe |
 | 5 | **Fatura Subcontrato** | `CarviaFaturaTransportadora` | `/carvia/faturas-transportadora` | Lista + Nova + Detalhe |
 | 6 | **Importacao** | `ImportacaoService` | `/carvia/importar` | Upload + Review + Confirmar |
+| 7 | **Fluxo de Caixa** | `FluxoCaixaService` | `/carvia/fluxo-de-caixa` | Accordions por dia + Pagar/Desfazer |
 
 ### Cross-links entre documentos (navegacao completa)
 
@@ -47,9 +48,9 @@ NF Venda ──── N:M ──── CTe CarVia ──── FK ──── F
 
 ```
 app/carvia/
-  ├── routes/          # 7 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api)
-  ├── services/        # 8 services (parsers, matching, importacao, cotacao, fatura_pdf_parser, linking)
-  ├── models.py        # 9 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem)
+  ├── routes/          # 8 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api, fluxo_caixa)
+  ├── services/        # 9 services (parsers, matching, importacao, cotacao, fatura_pdf_parser, linking, fluxo_caixa)
+  ├── models.py        # 10 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem, Despesa)
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/
@@ -122,7 +123,7 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 | CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7) |
 | CarviaFaturaCliente | `carvia_faturas_cliente` | Status: PENDENTE, EMITIDA, PAGA, CANCELADA. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
 | CarviaFaturaClienteItem | `carvia_fatura_cliente_itens` | Itens CTe de detalhe por fatura. FK `fatura_cliente_id` CASCADE. **FK `operacao_id` e `nf_id`** (nullable, resolvidos por LinkingService). Campos: cte_numero, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, frete, icms, iss, st, base_calculo |
-| CarviaFaturaTransportadora | `carvia_faturas_transportadora` | `status_conferencia` (nao `status`). `conferido_por`/`conferido_em` preenchidos na conferencia. Relationship `itens` → CarviaFaturaTransportadoraItem |
+| CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | **NOVO** — Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
 
 ---
@@ -254,3 +255,4 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/adicionar_campos_fatura_cliente_v2.py` + `.sql` — 14 novos campos em `carvia_faturas_cliente` + tabela `carvia_fatura_cliente_itens`
 - `scripts/migrations/carvia_linking_v1_schema.py` + `.sql` — FK `operacao_id`/`nf_id` em `carvia_fatura_cliente_itens` + tabela `carvia_fatura_transportadora_itens` (15 cols, 4 indices)
 - `scripts/migrations/carvia_linking_v2_backfill.py` — Backfill de FKs em itens existentes (requer v1 antes)
+- `scripts/migrations/adicionar_status_pagamento_fatura_transportadora.py` + `.sql` — 3 novos campos (`status_pagamento`, `pago_por`, `pago_em`) + indice

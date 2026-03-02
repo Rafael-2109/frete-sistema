@@ -1,0 +1,219 @@
+"""
+Fluxo de Caixa CarVia — Service
+================================
+
+Consolida 3 fontes de dados financeiros em visao diaria:
+- A Receber: carvia_faturas_cliente (status != CANCELADA)
+- A Pagar: carvia_faturas_transportadora (todas) + carvia_despesas (status != CANCELADO)
+
+Agrupamento por data de vencimento com saldo acumulado progressivo.
+"""
+
+import logging
+from collections import defaultdict
+
+from app import db
+
+logger = logging.getLogger(__name__)
+
+# Mapeamento dia da semana (Python weekday) -> portugues
+DIAS_SEMANA = {
+    0: 'Seg',
+    1: 'Ter',
+    2: 'Qua',
+    3: 'Qui',
+    4: 'Sex',
+    5: 'Sab',
+    6: 'Dom',
+}
+
+
+class FluxoCaixaService:
+    """Consolida fluxo de caixa de todas as fontes CarVia."""
+
+    def obter_fluxo(self, data_inicio, data_fim, filtro_status='total'):
+        """
+        Retorna fluxo de caixa agrupado por dia.
+
+        Args:
+            data_inicio: date - inicio do periodo
+            data_fim: date - fim do periodo
+            filtro_status: 'total' | 'pendente' | 'pago'
+
+        Returns:
+            dict com 'dias' (lista ordenada) e 'totais'
+        """
+        from app.carvia.models import (
+            CarviaFaturaCliente,
+            CarviaFaturaTransportadora,
+            CarviaDespesa,
+        )
+
+        # Coletar lancamentos de cada fonte
+        lancamentos_receber = self._buscar_faturas_cliente(
+            CarviaFaturaCliente, data_inicio, data_fim, filtro_status
+        )
+        lancamentos_pagar_transp = self._buscar_faturas_transportadora(
+            CarviaFaturaTransportadora, data_inicio, data_fim, filtro_status
+        )
+        lancamentos_pagar_desp = self._buscar_despesas(
+            CarviaDespesa, data_inicio, data_fim, filtro_status
+        )
+
+        # Agrupar por data de vencimento
+        dias_receber = defaultdict(list)
+        dias_pagar = defaultdict(list)
+
+        for lanc in lancamentos_receber:
+            dias_receber[lanc['vencimento']].append(lanc)
+
+        for lanc in lancamentos_pagar_transp + lancamentos_pagar_desp:
+            dias_pagar[lanc['vencimento']].append(lanc)
+
+        # Coletar todas as datas com lancamentos
+        todas_datas = sorted(
+            set(dias_receber.keys()) | set(dias_pagar.keys())
+        )
+
+        # Montar resultado por dia com saldo acumulado
+        resultado_dias = []
+        saldo_acumulado = 0.0
+        total_receber = 0.0
+        total_pagar = 0.0
+
+        for dt in todas_datas:
+            receber_dia = dias_receber.get(dt, [])
+            pagar_dia = dias_pagar.get(dt, [])
+
+            soma_receber = sum(l['valor'] for l in receber_dia)
+            soma_pagar = sum(l['valor'] for l in pagar_dia)
+            saldo_dia = soma_receber - soma_pagar
+            saldo_acumulado += saldo_dia
+
+            total_receber += soma_receber
+            total_pagar += soma_pagar
+
+            resultado_dias.append({
+                'data': dt,
+                'data_str': dt.strftime('%d/%m/%Y'),
+                'dia_semana': DIAS_SEMANA.get(dt.weekday(), ''),
+                'a_receber': soma_receber,
+                'a_pagar': soma_pagar,
+                'saldo_dia': saldo_dia,
+                'saldo_acumulado': saldo_acumulado,
+                'lancamentos_receber': receber_dia,
+                'lancamentos_pagar': pagar_dia,
+            })
+
+        return {
+            'dias': resultado_dias,
+            'totais': {
+                'a_receber': total_receber,
+                'a_pagar': total_pagar,
+                'saldo_liquido': total_receber - total_pagar,
+                'total_dias': len(resultado_dias),
+            },
+        }
+
+    def _buscar_faturas_cliente(self, model, data_inicio, data_fim, filtro_status):
+        """Busca faturas cliente (a receber) no periodo."""
+        query = db.session.query(model).filter(
+            model.vencimento >= data_inicio,
+            model.vencimento <= data_fim,
+            model.status != 'CANCELADA',
+        )
+
+        if filtro_status == 'pago':
+            query = query.filter(model.status == 'PAGA')
+        elif filtro_status == 'pendente':
+            query = query.filter(model.status != 'PAGA')
+
+        faturas = query.order_by(model.vencimento, model.id).all()
+
+        resultado = []
+        for f in faturas:
+            resultado.append({
+                'tipo_doc': 'fatura_cliente',
+                'tipo_label': 'Fatura CarVia',
+                'id': f.id,
+                'vencimento': f.vencimento,
+                'emissao': f.data_emissao,
+                'fornecedor': f.nome_cliente or f.cnpj_cliente or '-',
+                'documento': f.numero_fatura,
+                'valor': float(f.valor_total or 0),
+                'pago': f.status == 'PAGA',
+                'status': f.status,
+                'url_detalhe': f'/carvia/faturas-cliente/{f.id}',
+            })
+
+        return resultado
+
+    def _buscar_faturas_transportadora(self, model, data_inicio, data_fim, filtro_status):
+        """Busca faturas transportadora (a pagar) no periodo."""
+        query = db.session.query(model).filter(
+            model.vencimento >= data_inicio,
+            model.vencimento <= data_fim,
+        )
+
+        if filtro_status == 'pago':
+            query = query.filter(model.status_pagamento == 'PAGO')
+        elif filtro_status == 'pendente':
+            query = query.filter(model.status_pagamento == 'PENDENTE')
+
+        # transportadora ja usa lazy='joined' no model (models.py:550)
+        faturas = query.order_by(model.vencimento, model.id).all()
+
+        resultado = []
+        for f in faturas:
+            nome_transp = '-'
+            if f.transportadora:
+                nome_transp = f.transportadora.razao_social or '-'
+
+            resultado.append({
+                'tipo_doc': 'fatura_transportadora',
+                'tipo_label': 'Fatura Subcontrato',
+                'id': f.id,
+                'vencimento': f.vencimento,
+                'emissao': f.data_emissao,
+                'fornecedor': nome_transp,
+                'documento': f.numero_fatura,
+                'valor': float(f.valor_total or 0),
+                'pago': f.status_pagamento == 'PAGO',
+                'status': f.status_pagamento,
+                'url_detalhe': f'/carvia/faturas-transportadora/{f.id}',
+            })
+
+        return resultado
+
+    def _buscar_despesas(self, model, data_inicio, data_fim, filtro_status):
+        """Busca despesas (a pagar) no periodo."""
+        query = db.session.query(model).filter(
+            model.data_vencimento >= data_inicio,
+            model.data_vencimento <= data_fim,
+            model.status != 'CANCELADO',
+        )
+
+        if filtro_status == 'pago':
+            query = query.filter(model.status == 'PAGO')
+        elif filtro_status == 'pendente':
+            query = query.filter(model.status == 'PENDENTE')
+
+        despesas = query.order_by(model.data_vencimento, model.id).all()
+
+        resultado = []
+        for d in despesas:
+            resultado.append({
+                'tipo_doc': 'despesa',
+                'tipo_label': d.tipo_despesa or 'Despesa',
+                'id': d.id,
+                'vencimento': d.data_vencimento,
+                'emissao': d.data_despesa,
+                'fornecedor': d.descricao or '-',
+                'documento': str(d.id),
+                'valor': float(d.valor or 0),
+                'pago': d.status == 'PAGO',
+                'status': d.status,
+                'url_detalhe': f'/carvia/despesas/{d.id}',
+            })
+
+        return resultado

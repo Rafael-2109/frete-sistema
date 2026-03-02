@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{# ================================================================= #}
+{# MACROS (devem ser definidas ANTES do uso)                         #}
+{# ================================================================= #}
+
+{% macro _render_tabela_lancamentos(lancamentos, direcao) %}
+{% if lancamentos %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 carvia-table">
+        <thead>
+            <tr>
+                <th>Emissao</th>
+                <th>Fornecedor / Cliente</th>
+                <th>Tipo</th>
+                <th>Documento</th>
+                <th class="text-end">Valor</th>
+                <th>Status</th>
+                <th class="text-center">Acoes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in lancamentos %}
+            <tr class="{{ 'carvia-fluxo-pago' if l.pago }}"
+                data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}">
+                <td>{{ l.emissao.strftime('%d/%m') if l.emissao else '-' }}</td>
+                <td>{{ l.fornecedor|truncate(40) }}</td>
+                <td><span class="badge bg-secondary">{{ l.tipo_label }}</span></td>
+                <td>{{ l.documento }}</td>
+                <td class="valor-col">{{ l.valor|valor_br }}</td>
+                <td>
+                    <span class="badge carvia-badge-{{ l.status|lower }}">
+                        {{ l.status }}
+                    </span>
+                </td>
+                <td class="text-center text-nowrap">
+                    <a href="{{ l.url_detalhe }}" class="btn btn-xs btn-outline-primary"
+                       title="Ver detalhe"><i class="fas fa-eye"></i></a>
+                    {% if l.pago %}
+                    <button class="btn btn-xs btn-outline-warning btn-desfazer"
+                            data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}"
+                            title="Desfazer pagamento">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                    {% else %}
+                    <button class="btn btn-xs btn-outline-success btn-pagar"
+                            data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}"
+                            title="Marcar como pago">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted text-center py-3 mb-0">
+    Nenhum lancamento {{ 'a receber' if direcao == 'receber' else 'a pagar' }} neste dia.
+</p>
+{% endif %}
+{% endmacro %}
+
+
+{% macro _render_tabela_saldo(dia) %}
+<div class="table-responsive">
+    <table class="table table-sm mb-0 carvia-table">
+        <thead>
+            <tr>
+                <th></th>
+                <th>Fornecedor / Cliente</th>
+                <th>Tipo</th>
+                <th class="text-end">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in dia.lancamentos_receber %}
+            <tr class="{{ 'carvia-fluxo-pago' if l.pago }}">
+                <td class="text-success"><i class="fas fa-plus-circle"></i></td>
+                <td>{{ l.fornecedor|truncate(40) }}</td>
+                <td><span class="badge bg-secondary">{{ l.tipo_label }}</span></td>
+                <td class="valor-col text-success">+{{ l.valor|valor_br }}</td>
+            </tr>
+            {% endfor %}
+            {% for l in dia.lancamentos_pagar %}
+            <tr class="{{ 'carvia-fluxo-pago' if l.pago }}">
+                <td class="text-danger"><i class="fas fa-minus-circle"></i></td>
+                <td>{{ l.fornecedor|truncate(40) }}</td>
+                <td><span class="badge bg-secondary">{{ l.tipo_label }}</span></td>
+                <td class="valor-col text-danger">-{{ l.valor|valor_br }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="table-active">
+                <td colspan="3"><strong>Saldo do Dia</strong></td>
+                <td class="valor-col"><strong class="{{ 'text-success' if dia.saldo_dia >= 0 else 'text-danger' }}">
+                    {{ dia.saldo_dia|valor_br }}
+                </strong></td>
+            </tr>
+            <tr>
+                <td colspan="3"><strong>Saldo Acumulado</strong></td>
+                <td class="valor-col"><strong class="{{ 'text-success' if dia.saldo_acumulado >= 0 else 'text-danger' }}">
+                    {{ dia.saldo_acumulado|valor_br }}
+                </strong></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endmacro %}
+
+
+{# ================================================================= #}
+{# CONTEUDO PRINCIPAL                                                #}
+{# ================================================================= #}
+
+<div class="container-fluid py-4">
+
+    {# HEADER #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-chart-line"></i> Fluxo de Caixa</h2>
+            <p class="text-muted mb-0">Visao consolidada de receitas e despesas CarVia</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button id="btnExpandirTodos" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-expand-alt"></i> Expandir Todos
+            </button>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {# FILTROS #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">De</label>
+                    <input type="date" name="data_inicio" class="form-control form-control-sm"
+                           value="{{ data_inicio }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Ate</label>
+                    <input type="date" name="data_fim" class="form-control form-control-sm"
+                           value="{{ data_fim }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Status</label>
+                    <div class="btn-group btn-group-sm w-100 carvia-fluxo-filtro-status" role="group">
+                        <input type="radio" class="btn-check" name="status" id="st-total"
+                               value="total" {{ 'checked' if status_filtro == 'total' }} autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="st-total">Total</label>
+
+                        <input type="radio" class="btn-check" name="status" id="st-pendente"
+                               value="pendente" {{ 'checked' if status_filtro == 'pendente' }} autocomplete="off">
+                        <label class="btn btn-outline-warning" for="st-pendente">Pendente</label>
+
+                        <input type="radio" class="btn-check" name="status" id="st-pago"
+                               value="pago" {{ 'checked' if status_filtro == 'pago' }} autocomplete="off">
+                        <label class="btn btn-outline-success" for="st-pago">Pago</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# CARDS TOTAIS #}
+    <div class="row g-3 mb-4">
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-success">{{ fluxo.totais.a_receber|valor_br }}</div>
+                    <div class="stat-label text-muted">A Receber</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-danger">{{ fluxo.totais.a_pagar|valor_br }}</div>
+                    <div class="stat-label text-muted">A Pagar</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value {{ 'text-success' if fluxo.totais.saldo_liquido >= 0 else 'text-danger' }}">
+                        {{ fluxo.totais.saldo_liquido|valor_br }}
+                    </div>
+                    <div class="stat-label text-muted">Saldo Liquido</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-secondary">{{ fluxo.totais.total_dias }}</div>
+                    <div class="stat-label text-muted">Dias</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ACCORDIONS POR DIA #}
+    {% if fluxo.dias %}
+    <div class="accordion" id="accordionFluxo">
+        {% for dia in fluxo.dias %}
+        <div class="accordion-item mb-2">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#dia-{{ loop.index }}">
+                    <div class="carvia-fluxo-header">
+                        <span class="carvia-fluxo-data">
+                            {{ dia.data_str }}
+                            <span class="dia-semana">{{ dia.dia_semana }}</span>
+                        </span>
+                        <div class="carvia-fluxo-valores">
+                            {% if dia.a_receber > 0 %}
+                            <span class="carvia-fluxo-badge-receber">
+                                <i class="fas fa-arrow-down"></i> {{ dia.a_receber|valor_br }}
+                            </span>
+                            {% endif %}
+                            {% if dia.a_pagar > 0 %}
+                            <span class="carvia-fluxo-badge-pagar">
+                                <i class="fas fa-arrow-up"></i> {{ dia.a_pagar|valor_br }}
+                            </span>
+                            {% endif %}
+                            <span class="carvia-fluxo-badge-saldo {{ 'positivo' if dia.saldo_acumulado >= 0 else 'negativo' }}">
+                                Saldo: {{ dia.saldo_acumulado|valor_br }}
+                            </span>
+                        </div>
+                    </div>
+                </button>
+            </h2>
+            <div id="dia-{{ loop.index }}" class="accordion-collapse collapse">
+                <div class="accordion-body carvia-fluxo-body">
+                    {# Tabs internas #}
+                    <ul class="nav nav-tabs nav-tabs-sm" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" data-bs-toggle="tab"
+                                    data-bs-target="#tab-receber-{{ loop.index }}" type="button">
+                                A Receber
+                                {% if dia.lancamentos_receber %}
+                                <span class="badge bg-success ms-1">{{ dia.lancamentos_receber|length }}</span>
+                                {% endif %}
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="tab"
+                                    data-bs-target="#tab-pagar-{{ loop.index }}" type="button">
+                                A Pagar
+                                {% if dia.lancamentos_pagar %}
+                                <span class="badge bg-danger ms-1">{{ dia.lancamentos_pagar|length }}</span>
+                                {% endif %}
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="tab"
+                                    data-bs-target="#tab-saldo-{{ loop.index }}" type="button">
+                                Saldo
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content mt-2">
+                        <div class="tab-pane fade show active" id="tab-receber-{{ loop.index }}">
+                            {{ _render_tabela_lancamentos(dia.lancamentos_receber, 'receber') }}
+                        </div>
+                        <div class="tab-pane fade" id="tab-pagar-{{ loop.index }}">
+                            {{ _render_tabela_lancamentos(dia.lancamentos_pagar, 'pagar') }}
+                        </div>
+                        <div class="tab-pane fade" id="tab-saldo-{{ loop.index }}">
+                            {{ _render_tabela_saldo(dia) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-chart-line fa-3x mb-3 d-block opacity-50"></i>
+        <p>Nenhum lancamento encontrado no periodo selecionado.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    // --- Expandir/Recolher Todos ---
+    var btnExpandir = document.getElementById('btnExpandirTodos');
+    if (btnExpandir) {
+        var expandido = false;
+
+        btnExpandir.addEventListener('click', function() {
+            var accordions = document.querySelectorAll('#accordionFluxo .accordion-collapse');
+            expandido = !expandido;
+
+            accordions.forEach(function(el) {
+                var instance = bootstrap.Collapse.getOrCreateInstance(el, {toggle: false});
+                if (expandido) {
+                    instance.show();
+                } else {
+                    instance.hide();
+                }
+            });
+
+            btnExpandir.innerHTML = expandido
+                ? '<i class="fas fa-compress-alt"></i> Recolher Todos'
+                : '<i class="fas fa-expand-alt"></i> Expandir Todos';
+        });
+    }
+
+    // --- Pagar / Desfazer via event delegation ---
+    document.addEventListener('click', function(e) {
+        var btnPagar = e.target.closest('.btn-pagar');
+        var btnDesfazer = e.target.closest('.btn-desfazer');
+
+        if (btnPagar) {
+            e.preventDefault();
+            var tipo = btnPagar.dataset.tipo;
+            var id = btnPagar.dataset.id;
+
+            btnPagar.disabled = true;
+            btnPagar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/api/fluxo-caixa/pagar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tipo_doc: tipo, id: parseInt(id)})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    var tr = btnPagar.closest('tr');
+                    tr.classList.add('carvia-fluxo-pago');
+
+                    var badgeStatus = tr.querySelector('.badge[class*="carvia-badge-"]');
+                    if (badgeStatus) {
+                        badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
+                        badgeStatus.textContent = data.novo_status;
+                    }
+
+                    btnPagar.outerHTML =
+                        '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
+                        'data-tipo="' + tipo + '" data-id="' + id + '" title="Desfazer pagamento">' +
+                        '<i class="fas fa-undo"></i></button>';
+                } else {
+                    alert(data.erro || 'Erro ao processar pagamento');
+                    btnPagar.disabled = false;
+                    btnPagar.innerHTML = '<i class="fas fa-check"></i>';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btnPagar.disabled = false;
+                btnPagar.innerHTML = '<i class="fas fa-check"></i>';
+            });
+        }
+
+        if (btnDesfazer) {
+            e.preventDefault();
+            var tipo2 = btnDesfazer.dataset.tipo;
+            var id2 = btnDesfazer.dataset.id;
+
+            btnDesfazer.disabled = true;
+            btnDesfazer.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/api/fluxo-caixa/desfazer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tipo_doc: tipo2, id: parseInt(id2)})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    var tr = btnDesfazer.closest('tr');
+                    tr.classList.remove('carvia-fluxo-pago');
+
+                    var badgeStatus = tr.querySelector('.badge[class*="carvia-badge-"]');
+                    if (badgeStatus) {
+                        badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
+                        badgeStatus.textContent = data.novo_status;
+                    }
+
+                    btnDesfazer.outerHTML =
+                        '<button class="btn btn-xs btn-outline-success btn-pagar" ' +
+                        'data-tipo="' + tipo2 + '" data-id="' + id2 + '" title="Marcar como pago">' +
+                        '<i class="fas fa-check"></i></button>';
+                } else {
+                    alert(data.erro || 'Erro ao desfazer pagamento');
+                    btnDesfazer.disabled = false;
+                    btnDesfazer.innerHTML = '<i class="fas fa-undo"></i>';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btnDesfazer.disabled = false;
+                btnDesfazer.innerHTML = '<i class="fas fa-undo"></i>';
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}
