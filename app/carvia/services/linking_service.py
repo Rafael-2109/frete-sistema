@@ -85,17 +85,177 @@ class LinkingService:
         return query.first()
 
     # ------------------------------------------------------------------
+    # Criar NF referencia (stub) quando NF nao existe no banco
+    # ------------------------------------------------------------------
+
+    def _criar_nf_referencia(self, nf_numero, contraparte_cnpj,
+                              contraparte_nome=None, valor_mercadoria=None,
+                              peso_kg=None, criado_por='sistema'):
+        """Cria CarviaNf minima (tipo_fonte=FATURA_REFERENCIA) quando NF nao existe.
+
+        Usado como ultimo recurso quando:
+        1. resolver_nf_por_numero() nao encontrou (NF nunca importada)
+        2. Fallback via junction tambem falhou
+
+        Idempotente: retorna NF existente se ja criada (por numero + cnpj normalizado).
+
+        Args:
+            nf_numero: Numero da NF (obrigatorio)
+            contraparte_cnpj: CNPJ do emitente da NF (obrigatorio)
+            contraparte_nome: Nome do emitente (opcional)
+            valor_mercadoria: Valor da mercadoria (melhor dado disponivel)
+            peso_kg: Peso em kg
+            criado_por: Quem criou ('backfill' ou 'importacao')
+
+        Returns:
+            CarviaNf existente ou recem-criada
+        """
+        if not nf_numero or not contraparte_cnpj:
+            logger.warning(
+                f"_criar_nf_referencia: dados insuficientes "
+                f"nf_numero={nf_numero} cnpj={contraparte_cnpj}"
+            )
+            return None
+
+        from app.carvia.models import CarviaNf
+
+        # Normalizar para busca de duplicata
+        nf_norm = nf_numero.lstrip('0') or '0'
+        cnpj_digits = re.sub(r'\D', '', contraparte_cnpj)
+
+        # Verificar se ja existe (idempotencia)
+        existente = CarviaNf.query.filter(
+            func.ltrim(CarviaNf.numero_nf, '0') == nf_norm,
+            func.regexp_replace(
+                CarviaNf.cnpj_emitente, '[^0-9]', '', 'g'
+            ) == cnpj_digits,
+        ).first()
+
+        if existente:
+            logger.info(
+                f"NF referencia ja existe: nf_id={existente.id} "
+                f"numero={nf_numero} cnpj={contraparte_cnpj}"
+            )
+            return existente
+
+        # Criar NF stub minima
+        from app.utils.timezone import agora_utc_naive
+
+        nf = CarviaNf(
+            numero_nf=nf_numero,
+            cnpj_emitente=contraparte_cnpj,
+            nome_emitente=contraparte_nome,
+            valor_total=valor_mercadoria,
+            peso_bruto=peso_kg,
+            tipo_fonte='FATURA_REFERENCIA',
+            criado_em=agora_utc_naive(),
+            criado_por=criado_por,
+        )
+        db.session.add(nf)
+        db.session.flush()
+
+        logger.info(
+            f"NF referencia CRIADA: nf_id={nf.id} numero={nf_numero} "
+            f"cnpj={contraparte_cnpj} tipo_fonte=FATURA_REFERENCIA"
+        )
+        return nf
+
+    # ------------------------------------------------------------------
+    # Fallback: buscar NF via junction (operacao -> nfs vinculadas)
+    # ------------------------------------------------------------------
+
+    def _resolver_nf_via_junction(self, nf_numero, operacao_id):
+        """Busca NF via junction carvia_operacao_nfs quando match direto falha.
+
+        Se o item tem operacao_id, busca NFs vinculadas a essa operacao
+        e verifica se alguma tem numero_nf correspondente.
+
+        Returns:
+            CarviaNf ou None
+        """
+        if not nf_numero or not operacao_id:
+            return None
+
+        from app.carvia.models import CarviaNf, CarviaOperacaoNf
+
+        nf_norm = nf_numero.lstrip('0') or '0'
+
+        # Buscar NFs vinculadas a esta operacao cujo numero bate
+        nf = CarviaNf.query.join(
+            CarviaOperacaoNf,
+            CarviaOperacaoNf.nf_id == CarviaNf.id
+        ).filter(
+            CarviaOperacaoNf.operacao_id == operacao_id,
+            func.ltrim(CarviaNf.numero_nf, '0') == nf_norm,
+        ).first()
+
+        if nf:
+            logger.info(
+                f"NF resolvida via junction: nf_id={nf.id} "
+                f"numero={nf_numero} operacao_id={operacao_id}"
+            )
+
+        return nf
+
+    # ------------------------------------------------------------------
+    # Criar junction operacao <-> NF (se nao existe)
+    # ------------------------------------------------------------------
+
+    def _criar_junction_se_necessario(self, operacao_id, nf_id):
+        """Cria carvia_operacao_nfs se junction nao existe.
+
+        Idempotente: verifica existencia antes de criar.
+
+        Returns:
+            True se criou, False se ja existia
+        """
+        if not operacao_id or not nf_id:
+            return False
+
+        from app.carvia.models import CarviaOperacaoNf
+
+        existente = CarviaOperacaoNf.query.filter_by(
+            operacao_id=operacao_id,
+            nf_id=nf_id,
+        ).first()
+
+        if existente:
+            return False
+
+        junction = CarviaOperacaoNf(
+            operacao_id=operacao_id,
+            nf_id=nf_id,
+        )
+        db.session.add(junction)
+        db.session.flush()
+
+        logger.info(
+            f"Junction CRIADA: operacao_id={operacao_id} nf_id={nf_id}"
+        )
+        return True
+
+    # ------------------------------------------------------------------
     # vincular_itens_fatura_cliente: resolve FKs em itens existentes
     # ------------------------------------------------------------------
 
-    def vincular_itens_fatura_cliente(self, fatura_id):
+    def vincular_itens_fatura_cliente(self, fatura_id, auto_criar_nf=False):
         """Resolve operacao_id e nf_id nos itens de uma fatura cliente existente.
 
         Itera sobre CarviaFaturaClienteItem onde operacao_id ou nf_id sao NULL
         e tenta resolver via cte_numero e nf_numero.
 
+        Estrategia de resolucao de nf_id (3 niveis):
+        1. Match direto via resolver_nf_por_numero() (numero + cnpj)
+        2. Fallback via junction carvia_operacao_nfs (se item tem operacao_id)
+        3. Ultimo recurso: criar NF referencia (se auto_criar_nf=True)
+
+        Args:
+            fatura_id: ID da CarviaFaturaCliente
+            auto_criar_nf: Se True, cria CarviaNf stub (tipo_fonte=FATURA_REFERENCIA)
+                          quando todos os fallbacks falham. Default False.
+
         Returns:
-            dict com estatisticas (operacoes_resolvidas, nfs_resolvidas, total_itens)
+            dict com estatisticas
         """
         from app.carvia.models import CarviaFaturaClienteItem
 
@@ -103,7 +263,15 @@ class LinkingService:
             fatura_cliente_id=fatura_id
         ).all()
 
-        stats = {'operacoes_resolvidas': 0, 'nfs_resolvidas': 0, 'total_itens': len(itens)}
+        stats = {
+            'operacoes_resolvidas': 0,
+            'nfs_resolvidas': 0,
+            'nfs_via_junction': 0,
+            'nfs_criadas_referencia': 0,
+            'junctions_criadas': 0,
+            'nfs_nao_resolvidas': 0,
+            'total_itens': len(itens),
+        }
 
         for item in itens:
             # Resolver operacao_id via cte_numero
@@ -116,16 +284,59 @@ class LinkingService:
                         f"Linking: fat_cli_item={item.id} cte={item.cte_numero} -> op={operacao.id}"
                     )
 
-            # Resolver nf_id via nf_numero + contraparte_cnpj
+            # Resolver nf_id via nf_numero + contraparte_cnpj (3 niveis)
             if item.nf_id is None and item.nf_numero:
+                nf = None
+                metodo = None
+
+                # Nivel 1: Match direto
                 nf = self.resolver_nf_por_numero(
                     item.nf_numero, item.contraparte_cnpj
                 )
                 if nf:
+                    metodo = 'direto'
+
+                # Nivel 2: Fallback via junction (se item tem operacao_id)
+                if nf is None and item.operacao_id:
+                    nf = self._resolver_nf_via_junction(
+                        item.nf_numero, item.operacao_id
+                    )
+                    if nf:
+                        metodo = 'junction'
+                        stats['nfs_via_junction'] += 1
+
+                # Nivel 3: Criar NF referencia (ultimo recurso)
+                if nf is None and auto_criar_nf:
+                    nf = self._criar_nf_referencia(
+                        nf_numero=item.nf_numero,
+                        contraparte_cnpj=item.contraparte_cnpj,
+                        contraparte_nome=item.contraparte_nome,
+                        valor_mercadoria=item.valor_mercadoria,
+                        peso_kg=item.peso_kg,
+                        criado_por='importacao',
+                    )
+                    if nf:
+                        metodo = 'referencia_criada'
+                        stats['nfs_criadas_referencia'] += 1
+
+                # Vincular NF ao item
+                if nf:
                     item.nf_id = nf.id
                     stats['nfs_resolvidas'] += 1
                     logger.info(
-                        f"Linking: fat_cli_item={item.id} nf_num={item.nf_numero} -> nf={nf.id}"
+                        f"Linking: fat_cli_item={item.id} nf_num={item.nf_numero} "
+                        f"-> nf={nf.id} metodo={metodo}"
+                    )
+
+                    # Criar junction operacao <-> NF se necessario
+                    if item.operacao_id:
+                        if self._criar_junction_se_necessario(item.operacao_id, nf.id):
+                            stats['junctions_criadas'] += 1
+                else:
+                    stats['nfs_nao_resolvidas'] += 1
+                    logger.warning(
+                        f"Linking FALHOU: item={item.id} nf_numero={item.nf_numero} "
+                        f"contraparte_cnpj={item.contraparte_cnpj} -> nenhuma NF encontrada"
                     )
 
         db.session.flush()

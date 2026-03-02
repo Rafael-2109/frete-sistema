@@ -392,6 +392,23 @@ class ImportacaoService:
                                 )
                                 db.session.add(item)
 
+                            # Flush para que os itens recem-adicionados estejam
+                            # visiveis na query do vincular_itens_fatura_cliente
+                            db.session.flush()
+
+                            # Fallback: resolver NFs pendentes com auto-criacao
+                            # Itens criados acima podem ter nf_id=NULL se NF nunca
+                            # foi importada. vincular_itens_fatura_cliente com
+                            # auto_criar_nf=True cria CarviaNf stub (FATURA_REFERENCIA).
+                            link_stats = linker.vincular_itens_fatura_cliente(
+                                fatura.id, auto_criar_nf=True
+                            )
+                            if link_stats.get('nfs_criadas_referencia', 0) > 0:
+                                logger.info(
+                                    f"Fatura {fatura.id}: {link_stats['nfs_criadas_referencia']} "
+                                    f"NFs referencia criadas automaticamente"
+                                )
+
                         faturas_criadas.append(fatura)
                 except Exception as e:
                     logger.error(f"Erro ao salvar fatura: {e}")

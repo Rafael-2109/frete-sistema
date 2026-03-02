@@ -116,7 +116,7 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 
 | Modelo | Tabela | Gotchas |
 |--------|--------|---------|
-| CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL. Helpers: `get_faturas_cliente()`, `get_faturas_transportadora()` |
+| CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual/referencia). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL, FATURA_REFERENCIA (stub criado por backfill/importacao). Helpers: `get_faturas_cliente()`, `get_faturas_transportadora()` |
 | CarviaNfItem | `carvia_nf_itens` | Itens de produto da NF. FK `nf_id`. Cascade delete-orphan |
 | CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id` |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
@@ -200,13 +200,17 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 |--------|--------|
 | `resolver_operacao_por_cte(cte_numero)` | Busca CarviaOperacao por CTe, normaliza zeros a esquerda |
 | `resolver_nf_por_numero(nf_numero, cnpj)` | Busca CarviaNf por numero + CNPJ (emitente OU destinatario) |
-| `vincular_itens_fatura_cliente(fatura_id)` | Resolve `operacao_id` e `nf_id` em itens existentes |
+| `vincular_itens_fatura_cliente(fatura_id, auto_criar_nf)` | Resolve `operacao_id` e `nf_id` em itens existentes (3 niveis de fallback) |
+| `_criar_nf_referencia(nf_numero, cnpj, ...)` | Cria CarviaNf stub (FATURA_REFERENCIA) — idempotente |
+| `_resolver_nf_via_junction(nf_numero, operacao_id)` | Busca NF via junction carvia_operacao_nfs |
+| `_criar_junction_se_necessario(operacao_id, nf_id)` | Cria junction se nao existe — idempotente |
 | `criar_itens_fatura_transportadora(fatura_id)` | Gera itens a partir de subcontratos vinculados |
 | `criar_itens_fatura_cliente_from_operacoes(fatura_id)` | Gera itens a partir de operacoes (faturas manuais) |
 | `backfill_todas_faturas()` | One-time para dados existentes |
 
 **Matching de CTe**: `ltrim(cte_numero, '0')` normaliza "00000001" == "1".
 **Matching de NF**: numero + CNPJ contraparte (emitente OU destinatario), ambos normalizados.
+**Fallback 3 niveis**: 1) Match direto → 2) Via junction → 3) Criar NF referencia (se `auto_criar_nf=True`).
 
 **Chamado automaticamente por**:
 - `ImportacaoService.salvar_importacao()` — durante import de fatura PDF
@@ -255,4 +259,5 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/adicionar_campos_fatura_cliente_v2.py` + `.sql` — 14 novos campos em `carvia_faturas_cliente` + tabela `carvia_fatura_cliente_itens`
 - `scripts/migrations/carvia_linking_v1_schema.py` + `.sql` — FK `operacao_id`/`nf_id` em `carvia_fatura_cliente_itens` + tabela `carvia_fatura_transportadora_itens` (15 cols, 4 indices)
 - `scripts/migrations/carvia_linking_v2_backfill.py` — Backfill de FKs em itens existentes (requer v1 antes)
+- `scripts/migrations/backfill_carvia_nf_linking.py` + `.sql` — Cria CarviaNf stubs (FATURA_REFERENCIA) para NFs referenciadas em faturas que nunca foram importadas, vincula nf_id e cria junctions
 - `scripts/migrations/adicionar_status_pagamento_fatura_transportadora.py` + `.sql` — 3 novos campos (`status_pagamento`, `pago_por`, `pago_em`) + indice
