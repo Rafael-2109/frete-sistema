@@ -230,17 +230,31 @@
   ],
   "indices": [
     {
-      "name": "idx_nfd_cnpj_status",
+      "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
-        "cnpj_emitente",
+        "numero_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
         "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_nfd_data_registro",
+      "name": "idx_nfd_numero_serie",
       "columns": [
-        "data_registro"
+        "numero_nfd",
+        "serie_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_origem_registro",
+      "columns": [
+        "origem_registro"
       ],
       "unique": false
     },
@@ -252,9 +266,10 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_nf_venda",
+      "name": "idx_nfd_cnpj_status",
       "columns": [
-        "numero_nf_venda"
+        "cnpj_emitente",
+        "status"
       ],
       "unique": false
     },
@@ -266,9 +281,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_odoo_dfe",
+      "name": "idx_nfd_data_registro",
       "columns": [
-        "odoo_dfe_id"
+        "data_registro"
       ],
       "unique": false
     },
@@ -278,6 +293,20 @@
         "odoo_dfe_id"
       ],
       "unique": true
+    },
+    {
+      "name": "idx_nfd_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_odoo_dfe",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
     },
     {
       "name": "idx_nfd_tipo_documento",
@@ -354,35 +383,6 @@
       "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_numero_nfd",
-      "columns": [
-        "numero_nfd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_numero_serie",
-      "columns": [
-        "numero_nfd",
-        "serie_nfd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_origem_registro",
-      "columns": [
-        "origem_registro"
       ],
       "unique": false
     }

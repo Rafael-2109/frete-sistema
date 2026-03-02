@@ -119,9 +119,16 @@
   ],
   "indices": [
     {
-      "name": "ix_saldo_standby_status_standby",
+      "name": "ix_saldo_standby_tipo_standby",
       "columns": [
-        "status_standby"
+        "tipo_standby"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_saldo_standby_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -140,16 +147,9 @@
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cnpj_cliente",
+      "name": "ix_saldo_standby_status_standby",
       "columns": [
-        "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_saldo_standby_tipo_standby",
-      "columns": [
-        "tipo_standby"
+        "status_standby"
       ],
       "unique": false
     },

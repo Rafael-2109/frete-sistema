@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 131,
+  "total_tabelas": 132,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -193,6 +193,15 @@
         "num_pedido",
         "cod_produto",
         "pedido_cliente"
+      ]
+    },
+    {
+      "name": "carvia_despesas",
+      "description": "Tabela carvia_despesas",
+      "key_fields": [
+        "tipo_despesa",
+        "descricao",
+        "valor"
       ]
     },
     {
