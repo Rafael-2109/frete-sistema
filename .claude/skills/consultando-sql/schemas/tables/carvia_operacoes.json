@@ -95,6 +95,11 @@
       "type": "integer"
     },
     {
+      "name": "nfs_referenciadas_json",
+      "type": "jsonb",
+      "description": "NFs referenciadas no CTe XML [{chave, numero_nf, cnpj_emitente}] para re-linking retroativo"
+    },
+    {
       "name": "tipo_entrada",
       "type": "varchar(30)",
       "nullable": false
@@ -138,9 +143,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_fatura_cliente_id",
+      "name": "ix_carvia_operacoes_cte_numero",
       "columns": [
-        "fatura_cliente_id"
+        "cte_numero"
       ],
       "unique": false
     },
@@ -152,9 +157,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_cte_numero",
+      "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
-        "cte_numero"
+        "fatura_cliente_id"
       ],
       "unique": false
     }

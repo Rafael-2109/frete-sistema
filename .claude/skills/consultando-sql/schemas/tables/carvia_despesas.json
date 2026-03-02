@@ -56,16 +56,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_despesas_status",
+      "name": "ix_carvia_despesas_tipo_despesa",
       "columns": [
-        "status"
+        "tipo_despesa"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_despesas_tipo_despesa",
+      "name": "ix_carvia_despesas_status",
       "columns": [
-        "tipo_despesa"
+        "status"
       ],
       "unique": false
     }

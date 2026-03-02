@@ -190,20 +190,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pedido_compras_num_requisicao",
-      "columns": [
-        "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_tipo_pedido",
-      "columns": [
-        "tipo_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pedido_compras_dfe_id",
       "columns": [
         "dfe_id"
@@ -278,6 +264,20 @@
       "name": "ix_pedido_compras_status_odoo",
       "columns": [
         "status_odoo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_num_requisicao",
+      "columns": [
+        "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_tipo_pedido",
+      "columns": [
+        "tipo_pedido"
       ],
       "unique": false
     }
