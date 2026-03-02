@@ -774,7 +774,7 @@
                         <h6 class="mb-0 d-inline">Produtos da NFD</h6>
                         {% if linhas %}
                         <span class="badge bg-success ms-2">{{ linhas|selectattr('produto_resolvido')|list|length }} resolvidas</span>
-                        <span class="badge bg-warning">{{ linhas|rejectattr('produto_resolvido')|list|length }} pendentes</span>
+                        <span class="badge bg-warning text-dark">{{ linhas|rejectattr('produto_resolvido')|list|length }} pendentes</span>
                         {% endif %}
                         {% endif %}
                     </div>
@@ -911,7 +911,7 @@
                                             {% if linha.produto_resolvido %}
                                             <span class="badge bg-success">Resolvido</span>
                                             {% else %}
-                                            <span class="badge bg-warning">Pendente</span>
+                                            <span class="badge bg-warning text-dark">Pendente</span>
                                             {% endif %}
                                         </td>
                                         <td>

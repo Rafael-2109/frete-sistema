@@ -211,7 +211,7 @@
             </div>
 
             <hr>
-            <button type="button" id="btn-processar-ofx" class="btn btn-info text-white" disabled>
+            <button type="button" id="btn-processar-ofx" class="btn btn-info" disabled>
                 <i class="fas fa-link"></i> Importar e Vincular <span id="ofx-contagem-arquivos">(0 arquivos)</span>
             </button>
         </div>
@@ -1367,7 +1367,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 '<i class="fas fa-clock me-1"></i>Pendente' + scoreHtml + '</span>';
                     } else if (val === 'CONFIRMADO') {
                         var scoreC = row.lancamento_match_score != null ? ' ' + row.lancamento_match_score + '%' : '';
-                        html += '<span class="badge bg-info text-white" title="Pronto para lancar">' +
+                        html += '<span class="badge bg-info" title="Pronto para lancar">' +
                                 '<i class="fas fa-check me-1"></i>Confirmado' + scoreC + '</span>';
                         if (row.multi_nf) {
                             html += '<br><span class="badge bg-primary" title="Multi-NF: ' + row.lancamento_count + ' titulos">' +
@@ -3050,7 +3050,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Status badge
             var statusBadge = '';
             if (rowData.lancamento_status === 'PENDENTE') statusBadge = badge('PENDENTE', 'bg-warning text-dark');
-            else if (rowData.lancamento_status === 'CONFIRMADO') statusBadge = badge('CONFIRMADO', 'bg-info text-white');
+            else if (rowData.lancamento_status === 'CONFIRMADO') statusBadge = badge('CONFIRMADO', 'bg-info');
             else if (rowData.lancamento_status === 'LANCADO') statusBadge = badge('BAIXADO', 'bg-success');
             else if (rowData.lancamento_status === 'REJEITADO') statusBadge = badge('REJEITADO', 'bg-danger');
             else statusBadge = badge(rowData.lancamento_status, 'bg-secondary');

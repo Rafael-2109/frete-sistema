@@ -135,7 +135,7 @@
                             <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else '-' }}</td>
                             <td>
                                 {% if fatura.status_conferencia == 'PENDENTE' %}
-                                <span class="badge bg-warning">{{ fatura.status_conferencia }}</span>
+                                <span class="badge bg-warning text-dark">{{ fatura.status_conferencia }}</span>
                                 {% elif fatura.status_conferencia == 'CONFERIDO' %}
                                 <span class="badge bg-success">{{ fatura.status_conferencia }}</span>
                                 {% else %}
@@ -151,7 +151,7 @@
                                 {% endif %}
                                 <!-- ✅ DESPESAS EXTRAS USANDO MÉTODOS DO MODEL -->
                                 {% if fatura.total_despesas_extras() > 0 %}
-                                <br><span class="badge bg-warning">{{ fatura.total_despesas_extras() }} despesa(s)</span>
+                                <br><span class="badge bg-warning text-dark">{{ fatura.total_despesas_extras() }} despesa(s)</span>
                                 <br><small class="text-muted">
                                     {{ (fatura.valor_total_despesas_extras()|moeda_carteira) }}
                                 </small>
@@ -285,7 +285,7 @@
 <div class="modal fade" id="modalFechamentoFreteiros" tabindex="-1" aria-labelledby="modalFechamentoFreteirosLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-warning">
+            <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title" id="modalFechamentoFreteirosLabel">
                     <i class="fas fa-truck"></i> Exportar Fechamento de Freteiros
                 </h5>

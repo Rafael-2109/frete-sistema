@@ -121,7 +121,7 @@
                             {% elif d.status_dinamico == 'CANCELADO' %}
                             <span class="badge bg-secondary">{{ d.status_dinamico }}</span>
                             {% else %}
-                            <span class="badge bg-warning">{{ d.status_dinamico }}</span>
+                            <span class="badge bg-warning text-dark">{{ d.status_dinamico }}</span>
                             {% endif %}
                         </td>
                         <td>{{ d.data_vencimento|formatar_data_segura or '-' }}</td>

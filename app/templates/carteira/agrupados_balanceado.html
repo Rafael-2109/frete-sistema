@@ -533,7 +533,7 @@
                                         {% if pedido.totalmente_separado %}
                                         <br><span class="badge bg-success mt-1">Completo</span>
                                         {% elif pedido.qtd_separacoes > 0 %}
-                                        <br><span class="badge bg-warning mt-1">Parcial</span>
+                                        <br><span class="badge bg-warning text-dark mt-1">Parcial</span>
                                         {% else %}
                                         <br><span class="badge bg-secondary mt-1">Pendente {% if pedido.valor_saldo_restante %}R$ {{ pedido.valor_saldo_restante|moeda_carteira }}{% endif %}</span>
                                         {% endif %}

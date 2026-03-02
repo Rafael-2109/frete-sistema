@@ -124,7 +124,7 @@
                                         {% if item.tipo == 'nf_orfa' %}
                                             <span class="badge bg-danger">NF Órfã</span>
                                         {% elif item.tipo == 'separacao_orfa' %}
-                                            <span class="badge bg-warning">Separação Órfã</span>
+                                            <span class="badge bg-warning text-dark">Separação Órfã</span>
                                         {% elif item.tipo == 'divergencia_valor' %}
                                             <span class="badge bg-info">Divergência Valor</span>
                                         {% elif item.tipo == 'divergencia_quantidade' %}
@@ -196,7 +196,7 @@
                                         {% if item.resolvido %}
                                             <span class="badge bg-success">Resolvido</span>
                                         {% elif item.em_analise %}
-                                            <span class="badge bg-warning">Em Análise</span>
+                                            <span class="badge bg-warning text-dark">Em Análise</span>
                                         {% else %}
                                             <span class="badge bg-danger">Pendente</span>
                                         {% endif %}

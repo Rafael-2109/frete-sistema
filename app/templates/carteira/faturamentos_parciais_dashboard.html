@@ -173,7 +173,7 @@
                                     {% if just.percentual_divergencia > 10 %}
                                         <span class="badge bg-danger">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
                                     {% elif just.percentual_divergencia > 5 %}
-                                        <span class="badge bg-warning">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
+                                        <span class="badge bg-warning text-dark">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
                                     {% else %}
                                         <span class="badge bg-info">{{ "{:.1f}%".format(just.percentual_divergencia) }}</span>
                                     {% endif %}

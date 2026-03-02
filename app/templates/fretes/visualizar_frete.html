@@ -43,7 +43,7 @@
                 <i class="fas fa-edit"></i> Editar Frete
             </a>
             {% else %}
-            <button class="btn btn-primary" disabled title="Frete bloqueado - fatura conferida">
+            <button class="btn btn-secondary" disabled title="Frete bloqueado - fatura conferida">
                 <i class="fas fa-lock"></i> Frete Bloqueado
             </button>
             {% endif %}
@@ -71,7 +71,7 @@
                 style="display: inline-block;"
                 onsubmit="return confirm('🔄 Cancelar CTe: O CTe será removido mas o frete será mantido (status PENDENTE). Confirma?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button type="submit" class="btn btn-warning">
+                <button type="submit" class="btn btn-secondary">
                     <i class="fas fa-undo"></i> Cancelar CTe
                 </button>
             </form>
@@ -123,7 +123,7 @@
                                 {% if frete.tipo_carga == 'DIRETA' %}
                                 <span class="badge bg-info">{{ frete.tipo_carga }}</span>
                                 {% else %}
-                                <span class="badge bg-warning">{{ frete.tipo_carga }}</span>
+                                <span class="badge bg-warning text-dark">{{ frete.tipo_carga }}</span>
                                 {% endif %}
                             </p>
                             <p><strong>Modalidade:</strong> {{ frete.modalidade }}</p>
@@ -422,7 +422,7 @@
                         {% if diferenca_pago != 0 %}
                         <div class="mt-1">
                             {% if diferenca_pago > 0 %}
-                            <span class="badge bg-warning">+{{ (diferenca_pago)|moeda_carteira }}</span>
+                            <span class="badge bg-warning text-dark">+{{ (diferenca_pago)|moeda_carteira }}</span>
                             {% else %}
                             <span class="badge bg-info">{{ (diferenca_pago)|moeda_carteira }}</span>
                             {% endif %}
@@ -437,7 +437,7 @@
                             {% if 'abaixo' in classificacao_pago %}
                             <small class="badge bg-success">{{ classificacao_pago }}</small>
                             {% elif 'deve' in classificacao_pago %}
-                            <small class="badge bg-warning">{{ classificacao_pago }}</small>
+                            <small class="badge bg-warning text-dark">{{ classificacao_pago }}</small>
                             {% else %}
                             <small class="badge bg-secondary">{{ classificacao_pago }}</small>
                             {% endif %}
@@ -475,7 +475,7 @@
                                 {% if frete.odoo_dfe_id %}
                                 <a href="https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_dfe_id }}&model=l10n_br_ciel_it_account.dfe&view_type=form"
                                    target="_blank"
-                                   class="badge bg-info text-white text-decoration-none"
+                                   class="badge bg-info text-decoration-none"
                                    title="Abrir DFe {{ frete.odoo_dfe_id }} no Odoo">
                                     <i class="fas fa-external-link-alt me-1"></i>{{ frete.odoo_dfe_id }}
                                 </a>
@@ -491,7 +491,7 @@
                                 {% if frete.odoo_purchase_order_id %}
                                 <a href="https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_purchase_order_id }}&model=purchase.order&view_type=form"
                                    target="_blank"
-                                   class="badge bg-primary text-white text-decoration-none"
+                                   class="badge bg-primary text-decoration-none"
                                    title="Abrir PO {{ frete.odoo_purchase_order_id }} no Odoo">
                                     <i class="fas fa-external-link-alt me-1"></i>{{ frete.odoo_purchase_order_id }}
                                 </a>
@@ -507,7 +507,7 @@
                                 {% if frete.odoo_invoice_id %}
                                 <a href="https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_invoice_id }}&model=account.move&view_type=form"
                                    target="_blank"
-                                   class="badge bg-success text-white text-decoration-none"
+                                   class="badge bg-success text-decoration-none"
                                    title="Abrir Invoice {{ frete.odoo_invoice_id }} no Odoo">
                                     <i class="fas fa-external-link-alt me-1"></i>{{ frete.odoo_invoice_id }}
                                 </a>
@@ -662,7 +662,7 @@
                                     <td>
                                         {% if despesa.fatura_frete %}
                                         <a href="{{ url_for('fretes.visualizar_fatura', fatura_id=despesa.fatura_frete.id) }}"
-                                            class="badge bg-primary text-white text-decoration-none"
+                                            class="badge bg-primary text-decoration-none"
                                             title="Ver fatura {{ despesa.fatura_frete.numero_fatura }}">
                                             <i class="fas fa-file-invoice"></i> {{ despesa.fatura_frete.numero_fatura[:10] }}{% if despesa.fatura_frete.numero_fatura|length > 10 %}...{% endif %}
                                         </a>
@@ -948,7 +948,7 @@
                                     <td>{{ (mov.valor_diferenca)|moeda_carteira }}</td>
                                     <td>
                                         {% if mov.status == 'ATIVO' %}
-                                        <span class="badge bg-warning">{{ mov.status }}</span>
+                                        <span class="badge bg-warning text-dark">{{ mov.status }}</span>
                                         {% elif mov.status == 'COMPENSADO' %}
                                         <span class="badge bg-success">{{ mov.status }}</span>
                                         {% else %}

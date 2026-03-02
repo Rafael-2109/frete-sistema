@@ -2201,7 +2201,7 @@ function validarNF(loteId) {
     // Mostrar loading
     const badgeSincronizacao = document.getElementById('badge-sincronizacao');
     const mensagemValidacao = document.getElementById('mensagem-validacao');
-    badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6"><i class="fas fa-spinner fa-spin"></i> Validando e gravando...</span>';
+    badgeSincronizacao.innerHTML = '<span class="badge bg-warning text-dark fs-6"><i class="fas fa-spinner fa-spin"></i> Validando e gravando...</span>';
 
     // ✅ NOVO: Chama endpoint que VALIDA + GRAVA
     fetch(`/pedidos/gravar_nf/${loteId}`, {
@@ -2231,7 +2231,7 @@ function validarNF(loteId) {
                 }
             } else {
                 // NF não encontrada no faturamento (mas foi gravada)
-                badgeSincronizacao.innerHTML = '<span class="badge bg-warning fs-6">⚠️ Não encontrada</span>';
+                badgeSincronizacao.innerHTML = '<span class="badge bg-warning text-dark fs-6">⚠️ Não encontrada</span>';
                 mensagemValidacao.textContent = `⚠️ ${data.message}`;
                 mensagemValidacao.className = 'text-warning';
             }
@@ -2259,7 +2259,7 @@ function verificarMonitoramento(loteId, numeroNF) {
     // Mostrar loading
     const statusMonitoramento = document.getElementById('status-monitoramento');
     const infoMonitoramento = document.getElementById('info-monitoramento');
-    statusMonitoramento.innerHTML = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> Verificando...</span>';
+    statusMonitoramento.innerHTML = '<span class="badge bg-warning text-dark"><i class="fas fa-spinner fa-spin"></i> Verificando...</span>';
 
     fetch(`/pedidos/verificar_monitoramento`, {
         method: 'POST',
@@ -2706,7 +2706,7 @@ function criarModalEnderecoPedido(fonte = 'carteira') {
                                         </li>
                                         <li class="mb-2">
                                             <strong>Incoterm:</strong><br>
-                                            <span id="modal_incoterm" class="badge bg-warning">-</span>
+                                            <span id="modal_incoterm" class="badge bg-warning text-dark">-</span>
                                         </li>
                                     </ul>
                                 </div>

@@ -219,7 +219,7 @@
         <!-- Itens do Pedido -->
         <div class="col-md-6">
             <div class="card mb-4">
-                <div class="card-header bg-warning">
+                <div class="card-header bg-warning text-dark">
                     <i class="fas fa-motorcycle"></i> Motos do Pedido ({{ pedido.quantidade_motos }} unidade(s))
                 </div>
                 <div class="card-body p-0">
@@ -262,7 +262,7 @@
                                         {% if item.montagem_paga %}
                                             <span class="badge bg-success ml-2">PAGA</span>
                                         {% else %}
-                                            <span class="badge bg-warning ml-2">PENDENTE</span>
+                                            <span class="badge bg-warning text-dark ml-2">PENDENTE</span>
                                         {% endif %}
                                     </small>
                                 </td>
@@ -325,7 +325,7 @@
                                     {% if t.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
                                     {% elif t.status == 'ABERTO' %}
-                                        <span class="badge bg-warning">ABERTO</span>
+                                        <span class="badge bg-warning text-dark">ABERTO</span>
                                     {% else %}
                                         <span class="badge bg-secondary">{{ t.status }}</span>
                                     {% endif %}
@@ -368,7 +368,7 @@
                                     {% if c.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
                                     {% else %}
-                                        <span class="badge bg-warning">PENDENTE</span>
+                                        <span class="badge bg-warning text-dark">PENDENTE</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -423,7 +423,7 @@
                                     {% if item.montagem_paga %}
                                         <span class="badge bg-success">PAGA</span>
                                     {% else %}
-                                        <span class="badge bg-warning">PENDENTE</span>
+                                        <span class="badge bg-warning text-dark">PENDENTE</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -510,7 +510,7 @@
                 <input type="hidden" name="chassi_antigo" id="chassiAntigoForm"/>
                 <input type="hidden" name="chassi_novo" id="chassiNovoForm"/>
 
-                <div class="modal-header bg-warning">
+                <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmar Substituição</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>

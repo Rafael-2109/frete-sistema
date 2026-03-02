@@ -112,11 +112,11 @@
                                         </td>
                                         <td>
                                             {% if mov.tipo_movimentacao %}
-                                                <span class="badge {% if mov.tipo_movimentacao == 'CREDITO' %}bg-danger text-white{% elif mov.tipo_movimentacao == 'DEBITO' %}bg-success text-white{% else %}bg-info text-white{% endif %}">
+                                                <span class="badge {% if mov.tipo_movimentacao == 'CREDITO' %}bg-danger{% elif mov.tipo_movimentacao == 'DEBITO' %}bg-success{% else %}bg-info{% endif %}">
                                                     {{ mov.tipo_movimentacao or '-' }}
                                                 </span>
                                             {% else %}
-                                                <span class="badge bg-secondary text-white">-</span>
+                                                <span class="badge bg-secondary">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -140,11 +140,11 @@
                                         </td>
                                         <td>
                                             {% if mov.status %}
-                                                <span class="badge {% if mov.status == 'ATIVO' %}bg-warning text-dark{% elif mov.status == 'COMPENSADO' %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+                                                <span class="badge {% if mov.status == 'ATIVO' %}bg-warning text-dark{% elif mov.status == 'COMPENSADO' %}bg-success{% else %}bg-secondary{% endif %}">
                                                     {{ mov.status }}
                                                 </span>
                                             {% else %}
-                                                <span class="badge bg-secondary text-white">-</span>
+                                                <span class="badge bg-secondary">-</span>
                                             {% endif %}
                                         </td>
                                     </tr>

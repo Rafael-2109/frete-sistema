@@ -265,7 +265,7 @@
                   {% if ag.status == 'confirmado' %}
                     <span class="badge bg-primary">✅ Confirmado</span>
                   {% else %}
-                    <span class="badge bg-warning">⏳ Aguardando</span>
+                    <span class="badge bg-warning text-dark">⏳ Aguardando</span>
                   {% endif %}
                 </div>
                 
@@ -350,7 +350,7 @@
                     <hr class="my-2">
                     <strong>🗑️ Resposta apagada em:</strong> {{ pendencia.resposta_excluida_em | formatar_data_hora_brasil }}<br>
                     <strong>Por:</strong> {{ pendencia.resposta_excluida_por }}<br>
-                    <span class="badge bg-warning">⏳ Aguardando Nova Resposta</span>
+                    <span class="badge bg-warning text-dark">⏳ Aguardando Nova Resposta</span>
                   </div>
                 {% else %}
                   <!-- Resposta ativa -->
@@ -361,7 +361,7 @@
                   </div>
                 {% endif %}
               {% else %}
-                <span class="badge bg-warning">⏳ Aguardando Resposta</span>
+                <span class="badge bg-warning text-dark">⏳ Aguardando Resposta</span>
               {% endif %}
             </div>
             <div class="col-md-4 text-end">

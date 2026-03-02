@@ -167,13 +167,13 @@
                                         {% if frete.numero_cte %}
                                         <span class="badge bg-success">{{ frete.numero_cte }}</span>
                                         {% else %}
-                                        <span class="badge bg-warning">Pendente</span>
+                                        <span class="badge bg-warning text-dark">Pendente</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ (frete.valor_cotado)|moeda_carteira }}</td>
                                     <td>
                                         {% if frete.status == 'PENDENTE' %}
-                                        <span class="badge bg-warning">{{ frete.status }}</span>
+                                        <span class="badge bg-warning text-dark">{{ frete.status }}</span>
                                         {% elif frete.status == 'EM_TRATATIVA' %}
                                         <span class="badge bg-info">EM TRATATIVA</span>
                                         {% elif frete.status == 'APROVADO' %}

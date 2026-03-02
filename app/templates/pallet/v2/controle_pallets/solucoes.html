@@ -2245,7 +2245,7 @@ function openDetalhesModal(creditoId) {
                                         ${d.numero_documento ? ` - ${d.numero_documento}` : ''}
                                         <br><small class="text-muted">${d.quantidade} pallets</small>
                                     </div>
-                                    <span class="badge ${d.recebido ? 'bg-success' : 'bg-warning'}">${d.recebido ? 'Recebido' : 'Pendente'}</span>
+                                    <span class="badge ${d.recebido ? 'bg-success' : 'bg-warning text-dark'}">${d.recebido ? 'Recebido' : 'Pendente'}</span>
                                 </li>
                             `).join('')}
                         </ul>

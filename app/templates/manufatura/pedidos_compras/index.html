@@ -572,7 +572,7 @@ function criarLinhaHTML(linha) {
         if (linha.qtd_recebida >= linha.qtd_produto_pedido) {
             badgeRecebimento = `<span class="badge bg-success">Recebido (100%)</span>`;
         } else {
-            badgeRecebimento = `<span class="badge bg-warning">Parcial (${percentual}%)</span>`;
+            badgeRecebimento = `<span class="badge bg-warning text-dark">Parcial (${percentual}%)</span>`;
         }
     }
 

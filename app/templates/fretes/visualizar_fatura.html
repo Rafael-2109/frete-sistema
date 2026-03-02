@@ -70,7 +70,7 @@
                                 {% if fatura.status_conferencia == 'CONFERIDO' %}
                                 <span class="badge bg-success">CONFERIDO</span>
                                 {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                                <span class="badge bg-warning">EM CONFERÊNCIA</span>
+                                <span class="badge bg-warning text-dark">EM CONFERÊNCIA</span>
                                 {% else %}
                                 <span class="badge bg-secondary">PENDENTE</span>
                                 {% endif %}
@@ -203,7 +203,7 @@
                                 {% if frete.status == 'APROVADO' %}
                                 <span class="badge bg-success">{{ frete.status }}</span>
                                 {% elif frete.status == 'PENDENTE' %}
-                                <span class="badge bg-warning">{{ frete.status }}</span>
+                                <span class="badge bg-warning text-dark">{{ frete.status }}</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ frete.status }}</span>
                                 {% endif %}

@@ -176,7 +176,7 @@
                                 {% if moto.status == 'DISPONIVEL' %}
                                 <span class="badge bg-success">{{ moto.status }}</span>
                                 {% elif moto.status == 'RESERVADA' %}
-                                <span class="badge bg-warning">{{ moto.status }}</span>
+                                <span class="badge bg-warning text-dark">{{ moto.status }}</span>
                                 {% elif moto.status == 'VENDIDA' %}
                                 <span class="badge bg-danger">{{ moto.status }}</span>
                                 {% else %}
@@ -185,7 +185,7 @@
                             </td>
                             <td>
                                 {% if moto.reservado %}
-                                <span class="badge bg-warning">Sim</span>
+                                <span class="badge bg-warning text-dark">Sim</span>
                                 {% else %}
                                 <span class="badge bg-secondary">Não</span>
                                 {% endif %}
@@ -664,7 +664,7 @@
                     <td>${moto.ano || '-'}</td>
                     <td>${moto.nf}</td>
                     <td><span class="badge bg-${statusClass}">${moto.status}</span></td>
-                    <td>${moto.reservado ? '<span class="badge bg-warning">Sim</span>' : 'Não'}</td>
+                    <td>${moto.reservado ? '<span class="badge bg-warning text-dark">Sim</span>' : 'Não'}</td>
                 </tr>
             `;
         });

@@ -264,7 +264,7 @@
                                     <td>{{ sep.qtd_separada or 0 }}</td>
                                     <td>R$ {{ "%.2f"|format(sep.valor_separado or 0)|replace('.', ',')|replace(',', '.', 1) }}</td>
                                     <td>
-                                        <span class="badge bg-warning">Órfã</span>
+                                        <span class="badge bg-warning text-dark">Órfã</span>
                                     </td>
                                     <td>
                                         <button class="btn btn-sm btn-primary" onclick="vincularSeparacao('{{ sep.lote_separacao }}')">

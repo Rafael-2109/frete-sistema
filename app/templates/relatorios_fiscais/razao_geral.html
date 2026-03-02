@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             const badge = document.getElementById('status-odoo');
-            badge.className = 'badge bg-warning';
+            badge.className = 'badge bg-warning text-dark';
             badge.innerHTML = '<i class="fas fa-question-circle me-1"></i> Status desconhecido';
         });
 

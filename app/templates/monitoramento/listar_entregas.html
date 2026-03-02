@@ -1030,7 +1030,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                 <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'sem_previsao' %}active{% endif %}" 
                      href="?status=sem_previsao">
-                    <span class="badge bg-warning me-2">🟡</span> Sem Previsão
+                    <span class="badge bg-warning text-dark me-2">🟡</span> Sem Previsão
                     {% if contadores.sem_previsao %}
                       <span class="badge bg-warning text-dark float-end">{{ contadores.sem_previsao }}</span>
                     {% endif %}
@@ -1059,7 +1059,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                 <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'sem_agendamento' %}active{% endif %}" 
                      href="?status=sem_agendamento">
-                    <span class="badge bg-warning me-2">⚠️</span> Agend. Pendente
+                    <span class="badge bg-warning text-dark me-2">⚠️</span> Agend. Pendente
                     {% if contadores.sem_agendamento %}
                       <span class="badge bg-warning text-dark float-end">{{ contadores.sem_agendamento }}</span>
                     {% endif %}
@@ -1118,7 +1118,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                 <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'devolvida' %}active{% endif %}" 
                      href="?status=devolvida">
-                    <span class="badge bg-warning me-2">📦</span> Devolvida
+                    <span class="badge bg-warning text-dark me-2">📦</span> Devolvida
                   </a>
                 </li>
                 <li>
@@ -2542,7 +2542,7 @@ document.addEventListener('DOMContentLoaded', function() {
         data.agendamentos.forEach((agendamento, index) => {
           const statusBadge = agendamento.status === 'confirmado' 
             ? '<span class="badge bg-primary">✅ Confirmado</span>'
-            : '<span class="badge bg-warning">⏳ Aguardando</span>';
+            : '<span class="badge bg-warning text-dark">⏳ Aguardando</span>';
           
           // Identifica o último agendamento aguardando
           if (index === 0 && agendamento.status === 'aguardando') {

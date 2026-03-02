@@ -109,19 +109,19 @@
                                     </td>
                                     <td class="text-start">{{ produto.nome_produto }}</td>
                                     <td class="text-end">
-                                        <span class="badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning{% else %}bg-success{% endif %}">
+                                        <span class="badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
                                             {{ "{:,.0f}".format(produto.estoque_inicial).replace(',', '.') }}
                                         </span>
                                     </td>
                                     <td class="text-end">
-                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning{% else %}bg-success{% endif %}">
+                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
                                             {{ "{:,.0f}".format(produto.previsao_ruptura).replace(',', '.') }}
                                         </span>
                                     </td>
                                     <td class="text-center">
                                         {% if produto.qtd_disponivel and produto.qtd_disponivel > 0 %}
                                             <div>
-                                                <span class="badge bg-info text-white">
+                                                <span class="badge bg-info">
                                                     {{ "{:,.0f}".format(produto.qtd_disponivel).replace(',', '.') }}
                                                 </span>
                                                 {% if produto.dias_disponivel is not none %}
@@ -918,7 +918,7 @@ function renderizarCardex(data) {
                 statusTexto = 'Ruptura';
             } else if (estoque_final <= 10) {
                 statusClass = 'table-warning';
-                badgeClass = 'bg-warning';
+                badgeClass = 'bg-warning text-dark';
                 statusTexto = 'Crítico';
             } else if (producao > 0) {
                 badgeClass = 'bg-info';

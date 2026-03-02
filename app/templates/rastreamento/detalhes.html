@@ -238,7 +238,7 @@
                                             </td>
                                             <td>
                                                 {% if ping.bateria_nivel %}
-                                                    <span class="badge {% if ping.bateria_nivel > 50 %}bg-success{% elif ping.bateria_nivel > 20 %}bg-warning{% else %}bg-danger{% endif %}">
+                                                    <span class="badge {% if ping.bateria_nivel > 50 %}bg-success{% elif ping.bateria_nivel > 20 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
                                                         {{ ping.bateria_nivel }}%
                                                     </span>
                                                 {% else %}

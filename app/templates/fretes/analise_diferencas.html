@@ -34,7 +34,7 @@
                     {% endfor %}
                     {% endif %}
                     {% if pos_minimo_count > 0 %}
-                    <span class="badge bg-warning">{{ pos_minimo_count }} componentes aplicados PÓS-MÍNIMO</span>
+                    <span class="badge bg-warning text-dark">{{ pos_minimo_count }} componentes aplicados PÓS-MÍNIMO</span>
                     {% else %}
                     <span class="badge bg-success">Todos componentes aplicados PRÉ-MÍNIMO</span>
                     {% endif %}
@@ -225,7 +225,7 @@
 
                                         <!-- Indicador de componente pós-mínimo -->
                                         {% if componente.pos_minimo %}
-                                        <span class="badge bg-warning badge-sm"
+                                        <span class="badge bg-warning text-dark badge-sm"
                                             title="Este componente é aplicado APÓS o frete mínimo">
                                             <i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO
                                         </span>
@@ -522,7 +522,7 @@
         }
 
         if (comp.pos_minimo) {
-            html += ' <span class="badge bg-warning badge-sm" title="Aplicado APÓS o frete mínimo"><i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO</span>';
+            html += ' <span class="badge bg-warning text-dark badge-sm" title="Aplicado APÓS o frete mínimo"><i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO</span>';
         }
 
         if (comp.tem_minimo && comp.valor_sem_minimo && comp.valor_sem_minimo < comp.valor_calculado) {

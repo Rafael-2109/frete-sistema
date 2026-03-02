@@ -74,7 +74,7 @@
                                         </a>
                                         <br>
                                         <small class="d-block">
-                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning{% endif %}">
+                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning text-dark{% endif %}">
                                                 {{ frete.tipo_carga }}
                                             </span>
                                         </small>
@@ -90,7 +90,7 @@
                                     <td>
                                         <span class="badge
                                             {% if frete.status == 'APROVADO' %}bg-success
-                                            {% elif frete.status == 'EM_TRATATIVA' %}bg-warning
+                                            {% elif frete.status == 'EM_TRATATIVA' %}bg-warning text-dark
                                             {% elif frete.status == 'REJEITADO' %}bg-danger
                                             {% elif frete.status == 'PAGO' %}bg-primary
                                             {% elif frete.status == 'CANCELADO' %}bg-secondary
@@ -152,7 +152,7 @@
                                 {% set nfs_list = frete.numeros_nfs.split(',') %}
                                 {% for nf in nfs_list %}
                                     {% if nf.strip() %}
-                                        <span class="badge {% if nf.strip() == numero_nf %}bg-warning{% else %}bg-secondary{% endif %} mr-1">
+                                        <span class="badge {% if nf.strip() == numero_nf %}bg-warning text-dark{% else %}bg-secondary{% endif %} mr-1">
                                             {{ nf.strip() }}
                                             {% if nf.strip() == numero_nf %}
                                                 <i class="fas fa-search"></i>

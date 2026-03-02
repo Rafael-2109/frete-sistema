@@ -124,7 +124,7 @@
                   {% if item.alerta.tipo_alteracao == 'alteracao_quantidade' %}
                     <span class="badge bg-info">Quantidade</span>
                   {% elif item.alerta.tipo_alteracao == 'alteracao_data' %}
-                    <span class="badge bg-warning">Data</span>
+                    <span class="badge bg-warning text-dark">Data</span>
                   {% elif item.alerta.tipo_alteracao == 'cancelamento' %}
                     <span class="badge bg-danger">Cancelamento</span>
                   {% else %}
@@ -166,7 +166,7 @@
                   {% if item.alerta.reimpresso %}
                     <span class="badge bg-success">Reimpresso</span>
                   {% else %}
-                    <span class="badge bg-warning">Pendente</span>
+                    <span class="badge bg-warning text-dark">Pendente</span>
                   {% endif %}
                 {% else %}
                   <span class="badge bg-secondary">-</span>

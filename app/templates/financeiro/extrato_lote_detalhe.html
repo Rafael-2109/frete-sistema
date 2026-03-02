@@ -35,7 +35,7 @@
                             {% if lote.status == 'CONCLUIDO' %}bg-success
                             {% elif lote.status == 'ERRO' %}bg-danger
                             {% elif lote.status == 'CONCILIANDO' %}bg-info
-                            {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning
+                            {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning text-dark
                             {% else %}bg-secondary{% endif %}">
                             {{ lote.status }}
                         </span>
@@ -262,7 +262,7 @@
                                 {% elif item.status_match == 'MATCH_ENCONTRADO' %}
                                 <span class="badge bg-success">MATCH</span>
                                 {% elif item.status_match == 'MULTIPLOS_MATCHES' %}
-                                <span class="badge bg-warning">MÚLTIPLOS</span>
+                                <span class="badge bg-warning text-dark">MÚLTIPLOS</span>
                                 {% elif item.status_match == 'SEM_MATCH' %}
                                 <span class="badge bg-danger">SEM MATCH</span>
                                 {% else %}

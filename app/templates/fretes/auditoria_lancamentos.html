@@ -200,7 +200,7 @@
                             </td>
                             <td>
                                 <div class="progress" style="height: 20px; width: 100px;">
-                                    <div class="progress-bar {% if lanc.status == 'SUCESSO' %}bg-success{% elif lanc.status == 'ERRO' %}bg-danger{% else %}bg-warning{% endif %}"
+                                    <div class="progress-bar {% if lanc.status == 'SUCESSO' %}bg-success{% elif lanc.status == 'ERRO' %}bg-danger{% else %}bg-warning text-dark{% endif %}"
                                          style="width: {{ (lanc.ultima_etapa / 16 * 100)|int }}%">
                                         {{ lanc.ultima_etapa }}/16
                                     </div>
@@ -209,7 +209,7 @@
                             <td>
                                 {% if lanc.dfe_id %}
                                 <a href="https://odoo.nacomgoya.com.br/web#id={{ lanc.dfe_id }}&model=l10n_br_ciel_it_account.dfe&view_type=form"
-                                   target="_blank" class="badge bg-info text-white text-decoration-none" title="Abrir DFe no Odoo">
+                                   target="_blank" class="badge bg-info text-decoration-none" title="Abrir DFe no Odoo">
                                     <i class="fas fa-external-link-alt me-1"></i>D:{{ lanc.dfe_id }}
                                 </a>
                                 {% endif %}
@@ -221,7 +221,7 @@
                                 {% endif %}
                                 {% if lanc.invoice_id %}
                                 <a href="https://odoo.nacomgoya.com.br/web#id={{ lanc.invoice_id }}&model=account.move&view_type=form"
-                                   target="_blank" class="badge bg-success text-white text-decoration-none" title="Abrir Invoice no Odoo">
+                                   target="_blank" class="badge bg-success text-decoration-none" title="Abrir Invoice no Odoo">
                                     <i class="fas fa-external-link-alt me-1"></i>I:{{ lanc.invoice_id }}
                                 </a>
                                 {% endif %}
@@ -236,7 +236,7 @@
                                 {% elif lanc.status == 'ERRO' %}
                                 <span class="badge bg-danger"><i class="fas fa-times"></i> Erro</span>
                                 {% else %}
-                                <span class="badge bg-warning"><i class="fas fa-clock"></i> Incompleto</span>
+                                <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Incompleto</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -767,13 +767,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 html += '<div class="mt-2">';
                                 html += '<small class="text-muted">IDs Odoo:</small> ';
                                 if (lastEtapa.dfe_id) {
-                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.dfe_id}&model=l10n_br_ciel_it_account.dfe&view_type=form" target="_blank" class="badge bg-info text-white text-decoration-none me-1" title="Abrir DFe no Odoo"><i class="fas fa-external-link-alt me-1"></i>DFe: ${lastEtapa.dfe_id}</a>`;
+                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.dfe_id}&model=l10n_br_ciel_it_account.dfe&view_type=form" target="_blank" class="badge bg-info text-decoration-none me-1" title="Abrir DFe no Odoo"><i class="fas fa-external-link-alt me-1"></i>DFe: ${lastEtapa.dfe_id}</a>`;
                                 }
                                 if (lastEtapa.purchase_order_id) {
                                     html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.purchase_order_id}&model=purchase.order&view_type=form" target="_blank" class="badge bg-primary text-white text-decoration-none me-1" title="Abrir PO no Odoo"><i class="fas fa-external-link-alt me-1"></i>PO: ${lastEtapa.purchase_order_id}</a>`;
                                 }
                                 if (lastEtapa.invoice_id) {
-                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.invoice_id}&model=account.move&view_type=form" target="_blank" class="badge bg-success text-white text-decoration-none" title="Abrir Invoice no Odoo"><i class="fas fa-external-link-alt me-1"></i>Invoice: ${lastEtapa.invoice_id}</a>`;
+                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.invoice_id}&model=account.move&view_type=form" target="_blank" class="badge bg-success text-decoration-none" title="Abrir Invoice no Odoo"><i class="fas fa-external-link-alt me-1"></i>Invoice: ${lastEtapa.invoice_id}</a>`;
                                 }
                                 html += '</div>';
                             }

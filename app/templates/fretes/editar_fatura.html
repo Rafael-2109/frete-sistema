@@ -94,7 +94,7 @@
                             {% if fatura.status_conferencia == 'CONFERIDO' %}
                             <span class="badge bg-success">CONFERIDO</span>
                             {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                            <span class="badge bg-warning">EM CONFERÊNCIA</span>
+                            <span class="badge bg-warning text-dark">EM CONFERÊNCIA</span>
                             {% else %}
                             <span class="badge bg-secondary">PENDENTE</span>
                             {% endif %}
@@ -103,7 +103,7 @@
                             <strong>Fretes Vinculados:</strong><br>
                             <span class="badge bg-primary">{{ fatura.total_fretes() }} frete(s)</span>
                             {% if fatura.total_despesas_extras() > 0 %}
-                            <br><span class="badge bg-warning">{{ fatura.total_despesas_extras() }} despesa(s)</span>
+                            <br><span class="badge bg-warning text-dark">{{ fatura.total_despesas_extras() }} despesa(s)</span>
                             {% endif %}
                         </div>
                         <div class="col-md-3">

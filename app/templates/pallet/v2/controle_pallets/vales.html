@@ -928,9 +928,9 @@
                                 {% if doc.dias_para_vencer < 0 %}
                                 <span class="badge bg-danger">Vencido há {{ doc.dias_para_vencer|abs }} dia(s)</span>
                                 {% elif doc.dias_para_vencer == 0 %}
-                                <span class="badge bg-warning">Vence hoje</span>
+                                <span class="badge bg-warning text-dark">Vence hoje</span>
                                 {% elif doc.dias_para_vencer <= 30 %}
-                                <span class="badge bg-warning">Vence em {{ doc.dias_para_vencer }} dia(s)</span>
+                                <span class="badge bg-warning text-dark">Vence em {{ doc.dias_para_vencer }} dia(s)</span>
                                 {% else %}
                                 <span class="badge bg-success">{{ doc.dias_para_vencer }} dias</span>
                                 {% endif %}
@@ -943,7 +943,7 @@
                             {% if doc.recebido %}
                             <span class="badge bg-success">Recebido</span>
                             {% else %}
-                            <span class="badge bg-warning">Pendente</span>
+                            <span class="badge bg-warning text-dark">Pendente</span>
                             {% endif %}
                         </td>
                     </tr>

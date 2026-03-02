@@ -88,7 +88,7 @@
                             {% elif despesa.status_dinamico == 'CANCELADO' %}
                             <span class="badge bg-secondary">{{ despesa.status_dinamico }}</span>
                             {% else %}
-                            <span class="badge bg-warning">{{ despesa.status_dinamico }}</span>
+                            <span class="badge bg-warning text-dark">{{ despesa.status_dinamico }}</span>
                             {% endif %}
                             <small class="text-muted">(calculado automaticamente)</small><br>
                             <strong>Valor Pago:</strong> R$ {{ despesa.valor_pago or 0|valor_br }}<br>
