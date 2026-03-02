@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    {# HEADER #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-list-alt"></i> Extrato da Conta</h2>
+            <p class="text-muted mb-0">Movimentacoes financeiras CarVia</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.fluxo_caixa') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-chart-line"></i> Fluxo de Caixa
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {# FILTROS #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">De</label>
+                    <input type="date" name="data_inicio" class="form-control form-control-sm"
+                           value="{{ data_inicio }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Ate</label>
+                    <input type="date" name="data_fim" class="form-control form-control-sm"
+                           value="{{ data_fim }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# CARDS RESUMO #}
+    <div class="row g-3 mb-4">
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value {{ 'text-success' if extrato.saldo_anterior >= 0 else 'text-danger' }}">
+                        {{ extrato.saldo_anterior|valor_br }}
+                    </div>
+                    <div class="stat-label text-muted">Saldo Anterior</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-success">{{ extrato.total_creditos|valor_br }}</div>
+                    <div class="stat-label text-muted">Creditos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-danger">{{ extrato.total_debitos|valor_br }}</div>
+                    <div class="stat-label text-muted">Debitos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div id="saldoFinalValor"
+                         class="stat-value {{ 'text-success' if extrato.saldo_final >= 0 else 'text-danger' }}">
+                        {{ extrato.saldo_final|valor_br }}
+                    </div>
+                    <div class="stat-label text-muted">Saldo Final</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# SALDO INICIAL #}
+    <div class="card mb-4">
+        <div class="card-body py-3">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <strong><i class="fas fa-wallet"></i> Saldo Inicial da Conta</strong>
+                </div>
+                <div class="col-auto">
+                    <span id="saldoContaAtual"
+                          class="{{ 'text-success' if saldo_conta >= 0 else 'text-danger' }}">
+                        <strong>{{ saldo_conta|valor_br }}</strong>
+                    </span>
+                    <small class="text-muted ms-2">(saldo total atual)</small>
+                </div>
+                <div class="col-auto ms-auto">
+                    <div class="input-group input-group-sm" style="max-width: 280px;">
+                        <span class="input-group-text">R$</span>
+                        <input type="number" id="inputSaldoInicial" class="form-control"
+                               step="0.01" placeholder="0,00"
+                               title="Valor do saldo inicial">
+                        <button id="btnSaldoInicial" class="btn btn-outline-primary" type="button">
+                            <i class="fas fa-save"></i> Definir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# TABELA DE MOVIMENTACOES #}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 carvia-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descricao</th>
+                        <th>Usuario</th>
+                        <th class="text-end">Credito</th>
+                        <th class="text-end">Debito</th>
+                        <th class="text-end">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Linha de saldo anterior #}
+                    <tr class="carvia-extrato-saldo-row">
+                        <td colspan="3"><em>Saldo Anterior</em></td>
+                        <td></td>
+                        <td></td>
+                        <td class="valor-col">
+                            <strong class="{{ 'text-success' if extrato.saldo_anterior >= 0 else 'text-danger' }}">
+                                {{ extrato.saldo_anterior|valor_br }}
+                            </strong>
+                        </td>
+                    </tr>
+
+                    {% for mov in extrato.movimentacoes %}
+                    <tr>
+                        <td class="text-nowrap">
+                            {{ mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '-' }}
+                        </td>
+                        <td>{{ mov.descricao or mov.tipo_doc }}</td>
+                        <td>{{ mov.criado_por }}</td>
+                        <td class="valor-col">
+                            {% if mov.tipo_movimento == 'CREDITO' %}
+                            <span class="carvia-extrato-credito">{{ mov.valor|valor_br }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="valor-col">
+                            {% if mov.tipo_movimento == 'DEBITO' %}
+                            <span class="carvia-extrato-debito">{{ mov.valor|valor_br }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="valor-col">
+                            <strong class="{{ 'text-success' if mov.saldo_acumulado >= 0 else 'text-danger' }}">
+                                {{ mov.saldo_acumulado|valor_br }}
+                            </strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                    {% if not extrato.movimentacoes %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            Nenhuma movimentacao no periodo selecionado.
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot>
+                    <tr class="carvia-extrato-saldo-row">
+                        <td colspan="3"><strong>Saldo Final</strong></td>
+                        <td class="valor-col text-success">
+                            <strong>{{ extrato.total_creditos|valor_br }}</strong>
+                        </td>
+                        <td class="valor-col text-danger">
+                            <strong>{{ extrato.total_debitos|valor_br }}</strong>
+                        </td>
+                        <td class="valor-col">
+                            <strong class="{{ 'text-success' if extrato.saldo_final >= 0 else 'text-danger' }}">
+                                {{ extrato.saldo_final|valor_br }}
+                            </strong>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    var btnSaldo = document.getElementById('btnSaldoInicial');
+    var inputSaldo = document.getElementById('inputSaldoInicial');
+
+    if (btnSaldo && inputSaldo) {
+        btnSaldo.addEventListener('click', function() {
+            var valor = parseFloat(inputSaldo.value);
+            if (isNaN(valor)) {
+                alert('Informe um valor numerico valido.');
+                return;
+            }
+
+            btnSaldo.disabled = true;
+            btnSaldo.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/api/extrato-conta/saldo-inicial', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({valor: valor})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    // Atualizar saldo exibido
+                    var elSaldo = document.getElementById('saldoContaAtual');
+                    if (elSaldo) {
+                        var formatted = 'R$\u00a0' + data.saldo_atual.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        });
+                        elSaldo.innerHTML = '<strong>' + formatted + '</strong>';
+                        elSaldo.className = data.saldo_atual >= 0 ? 'text-success' : 'text-danger';
+                    }
+                    inputSaldo.value = '';
+                    // Recarregar para atualizar toda a tabela
+                    window.location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao definir saldo inicial');
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+            })
+            .finally(function() {
+                btnSaldo.disabled = false;
+                btnSaldo.innerHTML = '<i class="fas fa-save"></i> Definir';
+            });
+        });
+
+        // Enter no input dispara o botao
+        inputSaldo.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                btnSaldo.click();
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

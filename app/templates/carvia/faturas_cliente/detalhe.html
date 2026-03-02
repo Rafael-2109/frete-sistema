@@ -13,9 +13,16 @@
                 por {{ fatura.criado_por }}
             </p>
         </div>
-        <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
+        <div class="d-flex gap-2">
+            {% if fatura.arquivo_pdf_path %}
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadFaturaPdf({{ fatura.id }})" title="Baixar PDF original da fatura">
+                <i class="fas fa-download"></i> PDF
+            </button>
+            {% endif %}
+            <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
     </div>
 
     <div class="row g-4">
@@ -289,4 +296,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadFaturaPdf(faturaId) {
+    fetch(`/carvia/api/fatura-cliente/${faturaId}/pdf`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso && data.url) {
+                window.open(data.url, '_blank');
+            } else {
+                alert(data.mensagem || data.erro || 'Erro ao obter arquivo');
+            }
+        })
+        .catch(() => alert('Erro de conexao ao baixar arquivo'));
+}
+</script>
 {% endblock %}

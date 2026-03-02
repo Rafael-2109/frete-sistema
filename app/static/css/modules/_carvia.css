@@ -285,3 +285,34 @@
 [data-bs-theme="light"] .carvia-fluxo-badge-saldo.negativo {
     color: hsl(0 65% 40%);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Extrato da Conta
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-extrato-credito {
+    color: var(--semantic-success, #198754);
+    font-weight: 600;
+}
+
+.carvia-extrato-debito {
+    color: var(--semantic-danger, #dc3545);
+    font-weight: 600;
+}
+
+.carvia-extrato-saldo-row {
+    background: var(--bg-light, #f8f9fa);
+    font-weight: 600;
+}
+
+[data-bs-theme="dark"] .carvia-extrato-saldo-row {
+    background: var(--bg-dark, #212529);
+}
+
+[data-bs-theme="light"] .carvia-extrato-credito {
+    color: hsl(145 65% 30%);
+}
+
+[data-bs-theme="light"] .carvia-extrato-debito {
+    color: hsl(0 65% 40%);
+}

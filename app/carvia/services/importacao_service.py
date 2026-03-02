@@ -18,6 +18,7 @@ Fluxo:
 import logging
 import os
 import re
+from io import BytesIO
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -43,6 +44,31 @@ class ImportacaoService:
 
     def __init__(self):
         self.matching = MatchingService()
+
+    def _salvar_arquivo_storage(self, conteudo: bytes, nome: str,
+                                 pasta: str) -> Optional[str]:
+        """Salva arquivo no S3/local e retorna path. Best-effort: nao bloqueia import se falhar.
+
+        Args:
+            conteudo: Bytes do arquivo original
+            nome: Nome original do arquivo (ex: 'nfe_12345.xml')
+            pasta: Pasta de destino (ex: 'carvia/nfs_xml')
+
+        Returns:
+            Path (string) do arquivo salvo, ou None se falhar
+        """
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            buf = BytesIO(conteudo)
+            buf.name = nome  # Necessario para deteccao de MIME type
+            path = storage.save_file(file=buf, folder=pasta)
+            if path:
+                logger.info(f"Arquivo salvo no storage: {pasta}/{nome} -> {path}")
+            return path
+        except Exception as e:
+            logger.warning(f"Falha ao salvar arquivo no storage (best-effort): {nome} -> {e}")
+            return None
 
     def classificar_arquivo(self, nome_arquivo: str, conteudo: bytes) -> str:
         """
@@ -123,6 +149,9 @@ class ImportacaoService:
                 if tipo == 'XML_NFE':
                     dados = self._parsear_nfe_xml(conteudo, nome)
                     if dados:
+                        dados['arquivo_xml_path'] = self._salvar_arquivo_storage(
+                            conteudo, nome, 'carvia/nfs_xml'
+                        )
                         nfs_parseadas.append(dados)
                     else:
                         erros.append(f'{nome}: Nao foi possivel extrair dados da NF-e XML')
@@ -130,6 +159,9 @@ class ImportacaoService:
                 elif tipo == 'XML_CTE':
                     dados = self._parsear_cte_xml(conteudo, nome)
                     if dados:
+                        dados['cte_xml_path'] = self._salvar_arquivo_storage(
+                            conteudo, nome, 'carvia/ctes_xml'
+                        )
                         ctes_parseados.append(dados)
                     else:
                         erros.append(f'{nome}: Nao foi possivel extrair dados do CTe XML')
@@ -137,6 +169,9 @@ class ImportacaoService:
                 elif tipo == 'PDF_DANFE':
                     dados = self._parsear_danfe_pdf(conteudo, nome)
                     if dados:
+                        dados['arquivo_pdf_path'] = self._salvar_arquivo_storage(
+                            conteudo, nome, 'carvia/nfs_pdf'
+                        )
                         nfs_parseadas.append(dados)
                     else:
                         erros.append(f'{nome}: Nao foi possivel extrair dados do DANFE PDF')
@@ -144,6 +179,12 @@ class ImportacaoService:
                 elif tipo == 'PDF_FATURA':
                     dados_lista = self._parsear_fatura_pdf(conteudo, nome)
                     if dados_lista:
+                        # PDF multi-pagina: salvar UMA vez, atribuir MESMO path a TODAS as faturas
+                        pdf_path = self._salvar_arquivo_storage(
+                            conteudo, nome, 'carvia/faturas_pdf'
+                        )
+                        for dados_fat in dados_lista:
+                            dados_fat['arquivo_pdf_path'] = pdf_path
                         faturas_parseadas.extend(dados_lista)
                     else:
                         erros.append(f'{nome}: Nao foi possivel extrair dados da fatura PDF')
@@ -627,6 +668,7 @@ class ImportacaoService:
                 valor_total=valor_total,
                 vencimento=vencimento,
                 arquivo_nome_original=fat_data.get('arquivo_nome_original'),
+                arquivo_pdf_path=fat_data.get('arquivo_pdf_path'),
                 status_conferencia='PENDENTE',
                 criado_por=criado_por,
             )
@@ -656,6 +698,7 @@ class ImportacaoService:
             valor_total=valor_total,
             vencimento=vencimento,
             arquivo_nome_original=fat_data.get('arquivo_nome_original'),
+            arquivo_pdf_path=fat_data.get('arquivo_pdf_path'),
             # Campos SSW adicionais
             tipo_frete=fat_data.get('tipo_frete'),
             quantidade_documentos=fat_data.get('quantidade_documentos'),
@@ -719,6 +762,8 @@ class ImportacaoService:
             peso_liquido=data.get('peso_liquido'),
             quantidade_volumes=data.get('quantidade_volumes'),
             arquivo_nome_original=data.get('arquivo_nome_original'),
+            arquivo_xml_path=data.get('arquivo_xml_path'),
+            arquivo_pdf_path=data.get('arquivo_pdf_path'),
             tipo_fonte=data.get('tipo_fonte', 'MANUAL'),
             criado_por=criado_por,
         )
@@ -764,6 +809,7 @@ class ImportacaoService:
             cte_chave_acesso=cte_data.get('cte_chave_acesso'),
             cte_valor=cte_data.get('cte_valor'),
             cte_xml_nome_arquivo=cte_data.get('arquivo_nome_original'),
+            cte_xml_path=cte_data.get('cte_xml_path'),
             cte_data_emissao=self._parsear_data_cte(cte_data.get('cte_data_emissao')),
             cnpj_cliente=rem.get('cnpj') or 'DESCONHECIDO',
             nome_cliente=rem.get('nome'),
@@ -929,6 +975,7 @@ class ImportacaoService:
             cte_chave_acesso=cte_data.get('cte_chave_acesso'),
             cte_valor=cte_data.get('cte_valor'),
             cte_xml_nome_arquivo=cte_data.get('arquivo_nome_original'),
+            cte_xml_path=cte_data.get('cte_xml_path'),
             cte_data_emissao=self._parsear_data_cte(
                 cte_data.get('cte_data_emissao')
             ),

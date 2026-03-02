@@ -134,6 +134,158 @@ def register_api_routes(bp):
             logger.error(f"Erro ao buscar transportadoras: {e}")
             return jsonify({'erro': str(e)}), 500
 
+    # ------------------------------------------------------------------
+    # Download de arquivos originais (S3 / local)
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/nf/<int:nf_id>/arquivo/<tipo>')
+    @login_required
+    def api_download_nf_arquivo(nf_id, tipo):
+        """Gera URL presigned para download do XML ou PDF original de uma NF."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        if tipo not in ('xml', 'pdf'):
+            return jsonify({'erro': 'Tipo deve ser "xml" ou "pdf"'}), 400
+
+        from app.carvia.models import CarviaNf
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return jsonify({'erro': 'NF nao encontrada'}), 404
+
+        path = nf.arquivo_xml_path if tipo == 'xml' else nf.arquivo_pdf_path
+        if not path:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': f'Arquivo {tipo.upper()} nao disponivel no storage',
+            }), 404
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_file_url(path)
+            if not url:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Erro ao gerar URL do arquivo',
+                }), 500
+            return jsonify({
+                'sucesso': True,
+                'url': url,
+                'arquivo': nf.arquivo_nome_original or f'nf_{nf.numero_nf}.{tipo}',
+            })
+        except Exception as e:
+            logger.error(f"Erro ao gerar URL para NF {nf_id} ({tipo}): {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/operacao/<int:operacao_id>/xml')
+    @login_required
+    def api_download_operacao_xml(operacao_id):
+        """Gera URL presigned para download do CTe XML original de uma operacao."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaOperacao
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            return jsonify({'erro': 'Operacao nao encontrada'}), 404
+
+        if not operacao.cte_xml_path:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'CTe XML nao disponivel no storage',
+            }), 404
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_file_url(operacao.cte_xml_path)
+            if not url:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Erro ao gerar URL do arquivo',
+                }), 500
+            return jsonify({
+                'sucesso': True,
+                'url': url,
+                'arquivo': operacao.cte_xml_nome_arquivo or f'cte_{operacao.cte_numero}.xml',
+            })
+        except Exception as e:
+            logger.error(f"Erro ao gerar URL para operacao {operacao_id} XML: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/fatura-cliente/<int:fatura_id>/pdf')
+    @login_required
+    def api_download_fatura_cliente_pdf(fatura_id):
+        """Gera URL presigned para download do PDF original de uma fatura cliente."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaFaturaCliente
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'erro': 'Fatura nao encontrada'}), 404
+
+        if not fatura.arquivo_pdf_path:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'PDF nao disponivel no storage',
+            }), 404
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_file_url(fatura.arquivo_pdf_path)
+            if not url:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Erro ao gerar URL do arquivo',
+                }), 500
+            return jsonify({
+                'sucesso': True,
+                'url': url,
+                'arquivo': fatura.arquivo_nome_original or f'fatura_{fatura.numero_fatura}.pdf',
+            })
+        except Exception as e:
+            logger.error(f"Erro ao gerar URL para fatura cliente {fatura_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/fatura-transportadora/<int:fatura_id>/pdf')
+    @login_required
+    def api_download_fatura_transportadora_pdf(fatura_id):
+        """Gera URL presigned para download do PDF original de uma fatura transportadora."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaFaturaTransportadora
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return jsonify({'erro': 'Fatura nao encontrada'}), 404
+
+        if not fatura.arquivo_pdf_path:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'PDF nao disponivel no storage',
+            }), 404
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_file_url(fatura.arquivo_pdf_path)
+            if not url:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Erro ao gerar URL do arquivo',
+                }), 500
+            return jsonify({
+                'sucesso': True,
+                'url': url,
+                'arquivo': fatura.arquivo_nome_original or f'fatura_{fatura.numero_fatura}.pdf',
+            })
+        except Exception as e:
+            logger.error(f"Erro ao gerar URL para fatura transportadora {fatura_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
     @bp.route('/api/atualizar-cubagem', methods=['POST'])
     @login_required
     def api_atualizar_cubagem():

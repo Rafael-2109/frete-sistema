@@ -7,10 +7,15 @@ Consolida 3 fontes de dados financeiros em visao diaria:
 - A Pagar: carvia_faturas_transportadora (todas) + carvia_despesas (status != CANCELADO)
 
 Agrupamento por data de vencimento com saldo acumulado progressivo.
+
+Saldo de conta: calculado por SUM de carvia_conta_movimentacoes (sem cache).
 """
 
 import logging
 from collections import defaultdict
+from decimal import Decimal
+
+from sqlalchemy import func, case
 
 from app import db
 
@@ -217,3 +222,113 @@ class FluxoCaixaService:
             })
 
         return resultado
+
+    # ===================================================================
+    # Saldo de Conta
+    # ===================================================================
+
+    def obter_saldo_conta(self):
+        """
+        Calcula saldo atual da conta por SUM de movimentacoes.
+
+        Returns:
+            float — saldo (positivo = credito liquido)
+        """
+        from app.carvia.models import CarviaContaMovimentacao
+
+        resultado = db.session.query(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (CarviaContaMovimentacao.tipo_movimento == 'CREDITO',
+                         CarviaContaMovimentacao.valor),
+                        else_=-CarviaContaMovimentacao.valor,
+                    )
+                ),
+                Decimal('0'),
+            )
+        ).scalar()
+
+        return float(resultado)
+
+    def obter_extrato(self, data_inicio, data_fim):
+        """
+        Monta extrato da conta com saldo acumulado progressivo.
+
+        Args:
+            data_inicio: date — inicio do periodo
+            data_fim: date — fim do periodo (inclusive)
+
+        Returns:
+            dict com saldo_anterior, movimentacoes, saldo_final,
+            total_creditos, total_debitos
+        """
+        from app.carvia.models import CarviaContaMovimentacao
+
+        # Converter date → datetime para comparacao com TIMESTAMP
+        from datetime import datetime, time
+
+        dt_inicio = datetime.combine(data_inicio, time.min)
+        dt_fim = datetime.combine(data_fim, time(23, 59, 59))
+
+        # Saldo anterior (tudo antes de data_inicio)
+        saldo_anterior_result = db.session.query(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (CarviaContaMovimentacao.tipo_movimento == 'CREDITO',
+                         CarviaContaMovimentacao.valor),
+                        else_=-CarviaContaMovimentacao.valor,
+                    )
+                ),
+                Decimal('0'),
+            )
+        ).filter(
+            CarviaContaMovimentacao.criado_em < dt_inicio,
+        ).scalar()
+
+        saldo_anterior = float(saldo_anterior_result)
+
+        # Movimentacoes no periodo
+        movs = db.session.query(CarviaContaMovimentacao).filter(
+            CarviaContaMovimentacao.criado_em >= dt_inicio,
+            CarviaContaMovimentacao.criado_em <= dt_fim,
+        ).order_by(
+            CarviaContaMovimentacao.criado_em.asc(),
+            CarviaContaMovimentacao.id.asc(),
+        ).all()
+
+        # Calcular saldo acumulado progressivo
+        saldo_acumulado = saldo_anterior
+        total_creditos = 0.0
+        total_debitos = 0.0
+        movimentacoes = []
+
+        for mov in movs:
+            valor = float(mov.valor)
+            if mov.tipo_movimento == 'CREDITO':
+                saldo_acumulado += valor
+                total_creditos += valor
+            else:
+                saldo_acumulado -= valor
+                total_debitos += valor
+
+            movimentacoes.append({
+                'id': mov.id,
+                'criado_em': mov.criado_em,
+                'tipo_doc': mov.tipo_doc,
+                'doc_id': mov.doc_id,
+                'tipo_movimento': mov.tipo_movimento,
+                'valor': valor,
+                'descricao': mov.descricao or '',
+                'criado_por': mov.criado_por,
+                'saldo_acumulado': saldo_acumulado,
+            })
+
+        return {
+            'saldo_anterior': saldo_anterior,
+            'movimentacoes': movimentacoes,
+            'saldo_final': saldo_acumulado,
+            'total_creditos': total_creditos,
+            'total_debitos': total_debitos,
+        }

@@ -14,6 +14,11 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            {% if operacao.cte_xml_path %}
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadCteXml({{ operacao.id }})" title="Baixar CTe XML original">
+                <i class="fas fa-download"></i> CTe XML
+            </button>
+            {% endif %}
             {% if operacao.status not in ('FATURADO', 'CANCELADO') %}
             <a href="{{ url_for('carvia.editar_operacao', operacao_id=operacao.id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-edit"></i> Editar
@@ -324,4 +329,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadCteXml(operacaoId) {
+    fetch(`/carvia/api/operacao/${operacaoId}/xml`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso && data.url) {
+                window.open(data.url, '_blank');
+            } else {
+                alert(data.mensagem || data.erro || 'Erro ao obter arquivo');
+            }
+        })
+        .catch(() => alert('Erro de conexao ao baixar arquivo'));
+}
+</script>
 {% endblock %}

@@ -210,6 +210,22 @@
                 </div>
             </div>
         </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div id="saldoContaValor"
+                         class="stat-value {{ 'text-success' if saldo_conta >= 0 else 'text-danger' }}">
+                        {{ saldo_conta|valor_br }}
+                    </div>
+                    <div class="stat-label text-muted">
+                        Saldo da Conta
+                        <a href="{{ url_for('carvia.extrato_conta') }}" class="ms-1" title="Ver extrato">
+                            <i class="fas fa-external-link-alt small"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {# ACCORDIONS POR DIA #}
@@ -329,6 +345,19 @@
         });
     }
 
+    // --- Atualizar card de saldo da conta ---
+    function atualizarSaldoConta(saldo) {
+        var el = document.getElementById('saldoContaValor');
+        if (!el) return;
+        // Formatar como R$ brasileiro
+        var formatted = 'R$\u00a0' + saldo.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        el.textContent = formatted;
+        el.className = 'stat-value ' + (saldo >= 0 ? 'text-success' : 'text-danger');
+    }
+
     // --- Pagar / Desfazer via event delegation ---
     document.addEventListener('click', function(e) {
         var btnPagar = e.target.closest('.btn-pagar');
@@ -363,6 +392,10 @@
                         '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
                         'data-tipo="' + tipo + '" data-id="' + id + '" title="Desfazer pagamento">' +
                         '<i class="fas fa-undo"></i></button>';
+
+                    if (typeof data.saldo_atual === 'number') {
+                        atualizarSaldoConta(data.saldo_atual);
+                    }
                 } else {
                     alert(data.erro || 'Erro ao processar pagamento');
                     btnPagar.disabled = false;
@@ -405,6 +438,10 @@
                         '<button class="btn btn-xs btn-outline-success btn-pagar" ' +
                         'data-tipo="' + tipo2 + '" data-id="' + id2 + '" title="Marcar como pago">' +
                         '<i class="fas fa-check"></i></button>';
+
+                    if (typeof data.saldo_atual === 'number') {
+                        atualizarSaldoConta(data.saldo_atual);
+                    }
                 } else {
                     alert(data.erro || 'Erro ao desfazer pagamento');
                     btnDesfazer.disabled = false;

@@ -14,9 +14,21 @@
                 por {{ nf.criado_por }}
             </p>
         </div>
-        <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
+        <div class="d-flex gap-2">
+            {% if nf.arquivo_xml_path %}
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadArquivoNf({{ nf.id }}, 'xml')" title="Baixar XML original">
+                <i class="fas fa-download"></i> XML
+            </button>
+            {% endif %}
+            {% if nf.arquivo_pdf_path %}
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadArquivoNf({{ nf.id }}, 'pdf')" title="Baixar PDF original">
+                <i class="fas fa-download"></i> PDF
+            </button>
+            {% endif %}
+            <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
     </div>
 
     <div class="row g-4">
@@ -251,4 +263,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadArquivoNf(nfId, tipo) {
+    fetch(`/carvia/api/nf/${nfId}/arquivo/${tipo}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso && data.url) {
+                window.open(data.url, '_blank');
+            } else {
+                alert(data.mensagem || data.erro || 'Erro ao obter arquivo');
+            }
+        })
+        .catch(() => alert('Erro de conexao ao baixar arquivo'));
+}
+</script>
 {% endblock %}
