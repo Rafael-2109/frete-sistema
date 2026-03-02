@@ -362,6 +362,10 @@ class CarviaFaturaCliente(db.Model):
     # PENDENTE, EMITIDA, PAGA, CANCELADA
     status = db.Column(db.String(20), default='PENDENTE')
 
+    # Auditoria de pagamento
+    pago_por = db.Column(db.String(100))
+    pago_em = db.Column(db.DateTime)
+
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
@@ -512,6 +516,10 @@ class CarviaDespesa(db.Model):
     status = db.Column(db.String(20), default='PENDENTE', index=True)
     # PENDENTE, PAGO, CANCELADO
 
+    # Auditoria de pagamento
+    pago_por = db.Column(db.String(100))
+    pago_em = db.Column(db.DateTime)
+
     observacoes = db.Column(db.Text)
     criado_por = db.Column(db.String(150))
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
@@ -564,3 +572,31 @@ class CarviaFaturaTransportadora(db.Model):
 
     def __repr__(self):
         return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'
+
+
+class CarviaContaMovimentacao(db.Model):
+    """Movimentacoes financeiras da conta CarVia — saldo calculado por SUM"""
+    __tablename__ = 'carvia_conta_movimentacoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo_doc = db.Column(db.String(30), nullable=False)
+    # 'fatura_cliente' | 'fatura_transportadora' | 'despesa' | 'saldo_inicial' | 'ajuste'
+    doc_id = db.Column(db.Integer, nullable=False)
+    # FK conceitual (0 para saldo_inicial/ajuste)
+    tipo_movimento = db.Column(db.String(10), nullable=False)
+    # 'CREDITO' | 'DEBITO'
+    valor = db.Column(db.Numeric(15, 2), nullable=False)
+    # Sempre positivo
+    descricao = db.Column(db.String(500))
+    criado_por = db.Column(db.String(100), nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint('tipo_doc', 'doc_id', name='uq_carvia_mov_tipo_doc'),
+        db.CheckConstraint("tipo_movimento IN ('CREDITO', 'DEBITO')", name='ck_carvia_mov_tipo'),
+        db.CheckConstraint('valor > 0', name='ck_carvia_mov_valor'),
+        db.Index('ix_carvia_mov_criado_em', 'criado_em'),
+    )
+
+    def __repr__(self):
+        return f'<CarviaContaMovimentacao {self.tipo_doc}:{self.doc_id} {self.tipo_movimento} {self.valor}>'
