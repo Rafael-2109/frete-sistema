@@ -488,6 +488,12 @@ class ValidacaoNfPoService:
         3. PO.dfe_id = DFE.id (caminho inverso - 85.4% dos casos em status=04)
         """
         try:
+            # LIMPAR vinculos anteriores para garantir dados frescos do Odoo
+            validacao.odoo_po_vinculado_id = None
+            validacao.odoo_po_vinculado_name = None
+            validacao.odoo_po_fiscal_id = None
+            validacao.odoo_po_fiscal_name = None
+
             # 1. purchase_id (caminho direto - excepcional)
             purchase_id_data = dfe_data.get('purchase_id')
             if purchase_id_data and isinstance(purchase_id_data, (list, tuple)):

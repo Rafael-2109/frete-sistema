@@ -321,6 +321,13 @@ function validarNf(dfeId) {
                         icon: 'warning',
                         confirmButtonColor: '#0d6efd'
                     }).then(() => location.reload());
+                } else if (data.status === 'finalizado_odoo') {
+                    Swal.fire({
+                        title: 'NF Vinculada no Odoo',
+                        text: data.mensagem,
+                        icon: 'info',
+                        confirmButtonColor: '#0d6efd'
+                    }).then(() => location.reload());
                 } else {
                     Swal.fire({
                         title: 'Erro',

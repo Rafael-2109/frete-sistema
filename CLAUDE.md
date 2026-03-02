@@ -20,6 +20,7 @@
 4. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
 5. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
 6. **QUALIDADE > VELOCIDADE**: Sempre opte por pesquisar demais do que ser rápido mas não verificar algo importante.
+7. **COMPONENTES UI**: ANTES de escrever botoes, badges ou elementos com cor: LER `.claude/references/design/GUIA_COMPONENTES_UI.md`
 
 ### ANTES DE PROPOR NOVOS ARQUIVOS:
 1. **LER** o INDICE DE REFERENCIAS abaixo
@@ -90,6 +91,7 @@ Gotchas rapidos:
 | **Capacidades MCP (versoes, gaps, enhanced)** | `.claude/references/MCP_CAPABILITIES_2026.md` |
 | **Linx Microvix (APIs, WS, integracao)** | `.claude/references/linx/INTEGRACOES.md` |
 | **CarVia (frete subcontratado)** | `app/carvia/CLAUDE.md` |
+| **Botoes, badges e cores (qual classe usar)** | `.claude/references/design/GUIA_COMPONENTES_UI.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:
