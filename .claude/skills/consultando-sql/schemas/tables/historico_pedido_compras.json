@@ -174,9 +174,9 @@
   ],
   "indices": [
     {
-      "name": "ix_historico_pedido_compras_alterado_por",
+      "name": "ix_historico_pedido_compras_pedido_compra_id",
       "columns": [
-        "alterado_por"
+        "pedido_compra_id"
       ],
       "unique": false
     },
@@ -202,16 +202,16 @@
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_pedido_compra_id",
+      "name": "ix_historico_pedido_compras_cod_produto",
       "columns": [
-        "pedido_compra_id"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_cod_produto",
+      "name": "ix_historico_pedido_compras_alterado_por",
       "columns": [
-        "cod_produto"
+        "alterado_por"
       ],
       "unique": false
     }

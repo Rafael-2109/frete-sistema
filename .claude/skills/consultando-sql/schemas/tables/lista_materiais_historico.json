@@ -99,16 +99,16 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_lista_materiais_id",
+      "name": "ix_lista_materiais_historico_cod_produto_componente",
       "columns": [
-        "lista_materiais_id"
+        "cod_produto_componente"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_cod_produto_componente",
+      "name": "ix_lista_materiais_historico_lista_materiais_id",
       "columns": [
-        "cod_produto_componente"
+        "lista_materiais_id"
       ],
       "unique": false
     },
