@@ -493,6 +493,30 @@ class CarviaFaturaTransportadoraItem(db.Model):
         return f'<CarviaFaturaTransportadoraItem sub={self.subcontrato_id} fatura={self.fatura_transportadora_id}>'
 
 
+class CarviaDespesa(db.Model):
+    """Despesas operacionais da empresa no modulo CarVia"""
+    __tablename__ = 'carvia_despesas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo_despesa = db.Column(db.String(50), nullable=False, index=True)
+    # CONTABILIDADE, GRIS, SEGURO, OUTROS
+    descricao = db.Column(db.String(500))
+    valor = db.Column(db.Numeric(15, 2), nullable=False)
+
+    data_despesa = db.Column(db.Date, nullable=False)
+    data_vencimento = db.Column(db.Date)
+    status = db.Column(db.String(20), default='PENDENTE', index=True)
+    # PENDENTE, PAGO, CANCELADO
+
+    observacoes = db.Column(db.Text)
+    criado_por = db.Column(db.String(150))
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    def __repr__(self):
+        return f'<CarviaDespesa {self.id} {self.tipo_despesa} ({self.status})>'
+
+
 class CarviaFaturaTransportadora(db.Model):
     """Faturas recebidas dos subcontratados — agrupa N CTes de 1 transportadora"""
     __tablename__ = 'carvia_faturas_transportadora'
