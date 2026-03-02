@@ -471,6 +471,13 @@ def register_fatura_routes(bp):
                     CarviaFaturaCliente.id.in_(fat_cli_id_list)
                 ).all()
 
+        # Operacoes CTe CarVia via subcontratos
+        operacoes = []
+        if op_ids:
+            operacoes = CarviaOperacao.query.filter(
+                CarviaOperacao.id.in_(op_ids)
+            ).order_by(CarviaOperacao.criado_em.desc()).all()
+
         return render_template(
             'carvia/faturas_transportadora/detalhe.html',
             fatura=fatura,
@@ -480,6 +487,7 @@ def register_fatura_routes(bp):
             itens=itens,
             nfs=nfs,
             faturas_cliente=faturas_cliente,
+            operacoes=operacoes,
         )
 
     @bp.route('/faturas-transportadora/<int:fatura_id>/conferencia', methods=['POST'])

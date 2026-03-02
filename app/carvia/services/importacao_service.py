@@ -815,7 +815,10 @@ class ImportacaoService:
 
         if not operacao:
             raise ValueError(
-                f"nao encontrou CTe CarVia vinculado via NFs referenciadas"
+                f"CTe Subcontrato {cte_data.get('cte_numero', '?')} — "
+                f"nao encontrou CTe CarVia correspondente. "
+                f"Importe primeiro o CTe CarVia que referencia as mesmas NFs, "
+                f"ou crie o CTe Subcontrato manualmente."
             )
 
         # 2. Encontrar transportadora por CNPJ emitente

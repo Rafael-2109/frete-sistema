@@ -136,7 +136,7 @@
                 <table class="table table-sm table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>CTe Sub</th>
+                            <th>CTe Subcontrato</th>
                             <th>NF</th>
                             <th>Cliente</th>
                             <th>Peso</th>
@@ -190,7 +190,7 @@
     <!-- Documentos Relacionados -->
     <div class="row g-4 mt-0">
         <!-- NFs -->
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-file-alt"></i> NFs ({{ nfs|length }})</h5>
@@ -216,11 +216,46 @@
             </div>
         </div>
 
-        <!-- Faturas Cliente -->
-        <div class="col-md-6">
+        <!-- CTe CarVia -->
+        <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas Cliente ({{ faturas_cliente|length }})</h5>
+                    <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTe CarVia ({{ operacoes|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if operacoes %}
+                    <div class="list-group list-group-flush">
+                        {% for op in operacoes %}
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"
+                           class="list-group-item list-group-item-action py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>#{{ op.id }}</strong>
+                                    {% if op.cte_numero %}
+                                    <span class="text-muted">— CTe {{ op.cte_numero }}</span>
+                                    {% endif %}
+                                </div>
+                                <span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span>
+                            </div>
+                            <div class="small text-muted">
+                                {{ op.cidade_destino }}/{{ op.uf_destino }} |
+                                {{ op.cte_valor|valor_br if op.cte_valor else '-' }}
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Nenhum CTe CarVia vinculado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Faturas CarVia -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas CarVia ({{ faturas_cliente|length }})</h5>
                 </div>
                 <div class="card-body">
                     {% if faturas_cliente %}
@@ -237,7 +272,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-muted text-center mb-0 small">Nenhuma fatura cliente vinculada.</p>
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura CarVia vinculada.</p>
                     {% endif %}
                 </div>
             </div>
@@ -257,7 +292,7 @@
                             <th>Subcontrato</th>
                             <th>Cliente</th>
                             <th>Destino</th>
-                            <th>CTe Sub</th>
+                            <th>CTe Subcontrato</th>
                             <th>Valor Cotado</th>
                             <th>Valor Acertado</th>
                             <th>Valor Final</th>

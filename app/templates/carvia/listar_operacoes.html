@@ -9,10 +9,7 @@
                 <i class="fas fa-upload"></i> Importar
             </a>
             <a href="{{ url_for('carvia.criar_operacao_manual') }}" class="btn btn-success btn-sm">
-                <i class="fas fa-plus"></i> Manual
-            </a>
-            <a href="{{ url_for('carvia.criar_operacao_freteiro') }}" class="btn btn-outline-warning btn-sm">
-                <i class="fas fa-truck-loading"></i> Freteiro
+                <i class="fas fa-plus"></i> Criar
             </a>
         </div>
     </div>
@@ -61,13 +58,13 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>#</th>
                             <th>NFs</th>
                             <th>CTe CarVia</th>
                             <th>Cliente</th>
                             <th>Destino</th>
                             <th>Peso (kg)</th>
                             <th>Valor CTe</th>
+                            <th>Fatura</th>
                             <th>Tipo</th>
                             <th>Status</th>
                             <th>Criado em</th>
@@ -77,7 +74,6 @@
                     <tbody>
                         {% for op, qtd_nfs in operacoes %}
                         <tr>
-                            <td>{{ op.id }}</td>
                             <td>
                                 {% if qtd_nfs %}
                                 <span class="badge bg-info">{{ qtd_nfs }}</span>
@@ -94,6 +90,16 @@
                             <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
                             <td class="valor-col">{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}</td>
                             <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
+                            <td>
+                                {% if op.fatura_cliente %}
+                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=op.fatura_cliente.id) }}"
+                                   class="text-decoration-none">
+                                    {{ op.fatura_cliente.numero_fatura }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
                             <td><small class="text-muted">{{ op.tipo_entrada }}</small></td>
                             <td>
                                 <span class="badge carvia-badge-{{ op.status|lower }}">

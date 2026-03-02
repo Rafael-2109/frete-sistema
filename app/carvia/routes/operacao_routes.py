@@ -6,6 +6,7 @@ import logging
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.carvia.models import (
@@ -41,7 +42,7 @@ def register_operacao_routes(bp):
             CarviaOperacao, subq_nfs.c.qtd_nfs
         ).outerjoin(
             subq_nfs, CarviaOperacao.id == subq_nfs.c.operacao_id
-        )
+        ).options(joinedload(CarviaOperacao.fatura_cliente))
 
         if status_filtro:
             query = query.filter(CarviaOperacao.status == status_filtro)
@@ -113,13 +114,21 @@ def register_operacao_routes(bp):
     @bp.route('/operacoes/criar', methods=['GET', 'POST'])
     @login_required
     def criar_operacao_manual():
-        """Cria operacao manual (sem CTe)"""
+        """Cria operacao manual (sem CTe) — suporta MANUAL_SEM_CTE e MANUAL_FRETEIRO"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
         from app.carvia.forms import OperacaoManualForm
         form = OperacaoManualForm()
+
+        # Tipo de entrada: do form POST ou query param GET (para pre-selecao via redirect)
+        if request.method == 'POST':
+            tipo_entrada = request.form.get('tipo_entrada', 'MANUAL_SEM_CTE')
+        else:
+            tipo_entrada = request.args.get('tipo', 'MANUAL_SEM_CTE')
+        if tipo_entrada not in ('MANUAL_SEM_CTE', 'MANUAL_FRETEIRO'):
+            tipo_entrada = 'MANUAL_SEM_CTE'
 
         if form.validate_on_submit():
             try:
@@ -133,7 +142,7 @@ def register_operacao_routes(bp):
                     peso_bruto=form.peso_bruto.data,
                     peso_utilizado=form.peso_bruto.data,
                     valor_mercadoria=form.valor_mercadoria.data,
-                    tipo_entrada='MANUAL_SEM_CTE',
+                    tipo_entrada=tipo_entrada,
                     status='RASCUNHO',
                     observacoes=form.observacoes.data,
                     criado_por=current_user.email,
@@ -147,46 +156,17 @@ def register_operacao_routes(bp):
                 logger.error(f"Erro ao criar operacao manual: {e}")
                 flash(f'Erro ao criar operacao: {e}', 'danger')
 
-        return render_template('carvia/criar_manual.html', form=form)
+        return render_template(
+            'carvia/criar_manual.html',
+            form=form,
+            tipo_entrada=tipo_entrada,
+        )
 
     @bp.route('/operacoes/criar-freteiro', methods=['GET', 'POST'])
     @login_required
     def criar_operacao_freteiro():
-        """Cria operacao para freteiro (sem CTe subcontratado)"""
-        if not getattr(current_user, 'sistema_carvia', False):
-            flash('Acesso negado.', 'danger')
-            return redirect(url_for('main.dashboard'))
-
-        from app.carvia.forms import OperacaoManualForm
-        form = OperacaoManualForm()
-
-        if form.validate_on_submit():
-            try:
-                operacao = CarviaOperacao(
-                    cnpj_cliente=form.cnpj_cliente.data.strip(),
-                    nome_cliente=form.nome_cliente.data.strip(),
-                    uf_origem=form.uf_origem.data.strip().upper() if form.uf_origem.data else None,
-                    cidade_origem=form.cidade_origem.data.strip() if form.cidade_origem.data else None,
-                    uf_destino=form.uf_destino.data.strip().upper(),
-                    cidade_destino=form.cidade_destino.data.strip(),
-                    peso_bruto=form.peso_bruto.data,
-                    peso_utilizado=form.peso_bruto.data,
-                    valor_mercadoria=form.valor_mercadoria.data,
-                    tipo_entrada='MANUAL_FRETEIRO',
-                    status='RASCUNHO',
-                    observacoes=form.observacoes.data,
-                    criado_por=current_user.email,
-                )
-                db.session.add(operacao)
-                db.session.commit()
-                flash(f'Operacao freteiro #{operacao.id} criada com sucesso.', 'success')
-                return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao.id))
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Erro ao criar operacao freteiro: {e}")
-                flash(f'Erro ao criar operacao: {e}', 'danger')
-
-        return render_template('carvia/criar_freteiro.html', form=form)
+        """Redireciona para criar_operacao_manual com tipo freteiro pre-selecionado"""
+        return redirect(url_for('carvia.criar_operacao_manual', tipo='MANUAL_FRETEIRO'))
 
     # ==================== EDITAR OPERACAO ====================
 

@@ -149,11 +149,11 @@
             </div>
         </div>
 
-        <!-- Faturas Cliente -->
+        <!-- Faturas CarVia -->
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas Cliente ({{ faturas_cliente|length }})</h5>
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Faturas CarVia ({{ faturas_cliente|length }})</h5>
                 </div>
                 <div class="card-body">
                     {% if faturas_cliente %}
@@ -170,17 +170,17 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-muted text-center mb-0 small">Nenhuma fatura cliente vinculada.</p>
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura CarVia vinculada.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- Faturas Transportadora -->
+        <!-- Faturas Subcontrato -->
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-truck"></i> Faturas Transportadora ({{ faturas_transportadora|length }})</h5>
+                    <h5 class="mb-0"><i class="fas fa-truck"></i> Faturas Subcontrato ({{ faturas_transportadora|length }})</h5>
                 </div>
                 <div class="card-body">
                     {% if faturas_transportadora %}
@@ -199,7 +199,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-muted text-center mb-0 small">Nenhuma fatura transportadora vinculada.</p>
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura subcontrato vinculada.</p>
                     {% endif %}
                 </div>
             </div>

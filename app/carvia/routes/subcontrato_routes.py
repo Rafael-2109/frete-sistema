@@ -62,6 +62,123 @@ def register_subcontrato_routes(bp):
             busca=busca,
         )
 
+    @bp.route('/subcontratos/criar', methods=['GET', 'POST'])
+    @login_required
+    def criar_subcontrato():
+        """Cria subcontrato standalone — Passo 1: selecionar operacao, Passo 2: transportadora"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        operacao_id = request.args.get('operacao_id', type=int)
+        operacao = None
+
+        if operacao_id:
+            operacao = db.session.get(CarviaOperacao, operacao_id)
+            if not operacao:
+                flash('CTe CarVia nao encontrado.', 'warning')
+                return redirect(url_for('carvia.criar_subcontrato'))
+            if operacao.status in ('FATURADO', 'CANCELADO'):
+                flash('CTe CarVia faturado/cancelado nao aceita subcontratos.', 'warning')
+                return redirect(url_for('carvia.criar_subcontrato'))
+
+        if request.method == 'POST' and operacao:
+            transportadora_id = request.form.get('transportadora_id', type=int)
+            valor_acertado = request.form.get('valor_acertado', type=float)
+            cte_numero = request.form.get('cte_numero', '').strip() or None
+            cte_valor = request.form.get('cte_valor', type=float)
+            observacoes = request.form.get('observacoes', '').strip() or None
+
+            if not transportadora_id:
+                flash('Selecione uma transportadora.', 'warning')
+                return redirect(url_for(
+                    'carvia.criar_subcontrato', operacao_id=operacao_id
+                ))
+
+            try:
+                from app.carvia.models import CarviaSubcontrato as SubModel
+
+                # Verificar se ja existe subcontrato ativo para esta transportadora
+                existente = db.session.query(SubModel).filter(
+                    SubModel.operacao_id == operacao_id,
+                    SubModel.transportadora_id == transportadora_id,
+                    SubModel.status != 'CANCELADO',
+                ).first()
+
+                if existente:
+                    flash(
+                        'Ja existe um subcontrato ativo para esta transportadora nesta operacao.',
+                        'warning',
+                    )
+                    return redirect(url_for(
+                        'carvia.criar_subcontrato', operacao_id=operacao_id
+                    ))
+
+                # Cotar automaticamente
+                from app.carvia.services.cotacao_service import CotacaoService
+                cotacao = CotacaoService().cotar_subcontrato(
+                    operacao_id=operacao_id,
+                    transportadora_id=transportadora_id,
+                )
+
+                # Gerar numero sequencial por transportadora
+                max_seq = db.session.query(
+                    db.func.max(SubModel.numero_sequencial_transportadora)
+                ).filter(
+                    SubModel.transportadora_id == transportadora_id,
+                ).scalar() or 0
+
+                subcontrato = SubModel(
+                    operacao_id=operacao_id,
+                    transportadora_id=transportadora_id,
+                    numero_sequencial_transportadora=max_seq + 1,
+                    cte_numero=cte_numero,
+                    cte_valor=cte_valor if cte_valor else None,
+                    valor_cotado=cotacao.get('valor_cotado') if cotacao.get('sucesso') else None,
+                    tabela_frete_id=cotacao.get('tabela_frete_id') if cotacao.get('sucesso') else None,
+                    valor_acertado=valor_acertado if valor_acertado else None,
+                    status='COTADO' if cotacao.get('sucesso') else 'PENDENTE',
+                    observacoes=observacoes,
+                    criado_por=current_user.email,
+                )
+                db.session.add(subcontrato)
+
+                # Atualizar status da operacao se necessario
+                if operacao.status == 'RASCUNHO' and cotacao.get('sucesso'):
+                    operacao.status = 'COTADO'
+
+                db.session.commit()
+
+                msg = f'CTe Subcontrato #{subcontrato.id} criado.'
+                if cotacao.get('sucesso'):
+                    msg += f' Cotacao: R$ {cotacao["valor_cotado"]:.2f}'
+                    if cotacao.get('tabela_nome'):
+                        msg += f' (Tabela: {cotacao["tabela_nome"]})'
+                else:
+                    msg += f' Sem cotacao automatica: {cotacao.get("erro", "")}'
+
+                flash(msg, 'success' if cotacao.get('sucesso') else 'warning')
+                return redirect(url_for('carvia.detalhe_subcontrato', sub_id=subcontrato.id))
+
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Erro ao criar subcontrato standalone: {e}")
+                flash(f'Erro: {e}', 'danger')
+
+        # GET — Passo 1 ou Passo 2
+        operacoes_disponiveis = []
+        if not operacao:
+            # Passo 1: listar operacoes disponiveis para subcontratacao
+            operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+            ).order_by(CarviaOperacao.criado_em.desc()).limit(50).all()
+
+        return render_template(
+            'carvia/subcontratos/criar.html',
+            operacao=operacao,
+            operacoes_disponiveis=operacoes_disponiveis,
+        )
+
     @bp.route('/subcontratos/<int:sub_id>')
     @login_required
     def detalhe_subcontrato(sub_id):
@@ -91,10 +208,84 @@ def register_subcontrato_routes(bp):
             if operacao.fatura_cliente_id:
                 fatura_cliente = db.session.get(CarviaFaturaCliente, operacao.fatura_cliente_id)
 
+        # Operacoes disponiveis para re-vinculacao (modal "Alterar CTe CarVia")
+        operacoes_disponiveis = []
+        if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
+            operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.id != sub.operacao_id,
+            ).order_by(CarviaOperacao.criado_em.desc()).limit(50).all()
+
         return render_template(
             'carvia/subcontratos/detalhe.html',
             sub=sub,
             operacao=operacao,
             nfs=nfs,
             fatura_cliente=fatura_cliente,
+            operacoes_disponiveis=operacoes_disponiveis,
         )
+
+    @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST'])
+    @login_required
+    def vincular_operacao_subcontrato(sub_id):
+        """Re-vincula subcontrato a outra operacao (CTe CarVia)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            flash('CTe Subcontrato nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_subcontratos'))
+
+        if sub.status in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
+            flash(
+                f'Subcontrato com status {sub.status} nao pode ser re-vinculado.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+        nova_operacao_id = request.form.get('operacao_id', type=int)
+        if not nova_operacao_id:
+            flash('Selecione um CTe CarVia.', 'warning')
+            return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+        nova_operacao = db.session.get(CarviaOperacao, nova_operacao_id)
+        if not nova_operacao:
+            flash('CTe CarVia nao encontrado.', 'warning')
+            return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+        if nova_operacao.status in ('FATURADO', 'CANCELADO'):
+            flash('CTe CarVia faturado/cancelado nao aceita subcontratos.', 'warning')
+            return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+        try:
+            operacao_anterior_id = sub.operacao_id
+            sub.operacao_id = nova_operacao_id
+
+            # Recotar com base na nova operacao
+            from app.carvia.services.cotacao_service import CotacaoService
+            cotacao = CotacaoService().cotar_subcontrato(
+                operacao_id=nova_operacao_id,
+                transportadora_id=sub.transportadora_id,
+            )
+            if cotacao.get('sucesso'):
+                sub.valor_cotado = cotacao['valor_cotado']
+                sub.tabela_frete_id = cotacao.get('tabela_frete_id')
+
+            db.session.commit()
+
+            msg = (
+                f'Subcontrato re-vinculado: '
+                f'CTe CarVia #{operacao_anterior_id} -> #{nova_operacao_id}.'
+            )
+            if cotacao.get('sucesso'):
+                msg += f' Nova cotacao: R$ {cotacao["valor_cotado"]:.2f}'
+            flash(msg, 'success')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao re-vincular subcontrato: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))

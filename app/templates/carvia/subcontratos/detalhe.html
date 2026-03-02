@@ -45,7 +45,7 @@
                             <strong>{{ sub.numero_sequencial_transportadora or '-' }}</strong>
                         </div>
                         <div class="col-6">
-                            <small class="text-muted d-block">CTe Subcontratado</small>
+                            <small class="text-muted d-block">CTe Subcontrato</small>
                             <strong>{{ sub.cte_numero or 'Sem CTe' }}</strong>
                             {% if sub.cte_data_emissao %}
                             <div class="small text-muted">{{ sub.cte_data_emissao.strftime('%d/%m/%Y') }}</div>
@@ -83,8 +83,14 @@
         <!-- CTe CarVia vinculado -->
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTe CarVia Vinculado</h5>
+                    {% if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO') %}
+                    <button type="button" class="btn btn-sm btn-outline-warning"
+                            data-bs-toggle="modal" data-bs-target="#modalAlterarOperacao">
+                        <i class="fas fa-exchange-alt"></i> Alterar
+                    </button>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if operacao %}
@@ -125,6 +131,72 @@
         </div>
     </div>
 
+    <!-- Modal: Alterar CTe CarVia vinculado -->
+    {% if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO') %}
+    <div class="modal fade" id="modalAlterarOperacao" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Alterar CTe CarVia Vinculado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Selecione o CTe CarVia ao qual este subcontrato deve ser vinculado.
+                        Apenas operacoes em status RASCUNHO, COTADO ou CONFIRMADO sao listadas.
+                    </p>
+                    {% if operacoes_disponiveis %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover carvia-table">
+                            <thead>
+                                <tr>
+                                    <th>CTe CarVia</th>
+                                    <th>Cliente</th>
+                                    <th>Destino</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for op in operacoes_disponiveis %}
+                                <tr>
+                                    <td>
+                                        <strong>#{{ op.id }}</strong>
+                                        {% if op.cte_numero %}
+                                        <small class="text-muted">CTe {{ op.cte_numero }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ op.nome_cliente or op.cnpj_cliente }}</td>
+                                    <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
+                                    <td><span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span></td>
+                                    <td>
+                                        <form method="POST"
+                                              action="{{ url_for('carvia.vincular_operacao_subcontrato', sub_id=sub.id) }}"
+                                              class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="operacao_id" value="{{ op.id }}">
+                                            <button type="submit" class="btn btn-sm btn-success"
+                                                    onclick="return confirm('Vincular este subcontrato ao CTe CarVia #{{ op.id }}?')">
+                                                <i class="fas fa-link"></i> Vincular
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-info-circle"></i> Nenhum CTe CarVia disponivel.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Documentos Relacionados -->
     <div class="row g-4 mt-0">
         <!-- NFs Vinculadas (via operacao) -->
@@ -160,11 +232,11 @@
             </div>
         </div>
 
-        <!-- Fatura Cliente (via operacao) -->
+        <!-- Fatura CarVia (via operacao) -->
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Fatura Cliente</h5>
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Fatura CarVia</h5>
                 </div>
                 <div class="card-body">
                     {% if fatura_cliente %}
@@ -181,7 +253,7 @@
                         </div>
                     </a>
                     {% else %}
-                    <p class="text-muted text-center mb-0 small">Nenhuma fatura cliente vinculada.</p>
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura CarVia vinculada.</p>
                     {% endif %}
                 </div>
             </div>

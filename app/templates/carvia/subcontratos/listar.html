@@ -4,9 +4,17 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-handshake"></i> CTe Subcontrato</h2>
-        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-arrow-left"></i> Dashboard
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.criar_subcontrato') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Criar
+            </a>
+            <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-upload"></i> Importar
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
     </div>
 
     <!-- Filtros -->
@@ -54,7 +62,6 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>#</th>
                             <th>Seq</th>
                             <th>Transportadora</th>
                             <th>CTe CarVia</th>
@@ -68,7 +75,6 @@
                     <tbody>
                         {% for sub in subcontratos %}
                         <tr>
-                            <td>{{ sub.id }}</td>
                             <td>
                                 {% if sub.numero_sequencial_transportadora %}
                                 <span class="badge bg-info">{{ sub.numero_sequencial_transportadora }}</span>

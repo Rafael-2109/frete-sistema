@@ -80,7 +80,7 @@
                         {% endfor %}
                     </div>
                     <hr>
-                    <h6>Operacoes Vinculadas: {{ operacoes|length }}</h6>
+                    <h6>CTe CarVia Vinculados: {{ operacoes|length }}</h6>
                     <p class="text-muted small mb-0">
                         Soma CTe: R$ {{ "%.2f"|format(operacoes|selectattr('cte_valor')|map(attribute='cte_valor')|sum) }}
                     </p>
@@ -107,7 +107,6 @@
                             <th>Valor Merc.</th>
                             <th>Frete</th>
                             <th>ICMS</th>
-                            <th>Links</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -122,20 +121,6 @@
                             <td class="valor-col">{{ item.valor_mercadoria|valor_br if item.valor_mercadoria else '-' }}</td>
                             <td class="valor-col"><strong>{{ item.frete|valor_br if item.frete else '-' }}</strong></td>
                             <td class="valor-col">{{ item.icms|valor_br if item.icms else '-' }}</td>
-                            <td>
-                                {% if item.operacao_id %}
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=item.operacao_id) }}"
-                                   class="btn btn-sm btn-outline-primary py-0 px-1" title="CTe CarVia">
-                                    <i class="fas fa-file-invoice"></i>
-                                </a>
-                                {% endif %}
-                                {% if item.nf_id %}
-                                <a href="{{ url_for('carvia.detalhe_nf', nf_id=item.nf_id) }}"
-                                   class="btn btn-sm btn-outline-secondary py-0 px-1" title="NF">
-                                    <i class="fas fa-file-alt"></i>
-                                </a>
-                                {% endif %}
-                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -201,11 +186,11 @@
             </div>
         </div>
 
-        <!-- Faturas Transportadora -->
+        <!-- Faturas Subcontrato -->
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-truck"></i> Faturas Transp. ({{ faturas_transportadora|length }})</h5>
+                    <h5 class="mb-0"><i class="fas fa-truck"></i> Faturas Subcontrato ({{ faturas_transportadora|length }})</h5>
                 </div>
                 <div class="card-body">
                     {% if faturas_transportadora %}
@@ -227,24 +212,24 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-muted text-center mb-0 small">Nenhuma fatura transportadora vinculada.</p>
+                    <p class="text-muted text-center mb-0 small">Nenhuma fatura subcontrato vinculada.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Operacoes da fatura -->
+    <!-- CTe CarVia da fatura -->
     <div class="card mt-4">
         <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-list"></i> Operacoes ({{ operacoes|length }})</h5>
+            <h5 class="mb-0"><i class="fas fa-list"></i> CTe CarVia ({{ operacoes|length }})</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>Operacao</th>
+                            <th>CTe CarVia</th>
                             <th>CTe</th>
                             <th>Destino</th>
                             <th>Peso</th>

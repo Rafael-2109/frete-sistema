@@ -56,7 +56,6 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>#</th>
                             <th>Numero NF</th>
                             <th>Emitente</th>
                             <th>Destinatario</th>
@@ -71,7 +70,6 @@
                     <tbody>
                         {% for nf, qtd_ctes in nfs %}
                         <tr>
-                            <td>{{ nf.id }}</td>
                             <td><strong>{{ nf.numero_nf }}</strong>{% if nf.serie_nf %} <small class="text-muted">S{{ nf.serie_nf }}</small>{% endif %}</td>
                             <td>
                                 <span title="{{ nf.cnpj_emitente }}" class="cnpj-col">

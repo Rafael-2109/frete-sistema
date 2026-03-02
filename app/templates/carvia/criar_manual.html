@@ -4,8 +4,8 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2><i class="fas fa-plus-circle"></i> Novo CTe CarVia Manual</h2>
-            <p class="text-muted mb-0">Criar CTe CarVia sem XML — entrada manual de dados</p>
+            <h2><i class="fas fa-plus-circle"></i> Novo CTe CarVia</h2>
+            <p class="text-muted mb-0">Criar CTe CarVia — entrada manual de dados</p>
         </div>
         <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Voltar
@@ -16,6 +16,24 @@
         <div class="card-body">
             <form method="POST" novalidate>
                 {{ form.hidden_tag() }}
+
+                <h5 class="mb-3"><i class="fas fa-tag"></i> Tipo de Entrada</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label for="tipo_entrada" class="form-label">Tipo *</label>
+                        <select name="tipo_entrada" id="tipo_entrada" class="form-select">
+                            <option value="MANUAL_SEM_CTE" {{ 'selected' if tipo_entrada == 'MANUAL_SEM_CTE' }}>
+                                CTe CarVia sem documento
+                            </option>
+                            <option value="MANUAL_FRETEIRO" {{ 'selected' if tipo_entrada == 'MANUAL_FRETEIRO' }}>
+                                Freteiro (sem CTe subcontratado)
+                            </option>
+                        </select>
+                        <div class="form-text" id="tipo-help">
+                            Selecione o tipo de operacao a ser criada.
+                        </div>
+                    </div>
+                </div>
 
                 <h5 class="mb-3"><i class="fas fa-user"></i> Dados do Cliente</h5>
                 <div class="row g-3 mb-4">

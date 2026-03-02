@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-plus-circle"></i> Novo CTe Subcontrato</h2>
+            <p class="text-muted mb-0">Criar subcontrato manualmente — selecione CTe CarVia e transportadora</p>
+        </div>
+        <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% if not operacao %}
+    <!-- PASSO 1: Selecionar CTe CarVia (operacao) -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Passo 1 — Selecionar CTe CarVia</h5>
+        </div>
+        <div class="card-body">
+            {% if operacoes_disponiveis %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>CTe CarVia</th>
+                            <th>Cliente</th>
+                            <th>Destino</th>
+                            <th>Peso (kg)</th>
+                            <th>Valor CTe</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for op in operacoes_disponiveis %}
+                        <tr>
+                            <td>
+                                <strong>#{{ op.id }}</strong>
+                                {% if op.cte_numero %}
+                                <small class="text-muted">CTe {{ op.cte_numero }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span title="{{ op.cnpj_cliente }}" class="cnpj-col">
+                                    {{ op.nome_cliente or op.cnpj_cliente }}
+                                </span>
+                            </td>
+                            <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
+                            <td class="valor-col">{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}</td>
+                            <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
+                            <td>
+                                <span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('carvia.criar_subcontrato', operacao_id=op.id) }}"
+                                   class="btn btn-sm btn-success">
+                                    <i class="fas fa-check"></i> Selecionar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-info-circle fa-3x mb-3 d-block opacity-50"></i>
+                <p>Nenhum CTe CarVia disponivel para subcontratacao.</p>
+                <p class="small">CTe CarVia precisa estar em status RASCUNHO, COTADO ou CONFIRMADO.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+    <!-- PASSO 2: Dados do subcontrato -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTe CarVia Selecionado</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe CarVia</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}">
+                            #{{ operacao.id }} {{ '— CTe ' + operacao.cte_numero if operacao.cte_numero else '' }}
+                        </a>
+                    </strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Cliente</small>
+                    <strong>{{ operacao.nome_cliente or operacao.cnpj_cliente }}</strong>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted d-block">Destino</small>
+                    <strong>{{ operacao.cidade_destino }}/{{ operacao.uf_destino }}</strong>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted d-block">Peso</small>
+                    <strong>{{ operacao.peso_utilizado|numero_br(1) if operacao.peso_utilizado else '-' }} kg</strong>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted d-block">Status</small>
+                    <span class="badge carvia-badge-{{ operacao.status|lower }}">{{ operacao.status }}</span>
+                </div>
+            </div>
+            <div class="mt-2">
+                <a href="{{ url_for('carvia.criar_subcontrato') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-exchange-alt"></i> Trocar CTe CarVia
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Busca de transportadora -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-search"></i> Passo 2 — Buscar Transportadora</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-8">
+                    <input type="text" id="busca-transportadora" class="form-control"
+                           placeholder="Buscar por nome ou CNPJ da transportadora...">
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="filtro-freteiro">
+                        <label class="form-check-label" for="filtro-freteiro">Apenas freteiros</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" id="btn-buscar">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resultados -->
+            <div id="resultados-container" class="d-none">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover carvia-table">
+                        <thead>
+                            <tr>
+                                <th>Transportadora</th>
+                                <th>CNPJ</th>
+                                <th>Tipo</th>
+                                <th>Tabela Ativa</th>
+                                <th>Cotacao</th>
+                                <th>Acao</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultados-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="sem-resultados" class="text-center text-muted py-4 d-none">
+                <i class="fas fa-info-circle"></i> Nenhuma transportadora encontrada.
+            </div>
+            <div id="loading" class="text-center py-4 d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario de confirmacao (preenchido via JS) -->
+    <div id="form-confirmar" class="card d-none">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-check-circle"></i> Confirmar Subcontrato</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('carvia.criar_subcontrato', operacao_id=operacao.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="transportadora_id" id="transportadora_id_input">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <strong>Transportadora:</strong> <span id="nome-selecionada">-</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Cotacao:</strong> <span id="cotacao-selecionada">-</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Tabela:</strong> <span id="tabela-selecionada">-</span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label for="cte_numero" class="form-label">
+                            CTe Numero
+                            <small class="text-muted">— opcional</small>
+                        </label>
+                        <input type="text" class="form-control" name="cte_numero"
+                               placeholder="Numero do CTe (se houver)">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="cte_valor" class="form-label">
+                            Valor CTe (R$)
+                            <small class="text-muted">— opcional</small>
+                        </label>
+                        <input type="number" class="form-control" name="cte_valor"
+                               step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="valor_acertado" class="form-label">
+                            Valor Acertado (R$)
+                            <small class="text-muted">— se diferente da cotacao</small>
+                        </label>
+                        <input type="number" class="form-control" name="valor_acertado"
+                               step="0.01" placeholder="Deixe vazio para usar cotacao">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="observacoes" class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" name="observacoes"
+                               placeholder="Observacoes opcionais...">
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-check"></i> Criar CTe Subcontrato
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="btn-cancelar-selecao">
+                        Selecionar Outra
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% if operacao %}
+{% block scripts %}
+<script>
+const operacaoId = {{ operacao.id }};
+const ufDestino = '{{ operacao.uf_destino }}';
+
+function buscarTransportadoras() {
+    const busca = document.getElementById('busca-transportadora').value;
+    const filtroFreteiro = document.getElementById('filtro-freteiro');
+    const freteiro = filtroFreteiro && filtroFreteiro.checked ? '1' : '';
+
+    document.getElementById('loading').classList.remove('d-none');
+    document.getElementById('resultados-container').classList.add('d-none');
+    document.getElementById('sem-resultados').classList.add('d-none');
+
+    let url = `/carvia/api/opcoes-transportadora?busca=${encodeURIComponent(busca)}&uf_destino=${ufDestino}`;
+    if (freteiro) url += '&freteiro=1';
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loading').classList.add('d-none');
+
+            if (!data.sucesso || !data.transportadoras.length) {
+                document.getElementById('sem-resultados').classList.remove('d-none');
+                return;
+            }
+
+            const tbody = document.getElementById('resultados-tbody');
+            tbody.innerHTML = '';
+
+            data.transportadoras.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${t.nome}</strong></td>
+                    <td class="cnpj-col">${t.cnpj || '-'}</td>
+                    <td>${t.freteiro ? '<span class="badge bg-warning text-dark">Freteiro</span>' : '<span class="badge bg-info">Transportadora</span>'}</td>
+                    <td>${t.tem_tabela ? '<span class="badge bg-success">' + t.qtd_tabelas + ' tabela(s)</span>' : '<span class="badge bg-secondary">Sem tabela</span>'}</td>
+                    <td><button class="btn btn-sm btn-outline-primary btn-cotar" data-id="${t.id}" data-nome="${t.nome}"><i class="fas fa-calculator"></i> Cotar</button></td>
+                    <td><button class="btn btn-sm btn-success btn-selecionar" data-id="${t.id}" data-nome="${t.nome}"><i class="fas fa-plus"></i> Selecionar</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('resultados-container').classList.remove('d-none');
+
+            // Event listeners para cotar
+            tbody.querySelectorAll('.btn-cotar').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    cotarTransportadora(this.dataset.id, this.dataset.nome, this);
+                });
+            });
+
+            // Event listeners para selecionar
+            tbody.querySelectorAll('.btn-selecionar').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    selecionarTransportadora(this.dataset.id, this.dataset.nome);
+                });
+            });
+        })
+        .catch(err => {
+            document.getElementById('loading').classList.add('d-none');
+            alert('Erro ao buscar: ' + err.message);
+        });
+}
+
+function cotarTransportadora(transportadoraId, nome, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch('/carvia/api/calcular-cotacao', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            operacao_id: operacaoId,
+            transportadora_id: parseInt(transportadoraId),
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            btn.innerHTML = `R$ ${parseFloat(data.valor_cotado).toFixed(2)}`;
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-primary');
+            btn.disabled = false;
+        } else {
+            btn.innerHTML = data.erro || 'Sem tabela';
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-outline-secondary');
+            btn.disabled = true;
+        }
+    })
+    .catch(err => {
+        btn.innerHTML = 'Erro';
+        btn.disabled = true;
+    });
+}
+
+function selecionarTransportadora(transportadoraId, nome) {
+    document.getElementById('transportadora_id_input').value = transportadoraId;
+    document.getElementById('nome-selecionada').textContent = nome;
+
+    // Cotar automaticamente
+    fetch('/carvia/api/calcular-cotacao', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            operacao_id: operacaoId,
+            transportadora_id: parseInt(transportadoraId),
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            document.getElementById('cotacao-selecionada').textContent = `R$ ${parseFloat(data.valor_cotado).toFixed(2)}`;
+            document.getElementById('tabela-selecionada').textContent = data.tabela_nome || '-';
+        } else {
+            document.getElementById('cotacao-selecionada').textContent = 'Sem cotacao';
+            document.getElementById('tabela-selecionada').textContent = data.erro || '-';
+        }
+    })
+    .catch(() => {
+        document.getElementById('cotacao-selecionada').textContent = 'Erro';
+    });
+
+    document.getElementById('form-confirmar').classList.remove('d-none');
+    document.getElementById('form-confirmar').scrollIntoView({behavior: 'smooth'});
+}
+
+// Event listeners
+document.getElementById('btn-buscar').addEventListener('click', buscarTransportadoras);
+document.getElementById('busca-transportadora').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); buscarTransportadoras(); }
+});
+
+document.getElementById('btn-cancelar-selecao').addEventListener('click', function() {
+    document.getElementById('form-confirmar').classList.add('d-none');
+});
+
+// Busca inicial
+buscarTransportadoras();
+</script>
+{% endblock %}
+{% endif %}
