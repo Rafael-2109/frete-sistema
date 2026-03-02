@@ -1378,21 +1378,21 @@ nav.navbar .navbar-brand .badge.bg-primary {
             {% if e.data_agenda %}
               {% set ultimo_agendamento = e.agendamentos | sort(attribute='criado_em') | last if e.agendamentos else None %}
               {% if ultimo_agendamento and ultimo_agendamento.status == 'confirmado' %}
-                <button class="btn btn-sm btn-primary w-100 text-white" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
-                  📅 {{ e.data_agenda | formatar_data_segura }}
+                <button class="btn btn-sm btn-success w-100 flex-column" style="white-space: normal" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                  <span>📅 {{ e.data_agenda | formatar_data_segura }}</span>
                   {% if ultimo_agendamento.protocolo_agendamento %}
-                    <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                    <small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
                   {% endif %}
-                  <br><small>✅ Confirmado</small>
+                  <small>✅ Confirmado</small>
                 </button>
               {% else %}
                 <div class="d-flex align-items-center gap-1">
-                  <button class="btn btn-sm btn-warning flex-grow-1" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
-                    📅 {{ e.data_agenda | formatar_data_segura }}
+                  <button class="btn btn-sm btn-warning flex-grow-1 flex-column" style="white-space: normal" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+                    <span>📅 {{ e.data_agenda | formatar_data_segura }}</span>
                     {% if ultimo_agendamento and ultimo_agendamento.protocolo_agendamento %}
-                      <br><small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
+                      <small>📋 {{ ultimo_agendamento.protocolo_agendamento }}</small>
                     {% endif %}
-                    <br><small>⏳ Aguardando</small>
+                    <small>⏳ Aguardando</small>
                   </button>
                   {% if ultimo_agendamento and ultimo_agendamento.status == 'aguardando' %}
                     <button class="btn btn-sm btn-success" onclick="confirmarAgendamento('{{ ultimo_agendamento.id }}')">
@@ -1402,7 +1402,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
                 </div>
               {% endif %}
             {% else %}
-              <button class="btn btn-sm btn-warning w-100" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
+              <button class="btn btn-sm btn-secondary w-100" onclick="agendarEntrega('{{ e.id }}', '{{ e.numero_nf }}')">
                 ➕ Agendar
               </button>
             {% endif %}
@@ -1410,7 +1410,7 @@ nav.navbar .navbar-brand .badge.bg-primary {
           <td class="obs-cell-container">
             {% if e.data_entrega_prevista %}
               {% set ultimo_hist_mobile = e.historico_data_prevista | sort(attribute='alterado_em', reverse=true) | first %}
-              <button class="btn btn-sm btn-primary w-100 text-white"
+              <button class="btn btn-sm btn-warning w-100"
                       onclick="alterarDataPrevista('{{ e.id }}', '{{ e.numero_nf }}', '{{ e.data_entrega_prevista }}')"
                       {% if ultimo_hist_mobile %}
                       data-bs-toggle="tooltip"
