@@ -17,8 +17,13 @@ carvia_bp = Blueprint(
 
 from app.carvia.routes import register_routes  # noqa: E402
 
+_routes_registered = False
+
 
 def init_app(app):
     """Registra o blueprint CarVia e sub-blueprints"""
-    register_routes(carvia_bp)
+    global _routes_registered
+    if not _routes_registered:
+        register_routes(carvia_bp)
+        _routes_registered = True
     app.register_blueprint(carvia_bp)

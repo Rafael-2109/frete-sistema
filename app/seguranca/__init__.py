@@ -17,8 +17,13 @@ seguranca_bp = Blueprint(
 
 from app.seguranca.routes import register_routes  # noqa: E402
 
+_routes_registered = False
+
 
 def init_app(app):
     """Registra o blueprint Seguranca"""
-    register_routes(seguranca_bp)
+    global _routes_registered
+    if not _routes_registered:
+        register_routes(seguranca_bp)
+        _routes_registered = True
     app.register_blueprint(seguranca_bp)
