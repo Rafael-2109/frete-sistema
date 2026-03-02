@@ -118,7 +118,7 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 |--------|--------|---------|
 | CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual/referencia). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL, FATURA_REFERENCIA (stub criado por backfill/importacao). Helpers: `get_faturas_cliente()`, `get_faturas_transportadora()` |
 | CarviaNfItem | `carvia_nf_itens` | Itens de produto da NF. FK `nf_id`. Cascade delete-orphan |
-| CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id` |
+| CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
 | CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7) |
 | CarviaFaturaCliente | `carvia_faturas_cliente` | Status: PENDENTE, EMITIDA, PAGA, CANCELADA. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
@@ -200,6 +200,9 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 |--------|--------|
 | `resolver_operacao_por_cte(cte_numero)` | Busca CarviaOperacao por CTe, normaliza zeros a esquerda |
 | `resolver_nf_por_numero(nf_numero, cnpj)` | Busca CarviaNf por numero + CNPJ (emitente OU destinatario) |
+| `vincular_nf_a_operacoes_orfas(nf)` | Re-linking CTe→NF: busca operacoes com nfs_referenciadas_json que referenciam a NF e cria junctions |
+| `vincular_operacao_a_itens_fatura_orfaos(operacao)` | Re-linking CTe→Fat: atualiza operacao_id em itens de fatura orfaos + cria junctions |
+| `vincular_nf_a_itens_fatura_orfaos(nf)` | Re-linking NF→Fat: atualiza nf_id em itens de fatura orfaos (incl. stubs FATURA_REFERENCIA) + cria junctions |
 | `vincular_itens_fatura_cliente(fatura_id, auto_criar_nf)` | Resolve `operacao_id` e `nf_id` em itens existentes (3 niveis de fallback) |
 | `_criar_nf_referencia(nf_numero, cnpj, ...)` | Cria CarviaNf stub (FATURA_REFERENCIA) — idempotente |
 | `_resolver_nf_via_junction(nf_numero, operacao_id)` | Busca NF via junction carvia_operacao_nfs |
@@ -214,8 +217,12 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 
 **Chamado automaticamente por**:
 - `ImportacaoService.salvar_importacao()` — durante import de fatura PDF
+- `ImportacaoService.salvar_importacao()` — apos criar NF: `vincular_nf_a_operacoes_orfas` + `vincular_nf_a_itens_fatura_orfaos`
+- `ImportacaoService.salvar_importacao()` — apos criar/reusar CTe: `vincular_operacao_a_itens_fatura_orfaos`
 - `fatura_routes.nova_fatura_cliente()` — ao criar fatura manualmente
 - `fatura_routes.nova_fatura_transportadora()` — ao criar fatura manualmente
+
+**Ordem de importacao**: Independente. Re-linking retroativo garante que TODAS as 6 permutacoes (NF, CTe, Fatura) criam vinculos corretos.
 
 ---
 
@@ -261,3 +268,5 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/carvia_linking_v2_backfill.py` — Backfill de FKs em itens existentes (requer v1 antes)
 - `scripts/migrations/backfill_carvia_nf_linking.py` + `.sql` — Cria CarviaNf stubs (FATURA_REFERENCIA) para NFs referenciadas em faturas que nunca foram importadas, vincula nf_id e cria junctions
 - `scripts/migrations/adicionar_status_pagamento_fatura_transportadora.py` + `.sql` — 3 novos campos (`status_pagamento`, `pago_por`, `pago_em`) + indice
+- `scripts/migrations/add_nfs_referenciadas_json_operacoes.py` + `.sql` — Campo JSONB `nfs_referenciadas_json` em carvia_operacoes (refs NF do CTe XML)
+- `scripts/migrations/backfill_nfs_referenciadas_json.py` + `.sql` — Backfill: popula JSON a partir de junctions existentes

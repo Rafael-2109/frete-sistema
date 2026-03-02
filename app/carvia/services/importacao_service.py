@@ -251,6 +251,32 @@ class ImportacaoService:
 
                         nfs_criadas.append(nf)
 
+                        # Re-linking retroativo: resolver vinculos pendentes
+                        # quando NF chega depois de CTe ou Fatura
+                        try:
+                            from app.carvia.services.linking_service import LinkingService
+                            linker = LinkingService()
+
+                            # CTe→NF: criar junction via nfs_referenciadas_json
+                            junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
+                            if junc_count > 0:
+                                logger.info(
+                                    f"Re-linking NF→CTe: NF {nf.id} vinculada "
+                                    f"a {junc_count} operacao(oes) orfa(s)"
+                                )
+
+                            # Fat→NF: atualizar nf_id em itens de fatura
+                            fat_count = linker.vincular_nf_a_itens_fatura_orfaos(nf)
+                            if fat_count > 0:
+                                logger.info(
+                                    f"Re-linking NF→Fatura: NF {nf.id} vinculada "
+                                    f"a {fat_count} item(ns) de fatura"
+                                )
+                        except Exception as e_link:
+                            logger.warning(
+                                f"Erro no re-linking retroativo da NF {nf.id}: {e_link}"
+                            )
+
                     if chave:
                         nf_map[chave] = nf
                     if numero and cnpj:
@@ -285,6 +311,25 @@ class ImportacaoService:
                             # Vincular NFs que ainda nao estejam vinculadas
                             nfs_ref = cte_data.get('nfs_referenciadas', [])
                             self._vincular_nfs(op_existente, nfs_ref, nf_map)
+
+                            # Preencher JSON se ausente (backfill on re-import)
+                            if op_existente.nfs_referenciadas_json is None and nfs_ref:
+                                op_existente.nfs_referenciadas_json = nfs_ref
+                                logger.info(
+                                    f"Backfill JSON: op={op_existente.id} "
+                                    f"nfs_ref={len(nfs_ref)} refs"
+                                )
+
+                            # Re-linking: atualizar itens de fatura orfaos
+                            try:
+                                from app.carvia.services.linking_service import LinkingService
+                                linker = LinkingService()
+                                linker.vincular_operacao_a_itens_fatura_orfaos(op_existente)
+                            except Exception as e_link:
+                                logger.warning(
+                                    f"Erro re-linking CTe re-import: {e_link}"
+                                )
+
                             operacoes_criadas.append(op_existente)
                             continue
 
@@ -295,6 +340,22 @@ class ImportacaoService:
                     # Vincular NFs
                     nfs_ref = cte_data.get('nfs_referenciadas', [])
                     self._vincular_nfs(operacao, nfs_ref, nf_map)
+
+                    # Re-linking retroativo: atualizar itens de fatura
+                    # que referenciam este CTe mas foram importados antes
+                    try:
+                        from app.carvia.services.linking_service import LinkingService
+                        linker = LinkingService()
+                        fat_count = linker.vincular_operacao_a_itens_fatura_orfaos(operacao)
+                        if fat_count > 0:
+                            logger.info(
+                                f"Re-linking CTe→Fatura: op={operacao.id} "
+                                f"vinculada a {fat_count} item(ns) de fatura"
+                            )
+                    except Exception as e_link:
+                        logger.warning(
+                            f"Erro no re-linking CTe→Fatura op={operacao.id}: {e_link}"
+                        )
 
                     operacoes_criadas.append(operacao)
                 except Exception as e:
@@ -695,6 +756,9 @@ class ImportacaoService:
 
         rem = cte_data.get('remetente', {})
 
+        # Persistir referencias de NF do CTe XML para re-linking retroativo
+        nfs_ref_json = nfs_ref if nfs_ref else None
+
         return CarviaOperacao(
             cte_numero=cte_data.get('cte_numero'),
             cte_chave_acesso=cte_data.get('cte_chave_acesso'),
@@ -710,6 +774,7 @@ class ImportacaoService:
             peso_bruto=peso_total if peso_total > 0 else None,
             peso_utilizado=peso_total if peso_total > 0 else None,
             valor_mercadoria=valor_total if valor_total > 0 else None,
+            nfs_referenciadas_json=nfs_ref_json,
             tipo_entrada='IMPORTADO',
             status='RASCUNHO',
             criado_por=criado_por,

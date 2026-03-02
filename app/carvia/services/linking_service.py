@@ -235,6 +235,232 @@ class LinkingService:
         return True
 
     # ------------------------------------------------------------------
+    # vincular_nf_a_operacoes_orfas: re-linking retroativo CTe -> NF
+    # ------------------------------------------------------------------
+
+    def vincular_nf_a_operacoes_orfas(self, nf):
+        """Busca operacoes que referenciam esta NF (via JSON) e cria junctions.
+
+        Chamado apos importar NF quando CTe ja foi importado antes.
+        Usa nfs_referenciadas_json para reverse-lookup.
+
+        Estrategia de match (dentro do JSON):
+        1. Match por chave (44 digitos) — mais confiavel
+        2. Fallback: match por numero_nf + cnpj_emitente normalizados
+
+        Args:
+            nf: CarviaNf recem-criada (ja tem id)
+
+        Returns:
+            int — numero de junctions criadas
+        """
+        from app.carvia.models import CarviaOperacao
+
+        if not nf or not nf.id:
+            return 0
+
+        junctions_criadas = 0
+
+        # Preparar dados da NF para comparacao
+        nf_chave = nf.chave_acesso_nf
+        nf_numero = nf.numero_nf
+        nf_cnpj = re.sub(r'\D', '', nf.cnpj_emitente or '')
+
+        # Buscar operacoes com nfs_referenciadas_json preenchido
+        # que ainda NAO tem junction com esta NF
+        operacoes = CarviaOperacao.query.filter(
+            CarviaOperacao.nfs_referenciadas_json.isnot(None),
+        ).all()
+
+        for operacao in operacoes:
+            refs = operacao.nfs_referenciadas_json
+            if not isinstance(refs, list):
+                continue
+
+            matched = False
+            for ref in refs:
+                if not isinstance(ref, dict):
+                    continue
+
+                # Match 1: por chave de acesso (44 digitos)
+                if nf_chave and ref.get('chave') == nf_chave:
+                    matched = True
+                    break
+
+                # Match 2: por numero_nf + cnpj_emitente normalizados
+                ref_numero = ref.get('numero_nf')
+                ref_cnpj = re.sub(r'\D', '', ref.get('cnpj_emitente') or '')
+
+                if (ref_numero and nf_numero
+                        and ref_numero.lstrip('0') == nf_numero.lstrip('0')
+                        and ref_cnpj and nf_cnpj
+                        and ref_cnpj == nf_cnpj):
+                    matched = True
+                    break
+
+            if matched:
+                if self._criar_junction_se_necessario(operacao.id, nf.id):
+                    junctions_criadas += 1
+                    logger.info(
+                        f"Re-linking retroativo: op={operacao.id} "
+                        f"(CTe {operacao.cte_numero}) -> nf={nf.id} "
+                        f"(NF {nf.numero_nf})"
+                    )
+
+        return junctions_criadas
+
+    # ------------------------------------------------------------------
+    # vincular_operacao_a_itens_fatura_orfaos: quando CTe chega depois da Fatura
+    # ------------------------------------------------------------------
+
+    def vincular_operacao_a_itens_fatura_orfaos(self, operacao):
+        """Busca itens de fatura cliente com cte_numero correspondente e operacao_id NULL.
+
+        Chamado apos criar CarviaOperacao quando fatura ja foi importada antes.
+        Atualiza operacao_id nos itens e cria junctions com NFs vinculadas.
+
+        Cenarios cobertos:
+        - Fat→NF→CTe (cenario 3): item tem nf_id, falta operacao_id
+        - Fat→CTe→NF (cenario 4): item nao tem nf_id nem operacao_id
+        - NF→Fat→CTe (cenario 5): item tem nf_id, falta operacao_id
+
+        Args:
+            operacao: CarviaOperacao recem-criada (ja tem id e cte_numero)
+
+        Returns:
+            int — numero de itens atualizados
+        """
+        if not operacao or not operacao.id or not operacao.cte_numero:
+            return 0
+
+        from app.carvia.models import CarviaFaturaClienteItem
+
+        # Normalizar cte_numero (sem zeros a esquerda)
+        cte_norm = operacao.cte_numero.lstrip('0') or '0'
+
+        # Buscar itens com cte_numero matching e operacao_id NULL
+        itens = CarviaFaturaClienteItem.query.filter(
+            CarviaFaturaClienteItem.operacao_id.is_(None),
+            CarviaFaturaClienteItem.cte_numero.isnot(None),
+            func.ltrim(CarviaFaturaClienteItem.cte_numero, '0') == cte_norm,
+        ).all()
+
+        count = 0
+        for item in itens:
+            item.operacao_id = operacao.id
+            count += 1
+            logger.info(
+                f"Re-linking fatura item (CTe): item={item.id} "
+                f"cte={item.cte_numero} -> operacao={operacao.id}"
+            )
+
+            # Criar junction operacao <-> NF se item ja tem nf_id
+            if item.nf_id:
+                self._criar_junction_se_necessario(operacao.id, item.nf_id)
+
+        if count > 0:
+            db.session.flush()
+
+        return count
+
+    # ------------------------------------------------------------------
+    # vincular_nf_a_itens_fatura_orfaos: quando NF chega depois da Fatura
+    # ------------------------------------------------------------------
+
+    def vincular_nf_a_itens_fatura_orfaos(self, nf):
+        """Busca itens de fatura cliente com nf_numero correspondente e nf_id pendente.
+
+        Chamado apos criar CarviaNf quando fatura ja foi importada antes.
+        Atualiza nf_id nos itens, incluindo os que apontam para FATURA_REFERENCIA stub.
+        Cria junctions com operacoes vinculadas.
+
+        Cenarios cobertos:
+        - Fat→NF→CTe (cenario 3): item tem nf_id=NULL, falta nf_id
+        - Fat→CTe→NF (cenario 4): item pode ter operacao_id, falta nf_id
+        - CTe→Fat→NF (cenario 6): item tem operacao_id, falta nf_id
+
+        Trata 2 casos:
+        1. nf_id IS NULL (fatura importada antes da NF)
+        2. nf_id aponta para FATURA_REFERENCIA stub (auto_criar_nf criou stub)
+
+        Args:
+            nf: CarviaNf recem-criada (ja tem id)
+
+        Returns:
+            int — numero de itens atualizados
+        """
+        if not nf or not nf.id or not nf.numero_nf:
+            return 0
+
+        from app.carvia.models import CarviaNf, CarviaFaturaClienteItem
+
+        nf_norm = nf.numero_nf.lstrip('0') or '0'
+        nf_cnpj_emit = re.sub(r'\D', '', nf.cnpj_emitente or '')
+        nf_cnpj_dest = re.sub(r'\D', '', nf.cnpj_destinatario or '')
+
+        count = 0
+
+        # --- Caso 1: itens com nf_id IS NULL ---
+        itens_null = CarviaFaturaClienteItem.query.filter(
+            CarviaFaturaClienteItem.nf_id.is_(None),
+            CarviaFaturaClienteItem.nf_numero.isnot(None),
+            func.ltrim(CarviaFaturaClienteItem.nf_numero, '0') == nf_norm,
+        ).all()
+
+        for item in itens_null:
+            # Filtrar por CNPJ contraparte (emitente OU destinatario da NF)
+            if item.contraparte_cnpj:
+                item_cnpj = re.sub(r'\D', '', item.contraparte_cnpj)
+                if item_cnpj and item_cnpj not in (nf_cnpj_emit, nf_cnpj_dest):
+                    continue
+
+            item.nf_id = nf.id
+            count += 1
+            logger.info(
+                f"Re-linking fatura item (NF): item={item.id} "
+                f"nf_numero={item.nf_numero} -> nf={nf.id}"
+            )
+
+            # Criar junction operacao <-> NF se item ja tem operacao_id
+            if item.operacao_id:
+                self._criar_junction_se_necessario(item.operacao_id, nf.id)
+
+        # --- Caso 2: itens apontando para FATURA_REFERENCIA stub ---
+        if nf_cnpj_emit:
+            stubs = CarviaNf.query.filter(
+                CarviaNf.tipo_fonte == 'FATURA_REFERENCIA',
+                CarviaNf.id != nf.id,  # Nao e a propria NF
+                func.ltrim(CarviaNf.numero_nf, '0') == nf_norm,
+                func.regexp_replace(
+                    CarviaNf.cnpj_emitente, '[^0-9]', '', 'g'
+                ) == nf_cnpj_emit,
+            ).all()
+
+            stub_ids = [s.id for s in stubs]
+            if stub_ids:
+                itens_stub = CarviaFaturaClienteItem.query.filter(
+                    CarviaFaturaClienteItem.nf_id.in_(stub_ids),
+                ).all()
+
+                for item in itens_stub:
+                    old_nf_id = item.nf_id
+                    item.nf_id = nf.id
+                    count += 1
+                    logger.info(
+                        f"Re-linking fatura item (NF stub->real): item={item.id} "
+                        f"nf_numero={item.nf_numero} old_nf_id={old_nf_id} -> nf={nf.id}"
+                    )
+
+                    # Criar junction operacao <-> NF se item ja tem operacao_id
+                    if item.operacao_id:
+                        self._criar_junction_se_necessario(item.operacao_id, nf.id)
+
+        if count > 0:
+            db.session.flush()
+
+        return count
+
+    # ------------------------------------------------------------------
     # vincular_itens_fatura_cliente: resolve FKs em itens existentes
     # ------------------------------------------------------------------
 

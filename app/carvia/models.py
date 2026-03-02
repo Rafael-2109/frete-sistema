@@ -158,6 +158,10 @@ class CarviaOperacao(db.Model):
     cubagem_fator = db.Column(db.Numeric(10, 2))
     cubagem_volumes = db.Column(db.Integer)
 
+    # NFs referenciadas no CTe XML (persistido para re-linking retroativo)
+    # Formato: [{"chave": "44dig", "numero_nf": "123", "cnpj_emitente": "14dig"}]
+    nfs_referenciadas_json = db.Column(db.JSON)
+
     # Tipo e status
     # IMPORTADO, MANUAL_SEM_CTE, MANUAL_FRETEIRO
     tipo_entrada = db.Column(db.String(30), nullable=False)
