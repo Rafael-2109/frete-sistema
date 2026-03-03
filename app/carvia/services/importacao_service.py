@@ -677,6 +677,27 @@ class ImportacaoService:
             logger.warning(f"Fatura com data invalida '{data_emissao_str}' — ignorada")
             return None
 
+        # Verificar se fatura ja existe no banco (evitar duplicata cross-upload)
+        # Precisa verificar em AMBAS as tabelas (cliente e transportadora)
+        fatura_existente = CarviaFaturaCliente.query.filter_by(
+            numero_fatura=numero,
+            cnpj_cliente=cnpj_pagador or 'DESCONHECIDO',
+        ).first()
+
+        if not fatura_existente:
+            fatura_existente = CarviaFaturaTransportadora.query.filter_by(
+                numero_fatura=numero,
+                data_emissao=data_emissao,
+            ).first()
+
+        if fatura_existente:
+            tipo = 'cliente' if isinstance(fatura_existente, CarviaFaturaCliente) else 'transportadora'
+            logger.info(
+                f"Fatura {tipo} ja existe (ignorando): "
+                f"num={numero} id={fatura_existente.id}"
+            )
+            return None
+
         # Parsear valor total
         valor_total = 0.0
         if valor_str is not None:

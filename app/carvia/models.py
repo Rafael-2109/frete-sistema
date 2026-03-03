@@ -331,6 +331,10 @@ class CarviaFaturaCliente(db.Model):
     """Faturas CarVia emitidas ao cliente — agrupa N CTes CarVia"""
     __tablename__ = 'carvia_faturas_cliente'
 
+    __table_args__ = (
+        db.UniqueConstraint('numero_fatura', 'cnpj_cliente', name='uq_fatura_cliente_num_cnpj'),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)
     nome_cliente = db.Column(db.String(255))
@@ -532,6 +536,10 @@ class CarviaDespesa(db.Model):
 class CarviaFaturaTransportadora(db.Model):
     """Faturas recebidas dos subcontratados — agrupa N CTes de 1 transportadora"""
     __tablename__ = 'carvia_faturas_transportadora'
+
+    __table_args__ = (
+        db.UniqueConstraint('numero_fatura', 'transportadora_id', name='uq_fatura_transp_num_transp'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     transportadora_id = db.Column(

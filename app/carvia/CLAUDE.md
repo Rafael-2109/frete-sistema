@@ -122,9 +122,9 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 | CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
 | CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7) |
-| CarviaFaturaCliente | `carvia_faturas_cliente` | Status: PENDENTE, EMITIDA, PAGA, CANCELADA. `pago_por`/`pago_em` preenchidos ao pagar. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
+| CarviaFaturaCliente | `carvia_faturas_cliente` | **UNIQUE(numero_fatura, cnpj_cliente)**. Status: PENDENTE, EMITIDA, PAGA, CANCELADA. `pago_por`/`pago_em` preenchidos ao pagar. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
 | CarviaFaturaClienteItem | `carvia_fatura_cliente_itens` | Itens CTe de detalhe por fatura. FK `fatura_cliente_id` CASCADE. **FK `operacao_id` e `nf_id`** (nullable, resolvidos por LinkingService). Campos: cte_numero, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, frete, icms, iss, st, base_calculo |
-| CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
+| CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
 | CarviaContaMovimentacao | `carvia_conta_movimentacoes` | Movimentacoes financeiras da conta. `tipo_doc`: fatura_cliente/fatura_transportadora/despesa/saldo_inicial/ajuste. `doc_id`=0 para saldo_inicial. **UNIQUE(tipo_doc, doc_id)** impede duplicata. `tipo_movimento`: CREDITO/DEBITO. `valor` sempre positivo. Saldo calculado por SUM (nao armazenado) |
 
@@ -148,6 +148,9 @@ Upload (NF-e XML, CTe XML, DANFE PDF, Fatura PDF)
     └── Fatura PDF → parse_multi() (1 fatura por pagina)
         │   Parser: regex → Haiku → Sonnet (3 camadas escalonadas)
         │   Extrai: pagador (cliente), beneficiario (CarVia), tipo frete, itens CTe
+        │
+        ├── Dedup: verifica banco por (numero_fatura, cnpj_cliente/data_emissao)
+        │   Se ja existe → log "Fatura ja existe (ignorando)" + return None
         │
         ├── CNPJ beneficiario == transportadora cadastrada → CarviaFaturaTransportadora
         └── Outro CNPJ → CarviaFaturaCliente + CarviaFaturaClienteItem (itens)
@@ -276,3 +279,5 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/criar_tabela_carvia_conta_movimentacoes.py` + `.sql` — Tabela `carvia_conta_movimentacoes` (saldo por SUM, UNIQUE tipo_doc+doc_id)
 - `scripts/migrations/adicionar_pago_em_por_carvia.py` + `.sql` — `pago_em`/`pago_por` em `carvia_faturas_cliente` e `carvia_despesas`
 - `scripts/migrations/backfill_carvia_fatura_operacao_binding.py` + `.sql` — Backfill: seta `fatura_cliente_id` e `status=FATURADO` em operacoes via itens de fatura existentes
+- `scripts/migrations/fix_carvia_faturas_duplicadas.py` + `.sql` — Fix: remover 21 faturas cliente duplicadas (importacao 2x do mesmo PDF)
+- `scripts/migrations/add_unique_faturas_carvia.py` + `.sql` — UNIQUE(numero_fatura, cnpj_cliente) em faturas_cliente + UNIQUE(numero_fatura, transportadora_id) em faturas_transportadora
