@@ -1,15 +1,15 @@
 ---
 name: memoria-usuario
 description: >-
-  Esta skill deve ser usada quando o usuario pede "lembre que...",
-  "salva essa informacao", "o que voce sabe sobre mim?", "esqueca minhas
-  preferencias", ou quando o agente detecta preferencia, fato ou padrao
-  novo do usuario que deve ser persistido entre sessoes.
-  Nao usar para buscar em sessoes anteriores (usar mcp__sessions__search_sessions),
-  salvar dados de negocio no banco (usar SQL), ou buscar contexto da conversa
-  atual (usar historico recente do SDK).
-  NAO USAR QUANDO: Historico de conversas (ja e salvo automaticamente),
-  dados de negocio (usar skill de consulta apropriada).
+  Esta skill deve ser usada quando o usuario pede para lembrar, salvar,
+  anotar ou guardar informacoes pessoais, preferencias ou fatos entre
+  sessoes ("lembre que...", "anote isso", "guarde essa informacao",
+  "memorize que...", "o que voce sabe sobre mim?", "esqueca minhas
+  preferencias", "apague minhas memorias").
+  Tambem usar para ver, atualizar ou apagar memorias existentes.
+  NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql),
+  historico de conversas (automatico), exportacao de arquivos (usar
+  exportando-arquivos), busca em sessoes anteriores (usar consultando-sql).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

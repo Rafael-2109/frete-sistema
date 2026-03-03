@@ -1,6 +1,6 @@
 {
   "skill_name": "memoria-usuario",
-  "version": 1,
+  "version": 2,
   "trigger_evals": [
     {
       "query": "Lembre que eu prefiro respostas curtas e diretas",
@@ -43,6 +43,26 @@
       "should_trigger": true
     },
     {
+      "query": "Guarda essa informacao: o fornecedor da Mezzani e o melhor para palmito em conserva",
+      "should_trigger": true
+    },
+    {
+      "query": "Memorize que FOB sempre manda pedido completo, nunca parcial",
+      "should_trigger": true
+    },
+    {
+      "query": "Na verdade meu cargo correto e coordenador, nao gerente. Corrija isso.",
+      "should_trigger": true
+    },
+    {
+      "query": "Voce tem alguma anotacao sobre minhas preferencias de relatorio?",
+      "should_trigger": true
+    },
+    {
+      "query": "Salva como regra aprendida: Atacadao prefere entrega na parte da manha antes das 10h",
+      "should_trigger": true
+    },
+    {
       "query": "Quantos pedidos pendentes tem para o Atacadao?",
       "should_trigger": false
     },
@@ -80,6 +100,26 @@
     },
     {
       "query": "Cadastre a unidade CGR no SSW",
+      "should_trigger": false
+    },
+    {
+      "query": "Me mostra as queries mais lentas do banco esta semana",
+      "should_trigger": false
+    },
+    {
+      "query": "Cria um PRD para o modulo de devolucoes",
+      "should_trigger": false
+    },
+    {
+      "query": "Quero cotar frete subcontratado para SP com peso de 3 toneladas",
+      "should_trigger": false
+    },
+    {
+      "query": "Verifica se tem estoque de palmito para o pedido VCD2565291",
+      "should_trigger": false
+    },
+    {
+      "query": "Roda o loop autonomo para implementar a feature de relatorios",
       "should_trigger": false
     }
   ]

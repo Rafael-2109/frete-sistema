@@ -23,7 +23,7 @@ import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 
 from app import create_app, db
-from app.agente.models import AgentMemory
+from app.agente.models import AgentMemory, AgentMemoryVersion
 
 
 def view_memory(user_id: int, path: str = None):
@@ -98,6 +98,16 @@ def save_memory(user_id: int, path: str, content: str):
         existing = AgentMemory.get_by_path(user_id, path)
 
         if existing:
+            # Salvar versao anterior antes de sobrescrever
+            if existing.content:
+                try:
+                    AgentMemoryVersion.save_version(
+                        memory_id=existing.id,
+                        content=existing.content,
+                        changed_by='claude'
+                    )
+                except Exception:
+                    pass  # Version tracking é best-effort
             # Atualiza existente
             existing.content = content
             existing.is_directory = False
@@ -135,6 +145,16 @@ def update_memory(user_id: int, path: str, old_str: str, new_str: str):
         elif count > 1:
             print(f"ERRO: Texto aparece {count} vezes. Deve ser unico.")
             sys.exit(1)
+
+        # Salvar versao anterior antes de sobrescrever
+        try:
+            AgentMemoryVersion.save_version(
+                memory_id=memory.id,
+                content=content,
+                changed_by='claude'
+            )
+        except Exception:
+            pass  # Version tracking é best-effort
 
         memory.content = content.replace(old_str, new_str)
         db.session.commit()

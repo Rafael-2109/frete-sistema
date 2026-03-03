@@ -1,6 +1,7 @@
 {
   "skill_name": "memoria-usuario",
-  "version": 1,
+  "version": 3,
+  "setup_notes": "Evals requerem user_id valido na tabela 'usuarios'. Criar usuario de teste antes de executar: INSERT INTO usuarios (id, nome, email, senha_hash) VALUES (999, 'Usuario Teste Eval', 'eval999@test.local', 'hash_placeholder') ON CONFLICT (id) DO NOTHING. Evals com estado vazio (sem memorias previas) testam criacao; evals que assumem estado existente devem ser executados APOS evals de criacao.",
   "evals": [
     {
       "id": 0,
@@ -10,9 +11,10 @@
       "expectations": [
         "Executou memoria.py save com --path contendo /memories/ e --content com XML ou texto sobre preferencia de respostas curtas",
         "Usou --user-id correto (perguntou ao usuario se nao tinha ou usou ID da sessao)",
-        "Confirmou ao usuario que a preferencia foi salva",
+        "Confirmou resultado ao usuario (salva com sucesso OU erro transparente se DB falhou)",
         "NAO inventou memorias adicionais que o usuario nao pediu",
-        "Path usado segue a estrutura recomendada (ex: /memories/preferences.xml ou /memories/learned/)"
+        "Path usado segue a estrutura recomendada (ex: /memories/preferences.xml ou /memories/learned/)",
+        "Usou APENAS o CLI memoria.py (NAO bypassed com Python/SQLAlchemy direto)"
       ]
     },
     {
@@ -24,7 +26,7 @@
         "Executou memoria.py view com --user-id do usuario",
         "Se ha memorias: listou cada path e seu conteudo de forma organizada",
         "Se nao ha memorias: informou claramente que nenhuma memoria foi encontrada (nao inventou dados)",
-        "NAO fabricou memorias fictícias sobre o usuario",
+        "NAO fabricou memorias ficticias sobre o usuario",
         "Apresentou resultado de forma legivel, nao como output bruto do script"
       ]
     },
@@ -47,11 +49,12 @@
       "expected_output": "Atualiza memoria existente com str_replace de analista para gerente de logistica",
       "files": [],
       "expectations": [
-        "Tentou usar memoria.py update com --old contendo 'analista' e --new contendo 'gerente de logistica'",
+        "Tentou update OU corretamente usou save quando view retornou vazio (agente deve verificar estado antes)",
         "Se nao existia memoria de cargo: usou save para criar nova com o cargo correto",
         "Usou path apropriado (ex: /memories/user.xml ou /memories/context/role.xml)",
-        "Confirmou a atualizacao ao usuario",
-        "NAO criou memorias duplicadas sobre o mesmo fato"
+        "Confirmou resultado ao usuario (atualizacao feita OU erro transparente se DB falhou)",
+        "NAO criou memorias duplicadas sobre o mesmo fato",
+        "Usou APENAS o CLI memoria.py (NAO bypassed com Python/SQLAlchemy direto)"
       ]
     },
     {
@@ -65,6 +68,59 @@
         "Confirmou ao usuario quantos itens foram removidos",
         "NAO executou clear sem confirmacao previa",
         "Informou que a operacao e irreversivel"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Atualiza meu cargo para diretor. Acho que voce tinha anotado como gerente.",
+      "expected_output": "Tenta update de gerente para diretor. Se memoria nao existe, informa e cria nova.",
+      "files": [],
+      "expectations": [
+        "Tentou memoria.py update com --old 'gerente' e --new 'diretor'",
+        "Se erro 'Arquivo nao encontrado': executou view primeiro para verificar memorias existentes",
+        "Se erro 'Texto nao encontrado': executou view para ver conteudo atual e ajustou --old",
+        "NAO inventou que a atualizacao foi feita se o script retornou erro",
+        "Comunicou claramente o resultado ao usuario"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Guarda que o Atacadao sempre pede palmito e azeitona juntos no mesmo pedido. Sao os clientes que eu gerencio: Atacadao, Assai e Carrefour.",
+      "expected_output": "Salva informacao sobre clientes e padroes observados em paths separados e organizados",
+      "files": [],
+      "expectations": [
+        "Salvou informacao de clientes em path adequado (/memories/context/clients.xml)",
+        "Salvou padrao de pedido em path de padroes (/memories/learned/patterns.xml ou similar)",
+        "Usou XML com updated_at para rastreabilidade",
+        "NAO misturou tudo em um unico arquivo sem organizacao",
+        "Confirmou ao usuario que as informacoes foram salvas"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Na verdade o correto e que FOB sempre manda completo, nao parcial. Corrija nas minhas memorias.",
+      "expected_output": "Busca memoria existente sobre FOB e corrige, ou cria correcao em /memories/corrections/",
+      "files": [],
+      "expectations": [
+        "Executou view para verificar se existe memoria sobre FOB",
+        "Se existe: usou update para corrigir o conteudo",
+        "Se nao existe: criou em /memories/learned/rules.xml ou /memories/corrections/mistakes.xml",
+        "A correcao reflete exatamente o que o usuario disse (FOB manda completo, nao parcial)",
+        "NAO assumiu que havia informacao errada sem verificar primeiro"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Me mostra todas as memorias e depois atualiza meu cargo de analista para coordenador.",
+      "expected_output": "Executa view primeiro, depois update no cargo. Duas operacoes sequenciais.",
+      "files": [],
+      "expectations": [
+        "Executou view ANTES do update (sequencia correta)",
+        "Mostrou as memorias ao usuario de forma organizada",
+        "Tentou update OU explicou por que nao foi possivel (ex: memorias vazias) e ofereceu alternativa",
+        "Se update falhou (texto nao encontrado): ajustou abordagem com base no conteudo real visto no view",
+        "Confirmou resultado de ambas operacoes ao usuario (incluindo explicar se update nao foi possivel)",
+        "Usou APENAS o CLI memoria.py (NAO bypassed com Python/SQLAlchemy direto)"
       ]
     }
   ]
