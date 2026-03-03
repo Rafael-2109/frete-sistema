@@ -5,110 +5,575 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2><i class="fas fa-plus-circle"></i> Novo CTe CarVia</h2>
-            <p class="text-muted mb-0">Criar CTe CarVia — entrada manual de dados</p>
+            <p class="text-muted mb-0">Selecione NFs importadas, transportadora e informe o valor do frete</p>
         </div>
         <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Voltar
         </a>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <form method="POST" novalidate>
-                {{ form.hidden_tag() }}
+    <form method="POST" id="form-wizard">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="tipo_entrada" value="MANUAL_SEM_CTE">
 
-                <h5 class="mb-3"><i class="fas fa-tag"></i> Tipo de Entrada</h5>
-                <div class="row g-3 mb-4">
+        <!-- ====== CARD 1: Selecionar NFs ====== -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-file-invoice"></i> 1. Selecionar NFs</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
                     <div class="col-md-6">
-                        <label for="tipo_entrada" class="form-label">Tipo *</label>
-                        <select name="tipo_entrada" id="tipo_entrada" class="form-select">
-                            <option value="MANUAL_SEM_CTE" {{ 'selected' if tipo_entrada == 'MANUAL_SEM_CTE' }}>
-                                CTe CarVia sem documento
-                            </option>
-                            <option value="MANUAL_FRETEIRO" {{ 'selected' if tipo_entrada == 'MANUAL_FRETEIRO' }}>
-                                Freteiro (sem CTe subcontratado)
-                            </option>
+                        <label for="select-cliente" class="form-label">Cliente (emitente)</label>
+                        <select id="select-cliente" class="form-select">
+                            <option value="">Carregando clientes...</option>
                         </select>
-                        <div class="form-text" id="tipo-help">
-                            Selecione o tipo de operacao a ser criada.
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <div class="btn-group" role="group" aria-label="Filtro CTe">
+                            <input type="radio" class="btn-check" name="filtro-cte" id="filtro-sem-cte" value="0" checked>
+                            <label class="btn btn-outline-secondary btn-sm" for="filtro-sem-cte">Sem CTe</label>
+                            <input type="radio" class="btn-check" name="filtro-cte" id="filtro-com-cte" value="1">
+                            <label class="btn btn-outline-secondary btn-sm" for="filtro-com-cte">Com CTe</label>
+                            <input type="radio" class="btn-check" name="filtro-cte" id="filtro-todas" value="">
+                            <label class="btn btn-outline-secondary btn-sm" for="filtro-todas">Todas</label>
                         </div>
                     </div>
                 </div>
 
-                <h5 class="mb-3"><i class="fas fa-user"></i> Dados do Cliente</h5>
-                <div class="row g-3 mb-4">
+                <!-- Tabela NFs -->
+                <div id="nfs-container" class="d-none">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover carvia-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:2.5rem">
+                                        <input type="checkbox" class="form-check-input" id="check-all-nfs">
+                                    </th>
+                                    <th>NF</th>
+                                    <th>Emitente</th>
+                                    <th>Destinatario</th>
+                                    <th>Destino</th>
+                                    <th>Data</th>
+                                    <th class="text-end">Peso (kg)</th>
+                                    <th class="text-end">Valor (R$)</th>
+                                    <th>CTe?</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nfs-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="nfs-empty" class="text-center text-muted py-4 d-none">
+                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                    <p>Nenhuma NF encontrada para este cliente.</p>
+                </div>
+
+                <!-- Loading -->
+                <div id="nfs-loading" class="text-center py-4 d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+
+                <!-- Resumo NFs selecionadas -->
+                <div id="nfs-resumo" class="alert alert-info d-none mt-3 mb-0">
+                    <strong><span id="resumo-qtd">0</span> NF(s) selecionada(s)</strong> |
+                    Peso: <strong><span id="resumo-peso">0</span> kg</strong> |
+                    Valor: <strong>R$ <span id="resumo-valor">0,00</span></strong>
+                    <span id="resumo-destinos-warning" class="d-none ms-2 text-warning">
+                        <i class="fas fa-exclamation-triangle"></i> NFs com destinos diferentes
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== CARD 2: Transportadora e Modalidade (opcional) ====== -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck"></i> 2. Transportadora e Modalidade
+                    <small class="text-muted">(opcional)</small>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <input type="text" id="busca-transp" class="form-control"
+                               placeholder="Buscar transportadora por nome ou CNPJ...">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-primary w-100" id="btn-buscar-transp">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-secondary w-100" id="btn-limpar-transp">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabela transportadoras -->
+                <div id="transp-container" class="d-none">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover carvia-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:2.5rem"></th>
+                                    <th>Transportadora</th>
+                                    <th>CNPJ</th>
+                                    <th>Modalidades</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transp-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="transp-empty" class="text-center text-muted py-3 d-none">
+                    <i class="fas fa-info-circle"></i> Nenhuma transportadora com tabela ativa para o UF de destino.
+                </div>
+
+                <div id="transp-loading" class="text-center py-3 d-none">
+                    <div class="spinner-border text-primary spinner-border-sm" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+
+                <!-- Transportadora selecionada -->
+                <div id="transp-selecionada" class="alert alert-success d-none mt-3 mb-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-check-circle"></i>
+                        <strong><span id="transp-sel-nome"></span></strong>
+                        <span class="badge bg-primary" id="transp-sel-mod"></span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="btn-trocar-transp">
+                            <i class="fas fa-exchange-alt"></i> Trocar
+                        </button>
+                    </div>
+                </div>
+
+                <input type="hidden" name="transportadora_id" id="input-transportadora-id">
+                <input type="hidden" name="modalidade" id="input-modalidade">
+            </div>
+        </div>
+
+        <!-- ====== CARD 3: Valor do CTe ====== -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-dollar-sign"></i> 3. Valor do CTe CarVia</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
                     <div class="col-md-4">
-                        <label for="cnpj_cliente" class="form-label">CNPJ Cliente *</label>
-                        {{ form.cnpj_cliente(class="form-control", placeholder="00.000.000/0000-00") }}
-                        {% if form.cnpj_cliente.errors %}
-                        <div class="invalid-feedback d-block">{{ form.cnpj_cliente.errors[0] }}</div>
-                        {% endif %}
+                        <label for="cte_valor" class="form-label">Valor do CTe (R$) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" class="form-control" name="cte_valor" id="cte_valor"
+                                   placeholder="0,00" required>
+                        </div>
+                        <div class="form-text">Valor que a CarVia cobra do cliente</div>
                     </div>
                     <div class="col-md-8">
-                        <label for="nome_cliente" class="form-label">Nome/Razao Social *</label>
-                        {{ form.nome_cliente(class="form-control", placeholder="Nome do cliente") }}
-                        {% if form.nome_cliente.errors %}
-                        <div class="invalid-feedback d-block">{{ form.nome_cliente.errors[0] }}</div>
-                        {% endif %}
+                        <label for="observacoes" class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" name="observacoes" id="observacoes"
+                               placeholder="Observacoes opcionais...">
                     </div>
                 </div>
-
-                <h5 class="mb-3"><i class="fas fa-route"></i> Rota</h5>
-                <div class="row g-3 mb-4">
-                    <div class="col-md-2">
-                        <label for="uf_origem" class="form-label">UF Origem</label>
-                        {{ form.uf_origem(class="form-control", placeholder="SP", maxlength="2") }}
-                    </div>
-                    <div class="col-md-4">
-                        <label for="cidade_origem" class="form-label">Cidade Origem</label>
-                        {{ form.cidade_origem(class="form-control", placeholder="Sao Paulo") }}
-                    </div>
-                    <div class="col-md-2">
-                        <label for="uf_destino" class="form-label">UF Destino *</label>
-                        {{ form.uf_destino(class="form-control", placeholder="AM", maxlength="2") }}
-                        {% if form.uf_destino.errors %}
-                        <div class="invalid-feedback d-block">{{ form.uf_destino.errors[0] }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-4">
-                        <label for="cidade_destino" class="form-label">Cidade Destino *</label>
-                        {{ form.cidade_destino(class="form-control", placeholder="Manaus") }}
-                        {% if form.cidade_destino.errors %}
-                        <div class="invalid-feedback d-block">{{ form.cidade_destino.errors[0] }}</div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <h5 class="mb-3"><i class="fas fa-weight-hanging"></i> Peso e Valor</h5>
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <label for="peso_bruto" class="form-label">Peso Bruto (kg)</label>
-                        {{ form.peso_bruto(class="form-control", placeholder="0.000", step="0.001") }}
-                    </div>
-                    <div class="col-md-4">
-                        <label for="valor_mercadoria" class="form-label">Valor Mercadoria (R$)</label>
-                        {{ form.valor_mercadoria(class="form-control", placeholder="0.00", step="0.01") }}
-                    </div>
-                </div>
-
-                <h5 class="mb-3"><i class="fas fa-sticky-note"></i> Observacoes</h5>
-                <div class="row g-3 mb-4">
-                    <div class="col-12">
-                        {{ form.observacoes(class="form-control", rows="3", placeholder="Observacoes opcionais...") }}
-                    </div>
-                </div>
-
-                <hr>
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-success btn-lg">
-                        <i class="fas fa-check"></i> Criar CTe CarVia
-                    </button>
-                    <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary btn-lg">
-                        Cancelar
-                    </a>
-                </div>
-            </form>
+            </div>
         </div>
-    </div>
+
+        <!-- ====== Botoes de acao ====== -->
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-lg" id="btn-submit" disabled>
+                <i class="fas fa-check"></i> Criar CTe CarVia
+            </button>
+            <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary btn-lg">
+                Cancelar
+            </a>
+        </div>
+
+        <!-- Hidden inputs para nf_ids (preenchidos via JS) -->
+        <div id="nf-ids-container"></div>
+    </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    // ====== Estado ======
+    let nfsData = [];
+    let nfsSelecionadas = new Set();
+    let transpSelecionada = null;
+    let ufDestinoAtual = '';
+
+    // ====== Elementos ======
+    const selectCliente = document.getElementById('select-cliente');
+    const nfsContainer = document.getElementById('nfs-container');
+    const nfsEmpty = document.getElementById('nfs-empty');
+    const nfsLoading = document.getElementById('nfs-loading');
+    const nfsTbody = document.getElementById('nfs-tbody');
+    const checkAllNfs = document.getElementById('check-all-nfs');
+    const resumoEl = document.getElementById('nfs-resumo');
+    const nfIdsContainer = document.getElementById('nf-ids-container');
+    const transpContainer = document.getElementById('transp-container');
+    const transpEmpty = document.getElementById('transp-empty');
+    const transpLoading = document.getElementById('transp-loading');
+    const transpTbody = document.getElementById('transp-tbody');
+    const transpSelEl = document.getElementById('transp-selecionada');
+    const btnSubmit = document.getElementById('btn-submit');
+    const cteValorInput = document.getElementById('cte_valor');
+
+    // ====== 1. Carregar clientes ======
+    function loadClientes() {
+        fetch('/carvia/api/clientes-nf')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.sucesso) {
+                    selectCliente.innerHTML = '<option value="">Erro ao carregar</option>';
+                    return;
+                }
+                let html = '<option value="">Selecione um cliente...</option>';
+                data.clientes.forEach(c => {
+                    html += `<option value="${c.cnpj}">${c.nome} (${c.qtd_nfs} NFs)</option>`;
+                });
+                selectCliente.innerHTML = html;
+            })
+            .catch(() => {
+                selectCliente.innerHTML = '<option value="">Erro ao carregar</option>';
+            });
+    }
+
+    // ====== 2. Carregar NFs ======
+    function loadNfs() {
+        const cnpj = selectCliente.value;
+        if (!cnpj) {
+            nfsContainer.classList.add('d-none');
+            nfsEmpty.classList.add('d-none');
+            nfsLoading.classList.add('d-none');
+            resumoEl.classList.add('d-none');
+            nfsSelecionadas.clear();
+            updateNfSummary();
+            return;
+        }
+
+        const filtroCte = document.querySelector('input[name="filtro-cte"]:checked').value;
+
+        nfsContainer.classList.add('d-none');
+        nfsEmpty.classList.add('d-none');
+        nfsLoading.classList.remove('d-none');
+
+        fetch(`/carvia/api/nfs-para-cte?cnpj_cliente=${encodeURIComponent(cnpj)}&com_cte=${filtroCte}`)
+            .then(r => r.json())
+            .then(data => {
+                nfsLoading.classList.add('d-none');
+                nfsSelecionadas.clear();
+
+                if (!data.sucesso || !data.nfs.length) {
+                    nfsEmpty.classList.remove('d-none');
+                    nfsData = [];
+                    updateNfSummary();
+                    return;
+                }
+
+                nfsData = data.nfs;
+                renderNfs();
+                nfsContainer.classList.remove('d-none');
+            })
+            .catch(() => {
+                nfsLoading.classList.add('d-none');
+                nfsEmpty.classList.remove('d-none');
+            });
+    }
+
+    function renderNfs() {
+        nfsTbody.innerHTML = '';
+        checkAllNfs.checked = false;
+
+        nfsData.forEach(nf => {
+            const tr = document.createElement('tr');
+            const checked = nfsSelecionadas.has(nf.id) ? 'checked' : '';
+            tr.innerHTML = `
+                <td>
+                    <input type="checkbox" class="form-check-input nf-check" value="${nf.id}"
+                           data-peso="${nf.peso_bruto}" data-valor="${nf.valor_total}"
+                           data-uf="${nf.uf_destinatario || ''}" data-cidade="${nf.cidade_destinatario || ''}"
+                           ${checked}>
+                </td>
+                <td><strong>${nf.numero_nf}</strong>${nf.serie_nf ? '/' + nf.serie_nf : ''}</td>
+                <td class="small">${nf.nome_emitente || '-'}</td>
+                <td class="small">${nf.nome_destinatario || '-'}</td>
+                <td>${nf.cidade_destinatario || '-'}/${nf.uf_destinatario || '-'}</td>
+                <td>${nf.data_emissao || '-'}</td>
+                <td class="text-end valor-col">${formatNumber(nf.peso_bruto, 1)}</td>
+                <td class="text-end valor-col">${formatCurrency(nf.valor_total)}</td>
+                <td>${nf.tem_cte ? '<span class="badge bg-success">' + nf.qtd_ctes + '</span>' : '<span class="badge bg-secondary">Nao</span>'}</td>
+            `;
+            nfsTbody.appendChild(tr);
+        });
+
+        // Event listeners nos checkboxes
+        nfsTbody.querySelectorAll('.nf-check').forEach(cb => {
+            cb.addEventListener('change', onNfCheckChange);
+        });
+    }
+
+    function onNfCheckChange(e) {
+        const id = parseInt(e.target.value);
+        if (e.target.checked) {
+            nfsSelecionadas.add(id);
+        } else {
+            nfsSelecionadas.delete(id);
+        }
+        checkAllNfs.checked = nfsSelecionadas.size === nfsData.length && nfsData.length > 0;
+        updateNfSummary();
+    }
+
+    function updateNfSummary() {
+        // Atualizar hidden inputs
+        nfIdsContainer.innerHTML = '';
+        let pesoTotal = 0;
+        let valorTotal = 0;
+        const destinos = new Set();
+
+        nfsTbody.querySelectorAll('.nf-check:checked').forEach(cb => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'nf_ids';
+            input.value = cb.value;
+            nfIdsContainer.appendChild(input);
+
+            pesoTotal += parseFloat(cb.dataset.peso || 0);
+            valorTotal += parseFloat(cb.dataset.valor || 0);
+            if (cb.dataset.uf) {
+                destinos.add(`${cb.dataset.cidade}/${cb.dataset.uf}`);
+            }
+        });
+
+        const qtd = nfsSelecionadas.size;
+        document.getElementById('resumo-qtd').textContent = qtd;
+        document.getElementById('resumo-peso').textContent = formatNumber(pesoTotal, 1);
+        document.getElementById('resumo-valor').textContent = formatCurrency(valorTotal);
+
+        // Warning destinos diferentes
+        const warningEl = document.getElementById('resumo-destinos-warning');
+        if (destinos.size > 1) {
+            warningEl.classList.remove('d-none');
+        } else {
+            warningEl.classList.add('d-none');
+        }
+
+        if (qtd > 0) {
+            resumoEl.classList.remove('d-none');
+        } else {
+            resumoEl.classList.add('d-none');
+        }
+
+        // Determinar UF destino para busca de transportadoras
+        const novoUf = getUfDestinoSelecionado();
+        if (novoUf && novoUf !== ufDestinoAtual && qtd > 0) {
+            ufDestinoAtual = novoUf;
+            buscarTransportadoras();
+        }
+
+        updateSubmitState();
+    }
+
+    function getUfDestinoSelecionado() {
+        const checks = nfsTbody.querySelectorAll('.nf-check:checked');
+        if (checks.length === 0) return '';
+        return checks[0].dataset.uf || '';
+    }
+
+    // ====== Check all ======
+    checkAllNfs.addEventListener('change', function() {
+        const checks = nfsTbody.querySelectorAll('.nf-check');
+        checks.forEach(cb => {
+            cb.checked = this.checked;
+            const id = parseInt(cb.value);
+            if (this.checked) {
+                nfsSelecionadas.add(id);
+            } else {
+                nfsSelecionadas.delete(id);
+            }
+        });
+        updateNfSummary();
+    });
+
+    // ====== 3. Buscar transportadoras ======
+    function buscarTransportadoras() {
+        if (!ufDestinoAtual) return;
+
+        const busca = document.getElementById('busca-transp').value;
+
+        transpContainer.classList.add('d-none');
+        transpEmpty.classList.add('d-none');
+        transpLoading.classList.remove('d-none');
+
+        let url = `/carvia/api/transportadoras-modalidade?uf_destino=${encodeURIComponent(ufDestinoAtual)}`;
+        if (busca) url += `&busca=${encodeURIComponent(busca)}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                transpLoading.classList.add('d-none');
+
+                if (!data.sucesso || !data.transportadoras.length) {
+                    transpEmpty.classList.remove('d-none');
+                    return;
+                }
+
+                renderTransportadoras(data.transportadoras);
+                transpContainer.classList.remove('d-none');
+            })
+            .catch(() => {
+                transpLoading.classList.add('d-none');
+                transpEmpty.classList.remove('d-none');
+            });
+    }
+
+    function renderTransportadoras(transportadoras) {
+        transpTbody.innerHTML = '';
+
+        transportadoras.forEach(t => {
+            const tr = document.createElement('tr');
+
+            // Botoes de modalidade
+            let modBtns = '';
+            if (t.modalidades && t.modalidades.length) {
+                t.modalidades.forEach(mod => {
+                    modBtns += `<button type="button" class="btn btn-outline-primary btn-sm btn-select-mod" `
+                             + `data-transp-id="${t.id}" data-transp-nome="${t.razao_social}" `
+                             + `data-mod="${mod}">${mod}</button> `;
+                });
+            } else {
+                modBtns = '<span class="text-muted small">Sem modalidade</span>';
+            }
+
+            tr.innerHTML = `
+                <td>
+                    <input type="radio" class="form-check-input" name="transp-radio"
+                           value="${t.id}" data-nome="${t.razao_social}">
+                </td>
+                <td><strong>${t.razao_social}</strong>
+                    ${t.freteiro ? '<span class="badge bg-warning text-dark ms-1">Freteiro</span>' : ''}
+                </td>
+                <td class="cnpj-col">${t.cnpj || '-'}</td>
+                <td>${modBtns}</td>
+            `;
+            transpTbody.appendChild(tr);
+        });
+
+        // Event listeners nos botoes de modalidade
+        transpTbody.querySelectorAll('.btn-select-mod').forEach(btn => {
+            btn.addEventListener('click', function() {
+                selectTransportadora(
+                    parseInt(this.dataset.transpId),
+                    this.dataset.transpNome,
+                    this.dataset.mod
+                );
+            });
+        });
+
+        // Event listeners nos radios (selecao sem modalidade)
+        transpTbody.querySelectorAll('input[name="transp-radio"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                selectTransportadora(
+                    parseInt(this.value),
+                    this.dataset.nome,
+                    ''
+                );
+            });
+        });
+    }
+
+    function selectTransportadora(id, nome, mod) {
+        transpSelecionada = { id, nome, mod };
+
+        document.getElementById('input-transportadora-id').value = id;
+        document.getElementById('input-modalidade').value = mod;
+        document.getElementById('transp-sel-nome').textContent = nome;
+
+        const modBadge = document.getElementById('transp-sel-mod');
+        if (mod) {
+            modBadge.textContent = mod;
+            modBadge.classList.remove('d-none');
+        } else {
+            modBadge.classList.add('d-none');
+        }
+
+        transpSelEl.classList.remove('d-none');
+        transpContainer.classList.add('d-none');
+        updateSubmitState();
+    }
+
+    // ====== 4. Estado do submit ======
+    function updateSubmitState() {
+        const temNfs = nfsSelecionadas.size > 0;
+        const temValor = cteValorInput.value.trim() !== '';
+        btnSubmit.disabled = !(temNfs && temValor);
+    }
+
+    // ====== Formatadores ======
+    function formatNumber(val, decimals) {
+        if (val == null || isNaN(val)) return '0';
+        return parseFloat(val).toLocaleString('pt-BR', {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        });
+    }
+
+    function formatCurrency(val) {
+        if (val == null || isNaN(val)) return '0,00';
+        return parseFloat(val).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+    }
+
+    // ====== Event listeners ======
+    selectCliente.addEventListener('change', loadNfs);
+
+    document.querySelectorAll('input[name="filtro-cte"]').forEach(radio => {
+        radio.addEventListener('change', loadNfs);
+    });
+
+    document.getElementById('btn-buscar-transp').addEventListener('click', buscarTransportadoras);
+    document.getElementById('busca-transp').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); buscarTransportadoras(); }
+    });
+
+    document.getElementById('btn-limpar-transp').addEventListener('click', function() {
+        transpSelecionada = null;
+        document.getElementById('input-transportadora-id').value = '';
+        document.getElementById('input-modalidade').value = '';
+        transpSelEl.classList.add('d-none');
+        transpContainer.classList.add('d-none');
+        transpEmpty.classList.add('d-none');
+        document.getElementById('busca-transp').value = '';
+        updateSubmitState();
+    });
+
+    document.getElementById('btn-trocar-transp').addEventListener('click', function() {
+        transpSelecionada = null;
+        document.getElementById('input-transportadora-id').value = '';
+        document.getElementById('input-modalidade').value = '';
+        transpSelEl.classList.add('d-none');
+        buscarTransportadoras();
+        updateSubmitState();
+    });
+
+    cteValorInput.addEventListener('input', updateSubmitState);
+
+    // ====== Inicializacao ======
+    loadClientes();
+})();
+</script>
 {% endblock %}

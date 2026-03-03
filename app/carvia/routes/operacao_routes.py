@@ -132,53 +132,217 @@ def register_operacao_routes(bp):
     @bp.route('/operacoes/criar', methods=['GET', 'POST'])
     @login_required
     def criar_operacao_manual():
-        """Cria operacao manual (sem CTe) — suporta MANUAL_SEM_CTE e MANUAL_FRETEIRO"""
+        """Cria operacao manual — wizard com selecao de NFs ou fluxo freteiro.
+
+        Fluxo wizard (MANUAL_SEM_CTE):
+            GET: Renderiza wizard com 3 secoes (NFs, transportadora, valor)
+            POST: Cria CarviaOperacao a partir de NFs selecionadas
+
+        Fluxo freteiro (MANUAL_FRETEIRO):
+            Preservado — redireciona para criar_freteiro.html com OperacaoManualForm
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.forms import OperacaoManualForm
-        form = OperacaoManualForm()
-
-        # Tipo de entrada: do form POST ou query param GET (para pre-selecao via redirect)
-        if request.method == 'POST':
-            tipo_entrada = request.form.get('tipo_entrada', 'MANUAL_SEM_CTE')
+        # Detectar tipo de fluxo
+        if request.method == 'GET':
+            tipo = request.args.get('tipo', 'MANUAL_SEM_CTE')
         else:
-            tipo_entrada = request.args.get('tipo', 'MANUAL_SEM_CTE')
-        if tipo_entrada not in ('MANUAL_SEM_CTE', 'MANUAL_FRETEIRO'):
-            tipo_entrada = 'MANUAL_SEM_CTE'
+            tipo = request.form.get('tipo_entrada', 'MANUAL_SEM_CTE')
 
-        if form.validate_on_submit():
-            try:
-                operacao = CarviaOperacao(
-                    cnpj_cliente=form.cnpj_cliente.data.strip(),
-                    nome_cliente=form.nome_cliente.data.strip(),
-                    uf_origem=form.uf_origem.data.strip().upper() if form.uf_origem.data else None,
-                    cidade_origem=form.cidade_origem.data.strip() if form.cidade_origem.data else None,
-                    uf_destino=form.uf_destino.data.strip().upper(),
-                    cidade_destino=form.cidade_destino.data.strip(),
-                    peso_bruto=form.peso_bruto.data,
-                    peso_utilizado=form.peso_bruto.data,
-                    valor_mercadoria=form.valor_mercadoria.data,
-                    tipo_entrada=tipo_entrada,
-                    status='RASCUNHO',
-                    observacoes=form.observacoes.data,
+        # ---- Fluxo freteiro: preservar comportamento existente ----
+        if tipo == 'MANUAL_FRETEIRO':
+            from app.carvia.forms import OperacaoManualForm
+            form = OperacaoManualForm()
+
+            if form.validate_on_submit():
+                try:
+                    operacao = CarviaOperacao(
+                        cnpj_cliente=form.cnpj_cliente.data.strip(),
+                        nome_cliente=form.nome_cliente.data.strip(),
+                        uf_origem=form.uf_origem.data.strip().upper() if form.uf_origem.data else None,
+                        cidade_origem=form.cidade_origem.data.strip() if form.cidade_origem.data else None,
+                        uf_destino=form.uf_destino.data.strip().upper(),
+                        cidade_destino=form.cidade_destino.data.strip(),
+                        peso_bruto=form.peso_bruto.data,
+                        peso_utilizado=form.peso_bruto.data,
+                        valor_mercadoria=form.valor_mercadoria.data,
+                        tipo_entrada='MANUAL_FRETEIRO',
+                        status='RASCUNHO',
+                        observacoes=form.observacoes.data,
+                        criado_por=current_user.email,
+                    )
+                    db.session.add(operacao)
+                    db.session.commit()
+                    flash(f'Operacao #{operacao.id} criada com sucesso.', 'success')
+                    return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao.id))
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"Erro ao criar operacao freteiro: {e}")
+                    flash(f'Erro ao criar operacao: {e}', 'danger')
+
+            return render_template(
+                'carvia/criar_freteiro.html',
+                form=form,
+                tipo_entrada='MANUAL_FRETEIRO',
+            )
+
+        # ---- Fluxo wizard: criar a partir de NFs ----
+        if request.method == 'GET':
+            return render_template('carvia/criar_manual.html')
+
+        # POST — processar wizard
+        nf_ids_raw = request.form.getlist('nf_ids')
+        cte_valor_raw = request.form.get('cte_valor', '').strip()
+        transportadora_id = request.form.get('transportadora_id', type=int)
+        modalidade = request.form.get('modalidade', '').strip()
+        observacoes = request.form.get('observacoes', '').strip()
+
+        # Validar NFs
+        if not nf_ids_raw:
+            flash('Selecione pelo menos uma NF.', 'warning')
+            return render_template('carvia/criar_manual.html')
+
+        # Parse nf_ids
+        try:
+            nf_ids = [int(x) for x in nf_ids_raw]
+        except (ValueError, TypeError):
+            flash('IDs de NF invalidos.', 'danger')
+            return render_template('carvia/criar_manual.html')
+
+        # Validar cte_valor (formato BR: "1.234,56" -> 1234.56)
+        if not cte_valor_raw:
+            flash('Informe o valor do CTe.', 'warning')
+            return render_template('carvia/criar_manual.html')
+
+        try:
+            cte_valor = float(cte_valor_raw.replace('.', '').replace(',', '.'))
+        except (ValueError, TypeError):
+            flash('Valor do CTe invalido.', 'danger')
+            return render_template('carvia/criar_manual.html')
+
+        # Buscar NFs do banco
+        nfs_encontradas = db.session.query(CarviaNf).filter(
+            CarviaNf.id.in_(nf_ids)
+        ).all()
+
+        if len(nfs_encontradas) != len(nf_ids):
+            flash('Uma ou mais NFs nao foram encontradas.', 'danger')
+            return render_template('carvia/criar_manual.html')
+
+        # Validar mesmo cnpj_emitente
+        cnpjs = {nf.cnpj_emitente for nf in nfs_encontradas}
+        if len(cnpjs) > 1:
+            flash('NFs selecionadas pertencem a clientes diferentes. Selecione NFs do mesmo cliente.', 'danger')
+            return render_template('carvia/criar_manual.html')
+
+        try:
+            # Somar peso_bruto e valor_total das NFs
+            peso_total = sum(float(nf.peso_bruto or 0) for nf in nfs_encontradas)
+            valor_total = sum(float(nf.valor_total or 0) for nf in nfs_encontradas)
+
+            # Extrair dados da primeira NF (emitente = cliente, destinatario = destino)
+            primeira_nf = nfs_encontradas[0]
+            cnpj_cliente = primeira_nf.cnpj_emitente
+            nome_cliente = primeira_nf.nome_emitente or cnpj_cliente
+            uf_origem = primeira_nf.uf_emitente
+            cidade_origem = primeira_nf.cidade_emitente
+            uf_destino = primeira_nf.uf_destinatario
+            cidade_destino = primeira_nf.cidade_destinatario
+
+            # Warning se NFs tem destinos diferentes
+            destinos = {
+                (nf.uf_destinatario, nf.cidade_destinatario)
+                for nf in nfs_encontradas
+                if nf.uf_destinatario
+            }
+            if len(destinos) > 1:
+                flash(
+                    'NFs selecionadas tem destinos diferentes. '
+                    f'Usando destino da primeira NF: {cidade_destino}/{uf_destino}.',
+                    'warning'
+                )
+
+            # Validar campos obrigatorios
+            if not uf_destino:
+                flash('UF destino nao encontrada nas NFs selecionadas.', 'danger')
+                return render_template('carvia/criar_manual.html')
+            if not cidade_destino:
+                flash('Cidade destino nao encontrada nas NFs selecionadas.', 'danger')
+                return render_template('carvia/criar_manual.html')
+
+            # Criar CarviaOperacao
+            operacao = CarviaOperacao(
+                cnpj_cliente=cnpj_cliente,
+                nome_cliente=nome_cliente,
+                uf_origem=uf_origem,
+                cidade_origem=cidade_origem,
+                uf_destino=uf_destino,
+                cidade_destino=cidade_destino,
+                peso_bruto=peso_total,
+                valor_mercadoria=valor_total,
+                cte_valor=cte_valor,
+                tipo_entrada='MANUAL_SEM_CTE',
+                status='RASCUNHO',
+                observacoes=observacoes or None,
+                criado_por=current_user.email,
+            )
+            # R3: calcular peso_utilizado
+            operacao.calcular_peso_utilizado()
+            db.session.add(operacao)
+            db.session.flush()  # Obter operacao.id para junctions
+
+            # Criar junctions CarviaOperacaoNf
+            for nf in nfs_encontradas:
+                junction = CarviaOperacaoNf(
+                    operacao_id=operacao.id,
+                    nf_id=nf.id,
+                )
+                db.session.add(junction)
+
+            # Se transportadora selecionada, criar subcontrato
+            if transportadora_id:
+                from app.carvia.services.cotacao_service import CotacaoService
+
+                cotacao = CotacaoService().cotar_subcontrato(
+                    operacao_id=operacao.id,
+                    transportadora_id=transportadora_id,
+                )
+
+                # R7: numero sequencial por transportadora
+                max_seq = db.session.query(
+                    func.max(CarviaSubcontrato.numero_sequencial_transportadora)
+                ).filter(
+                    CarviaSubcontrato.transportadora_id == transportadora_id,
+                ).scalar() or 0
+
+                subcontrato = CarviaSubcontrato(
+                    operacao_id=operacao.id,
+                    transportadora_id=transportadora_id,
+                    numero_sequencial_transportadora=max_seq + 1,
+                    valor_cotado=cotacao.get('valor_cotado') if cotacao.get('sucesso') else None,
+                    tabela_frete_id=cotacao.get('tabela_frete_id') if cotacao.get('sucesso') else None,
+                    status='COTADO' if cotacao.get('sucesso') else 'PENDENTE',
+                    observacoes=f'Modalidade: {modalidade}' if modalidade else None,
                     criado_por=current_user.email,
                 )
-                db.session.add(operacao)
-                db.session.commit()
-                flash(f'Operacao #{operacao.id} criada com sucesso.', 'success')
-                return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao.id))
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Erro ao criar operacao manual: {e}")
-                flash(f'Erro ao criar operacao: {e}', 'danger')
+                db.session.add(subcontrato)
 
-        return render_template(
-            'carvia/criar_manual.html',
-            form=form,
-            tipo_entrada=tipo_entrada,
-        )
+                # R4: avancar status se cotacao sucesso
+                if cotacao.get('sucesso'):
+                    operacao.status = 'COTADO'
+
+            db.session.commit()
+
+            flash(f'Operacao #{operacao.id} criada com {len(nfs_encontradas)} NF(s).', 'success')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar operacao via wizard: {e}")
+            flash(f'Erro ao criar operacao: {e}', 'danger')
+            return render_template('carvia/criar_manual.html')
 
     @bp.route('/operacoes/criar-freteiro', methods=['GET', 'POST'])
     @login_required

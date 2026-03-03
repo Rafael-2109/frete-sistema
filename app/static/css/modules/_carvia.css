@@ -335,3 +335,20 @@
 [data-bs-theme="light"] .carvia-extrato-debito {
     color: hsl(0 65% 40%);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Wizard Criar CTe Manual
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Modalidade buttons (transportadora table) */
+.btn-select-mod {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.45rem;
+}
+
+/* Transportadora selected display */
+#transp-selecionada {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}

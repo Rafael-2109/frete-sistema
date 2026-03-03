@@ -286,6 +286,202 @@ def register_api_routes(bp):
             logger.error(f"Erro ao gerar URL para fatura transportadora {fatura_id}: {e}")
             return jsonify({'erro': str(e)}), 500
 
+    # ------------------------------------------------------------------
+    # Wizard "Criar CTe Manual" — APIs de selecao
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/clientes-nf')
+    @login_required
+    def api_clientes_nf():
+        """Lista clientes distintos (cnpj_emitente + nome_emitente) com contagem de NFs.
+
+        Emitente = cliente pois em importacao_service cnpj_cliente vem do remetente.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.models import CarviaNf
+            from sqlalchemy import func as sqlfunc
+
+            resultados = db.session.query(
+                CarviaNf.cnpj_emitente,
+                CarviaNf.nome_emitente,
+                sqlfunc.count(CarviaNf.id).label('qtd_nfs'),
+            ).group_by(
+                CarviaNf.cnpj_emitente,
+                CarviaNf.nome_emitente,
+            ).order_by(
+                CarviaNf.nome_emitente,
+            ).all()
+
+            clientes = [{
+                'cnpj': r.cnpj_emitente,
+                'nome': r.nome_emitente or r.cnpj_emitente,
+                'qtd_nfs': r.qtd_nfs,
+            } for r in resultados]
+
+            return jsonify({'sucesso': True, 'clientes': clientes})
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar clientes NF: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/nfs-para-cte')
+    @login_required
+    def api_nfs_para_cte():
+        """Lista NFs de um cliente com flag tem_cte (se aparece em carvia_operacao_nfs).
+
+        Query params:
+            cnpj_cliente: CNPJ do emitente (obrigatorio)
+            com_cte: '0' = sem CTe (default), '1' = com CTe, '' = todas
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        cnpj_cliente = request.args.get('cnpj_cliente', '').strip()
+        if not cnpj_cliente:
+            return jsonify({'erro': 'cnpj_cliente obrigatorio'}), 400
+
+        com_cte = request.args.get('com_cte', '0')
+
+        try:
+            from app.carvia.models import CarviaNf, CarviaOperacaoNf
+            from sqlalchemy import func as sqlfunc
+
+            # Subquery: contagem de CTes por NF
+            subq = db.session.query(
+                CarviaOperacaoNf.nf_id,
+                sqlfunc.count(CarviaOperacaoNf.operacao_id).label('qtd_ctes'),
+            ).group_by(CarviaOperacaoNf.nf_id).subquery()
+
+            query = db.session.query(
+                CarviaNf, subq.c.qtd_ctes,
+            ).outerjoin(
+                subq, CarviaNf.id == subq.c.nf_id,
+            ).filter(
+                CarviaNf.cnpj_emitente == cnpj_cliente,
+            )
+
+            # Filtro com_cte
+            if com_cte == '0':
+                query = query.filter(subq.c.qtd_ctes.is_(None))
+            elif com_cte == '1':
+                query = query.filter(subq.c.qtd_ctes > 0)
+            # '' = todas (sem filtro)
+
+            query = query.order_by(
+                CarviaNf.data_emissao.desc().nullslast(),
+                CarviaNf.numero_nf,
+            )
+
+            resultados = query.all()
+
+            nfs = []
+            for nf, qtd_ctes in resultados:
+                nfs.append({
+                    'id': nf.id,
+                    'numero_nf': nf.numero_nf,
+                    'serie_nf': nf.serie_nf,
+                    'data_emissao': nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else None,
+                    'nome_emitente': nf.nome_emitente,
+                    'nome_destinatario': nf.nome_destinatario,
+                    'uf_destinatario': nf.uf_destinatario,
+                    'cidade_destinatario': nf.cidade_destinatario,
+                    'uf_emitente': nf.uf_emitente,
+                    'cidade_emitente': nf.cidade_emitente,
+                    'valor_total': float(nf.valor_total) if nf.valor_total else 0,
+                    'peso_bruto': float(nf.peso_bruto) if nf.peso_bruto else 0,
+                    'tem_cte': bool(qtd_ctes and qtd_ctes > 0),
+                    'qtd_ctes': qtd_ctes or 0,
+                })
+
+            return jsonify({'sucesso': True, 'nfs': nfs})
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar NFs para CTe: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/transportadoras-modalidade')
+    @login_required
+    def api_transportadoras_modalidade():
+        """Lista transportadoras ativas com tabelas de frete para o UF, agrupando modalidades.
+
+        Query params:
+            uf_destino: UF de destino (obrigatorio)
+            busca: texto de busca (opcional)
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        uf_destino = request.args.get('uf_destino', '').strip().upper()
+        busca = request.args.get('busca', '').strip()
+
+        if not uf_destino:
+            return jsonify({'erro': 'uf_destino obrigatorio'}), 400
+
+        try:
+            from app.transportadoras.models import Transportadora
+            from app.tabelas.models import TabelaFrete
+
+            # Buscar tabelas ativas para o UF destino
+            tabelas_query = db.session.query(TabelaFrete).filter(
+                TabelaFrete.uf_destino == uf_destino,
+                TabelaFrete.ativo == True,  # noqa: E712
+            )
+
+            # Coletar transportadora_ids e modalidades
+            tabelas_por_transp = {}
+            for t in tabelas_query.all():
+                tid = t.transportadora_id
+                if tid not in tabelas_por_transp:
+                    tabelas_por_transp[tid] = {
+                        'modalidades': set(),
+                        'qtd_tabelas': 0,
+                    }
+                tabelas_por_transp[tid]['qtd_tabelas'] += 1
+                if t.nome_tabela:
+                    tabelas_por_transp[tid]['modalidades'].add(t.nome_tabela)
+
+            if not tabelas_por_transp:
+                return jsonify({'sucesso': True, 'transportadoras': []})
+
+            # Buscar transportadoras ativas que tem tabela
+            query = db.session.query(Transportadora).filter(
+                Transportadora.id.in_(tabelas_por_transp.keys()),
+                Transportadora.ativo == True,  # noqa: E712
+            )
+
+            if busca:
+                busca_like = f'%{busca}%'
+                query = query.filter(
+                    db.or_(
+                        Transportadora.razao_social.ilike(busca_like),
+                        Transportadora.cnpj.ilike(busca_like),
+                    )
+                )
+
+            query = query.order_by(Transportadora.razao_social).limit(50)
+            transportadoras = query.all()
+
+            resultado = []
+            for t in transportadoras:
+                info = tabelas_por_transp.get(t.id, {})
+                resultado.append({
+                    'id': t.id,
+                    'razao_social': t.razao_social,
+                    'cnpj': t.cnpj,
+                    'freteiro': t.freteiro,
+                    'modalidades': sorted(info.get('modalidades', set())),
+                    'qtd_tabelas': info.get('qtd_tabelas', 0),
+                })
+
+            return jsonify({'sucesso': True, 'transportadoras': resultado})
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar transportadoras modalidade: {e}")
+            return jsonify({'erro': str(e)}), 500
+
     @bp.route('/api/atualizar-cubagem', methods=['POST'])
     @login_required
     def api_atualizar_cubagem():
