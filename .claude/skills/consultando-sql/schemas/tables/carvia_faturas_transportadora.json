@@ -87,18 +87,24 @@
       "references": "transportadoras.id"
     }
   ],
+  "unique_constraints": [
+    [
+      "numero_fatura",
+      "transportadora_id"
+    ]
+  ],
   "indices": [
-    {
-      "name": "ix_carvia_faturas_transportadora_numero_fatura",
-      "columns": [
-        "numero_fatura"
-      ],
-      "unique": false
-    },
     {
       "name": "ix_carvia_faturas_transportadora_status_pagamento",
       "columns": [
         "status_pagamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_faturas_transportadora_numero_fatura",
+      "columns": [
+        "numero_fatura"
       ],
       "unique": false
     }

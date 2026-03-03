@@ -128,6 +128,12 @@
       "nullable": false
     }
   ],
+  "unique_constraints": [
+    [
+      "numero_fatura",
+      "cnpj_cliente"
+    ]
+  ],
   "indices": [
     {
       "name": "ix_carvia_faturas_cliente_cnpj_cliente",
