@@ -8,6 +8,7 @@ NF, CTe CarVia (Operacao), CTe Subcontrato, Fatura Cliente, Fatura Transportador
 
 Metodos:
 - vincular_itens_fatura_cliente: resolve operacao_id e nf_id em itens existentes
+- vincular_operacoes_da_fatura: backward binding operacao -> fatura via itens
 - criar_itens_fatura_transportadora: gera itens a partir de subcontratos vinculados
 - criar_itens_fatura_cliente_from_operacoes: gera itens a partir de operacoes (UI manual)
 - resolver_operacao_por_cte: helper de matching cte_numero -> operacao_id
@@ -358,6 +359,19 @@ class LinkingService:
             if item.nf_id:
                 self._criar_junction_se_necessario(operacao.id, item.nf_id)
 
+            # Backward binding: setar fatura_cliente_id na operacao
+            # se ainda nao vinculada. Primeira fatura ganha quando
+            # varios itens de faturas diferentes referenciam o mesmo CTe.
+            if (item.fatura_cliente_id
+                    and operacao.fatura_cliente_id is None):
+                operacao.fatura_cliente_id = item.fatura_cliente_id
+                operacao.status = 'FATURADO'
+                logger.info(
+                    f"Backward binding (re-link): operacao={operacao.id} "
+                    f"-> fatura_cliente_id={item.fatura_cliente_id} "
+                    f"status=FATURADO"
+                )
+
         if count > 0:
             db.session.flush()
 
@@ -459,6 +473,71 @@ class LinkingService:
             db.session.flush()
 
         return count
+
+    # ------------------------------------------------------------------
+    # vincular_operacoes_da_fatura: backward binding operacao -> fatura
+    # ------------------------------------------------------------------
+
+    def vincular_operacoes_da_fatura(self, fatura_id):
+        """Vincula operacoes a fatura via itens ja existentes (backward binding).
+
+        Busca operacao_id nos CarviaFaturaClienteItem da fatura,
+        e para cada operacao com fatura_cliente_id IS NULL,
+        seta fatura_cliente_id e muda status para FATURADO.
+
+        Regra de negocio: fatura PDF e evidencia documental de faturamento
+        consumado, entao e correto promover status para FATURADO
+        independente do status anterior (RASCUNHO/COTADO/CONFIRMADO).
+
+        Returns:
+            dict com: operacoes_vinculadas, operacoes_ja_vinculadas, total
+        """
+        from app.carvia.models import CarviaFaturaClienteItem, CarviaOperacao
+
+        # Buscar operacao_ids distintos nos itens desta fatura
+        itens = CarviaFaturaClienteItem.query.filter(
+            CarviaFaturaClienteItem.fatura_cliente_id == fatura_id,
+            CarviaFaturaClienteItem.operacao_id.isnot(None),
+        ).all()
+
+        operacao_ids = list(set(item.operacao_id for item in itens))
+
+        stats = {
+            'operacoes_vinculadas': 0,
+            'operacoes_ja_vinculadas': 0,
+            'total': len(operacao_ids),
+        }
+
+        if not operacao_ids:
+            return stats
+
+        operacoes = CarviaOperacao.query.filter(
+            CarviaOperacao.id.in_(operacao_ids)
+        ).all()
+
+        for operacao in operacoes:
+            if operacao.fatura_cliente_id is not None:
+                stats['operacoes_ja_vinculadas'] += 1
+                if operacao.fatura_cliente_id != fatura_id:
+                    logger.warning(
+                        f"Operacao {operacao.id} ja vinculada a fatura "
+                        f"{operacao.fatura_cliente_id}, ignorando fatura {fatura_id}"
+                    )
+                continue
+
+            operacao.fatura_cliente_id = fatura_id
+            operacao.status = 'FATURADO'
+            stats['operacoes_vinculadas'] += 1
+            logger.info(
+                f"Backward binding: operacao={operacao.id} "
+                f"(CTe {operacao.cte_numero}) -> fatura_cliente_id={fatura_id} "
+                f"status=FATURADO"
+            )
+
+        if stats['operacoes_vinculadas'] > 0:
+            db.session.flush()
+
+        return stats
 
     # ------------------------------------------------------------------
     # vincular_itens_fatura_cliente: resolve FKs em itens existentes

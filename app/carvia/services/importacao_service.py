@@ -511,6 +511,19 @@ class ImportacaoService:
                                     f"NFs referencia criadas automaticamente"
                                 )
 
+                            # Backward binding: setar fatura_cliente_id e status
+                            # nas operacoes que ja foram resolvidas nos itens.
+                            # Fatura PDF e evidencia de faturamento consumado.
+                            bind_stats = linker.vincular_operacoes_da_fatura(
+                                fatura.id
+                            )
+                            if bind_stats['operacoes_vinculadas'] > 0:
+                                logger.info(
+                                    f"Fatura {fatura.id}: "
+                                    f"{bind_stats['operacoes_vinculadas']} operacao(oes) "
+                                    f"vinculada(s) com status FATURADO"
+                                )
+
                         faturas_criadas.append(fatura)
                 except Exception as e:
                     logger.error(f"Erro ao salvar fatura: {e}")
