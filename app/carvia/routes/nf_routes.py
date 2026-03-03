@@ -27,6 +27,8 @@ def register_nf_routes(bp):
         per_page = request.args.get('per_page', 25, type=int)
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo_fonte', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
 
         # Subquery: contar CTes vinculados a cada NF
         subq_ctes = db.session.query(
@@ -55,7 +57,21 @@ def register_nf_routes(bp):
                 )
             )
 
-        query = query.order_by(CarviaNf.criado_em.desc())
+        # Ordenacao dinamica
+        sortable_columns = {
+            'numero_nf': CarviaNf.numero_nf,
+            'emitente': CarviaNf.nome_emitente,
+            'valor_total': CarviaNf.valor_total,
+            'peso_bruto': CarviaNf.peso_bruto,
+            'data_emissao': CarviaNf.data_emissao,
+            'criado_em': CarviaNf.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaNf.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
+
         paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
         return render_template(
@@ -64,6 +80,8 @@ def register_nf_routes(bp):
             paginacao=paginacao,
             busca=busca,
             tipo_filtro=tipo_filtro,
+            sort=sort,
+            direction=direction,
         )
 
     @bp.route('/nfs/<int:nf_id>')

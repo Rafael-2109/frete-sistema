@@ -161,6 +161,25 @@
     background: var(--bg-dark, #212529);
 }
 
+/* Sortable Headers */
+.carvia-sortable {
+    color: var(--bs-secondary-color, #6c757d);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: color 0.15s ease;
+}
+
+.carvia-sortable:hover {
+    color: var(--bs-primary, #0d6efd);
+}
+
+.carvia-sortable i {
+    font-size: 0.7rem;
+    color: var(--bs-primary, #0d6efd);
+}
+
 /* Table Responsive */
 .carvia-table th {
     white-space: nowrap;

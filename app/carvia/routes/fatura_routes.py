@@ -32,6 +32,8 @@ def register_fatura_routes(bp):
         page = request.args.get('page', 1, type=int)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaFaturaCliente)
         if status_filtro:
@@ -45,7 +47,22 @@ def register_fatura_routes(bp):
                     CarviaFaturaCliente.numero_fatura.ilike(busca_like),
                 )
             )
-        query = query.order_by(CarviaFaturaCliente.criado_em.desc())
+
+        # Ordenacao dinamica
+        sortable_columns = {
+            'numero_fatura': CarviaFaturaCliente.numero_fatura,
+            'nome_cliente': CarviaFaturaCliente.nome_cliente,
+            'data_emissao': CarviaFaturaCliente.data_emissao,
+            'vencimento': CarviaFaturaCliente.vencimento,
+            'valor_total': CarviaFaturaCliente.valor_total,
+            'status': CarviaFaturaCliente.status,
+            'criado_em': CarviaFaturaCliente.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaFaturaCliente.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
@@ -55,6 +72,8 @@ def register_fatura_routes(bp):
             paginacao=paginacao,
             status_filtro=status_filtro,
             busca=busca,
+            sort=sort,
+            direction=direction,
         )
 
     @bp.route('/faturas-cliente/nova', methods=['GET', 'POST'])
@@ -309,6 +328,8 @@ def register_fatura_routes(bp):
         page = request.args.get('page', 1, type=int)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaFaturaTransportadora)
         if status_filtro:
@@ -322,7 +343,21 @@ def register_fatura_routes(bp):
                     CarviaFaturaTransportadora.numero_fatura.ilike(busca_like),
                 )
             )
-        query = query.order_by(CarviaFaturaTransportadora.criado_em.desc())
+
+        # Ordenacao dinamica
+        sortable_columns = {
+            'numero_fatura': CarviaFaturaTransportadora.numero_fatura,
+            'data_emissao': CarviaFaturaTransportadora.data_emissao,
+            'vencimento': CarviaFaturaTransportadora.vencimento,
+            'valor_total': CarviaFaturaTransportadora.valor_total,
+            'status_conferencia': CarviaFaturaTransportadora.status_conferencia,
+            'criado_em': CarviaFaturaTransportadora.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
@@ -332,6 +367,8 @@ def register_fatura_routes(bp):
             paginacao=paginacao,
             status_filtro=status_filtro,
             busca=busca,
+            sort=sort,
+            direction=direction,
         )
 
     @bp.route('/faturas-transportadora/nova', methods=['GET', 'POST'])

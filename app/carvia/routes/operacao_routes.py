@@ -31,6 +31,8 @@ def register_operacao_routes(bp):
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
 
         # Subquery: contar NFs vinculadas a cada operacao
         subq_nfs = db.session.query(
@@ -61,7 +63,21 @@ def register_operacao_routes(bp):
                 )
             )
 
-        query = query.order_by(CarviaOperacao.criado_em.desc())
+        # Ordenacao dinamica
+        sortable_columns = {
+            'cte_numero': CarviaOperacao.cte_numero,
+            'nome_cliente': CarviaOperacao.nome_cliente,
+            'peso_utilizado': CarviaOperacao.peso_utilizado,
+            'cte_valor': CarviaOperacao.cte_valor,
+            'status': CarviaOperacao.status,
+            'criado_em': CarviaOperacao.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaOperacao.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
+
         paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
         return render_template(
@@ -71,6 +87,8 @@ def register_operacao_routes(bp):
             status_filtro=status_filtro,
             tipo_filtro=tipo_filtro,
             busca=busca,
+            sort=sort,
+            direction=direction,
         )
 
     @bp.route('/operacoes/<int:operacao_id>')

@@ -26,6 +26,8 @@ def register_subcontrato_routes(bp):
         per_page = request.args.get('per_page', 25, type=int)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaSubcontrato).join(
             CarviaOperacao,
@@ -51,7 +53,19 @@ def register_subcontrato_routes(bp):
                 )
             )
 
-        query = query.order_by(CarviaSubcontrato.criado_em.desc())
+        # Ordenacao dinamica
+        sortable_columns = {
+            'seq': CarviaSubcontrato.numero_sequencial_transportadora,
+            'valor_final': CarviaSubcontrato.valor_cotado,
+            'status': CarviaSubcontrato.status,
+            'criado_em': CarviaSubcontrato.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaSubcontrato.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
+
         paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
         return render_template(
@@ -60,6 +74,8 @@ def register_subcontrato_routes(bp):
             paginacao=paginacao,
             status_filtro=status_filtro,
             busca=busca,
+            sort=sort,
+            direction=direction,
         )
 
     @bp.route('/subcontratos/criar', methods=['GET', 'POST'])

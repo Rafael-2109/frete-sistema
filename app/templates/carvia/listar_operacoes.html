@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "carvia/_macros.html" import th_sort %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -59,15 +60,15 @@
                     <thead>
                         <tr>
                             <th>NFs</th>
-                            <th>CTe CarVia</th>
-                            <th>Cliente</th>
+                            {{ th_sort('cte_numero', 'CTe CarVia', sort, direction) }}
+                            {{ th_sort('nome_cliente', 'Cliente', sort, direction) }}
                             <th>Destino</th>
-                            <th>Peso (kg)</th>
-                            <th>Valor CTe</th>
+                            {{ th_sort('peso_utilizado', 'Peso (kg)', sort, direction, 'text-end') }}
+                            {{ th_sort('cte_valor', 'Valor CTe', sort, direction, 'text-end') }}
                             <th>Fatura</th>
                             <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Criado em</th>
+                            {{ th_sort('status', 'Status', sort, direction) }}
+                            {{ th_sort('criado_em', 'Criado em', sort, direction) }}
                             <th></th>
                         </tr>
                     </thead>
@@ -125,7 +126,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.prev_num, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.prev_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -133,7 +134,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=p, status=status_filtro, busca=busca) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=p, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -141,7 +142,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.next_num, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.next_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

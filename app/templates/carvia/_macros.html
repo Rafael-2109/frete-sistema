@@ -1,0 +1,27 @@
+{# ═══════════════════════════════════════════════════════════════
+   Macros compartilhados do modulo CarVia
+   ═══════════════════════════════════════════════════════════════ #}
+
+{#
+  th_sort — Header de coluna com ordenacao server-side
+  Preserva todos os query params existentes (filtros, busca)
+
+  Params:
+    field     - nome do campo para sort (ex: 'numero_nf')
+    label     - texto exibido no header
+    sort      - campo de sort ativo (do contexto da rota)
+    direction - direcao ativa: 'asc' ou 'desc'
+    cls       - classe CSS adicional (ex: 'text-end')
+#}
+{% macro th_sort(field, label, sort, direction, cls='') %}
+  {% set next_dir = 'desc' if (sort == field and direction == 'asc') else 'asc' %}
+  <th class="{{ cls }}">
+    <a href="?sort={{ field }}&direction={{ next_dir }}{% for k, v in request.args.items() if k not in ('sort', 'direction', 'page') and v %}&{{ k }}={{ v }}{% endfor %}"
+       class="carvia-sortable">
+      {{ label }}
+      {% if sort == field %}
+      <i class="fas fa-sort-{{ 'up' if direction == 'asc' else 'down' }}"></i>
+      {% endif %}
+    </a>
+  </th>
+{% endmacro %}
