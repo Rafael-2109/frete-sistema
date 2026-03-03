@@ -226,9 +226,23 @@
   ],
   "indices": [
     {
-      "name": "idx_conta_receber_odoo_line_id",
+      "name": "ix_contas_a_receber_titulo_nf",
       "columns": [
-        "odoo_line_id"
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
       ],
       "unique": false
     },
@@ -254,16 +268,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_empresa",
+      "name": "idx_conta_receber_cnpj",
       "columns": [
-        "empresa"
+        "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "idx_conta_receber_cnpj",
+      "name": "ix_contas_a_receber_empresa",
       "columns": [
-        "cnpj"
+        "empresa"
       ],
       "unique": false
     },
@@ -275,13 +289,6 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_conta_receber_nf",
       "columns": [
         "titulo_nf"
@@ -289,23 +296,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_titulo_nf",
+      "name": "ix_contas_a_receber_vencimento",
       "columns": [
-        "titulo_nf"
+        "vencimento"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_cnpj",
+      "name": "idx_conta_receber_odoo_line_id",
       "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_parcela",
-      "columns": [
-        "parcela"
+        "odoo_line_id"
       ],
       "unique": false
     }

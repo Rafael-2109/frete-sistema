@@ -180,16 +180,10 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_status",
+      "name": "idx_ocorrencia_status_destino",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
-      "columns": [
-        "autorizado_por_id"
+        "status",
+        "destino"
       ],
       "unique": false
     },
@@ -199,14 +193,6 @@
         "numero_ocorrencia"
       ],
       "unique": true
-    },
-    {
-      "name": "idx_ocorrencia_status_destino",
-      "columns": [
-        "status",
-        "destino"
-      ],
-      "unique": false
     },
     {
       "name": "ix_ocorrencia_devolucao_ativo",
@@ -221,13 +207,6 @@
         "origem_id"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
-      "columns": [
-        "nf_devolucao_id"
-      ],
-      "unique": true
     },
     {
       "name": "idx_ocorrencia_categoria",
@@ -258,6 +237,27 @@
         "responsavel_id"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
+      "columns": [
+        "autorizado_por_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": true
     }
   ]
 }
