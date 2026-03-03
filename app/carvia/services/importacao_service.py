@@ -263,12 +263,45 @@ class ImportacaoService:
                             chave_acesso_nf=chave
                         ).first()
 
-                    if nf_existente:
-                        logger.info(
-                            f"NF ja importada (reutilizando): "
-                            f"nf_id={nf_existente.id} chave={chave}"
+                    # Se nao encontrou por chave, buscar stub FATURA_REFERENCIA
+                    # por numero+CNPJ (stub nao tem chave_acesso_nf)
+                    if not nf_existente and numero and cnpj:
+                        nf_existente = self._buscar_stub_fatura_referencia(
+                            numero, cnpj
                         )
-                        nf = nf_existente
+
+                    if nf_existente:
+                        if nf_existente.tipo_fonte == 'FATURA_REFERENCIA':
+                            # MERGE: promover stub com dados reais da NF
+                            nf = self._merge_nf_sobre_stub(
+                                nf_existente, nf_data, criado_por
+                            )
+                            nfs_criadas.append(nf)
+
+                            # Re-linking retroativo: o stub nao tinha
+                            # chave_acesso_nf, agora a NF real tem — pode
+                            # gerar novas junctions via nfs_referenciadas_json
+                            try:
+                                from app.carvia.services.linking_service import LinkingService
+                                linker = LinkingService()
+                                junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
+                                if junc_count > 0:
+                                    logger.info(
+                                        f"Re-linking (stub promovido) NF→CTe: "
+                                        f"NF {nf.id} vinculada a {junc_count} "
+                                        f"operacao(oes)"
+                                    )
+                            except Exception as e_link:
+                                logger.warning(
+                                    f"Erro no re-linking do stub promovido "
+                                    f"NF {nf.id}: {e_link}"
+                                )
+                        else:
+                            logger.info(
+                                f"NF ja importada (reutilizando): "
+                                f"nf_id={nf_existente.id} chave={chave}"
+                            )
+                            nf = nf_existente
                     else:
                         nf = self._criar_nf(nf_data, criado_por)
                         db.session.add(nf)
@@ -750,6 +783,117 @@ class ImportacaoService:
         except (ValueError, TypeError):
             logger.warning(f"Erro ao parsear data fatura '{data_str}'")
             return None
+
+    def _buscar_stub_fatura_referencia(self, numero: str, cnpj: str) -> Optional[CarviaNf]:
+        """Busca CarviaNf stub (tipo_fonte=FATURA_REFERENCIA) por numero+CNPJ.
+
+        Stubs sao criados pelo LinkingService quando uma fatura referencia
+        uma NF que ainda nao foi importada. Quando a NF real chega,
+        precisamos encontrar o stub para fazer merge.
+
+        Normaliza zeros a esquerda e CNPJ (apenas digitos).
+
+        Returns:
+            CarviaNf stub ou None
+        """
+        from sqlalchemy import func as sa_func
+
+        nf_norm = numero.lstrip('0') or '0'
+        cnpj_digits = re.sub(r'\D', '', cnpj)
+
+        if not cnpj_digits:
+            return None
+
+        stub = CarviaNf.query.filter(
+            CarviaNf.tipo_fonte == 'FATURA_REFERENCIA',
+            sa_func.ltrim(CarviaNf.numero_nf, '0') == nf_norm,
+            sa_func.regexp_replace(
+                CarviaNf.cnpj_emitente, '[^0-9]', '', 'g'
+            ) == cnpj_digits,
+        ).first()
+
+        if stub:
+            logger.info(
+                f"Stub FATURA_REFERENCIA encontrado: nf_id={stub.id} "
+                f"numero={numero} cnpj={cnpj}"
+            )
+
+        return stub
+
+    def _merge_nf_sobre_stub(self, stub: CarviaNf, nf_data: Dict,
+                              criado_por: str) -> CarviaNf:
+        """Promove stub FATURA_REFERENCIA com dados reais da NF.
+
+        Atualiza TODOS os campos do stub com dados da NF real,
+        preservando id, criado_em e todas as FK existentes (fatura items,
+        junctions carvia_operacao_nfs).
+
+        Args:
+            stub: CarviaNf com tipo_fonte='FATURA_REFERENCIA'
+            nf_data: Dict com dados parseados da NF real
+            criado_por: Email do usuario
+
+        Returns:
+            O mesmo stub (atualizado in-place)
+        """
+        data_emissao = nf_data.get('data_emissao')
+        if data_emissao and hasattr(data_emissao, 'date'):
+            data_emissao = data_emissao.date()
+
+        # Atualizar campos com dados reais
+        stub.numero_nf = nf_data.get('numero_nf') or stub.numero_nf
+        stub.serie_nf = nf_data.get('serie_nf')
+        stub.chave_acesso_nf = nf_data.get('chave_acesso_nf')
+        stub.data_emissao = data_emissao
+
+        stub.cnpj_emitente = nf_data.get('cnpj_emitente') or stub.cnpj_emitente
+        stub.nome_emitente = nf_data.get('nome_emitente')
+        stub.uf_emitente = nf_data.get('uf_emitente')
+        stub.cidade_emitente = nf_data.get('cidade_emitente')
+
+        stub.cnpj_destinatario = nf_data.get('cnpj_destinatario')
+        stub.nome_destinatario = nf_data.get('nome_destinatario')
+        stub.uf_destinatario = nf_data.get('uf_destinatario')
+        stub.cidade_destinatario = nf_data.get('cidade_destinatario')
+
+        stub.valor_total = nf_data.get('valor_total')
+        stub.peso_bruto = nf_data.get('peso_bruto')
+        stub.peso_liquido = nf_data.get('peso_liquido')
+        stub.quantidade_volumes = nf_data.get('quantidade_volumes')
+
+        stub.arquivo_nome_original = nf_data.get('arquivo_nome_original')
+        stub.arquivo_xml_path = nf_data.get('arquivo_xml_path')
+        stub.arquivo_pdf_path = nf_data.get('arquivo_pdf_path')
+
+        novo_tipo = nf_data.get('tipo_fonte', 'MANUAL')
+        stub.tipo_fonte = novo_tipo
+
+        db.session.flush()
+
+        # Gravar itens de produto (que o stub nao tinha)
+        itens_data = nf_data.get('itens', [])
+        for item_data in itens_data:
+            item = CarviaNfItem(
+                nf_id=stub.id,
+                codigo_produto=item_data.get('codigo_produto'),
+                descricao=item_data.get('descricao'),
+                ncm=item_data.get('ncm'),
+                cfop=item_data.get('cfop'),
+                unidade=item_data.get('unidade'),
+                quantidade=item_data.get('quantidade'),
+                valor_unitario=item_data.get('valor_unitario'),
+                valor_total_item=item_data.get('valor_total_item'),
+            )
+            db.session.add(item)
+
+        logger.info(
+            f"NF stub FATURA_REFERENCIA promovida para {novo_tipo}: "
+            f"nf_id={stub.id} numero={stub.numero_nf} "
+            f"chave={stub.chave_acesso_nf} "
+            f"itens={len(itens_data)}"
+        )
+
+        return stub
 
     def _criar_nf(self, data: Dict, criado_por: str) -> CarviaNf:
         """Cria registro CarviaNf a partir de dados parseados"""

@@ -65,7 +65,7 @@ def register_operacao_routes(bp):
 
         # Ordenacao dinamica
         sortable_columns = {
-            'cte_numero': CarviaOperacao.cte_numero,
+            'cte_numero': func.lpad(func.coalesce(CarviaOperacao.cte_numero, ''), 20, '0'),
             'nome_cliente': CarviaOperacao.nome_cliente,
             'peso_utilizado': CarviaOperacao.peso_utilizado,
             'cte_valor': CarviaOperacao.cte_valor,

@@ -59,7 +59,7 @@ def register_nf_routes(bp):
 
         # Ordenacao dinamica
         sortable_columns = {
-            'numero_nf': CarviaNf.numero_nf,
+            'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),
             'emitente': CarviaNf.nome_emitente,
             'valor_total': CarviaNf.valor_total,
             'peso_bruto': CarviaNf.peso_bruto,

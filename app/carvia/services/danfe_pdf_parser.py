@@ -609,11 +609,28 @@ class DanfePDFParser:
                 if re.search(r'CEP[:\s]*\d{5}', candidato, re.IGNORECASE):
                     continue
                 # Pular linhas de endereco (contem numero de rua + bairro)
-                if re.search(r'(?:RUA|AV|AVENIDA|ROD|RODOVIA|ESTRADA|LOTE|QUADRA)\b', candidato, re.IGNORECASE):
+                if re.search(
+                    r'(?:'
+                    r'RUA|R\.\s|'
+                    r'AV\.?\s|AVENIDA|'
+                    r'ROD\.?\s|RODOVIA|'
+                    r'EST\.?\s|ESTR\.?\s|ESTRADA|'
+                    r'TV\.?\s|TRAV\.?\s|TRAVESSA|'
+                    r'AL\.?\s|ALAMEDA|'
+                    r'PCA\.?\s|PRA[CÇ]A|'
+                    r'LOTE|LT\.?\s|QUADRA|QD\.?\s|'
+                    r'COND\.?\s|CONDOMINIO|'
+                    r'BR\s*-?\s*\d{3}'
+                    r')\b',
+                    candidato, re.IGNORECASE,
+                ):
                     continue
                 # Pular bairro: linha imediatamente ACIMA de "Cidade - UF - CEP"
                 # (bairro = palavra curta logo antes da cidade, ex: "Olaria" antes de "Rio de Janeiro - RJ - CEP")
                 if i + 1 < len(linhas) and re.search(r'-\s*[A-Z]{2}\s*-\s*CEP', linhas[i + 1]):
+                    continue
+                # Pular linhas com padrao de endereco: "texto, NUMERO" (logradouro + numero)
+                if re.search(r',\s*\d{1,5}\b', candidato):
                     continue
                 # Pular "CONTROLE DO FISCO" e similares
                 if re.search(r'CONTROLE|FISCO|INSCRI[ÇC]', candidato, re.IGNORECASE):

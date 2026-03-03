@@ -7,6 +7,7 @@ from datetime import date
 
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
+from sqlalchemy import func
 
 from app import db
 from app.carvia.models import (
@@ -50,7 +51,7 @@ def register_fatura_routes(bp):
 
         # Ordenacao dinamica
         sortable_columns = {
-            'numero_fatura': CarviaFaturaCliente.numero_fatura,
+            'numero_fatura': func.lpad(func.coalesce(CarviaFaturaCliente.numero_fatura, ''), 20, '0'),
             'nome_cliente': CarviaFaturaCliente.nome_cliente,
             'data_emissao': CarviaFaturaCliente.data_emissao,
             'vencimento': CarviaFaturaCliente.vencimento,
@@ -346,7 +347,7 @@ def register_fatura_routes(bp):
 
         # Ordenacao dinamica
         sortable_columns = {
-            'numero_fatura': CarviaFaturaTransportadora.numero_fatura,
+            'numero_fatura': func.lpad(func.coalesce(CarviaFaturaTransportadora.numero_fatura, ''), 20, '0'),
             'data_emissao': CarviaFaturaTransportadora.data_emissao,
             'vencimento': CarviaFaturaTransportadora.vencimento,
             'valor_total': CarviaFaturaTransportadora.valor_total,
