@@ -1,0 +1,83 @@
+{
+  "name": "agent_memory_entity_relations",
+  "description": "Relação semântica entre entidades (ex: RODONAVES atrasa_para AM).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "source_entity_id",
+      "type": "integer",
+      "description": "FK → agent_memory_entities.id",
+      "nullable": false
+    },
+    {
+      "name": "target_entity_id",
+      "type": "integer",
+      "description": "FK → agent_memory_entities.id",
+      "nullable": false
+    },
+    {
+      "name": "relation_type",
+      "type": "varchar(50)",
+      "nullable": false,
+      "default": "co_occurs"
+    },
+    {
+      "name": "weight",
+      "type": "float",
+      "nullable": false,
+      "default": 1.0
+    },
+    {
+      "name": "memory_id",
+      "type": "integer",
+      "description": "FK → agent_memories.id"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "source_entity_id",
+      "references": "agent_memory_entities.id"
+    },
+    {
+      "column": "target_entity_id",
+      "references": "agent_memory_entities.id"
+    },
+    {
+      "column": "memory_id",
+      "references": "agent_memories.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "source_entity_id",
+      "target_entity_id",
+      "relation_type"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_memory_entity_relations_target_entity_id",
+      "columns": [
+        "target_entity_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_memory_entity_relations_source_entity_id",
+      "columns": [
+        "source_entity_id"
+      ],
+      "unique": false
+    }
+  ]
+}

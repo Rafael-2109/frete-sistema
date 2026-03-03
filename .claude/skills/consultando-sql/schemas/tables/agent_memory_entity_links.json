@@ -1,0 +1,68 @@
+{
+  "name": "agent_memory_entity_links",
+  "description": "Link entre entidade e memória — indica que a entidade foi mencionada na memória.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entity_id",
+      "type": "integer",
+      "description": "FK → agent_memory_entities.id",
+      "nullable": false
+    },
+    {
+      "name": "memory_id",
+      "type": "integer",
+      "description": "FK → agent_memories.id",
+      "nullable": false
+    },
+    {
+      "name": "relation_type",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "mentions"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "entity_id",
+      "references": "agent_memory_entities.id"
+    },
+    {
+      "column": "memory_id",
+      "references": "agent_memories.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "entity_id",
+      "memory_id",
+      "relation_type"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_memory_entity_links_entity_id",
+      "columns": [
+        "entity_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_memory_entity_links_memory_id",
+      "columns": [
+        "memory_id"
+      ],
+      "unique": false
+    }
+  ]
+}

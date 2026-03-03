@@ -142,6 +142,20 @@
   ],
   "indices": [
     {
+      "name": "ix_faturamento_produto_data_fatura",
+      "columns": [
+        "data_fatura"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_faturamento_pedido",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_faturamento_produto_cod_produto",
       "columns": [
         "cod_produto"
@@ -189,20 +203,6 @@
       "name": "ix_faturamento_produto_revertida",
       "columns": [
         "revertida"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_faturamento_pedido",
-      "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_faturamento_produto_data_fatura",
-      "columns": [
-        "data_fatura"
       ],
       "unique": false
     }

@@ -165,13 +165,6 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_pagar_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -186,16 +179,9 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
+      "name": "idx_conta_pagar_nf",
       "columns": [
-        "odoo_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_vencimento",
-      "columns": [
-        "vencimento"
+        "titulo_nf"
       ],
       "unique": false
     },
@@ -203,6 +189,13 @@
       "name": "ix_contas_a_pagar_parcela",
       "columns": [
         "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_vencimento",
+      "columns": [
+        "vencimento"
       ],
       "unique": false
     },
@@ -221,18 +214,11 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_nf",
+      "name": "ix_contas_a_pagar_odoo_line_id",
       "columns": [
-        "titulo_nf"
+        "odoo_line_id"
       ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "idx_conta_pagar_vencimento",
@@ -242,11 +228,11 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_odoo_line_id",
+      "name": "ix_contas_a_pagar_cnpj",
       "columns": [
-        "odoo_line_id"
+        "cnpj"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "idx_conta_pagar_cnpj",
@@ -259,6 +245,20 @@
       "name": "ix_contas_a_pagar_empresa",
       "columns": [
         "empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_odoo_line",
+      "columns": [
+        "odoo_line_id"
       ],
       "unique": false
     }

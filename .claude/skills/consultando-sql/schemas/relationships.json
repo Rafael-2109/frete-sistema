@@ -1,11 +1,29 @@
 {
   "version": "2.0.0",
-  "total_relationships": 205,
+  "total_relationships": 208,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
       "from_column": "entrega_id",
       "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "agent_memory_entity_links",
+      "from_column": "entity_id",
+      "to_table": "agent_memory_entities",
+      "to_column": "id"
+    },
+    {
+      "from_table": "agent_memory_entity_relations",
+      "from_column": "source_entity_id",
+      "to_table": "agent_memory_entities",
+      "to_column": "id"
+    },
+    {
+      "from_table": "agent_memory_entity_relations",
+      "from_column": "target_entity_id",
+      "to_table": "agent_memory_entities",
       "to_column": "id"
     },
     {

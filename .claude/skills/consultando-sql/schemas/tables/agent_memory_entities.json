@@ -1,0 +1,77 @@
+{
+  "name": "agent_memory_entities",
+  "description": "Nó do Knowledge Graph — entidade canônica extraída de memórias.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "entity_type",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "entity_name",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "entity_key",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "mention_count",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "first_seen_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "last_seen_at",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "unique_constraints": [
+    [
+      "user_id",
+      "entity_type",
+      "entity_name"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_ame_user_type",
+      "columns": [
+        "user_id",
+        "entity_type"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_memory_entities_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ame_entity_key",
+      "columns": [
+        "entity_key"
+      ],
+      "unique": false
+    }
+  ]
+}

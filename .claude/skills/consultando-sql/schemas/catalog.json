@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 133,
+  "total_tabelas": 136,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -112,6 +112,33 @@
         "entrega_id",
         "data_agendada",
         "hora_agendada"
+      ]
+    },
+    {
+      "name": "agent_memory_entities",
+      "description": "Nó do Knowledge Graph — entidade canônica extraída de memórias.",
+      "key_fields": [
+        "user_id",
+        "entity_type",
+        "entity_name"
+      ]
+    },
+    {
+      "name": "agent_memory_entity_links",
+      "description": "Link entre entidade e memória — indica que a entidade foi mencionada na memória.",
+      "key_fields": [
+        "entity_id",
+        "memory_id",
+        "relation_type"
+      ]
+    },
+    {
+      "name": "agent_memory_entity_relations",
+      "description": "Relação semântica entre entidades (ex: RODONAVES atrasa_para AM).",
+      "key_fields": [
+        "source_entity_id",
+        "target_entity_id",
+        "relation_type"
       ]
     },
     {

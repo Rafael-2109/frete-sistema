@@ -68,9 +68,9 @@
   ],
   "indices": [
     {
-      "name": "ix_unificacao_codigos_ativo",
+      "name": "ix_unificacao_codigos_codigo_origem",
       "columns": [
-        "ativo"
+        "codigo_origem"
       ],
       "unique": false
     },
@@ -82,9 +82,9 @@
       "unique": false
     },
     {
-      "name": "ix_unificacao_codigos_codigo_origem",
+      "name": "ix_unificacao_codigos_ativo",
       "columns": [
-        "codigo_origem"
+        "ativo"
       ],
       "unique": false
     }
