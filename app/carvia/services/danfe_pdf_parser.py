@@ -236,8 +236,11 @@ class DanfePDFParser:
         )
         if match:
             numero = match.group(1).replace('.', '').lstrip('0') or '0'
-            self.confianca += 0.1
-            return numero
+            # Guard: rejeitar numeros que parecem ano (19xx, 20xx)
+            # Ex: "ANO 2025/MOD 2025" nos DADOS ADICIONAIS do DANFE
+            if not re.match(r'^(19|20)\d{2}$', numero):
+                self.confianca += 0.1
+                return numero
 
         # Strategy 2: regexes same-line (numeros simples sem separador de milhar)
         patterns = [
@@ -249,8 +252,12 @@ class DanfePDFParser:
         for pattern in patterns:
             match = re.search(pattern, self.texto_completo, re.IGNORECASE)
             if match:
+                resultado = match.group(1).lstrip('0') or '0'
+                # Guard: rejeitar numeros que parecem ano (19xx, 20xx)
+                if re.match(r'^(19|20)\d{2}$', resultado):
+                    continue  # provavelmente "ANO 2025", tentar proximo pattern
                 self.confianca += 0.1
-                return match.group(1).lstrip('0') or '0'
+                return resultado
         return None
 
     def get_serie(self) -> Optional[str]:
@@ -1206,9 +1213,27 @@ class DanfePDFParser:
         uf_emit, cidade_emit = self.get_uf_cidade_emitente()
         uf_dest, cidade_dest = self.get_uf_cidade_destinatario()
 
+        chave = self.get_chave_acesso()
+        numero = self.get_numero_nf()
+
+        # Cross-validacao: chave de acesso (44 digitos) e fonte definitiva
+        # para numero_nf — posicoes 25-33 contem o numero real da NF
+        if chave and len(chave) == 44 and numero:
+            try:
+                numero_da_chave = str(int(chave[25:34]))  # 9 digitos, strip zeros
+                if numero != numero_da_chave:
+                    logger.warning(
+                        "DANFE: numero_nf '%s' diverge da chave "
+                        "(real=%s) — corrigindo",
+                        numero, numero_da_chave,
+                    )
+                    numero = numero_da_chave
+            except (ValueError, IndexError):
+                pass  # chave mal-formada, manter numero do regex
+
         resultado = {
-            'chave_acesso_nf': self.get_chave_acesso(),
-            'numero_nf': self.get_numero_nf(),
+            'chave_acesso_nf': chave,
+            'numero_nf': numero,
             'serie_nf': self.get_serie(),
             'data_emissao_str': self.get_data_emissao(),
             'data_emissao': None,
