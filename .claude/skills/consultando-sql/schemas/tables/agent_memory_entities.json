@@ -52,17 +52,17 @@
   ],
   "indices": [
     {
-      "name": "idx_ame_user_type",
+      "name": "ix_agent_memory_entities_user_id",
       "columns": [
-        "user_id",
-        "entity_type"
+        "user_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_memory_entities_user_id",
+      "name": "idx_ame_user_type",
       "columns": [
-        "user_id"
+        "user_id",
+        "entity_type"
       ],
       "unique": false
     },

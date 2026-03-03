@@ -259,6 +259,13 @@
   ],
   "indices": [
     {
+      "name": "idx_extrato_item_categoria_pag",
+      "columns": [
+        "categoria_pagamento"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_extrato_item_odoo_partner",
       "columns": [
         "odoo_partner_id"
@@ -332,13 +339,6 @@
       "name": "ix_extrato_item_lote_id",
       "columns": [
         "lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_categoria_pag",
-      "columns": [
-        "categoria_pagamento"
       ],
       "unique": false
     }

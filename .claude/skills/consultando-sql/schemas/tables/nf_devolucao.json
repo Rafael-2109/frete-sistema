@@ -230,6 +230,20 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_devolucao_chave_nfd",
+      "columns": [
+        "chave_nfd"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nota_credito_id",
+      "columns": [
+        "odoo_nota_credito_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
@@ -290,14 +304,6 @@
       "name": "ix_nf_devolucao_origem_registro",
       "columns": [
         "origem_registro"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_cnpj_status",
-      "columns": [
-        "cnpj_emitente",
-        "status"
       ],
       "unique": false
     },
@@ -373,16 +379,10 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_chave_nfd",
+      "name": "idx_nfd_cnpj_status",
       "columns": [
-        "chave_nfd"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_nf_devolucao_odoo_nota_credito_id",
-      "columns": [
-        "odoo_nota_credito_id"
+        "cnpj_emitente",
+        "status"
       ],
       "unique": false
     }

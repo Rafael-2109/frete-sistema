@@ -111,9 +111,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_subcontratos_transportadora_id",
+      "name": "ix_carvia_subcontratos_cte_numero",
       "columns": [
-        "transportadora_id"
+        "cte_numero"
       ],
       "unique": false
     },
@@ -125,16 +125,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_cte_numero",
+      "name": "ix_carvia_subcontratos_operacao_id",
       "columns": [
-        "cte_numero"
+        "operacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_operacao_id",
+      "name": "ix_carvia_subcontratos_transportadora_id",
       "columns": [
-        "operacao_id"
+        "transportadora_id"
       ],
       "unique": false
     }
