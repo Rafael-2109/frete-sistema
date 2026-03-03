@@ -43,16 +43,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacao_nfs_nf_id",
+      "name": "ix_carvia_operacao_nfs_operacao_id",
       "columns": [
-        "nf_id"
+        "operacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_operacao_nfs_operacao_id",
+      "name": "ix_carvia_operacao_nfs_nf_id",
       "columns": [
-        "operacao_id"
+        "nf_id"
       ],
       "unique": false
     }
