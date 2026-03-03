@@ -62,18 +62,33 @@ def gc_orphan_embeddings(dry_run: bool = False):
         print(f"\n   [DRY-RUN] {orphan_count} embeddings seriam removidos.\n")
         return
 
-    deleted = db.session.execute(text("""
-        DELETE FROM agent_memory_embeddings
-        WHERE id IN (
-            SELECT ame.id
+    try:
+        deleted = db.session.execute(text("""
+            DELETE FROM agent_memory_embeddings
+            WHERE id IN (
+                SELECT ame.id
+                FROM agent_memory_embeddings ame
+                LEFT JOIN agent_memories am ON ame.memory_id = am.id
+                WHERE am.id IS NULL
+            )
+        """))
+        db.session.commit()
+        print(f"\n   Removidos: {deleted.rowcount} embeddings orfãos.")
+
+        # Verificação pós-delete
+        remaining = db.session.execute(text("""
+            SELECT COUNT(*)
             FROM agent_memory_embeddings ame
             LEFT JOIN agent_memories am ON ame.memory_id = am.id
             WHERE am.id IS NULL
-        )
-    """))
-    db.session.commit()
+        """)).scalar()
+        print(f"   Orfãos remanescentes: {remaining}\n")
 
-    print(f"\n   Removidos: {deleted.rowcount} embeddings orfãos.\n")
+    except Exception as e:
+        db.session.rollback()
+        print(f"\n   ERRO ao deletar orfãos: {e}")
+        print("   Rollback executado. Nenhum dado foi alterado.\n")
+        raise
 
 
 if __name__ == '__main__':

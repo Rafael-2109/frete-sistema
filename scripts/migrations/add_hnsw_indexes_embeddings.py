@@ -5,7 +5,7 @@ Suporta T2-3: Performance de busca semantica via pgvector.
 HNSW (Hierarchical Navigable Small World) oferece busca ANN com
 O(log N) vs O(N) do sequential scan.
 
-PREREQUISITO: pgvector instalado e tabelas com registros (HNSW precisa de dados).
+PREREQUISITO: pgvector instalado. HNSW funciona em tabelas vazias (diferente de IVFFlat).
 
 Executar:
     source .venv/bin/activate
@@ -84,38 +84,35 @@ def migrate(engine):
         print(f"   Embeddings: memorias={mem_count}, sessoes={session_count}")
 
         if mem_count == 0 and session_count == 0:
-            print("   AVISO: Tabelas vazias. HNSW funciona melhor com dados.")
-            print("   Execute os batch indexers primeiro (opcional).")
+            print("   INFO: Tabelas vazias. HNSW funciona em tabelas vazias (indices crescem incrementalmente).")
 
-    # Criar indices HNSW
+    # Criar indices HNSW (funciona em tabelas vazias — diferente de IVFFlat)
     # NOTA: Usando CREATE INDEX sem CONCURRENTLY porque precisamos de transacao
     # Em producao com carga, preferir o .sql com CONCURRENTLY
 
-    if mem_count > 0:
-        with engine.connect() as conn:
-            if not _index_exists(conn, 'idx_memory_emb_hnsw'):
-                print("   Criando HNSW index para agent_memory_embeddings...")
-                _execute_safe(engine, """
-                    CREATE INDEX idx_memory_emb_hnsw
-                    ON agent_memory_embeddings
-                    USING hnsw (embedding vector_cosine_ops)
-                    WITH (m = 16, ef_construction = 64)
-                """, "CREATE INDEX idx_memory_emb_hnsw")
-            else:
-                print("   idx_memory_emb_hnsw: ja existe")
+    with engine.connect() as conn:
+        if not _index_exists(conn, 'idx_memory_emb_hnsw'):
+            print("   Criando HNSW index para agent_memory_embeddings...")
+            _execute_safe(engine, """
+                CREATE INDEX idx_memory_emb_hnsw
+                ON agent_memory_embeddings
+                USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64)
+            """, "CREATE INDEX idx_memory_emb_hnsw")
+        else:
+            print("   idx_memory_emb_hnsw: ja existe")
 
-    if session_count > 0:
-        with engine.connect() as conn:
-            if not _index_exists(conn, 'idx_session_emb_hnsw'):
-                print("   Criando HNSW index para session_turn_embeddings...")
-                _execute_safe(engine, """
-                    CREATE INDEX idx_session_emb_hnsw
-                    ON session_turn_embeddings
-                    USING hnsw (embedding vector_cosine_ops)
-                    WITH (m = 16, ef_construction = 64)
-                """, "CREATE INDEX idx_session_emb_hnsw")
-            else:
-                print("   idx_session_emb_hnsw: ja existe")
+    with engine.connect() as conn:
+        if not _index_exists(conn, 'idx_session_emb_hnsw'):
+            print("   Criando HNSW index para session_turn_embeddings...")
+            _execute_safe(engine, """
+                CREATE INDEX idx_session_emb_hnsw
+                ON session_turn_embeddings
+                USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64)
+            """, "CREATE INDEX idx_session_emb_hnsw")
+        else:
+            print("   idx_session_emb_hnsw: ja existe")
 
     verify(engine)
     return True
@@ -134,8 +131,8 @@ def verify(engine):
 
     checks = [
         ("pgvector extension", has_pgvector),
-        (f"idx_memory_emb_hnsw ({mem_count} embeddings)", has_mem_idx or mem_count == 0),
-        (f"idx_session_emb_hnsw ({session_count} embeddings)", has_sess_idx or session_count == 0),
+        (f"idx_memory_emb_hnsw ({mem_count} embeddings)", has_mem_idx),
+        (f"idx_session_emb_hnsw ({session_count} embeddings)", has_sess_idx),
     ]
 
     all_ok = True

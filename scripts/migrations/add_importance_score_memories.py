@@ -67,14 +67,16 @@ def migrate(engine):
         # 2. Adicionar colunas
         if not has_importance:
             _execute_safe(engine,
-                "ALTER TABLE agent_memories ADD COLUMN importance_score FLOAT DEFAULT 0.5",
-                "ADD importance_score"
+                "ALTER TABLE agent_memories ADD COLUMN importance_score FLOAT DEFAULT 0.5 NOT NULL",
+                "ADD importance_score (NOT NULL, DEFAULT 0.5)"
             )
 
         if not has_last_accessed:
+            # Adicionar SEM default para que registros existentes fiquem NULL
+            # O backfill (etapa 4) seta o valor correto (updated_at, nao NOW())
             _execute_safe(engine,
-                "ALTER TABLE agent_memories ADD COLUMN last_accessed_at TIMESTAMP DEFAULT NOW()",
-                "ADD last_accessed_at"
+                "ALTER TABLE agent_memories ADD COLUMN last_accessed_at TIMESTAMP",
+                "ADD last_accessed_at (nullable temporariamente)"
             )
 
     # 3. Indices
@@ -91,12 +93,23 @@ def migrate(engine):
                 "CREATE INDEX idx_agent_memories_importance"
             )
 
-    # 4. Backfill last_accessed_at para registros existentes
+    # 4. Backfill last_accessed_at usando updated_at (semanticamente correto)
+    # Se usassemos DEFAULT NOW(), todas as memorias teriam decay=1.0 apos migration
     _execute_safe(engine, """
         UPDATE agent_memories
         SET last_accessed_at = COALESCE(updated_at, created_at, NOW())
         WHERE last_accessed_at IS NULL
     """, "BACKFILL last_accessed_at")
+
+    # 5. Adicionar NOT NULL + DEFAULT para novos registros
+    _execute_safe(engine,
+        "ALTER TABLE agent_memories ALTER COLUMN last_accessed_at SET NOT NULL",
+        "SET NOT NULL last_accessed_at"
+    )
+    _execute_safe(engine,
+        "ALTER TABLE agent_memories ALTER COLUMN last_accessed_at SET DEFAULT NOW()",
+        "SET DEFAULT NOW() last_accessed_at"
+    )
 
     # 5. Verificar DEPOIS
     verify(engine)

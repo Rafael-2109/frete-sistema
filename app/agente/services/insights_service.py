@@ -693,3 +693,133 @@ def _calc_daily(sessions: List, days: int) -> Dict[str, Any]:
         'cost_values': cost_values,
         'resolution_rates': resolution_rates,
     }
+
+
+# =============================================================================
+# T2-5: MÉTRICAS DE QUALIDADE DE MEMÓRIA
+# =============================================================================
+
+def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Calcula métricas de qualidade do sistema de memória.
+
+    Métricas:
+    - memory_utilization: % de memórias que foram acessadas no período
+    - correction_frequency: Número de correções salvas no período
+    - decay_distribution: Distribuição de idades das memórias ativas
+    - orphan_embeddings: Contagem de embeddings sem memória correspondente
+    - avg_importance: Média de importance_score das memórias
+
+    Args:
+        days: Período de análise
+        user_id: Filtrar por usuário (None = todos)
+
+    Returns:
+        Dict com métricas de memória
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+        from sqlalchemy import text, func
+
+        now = agora_utc_naive()
+        since = now - timedelta(days=days)
+
+        # Base query
+        base_filter = [AgentMemory.is_directory == False]  # noqa: E712
+        if user_id is not None:
+            base_filter.append(AgentMemory.user_id == user_id)
+
+        # ── Total de memórias ──
+        total_memories = AgentMemory.query.filter(*base_filter).count()
+
+        # ── Memórias acessadas no período (utilization) ──
+        accessed_filter = base_filter + [AgentMemory.last_accessed_at >= since]
+        accessed_count = AgentMemory.query.filter(*accessed_filter).count()
+        utilization_rate = round((accessed_count / total_memories * 100), 1) if total_memories > 0 else 0
+
+        # ── Correções no período ──
+        correction_filter = base_filter + [
+            AgentMemory.path.like('/memories/corrections/%'),
+            AgentMemory.updated_at >= since,
+        ]
+        corrections_count = AgentMemory.query.filter(*correction_filter).count()
+
+        # ── Importance score médio ──
+        avg_importance_result = db.session.query(
+            func.avg(AgentMemory.importance_score)
+        ).filter(*base_filter).scalar()
+        avg_importance = round(float(avg_importance_result or 0.5), 3)
+
+        # ── Decay distribution (age buckets) ──
+        age_buckets = {"<1d": 0, "1-7d": 0, "7-30d": 0, "30-90d": 0, ">90d": 0}
+        all_memories = AgentMemory.query.filter(*base_filter).with_entities(
+            AgentMemory.last_accessed_at, AgentMemory.updated_at
+        ).all()
+
+        for mem in all_memories:
+            last_access = mem.last_accessed_at or mem.updated_at
+            if not last_access:
+                age_buckets[">90d"] += 1
+                continue
+            age_hours = (now - last_access).total_seconds() / 3600
+            if age_hours < 24:
+                age_buckets["<1d"] += 1
+            elif age_hours < 168:
+                age_buckets["1-7d"] += 1
+            elif age_hours < 720:
+                age_buckets["7-30d"] += 1
+            elif age_hours < 2160:
+                age_buckets["30-90d"] += 1
+            else:
+                age_buckets[">90d"] += 1
+
+        # ── Orphan embeddings ──
+        # Query isolada: raw SQL pode falhar se tabela nao existe (migration pendente).
+        # Sem rollback, session fica em InFailedTransaction e queries seguintes falham.
+        orphan_count = 0
+        try:
+            orphan_result = db.session.execute(text("""
+                SELECT COUNT(*)
+                FROM agent_memory_embeddings ame
+                LEFT JOIN agent_memories am ON ame.memory_id = am.id
+                WHERE am.id IS NULL
+            """))
+            orphan_count = orphan_result.scalar() or 0
+        except Exception as orphan_err:
+            logger.debug(f"[INSIGHTS] Orphan query falhou (tabela pode nao existir): {orphan_err}")
+            db.session.rollback()
+
+        # ── Memórias por categoria ──
+        categories = {}
+        cat_memories = AgentMemory.query.filter(*base_filter).with_entities(
+            AgentMemory.path
+        ).all()
+        for mem in cat_memories:
+            parts = mem.path.split('/')
+            # /memories/learned/x.xml → "learned"
+            if len(parts) >= 3:
+                cat = parts[2] if not parts[2].endswith('.xml') else 'root'
+            else:
+                cat = 'root'
+            categories[cat] = categories.get(cat, 0) + 1
+
+        return {
+            'total_memories': total_memories,
+            'utilization_rate': utilization_rate,
+            'accessed_in_period': accessed_count,
+            'corrections_count': corrections_count,
+            'avg_importance_score': avg_importance,
+            'decay_distribution': age_buckets,
+            'orphan_embeddings': orphan_count,
+            'categories': categories,
+            'period_days': days,
+        }
+
+    except Exception as e:
+        logger.error(f"[INSIGHTS] Erro ao calcular memory metrics: {e}")
+        return {
+            'total_memories': 0,
+            'utilization_rate': 0,
+            'error': str(e),
+        }

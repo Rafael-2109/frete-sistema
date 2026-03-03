@@ -88,6 +88,20 @@ EMBEDDINGS_ENABLED = os.environ.get("EMBEDDINGS_ENABLED", "true").lower() == "tr
 # quando o trade-off latencia/custo for aceitavel.
 RERANKING_ENABLED = os.environ.get("RERANKING_ENABLED", "false").lower() == "true"
 
+# Reranking SELETIVO para memórias do agente (T3-2)
+# Ativar separadamente do reranking global: memórias suportam +2s latência
+# porque a injeção ocorre ANTES do stream iniciar (não real-time).
+# Quando true: busca vetorial top-20 → rerank → top-10
+MEMORY_RERANKING_ENABLED = os.environ.get("MEMORY_RERANKING_ENABLED", "true").lower() == "true"
+
+# Contextual Retrieval para memórias do agente (T3-1)
+# Ao embedar uma memória, gera contexto breve (1-2 frases) via Haiku que situa
+# a memória no contexto geral do usuário. Embeda `contexto + memória` em vez de
+# só `memória`, melhorando precision do retrieval em até 49-67%.
+# Custo: ~$0.0003 por save_memory (1 chamada Haiku, ~500 input + ~50 output tokens).
+# Ref: https://www.anthropic.com/news/contextual-retrieval
+MEMORY_CONTEXTUAL_EMBEDDING = os.environ.get("MEMORY_CONTEXTUAL_EMBEDDING", "true").lower() == "true"
+
 # Habilita busca semantica de produtos no AI Resolver (devolucoes)
 # Quando True, substitui chamada Haiku de extracao de termos por busca por embeddings
 PRODUCT_SEMANTIC_SEARCH = os.environ.get("PRODUCT_SEMANTIC_SEARCH", "true").lower() == "true"

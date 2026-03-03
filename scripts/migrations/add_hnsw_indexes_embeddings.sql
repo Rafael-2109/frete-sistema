@@ -21,7 +21,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_session_emb_hnsw
     USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
 
--- Configurar ef_search para queries (balance recall vs speed)
--- Valor mais alto = melhor recall, mais lento
--- Default pgvector: 40. Recomendado: 100 para buscas de precisao
-SET hnsw.ef_search = 100;
+-- NOTA: ef_search controla recall vs speed nas queries.
+-- Default pgvector: 40. Para buscas de precisao, configurar 100 via:
+--   ALTER DATABASE <dbname> SET hnsw.ef_search = 100;
+-- (SET hnsw.ef_search = 100 e session-scoped e nao persiste)

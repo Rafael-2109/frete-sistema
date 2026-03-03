@@ -170,6 +170,125 @@ def _execute_with_context(func):
 
 
 # =====================================================================
+# HELPER: Contextual Retrieval — contexto semântico para embedding (T3-1)
+# =====================================================================
+# Referência: https://www.anthropic.com/news/contextual-retrieval
+# Ao embedar uma memória, gera contexto breve (1-2 frases) via Haiku que
+# situa a memória no conjunto geral do usuário. Embeda `contexto + memória`
+# em vez de só `memória`, melhorando precision do retrieval em até 49-67%.
+# Custo: ~$0.0003 por save_memory (1 chamada Haiku).
+
+_HAIKU_MODEL = "claude-haiku-4-5-20251001"
+
+_CONTEXTUAL_PROMPT = """\
+<user_memories>
+{existing_memories}
+</user_memories>
+
+Aqui está a memória sendo salva pelo usuário:
+<memory path="{path}">
+{content}
+</memory>
+
+Dê um contexto curto e sucinto (1-2 frases, máximo 80 tokens) para situar \
+esta memória dentro da coleção geral de memórias do usuário. Este contexto \
+será preposto à memória para melhorar a busca semântica.
+Responda APENAS com o contexto sucinto, sem explicações ou formatação adicional.\
+"""
+
+
+def _generate_memory_context(user_id: int, path: str, content: str) -> Optional[str]:
+    """
+    Gera contexto semântico breve via Haiku para enriquecer embedding de memória.
+
+    Técnica: Anthropic Contextual Retrieval (2024).
+    Carrega memórias existentes do usuário como "documento",
+    gera 1-2 frases de contexto que situam a nova memória no conjunto.
+
+    Best-effort: falhas retornam None (fallback para embedding sem contexto).
+
+    Args:
+        user_id: ID do usuário
+        path: Path da memória (ex: /memories/learned/regras.xml)
+        content: Conteúdo da memória
+
+    Returns:
+        String com contexto (50-100 tokens) ou None se falhar
+    """
+    try:
+        import anthropic
+
+        # Carregar memórias existentes do usuário (paths + snippets)
+        def _load_existing():
+            from ..models import AgentMemory
+            return AgentMemory.query.filter_by(
+                user_id=user_id,
+                is_directory=False,
+            ).order_by(AgentMemory.updated_at.desc()).limit(30).all()
+
+        existing = _execute_with_context(_load_existing)
+
+        # Formatar memórias existentes como contexto do "documento"
+        if existing:
+            lines = []
+            total_chars = 0
+            for mem in existing:
+                if mem.path == path:
+                    continue  # Excluir a própria memória
+                snippet = (mem.content or "")[:80].replace('\n', ' ').strip()
+                if not snippet:
+                    continue
+                line = f"- {mem.path}: {snippet}"
+                if total_chars + len(line) > 2000:
+                    break  # Cap: ~2000 chars de contexto
+                lines.append(line)
+                total_chars += len(line)
+            existing_text = "\n".join(lines) if lines else "(nenhuma memória anterior)"
+        else:
+            existing_text = "(nenhuma memória anterior — esta é a primeira)"
+
+        # Truncar conteúdo para o prompt (economia de tokens)
+        content_truncated = content[:500] if len(content) > 500 else content
+
+        # Chamar Haiku com timeout curto (best-effort, não pode travar o save)
+        client = anthropic.Anthropic(timeout=5.0)
+        response = client.messages.create(
+            model=_HAIKU_MODEL,
+            max_tokens=150,
+            messages=[{
+                "role": "user",
+                "content": _CONTEXTUAL_PROMPT.format(
+                    existing_memories=existing_text,
+                    path=path,
+                    content=content_truncated,
+                ),
+            }],
+        )
+
+        context = response.content[0].text.strip()
+
+        # Validar: contexto deve ter pelo menos 10 chars e no máximo 500
+        if not context or len(context) < 10:
+            logger.debug(
+                f"[MEMORY_MCP] Contextual: Haiku retornou contexto insuficiente "
+                f"({len(context or '')} chars) para {path}"
+            )
+            return None
+
+        if len(context) > 500:
+            context = context[:500]
+
+        logger.debug(
+            f"[MEMORY_MCP] Contextual: gerado para {path} ({len(context)} chars)"
+        )
+        return context
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_MCP] Contextual: falhou (ignorado): {e}")
+        return None
+
+
+# =====================================================================
 # HELPER: Embedding de memória para busca semântica
 # =====================================================================
 
@@ -178,7 +297,12 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
     Gera embedding de uma memória para busca semântica.
 
     Best-effort: falhas são silenciosas e não afetam o fluxo principal.
-    O embedding é gerado inline (~100ms) e salvo via upsert.
+
+    Pipeline (T3-1 Contextual Retrieval):
+    1. Se MEMORY_CONTEXTUAL_EMBEDDING ativo: gerar contexto via Haiku (~300ms)
+    2. Construir texto_embedado: contexto + [path]: conteúdo
+    3. Gerar embedding via Voyage AI (~100ms)
+    4. Upsert em agent_memory_embeddings
 
     Args:
         user_id: ID do usuário
@@ -189,14 +313,30 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
     import json
 
     try:
-        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, VOYAGE_DEFAULT_MODEL
+        from app.embeddings.config import (
+            MEMORY_SEMANTIC_SEARCH,
+            VOYAGE_DEFAULT_MODEL,
+            MEMORY_CONTEXTUAL_EMBEDDING,
+        )
         if not MEMORY_SEMANTIC_SEARCH:
             return
 
         from app.embeddings.service import EmbeddingService
 
-        # Build texto embedado
-        texto_embedado = f"[{path}]: {content}"
+        # T3-1: Contextual Retrieval — gerar contexto semântico via Haiku
+        context_prefix = None
+        if MEMORY_CONTEXTUAL_EMBEDDING:
+            context_prefix = _generate_memory_context(user_id, path, content)
+
+        # Build texto embedado (com ou sem contexto)
+        if context_prefix:
+            texto_embedado = f"{context_prefix}\n\n[{path}]: {content}"
+        else:
+            texto_embedado = f"[{path}]: {content}"
+
+        # Hash baseado no conteúdo original (não no texto_embedado).
+        # Motivo: se só o contexto mudar (outras memórias adicionadas),
+        # não re-embedamos — o contexto é "bom o suficiente" no momento do save.
         c_hash = hashlib.md5(content.encode('utf-8')).hexdigest()
 
         def _do_embed():
@@ -261,6 +401,58 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
 
     except Exception as e:
         logger.debug(f"[MEMORY_MCP] _embed_memory_best_effort falhou: {e}")
+
+
+def _calculate_importance_score(path: str, content: str) -> float:
+    """
+    Calcula importance score heurístico de uma memória (0-1).
+
+    Scoring baseado em padrões do conteúdo e path, sem chamada LLM.
+    Referência: Stanford Generative Agents (2023).
+
+    Args:
+        path: Path da memória
+        content: Conteúdo da memória
+
+    Returns:
+        Float entre 0.0 e 1.0
+    """
+    score = 0.5  # default
+
+    content_lower = content.lower() if content else ''
+    path_lower = path.lower() if path else ''
+
+    # Path-based scoring
+    if '/memories/corrections/' in path_lower:
+        score += 0.2  # Correções são valiosas
+    elif '/memories/learned/' in path_lower:
+        score += 0.1  # Aprendizados têm valor
+
+    # Conteúdo: menção a entidades de negócio
+    business_patterns = [
+        'transportadora', 'cliente', 'rota', 'fornecedor',
+        'produto', 'pedido', 'embarque', 'separação', 'separacao',
+        'cnpj', 'nota fiscal', 'nf-e', 'fatura',
+    ]
+    if any(p in content_lower for p in business_patterns):
+        score += 0.3
+
+    # Conteúdo: valor monetário (R$ X.XXX,XX)
+    if content and (re.search(r'R\$\s*[\d.,]+', content) or re.search(r'\d+[.,]\d{2}\b', content)):
+        score += 0.2
+
+    # Conteúdo: correção/erro
+    correction_patterns = [
+        'correto é', 'correto e', 'na verdade', 'errado',
+        'não é', 'nao e', 'correção', 'correcao', 'corrigir',
+        'nunca', 'sempre', 'importante', 'atenção', 'atencao',
+        'cuidado', 'obrigatório', 'obrigatorio',
+    ]
+    if any(p in content_lower for p in correction_patterns):
+        score += 0.3
+
+    # Cap at 1.0
+    return min(score, 1.0)
 
 
 def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') -> Optional[str]:
@@ -448,6 +640,10 @@ try:
             def _save():
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
+                from app.utils.timezone import agora_utc_naive
+
+                # Calcular importance score heurístico (QW-1)
+                importance = _calculate_importance_score(path, content)
 
                 existing = AgentMemory.get_by_path(user_id, path)
 
@@ -461,9 +657,13 @@ try:
                         )
                     existing.content = content
                     existing.is_directory = False
+                    existing.importance_score = importance
+                    existing.last_accessed_at = agora_utc_naive()
                     action = "atualizado"
                 else:
-                    AgentMemory.create_file(user_id, path, content)
+                    mem = AgentMemory.create_file(user_id, path, content)
+                    mem.importance_score = importance
+                    mem.last_accessed_at = agora_utc_naive()
                     action = "criado"
 
                 db.session.commit()
@@ -648,12 +848,40 @@ try:
             def _delete():
                 from ..models import AgentMemory
                 from app import db
+                from sqlalchemy import text as sql_text
 
                 memory = AgentMemory.get_by_path(user_id, path)
                 if not memory:
                     raise FileNotFoundError(f"Path não encontrado: {path}")
 
                 tipo = "Diretório" if memory.is_directory else "Arquivo"
+
+                # QW-2: Cleanup explícito de embeddings (defense in depth)
+                # O trigger trg_delete_memory_embedding já cuida disso no DB,
+                # mas adicionamos cleanup Python para cobrir edge cases.
+                try:
+                    if memory.is_directory:
+                        # Coletar IDs de todos os arquivos do diretório
+                        children = AgentMemory.query.filter(
+                            AgentMemory.user_id == user_id,
+                            db.or_(
+                                AgentMemory.id == memory.id,
+                                AgentMemory.path.like(f'{path}/%')
+                            ),
+                            AgentMemory.is_directory == False,  # noqa: E712
+                        ).with_entities(AgentMemory.id).all()
+                        memory_ids = [c.id for c in children]
+                    else:
+                        memory_ids = [memory.id]
+
+                    if memory_ids:
+                        db.session.execute(sql_text("""
+                            DELETE FROM agent_memory_embeddings
+                            WHERE memory_id = ANY(:ids)
+                        """), {"ids": memory_ids})
+                except Exception as gc_err:
+                    logger.debug(f"[MEMORY_MCP] Embedding cleanup falhou (ignorado): {gc_err}")
+
                 count = AgentMemory.delete_by_path(user_id, path)
                 db.session.commit()
                 return f"{tipo} deletado: {path}" + (f" ({count} itens)" if count > 1 else "")

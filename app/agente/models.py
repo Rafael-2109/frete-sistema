@@ -459,6 +459,14 @@ class AgentMemory(db.Model):
     # Flag para indicar se é diretório
     is_directory = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Importance scoring (QW-1): peso heurístico 0-1
+    # Usado no retrieval junto com recency decay e cosine similarity
+    importance_score = db.Column(db.Float, default=0.5, nullable=False)
+
+    # Último acesso (QW-1): quando a memória foi injetada/lida pela última vez
+    # Usado para calcular recency decay no retrieval
+    last_accessed_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), nullable=False)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
     updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())

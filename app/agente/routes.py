@@ -2468,3 +2468,45 @@ def api_insights_friction():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@agente_bp.route('/api/insights/memory', methods=['GET'])
+@login_required
+def api_insights_memory():
+    """
+    Métricas de qualidade do sistema de memória (T2-5).
+
+    GET /agente/api/insights/memory?days=30&user_id=123
+
+    Returns:
+        JSON com métricas: utilization_rate, corrections_count,
+        avg_importance_score, decay_distribution, orphan_embeddings, categories
+    """
+    from .config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        days = request.args.get('days', 30, type=int)
+        days = min(max(days, 1), 90)
+        user_id = request.args.get('user_id', None, type=int)
+
+        from .services.insights_service import get_memory_metrics
+
+        data = get_memory_metrics(days=days, user_id=user_id)
+
+        return jsonify({
+            'success': True,
+            'data': data,
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro nas metricas de memoria: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

@@ -152,15 +152,22 @@ MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_G
 # RAG Semantico (Fase 4)
 # ====================================================================
 
-# Busca semantica em sessoes anteriores via embeddings
-# Quando true: tool semantic_search_sessions disponivel + search_sessions usa semantica
-# Quando false: comportamento original (ILIKE em JSONB)
-# Default false: ativar apos batch indexer popular session_turn_embeddings
-USE_SESSION_SEMANTIC_SEARCH = os.getenv("AGENT_SESSION_SEMANTIC_SEARCH", "false").lower() == "true"
+# Embedding inline de turns de sessão: gera embedding em tempo real ao salvar cada turn
+# Quando true: routes.py chama _embed_session_turn_best_effort() on-save
+# Quando false: embedding só via batch indexer manual (session_turn_indexer.py)
+# ATIVO por default (QW-3): batch indexer complementa, mas inline garante cobertura real-time
+#
+# NOTA: Esta flag controla ESCRITA de embeddings. A LEITURA é controlada por:
+#   app/embeddings/config.py:SESSION_SEMANTIC_SEARCH (env: SESSION_SEMANTIC_SEARCH, default true)
+# Ambas devem estar true para busca semântica de sessões funcionar end-to-end.
+USE_SESSION_TURN_EMBEDDING = os.getenv("AGENT_SESSION_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Alias legado (compatibilidade com código existente que importa USE_SESSION_SEMANTIC_SEARCH)
+USE_SESSION_SEMANTIC_SEARCH = USE_SESSION_TURN_EMBEDDING
 
 # REMOVIDO: USE_MEMORY_SEMANTIC_SEARCH — unificado em app.embeddings.config.MEMORY_SEMANTIC_SEARCH
 # Env var: MEMORY_SEMANTIC_SEARCH (default true)
-# Ver: app/embeddings/config.py linha 81
+# Ver: app/embeddings/config.py linha 106
 
 # ====================================================================
 # Teams Bot

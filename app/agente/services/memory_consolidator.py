@@ -41,6 +41,19 @@ NOTAS PARA CONSOLIDAR:
 
 RESUMO CONSOLIDADO:"""
 
+VERIFICATION_PROMPT = """Compare as NOTAS ORIGINAIS com o RESUMO abaixo.
+
+Liste APENAS os fatos que estão nas notas originais mas NÃO estão no resumo.
+Se TODOS os fatos foram preservados, responda exatamente: "TODOS_PRESERVADOS"
+
+NOTAS ORIGINAIS:
+{originals}
+
+RESUMO:
+{summary}
+
+FATOS PERDIDOS (ou "TODOS_PRESERVADOS"):"""
+
 # Diretórios protegidos — NUNCA consolidar estes arquivos
 PROTECTED_PATHS = {
     "/memories/user.xml",
@@ -256,6 +269,74 @@ def _consolidate_group(
                 f"para {dir_path} ({len(consolidated_content)} chars)"
             )
             return None
+
+        # T2-4: Verificação de preservação de fatos
+        # Cross-check: perguntar ao Haiku se algum fato foi perdido
+        # NOTA: Usar mesmo limite de truncamento que a consolidação (6000 chars)
+        INPUT_LIMIT = 6000
+        try:
+            verify_response = client.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=500,
+                messages=[{
+                    "role": "user",
+                    "content": VERIFICATION_PROMPT.format(
+                        originals=memories_text[:INPUT_LIMIT],
+                        summary=consolidated_content,
+                    ),
+                }],
+            )
+
+            verify_text = verify_response.content[0].text.strip()
+
+            if "TODOS_PRESERVADOS" not in verify_text.upper():
+                # Fatos perdidos detectados — re-consolidar com instrução mais explícita
+                logger.warning(
+                    f"[MEMORY_CONSOLIDATOR] Fatos perdidos detectados em {dir_path}: "
+                    f"{verify_text[:200]}"
+                )
+
+                # Re-consolidar incluindo os fatos perdidos como instrução adicional
+                retry_prompt = (
+                    f"Consolide estas {len(memory_texts)} notas em UM resumo. "
+                    f"ATENÇÃO: O resumo anterior perdeu estes fatos — INCLUA-OS obrigatoriamente:\n"
+                    f"{verify_text}\n\n"
+                    f"NOTAS:\n{memories_text[:6000]}\n\n"
+                    f"RESUMO CONSOLIDADO (máximo 1000 caracteres):"
+                )
+
+                retry_response = client.messages.create(
+                    model=HAIKU_MODEL,
+                    max_tokens=1500,
+                    messages=[{"role": "user", "content": retry_prompt}],
+                )
+                retry_content = retry_response.content[0].text.strip()
+
+                # Validar re-consolidação (mesma regra que consolidação inicial)
+                if retry_content and len(retry_content) >= 20:
+                    consolidated_content = retry_content
+                else:
+                    logger.warning(
+                        f"[MEMORY_CONSOLIDATOR] Re-consolidação insuficiente para {dir_path} "
+                        f"({len(retry_content)} chars), mantendo consolidado original"
+                    )
+
+                logger.info(
+                    f"[MEMORY_CONSOLIDATOR] Re-consolidação para {dir_path}: "
+                    f"{len(consolidated_content)} chars (com fatos recuperados)"
+                )
+            else:
+                logger.info(
+                    f"[MEMORY_CONSOLIDATOR] Verificação OK para {dir_path}: "
+                    f"todos os fatos preservados"
+                )
+
+        except Exception as verify_err:
+            # Verificação falhou — usar consolidado original (melhor que nada)
+            logger.debug(
+                f"[MEMORY_CONSOLIDATOR] Verificação falhou (usando consolidado original): "
+                f"{verify_err}"
+            )
 
     except Exception as e:
         logger.warning(

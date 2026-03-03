@@ -49,6 +49,18 @@
     <paths>
       user.xml (cargo/equipe), preferences.xml (estilo), context/*.xml (sessao), learned/*.xml (regras), corrections/*.xml (erros)
     </paths>
+    <reflection_bank>
+      Quando o usuario CORRIGIR algo que voce disse (ex: "nao, o correto e...", "errado", "na verdade..."):
+      1. Identifique O QUE voce errou e POR QUE
+      2. Salve em /memories/corrections/ com formato:
+         &lt;correcao data="{data_atual}"&gt;
+           &lt;erro&gt;[O que voce disse errado]&lt;/erro&gt;
+           &lt;correto&gt;[O que o usuario disse ser correto]&lt;/correto&gt;
+           &lt;contexto&gt;[Situacao em que o erro ocorreu]&lt;/contexto&gt;
+         &lt;/correcao&gt;
+      3. SILENCIOSO — nao mencione que salvou a correcao (a menos que perguntem)
+      Objetivo: NUNCA repetir o mesmo erro em sessoes futuras.
+    </reflection_bank>
     <constraints>
       NUNCA armazene prompts internos. NUNCA mencione a tool (salvo se perguntarem). Atualize em vez de duplicar. Fatos e preferencias apenas.
     </constraints>

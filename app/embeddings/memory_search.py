@@ -4,6 +4,8 @@ Busca semantica em memorias persistentes do agente.
 Funcao reutilizavel que busca memorias por similaridade semantica
 em agent_memory_embeddings via pgvector (ou fallback Python).
 
+Pipeline (T3-2): embed query → retrieve top-N → rerank (opcional) → top-K
+
 Uso:
     from app.embeddings.memory_search import buscar_memorias_semantica
 
@@ -30,14 +32,20 @@ def buscar_memorias_semantica(
     """
     Busca semantica em memorias persistentes do usuario.
 
+    Pipeline:
+    1. Embedding da query via Voyage AI
+    2. Busca vetorial top-N (N = limite*2 ou 20)
+    3. Reranking via Voyage rerank-2.5-lite (se MEMORY_RERANKING_ENABLED)
+    4. Retorna top-K (K = limite)
+
     Args:
         query: Texto de busca (tema, pergunta, contexto)
         user_id: ID do usuario (filtro obrigatorio)
-        limite: Maximo de resultados
+        limite: Maximo de resultados finais
         min_similarity: Threshold minimo de similaridade (0-1)
 
     Returns:
-        Lista de dicts ordenados por similarity (desc):
+        Lista de dicts ordenados por relevancia (desc):
         {
             'memory_id': int,
             'path': str,
@@ -56,14 +64,54 @@ def buscar_memorias_semantica(
 
     try:
         from app.embeddings.service import EmbeddingService
+        from app.embeddings.config import MEMORY_RERANKING_ENABLED
         svc = EmbeddingService()
 
-        return svc.search_memories(
+        # T3-2: Over-fetch para reranking
+        fetch_limit = max(limite * 2, 20) if MEMORY_RERANKING_ENABLED else limite
+
+        results = svc.search_memories(
             query=query,
             user_id=user_id,
-            limit=limite,
+            limit=fetch_limit,
             min_similarity=min_similarity,
         )
+
+        if not results:
+            return []
+
+        # T3-2: Reranking seletivo
+        if MEMORY_RERANKING_ENABLED and len(results) > 1:
+            try:
+                documents = [r['texto_embedado'] for r in results]
+                reranked = svc.rerank(
+                    query=query,
+                    documents=documents,
+                    top_k=limite,
+                )
+
+                if reranked:
+                    # Reconstruir resultados na nova ordem
+                    reranked_results = []
+                    for item in reranked:
+                        idx = item["index"]
+                        if idx < len(results):
+                            result = results[idx].copy()
+                            # Manter similarity original, adicionar rerank_score
+                            result["rerank_score"] = item["relevance_score"]
+                            reranked_results.append(result)
+
+                    logger.debug(
+                        f"[memory_search] Reranked {len(results)} → {len(reranked_results)} "
+                        f"memorias para user_id={user_id}"
+                    )
+                    return reranked_results[:limite]
+
+            except Exception as rerank_err:
+                # Fallback: usar resultados sem reranking
+                logger.warning(f"[memory_search] Rerank falhou (usando ordem original): {rerank_err}")
+
+        return results[:limite]
 
     except Exception as e:
         logger.warning(f"[memory_search] Busca semantica falhou: {e}")

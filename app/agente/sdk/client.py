@@ -49,7 +49,7 @@ logger = logging.getLogger('sistema_fretes')
 # HELPER: Auto-injeção de memórias do usuário
 # =====================================================================
 
-def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optional[str]:
+def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> Optional[str]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
 
@@ -61,9 +61,16 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
     - Tier 2 (semântica): memórias relevantes ao prompt, excluindo Tier 1
     - Fallback: memórias mais recentes se semântica não retornar nada
 
+    Budget adaptativo (T2-2):
+    - Opus: 8000 chars (~2000 tokens)
+    - Sonnet: 4000 chars (~1000 tokens)
+    - Haiku: 2000 chars (~500 tokens)
+    - Ajustado pelo tamanho do prompt (prompts longos = budget menor)
+
     Args:
         user_id: ID do usuário no banco
         prompt: Prompt do usuário (para seleção semântica)
+        model_name: Nome do modelo (para budget adaptativo, ex: "claude-opus-4-6")
 
     Returns:
         String XML formatada com memórias ou None se vazio
@@ -96,10 +103,11 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
 
             protected_ids = {m.id for m in protected_memories}
 
-            # ── Tier 2: Busca semântica (excluindo protegidas) ──
+            # ── Tier 2: Busca semântica com composite scoring (QW-1) ──
             additional_memories = []
             semantic_count = 0
             avg_similarity = 0.0
+            avg_composite = 0.0
             used_fallback = False
 
             try:
@@ -107,9 +115,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
 
                 if MEMORY_SEMANTIC_SEARCH and prompt and user_id:
                     from app.embeddings.memory_search import buscar_memorias_semantica
+                    # Over-fetch: buscar 20 candidatos para re-ranking por composite score
                     resultados = buscar_memorias_semantica(
                         prompt, user_id,
-                        limite=10,
+                        limite=20,
                         min_similarity=MEMORY_INJECTION_MIN_SIMILARITY,
                     )
 
@@ -127,16 +136,40 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
                             ) / len(filtered)
 
                             memory_ids = [r['memory_id'] for r in filtered]
-                            additional_memories = AgentMemory.query.filter(
+                            mem_objects = AgentMemory.query.filter(
                                 AgentMemory.id.in_(memory_ids),
                                 AgentMemory.is_directory == False,  # noqa: E712
                             ).all()
 
-                            # Ordenar por relevância semântica
-                            id_order = {mid: i for i, mid in enumerate(memory_ids)}
-                            additional_memories.sort(
-                                key=lambda m: id_order.get(m.id, 999)
-                            )
+                            # Mapear similarity por memory_id
+                            sim_map = {r['memory_id']: r.get('similarity', 0) for r in filtered}
+
+                            # Calcular composite score: 0.3*decay + 0.3*importance + 0.4*similarity
+                            now = agora_utc_naive()
+                            scored = []
+                            for mem in mem_objects:
+                                similarity = sim_map.get(mem.id, 0)
+                                importance = mem.importance_score if mem.importance_score is not None else 0.5
+
+                                # Recency decay: 0.995 ^ horas_desde_ultimo_acesso
+                                last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
+                                if last_access:
+                                    hours_since = max(0, (now - last_access).total_seconds() / 3600)
+                                    decay = 0.995 ** hours_since
+                                else:
+                                    decay = 0.5
+
+                                composite = 0.3 * decay + 0.3 * importance + 0.4 * similarity
+                                scored.append((mem, composite, similarity))
+
+                            # Ordenar por composite score (desc), pegar top 10
+                            scored.sort(key=lambda x: x[1], reverse=True)
+                            scored = scored[:10]
+
+                            additional_memories = [s[0] for s in scored]
+                            if scored:
+                                avg_composite = sum(s[1] for s in scored) / len(scored)
+
             except Exception as sem_err:
                 logger.warning(
                     f"[MEMORY_INJECT] Semantic fallback to recency: {sem_err}"
@@ -163,26 +196,66 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
             if not all_memories:
                 return None
 
-            parts = [
-                "<user_memories>",
-                "<!-- Memórias persistentes do usuário — use para personalizar respostas -->",
-            ]
+            # ── QW-4 + T2-2: Truncamento inteligente com budget adaptativo ──
+            # Budget base por modelo
+            _model = (model_name or "").lower()
+            if "opus" in _model:
+                base_budget = 8000
+            elif "haiku" in _model:
+                base_budget = 2000
+            else:
+                base_budget = 4000  # Sonnet ou desconhecido
+
+            # Fator de ajuste: prompts longos consomem context window, reduzir budget
+            prompt_len = len(prompt) if prompt else 0
+            prompt_factor = max(0.5, 1.0 - prompt_len / 10000)
+            budget = int(base_budget * prompt_factor)
+            header = (
+                "<user_memories>\n"
+                "<!-- Memórias persistentes do usuário — use para personalizar respostas -->\n"
+            )
+            footer = "</user_memories>"
+            current_len = len(header) + len(footer)
+            selected_parts = [header]
+            injected_mems = []  # Track actually injected memory objects
 
             for mem in all_memories:
                 path = mem.path
                 content = (mem.content or "").strip()
-                if content:
-                    parts.append(f'<memory path="{path}">\n{content}\n</memory>')
+                if not content:
+                    continue
+                mem_text = f'<memory path="{path}">\n{content}\n</memory>\n'
+                # Memórias protegidas SEMPRE injetadas (Tier 1 contract)
+                is_protected = mem.path in PROTECTED_PATHS
+                if not is_protected and current_len + len(mem_text) > budget:
+                    break  # Não cabe — parar sem truncar
+                selected_parts.append(mem_text)
+                injected_mems.append(mem)
+                current_len += len(mem_text)
 
-            parts.append("</user_memories>")
-
-            result = "\n".join(parts)
-
-            # Limitar a 4000 chars para controle de tokens (~1000 tokens)
-            if len(result) > 4000:
-                result = result[:4000] + "\n... (memórias truncadas)"
+            selected_parts.append(footer)
+            result = "".join(selected_parts)
 
             total_chars = len(result)
+            injected_count = len(injected_mems)
+
+            if injected_count == 0:
+                return None  # Nenhuma memória coube no budget
+
+            # ── Atualizar last_accessed_at para memórias injetadas (QW-1) ──
+            try:
+                from app import db
+                from sqlalchemy import text as sql_text
+                injected_ids = [m.id for m in injected_mems]
+                if injected_ids:
+                    db.session.execute(sql_text("""
+                        UPDATE agent_memories
+                        SET last_accessed_at = NOW()
+                        WHERE id = ANY(:ids)
+                    """), {"ids": injected_ids})
+                    db.session.commit()
+            except Exception as e:
+                logger.debug(f"[MEMORY_INJECT] last_accessed_at update failed (ignored): {e}")
 
             # ── B1: Log detalhado de injeção ──
             logger.info(
@@ -191,9 +264,12 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None) -> Optiona
                 f"protected={len(protected_memories)} | "
                 f"semantic={semantic_count} | "
                 f"fallback={used_fallback} | "
-                f"total_injected={len(all_memories)} | "
+                f"total_injected={injected_count} | "
                 f"total_chars={total_chars} | "
+                f"budget={budget} | "
+                f"model={_model or 'unknown'} | "
                 f"avg_similarity={avg_similarity:.2f} | "
+                f"avg_composite={avg_composite:.2f} | "
                 f"min_similarity_threshold={MEMORY_INJECTION_MIN_SIMILARITY} | "
                 f"prompt_preview={prompt[:50] if prompt else 'None'}"
             )
@@ -1017,14 +1093,41 @@ Nunca invente informações."""
                     additional_context = None
                     if USE_AUTO_MEMORY_INJECTION and user_id:
                         try:
-                            additional_context = _load_user_memories_for_context(user_id, prompt=prompt)
+                            additional_context = _load_user_memories_for_context(
+                                user_id, prompt=prompt,
+                                model_name=str(options_dict.get("model", self.settings.model)),
+                            )
                         except Exception as mem_err:
                             logger.warning(
                                 f"[HOOK:UserPromptSubmit] Erro ao carregar memórias "
                                 f"(ignorado): {mem_err}"
                             )
 
-                    if additional_context:
+                    # T2-1: Detecção de correção — lembrete para Reflection Bank
+                    correction_hint = ""
+                    if prompt and len(prompt) > 10:
+                        import re as _re
+                        _correction_patterns = [
+                            _re.compile(r'(?i)\b(n[aã]o|errado|incorreto),?\s*(o\s+correct?o|na\s+verdade|deveria)'),
+                            _re.compile(r'(?i)^(na verdade|errado|incorreto|n[aã]o[,.]?\s+(é|e)\s+(assim|isso))'),
+                            _re.compile(r'(?i)\b(voc[eê]\s+errou|est[aá]\s+errado|isso\s+(est[aá]|tá)\s+errado)'),
+                            _re.compile(r'(?i)\b(correct?o\s+[eé]|certo\s+[eé]|deveria\s+ser)'),
+                        ]
+                        if any(p.search(prompt) for p in _correction_patterns):
+                            correction_hint = (
+                                "\n<system_hint>"
+                                "O usuário parece estar CORRIGINDO algo. "
+                                "Siga o protocolo reflection_bank (R0): identifique o erro, "
+                                "reconheça, salve em /memories/corrections/ e aprenda."
+                                "</system_hint>"
+                            )
+                            logger.info(
+                                f"[REFLECTION] Correção detectada user_id={user_id} "
+                                f"prompt_preview={prompt[:60]}"
+                            )
+
+                    if additional_context or correction_hint:
+                        additional_context = (additional_context or "") + correction_hint
                         # B2: Log de context budget por categoria
                         memory_tokens_est = len(additional_context) // 4
                         logger.info(
