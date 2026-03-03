@@ -144,3 +144,12 @@ ROUTE_TEMPLATE_SEMANTIC_SEARCH = os.environ.get("ROUTE_TEMPLATE_SEMANTIC_SEARCH"
 # Na busca, além de similaridade vetorial, encontra memórias conectadas por entidades compartilhadas.
 # Consumers: knowledge_graph_service.py (extract + query), memory_mcp_tool.py (save/update/delete), client.py (retrieval)
 MEMORY_KNOWLEDGE_GRAPH = os.environ.get("MEMORY_KNOWLEDGE_GRAPH", "true").lower() == "true"
+
+# ============================================================
+# CONSTANTES DE EMBEDDING
+# ============================================================
+
+# Tamanho máximo da resposta do assistant incluída no embedding de session turn (GAP 7)
+# Usado por: routes.py (inline embedding), session_turn_indexer.py (batch embedding)
+# 1000 chars captura melhor o contexto da resposta (avaliado em P2.3)
+ASSISTANT_SUMMARY_MAX_CHARS = int(os.environ.get("ASSISTANT_SUMMARY_MAX_CHARS", "1000"))

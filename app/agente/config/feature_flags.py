@@ -160,7 +160,9 @@ MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_G
 # NOTA: Esta flag controla ESCRITA de embeddings. A LEITURA é controlada por:
 #   app/embeddings/config.py:SESSION_SEMANTIC_SEARCH (env: SESSION_SEMANTIC_SEARCH, default true)
 # Ambas devem estar true para busca semântica de sessões funcionar end-to-end.
-USE_SESSION_TURN_EMBEDDING = os.getenv("AGENT_SESSION_SEMANTIC_SEARCH", "true").lower() == "true"
+# UNIFICADO (GAP 5): Usa mesma env var que config.py (SESSION_SEMANTIC_SEARCH) para evitar
+# dessincronização entre write e read path ao setar apenas uma env var.
+USE_SESSION_TURN_EMBEDDING = os.getenv("SESSION_SEMANTIC_SEARCH", "true").lower() == "true"
 
 # Alias legado (compatibilidade com código existente que importa USE_SESSION_SEMANTIC_SEARCH)
 USE_SESSION_SEMANTIC_SEARCH = USE_SESSION_TURN_EMBEDDING

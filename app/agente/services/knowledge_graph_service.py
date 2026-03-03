@@ -650,7 +650,11 @@ def query_graph_memories(
                 if mid not in exclude:
                     graph_results.append({
                         'memory_id': mid,
-                        'similarity': 0.5,  # Proxy score para graph results
+                        # Design decision (GAP 11): 0.5 = proxy neutro para graph results.
+                        # Graph results são link-based (não vetoriais), sem cosine similarity real.
+                        # No composite scoring (0.3*decay + 0.3*importance + 0.4*similarity),
+                        # 0.5 garante que graph results competem de forma justa com resultados semânticos.
+                        'similarity': 0.5,
                         'source': 'graph',
                     })
                     if len(graph_results) >= limit:

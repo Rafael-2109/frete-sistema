@@ -105,6 +105,9 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 |---------|------|---------|-----------|
 | `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Haiku a cada 10 sessoes, salva patterns em `/memories/learned/patterns.xml` |
 | `services/sentiment_detector.py` | `USE_SENTIMENT_DETECTION` | `false` | Detecta frustracao via regex, injeta instrucao de tom. Zero custo API |
+| `services/memory_consolidator.py` | `USE_MEMORY_CONSOLIDATION` | `true` | Consolida memorias redundantes via Haiku quando >15 arquivos ou >6000 chars. Custo ~$0.002. 395 LOC |
+| `services/knowledge_graph_service.py` | `MEMORY_KNOWLEDGE_GRAPH` | `true` | Extrai entidades + relacoes de memorias (3 layers: regex/Voyage/Haiku). Query multi-hop. 806 LOC |
+| `services/insights_service.py` | `USE_AGENT_INSIGHTS` | `true` | Metricas de memoria (utilization, decay, orphans). Endpoint `/insights/memory`. 841 LOC |
 
 ---
 

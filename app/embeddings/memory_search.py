@@ -18,7 +18,7 @@ Uso:
 import logging
 from typing import List, Dict
 
-from app.embeddings.config import EMBEDDINGS_ENABLED, MEMORY_SEMANTIC_SEARCH
+from app.embeddings.config import EMBEDDINGS_ENABLED, MEMORY_SEMANTIC_SEARCH, THRESHOLD_MEMORY
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def buscar_memorias_semantica(
     query: str,
     user_id: int,
     limite: int = 10,
-    min_similarity: float = 0.30,
+    min_similarity: float | None = None,
 ) -> List[Dict]:
     """
     Busca semantica em memorias persistentes do usuario.
@@ -42,7 +42,8 @@ def buscar_memorias_semantica(
         query: Texto de busca (tema, pergunta, contexto)
         user_id: ID do usuario (filtro obrigatorio)
         limite: Maximo de resultados finais
-        min_similarity: Threshold minimo de similaridade (0-1)
+        min_similarity: Threshold minimo de similaridade (0-1).
+            Default: THRESHOLD_MEMORY (0.40) de embeddings/config.py
 
     Returns:
         Lista de dicts ordenados por relevancia (desc):
@@ -61,6 +62,10 @@ def buscar_memorias_semantica(
 
     if not user_id:
         return []
+
+    # GAP 6: Default centralizado em THRESHOLD_MEMORY (0.40) de config.py
+    if min_similarity is None:
+        min_similarity = THRESHOLD_MEMORY
 
     try:
         from app.embeddings.service import EmbeddingService

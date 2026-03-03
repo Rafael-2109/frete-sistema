@@ -371,6 +371,7 @@ def _embed_memory_best_effort(
             from ..models import AgentMemory
             from app import db
             from sqlalchemy import text
+            from app.utils.timezone import agora_utc_naive
 
             # Buscar memory_id
             mem = AgentMemory.get_by_path(user_id, path)
@@ -411,7 +412,7 @@ def _embed_memory_best_effort(
                     embedding = EXCLUDED.embedding,
                     model_used = EXCLUDED.model_used,
                     content_hash = EXCLUDED.content_hash,
-                    updated_at = NOW()
+                    updated_at = :updated_at
             """), {
                 "memory_id": mem.id,
                 "user_id": user_id,
@@ -420,6 +421,7 @@ def _embed_memory_best_effort(
                 "embedding": embedding_str,
                 "model_used": VOYAGE_DEFAULT_MODEL,
                 "content_hash": c_hash,
+                "updated_at": agora_utc_naive(),
             })
             db.session.commit()
 

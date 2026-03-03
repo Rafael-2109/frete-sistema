@@ -1009,7 +1009,8 @@ def _embed_session_turn_best_effort(app, session_id, user_id, user_message, assi
         turn_index = max(0, (msg_count - 1) // 2)
 
         # Build texto embedado
-        assistant_summary = (assistant_message or '')[:500]
+        from app.embeddings.config import ASSISTANT_SUMMARY_MAX_CHARS
+        assistant_summary = (assistant_message or '')[:ASSISTANT_SUMMARY_MAX_CHARS]
         texto_embedado = f"[USER]: {user_message}\n[ASSISTANT]: {assistant_summary}"
 
         # Content hash para stale detection

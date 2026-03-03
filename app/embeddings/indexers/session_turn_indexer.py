@@ -28,9 +28,8 @@ from typing import List, Dict, Tuple, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 
-# Tamanho maximo da resposta do assistant incluida no embedding
-# 1000 chars captura melhor o contexto da resposta (P2.3)
-ASSISTANT_SUMMARY_MAX_CHARS = 1000
+# GAP 7: Constante centralizada em embeddings/config.py
+from app.embeddings.config import ASSISTANT_SUMMARY_MAX_CHARS
 
 # Tamanho minimo da mensagem do usuario para ser indexada
 MIN_USER_CONTENT_CHARS = 10

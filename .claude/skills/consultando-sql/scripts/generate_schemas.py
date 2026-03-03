@@ -39,8 +39,9 @@ BLOCKED_TABLES = {
     'permission_submodule', 'user_permission', 'permission_template',
     'permission_cache', 'permission_log', 'batch_operation',
     'perfil_usuario', 'vendedor_permission', 'equipe_permission',
-    # Agente
+    # Agente (tabelas internas — não expor ao LLM SQL)
     'agent_sessions', 'agent_memories', 'agent_memory_versions',
+    'agent_memory_embeddings', 'session_turn_embeddings',
     # Alembic
     'alembic_version',
     # Sessões web

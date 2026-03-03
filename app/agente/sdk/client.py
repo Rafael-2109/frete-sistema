@@ -142,7 +142,11 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             ).all()
 
                             # Mapear similarity por memory_id
-                            sim_map = {r['memory_id']: r.get('similarity', 0) for r in filtered}
+                            # GAP 10: Preferir rerank_score (Voyage) quando disponível
+                            sim_map = {
+                                r['memory_id']: r.get('rerank_score', r.get('similarity', 0))
+                                for r in filtered
+                            }
 
                             # Calcular composite score: 0.3*decay + 0.3*importance + 0.4*similarity
                             now = agora_utc_naive()
@@ -294,11 +298,12 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 from sqlalchemy import text as sql_text
                 injected_ids = [m.id for m in injected_mems]
                 if injected_ids:
+                    ts = agora_utc_naive()
                     db.session.execute(sql_text("""
                         UPDATE agent_memories
-                        SET last_accessed_at = NOW()
+                        SET last_accessed_at = :ts
                         WHERE id = ANY(:ids)
-                    """), {"ids": injected_ids})
+                    """), {"ids": injected_ids, "ts": ts})
                     db.session.commit()
             except Exception as e:
                 logger.debug(f"[MEMORY_INJECT] last_accessed_at update failed (ignored): {e}")
