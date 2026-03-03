@@ -779,3 +779,167 @@ class AgentMemoryVersion(db.Model):
             Instância de AgentMemoryVersion ou None
         """
         return cls.query.filter_by(memory_id=memory_id, version=version).first()
+
+
+class AgentMemoryEntity(db.Model):
+    """
+    Nó do Knowledge Graph — entidade canônica extraída de memórias.
+
+    T3-3: Knowledge Graph Simplificado.
+
+    Cada entidade é única por (user_id, entity_type, entity_name).
+    entity_key é um ID canônico opcional (CNPJ raiz, cod_produto, UF).
+
+    Entity types:
+        - uf: Estado brasileiro (SP, AM, etc.)
+        - pedido: Número de pedido (VCD2565291)
+        - cnpj: CNPJ raiz (8 dígitos)
+        - valor: Valor monetário (R$ X.XXX)
+        - transportadora: Nome normalizado
+        - produto: Nome normalizado
+        - cliente: Nome normalizado
+        - fornecedor: Nome normalizado
+        - regra: Regra de negócio (semântico, via Haiku)
+    """
+    __tablename__ = 'agent_memory_entities'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+
+    # Tipo da entidade (uf, pedido, cnpj, transportadora, produto, etc.)
+    entity_type = db.Column(db.String(30), nullable=False)
+
+    # Nome normalizado (uppercase, sem acentos)
+    entity_name = db.Column(db.String(200), nullable=False)
+
+    # ID canônico opcional (CNPJ raiz, cod_produto, UF)
+    entity_key = db.Column(db.String(100), nullable=True)
+
+    # Contagem de menções (tracking para GC de entidades órfãs)
+    mention_count = db.Column(db.Integer, nullable=False, default=1)
+
+    # Timestamps
+    first_seen_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive())
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'entity_type', 'entity_name', name='uq_user_entity'),
+        db.Index('idx_ame_user_type', 'user_id', 'entity_type'),
+        db.Index('idx_ame_entity_key', 'entity_key', postgresql_where=db.text('entity_key IS NOT NULL')),
+    )
+
+    def __repr__(self):
+        return f'<AgentMemoryEntity {self.entity_type}:{self.entity_name} user={self.user_id}>'
+
+
+class AgentMemoryEntityLink(db.Model):
+    """
+    Link entre entidade e memória — indica que a entidade foi mencionada na memória.
+
+    T3-3: Knowledge Graph Simplificado.
+
+    relation_type:
+        - 'mentions': menção genérica (default)
+        - 'corrects': memória corrige informação sobre a entidade
+        - 'prefers': memória indica preferência sobre a entidade
+    """
+    __tablename__ = 'agent_memory_entity_links'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entity_id = db.Column(
+        db.Integer,
+        db.ForeignKey('agent_memory_entities.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    memory_id = db.Column(
+        db.Integer,
+        db.ForeignKey('agent_memories.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+
+    # Tipo de relação: mentions, corrects, prefers
+    relation_type = db.Column(db.String(30), nullable=False, default='mentions')
+
+    # Timestamp
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive())
+
+    # Relacionamentos
+    entity = db.relationship('AgentMemoryEntity', backref=db.backref('links', lazy='dynamic'))
+    memory = db.relationship('AgentMemory', backref=db.backref('entity_links', lazy='dynamic', cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.UniqueConstraint('entity_id', 'memory_id', 'relation_type', name='uq_entity_memory_link'),
+    )
+
+    def __repr__(self):
+        return f'<AgentMemoryEntityLink entity={self.entity_id} memory={self.memory_id} rel={self.relation_type}>'
+
+
+class AgentMemoryEntityRelation(db.Model):
+    """
+    Relação semântica entre entidades (ex: RODONAVES atrasa_para AM).
+
+    T3-3: Knowledge Graph Simplificado.
+
+    relation_type:
+        - 'co_occurs': entidades coocorrem na mesma memória (default)
+        - Semânticos via Haiku: 'atrasa_para', 'melhor_para', 'fornece', etc.
+    """
+    __tablename__ = 'agent_memory_entity_relations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_entity_id = db.Column(
+        db.Integer,
+        db.ForeignKey('agent_memory_entities.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    target_entity_id = db.Column(
+        db.Integer,
+        db.ForeignKey('agent_memory_entities.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+
+    # Tipo da relação (co_occurs, atrasa_para, melhor_para, etc.)
+    relation_type = db.Column(db.String(50), nullable=False, default='co_occurs')
+
+    # Peso da relação (para ranking)
+    weight = db.Column(db.Float, nullable=False, default=1.0)
+
+    # Memória que originou a relação (NULL se removida)
+    memory_id = db.Column(
+        db.Integer,
+        db.ForeignKey('agent_memories.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+
+    # Timestamp
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive())
+
+    # Relacionamentos
+    source_entity = db.relationship(
+        'AgentMemoryEntity',
+        foreign_keys=[source_entity_id],
+        backref=db.backref('outgoing_relations', lazy='dynamic'),
+    )
+    target_entity = db.relationship(
+        'AgentMemoryEntity',
+        foreign_keys=[target_entity_id],
+        backref=db.backref('incoming_relations', lazy='dynamic'),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'source_entity_id', 'target_entity_id', 'relation_type',
+            name='uq_entity_relation',
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentMemoryEntityRelation '
+            f'src={self.source_entity_id} {self.relation_type} tgt={self.target_entity_id}>'
+        )

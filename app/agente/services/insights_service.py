@@ -804,6 +804,21 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
                 cat = 'root'
             categories[cat] = categories.get(cat, 0) + 1
 
+        # ── Knowledge Graph stats (T3-3) ──
+        graph_stats = {}
+        try:
+            from .knowledge_graph_service import get_graph_stats
+            graph_stats = get_graph_stats(user_id=user_id)
+        except Exception as kg_err:
+            logger.debug(f"[INSIGHTS] Knowledge Graph stats falhou (tabelas podem nao existir): {kg_err}")
+            graph_stats = {
+                'total_entities': 0,
+                'total_links': 0,
+                'total_relations': 0,
+                'entities_by_type': {},
+                'top_entities': [],
+            }
+
         return {
             'total_memories': total_memories,
             'utilization_rate': utilization_rate,
@@ -813,6 +828,7 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
             'decay_distribution': age_buckets,
             'orphan_embeddings': orphan_count,
             'categories': categories,
+            'knowledge_graph': graph_stats,
             'period_days': days,
         }
 

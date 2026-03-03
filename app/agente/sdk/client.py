@@ -175,6 +175,52 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     f"[MEMORY_INJECT] Semantic fallback to recency: {sem_err}"
                 )
 
+            # ── Tier 2b: Knowledge Graph retrieval (T3-3) ──
+            graph_count = 0
+            try:
+                from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
+                if MEMORY_KNOWLEDGE_GRAPH and prompt and user_id:
+                    from app.agente.services.knowledge_graph_service import query_graph_memories
+
+                    # IDs já encontrados pela semântica
+                    semantic_ids = {m.id for m in additional_memories} | protected_ids
+
+                    graph_results = query_graph_memories(
+                        user_id=user_id,
+                        prompt=prompt,
+                        exclude_memory_ids=semantic_ids,
+                        limit=5,  # Complementar, não substituir
+                    )
+
+                    if graph_results:
+                        graph_memory_ids = [r['memory_id'] for r in graph_results]
+                        graph_sim_map = {r['memory_id']: r.get('similarity', 0.5) for r in graph_results}
+
+                        graph_mem_objects = AgentMemory.query.filter(
+                            AgentMemory.id.in_(graph_memory_ids),
+                            AgentMemory.is_directory == False,  # noqa: E712
+                        ).all()
+
+                        # Scoring com similarity proxy (0.5)
+                        now_graph = agora_utc_naive()
+                        for mem in graph_mem_objects:
+                            similarity = graph_sim_map.get(mem.id, 0.5)
+                            importance = mem.importance_score if mem.importance_score is not None else 0.5
+                            last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
+                            if last_access:
+                                hours_since = max(0, (now_graph - last_access).total_seconds() / 3600)
+                                decay = 0.995 ** hours_since
+                            else:
+                                decay = 0.5
+                            composite = 0.3 * decay + 0.3 * importance + 0.4 * similarity
+                            # Só adicionar se composite razoável
+                            if composite >= 0.3:
+                                additional_memories.append(mem)
+                                graph_count += 1
+
+            except Exception as graph_err:
+                logger.debug(f"[MEMORY_INJECT] Graph retrieval falhou (ignorado): {graph_err}")
+
             # ── Fallback: recência se semântica não retornou nada ──
             if not additional_memories:
                 used_fallback = True
@@ -263,6 +309,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"user_id={user_id} | "
                 f"protected={len(protected_memories)} | "
                 f"semantic={semantic_count} | "
+                f"graph={graph_count} | "
                 f"fallback={used_fallback} | "
                 f"total_injected={injected_count} | "
                 f"total_chars={total_chars} | "

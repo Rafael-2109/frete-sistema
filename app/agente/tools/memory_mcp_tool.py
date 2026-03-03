@@ -190,22 +190,30 @@ Aqui está a memória sendo salva pelo usuário:
 {content}
 </memory>
 
-Dê um contexto curto e sucinto (1-2 frases, máximo 80 tokens) para situar \
-esta memória dentro da coleção geral de memórias do usuário. Este contexto \
-será preposto à memória para melhorar a busca semântica.
-Responda APENAS com o contexto sucinto, sem explicações ou formatação adicional.\
+Responda no formato abaixo. Cada seção é obrigatória.
+
+CONTEXTO: 1-2 frases situando esta memória no conjunto do usuário (máximo 80 tokens)
+ENTIDADES: lista de entidades no formato tipo:nome separadas por | (ex: transportadora:RODONAVES|uf:AM|cliente:ATACADAO)
+RELACOES: lista de relações no formato origem>tipo>destino separadas por | (ex: RODONAVES>atrasa_para>AM)
+
+Tipos de entidade válidos: uf, pedido, cnpj, valor, transportadora, produto, cliente, fornecedor, regra
+Se não houver entidades ou relações claras, escreva ENTIDADES: nenhuma e RELACOES: nenhuma\
 """
 
 
-def _generate_memory_context(user_id: int, path: str, content: str) -> Optional[str]:
+def _generate_memory_context(
+    user_id: int, path: str, content: str,
+) -> tuple[Optional[str], list[tuple[str, str]], list[tuple[str, str, str]]]:
     """
     Gera contexto semântico breve via Haiku para enriquecer embedding de memória.
 
-    Técnica: Anthropic Contextual Retrieval (2024).
-    Carrega memórias existentes do usuário como "documento",
-    gera 1-2 frases de contexto que situam a nova memória no conjunto.
+    T3-1: Anthropic Contextual Retrieval (2024).
+    T3-3: Prompt ampliado para extrair entidades e relações (Knowledge Graph).
 
-    Best-effort: falhas retornam None (fallback para embedding sem contexto).
+    Carrega memórias existentes do usuário como "documento",
+    gera contexto + entidades + relações em formato estruturado.
+
+    Best-effort: falhas retornam (None, [], []) (fallback para embedding sem contexto).
 
     Args:
         user_id: ID do usuário
@@ -213,7 +221,10 @@ def _generate_memory_context(user_id: int, path: str, content: str) -> Optional[
         content: Conteúdo da memória
 
     Returns:
-        String com contexto (50-100 tokens) ou None se falhar
+        Tupla (context, entities, relations):
+        - context: String com contexto (50-100 tokens) ou None se falhar
+        - entities: [(tipo, nome), ...] — entidades extraídas pelo Haiku
+        - relations: [(origem, tipo_relacao, destino), ...] — relações semânticas
     """
     try:
         import anthropic
@@ -251,10 +262,11 @@ def _generate_memory_context(user_id: int, path: str, content: str) -> Optional[
         content_truncated = content[:500] if len(content) > 500 else content
 
         # Chamar Haiku com timeout curto (best-effort, não pode travar o save)
+        # T3-3: max_tokens aumentado de 150→250 para acomodar entidades+relações
         client = anthropic.Anthropic(timeout=5.0)
         response = client.messages.create(
             model=_HAIKU_MODEL,
-            max_tokens=150,
+            max_tokens=250,
             messages=[{
                 "role": "user",
                 "content": _CONTEXTUAL_PROMPT.format(
@@ -265,41 +277,48 @@ def _generate_memory_context(user_id: int, path: str, content: str) -> Optional[
             }],
         )
 
-        context = response.content[0].text.strip()
+        raw_text = response.content[0].text.strip()
 
-        # Validar: contexto deve ter pelo menos 10 chars e no máximo 500
+        # T3-3: Parse estruturado com fallback
+        from ..services.knowledge_graph_service import parse_contextual_response
+        context, entities, relations = parse_contextual_response(raw_text)
+
+        # Validar contexto: pelo menos 10 chars e no máximo 500
         if not context or len(context) < 10:
             logger.debug(
                 f"[MEMORY_MCP] Contextual: Haiku retornou contexto insuficiente "
                 f"({len(context or '')} chars) para {path}"
             )
-            return None
+            return None, entities, relations
 
         if len(context) > 500:
             context = context[:500]
 
         logger.debug(
-            f"[MEMORY_MCP] Contextual: gerado para {path} ({len(context)} chars)"
+            f"[MEMORY_MCP] Contextual: gerado para {path} ({len(context)} chars, "
+            f"{len(entities)} entidades, {len(relations)} relações)"
         )
-        return context
+        return context, entities, relations
 
     except Exception as e:
         logger.debug(f"[MEMORY_MCP] Contextual: falhou (ignorado): {e}")
-        return None
+        return None, [], []
 
 
 # =====================================================================
 # HELPER: Embedding de memória para busca semântica
 # =====================================================================
 
-def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
+def _embed_memory_best_effort(
+    user_id: int, path: str, content: str,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
     """
     Gera embedding de uma memória para busca semântica.
 
     Best-effort: falhas são silenciosas e não afetam o fluxo principal.
 
-    Pipeline (T3-1 Contextual Retrieval):
-    1. Se MEMORY_CONTEXTUAL_EMBEDDING ativo: gerar contexto via Haiku (~300ms)
+    Pipeline (T3-1 Contextual Retrieval + T3-3 Knowledge Graph):
+    1. Se MEMORY_CONTEXTUAL_EMBEDDING ativo: gerar contexto + entidades + relações via Haiku (~300ms)
     2. Construir texto_embedado: contexto + [path]: conteúdo
     3. Gerar embedding via Voyage AI (~100ms)
     4. Upsert em agent_memory_embeddings
@@ -308,9 +327,16 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
         user_id: ID do usuário
         path: Path da memória (ex: /memories/user.xml)
         content: Conteúdo da memória
+
+    Returns:
+        Tupla (haiku_entities, haiku_relations) para uso pelo caller no KG pipeline.
+        Retorna ([], []) se contextual embedding desabilitado ou falhou.
     """
     import hashlib
     import json
+
+    haiku_entities = []
+    haiku_relations = []
 
     try:
         from app.embeddings.config import (
@@ -319,14 +345,16 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
             MEMORY_CONTEXTUAL_EMBEDDING,
         )
         if not MEMORY_SEMANTIC_SEARCH:
-            return
+            return haiku_entities, haiku_relations
 
         from app.embeddings.service import EmbeddingService
 
-        # T3-1: Contextual Retrieval — gerar contexto semântico via Haiku
+        # T3-1 + T3-3: Contextual Retrieval — gerar contexto + entidades + relações via Haiku
         context_prefix = None
         if MEMORY_CONTEXTUAL_EMBEDDING:
-            context_prefix = _generate_memory_context(user_id, path, content)
+            context_prefix, haiku_entities, haiku_relations = _generate_memory_context(
+                user_id, path, content
+            )
 
         # Build texto embedado (com ou sem contexto)
         if context_prefix:
@@ -401,6 +429,8 @@ def _embed_memory_best_effort(user_id: int, path: str, content: str) -> None:
 
     except Exception as e:
         logger.debug(f"[MEMORY_MCP] _embed_memory_best_effort falhou: {e}")
+
+    return haiku_entities, haiku_relations
 
 
 def _calculate_importance_score(path: str, content: str) -> float:
@@ -693,13 +723,38 @@ try:
                     f"[MEMORY_MCP] Consolidação não executada (ignorado): {consolidation_err}"
                 )
 
-            # Best-effort: embeddar memória para busca semântica
+            # Best-effort: embeddar memória para busca semântica + extrair entidades KG
+            haiku_entities = []
+            haiku_relations = []
             try:
                 from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
                 if MEMORY_SEMANTIC_SEARCH:
-                    _embed_memory_best_effort(user_id, path, content)
+                    haiku_entities, haiku_relations = _embed_memory_best_effort(
+                        user_id, path, content
+                    )
             except Exception as emb_err:
                 logger.debug(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
+
+            # Best-effort: Knowledge Graph — extrair e linkar entidades (T3-3)
+            try:
+                from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
+                if MEMORY_KNOWLEDGE_GRAPH:
+                    # Obter memory_id para linking
+                    def _get_memory_id():
+                        from ..models import AgentMemory
+                        mem = AgentMemory.get_by_path(user_id, path)
+                        return mem.id if mem else None
+
+                    mid = _execute_with_context(_get_memory_id)
+                    if mid:
+                        from ..services.knowledge_graph_service import extract_and_link_entities
+                        extract_and_link_entities(
+                            user_id, mid, content,
+                            haiku_entities=haiku_entities,
+                            haiku_relations=haiku_relations,
+                        )
+            except Exception as kg_err:
+                logger.debug(f"[MEMORY_MCP] Knowledge Graph falhou (ignorado): {kg_err}")
 
             return {
                 "content": [{"type": "text", "text": f"Memória {action} em {path}{dedup_warning}"}]
@@ -780,7 +835,9 @@ try:
             _execute_with_context(_update)
             logger.info(f"[MEMORY_MCP] update_memory: {path}")
 
-            # Best-effort: re-embeddar memória atualizada
+            # Best-effort: re-embeddar memória atualizada + KG
+            haiku_entities = []
+            haiku_relations = []
             try:
                 from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
                 if MEMORY_SEMANTIC_SEARCH:
@@ -792,9 +849,36 @@ try:
 
                     updated_content = _execute_with_context(_get_content)
                     if updated_content:
-                        _embed_memory_best_effort(user_id, path, updated_content)
+                        haiku_entities, haiku_relations = _embed_memory_best_effort(
+                            user_id, path, updated_content
+                        )
             except Exception as emb_err:
                 logger.debug(f"[MEMORY_MCP] Embedding update falhou (ignorado): {emb_err}")
+
+            # Best-effort: Knowledge Graph — re-extrair entidades (T3-3)
+            try:
+                from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
+                if MEMORY_KNOWLEDGE_GRAPH:
+                    def _get_mem_for_kg():
+                        from ..models import AgentMemory
+                        mem = AgentMemory.get_by_path(user_id, path)
+                        return (mem.id, mem.content) if mem else (None, None)
+
+                    mid, mcontent = _execute_with_context(_get_mem_for_kg)
+                    if mid and mcontent:
+                        from ..services.knowledge_graph_service import (
+                            remove_memory_links,
+                            extract_and_link_entities,
+                        )
+                        # Limpar links antigos e re-extrair
+                        remove_memory_links(mid)
+                        extract_and_link_entities(
+                            user_id, mid, mcontent,
+                            haiku_entities=haiku_entities,
+                            haiku_relations=haiku_relations,
+                        )
+            except Exception as kg_err:
+                logger.debug(f"[MEMORY_MCP] Knowledge Graph update falhou (ignorado): {kg_err}")
 
             return {
                 "content": [{"type": "text", "text": f"Memória atualizada em {path}"}]
@@ -881,6 +965,16 @@ try:
                         """), {"ids": memory_ids})
                 except Exception as gc_err:
                     logger.debug(f"[MEMORY_MCP] Embedding cleanup falhou (ignorado): {gc_err}")
+
+                # T3-3: Cleanup explícito de links no Knowledge Graph
+                try:
+                    from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
+                    if MEMORY_KNOWLEDGE_GRAPH and memory_ids:
+                        from ..services.knowledge_graph_service import remove_memory_links
+                        for mid in memory_ids:
+                            remove_memory_links(mid)
+                except Exception as kg_err:
+                    logger.debug(f"[MEMORY_MCP] KG cleanup falhou (ignorado): {kg_err}")
 
                 count = AgentMemory.delete_by_path(user_id, path)
                 db.session.commit()

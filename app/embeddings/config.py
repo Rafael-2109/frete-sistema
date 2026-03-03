@@ -138,3 +138,9 @@ CARRIER_SEMANTIC_SEARCH = os.environ.get("CARRIER_SEMANTIC_SEARCH", "true").lowe
 # Habilita busca semantica de rotas e templates do sistema
 # Consumers: route_template_search.py, agente web (MCP tool futuro)
 ROUTE_TEMPLATE_SEMANTIC_SEARCH = os.environ.get("ROUTE_TEMPLATE_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Knowledge Graph de memórias do agente (T3-3)
+# Quando True: extrai entidades de memórias e cria links no knowledge graph.
+# Na busca, além de similaridade vetorial, encontra memórias conectadas por entidades compartilhadas.
+# Consumers: knowledge_graph_service.py (extract + query), memory_mcp_tool.py (save/update/delete), client.py (retrieval)
+MEMORY_KNOWLEDGE_GRAPH = os.environ.get("MEMORY_KNOWLEDGE_GRAPH", "true").lower() == "true"
