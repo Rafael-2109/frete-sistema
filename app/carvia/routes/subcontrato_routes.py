@@ -29,7 +29,7 @@ def register_subcontrato_routes(bp):
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
-        query = db.session.query(CarviaSubcontrato).join(
+        query = db.session.query(CarviaSubcontrato).outerjoin(
             CarviaOperacao,
             CarviaSubcontrato.operacao_id == CarviaOperacao.id,
         )

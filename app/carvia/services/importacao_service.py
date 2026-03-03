@@ -38,6 +38,11 @@ CARVIA_CNPJ = re.sub(r'\D', '', os.environ.get('CARVIA_CNPJ', ''))
 
 logger = logging.getLogger(__name__)
 
+if not CARVIA_CNPJ:
+    logger.warning(
+        "CARVIA_CNPJ nao configurada — classificacao CTE_CARVIA/CTE_SUBCONTRATO desativada"
+    )
+
 
 class ImportacaoService:
     """Orquestrador do fluxo de importacao de NFs e CTes"""
@@ -87,17 +92,54 @@ class ImportacaoService:
 
         return 'DESCONHECIDO'
 
-    def _classificar_pdf(self, conteudo: bytes) -> str:
-        """Classifica PDF: DANFE (chave 44 digitos) vs Fatura (fallback).
+    def _is_dacte_pdf(self, conteudo: bytes) -> bool:
+        """Verifica se um PDF e DACTE (CTe) e nao DANFE (NF-e).
 
-        DANFE sempre tem chave de acesso de 44 digitos. Se nao encontrar,
-        assume que e uma fatura (cliente ou transportadora).
+        Usa DanfePDFParser apenas para extrair texto, depois verifica
+        marcadores DACTE: texto "DACTE"/"Conhecimento de Transporte"
+        ou modelo 57 na chave de 44 digitos.
         """
+        danfe = DanfePDFParser(pdf_bytes=conteudo)
+        if not danfe.is_valid():
+            return False
+
+        upper = danfe.texto_completo.upper()
+
+        # Marcadores textuais DACTE
+        if 'D A C T E' in upper or 'DACTE' in upper:
+            return True
+        if 'CONHECIMENTO DE TRANSPORTE' in upper:
+            return True
+
+        # Chave com modelo 57 (CTe)
+        texto_limpo = re.sub(r'[.\-/\s]', '', danfe.texto_completo)
+        chaves = re.findall(r'\d{44}', texto_limpo)
+        for chave in chaves:
+            if chave[20:22] == '57':
+                return True
+
+        return False
+
+    def _classificar_pdf(self, conteudo: bytes) -> str:
+        """Classifica PDF: DACTE (CTe) vs DANFE (NF-e) vs Fatura (fallback).
+
+        Ordem de verificacao:
+        1. DACTE: texto "DACTE"/"Conhecimento de Transporte" ou modelo 57 na chave
+        2. DANFE: chave 44 digitos com modelo != 57
+        3. Fatura: fallback
+        """
+        # 1. DACTE primeiro — DACTEs tambem tem chaves de 44 digitos
+        if self._is_dacte_pdf(conteudo):
+            return 'PDF_DACTE'
+
+        # 2. DANFE: chave 44 digitos (modelo 55)
         danfe = DanfePDFParser(pdf_bytes=conteudo)
         if danfe.is_valid():
             chave = danfe.get_chave_acesso()
             if chave and len(chave) == 44:
                 return 'PDF_DANFE'
+
+        # 3. Fallback: Fatura
         return 'PDF_FATURA'
 
     def _classificar_xml(self, conteudo: bytes) -> str:
@@ -166,6 +208,16 @@ class ImportacaoService:
                     else:
                         erros.append(f'{nome}: Nao foi possivel extrair dados do CTe XML')
 
+                elif tipo == 'PDF_DACTE':
+                    dados = self._parsear_dacte_pdf(conteudo, nome)
+                    if dados:
+                        dados['cte_xml_path'] = self._salvar_arquivo_storage(
+                            conteudo, nome, 'carvia/ctes_pdf'
+                        )
+                        ctes_parseados.append(dados)
+                    else:
+                        erros.append(f'{nome}: Nao foi possivel extrair dados do DACTE PDF')
+
                 elif tipo == 'PDF_DANFE':
                     dados = self._parsear_danfe_pdf(conteudo, nome)
                     if dados:
@@ -210,6 +262,64 @@ class ImportacaoService:
             # Sem CARVIA_CNPJ configurado — todos sao CTe CarVia (compatibilidade)
             for cte in ctes_parseados:
                 cte['classificacao'] = 'CTE_CARVIA'
+            if ctes_parseados:
+                erros.append(
+                    'AVISO: CARVIA_CNPJ nao configurada — todos os CTes foram '
+                    'classificados como CTe CarVia. Configure a variavel de '
+                    'ambiente CARVIA_CNPJ para separar CTes CarVia de Subcontratos.'
+                )
+
+        # Pre-check: verificar transportadoras para CTes subcontrato e faturas
+        transportadoras_nao_encontradas = {}
+
+        for cte in ctes_parseados:
+            if cte.get('classificacao') != 'CTE_SUBCONTRATO':
+                continue
+            emit = cte.get('emitente', {})
+            cnpj = re.sub(r'\D', '', emit.get('cnpj') or '')
+            if not cnpj:
+                continue
+            if cnpj not in transportadoras_nao_encontradas:
+                transp = self._encontrar_transportadora(cnpj)
+                if transp:
+                    cte['transportadora_encontrada'] = True
+                    cte['transportadora_nome'] = transp.razao_social
+                else:
+                    cte['transportadora_encontrada'] = False
+                    transportadoras_nao_encontradas[cnpj] = {
+                        'cnpj': cnpj,
+                        'nome': emit.get('nome', ''),
+                        'uf': emit.get('uf', ''),
+                        'cidade': emit.get('cidade', ''),
+                        'fonte': 'CTE_SUBCONTRATO',
+                    }
+            else:
+                cte['transportadora_encontrada'] = False
+
+        # Pre-check: verificar transportadoras para faturas (beneficiario)
+        for fat in faturas_parseadas:
+            cnpj_emissor = fat.get('cnpj_emissor', '')
+            cnpj_digitos = re.sub(r'\D', '', cnpj_emissor)
+            if len(cnpj_digitos) < 14:
+                continue
+            if cnpj_digitos == CARVIA_CNPJ:
+                continue
+            if cnpj_digitos in transportadoras_nao_encontradas:
+                fat['transportadora_encontrada'] = False
+            else:
+                transp = self._encontrar_transportadora(cnpj_digitos)
+                if transp:
+                    fat['transportadora_encontrada'] = True
+                    fat['transportadora_nome'] = transp.razao_social
+                else:
+                    fat['transportadora_encontrada'] = False
+                    transportadoras_nao_encontradas[cnpj_digitos] = {
+                        'cnpj': cnpj_digitos,
+                        'nome': fat.get('nome_emissor', ''),
+                        'uf': '',
+                        'cidade': '',
+                        'fonte': 'FATURA_BENEFICIARIO',
+                    }
 
         # Matching (apenas CTes CarVia participam do match com NFs)
         ctes_carvia = [c for c in ctes_parseados if c['classificacao'] == 'CTE_CARVIA']
@@ -223,6 +333,9 @@ class ImportacaoService:
             'faturas_parseadas': faturas_parseadas,
             'matches': {k: [m.to_dict() for m in v] for k, v in matches.items()},
             'erros': erros,
+            'transportadoras_nao_encontradas': list(
+                transportadoras_nao_encontradas.values()
+            ),
         }
 
     def salvar_importacao(self, nfs_data: List[Dict], ctes_data: List[Dict],
@@ -623,6 +736,22 @@ class ImportacaoService:
         dados['arquivo_nome_original'] = nome
         return dados
 
+    def _parsear_dacte_pdf(self, conteudo: bytes, nome: str) -> Dict:
+        """Parseia DACTE PDF (CTe em formato PDF).
+
+        Retorna dict no mesmo formato de _parsear_cte_xml() para que o
+        fluxo de classificacao CNPJ e criacao de operacao/subcontrato
+        funcione sem alteracao.
+        """
+        from app.carvia.services.dacte_pdf_parser import DactePDFParser
+
+        parser = DactePDFParser(pdf_bytes=conteudo)
+        if not parser.is_valid():
+            return {}
+        dados = parser.get_todas_informacoes()
+        dados['arquivo_nome_original'] = nome
+        return dados
+
     def _parsear_danfe_pdf(self, conteudo: bytes, nome: str) -> Dict:
         """Parseia DANFE PDF"""
         parser = DanfePDFParser(pdf_bytes=conteudo)
@@ -743,6 +872,20 @@ class ImportacaoService:
                 f"Fatura transportadora criada: {numero} transp={transportadora.razao_social}"
             )
             return fatura
+
+        # Warning: beneficiario nao cadastrado como transportadora
+        if cnpj_emissor:
+            cnpj_digitos = re.sub(r'\D', '', cnpj_emissor)
+            # Se tem CNPJ de empresa (14 digitos) e nao e o CNPJ CarVia,
+            # pode ser fatura de subcontrato com transportadora nao cadastrada
+            if len(cnpj_digitos) >= 14 and cnpj_digitos != CARVIA_CNPJ:
+                nome_emissor = fat_data.get('nome_emissor', '')
+                logger.warning(
+                    f"Fatura {numero}: beneficiario CNPJ {cnpj_emissor} "
+                    f"({nome_emissor}) nao encontrado como transportadora. "
+                    f"Classificando como fatura cliente. Se for fatura de "
+                    f"subcontrato, cadastre a transportadora."
+                )
 
         # Fatura cliente (CarVia -> cliente)
         # FIX CRITICO: usar cnpj_pagador (cliente) — NAO cnpj_emissor (CarVia)

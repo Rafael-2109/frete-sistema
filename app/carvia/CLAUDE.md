@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**23 arquivos** | **~5.6K LOC** | **21 templates** | **Atualizado**: 02/03/2026
+**24 arquivos** | **~5.9K LOC** | **21 templates** | **Atualizado**: 03/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -50,7 +50,7 @@ NF Venda ──── N:M ──── CTe CarVia ──── FK ──── F
 ```
 app/carvia/
   ├── routes/          # 8 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api, fluxo_caixa)
-  ├── services/        # 9 services (parsers, matching, importacao, cotacao, fatura_pdf_parser, linking, fluxo_caixa)
+  ├── services/        # 10 services (parsers incl. dacte_pdf_parser, matching, importacao, cotacao, fatura_pdf_parser, linking, fluxo_caixa)
   ├── models.py        # 11 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem, Despesa, ContaMovimentacao)
   └── forms.py         # 4 forms WTForms
 
@@ -133,17 +133,20 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 ## Importacao — Fluxo de Classificacao
 
 ```
-Upload (NF-e XML, CTe XML, DANFE PDF, Fatura PDF)
+Upload (NF-e XML, CTe XML, DACTE PDF, DANFE PDF, Fatura PDF)
     │
     ├── NF-e XML / PDF DANFE → CarviaNf + CarviaNfItem
     │   └── XML: is_nfe() verifica mod==55 (rejeita CTe disfarçado)
     │
-    ├── CTe XML → Classificar por CNPJ emitente (R6)
+    ├── CTe XML / PDF DACTE → Classificar por CNPJ emitente (R6)
     │   ├── CNPJ == CARVIA_CNPJ → CarviaOperacao (CTe CarVia)
     │   │   └── Vincular NFs via junction (matching por chave de acesso)
     │   └── CNPJ != CARVIA_CNPJ → CarviaSubcontrato (CTe Subcontrato)
     │       └── Vincular a CarviaOperacao via NFs compartilhadas
     │           Se nao encontrar operacao → erro/warning
+    │
+    ├── [PRE-CHECK] Verificar transportadoras para subcontratos + faturas
+    │   └── CNPJs nao cadastrados → transportadoras_nao_encontradas (alerta + modal)
     │
     └── Fatura PDF → parse_multi() (1 fatura por pagina)
         │   Parser: regex → Haiku → Sonnet (3 camadas escalonadas)
@@ -153,13 +156,31 @@ Upload (NF-e XML, CTe XML, DANFE PDF, Fatura PDF)
         │   Se ja existe → log "Fatura ja existe (ignorando)" + return None
         │
         ├── CNPJ beneficiario == transportadora cadastrada → CarviaFaturaTransportadora
+        │   └── Warning se CNPJ beneficiario nao cadastrado e != CARVIA_CNPJ
         └── Outro CNPJ → CarviaFaturaCliente + CarviaFaturaClienteItem (itens)
             cnpj_cliente = cnpj_PAGADOR (NAO cnpj_emissor/beneficiario)
 ```
 
-**Env var necessaria**: `CARVIA_CNPJ` (apenas digitos, ex: `12345678000199`)
+**Env var necessaria**: `CARVIA_CNPJ` (apenas digitos, ex: `12345678000199`).
+Se nao configurada, todos CTes sao classificados como CarVia (compatibilidade) e um aviso e emitido.
 
-**Classificacao PDF**: PDF com chave de acesso 44 digitos = DANFE. Sem chave = Fatura.
+**Pre-check de transportadoras** (no review, ANTES de confirmar):
+- `processar_arquivos()` verifica se CNPJs de emitentes de CTes subcontrato e beneficiarios de faturas
+  estao cadastrados como transportadoras no banco
+- Resultado inclui `transportadoras_nao_encontradas` — lista de CNPJs pendentes com nome/uf/cidade
+- Template `importar_resultado.html` mostra alerta com botoes de cadastro rapido (modal AJAX)
+- Endpoint `POST /carvia/api/cadastrar-transportadora` (CNPJ, razao_social, cidade, UF, freteiro)
+  - Dedup: se CNPJ ja existe, retorna transportadora existente sem erro
+  - Formata CNPJ automaticamente (XX.XXX.XXX/XXXX-XX)
+- Ao cadastrar, badges na tabela de CTes mudam de vermelho para verde via JS
+
+**Classificacao PDF** (ordem de verificacao):
+1. **DACTE**: texto "DACTE"/"Conhecimento de Transporte" ou chave com modelo=57 → `PDF_DACTE`
+2. **DANFE**: chave 44 digitos com modelo != 57 → `PDF_DANFE`
+3. **Fatura**: fallback → `PDF_FATURA`
+
+**CNPJ matriz vs filial**: Faturas podem usar CNPJ matriz (ex: 0001-49) enquanto DACTEs
+usam filial (ex: 0002-20). A classificacao de transportadora busca por CNPJ exato cadastrado.
 
 ### Fatura PDF — Multi-Pagina (formato SSW)
 
@@ -184,6 +205,7 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 |--------|---------------|-------|
 | `nfe_xml_parser.py` | Alta | Namespace-agnostic. Fonte de verdade para NF-e. Extrai itens de produto. `is_nfe()` verifica mod==55 |
 | `cte_xml_parser_carvia.py` | Alta | Herda CTeXMLParser. `get_nfs_referenciadas()` para matching. `get_emitente()` para classificacao |
+| `dacte_pdf_parser.py` | Media | Regex-based para DACTE SSW (layout padronizado). Separa chaves modelo=57 (CTe) de modelo=55 (NF-e). Saida identica a `cte_xml_parser_carvia` |
 | `danfe_pdf_parser.py` | Media | Regex-based com pdfplumber+pypdf fallback. Campo `confianca` (0.0-1.0) |
 | `fatura_pdf_parser.py` | Variavel | 3 camadas: Regex (alta) -> Haiku (media) -> Sonnet (baixa). Campo `confianca` + `metodo_extracao` |
 

@@ -3,6 +3,7 @@ API Routes CarVia — Endpoints AJAX (cotacao, busca, cubagem)
 """
 
 import logging
+import re
 from flask import jsonify, request
 from flask_login import login_required, current_user
 
@@ -12,6 +13,87 @@ logger = logging.getLogger(__name__)
 
 
 def register_api_routes(bp):
+
+    @bp.route('/api/cadastrar-transportadora', methods=['POST'])
+    @login_required
+    def api_cadastrar_transportadora():
+        """Cadastro rapido de transportadora durante importacao."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        cnpj = data.get('cnpj', '').strip()
+        razao_social = data.get('razao_social', '').strip()
+        cidade = data.get('cidade', '').strip()
+        uf = data.get('uf', '').strip().upper()
+
+        if not all([cnpj, razao_social, cidade, uf]):
+            return jsonify({'erro': 'cnpj, razao_social, cidade e uf sao obrigatorios'}), 400
+        if len(uf) != 2:
+            return jsonify({'erro': 'UF deve ter 2 caracteres'}), 400
+
+        try:
+            from app.transportadoras.models import Transportadora
+
+            # Verificar duplicidade
+            cnpj_digits = re.sub(r'\D', '', cnpj)
+            existente = Transportadora.query.filter(
+                db.func.regexp_replace(Transportadora.cnpj, '[^0-9]', '', 'g')
+                == cnpj_digits
+            ).first()
+            if existente:
+                return jsonify({
+                    'sucesso': True,
+                    'transportadora': {
+                        'id': existente.id,
+                        'razao_social': existente.razao_social,
+                        'cnpj': existente.cnpj,
+                    },
+                    'mensagem': 'Transportadora ja cadastrada',
+                })
+
+            # Formatar CNPJ: XX.XXX.XXX/XXXX-XX
+            if len(cnpj_digits) == 14:
+                cnpj_fmt = (
+                    f'{cnpj_digits[:2]}.{cnpj_digits[2:5]}.{cnpj_digits[5:8]}'
+                    f'/{cnpj_digits[8:12]}-{cnpj_digits[12:]}'
+                )
+            else:
+                cnpj_fmt = cnpj
+
+            freteiro = data.get('freteiro', False)
+            transp = Transportadora(
+                cnpj=cnpj_fmt,
+                razao_social=razao_social,
+                cidade=cidade,
+                uf=uf,
+                freteiro=bool(freteiro),
+                ativo=True,
+            )
+            db.session.add(transp)
+            db.session.commit()
+
+            logger.info(
+                f"Transportadora cadastrada via importacao: {razao_social} "
+                f"({cnpj_fmt}) por {current_user.email}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'transportadora': {
+                    'id': transp.id,
+                    'razao_social': transp.razao_social,
+                    'cnpj': transp.cnpj,
+                },
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao cadastrar transportadora: {e}")
+            return jsonify({'erro': str(e)}), 500
 
     @bp.route('/api/calcular-cubagem', methods=['POST'])
     @login_required

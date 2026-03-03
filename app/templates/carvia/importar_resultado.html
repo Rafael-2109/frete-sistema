@@ -64,6 +64,30 @@
     </div>
     {% endif %}
 
+    <!-- Transportadoras nao cadastradas -->
+    {% set transp_nao_encontradas = resultado.get('transportadoras_nao_encontradas', []) %}
+    {% if transp_nao_encontradas %}
+    <div class="alert alert-warning">
+        <h6><i class="fas fa-truck"></i> Transportadoras nao cadastradas ({{ transp_nao_encontradas|length }}):</h6>
+        <p class="small mb-2">
+            CTes subcontrato e faturas de beneficiarios precisam de transportadora cadastrada.
+            Cadastre abaixo para que a importacao vincule corretamente.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+            {% for t in transp_nao_encontradas %}
+            <button type="button" class="btn btn-sm btn-outline-warning transportadora-cadastrar-btn"
+                    data-cnpj="{{ t.cnpj }}" data-nome="{{ t.nome }}"
+                    data-uf="{{ t.uf }}" data-cidade="{{ t.cidade }}"
+                    data-bs-toggle="modal" data-bs-target="#modalCadastrarTransportadora"
+                    id="btn-transp-{{ t.cnpj }}">
+                <i class="fas fa-plus-circle"></i> {{ t.nome or t.cnpj }}
+                <span class="badge bg-secondary ms-1">{{ t.cnpj[:2] }}...{{ t.cnpj[-2:] }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- NFs Extraidas -->
     {% if resultado.nfs_parseadas %}
     <div class="card mb-4">
@@ -125,11 +149,13 @@
                             <th>Rota</th>
                             <th>Valor Prestacao</th>
                             <th>Emitente</th>
+                            <th>Transportadora</th>
                             <th>NFs Ref.</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for cte in resultado.ctes_parseados %}
+                        {% set cnpj_emit_digits = ((cte.emitente or {}).get('cnpj', '') or '')|replace('/','') | replace('.','') | replace('-','') %}
                         <tr>
                             <td><strong>{{ cte.cte_numero or '-' }}</strong></td>
                             <td>
@@ -148,6 +174,21 @@
                                 {% if cte.cte_valor %}R$ {{ "%.2f"|format(cte.cte_valor) }}{% else %}-{% endif %}
                             </td>
                             <td>{{ (cte.emitente or {}).get('nome', '-') }}</td>
+                            <td>
+                                {% if cte.classificacao == 'CTE_SUBCONTRATO' %}
+                                    {% if cte.get('transportadora_encontrada') %}
+                                        <span class="badge bg-success" id="badge-transp-{{ cnpj_emit_digits }}">
+                                            <i class="fas fa-check"></i> {{ cte.get('transportadora_nome', 'Cadastrada') }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger" id="badge-transp-{{ cnpj_emit_digits }}">
+                                            <i class="fas fa-exclamation-triangle"></i> Nao cadastrada
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <span class="badge bg-info">{{ (cte.nfs_referenciadas or [])|length }}</span>
                             </td>
@@ -362,4 +403,152 @@
         </a>
     </div>
 </div>
+
+<!-- Modal: Cadastro rapido de transportadora -->
+<div class="modal fade" id="modalCadastrarTransportadora" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-truck"></i> Cadastrar Transportadora</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">CNPJ</label>
+          <input type="text" class="form-control" id="modal-transp-cnpj" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Razao Social <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="modal-transp-razao" maxlength="120" required>
+        </div>
+        <div class="row">
+          <div class="col-md-8 mb-3">
+            <label class="form-label">Cidade <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="modal-transp-cidade" maxlength="100" required>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">UF <span class="text-danger">*</span></label>
+            <select class="form-select" id="modal-transp-uf" required>
+              <option value="">--</option>
+              {% for uf in ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MG','MS','MT',
+                            'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'] %}
+              <option value="{{ uf }}">{{ uf }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="modal-transp-freteiro">
+          <label class="form-check-label" for="modal-transp-freteiro">Freteiro</label>
+        </div>
+        <div id="modal-transp-erro" class="alert alert-danger mt-3 d-none"></div>
+        <div id="modal-transp-sucesso" class="alert alert-success mt-3 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="modal-transp-salvar">
+          <i class="fas fa-save"></i> Cadastrar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+                   || document.querySelector('input[name="csrf_token"]')?.value
+                   || '';
+
+    // Preencher modal com dados do botao
+    document.querySelectorAll('.transportadora-cadastrar-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var cnpj = this.dataset.cnpj;
+            var cnpjFmt = cnpj.length === 14
+                ? cnpj.slice(0,2) + '.' + cnpj.slice(2,5) + '.' + cnpj.slice(5,8) + '/' + cnpj.slice(8,12) + '-' + cnpj.slice(12)
+                : cnpj;
+            document.getElementById('modal-transp-cnpj').value = cnpjFmt;
+            document.getElementById('modal-transp-cnpj').dataset.cnpjDigits = cnpj;
+            document.getElementById('modal-transp-razao').value = this.dataset.nome || '';
+            document.getElementById('modal-transp-cidade').value = this.dataset.cidade || '';
+            document.getElementById('modal-transp-uf').value = this.dataset.uf || '';
+            document.getElementById('modal-transp-freteiro').checked = false;
+            // Limpar alertas
+            document.getElementById('modal-transp-erro').classList.add('d-none');
+            document.getElementById('modal-transp-sucesso').classList.add('d-none');
+            document.getElementById('modal-transp-salvar').disabled = false;
+            document.getElementById('modal-transp-salvar').innerHTML = '<i class="fas fa-save"></i> Cadastrar';
+        });
+    });
+
+    // Salvar transportadora via AJAX
+    document.getElementById('modal-transp-salvar')?.addEventListener('click', async function() {
+        var btn = this;
+        var cnpj = document.getElementById('modal-transp-cnpj').dataset.cnpjDigits;
+        var razao = document.getElementById('modal-transp-razao').value.trim();
+        var cidade = document.getElementById('modal-transp-cidade').value.trim();
+        var uf = document.getElementById('modal-transp-uf').value;
+        var freteiro = document.getElementById('modal-transp-freteiro').checked;
+
+        if (!razao || !cidade || !uf) {
+            document.getElementById('modal-transp-erro').textContent = 'Preencha todos os campos obrigatorios.';
+            document.getElementById('modal-transp-erro').classList.remove('d-none');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+        try {
+            var resp = await fetch('/carvia/api/cadastrar-transportadora', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                body: JSON.stringify({cnpj: cnpj, razao_social: razao, cidade: cidade, uf: uf, freteiro: freteiro}),
+            });
+            var data = await resp.json();
+
+            if (data.sucesso) {
+                // Sucesso: atualizar UI
+                document.getElementById('modal-transp-sucesso').textContent =
+                    'Transportadora "' + data.transportadora.razao_social + '" cadastrada com sucesso!';
+                document.getElementById('modal-transp-sucesso').classList.remove('d-none');
+                document.getElementById('modal-transp-erro').classList.add('d-none');
+
+                // Atualizar badges na tabela de CTes (pode haver multiplos com mesmo CNPJ)
+                document.querySelectorAll('[id="badge-transp-' + cnpj + '"]').forEach(function(badge) {
+                    badge.className = 'badge bg-success';
+                    badge.innerHTML = '<i class="fas fa-check"></i> ' + data.transportadora.razao_social;
+                });
+
+                // Desabilitar botao de cadastro
+                var cadastrarBtn = document.getElementById('btn-transp-' + cnpj);
+                if (cadastrarBtn) {
+                    cadastrarBtn.classList.replace('btn-outline-warning', 'btn-outline-success');
+                    cadastrarBtn.disabled = true;
+                    cadastrarBtn.innerHTML = '<i class="fas fa-check"></i> ' + data.transportadora.razao_social + ' — Cadastrada';
+                }
+
+                // Fechar modal apos 1.5s
+                setTimeout(function() {
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('modalCadastrarTransportadora'));
+                    if (modal) modal.hide();
+                }, 1500);
+            } else {
+                document.getElementById('modal-transp-erro').textContent = data.erro || 'Erro ao cadastrar.';
+                document.getElementById('modal-transp-erro').classList.remove('d-none');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
+            }
+        } catch (e) {
+            document.getElementById('modal-transp-erro').textContent = 'Erro de conexao: ' + e.message;
+            document.getElementById('modal-transp-erro').classList.remove('d-none');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
+        }
+    });
+})();
+</script>
 {% endblock %}
