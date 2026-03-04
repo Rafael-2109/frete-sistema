@@ -40,6 +40,7 @@ from app.recebimento.models import (
     ValidacaoFiscalDfe
 )
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.dfe_utils import TIPOS_DFE_COMPRA
 from app.utils.cnpj_utils import normalizar_cnpj, obter_nome_empresa
 
 logger = logging.getLogger(__name__)
@@ -571,7 +572,7 @@ class ValidacaoFiscalService:
         # Excluir devolucoes (finnfe = 4)
         filtro_dfe = [
             ['nfe_infnfe_emit_cnpj', 'ilike', cnpj_fornecedor],
-            ['l10n_br_tipo_pedido', '=', 'compra'],
+            ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA],
             ['l10n_br_status', '=', '04'],  # Apenas NFs processadas
             ['nfe_infnfe_ide_finnfe', '!=', '4']  # Excluir devolucoes
         ]

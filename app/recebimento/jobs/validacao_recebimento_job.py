@@ -50,6 +50,7 @@ from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalSer
 from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService
 from app.recebimento.services.depara_service import DeparaService
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.dfe_utils import TIPOS_DFE_COMPRA
 from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
 from app.odoo.services.alocacao_compras_service import AlocacaoComprasServiceOtimizado
 from app.odoo.services.requisicao_compras_service import RequisicaoComprasService
@@ -827,7 +828,7 @@ class ValidacaoRecebimentoJob:
         data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
 
         filtro = [
-            ['l10n_br_tipo_pedido', '=', 'compra'],
+            ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA],
             ['l10n_br_status', '=', '04'],
             ['nfe_infnfe_ide_finnfe', '!=', '4'],  # Excluir devolucoes
             ['is_cte', '=', False],  # Apenas NF-e

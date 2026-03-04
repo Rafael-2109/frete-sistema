@@ -24,6 +24,7 @@ from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import ValidacaoFiscalDfe
 from app.recebimento.services.validacao_fiscal_service import ValidacaoFiscalService
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.dfe_utils import TIPOS_DFE_COMPRA
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ class ValidacaoFiscalJob:
         # nfe_infnfe_ide_finnfe != '4' exclui devolucoes (4 = devolucao de mercadoria)
         # is_cte = False exclui CTe (Conhecimento de Transporte)
         filtro = [
-            ['l10n_br_tipo_pedido', '=', 'compra'],
+            ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA],
             ['l10n_br_status', '=', '04'],
             ['nfe_infnfe_ide_finnfe', '!=', '4'],  # Excluir devolucoes
             ['is_cte', '=', False],  # Apenas NF-e (excluir CTe)

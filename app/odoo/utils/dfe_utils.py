@@ -37,6 +37,10 @@ SITUACAO_NF_DFE = {
     'INUTILIZADA': 'Inutilizada',
 }
 
+# Tipos de pedido para o pipeline de recebimento de compras (Fases 1-4).
+# Usado em filtros Odoo: ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA]
+TIPOS_DFE_COMPRA = ['compra', 'rem-conta-ordem']
+
 
 def situacao_nf_valida(situacao: Optional[str]) -> bool:
     """
@@ -180,7 +184,7 @@ def buscar_dfes_compra(
     try:
         # Montar domain de busca
         domain = [
-            ['l10n_br_tipo_pedido', '=', 'compra'],
+            ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA],
         ]
 
         if status:
@@ -277,7 +281,7 @@ def buscar_dfes_pendentes_validacao(
         data_limite_str = data_limite.strftime('%Y-%m-%d %H:%M:%S')
 
         domain = [
-            ['l10n_br_tipo_pedido', '=', 'compra'],
+            ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA],
             ['l10n_br_status', '=', '04'],  # PO Vinculado
             ['is_cte', '=', False],
             ['write_date', '>=', data_limite_str]

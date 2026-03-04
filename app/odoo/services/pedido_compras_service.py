@@ -57,6 +57,7 @@ class PedidoComprasServiceOtimizado:
         'industrializacao',         # Retorno de industrialização
         'serv-industrializacao',    # Serviço de industrialização (produção terceirizada)
         'ent-bonificacao',          # Bonificação (brinde)
+        'rem-conta-ordem',          # Remessa por conta e ordem
     }
 
     def __init__(self):

@@ -23,6 +23,7 @@ from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import PendenciaFiscalIbsCbs
 from app.recebimento.services.validacao_ibscbs_service import validacao_ibscbs_service
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.dfe_utils import TIPOS_DFE_COMPRA
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ class ValidacaoIbsCbsJob:
             dfes = odoo.search_read(
                 'l10n_br_ciel_it_account.dfe',
                 [
-                    ['l10n_br_tipo_pedido', '=', 'compra'],
+                    ['l10n_br_tipo_pedido', 'in', TIPOS_DFE_COMPRA],
                     ['l10n_br_status', '=', '04'],
                     ['is_cte', '=', False],
                     ['nfe_infnfe_ide_finnfe', '!=', '4'],
