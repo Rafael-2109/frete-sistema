@@ -390,6 +390,8 @@ def register_api_routes(bp):
                 CarviaNf.cnpj_emitente,
                 CarviaNf.nome_emitente,
                 sqlfunc.count(CarviaNf.id).label('qtd_nfs'),
+            ).filter(
+                CarviaNf.status != 'CANCELADA',
             ).group_by(
                 CarviaNf.cnpj_emitente,
                 CarviaNf.nome_emitente,
@@ -443,6 +445,7 @@ def register_api_routes(bp):
                 subq, CarviaNf.id == subq.c.nf_id,
             ).filter(
                 CarviaNf.cnpj_emitente == cnpj_cliente,
+                CarviaNf.status != 'CANCELADA',
             )
 
             # Filtro com_cte

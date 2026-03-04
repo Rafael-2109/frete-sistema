@@ -66,7 +66,8 @@ class LinkingService:
 
         nf_norm = nf_numero.lstrip('0') or '0'
         query = CarviaNf.query.filter(
-            func.ltrim(CarviaNf.numero_nf, '0') == nf_norm
+            func.ltrim(CarviaNf.numero_nf, '0') == nf_norm,
+            CarviaNf.status != 'CANCELADA',
         )
 
         if contraparte_cnpj:

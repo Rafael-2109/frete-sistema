@@ -19,12 +19,12 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="Numero, emitente, CNPJ, chave..." value="{{ busca }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">Tipo Fonte</label>
                     <select name="tipo_fonte" class="form-select form-select-sm">
                         <option value="">Todos</option>
@@ -34,11 +34,19 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="" {{ 'selected' if not status_filtro }}>Ativas</option>
+                        <option value="CANCELADA" {{ 'selected' if status_filtro == 'CANCELADA' }}>Canceladas</option>
+                        <option value="TODAS" {{ 'selected' if status_filtro == 'TODAS' }}>Todas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-search"></i> Filtrar
                     </button>
                 </div>
-                {% if busca or tipo_filtro %}
+                {% if busca or tipo_filtro or status_filtro %}
                 <div class="col-md-2">
                     <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i> Limpar
@@ -63,6 +71,7 @@
                             {{ th_sort('valor_total', 'Valor', sort, direction, 'text-end') }}
                             {{ th_sort('peso_bruto', 'Peso (kg)', sort, direction, 'text-end') }}
                             <th>Fonte</th>
+                            <th>Status</th>
                             <th>CTe</th>
                             {{ th_sort('data_emissao', 'Data Emissao', sort, direction) }}
                             <th></th>
@@ -70,7 +79,7 @@
                     </thead>
                     <tbody>
                         {% for nf, qtd_ctes in nfs %}
-                        <tr>
+                        <tr{% if nf.status == 'CANCELADA' %} class="carvia-nf-cancelada"{% endif %}>
                             <td><strong>{{ nf.numero_nf }}</strong>{% if nf.serie_nf %} <small class="text-muted">S{{ nf.serie_nf }}</small>{% endif %}</td>
                             <td>
                                 <span title="{{ nf.cnpj_emitente }}" class="cnpj-col">
@@ -85,6 +94,9 @@
                             <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
                             <td class="valor-col">{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }}</td>
                             <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
+                            <td>
+                                <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>
+                            </td>
                             <td>
                                 {% if qtd_ctes %}
                                 <span class="badge bg-success">{{ qtd_ctes }} CTe{{ 's' if qtd_ctes > 1 }}</span>
@@ -111,7 +123,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -119,7 +131,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -127,7 +139,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

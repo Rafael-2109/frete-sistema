@@ -1,5 +1,5 @@
 """
-Rotas de NF Venda CarVia — Listagem e detalhe de NFs importadas
+Rotas de NF Venda CarVia — Listagem, detalhe e cancelamento de NFs importadas
 """
 
 import logging
@@ -9,6 +9,7 @@ from sqlalchemy import func
 
 from app import db
 from app.carvia.models import CarviaNf, CarviaOperacaoNf
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ def register_nf_routes(bp):
         per_page = request.args.get('per_page', 25, type=int)
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo_fonte', '')
+        status_filtro = request.args.get('status', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -41,6 +43,15 @@ def register_nf_routes(bp):
         ).outerjoin(
             subq_ctes, CarviaNf.id == subq_ctes.c.nf_id
         )
+
+        # Filtro de status: por padrao exclui CANCELADA
+        if status_filtro == 'CANCELADA':
+            query = query.filter(CarviaNf.status == 'CANCELADA')
+        elif status_filtro == 'TODAS':
+            pass  # Sem filtro de status
+        else:
+            # Padrao: apenas ATIVA
+            query = query.filter(CarviaNf.status != 'CANCELADA')
 
         if tipo_filtro:
             query = query.filter(CarviaNf.tipo_fonte == tipo_filtro)
@@ -80,6 +91,7 @@ def register_nf_routes(bp):
             paginacao=paginacao,
             busca=busca,
             tipo_filtro=tipo_filtro,
+            status_filtro=status_filtro,
             sort=sort,
             direction=direction,
         )
@@ -123,3 +135,46 @@ def register_nf_routes(bp):
             faturas_cliente=faturas_cliente,
             faturas_transportadora=faturas_transportadora,
         )
+
+    # ==================== CANCELAR NF ====================
+
+    @bp.route('/nfs/<int:nf_id>/cancelar', methods=['POST'])
+    @login_required
+    def cancelar_nf(nf_id):
+        """Cancela uma NF (soft-delete conforme GAP-20)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            flash('NF nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_nfs'))
+
+        if nf.status == 'CANCELADA':
+            flash('NF ja esta cancelada.', 'warning')
+            return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+        motivo = request.form.get('motivo_cancelamento', '').strip()
+        if not motivo:
+            flash('Motivo de cancelamento e obrigatorio.', 'warning')
+            return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+        try:
+            nf.status = 'CANCELADA'
+            nf.cancelado_em = agora_utc_naive()
+            nf.cancelado_por = current_user.email
+            nf.motivo_cancelamento = motivo
+            db.session.commit()
+
+            logger.info(
+                f"NF cancelada: nf_id={nf.id} numero={nf.numero_nf} "
+                f"por={current_user.email} motivo={motivo}"
+            )
+            flash(f'NF {nf.numero_nf} cancelada com sucesso.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao cancelar NF {nf_id}: {e}")
+            flash(f'Erro ao cancelar NF: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))

@@ -58,6 +58,14 @@ class CarviaNf(db.Model):
     # Tipo de fonte: PDF_DANFE, XML_NFE, MANUAL
     tipo_fonte = db.Column(db.String(20), nullable=False)
 
+    # Status: ATIVA, CANCELADA (soft-delete conforme GAP-20)
+    status = db.Column(db.String(20), nullable=False, default='ATIVA', index=True)
+
+    # Auditoria de cancelamento
+    cancelado_em = db.Column(db.DateTime)
+    cancelado_por = db.Column(db.String(100))
+    motivo_cancelamento = db.Column(db.Text)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
