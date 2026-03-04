@@ -186,20 +186,6 @@
   ],
   "indices": [
     {
-      "name": "idx_comp_data_pagamento",
-      "columns": [
-        "data_pagamento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_data_vencimento",
-      "columns": [
-        "data_vencimento"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_comp_ofx_fitid",
       "columns": [
         "ofx_fitid"
@@ -207,16 +193,23 @@
       "unique": false
     },
     {
-      "name": "idx_comp_ofx_checknum",
+      "name": "idx_comp_beneficiario_cnpj",
       "columns": [
-        "ofx_checknum"
+        "beneficiario_cnpj_cpf"
       ],
       "unique": false
     },
     {
-      "name": "idx_comp_beneficiario_cnpj",
+      "name": "idx_comp_data_pagamento",
       "columns": [
-        "beneficiario_cnpj_cpf"
+        "data_pagamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_ofx_checknum",
+      "columns": [
+        "ofx_checknum"
       ],
       "unique": false
     },
@@ -235,13 +228,6 @@
       "unique": false
     },
     {
-      "name": "idx_comp_pagador_cnpj",
-      "columns": [
-        "pagador_cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
       "columns": [
         "numero_agendamento"
@@ -256,6 +242,13 @@
       "unique": false
     },
     {
+      "name": "idx_comp_pagador_cnpj",
+      "columns": [
+        "pagador_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
         "tipo"
@@ -266,6 +259,13 @@
       "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
         "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_data_vencimento",
+      "columns": [
+        "data_vencimento"
       ],
       "unique": false
     }

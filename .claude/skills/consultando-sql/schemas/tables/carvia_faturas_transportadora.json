@@ -95,16 +95,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_faturas_transportadora_status_pagamento",
+      "name": "ix_carvia_faturas_transportadora_numero_fatura",
       "columns": [
-        "status_pagamento"
+        "numero_fatura"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_faturas_transportadora_numero_fatura",
+      "name": "ix_carvia_faturas_transportadora_status_pagamento",
       "columns": [
-        "numero_fatura"
+        "status_pagamento"
       ],
       "unique": false
     }

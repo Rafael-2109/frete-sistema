@@ -166,20 +166,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pendencia_fiscal_ibscbs_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_cnpj_fornecedor",
-      "columns": [
-        "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -194,13 +180,6 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
-      "columns": [
-        "tipo_documento"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pendencia_fiscal_ibscbs_status",
       "columns": [
         "status"
@@ -211,6 +190,27 @@
       "name": "ix_pendencia_fiscal_ibscbs_ncm_prefixo",
       "columns": [
         "ncm_prefixo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
+      "columns": [
+        "tipo_documento"
       ],
       "unique": false
     }

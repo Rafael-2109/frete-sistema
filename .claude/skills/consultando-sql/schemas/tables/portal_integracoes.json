@@ -91,6 +91,13 @@
   ],
   "indices": [
     {
+      "name": "ix_portal_integracoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_portal_integracoes_job_id",
       "columns": [
         "job_id"
@@ -117,13 +124,6 @@
         "protocolo"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_portal_integracoes_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
     }
   ]
 }
