@@ -146,14 +146,6 @@
       "unique": false
     },
     {
-      "name": "idx_alocacao_odoo_ids",
-      "columns": [
-        "purchase_request_line_odoo_id",
-        "purchase_order_line_odoo_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_alocacao_requisicao_pedido",
       "columns": [
         "requisicao_compra_id",
@@ -180,6 +172,14 @@
       "columns": [
         "cod_produto",
         "purchase_state"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_alocacao_odoo_ids",
+      "columns": [
+        "purchase_request_line_odoo_id",
+        "purchase_order_line_odoo_id"
       ],
       "unique": false
     },
