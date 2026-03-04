@@ -24,12 +24,14 @@ from pathlib import Path
 # Adicionar o diretório raiz ao path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from collections import Counter
+
 import pandas as pd
 from app.odoo.utils.connection import get_odoo_connection
 from app.utils.timezone import agora_utc_naive
 
 
-def extrair_relatorio_fiscal_datas(data_ini, data_fim, tipos: list = None):
+def extrair_relatorio_fiscal_datas(data_ini, data_fim, tipos: list = None, incluir_nc_draft: bool = False):
     """
     Extrai relatório fiscal idêntico ao Odoo + campos IBS/CBS
     (Versão com datas explícitas - usada pelo endpoint Flask)
@@ -38,28 +40,30 @@ def extrair_relatorio_fiscal_datas(data_ini, data_fim, tipos: list = None):
         data_ini: Data inicial (datetime.date)
         data_fim: Data final (datetime.date)
         tipos: Lista de tipos de documento ['out_invoice', 'in_invoice', etc.]
+        incluir_nc_draft: Se True, inclui NCs em rascunho (state='draft')
 
     Returns:
         Caminho do arquivo Excel gerado ou None
     """
-    return _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos)
+    return _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos, incluir_nc_draft=incluir_nc_draft)
 
 
-def extrair_relatorio_fiscal(dias_atras: int = 2, tipos: list = None):
+def extrair_relatorio_fiscal(dias_atras: int = 2, tipos: list = None, incluir_nc_draft: bool = False):
     """
     Extrai relatório fiscal idêntico ao Odoo + campos IBS/CBS
 
     Args:
         dias_atras: Quantidade de dias para buscar (padrão: 2)
         tipos: Lista de tipos de documento ['out_invoice', 'in_invoice', etc.]
+        incluir_nc_draft: Se True, inclui NCs em rascunho (state='draft')
     """
     # Calcular período
     data_fim = agora_utc_naive().date()
     data_ini = data_fim - timedelta(days=dias_atras)
-    return _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos)
+    return _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos, incluir_nc_draft=incluir_nc_draft)
 
 
-def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
+def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None, incluir_nc_draft: bool = False):
     """
     Implementação interna da extração do relatório fiscal
 
@@ -67,6 +71,7 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
         data_ini: Data inicial (datetime.date)
         data_fim: Data final (datetime.date)
         tipos: Lista de tipos de documento ['out_invoice', 'in_invoice', etc.]
+        incluir_nc_draft: Se True, inclui NCs em rascunho (state='draft')
     """
     print("=" * 80)
     print("RELATÓRIO DE DOCUMENTOS FISCAIS COM IBS/CBS")
@@ -87,13 +92,40 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
     if tipos is None:
         tipos = ['out_invoice', 'out_refund', 'in_invoice', 'in_refund']
 
-    # Filtro para buscar faturas
-    domain = [
+    # Identificar tipos de NC (refund) presentes
+    tipos_refund = [t for t in tipos if 'refund' in t]
+
+    # Montar domain com OR para capturar NCs sem invoice_date (usa 'date' como fallback)
+    # Causa: NCs criadas via wizard de reversão frequentemente têm invoice_date = False
+    domain_type = [['move_type', 'in', tipos]]
+
+    # State: posted OU (draft E tipo refund) quando checkbox marcado
+    if incluir_nc_draft and tipos_refund:
+        domain_state = [
+            '|',
+            ['state', '=', 'posted'],
+            '&',
+            ['state', '=', 'draft'],
+            ['move_type', 'in', tipos_refund],
+        ]
+    else:
+        domain_state = [['state', '=', 'posted']]
+
+    # Date: invoice_date no range OU (invoice_date=False E date no range)
+    # Isso captura NCs cujo invoice_date é False mas date (data contábil) está no período
+    domain_date = [
+        '|',
+        '&',
         ['invoice_date', '>=', data_ini.isoformat()],
         ['invoice_date', '<=', data_fim.isoformat()],
-        ['move_type', 'in', tipos],
-        ['state', '=', 'posted']
+        '&',
+        '&',
+        ['invoice_date', '=', False],
+        ['date', '>=', data_ini.isoformat()],
+        ['date', '<=', data_fim.isoformat()],
     ]
+
+    domain = domain_type + domain_state + domain_date
 
     print(f"\n🔍 Buscando faturas...")
 
@@ -167,9 +199,12 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
         'analytic_line_ids',
     ]
 
-    # Buscar cabeçalhos
-    moves = odoo.search_read('account.move', domain, campos_move)
-    print(f"📄 Encontradas {len(moves)} faturas")
+    # Buscar cabeçalhos (limit=0 = sem limite, evita default de 80 do Odoo)
+    moves = odoo.search_read('account.move', domain, campos_move, limit=0)
+
+    # Log de diagnóstico por tipo de documento
+    tipos_count = Counter(m.get('move_type') for m in moves)
+    print(f"📄 Encontradas {len(moves)} faturas: {dict(tipos_count)}")
 
     if not moves:
         print("⚠️ Nenhuma fatura encontrada no período")
@@ -184,7 +219,7 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None):
         ['move_id', 'in', move_ids],
         ['display_type', '=', 'product']
     ]
-    lines = odoo.search_read('account.move.line', domain_lines, campos_line)
+    lines = odoo.search_read('account.move.line', domain_lines, campos_line, limit=0)
     print(f"📝 Encontradas {len(lines)} linhas de produto")
 
     # ========================================================================

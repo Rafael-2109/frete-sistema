@@ -82,9 +82,12 @@ def gerar_relatorio_ibscbs():
         if not tipos_lista:
             tipos_lista = ['out_invoice', 'out_refund', 'in_invoice', 'in_refund']
 
+        # Opção: incluir NCs em rascunho
+        incluir_nc_draft = bool(request.form.get('incluir_nc_draft'))
+
         logger.info(
             f"📊 Gerando relatório IBS/CBS: {data_ini} a {data_fim} "
-            f"| Tipos: {tipos_lista} | Usuário: {current_user.nome}"
+            f"| Tipos: {tipos_lista} | NC draft: {incluir_nc_draft} | Usuário: {current_user.nome}"
         )
 
         # Importar função de geração
@@ -94,7 +97,8 @@ def gerar_relatorio_ibscbs():
         arquivo = extrair_relatorio_fiscal_datas(
             data_ini=data_ini,
             data_fim=data_fim,
-            tipos=tipos_lista
+            tipos=tipos_lista,
+            incluir_nc_draft=incluir_nc_draft
         )
 
         if not arquivo:

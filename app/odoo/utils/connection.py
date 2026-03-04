@@ -243,7 +243,7 @@ class OdooConnection:
         kwargs = {}
         if fields:
             kwargs['fields'] = fields
-        if limit:
+        if limit is not None:
             kwargs['limit'] = limit
         if offset:
             kwargs['offset'] = offset
@@ -251,11 +251,11 @@ class OdooConnection:
             kwargs['order'] = order
 
         return self.execute_kw(model, 'search_read', [domain], kwargs)
-    
+
     def search(self, model: str, domain: list, limit: Optional[int] = None) -> list:
         """Busca IDs de registros no Odoo"""
         kwargs = {}
-        if limit:
+        if limit is not None:
             kwargs['limit'] = limit
         
         return self.execute_kw(model, 'search', [domain], kwargs)
