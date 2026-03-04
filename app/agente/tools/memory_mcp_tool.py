@@ -547,6 +547,71 @@ def _classify_memory_category(path: str, content: str) -> tuple:
     return ('operational', False)
 
 
+def _detect_pitfall_hint(path: str, content: str) -> Optional[str]:
+    """
+    Detecta se uma correção salva parece ser um system pitfall (gotcha do ambiente).
+
+    Diferença:
+    - Correction: "eu errei, o campo certo é X" (erro do agent)
+    - Pitfall: "o journal_id é 68, não 47" (armadilha do sistema)
+
+    Heurística: keywords que indicam gotcha de sistema, não erro de raciocínio.
+
+    Returns:
+        Hint string para appendar na resposta, ou None.
+    """
+    if '/corrections/' not in path.lower():
+        return None
+
+    content_lower = content.lower()
+
+    # Keywords que indicam gotcha de sistema (não erro do agent)
+    system_keywords = [
+        # IDs/configurações erradas
+        'id deve ser', 'id é', 'id correto', 'id errado',
+        'journal_id', 'account_id', 'company_id', 'partner_id',
+        # Comportamento inesperado de APIs/sistemas
+        'não funciona via', 'não expõe', 'não suporta',
+        'retorna erro', 'retorna 4', 'retorna 5',
+        'timeout', 'rate limit',
+        # Campos/tabelas com comportamento não-óbvio
+        'campo não recalcula', 'campo stale', 'não atualiza',
+        'precisa de playwright', 'precisa de xml-rpc',
+        'só funciona via', 'só recalcula',
+        # Ordem obrigatória de operações
+        'antes de', 'deve ser último', 'deve ser primeiro',
+        'ordem obrigatória', 'desfaz a reconciliação',
+        # Valores fixos/hardcoded
+        'valor fixo', 'hardcoded', 'id fixo',
+    ]
+
+    hit_count = sum(1 for kw in system_keywords if kw in content_lower)
+
+    if hit_count >= 2:
+        # Tentar extrair a área do conteúdo
+        area_hints = {
+            'odoo': ['odoo', 'journal', 'account_id', 'xml-rpc', 'invoice', 'payment'],
+            'ssw': ['ssw', 'opcao', 'cadastr', 'comissao', '401', '402', '408', '478', '485'],
+            'banco': ['tabela', 'coluna', 'index', 'migration', 'constraint', 'trigger'],
+            'api': ['api', 'endpoint', 'rate limit', 'timeout', 'webhook'],
+            'deploy': ['render', 'deploy', 'env var', 'worker', 'scheduler'],
+        }
+        detected_area = 'sistema'
+        for area, keywords in area_hints.items():
+            if any(kw in content_lower for kw in keywords):
+                detected_area = area
+                break
+
+        return (
+            f'\n\nDica: esta correção parece ser um SYSTEM PITFALL (gotcha do ambiente, '
+            f'não erro seu). Considere chamar log_system_pitfall(area="{detected_area}", '
+            f'description="...") para registrá-lo separadamente — pitfalls ficam visíveis '
+            f'em todas as sessões futuras.'
+        )
+
+    return None
+
+
 def _regenerate_pitfalls_xml(user_id: int, pitfalls: list) -> None:
     """
     Regenera /memories/system/pitfalls.xml a partir da lista JSON.
@@ -1027,8 +1092,16 @@ try:
             except Exception as conflict_err:
                 logger.debug(f"[MEMORY_MCP] Conflict detection falhou (ignorado): {conflict_err}")
 
+            # Best-effort: Pitfall nudge — se correção parece system pitfall,
+            # sugere ao Agent chamar log_system_pitfall()
+            pitfall_hint = ''
+            try:
+                pitfall_hint = _detect_pitfall_hint(path, content) or ''
+            except Exception:
+                pass
+
             return {
-                "content": [{"type": "text", "text": f"Memória {action} em {path}{dedup_warning}"}]
+                "content": [{"type": "text", "text": f"Memória {action} em {path}{dedup_warning}{pitfall_hint}"}]
             }
 
         except Exception as e:
