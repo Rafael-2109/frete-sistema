@@ -182,6 +182,9 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Fatura cliente nao encontrada'}), 404
                 if doc.status == 'CANCELADA':
                     return jsonify({'erro': 'Fatura cancelada nao pode ser paga'}), 400
+                # GAP-14: Verificar se ja esta PAGA
+                if doc.status == 'PAGA':
+                    return jsonify({'erro': 'Fatura ja esta paga'}), 409
                 doc.status = 'PAGA'
                 doc.pago_por = usuario
                 doc.pago_em = agora
@@ -192,6 +195,9 @@ def register_fluxo_caixa_routes(bp):
                 doc = db.session.get(CarviaFaturaTransportadora, int(doc_id))
                 if not doc:
                     return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
+                # GAP-14: Verificar se ja esta PAGO
+                if doc.status_pagamento == 'PAGO':
+                    return jsonify({'erro': 'Fatura transportadora ja esta paga'}), 409
                 doc.status_pagamento = 'PAGO'
                 doc.pago_por = usuario
                 doc.pago_em = agora
@@ -204,6 +210,9 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Despesa nao encontrada'}), 404
                 if doc.status == 'CANCELADO':
                     return jsonify({'erro': 'Despesa cancelada nao pode ser paga'}), 400
+                # GAP-14: Verificar se ja esta PAGO
+                if doc.status == 'PAGO':
+                    return jsonify({'erro': 'Despesa ja esta paga'}), 409
                 doc.status = 'PAGO'
                 doc.pago_por = usuario
                 doc.pago_em = agora

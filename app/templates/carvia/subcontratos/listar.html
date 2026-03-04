@@ -105,6 +105,12 @@
                                 <span class="badge carvia-badge-{{ sub.status|lower }}">
                                     {{ sub.status }}
                                 </span>
+                                {# GAP-22: Indicador de faturamento pendente (sub sem fatura transportadora) #}
+                                {% if sub.status in ('FATURADO', 'CONFERIDO') and not sub.fatura_transportadora_id %}
+                                <span class="badge bg-warning text-dark ms-1" title="Sem fatura de transportadora vinculada">
+                                    <i class="fas fa-exclamation-circle"></i> s/ fatura
+                                </span>
+                                {% endif %}
                             </td>
                             <td><small>{{ sub.criado_em|formatar_data_hora_brasil if sub.criado_em else '-' }}</small></td>
                             <td>

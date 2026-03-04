@@ -141,6 +141,18 @@
 
     <!-- Itens de Detalhe -->
     {% if itens %}
+    {# GAP-09: Alerta para itens sem FK resolvido #}
+    {% set itens_sem_sub = itens|selectattr('subcontrato_id', 'none')|list %}
+    {% set itens_sem_operacao = itens|selectattr('operacao_id', 'none')|list %}
+    {% if itens_sem_sub or itens_sem_operacao %}
+    <div class="alert alert-warning mt-4 mb-0">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Itens com vinculacao pendente:</strong>
+        {% if itens_sem_sub %}{{ itens_sem_sub|length }} item(ns) sem CTe Subcontrato vinculado{% endif %}
+        {% if itens_sem_sub and itens_sem_operacao %}, {% endif %}
+        {% if itens_sem_operacao %}{{ itens_sem_operacao|length }} item(ns) sem CTe CarVia vinculado{% endif %}.
+    </div>
+    {% endif %}
     <div class="card mt-4">
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-list-alt"></i> Itens de Detalhe ({{ itens|length }})</h5>

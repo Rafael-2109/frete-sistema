@@ -391,9 +391,12 @@
     <!-- Acoes -->
     <div class="d-flex gap-2">
         {% if resultado.nfs_parseadas or resultado.ctes_parseados or faturas %}
-        <form method="POST" action="{{ url_for('carvia.importar_confirmar') }}">
+        <form method="POST" action="{{ url_for('carvia.importar_confirmar') }}" id="form-confirmar-importacao">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-success btn-lg">
+            {# GAP-11: chave Redis para recuperar dados de importacao #}
+            <input type="hidden" name="importacao_chave" value="{{ importacao_chave }}">
+            {# GAP-30: Debounce para evitar duplo clique #}
+            <button type="submit" class="btn btn-success btn-lg" id="btn-confirmar-importacao">
                 <i class="fas fa-check"></i> Confirmar e Salvar
             </button>
         </form>
@@ -462,6 +465,21 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
                    || document.querySelector('input[name="csrf_token"]')?.value
                    || '';
+
+    // GAP-30: Debounce — desabilitar botao apos primeiro clique
+    var formConfirmar = document.getElementById('form-confirmar-importacao');
+    if (formConfirmar) {
+        formConfirmar.addEventListener('submit', function(e) {
+            var btn = document.getElementById('btn-confirmar-importacao');
+            if (btn.dataset.submitted === 'true') {
+                e.preventDefault();
+                return false;
+            }
+            btn.dataset.submitted = 'true';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        });
+    }
 
     // Preencher modal com dados do botao
     document.querySelectorAll('.transportadora-cadastrar-btn').forEach(function(btn) {

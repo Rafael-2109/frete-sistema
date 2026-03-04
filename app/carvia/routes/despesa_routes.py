@@ -223,6 +223,17 @@ def register_despesa_routes(bp):
             return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
 
         try:
+            # GAP-06: Se revertendo de PAGO para outro status, remover movimentacao financeira
+            if despesa.status == 'PAGO' and novo_status != 'PAGO':
+                from app.carvia.routes.fluxo_caixa_routes import _remover_movimentacao
+                _remover_movimentacao('despesa', despesa_id)
+                despesa.pago_por = None
+                despesa.pago_em = None
+                logger.info(
+                    f"Despesa #{despesa_id}: movimentacao removida ao reverter "
+                    f"PAGO -> {novo_status} por {current_user.email}"
+                )
+
             despesa.status = novo_status
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')

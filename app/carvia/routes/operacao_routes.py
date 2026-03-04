@@ -189,6 +189,9 @@ def register_operacao_routes(bp):
             )
 
         # ---- Fluxo wizard: criar a partir de NFs ----
+        # GAP-13: Wizard usa request.form direto (sem WTForms). CSRF protegido pelo
+        # Flask-WTF global CSRF (CSRFProtect em app/__init__.py) + {{ csrf_token() }}
+        # no template criar_manual.html. Nao necessita WTForms adicional.
         if request.method == 'GET':
             return render_template('carvia/criar_manual.html')
 
@@ -199,28 +202,37 @@ def register_operacao_routes(bp):
         modalidade = request.form.get('modalidade', '').strip()
         observacoes = request.form.get('observacoes', '').strip()
 
+        # GAP-18: Preservar dados do formulario para re-render apos erro
+        form_data = {
+            'nf_ids': nf_ids_raw,
+            'cte_valor': cte_valor_raw,
+            'transportadora_id': transportadora_id,
+            'modalidade': modalidade,
+            'observacoes': observacoes,
+        }
+
         # Validar NFs
         if not nf_ids_raw:
             flash('Selecione pelo menos uma NF.', 'warning')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         # Parse nf_ids
         try:
             nf_ids = [int(x) for x in nf_ids_raw]
         except (ValueError, TypeError):
             flash('IDs de NF invalidos.', 'danger')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         # Validar cte_valor (formato BR: "1.234,56" -> 1234.56)
         if not cte_valor_raw:
             flash('Informe o valor do CTe.', 'warning')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         try:
             cte_valor = float(cte_valor_raw.replace('.', '').replace(',', '.'))
         except (ValueError, TypeError):
             flash('Valor do CTe invalido.', 'danger')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         # Buscar NFs do banco
         nfs_encontradas = db.session.query(CarviaNf).filter(
@@ -229,13 +241,13 @@ def register_operacao_routes(bp):
 
         if len(nfs_encontradas) != len(nf_ids):
             flash('Uma ou mais NFs nao foram encontradas.', 'danger')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         # Validar mesmo cnpj_emitente
         cnpjs = {nf.cnpj_emitente for nf in nfs_encontradas}
         if len(cnpjs) > 1:
             flash('NFs selecionadas pertencem a clientes diferentes. Selecione NFs do mesmo cliente.', 'danger')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         try:
             # Somar peso_bruto e valor_total das NFs
@@ -267,10 +279,10 @@ def register_operacao_routes(bp):
             # Validar campos obrigatorios
             if not uf_destino:
                 flash('UF destino nao encontrada nas NFs selecionadas.', 'danger')
-                return render_template('carvia/criar_manual.html')
+                return render_template('carvia/criar_manual.html', form_data=form_data)
             if not cidade_destino:
                 flash('Cidade destino nao encontrada nas NFs selecionadas.', 'danger')
-                return render_template('carvia/criar_manual.html')
+                return render_template('carvia/criar_manual.html', form_data=form_data)
 
             # Criar CarviaOperacao
             operacao = CarviaOperacao(
@@ -311,11 +323,12 @@ def register_operacao_routes(bp):
                 )
 
                 # R7: numero sequencial por transportadora
+                # GAP-28: FOR UPDATE para evitar race condition no numero sequencial
                 max_seq = db.session.query(
                     func.max(CarviaSubcontrato.numero_sequencial_transportadora)
                 ).filter(
                     CarviaSubcontrato.transportadora_id == transportadora_id,
-                ).scalar() or 0
+                ).with_for_update().scalar() or 0
 
                 subcontrato = CarviaSubcontrato(
                     operacao_id=operacao.id,
@@ -342,7 +355,7 @@ def register_operacao_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao criar operacao via wizard: {e}")
             flash(f'Erro ao criar operacao: {e}', 'danger')
-            return render_template('carvia/criar_manual.html')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
     @bp.route('/operacoes/criar-freteiro', methods=['GET', 'POST'])
     @login_required
@@ -420,8 +433,9 @@ def register_operacao_routes(bp):
         try:
             operacao.status = 'CANCELADO'
             # Cancelar subcontratos pendentes
+            # GAP-02: CONFERIDO e pos-FATURADO, nao deve ser cancelado em cascata
             for sub in operacao.subcontratos.filter(
-                CarviaSubcontrato.status.notin_(['FATURADO', 'CANCELADO'])
+                CarviaSubcontrato.status.notin_(['FATURADO', 'CONFERIDO', 'CANCELADO'])
             ).all():
                 sub.status = 'CANCELADO'
             db.session.commit()
@@ -534,11 +548,12 @@ def register_operacao_routes(bp):
                 )
 
                 # Gerar numero sequencial por transportadora
+                # GAP-28: FOR UPDATE para evitar race condition no numero sequencial
                 max_seq = db.session.query(
                     db.func.max(CarviaSubcontrato.numero_sequencial_transportadora)
                 ).filter(
                     CarviaSubcontrato.transportadora_id == transportadora_id,
-                ).scalar() or 0
+                ).with_for_update().scalar() or 0
 
                 subcontrato = CarviaSubcontrato(
                     operacao_id=operacao_id,
@@ -641,6 +656,30 @@ def register_operacao_routes(bp):
 
         try:
             sub.status = 'CANCELADO'
+
+            # GAP-03: Downgrade operacao se nao ha mais subs ativos
+            operacao = db.session.get(CarviaOperacao, operacao_id)
+            if operacao and operacao.status not in ('FATURADO', 'CANCELADO'):
+                subs_ativos = operacao.subcontratos.filter(
+                    CarviaSubcontrato.status != 'CANCELADO'
+                ).all()
+                if not subs_ativos:
+                    operacao.status = 'RASCUNHO'
+                    logger.info(
+                        f"Operacao #{operacao_id}: downgrade para RASCUNHO "
+                        f"(ultimo sub ativo cancelado por {current_user.email})"
+                    )
+                elif operacao.status == 'CONFIRMADO':
+                    todos_confirmados = all(
+                        s.status == 'CONFIRMADO' for s in subs_ativos
+                    )
+                    if not todos_confirmados:
+                        operacao.status = 'COTADO'
+                        logger.info(
+                            f"Operacao #{operacao_id}: downgrade para COTADO "
+                            f"(nem todos subs confirmados apos cancelamento)"
+                        )
+
             db.session.commit()
             flash('Subcontrato cancelado.', 'success')
         except Exception as e:
@@ -663,14 +702,84 @@ def register_operacao_routes(bp):
             flash('Subcontrato nao encontrado.', 'warning')
             return redirect(url_for('carvia.listar_operacoes'))
 
+        # GAP-04: Bloquear edicao de valor_acertado em subs CONFERIDO/FATURADO
+        if sub.status in ('CONFERIDO', 'FATURADO'):
+            flash(f'Subcontrato {sub.status} nao permite alteracao de valor.', 'warning')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
         try:
-            valor_acertado = request.form.get('valor_acertado', type=float)
+            # GAP-17: Aceitar formato BR (1.234,56) e formato US (1234.56)
+            valor_raw = request.form.get('valor_acertado', '').strip()
+            if valor_raw:
+                valor_acertado = float(valor_raw.replace('.', '').replace(',', '.'))
+            else:
+                valor_acertado = None
             sub.valor_acertado = valor_acertado
             db.session.commit()
             flash(f'Valor acertado atualizado: R$ {valor_acertado:.2f}' if valor_acertado else 'Valor acertado removido.', 'success')
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao atualizar valor: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+    # ==================== DESVINCULAR FATURA ====================
+
+    @bp.route('/operacoes/<int:operacao_id>/desvincular-fatura', methods=['POST'])
+    @login_required
+    def desvincular_fatura(operacao_id):
+        """GAP-23: Desvincula fatura cliente de uma operacao FATURADO.
+
+        Reverte operacao para CONFIRMADO, remove fatura_cliente_id.
+        Itens de fatura mantidos (nao exclui fatura, apenas desvincula operacao).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            flash('Operacao nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_operacoes'))
+
+        if operacao.status != 'FATURADO':
+            flash('Apenas operacoes FATURADO podem ter fatura desvinculada.', 'warning')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+        if not operacao.fatura_cliente_id:
+            flash('Operacao nao possui fatura vinculada.', 'warning')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+        try:
+            fatura_id = operacao.fatura_cliente_id
+
+            # Remover FK da operacao e reverter status
+            operacao.fatura_cliente_id = None
+            operacao.status = 'CONFIRMADO'
+
+            # Limpar operacao_id nos itens de fatura (nao exclui itens)
+            from app.carvia.models import CarviaFaturaClienteItem
+            itens = db.session.query(CarviaFaturaClienteItem).filter_by(
+                fatura_cliente_id=fatura_id,
+                operacao_id=operacao_id,
+            ).all()
+            for item in itens:
+                item.operacao_id = None
+
+            db.session.commit()
+
+            logger.info(
+                f"Operacao #{operacao_id}: fatura #{fatura_id} desvinculada, "
+                f"status revertido para CONFIRMADO por {current_user.email}"
+            )
+            flash(
+                f'Fatura #{fatura_id} desvinculada. Operacao revertida para CONFIRMADO.',
+                'success',
+            )
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao desvincular fatura da operacao #{operacao_id}: {e}")
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))

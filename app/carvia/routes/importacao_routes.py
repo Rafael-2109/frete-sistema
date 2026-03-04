@@ -3,10 +3,69 @@ Rotas de Importacao CarVia — Upload PDF/XML, parsing, matching
 """
 
 import logging
-from flask import render_template, request, flash, redirect, url_for, session, jsonify
+import uuid as uuid_mod
+from flask import render_template, request, flash, redirect, url_for, session
 from flask_login import login_required, current_user
 
 logger = logging.getLogger(__name__)
+
+# GAP-11: TTL de 1 hora para dados de importacao no Redis
+_IMPORTACAO_TTL = 3600
+
+
+def _importacao_redis_key(user_id, chave_uuid):
+    """Gera chave Redis para dados de importacao."""
+    return f'carvia:importacao:{user_id}:{chave_uuid}'
+
+
+def _salvar_importacao_temp(user_id, resultado):
+    """Salva resultado de importacao no Redis (preferencia) ou session (fallback).
+
+    Returns:
+        str: UUID da chave usada
+    """
+    chave_uuid = str(uuid_mod.uuid4())
+
+    from app.utils.redis_cache import redis_cache
+    if redis_cache.disponivel:
+        redis_key = _importacao_redis_key(user_id, chave_uuid)
+        salvo = redis_cache.set(redis_key, resultado, ttl=_IMPORTACAO_TTL)
+        if salvo:
+            logger.info(f"Importacao salva no Redis: {redis_key} (TTL={_IMPORTACAO_TTL}s)")
+            return chave_uuid
+
+    # Fallback: session Flask (limitada a ~4KB cookie)
+    logger.warning("Redis indisponivel, usando session Flask para importacao (fallback)")
+    session['carvia_importacao'] = resultado
+    return chave_uuid
+
+
+def _obter_importacao_temp(user_id, chave_uuid):
+    """Recupera resultado de importacao do Redis ou session.
+
+    Returns:
+        dict ou None
+    """
+    from app.utils.redis_cache import redis_cache
+    if redis_cache.disponivel:
+        redis_key = _importacao_redis_key(user_id, chave_uuid)
+        resultado = redis_cache.get(redis_key)
+        if resultado:
+            return resultado
+
+    # Fallback: session Flask
+    return session.get('carvia_importacao')
+
+
+def _limpar_importacao_temp(user_id, chave_uuid):
+    """Remove dados de importacao do Redis e session."""
+    from app.utils.redis_cache import redis_cache
+    if redis_cache.disponivel:
+        redis_key = _importacao_redis_key(user_id, chave_uuid)
+        redis_cache.delete(redis_key)
+
+    session.pop('carvia_importacao', None)
+    session.pop('carvia_importacao_arquivos', None)
 
 
 def register_importacao_routes(bp):
@@ -25,12 +84,37 @@ def register_importacao_routes(bp):
                 flash('Nenhum arquivo selecionado.', 'warning')
                 return redirect(url_for('carvia.importar'))
 
-            # Ler conteudo dos arquivos
+            # GAP-12: Validar extensao e tamanho dos arquivos
+            _EXTENSOES_PERMITIDAS = {'.pdf', '.xml'}
+            _MAX_TAMANHO_BYTES = 50 * 1024 * 1024  # 50MB
+
             arquivos_bytes = []
             for f in arquivos:
-                if f.filename:
-                    conteudo = f.read()
-                    arquivos_bytes.append((f.filename, conteudo))
+                if not f.filename:
+                    continue
+
+                # Validar extensao
+                ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+                if f'.{ext}' not in _EXTENSOES_PERMITIDAS:
+                    flash(
+                        f'Arquivo "{f.filename}" ignorado: extensao .{ext} nao permitida '
+                        f'(aceitos: {", ".join(sorted(_EXTENSOES_PERMITIDAS))}).',
+                        'warning',
+                    )
+                    continue
+
+                conteudo = f.read()
+
+                # Validar tamanho
+                if len(conteudo) > _MAX_TAMANHO_BYTES:
+                    flash(
+                        f'Arquivo "{f.filename}" ignorado: {len(conteudo) / 1024 / 1024:.1f}MB '
+                        f'excede limite de {_MAX_TAMANHO_BYTES / 1024 / 1024:.0f}MB.',
+                        'warning',
+                    )
+                    continue
+
+                arquivos_bytes.append((f.filename, conteudo))
 
             if not arquivos_bytes:
                 flash('Nenhum arquivo valido.', 'warning')
@@ -44,15 +128,13 @@ def register_importacao_routes(bp):
                 criado_por=current_user.email,
             )
 
-            # Armazenar resultado na sessao para review
-            session['carvia_importacao'] = resultado
-            session['carvia_importacao_arquivos'] = [
-                (nome, None) for nome, _ in arquivos_bytes
-            ]
+            # GAP-11: Armazenar resultado no Redis (com fallback session)
+            chave_uuid = _salvar_importacao_temp(current_user.id, resultado)
 
             return render_template(
                 'carvia/importar_resultado.html',
                 resultado=resultado,
+                importacao_chave=chave_uuid,
             )
 
         return render_template('carvia/importar.html')
@@ -65,9 +147,11 @@ def register_importacao_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        resultado = session.get('carvia_importacao')
+        # GAP-11: Recuperar dados do Redis usando chave do form
+        chave_uuid = request.form.get('importacao_chave', '')
+        resultado = _obter_importacao_temp(current_user.id, chave_uuid)
         if not resultado:
-            flash('Nenhuma importacao pendente. Faca o upload novamente.', 'warning')
+            flash('Nenhuma importacao pendente ou sessao expirada. Faca o upload novamente.', 'warning')
             return redirect(url_for('carvia.importar'))
 
         from app.carvia.services.importacao_service import ImportacaoService
@@ -81,9 +165,8 @@ def register_importacao_routes(bp):
             faturas_data=resultado.get('faturas_parseadas', []),
         )
 
-        # Limpar sessao
-        session.pop('carvia_importacao', None)
-        session.pop('carvia_importacao_arquivos', None)
+        # GAP-11: Limpar dados temporarios (Redis + session)
+        _limpar_importacao_temp(current_user.id, chave_uuid)
 
         if resultado_salvo.get('sucesso'):
             partes = [

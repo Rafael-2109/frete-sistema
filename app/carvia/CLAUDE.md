@@ -6,6 +6,7 @@ Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
 
 > Campos de tabelas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
+> Revisao de gaps: `app/carvia/REVISAO_GAPS.md` — 37 gaps mapeados com fluxogramas (03/03/2026)
 
 ---
 

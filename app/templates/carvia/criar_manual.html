@@ -574,6 +574,42 @@
 
     // ====== Inicializacao ======
     loadClientes();
+
+    // GAP-18: Restaurar selecoes do formulario apos erro de validacao
+    {% if form_data %}
+    (function restoreFormData() {
+        const savedNfIds = {{ form_data.nf_ids|tojson }};
+        const savedCteValor = {{ form_data.cte_valor|tojson }};
+        const savedTranspId = {{ form_data.transportadora_id|tojson }};
+        const savedObservacoes = {{ form_data.observacoes|tojson }};
+
+        // Restaurar valor CTe e observacoes
+        if (savedCteValor) cteValorInput.value = savedCteValor;
+        if (savedObservacoes) document.getElementById('observacoes').value = savedObservacoes;
+
+        // Restaurar NFs selecionadas apos carregamento AJAX
+        if (savedNfIds && savedNfIds.length) {
+            const savedIds = new Set(savedNfIds.map(id => parseInt(id)));
+            const origRender = renderNfs;
+            renderNfs = function() {
+                origRender();
+                nfsTbody.querySelectorAll('.nf-check').forEach(cb => {
+                    if (savedIds.has(parseInt(cb.value))) {
+                        cb.checked = true;
+                        nfsSelecionadas.add(parseInt(cb.value));
+                    }
+                });
+                updateNfSummary();
+                renderNfs = origRender;  // Restaurar apenas na 1a vez
+            };
+        }
+
+        // Restaurar transportadora (salva id no hidden)
+        if (savedTranspId) {
+            document.getElementById('input-transportadora-id').value = savedTranspId;
+        }
+    })();
+    {% endif %}
 })();
 </script>
 {% endblock %}

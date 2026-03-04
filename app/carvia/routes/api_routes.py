@@ -585,6 +585,10 @@ def register_api_routes(bp):
             if not operacao:
                 return jsonify({'erro': 'Operacao nao encontrada'}), 404
 
+            # GAP-33: Registrar valores anteriores para auditoria
+            peso_cubado_anterior = float(operacao.peso_cubado) if operacao.peso_cubado else None
+            peso_utilizado_anterior = float(operacao.peso_utilizado) if operacao.peso_utilizado else None
+
             # Peso cubado direto OU por dimensoes
             peso_cubado_direto = data.get('peso_cubado')
             if peso_cubado_direto:
@@ -609,10 +613,20 @@ def register_api_routes(bp):
             operacao.calcular_peso_utilizado()
             db.session.commit()
 
+            # GAP-33: Log de auditoria com valores anteriores e usuario
+            peso_cubado_novo = float(operacao.peso_cubado) if operacao.peso_cubado else None
+            peso_utilizado_novo = float(operacao.peso_utilizado) if operacao.peso_utilizado else None
+            logger.info(
+                f"Cubagem atualizada | operacao_id={operacao.id} | "
+                f"usuario={current_user.email} | "
+                f"peso_cubado: {peso_cubado_anterior} -> {peso_cubado_novo} | "
+                f"peso_utilizado: {peso_utilizado_anterior} -> {peso_utilizado_novo}"
+            )
+
             return jsonify({
                 'sucesso': True,
-                'peso_cubado': float(operacao.peso_cubado) if operacao.peso_cubado else None,
-                'peso_utilizado': float(operacao.peso_utilizado) if operacao.peso_utilizado else None,
+                'peso_cubado': peso_cubado_novo,
+                'peso_utilizado': peso_utilizado_novo,
             })
 
         except Exception as e:

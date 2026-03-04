@@ -106,12 +106,13 @@ def register_fatura_routes(bp):
                 vencimento = date.fromisoformat(vencimento_str) if vencimento_str else None
 
                 # Buscar operacoes selecionadas
+                # GAP-29: FOR UPDATE para evitar faturamento duplo concorrente
                 operacoes = db.session.query(CarviaOperacao).filter(
                     CarviaOperacao.id.in_(operacao_ids),
                     CarviaOperacao.cnpj_cliente == cnpj_cliente,
                     CarviaOperacao.status == 'CONFIRMADO',
                     CarviaOperacao.fatura_cliente_id.is_(None),
-                ).all()
+                ).with_for_update().all()
 
                 if not operacoes:
                     flash('Nenhuma operacao valida selecionada.', 'warning')
@@ -121,6 +122,11 @@ def register_fatura_routes(bp):
                 valor_total = sum(
                     float(op.cte_valor or 0) for op in operacoes
                 )
+
+                # GAP-24: Validar valor_total > 0
+                if valor_total <= 0:
+                    flash('Valor total da fatura deve ser maior que zero. Verifique os valores das operacoes.', 'warning')
+                    return redirect(url_for('carvia.nova_fatura_cliente'))
 
                 fatura = CarviaFaturaCliente(
                     cnpj_cliente=cnpj_cliente,
@@ -266,8 +272,9 @@ def register_fatura_routes(bp):
             flash('Fatura nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_faturas_cliente'))
 
-        if fatura.status == 'CANCELADA':
-            flash('Nao e possivel editar vencimento de fatura cancelada.', 'warning')
+        # GAP-35: Bloquear edicao de vencimento em fatura PAGA ou CANCELADA
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            flash(f'Nao e possivel editar vencimento de fatura {fatura.status.lower()}.', 'warning')
             return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
         vencimento_str = request.form.get('vencimento', '').strip()
@@ -302,11 +309,23 @@ def register_fatura_routes(bp):
             return redirect(url_for('carvia.listar_faturas_cliente'))
 
         novo_status = request.form.get('status')
-        if novo_status not in ('PENDENTE', 'EMITIDA', 'PAGA', 'CANCELADA'):
+        # GAP-01: EMITIDA removido do fluxo (status morto, nunca setado automaticamente)
+        if novo_status not in ('PENDENTE', 'PAGA', 'CANCELADA'):
             flash('Status invalido.', 'warning')
             return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
         try:
+            # GAP-05: Se revertendo de PAGA para outro status, remover movimentacao financeira
+            if fatura.status == 'PAGA' and novo_status != 'PAGA':
+                from app.carvia.routes.fluxo_caixa_routes import _remover_movimentacao
+                _remover_movimentacao('fatura_cliente', fatura_id)
+                fatura.pago_por = None
+                fatura.pago_em = None
+                logger.info(
+                    f"Fatura cliente #{fatura_id}: movimentacao removida ao reverter "
+                    f"PAGA -> {novo_status} por {current_user.email}"
+                )
+
             fatura.status = novo_status
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
@@ -338,10 +357,17 @@ def register_fatura_routes(bp):
                 CarviaFaturaTransportadora.status_conferencia == status_filtro
             )
         if busca:
+            # GAP-19/36: Expandir busca para incluir razao_social e cnpj da transportadora
+            from app.transportadoras.models import Transportadora
             busca_like = f'%{busca}%'
-            query = query.filter(
+            query = query.outerjoin(
+                Transportadora,
+                CarviaFaturaTransportadora.transportadora_id == Transportadora.id,
+            ).filter(
                 db.or_(
                     CarviaFaturaTransportadora.numero_fatura.ilike(busca_like),
+                    Transportadora.razao_social.ilike(busca_like),
+                    Transportadora.cnpj.ilike(busca_like),
                 )
             )
 
@@ -401,12 +427,13 @@ def register_fatura_routes(bp):
                 vencimento = date.fromisoformat(vencimento_str) if vencimento_str else None
 
                 # Buscar subcontratos selecionados
+                # GAP-29: FOR UPDATE para evitar faturamento duplo concorrente
                 subcontratos = db.session.query(CarviaSubcontrato).filter(
                     CarviaSubcontrato.id.in_(subcontrato_ids),
                     CarviaSubcontrato.transportadora_id == transportadora_id,
                     CarviaSubcontrato.status == 'CONFIRMADO',
                     CarviaSubcontrato.fatura_transportadora_id.is_(None),
-                ).all()
+                ).with_for_update().all()
 
                 if not subcontratos:
                     flash('Nenhum subcontrato valido selecionado.', 'warning')
@@ -416,6 +443,11 @@ def register_fatura_routes(bp):
                 valor_total = sum(
                     float(sub.valor_final or sub.cte_valor or 0) for sub in subcontratos
                 )
+
+                # GAP-25: Validar valor_total > 0
+                if valor_total <= 0:
+                    flash('Valor total da fatura deve ser maior que zero. Verifique os valores dos subcontratos.', 'warning')
+                    return redirect(url_for('carvia.nova_fatura_transportadora'))
 
                 fatura = CarviaFaturaTransportadora(
                     transportadora_id=transportadora_id,
@@ -619,9 +651,10 @@ def register_fatura_routes(bp):
         try:
             from app.utils.timezone import agora_utc_naive
             fatura.status_conferencia = novo_status
+            # GAP-32: Registrar autor/timestamp para TODOS os status de conferencia
+            fatura.conferido_por = current_user.email
+            fatura.conferido_em = agora_utc_naive()
             if novo_status == 'CONFERIDO':
-                fatura.conferido_por = current_user.email
-                fatura.conferido_em = agora_utc_naive()
                 # Marcar subcontratos como conferidos
                 for sub in fatura.subcontratos:
                     if sub.status == 'FATURADO':

@@ -267,11 +267,27 @@ class LinkingService:
         nf_numero = nf.numero_nf
         nf_cnpj = re.sub(r'\D', '', nf.cnpj_emitente or '')
 
-        # Buscar operacoes com nfs_referenciadas_json preenchido
-        # que ainda NAO tem junction com esta NF
-        operacoes = CarviaOperacao.query.filter(
-            CarviaOperacao.nfs_referenciadas_json.isnot(None),
-        ).all()
+        # GAP-34: Pre-filtrar operacoes via text search no JSON (evita full table scan)
+        # Usa cast para text + LIKE para reduzir linhas carregadas em Python
+        text_filters = []
+        if nf_chave:
+            text_filters.append(
+                CarviaOperacao.nfs_referenciadas_json.cast(db.String).contains(nf_chave)
+            )
+        if nf_numero:
+            nf_num_norm = nf_numero.lstrip('0') or '0'
+            text_filters.append(
+                CarviaOperacao.nfs_referenciadas_json.cast(db.String).contains(nf_num_norm)
+            )
+
+        base_filter = CarviaOperacao.nfs_referenciadas_json.isnot(None)
+        if text_filters:
+            operacoes = CarviaOperacao.query.filter(
+                base_filter,
+                or_(*text_filters),
+            ).all()
+        else:
+            operacoes = CarviaOperacao.query.filter(base_filter).all()
 
         for operacao in operacoes:
             refs = operacao.nfs_referenciadas_json

@@ -8,6 +8,14 @@ Gestao de frete subcontratado:
 - Subcontratos (1 por transportadora por operacao)
 - Faturas Cliente (CarVia -> cliente)
 - Faturas Transportadora (subcontratado -> CarVia)
+
+GAP-20 — DECISAO DE DESIGN: AUSENCIA INTENCIONAL DE DELETE
+Nenhuma entidade CarVia possui endpoint de exclusao. Registros sao CANCELADOS
+(status='CANCELADO') em vez de deletados. Motivos:
+1. Rastreabilidade: historico completo de operacoes para auditoria fiscal
+2. Integridade referencial: NFs, CTes, faturas e subcontratos interligados por FKs
+3. Documentos fiscais (NF-e, CT-e) nao podem ser apagados por regulamentacao
+Se exclusao for necessaria no futuro, implementar soft-delete com campo `excluido_em`.
 """
 
 from app import db
@@ -189,6 +197,10 @@ class CarviaOperacao(db.Model):
         back_populates='operacoes',
         lazy='dynamic'
     )
+    # GAP-07: cascade='all, delete-orphan' e INTENCIONAL. SQLAlchemy gerencia
+    # o ciclo de vida dos subcontratos via ORM. O DB nao aciona cascade
+    # (FK sem ON DELETE CASCADE) — a remocao e feita pelo session.delete() do ORM.
+    # Na pratica, operacoes nunca sao deletadas (GAP-20: design sem DELETE).
     subcontratos = db.relationship(
         'CarviaSubcontrato',
         backref='operacao',
@@ -238,9 +250,10 @@ class CarviaOperacaoNf(db.Model):
         nullable=False,
         index=True
     )
+    # GAP-08: ondelete='CASCADE' — ao deletar NF, remove junctions automaticamente
     nf_id = db.Column(
         db.Integer,
-        db.ForeignKey('carvia_nfs.id'),
+        db.ForeignKey('carvia_nfs.id', ondelete='CASCADE'),
         nullable=False,
         index=True
     )
@@ -363,7 +376,7 @@ class CarviaFaturaCliente(db.Model):
     pagador_ie = db.Column(db.String(20))
     pagador_telefone = db.Column(db.String(30))
 
-    # PENDENTE, EMITIDA, PAGA, CANCELADA
+    # PENDENTE, PAGA, CANCELADA (GAP-01: EMITIDA removido — status morto no fluxo)
     status = db.Column(db.String(20), default='PENDENTE')
 
     # Auditoria de pagamento
@@ -599,8 +612,15 @@ class CarviaContaMovimentacao(db.Model):
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 
+    # GAP-10: UNIQUE parcial — exclui 'ajuste' e 'saldo_inicial' para permitir multiplos
+    # A constraint real e via partial unique index no banco (migration)
     __table_args__ = (
-        db.UniqueConstraint('tipo_doc', 'doc_id', name='uq_carvia_mov_tipo_doc'),
+        db.Index(
+            'uq_carvia_mov_tipo_doc_parcial',
+            'tipo_doc', 'doc_id',
+            unique=True,
+            postgresql_where=db.text("tipo_doc NOT IN ('ajuste', 'saldo_inicial')"),
+        ),
         db.CheckConstraint("tipo_movimento IN ('CREDITO', 'DEBITO')", name='ck_carvia_mov_tipo'),
         db.CheckConstraint('valor > 0', name='ck_carvia_mov_valor'),
         db.Index('ix_carvia_mov_criado_em', 'criado_em'),

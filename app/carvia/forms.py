@@ -2,19 +2,49 @@
 Formularios WTForms do Modulo CarVia
 """
 
+import re
+
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, DecimalField, IntegerField, SelectField,
     TextAreaField, DateField, HiddenField
 )
-from wtforms.validators import DataRequired, Optional, Length, NumberRange
+from wtforms.validators import DataRequired, Optional, Length, NumberRange, ValidationError
+
+
+# GAP-26: Validador de digitos verificadores de CNPJ
+def validar_cnpj(_form, field):
+    """Valida digitos verificadores de CNPJ (14 digitos)"""
+    if not field.data:
+        return
+    # Extrair apenas digitos
+    digitos = re.sub(r'\D', '', field.data)
+    if len(digitos) != 14:
+        return  # Length validator ja cuida do tamanho
+    # Rejeitar CNPJs com todos os digitos iguais
+    if len(set(digitos)) == 1:
+        raise ValidationError('CNPJ invalido.')
+    # Calculo do primeiro digito verificador
+    pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    soma = sum(int(digitos[i]) * pesos1[i] for i in range(12))
+    resto = soma % 11
+    dv1 = 0 if resto < 2 else 11 - resto
+    if int(digitos[12]) != dv1:
+        raise ValidationError('CNPJ invalido (digito verificador).')
+    # Calculo do segundo digito verificador
+    pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    soma = sum(int(digitos[i]) * pesos2[i] for i in range(13))
+    resto = soma % 11
+    dv2 = 0 if resto < 2 else 11 - resto
+    if int(digitos[13]) != dv2:
+        raise ValidationError('CNPJ invalido (digito verificador).')
 
 
 class OperacaoManualForm(FlaskForm):
     """Formulario para criacao manual de operacao (sem CTe)"""
     cnpj_cliente = StringField(
         'CNPJ Cliente',
-        validators=[DataRequired(), Length(min=14, max=20)]
+        validators=[DataRequired(), Length(min=14, max=20), validar_cnpj]
     )
     nome_cliente = StringField(
         'Nome Cliente',
@@ -33,13 +63,14 @@ class NfManualForm(FlaskForm):
     """Formulario para adicionar NF manualmente"""
     numero_nf = StringField('Numero NF', validators=[DataRequired(), Length(max=20)])
     serie_nf = StringField('Serie', validators=[Optional(), Length(max=5)])
-    chave_acesso_nf = StringField('Chave de Acesso (44 digitos)', validators=[Optional(), Length(max=44)])
+    # GAP-27: Chave de acesso deve ter exatamente 44 digitos (quando preenchida)
+    chave_acesso_nf = StringField('Chave de Acesso (44 digitos)', validators=[Optional(), Length(min=44, max=44)])
     data_emissao = DateField('Data Emissao', validators=[Optional()])
-    cnpj_emitente = StringField('CNPJ Emitente', validators=[DataRequired(), Length(max=20)])
+    cnpj_emitente = StringField('CNPJ Emitente', validators=[DataRequired(), Length(min=14, max=20), validar_cnpj])
     nome_emitente = StringField('Nome Emitente', validators=[Optional(), Length(max=255)])
     uf_emitente = StringField('UF Emitente', validators=[Optional(), Length(max=2)])
     cidade_emitente = StringField('Cidade Emitente', validators=[Optional(), Length(max=100)])
-    cnpj_destinatario = StringField('CNPJ Destinatario', validators=[Optional(), Length(max=20)])
+    cnpj_destinatario = StringField('CNPJ Destinatario', validators=[Optional(), Length(max=20), validar_cnpj])
     nome_destinatario = StringField('Nome Destinatario', validators=[Optional(), Length(max=255)])
     uf_destinatario = StringField('UF Destino', validators=[Optional(), Length(max=2)])
     cidade_destinatario = StringField('Cidade Destino', validators=[Optional(), Length(max=100)])

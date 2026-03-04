@@ -7,6 +7,7 @@ from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
 
 from app import db
+from sqlalchemy import func
 from app.carvia.models import CarviaSubcontrato, CarviaOperacao
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,8 @@ def register_subcontrato_routes(bp):
         # Ordenacao dinamica
         sortable_columns = {
             'seq': CarviaSubcontrato.numero_sequencial_transportadora,
-            'valor_final': CarviaSubcontrato.valor_cotado,
+            # GAP-37: Usar COALESCE para ordenar por valor_final real
+            'valor_final': func.coalesce(CarviaSubcontrato.valor_acertado, CarviaSubcontrato.valor_cotado),
             'status': CarviaSubcontrato.status,
             'criado_em': CarviaSubcontrato.criado_em,
         }
@@ -138,11 +140,12 @@ def register_subcontrato_routes(bp):
                 )
 
                 # Gerar numero sequencial por transportadora
+                # GAP-28: FOR UPDATE para evitar race condition no numero sequencial
                 max_seq = db.session.query(
                     db.func.max(SubModel.numero_sequencial_transportadora)
                 ).filter(
                     SubModel.transportadora_id == transportadora_id,
-                ).scalar() or 0
+                ).with_for_update().scalar() or 0
 
                 subcontrato = SubModel(
                     operacao_id=operacao_id,
@@ -277,6 +280,15 @@ def register_subcontrato_routes(bp):
 
         try:
             operacao_anterior_id = sub.operacao_id
+
+            # GAP-15: Se sub era CONFIRMADO, downgrade para COTADO (cotacao mudou)
+            if sub.status == 'CONFIRMADO':
+                sub.status = 'COTADO'
+                logger.info(
+                    f"Subcontrato #{sub_id}: downgrade CONFIRMADO -> COTADO "
+                    f"(re-vinculado a operacao #{nova_operacao_id})"
+                )
+
             sub.operacao_id = nova_operacao_id
 
             # Recotar com base na nova operacao
@@ -288,6 +300,30 @@ def register_subcontrato_routes(bp):
             if cotacao.get('sucesso'):
                 sub.valor_cotado = cotacao['valor_cotado']
                 sub.tabela_frete_id = cotacao.get('tabela_frete_id')
+
+            # GAP-15: Verificar se operacao anterior precisa downgrade (GAP-03 composto)
+            if operacao_anterior_id:
+                operacao_anterior = db.session.get(CarviaOperacao, operacao_anterior_id)
+                if operacao_anterior and operacao_anterior.status not in ('FATURADO', 'CANCELADO'):
+                    subs_ativos = operacao_anterior.subcontratos.filter(
+                        CarviaSubcontrato.status != 'CANCELADO'
+                    ).all()
+                    if not subs_ativos:
+                        operacao_anterior.status = 'RASCUNHO'
+                        logger.info(
+                            f"Operacao #{operacao_anterior_id}: downgrade para RASCUNHO "
+                            f"(sub #{sub_id} re-vinculado, sem subs restantes)"
+                        )
+                    elif operacao_anterior.status == 'CONFIRMADO':
+                        todos_confirmados = all(
+                            s.status == 'CONFIRMADO' for s in subs_ativos
+                        )
+                        if not todos_confirmados:
+                            operacao_anterior.status = 'COTADO'
+                            logger.info(
+                                f"Operacao #{operacao_anterior_id}: downgrade para COTADO "
+                                f"(nem todos subs confirmados apos re-vinculacao)"
+                            )
 
             db.session.commit()
 

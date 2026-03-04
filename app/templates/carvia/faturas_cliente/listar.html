@@ -30,8 +30,8 @@
                 <div class="col-md-3">
                     <select name="status" class="form-select form-select-sm">
                         <option value="">Todos os Status</option>
+                        {# GAP-01: EMITIDA removido do fluxo #}
                         <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
-                        <option value="EMITIDA" {{ 'selected' if status_filtro == 'EMITIDA' }}>Emitida</option>
                         <option value="PAGA" {{ 'selected' if status_filtro == 'PAGA' }}>Paga</option>
                         <option value="CANCELADA" {{ 'selected' if status_filtro == 'CANCELADA' }}>Cancelada</option>
                     </select>

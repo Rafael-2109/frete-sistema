@@ -91,6 +91,7 @@ Gotchas rapidos:
 | **Capacidades MCP (versoes, gaps, enhanced)** | `.claude/references/MCP_CAPABILITIES_2026.md` |
 | **Linx Microvix (APIs, WS, integracao)** | `.claude/references/linx/INTEGRACOES.md` |
 | **CarVia (frete subcontratado)** | `app/carvia/CLAUDE.md` |
+| **CarVia — Revisao de Gaps (37 gaps)** | `app/carvia/REVISAO_GAPS.md` |
 | **Botoes, badges e cores (qual classe usar)** | `.claude/references/design/GUIA_COMPONENTES_UI.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 

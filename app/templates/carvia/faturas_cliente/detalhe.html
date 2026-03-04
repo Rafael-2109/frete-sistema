@@ -50,7 +50,8 @@
                         <div class="col-6">
                             <small class="text-muted d-block">Vencimento</small>
                             <strong>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</strong>
-                            {% if fatura.status != 'CANCELADA' %}
+                            {# GAP-35: Bloquear edicao de vencimento em fatura PAGA ou CANCELADA #}
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') %}
                             <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
                                     data-bs-toggle="modal" data-bs-target="#modalEditarVencimento"
                                     title="Editar vencimento">
@@ -80,7 +81,8 @@
                 </div>
                 <div class="card-body">
                     <div class="d-flex gap-2 flex-wrap">
-                        {% for status in ['PENDENTE', 'EMITIDA', 'PAGA', 'CANCELADA'] %}
+                        {# GAP-01: EMITIDA removido do fluxo #}
+                        {% for status in ['PENDENTE', 'PAGA', 'CANCELADA'] %}
                         {% if status != fatura.status %}
                         <form method="POST" action="{{ url_for('carvia.atualizar_status_fatura_cliente', fatura_id=fatura.id) }}" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -105,6 +107,19 @@
 
     <!-- Itens de Detalhe CTe -->
     {% if itens %}
+    {# GAP-09: Alerta para itens sem FK resolvido (operacao ou NF nao encontrada) #}
+    {% set itens_sem_operacao = itens|selectattr('operacao_id', 'none')|list %}
+    {% set itens_sem_nf = itens|selectattr('nf_id', 'none')|list %}
+    {% if itens_sem_operacao or itens_sem_nf %}
+    <div class="alert alert-warning mt-4 mb-0">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Itens com vinculacao pendente:</strong>
+        {% if itens_sem_operacao %}{{ itens_sem_operacao|length }} item(ns) sem CTe CarVia vinculado{% endif %}
+        {% if itens_sem_operacao and itens_sem_nf %}, {% endif %}
+        {% if itens_sem_nf %}{{ itens_sem_nf|length }} item(ns) sem NF vinculada{% endif %}.
+        <span class="small d-block mt-1">Importe os documentos faltantes para que o linking automatico resolva as vinculacoes.</span>
+    </div>
+    {% endif %}
     <div class="card mt-4">
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-list-alt"></i> Itens de Detalhe ({{ itens|length }})</h5>
