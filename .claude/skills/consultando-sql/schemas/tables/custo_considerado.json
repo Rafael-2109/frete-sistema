@@ -139,13 +139,6 @@
       "unique": false
     },
     {
-      "name": "ix_custo_considerado_custo_atual",
-      "columns": [
-        "custo_atual"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_custo_considerado_tipo",
       "columns": [
         "tipo_produto"
@@ -156,6 +149,13 @@
       "name": "idx_custo_considerado_atual",
       "columns": [
         "cod_produto",
+        "custo_atual"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_custo_considerado_custo_atual",
+      "columns": [
         "custo_atual"
       ],
       "unique": false

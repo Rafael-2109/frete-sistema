@@ -230,6 +230,27 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_devolucao_e_pallet_devolucao",
+      "columns": [
+        "e_pallet_devolucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
         "numero_nfd"
@@ -362,27 +383,6 @@
       "name": "ix_nf_devolucao_ativo",
       "columns": [
         "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_e_pallet_devolucao",
-      "columns": [
-        "e_pallet_devolucao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
       ],
       "unique": false
     }

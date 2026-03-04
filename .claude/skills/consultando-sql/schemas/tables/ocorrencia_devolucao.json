@@ -216,10 +216,10 @@
       "unique": false
     },
     {
-      "name": "idx_ocorrencia_responsavel",
+      "name": "idx_ocorrencia_categoria",
       "columns": [
-        "responsavel",
-        "status"
+        "categoria",
+        "subcategoria"
       ],
       "unique": false
     },
@@ -245,10 +245,10 @@
       "unique": true
     },
     {
-      "name": "idx_ocorrencia_categoria",
+      "name": "idx_ocorrencia_responsavel",
       "columns": [
-        "categoria",
-        "subcategoria"
+        "responsavel",
+        "status"
       ],
       "unique": false
     },

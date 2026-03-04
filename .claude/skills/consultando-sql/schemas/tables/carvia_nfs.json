@@ -91,6 +91,24 @@
       "nullable": false
     },
     {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ATIVA"
+    },
+    {
+      "name": "cancelado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "text"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -110,6 +128,13 @@
       "unique": false
     },
     {
+      "name": "ix_carvia_nfs_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_nfs_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
@@ -117,9 +142,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_nfs_cnpj_destinatario",
+      "name": "ix_carvia_nfs_status",
       "columns": [
-        "cnpj_destinatario"
+        "status"
       ],
       "unique": false
     }

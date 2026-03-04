@@ -180,16 +180,16 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_cnpj_fornecedor",
+      "name": "ix_pendencia_fiscal_ibscbs_odoo_dfe_id",
       "columns": [
-        "cnpj_fornecedor"
+        "odoo_dfe_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_odoo_dfe_id",
+      "name": "ix_pendencia_fiscal_ibscbs_cnpj_fornecedor",
       "columns": [
-        "odoo_dfe_id"
+        "cnpj_fornecedor"
       ],
       "unique": false
     },

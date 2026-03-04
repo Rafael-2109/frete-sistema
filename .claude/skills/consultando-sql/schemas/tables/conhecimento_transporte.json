@@ -255,6 +255,41 @@
   ],
   "indices": [
     {
+      "name": "ix_conhecimento_transporte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_dfe_id",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_cte_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -269,17 +304,16 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_ativo",
+      "name": "ix_conhecimento_transporte_odoo_status_codigo",
       "columns": [
-        "ativo"
+        "odoo_status_codigo"
       ],
       "unique": false
     },
     {
-      "name": "idx_cte_numero_serie",
+      "name": "ix_conhecimento_transporte_ativo",
       "columns": [
-        "numero_cte",
-        "serie_cte"
+        "ativo"
       ],
       "unique": false
     },
@@ -298,9 +332,10 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_numero_cte",
+      "name": "idx_cte_numero_serie",
       "columns": [
-        "numero_cte"
+        "numero_cte",
+        "serie_cte"
       ],
       "unique": false
     },
@@ -312,9 +347,9 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "name": "ix_conhecimento_transporte_numero_cte",
       "columns": [
-        "cte_complementa_chave"
+        "numero_cte"
       ],
       "unique": false
     },
@@ -333,9 +368,9 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "name": "ix_conhecimento_transporte_cte_complementa_chave",
       "columns": [
-        "cte_complementa_id"
+        "cte_complementa_chave"
       ],
       "unique": false
     },
@@ -347,6 +382,13 @@
       "unique": false
     },
     {
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cte_frete",
       "columns": [
         "frete_id"
@@ -354,16 +396,16 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_data_emissao",
+      "name": "idx_cte_status",
       "columns": [
-        "data_emissao"
+        "odoo_status_codigo"
       ],
       "unique": false
     },
     {
-      "name": "idx_cte_status",
+      "name": "ix_conhecimento_transporte_data_emissao",
       "columns": [
-        "odoo_status_codigo"
+        "data_emissao"
       ],
       "unique": false
     },
@@ -385,48 +427,6 @@
       "name": "idx_cte_complementa_id",
       "columns": [
         "cte_complementa_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_odoo_status_codigo",
-      "columns": [
-        "odoo_status_codigo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_dfe_id",
-      "columns": [
-        "dfe_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_remetente",
-      "columns": [
-        "cnpj_remetente"
       ],
       "unique": false
     }
