@@ -121,13 +121,6 @@
   ],
   "indices": [
     {
-      "name": "ix_requisicao_compras_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_requisicao_compras_num_requisicao",
       "columns": [
         "num_requisicao"
@@ -167,6 +160,13 @@
       "columns": [
         "company_id",
         "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }
