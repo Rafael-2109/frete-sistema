@@ -467,6 +467,31 @@ class AgentMemory(db.Model):
     # Usado para calcular recency decay no retrieval
     last_accessed_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), nullable=False)
 
+    # ── Taxonomia v2: categoria + permanência (Memory System v2) ──
+    # Categorias: permanent, structural, operational (default), contextual, cold
+    # permanent: regras de escopo, permissões, identidade — sem decay
+    # structural: gotchas Odoo, campos que não existem — decay lento (~60d meia-vida)
+    # operational: workflows, preferências de formato — decay médio (~30d)
+    # contextual: alertas, estado sistema, sessões recentes — decay rápido (~3d)
+    # cold: memórias depreciadas — só busca explícita, sem injeção automática
+    category = db.Column(db.String(20), default='operational', nullable=False, index=True)
+
+    # Flag para memórias que NUNCA devem decair ou ser consolidadas
+    is_permanent = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Flag para memórias movidas para tier frio (sem injeção automática)
+    is_cold = db.Column(db.Boolean, default=False, nullable=False)
+
+    # ── Feedback Loop v2: rastreamento de uso e efetividade ──
+    # Quantas vezes esta memória foi injetada no contexto
+    usage_count = db.Column(db.Integer, default=0, nullable=False)
+    # Quantas vezes o Agent usou conteúdo desta memória na resposta
+    effective_count = db.Column(db.Integer, default=0, nullable=False)
+    # Quantas vezes o usuário corrigiu após injeção desta memória
+    correction_count = db.Column(db.Integer, default=0, nullable=False)
+    # Flag para memórias com potencial contradição detectada
+    has_potential_conflict = db.Column(db.Boolean, default=False, nullable=False)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
     updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())

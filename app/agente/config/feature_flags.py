@@ -79,7 +79,7 @@ USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "false").lower() 
 # Heuristicas locais (sem chamada API): mensagens curtas, repetidas, marcadores explicitos
 # Custo: zero (deteccao local por regex/heuristica)
 # Default false: ativar apos validar que os sinais de frustracao sao precisos
-USE_SENTIMENT_DETECTION = os.getenv("AGENT_SENTIMENT_DETECTION", "false").lower() == "true"
+USE_SENTIMENT_DETECTION = os.getenv("AGENT_SENTIMENT_DETECTION", "true").lower() == "true"
 
 # Pattern Learning — analisa sessoes historicas e identifica padroes recorrentes
 # Usa Haiku para detectar: clientes frequentes, queries repetidas, preferencias
@@ -147,6 +147,11 @@ MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION
 
 # Minimo de arquivos em um diretorio para ser candidato a consolidacao
 MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
+
+# Briefing Inter-Sessão — injeta eventos entre sessões (erros Odoo, imports, alertas de memória)
+# Queries SQL leves, zero custo LLM. Injetado como Tier 0b no início da sessão.
+# Default true (env AGENT_INTERSESSION_BRIEFING)
+USE_INTERSESSION_BRIEFING = os.getenv("AGENT_INTERSESSION_BRIEFING", "true").lower() == "true"
 
 # ====================================================================
 # RAG Semantico (Fase 4)

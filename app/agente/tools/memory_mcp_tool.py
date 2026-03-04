@@ -487,6 +487,66 @@ def _calculate_importance_score(path: str, content: str) -> float:
     return min(score, 1.0)
 
 
+def _classify_memory_category(path: str, content: str) -> tuple:
+    """
+    Classifica memória em categoria e permanência por heurística.
+
+    Memory System v2: classificação automática zero-custo (<1ms).
+    Agent pode override via parâmetro opcional no save_memory.
+
+    Regras (ordem de prioridade):
+    1. Path = user.xml ou preferences.xml → permanent
+    2. Path /corrections/ + keywords de escopo → permanent
+    3. Path /corrections/ + keywords estruturais → structural
+    4. Path /corrections/ (demais) → structural
+    5. Path /context/ → contextual
+    6. Default → operational
+
+    Args:
+        path: Path da memória
+        content: Conteúdo da memória
+
+    Returns:
+        Tupla (category: str, is_permanent: bool)
+    """
+    path_lower = path.lower() if path else ''
+    content_lower = content.lower() if content else ''
+
+    # user.xml e preferences.xml → permanent
+    if path_lower in ('/memories/user.xml', '/memories/preferences.xml'):
+        return ('permanent', True)
+
+    # corrections/ com keywords de escopo/permanência → permanent
+    if '/corrections/' in path_lower:
+        permanent_keywords = [
+            'scope', 'escopo', 'permiss', 'regra', 'proibido',
+            'obrigat', 'nunca fazer', 'sempre fazer', 'nunca use',
+            'nunca usar', 'identidade', 'papel', 'role',
+        ]
+        if any(kw in content_lower for kw in permanent_keywords):
+            return ('permanent', True)
+
+        # corrections/ com keywords estruturais → structural
+        structural_keywords = [
+            'timeout', 'campo', 'fk', 'constraint', 'empresa',
+            'odoo', 'nao existe', 'não existe', 'tabela', 'coluna',
+            'modelo', 'api', 'endpoint', 'migration', 'index',
+        ]
+        if any(kw in content_lower for kw in structural_keywords):
+            return ('structural', False)
+
+        # corrections/ (demais) → structural por default
+        return ('structural', False)
+
+    # context/ → contextual
+    if '/context/' in path_lower:
+        return ('contextual', False)
+
+    # learned/patterns → operational
+    # Default → operational
+    return ('operational', False)
+
+
 def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') -> Optional[str]:
     """
     Verifica se ja existe memoria semanticamente similar para o usuario.
@@ -533,6 +593,133 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
         logger.debug(f"[MEMORY_MCP] Dedup check falhou (ignorado): {e}")
 
     return None
+
+
+def _track_correction_feedback(user_id: int, correction_path: str, correction_content: str) -> None:
+    """
+    Memory v2 — Feedback Loop: quando uma correção é salva,
+    incrementa correction_count nas memórias recentemente injetadas.
+
+    Lógica: se o Agent acabou de salvar uma correção, algo nas memórias
+    existentes pode estar errado. Incrementamos correction_count nas
+    memórias que foram injetadas nos últimos 5 minutos (mesmo turno).
+
+    Best-effort: falhas silenciosas.
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+        from sqlalchemy import text as sql_text
+        from app.utils.timezone import agora_utc_naive
+        from datetime import timedelta
+
+        now = agora_utc_naive()
+        cutoff = now - timedelta(minutes=5)
+
+        # Buscar memórias injetadas recentemente (mesmo turno) que NÃO são a correção atual
+        recent = AgentMemory.query.filter(
+            AgentMemory.user_id == user_id,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.last_accessed_at >= cutoff,
+            AgentMemory.usage_count > 0,
+            AgentMemory.path != correction_path,
+        ).all()
+
+        if not recent:
+            return
+
+        # Incrementar correction_count apenas nas que têm conteúdo relacionado
+        correction_lower = correction_content.lower()
+        related_ids = []
+        for mem in recent:
+            mem_content = (mem.content or "").lower()
+            # Checar overlap: pelo menos 2 termos significativos em comum
+            # (palavras >4 chars, excluindo genéricas que matcham quase tudo)
+            _generic = {'pedido', 'campo', 'valor', 'odoo', 'tabela', 'dados',
+                        'sistema', 'modelo', 'sempre', 'nunca', 'quando', 'existe'}
+            mem_words = set(w for w in mem_content.split() if len(w) > 4 and w not in _generic)
+            corr_words = set(w for w in correction_lower.split() if len(w) > 4 and w not in _generic)
+            overlap = mem_words & corr_words
+            if len(overlap) >= 2:  # Mínimo 2 termos para reduzir falsos positivos
+                related_ids.append(mem.id)
+
+        if related_ids:
+            db.session.execute(sql_text("""
+                UPDATE agent_memories
+                SET correction_count = correction_count + 1
+                WHERE id = ANY(:ids)
+            """), {"ids": related_ids})
+            db.session.commit()
+            logger.info(
+                f"[MEMORY_FEEDBACK] correction_count incremented for {len(related_ids)} memories "
+                f"(correction={correction_path})"
+            )
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_FEEDBACK] Correction tracking falhou (ignorado): {e}")
+
+
+def _detect_conflicts_async(user_id: int, new_path: str, new_content: str) -> None:
+    """
+    Memory v2 — Detecção de contradições (assíncrona/best-effort).
+
+    Após salvar, busca memórias semanticamente similares (cosine 0.50-0.85)
+    no mesmo domínio (parent path). Se encontrar com entidades em comum,
+    marca a NOVA memória com has_potential_conflict=True.
+
+    O alerta aparece na PRÓXIMA injeção (não bloqueia o save atual).
+    """
+    try:
+        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
+        if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
+            return
+
+        from app.embeddings.service import EmbeddingService
+        from ..models import AgentMemory
+        from app import db
+
+        svc = EmbeddingService()
+        results = svc.search_memories(
+            new_content, user_id=user_id, limit=5, min_similarity=0.50
+        )
+
+        if not results:
+            return
+
+        # Extrair parent path para filtrar mesmo domínio
+        parent = new_path.rsplit('/', 1)[0] if '/' in new_path else ''
+
+        conflicts_found = False
+        for r in results:
+            r_path = r.get('path', '')
+            similarity = r.get('similarity', 0)
+
+            # Excluir self-match e duplicatas (>0.90 já detectadas pelo dedup)
+            if r_path == new_path or similarity >= 0.90:
+                continue
+
+            # Faixa de conflito: similar o suficiente para ser relacionado,
+            # mas diferente o suficiente para potencialmente contradizer
+            if 0.50 <= similarity <= 0.85:
+                # Verificar se está no mesmo domínio (parent path)
+                r_parent = r_path.rsplit('/', 1)[0] if '/' in r_path else ''
+                if r_parent == parent or parent in r_parent or r_parent in parent:
+                    conflicts_found = True
+                    logger.info(
+                        f"[MEMORY_CONFLICT] Potencial contradição detectada: "
+                        f"'{new_path}' vs '{r_path}' (sim={similarity:.3f})"
+                    )
+                    break
+
+        if conflicts_found:
+            # Marcar a nova memória com flag de conflito
+            mem = AgentMemory.get_by_path(user_id, new_path)
+            if mem:
+                mem.has_potential_conflict = True
+                db.session.commit()
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_CONFLICT] Detection falhou (ignorado): {e}")
 
 
 # =====================================================================
@@ -645,13 +832,17 @@ try:
         Cria ou atualiza memória.
 
         Args:
-            args: {"path": str, "content": str}
+            args: {"path": str, "content": str, "category": str (optional)}
+
+        category pode ser: permanent, structural, operational, contextual.
+        Se não informado, classificação automática por heurística de path + content.
 
         Returns:
             MCP tool response com confirmação
         """
         path = args.get("path", "").strip()
         content = args.get("content", "").strip()
+        category_override = args.get("category", "").strip().lower() or None
 
         if not path:
             return {
@@ -677,6 +868,14 @@ try:
                 # Calcular importance score heurístico (QW-1)
                 importance = _calculate_importance_score(path, content)
 
+                # Memory v2: classificar categoria (heurística ou override)
+                valid_categories = {'permanent', 'structural', 'operational', 'contextual'}
+                if category_override and category_override in valid_categories:
+                    category = category_override
+                    is_perm = (category == 'permanent')
+                else:
+                    category, is_perm = _classify_memory_category(path, content)
+
                 existing = AgentMemory.get_by_path(user_id, path)
 
                 if existing:
@@ -690,11 +889,17 @@ try:
                     existing.content = content
                     existing.is_directory = False
                     existing.importance_score = importance
+                    existing.category = category
+                    existing.is_permanent = is_perm
                     existing.last_accessed_at = agora_utc_naive()
+                    # Se salvando novo conteúdo, limpar flag de conflito
+                    existing.has_potential_conflict = False
                     action = "atualizado"
                 else:
                     mem = AgentMemory.create_file(user_id, path, content)
                     mem.importance_score = importance
+                    mem.category = category
+                    mem.is_permanent = is_perm
                     mem.last_accessed_at = agora_utc_naive()
                     action = "criado"
 
@@ -716,13 +921,14 @@ try:
             except Exception:
                 pass
 
-            # Best-effort: verificar se memórias precisam de consolidação
+            # Best-effort: verificar se memórias precisam de consolidação + tier frio
             try:
-                from ..services.memory_consolidator import maybe_consolidate
+                from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
                 maybe_consolidate(user_id)
+                maybe_move_to_cold(user_id)
             except Exception as consolidation_err:
                 logger.debug(
-                    f"[MEMORY_MCP] Consolidação não executada (ignorado): {consolidation_err}"
+                    f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
                 )
 
             # Best-effort: embeddar memória para busca semântica + extrair entidades KG
@@ -757,6 +963,23 @@ try:
                         )
             except Exception as kg_err:
                 logger.debug(f"[MEMORY_MCP] Knowledge Graph falhou (ignorado): {kg_err}")
+
+            # Best-effort: Memory v2 — Feedback Loop: se é uma correção,
+            # incrementar correction_count nas memórias recentemente injetadas
+            # (indica que memórias existentes podem estar incorretas/incompletas)
+            try:
+                if '/corrections/' in path.lower():
+                    _track_correction_feedback(user_id, path, content)
+            except Exception as fb_err:
+                logger.debug(f"[MEMORY_MCP] Correction feedback falhou (ignorado): {fb_err}")
+
+            # Best-effort: Memory v2 — Conflict Detection (assíncrono)
+            # Busca memórias semanticamente similares no mesmo domínio
+            # Se encontrar potencial contradição, marca has_potential_conflict=True
+            try:
+                _detect_conflicts_async(user_id, path, content)
+            except Exception as conflict_err:
+                logger.debug(f"[MEMORY_MCP] Conflict detection falhou (ignorado): {conflict_err}")
 
             return {
                 "content": [{"type": "text", "text": f"Memória {action} em {path}{dedup_warning}"}]
@@ -1085,6 +1308,89 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
+    @tool(
+        "search_cold_memories",
+        "Busca no tier frio de memórias: memórias que foram automaticamente removidas da "
+        "injeção por baixa efetividade (injetadas 20+ vezes sem nunca serem usadas na resposta). "
+        "Use quando precisar consultar histórico de informações antigas que não aparecem mais "
+        "no contexto automático. Busca por texto no conteúdo e path.",
+        {"query": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def search_cold_memories(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Busca memórias no tier frio (is_cold=True).
+
+        Memory v2 — Fase 3B: memórias deprecadas são buscáveis mas não
+        injetadas automaticamente no contexto.
+
+        Args:
+            args: {"query": str} — texto para buscar no conteúdo e path
+
+        Returns:
+            MCP tool response com memórias encontradas
+        """
+        query = args.get("query", "").strip()
+
+        if not query:
+            return {
+                "content": [{"type": "text", "text": "Erro: query é obrigatório"}],
+                "is_error": True,
+            }
+
+        try:
+            user_id = get_current_user_id()
+
+            def _search_cold():
+                from ..models import AgentMemory
+                from app import db
+
+                # Buscar memórias cold que contenham o query no conteúdo ou path
+                query_lower = f"%{query.lower()}%"
+                cold_memories = AgentMemory.query.filter(
+                    AgentMemory.user_id == user_id,
+                    AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.is_cold == True,  # noqa: E712
+                    db.or_(
+                        AgentMemory.content.ilike(query_lower),
+                        AgentMemory.path.ilike(query_lower),
+                    ),
+                ).order_by(
+                    AgentMemory.updated_at.desc()
+                ).limit(10).all()
+
+                if not cold_memories:
+                    return f"Nenhuma memória fria encontrada para '{query}'."
+
+                lines = [f"Memórias frias ({len(cold_memories)} resultados para '{query}'):\n"]
+                for mem in cold_memories:
+                    content_preview = (mem.content or "")[:200]
+                    usage = getattr(mem, 'usage_count', 0) or 0
+                    effective = getattr(mem, 'effective_count', 0) or 0
+                    lines.append(
+                        f"--- {mem.path} (uso={usage}, efetivo={effective}) ---\n"
+                        f"{content_preview}"
+                    )
+                    if len(mem.content or "") > 200:
+                        lines.append("...")
+                    lines.append("")
+
+                return "\n".join(lines)
+
+            result = _execute_with_context(_search_cold)
+            logger.info(f"[MEMORY_MCP] search_cold_memories: query='{query[:50]}'")
+            return {"content": [{"type": "text", "text": result}]}
+
+        except Exception as e:
+            error_msg = f"Erro ao buscar memórias frias: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
     # Criar MCP server in-process
     memory_server = create_sdk_mcp_server(
         name="memory-tools",
@@ -1096,10 +1402,11 @@ try:
             delete_memory,
             list_memories,
             clear_memories,
+            search_cold_memories,
         ],
     )
 
-    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (6 operações)")
+    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (7 operações)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

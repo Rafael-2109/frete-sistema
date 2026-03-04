@@ -970,6 +970,24 @@ def _save_messages_to_db(
             except Exception as emb_err:
                 logger.debug(f"[AGENTE] Embedding turn falhou (ignorado): {emb_err}")
 
+            # =============================================================
+            # Memory v2: Feedback Loop — rastrear efetividade de memórias
+            # Verifica se a resposta do Agent referencia conteúdo de memórias
+            # injetadas neste turno. Incrementa effective_count se sim.
+            # Roda APÓS tudo — falha não afeta nada.
+            # =============================================================
+            try:
+                if assistant_message and user_id:
+                    # Obter IDs das memórias injetadas neste turno (determinístico)
+                    from .sdk import get_client as _get_client
+                    _client = _get_client()
+                    injected_ids = getattr(_client, '_last_injected_memory_ids', [])
+                    _track_memory_effectiveness(user_id, assistant_message, injected_ids)
+                    # Limpar para não vazar entre turnos
+                    _client._last_injected_memory_ids = []
+            except Exception as eff_err:
+                logger.debug(f"[AGENTE] Memory effectiveness tracking falhou (ignorado): {eff_err}")
+
     except Exception as e:
         logger.error(f"[AGENTE] Erro ao salvar mensagens: {e}")
         try:
@@ -977,6 +995,71 @@ def _save_messages_to_db(
                 db.session.rollback()
         except Exception:
             pass
+
+
+def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_memory_ids: list[int] = None) -> None:
+    """
+    Memory v2 — Feedback Loop: rastreia se memórias injetadas foram usadas.
+
+    Usa IDs determinísticos das memórias injetadas neste turno (passados pelo caller)
+    em vez de heurística temporal. Verifica se fragmentos do conteúdo aparecem na
+    resposta do assistente.
+
+    Se sim: incrementa effective_count.
+
+    Best-effort: falhas silenciosas, não afeta fluxo principal.
+    """
+    try:
+        if not injected_memory_ids:
+            return
+
+        from .models import AgentMemory
+        from sqlalchemy import text as sql_text
+
+        # Buscar memórias pelos IDs exatos injetados neste turno
+        injected_memories = AgentMemory.query.filter(
+            AgentMemory.id.in_(injected_memory_ids),
+        ).all()
+
+        if not injected_memories:
+            return
+
+        assistant_lower = assistant_message.lower()
+        effective_ids = []
+
+        for mem in injected_memories:
+            content = (mem.content or "").strip()
+            if not content or len(content) < 15:
+                continue
+
+            # Extrair fragmentos significativos (>= 20 chars) do conteúdo
+            # e verificar se aparecem na resposta
+            # Usamos os primeiros 3 "pedaços" de 30+ chars para match
+            fragments = [
+                f.strip() for f in content.split('\n')
+                if len(f.strip()) >= 20
+            ][:3]
+
+            for frag in fragments:
+                if frag.lower() in assistant_lower:
+                    effective_ids.append(mem.id)
+                    break
+
+        if effective_ids:
+            db.session.execute(sql_text("""
+                UPDATE agent_memories
+                SET effective_count = effective_count + 1
+                WHERE id = ANY(:ids)
+            """), {"ids": effective_ids})
+            db.session.commit()
+            logger.debug(
+                f"[MEMORY_FEEDBACK] effective_count incremented for "
+                f"{len(effective_ids)}/{len(injected_memory_ids)} memories "
+                f"(user_id={user_id})"
+            )
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_FEEDBACK] Tracking falhou (ignorado): {e}")
 
 
 def _embed_session_turn_best_effort(app, session_id, user_id, user_message, assistant_message, session):

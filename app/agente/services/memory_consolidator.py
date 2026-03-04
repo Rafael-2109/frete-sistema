@@ -68,6 +68,66 @@ CONSOLIDATION_DIRS = [
 ]
 
 
+def maybe_move_to_cold(user_id: int) -> int:
+    """
+    Memory v2 — Fase 3B: Move memórias ineficazes para tier frio.
+
+    Critério: usage_count >= 20 (injetada 20+ vezes) E effective_count == 0
+    (nunca usada na resposta do agente).
+
+    Memórias no tier frio:
+    - NÃO são injetadas automaticamente no contexto
+    - SÃO buscáveis via tool search_cold_memories
+    - NÃO são consolidadas
+
+    Chamado junto com maybe_consolidate, best-effort.
+
+    Args:
+        user_id: ID do usuário
+
+    Returns:
+        Número de memórias movidas para cold
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+
+        # Buscar candidatas a cold: muito injetadas, nunca efetivas
+        candidates = AgentMemory.query.filter(
+            AgentMemory.user_id == user_id,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == False,  # noqa: E712
+            AgentMemory.is_permanent == False,  # noqa: E712 — permanentes são imunes
+            AgentMemory.usage_count >= 20,
+            AgentMemory.effective_count == 0,
+        ).all()
+
+        if not candidates:
+            return 0
+
+        moved = 0
+        for mem in candidates:
+            mem.is_cold = True
+            moved += 1
+            logger.info(
+                f"[MEMORY_CONSOLIDATOR] Movida para cold: {mem.path} "
+                f"(usage={mem.usage_count}, effective=0)"
+            )
+
+        if moved > 0:
+            db.session.commit()
+            logger.info(
+                f"[MEMORY_CONSOLIDATOR] {moved} memórias movidas para tier frio "
+                f"(user_id={user_id})"
+            )
+
+        return moved
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_CONSOLIDATOR] Cold move falhou (ignorado): {e}")
+        return 0
+
+
 def maybe_consolidate(user_id: int) -> Optional[Dict[str, Any]]:
     """
     Verifica se memórias do usuário excedem thresholds e consolida se necessário.
@@ -156,6 +216,14 @@ def _consolidate_if_needed(
     groups: Dict[str, list] = defaultdict(list)
     for mem in memories:
         if mem.path in PROTECTED_PATHS:
+            continue
+
+        # Memory v2: memórias permanentes ou com alta importância são imunes
+        if getattr(mem, 'is_permanent', False):
+            logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (permanent): {mem.path}")
+            continue
+        if (getattr(mem, 'importance_score', 0) or 0) >= 0.7:
+            logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (importance={mem.importance_score:.2f}): {mem.path}")
             continue
 
         # Extrair diretório pai

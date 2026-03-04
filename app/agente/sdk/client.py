@@ -49,17 +49,189 @@ logger = logging.getLogger('sistema_fretes')
 # HELPER: Auto-injeção de memórias do usuário
 # =====================================================================
 
-def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> Optional[str]:
+def _build_operational_context(user_id: int) -> Optional[str]:
+    """
+    Memory v2 — Tier 0: Contexto operacional do dia.
+
+    Queries leves para injetar estado atual do sistema:
+    - Dia da semana
+    - Pedidos vencendo D+2
+    - Separações pendentes
+    - Conflitos de memória pendentes
+
+    Retorna XML compacto (~300 chars) ou None.
+    """
+    try:
+        from app import db
+        from sqlalchemy import text as sql_text
+        from datetime import timedelta
+
+        now = agora_utc_naive()
+        dia_semana = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'][now.weekday()]
+
+        parts = [f'<operational_context date="{now.strftime("%d/%m/%Y")}" dia="{dia_semana}">']
+
+        # Pedidos vencendo D+2 (carteira_principal)
+        try:
+            d2 = now + timedelta(days=2)
+            r = db.session.execute(sql_text("""
+                SELECT count(*)
+                FROM carteira_principal
+                WHERE qtd_saldo_produto_pedido > 0
+                  AND data_entrega_pedido <= :d2
+                  AND data_entrega_pedido >= :now
+            """), {"d2": d2.date(), "now": now.date()})
+            count_urgentes = r.scalar() or 0
+            if count_urgentes > 0:
+                parts.append(f'<pedidos_urgentes_d2>{count_urgentes}</pedidos_urgentes_d2>')
+        except Exception:
+            pass
+
+        # Separações pendentes
+        try:
+            r = db.session.execute(sql_text("""
+                SELECT count(*)
+                FROM separacao
+                WHERE sincronizado_nf = FALSE
+                  AND qtd_saldo > 0
+            """))
+            count_sep = r.scalar() or 0
+            if count_sep > 0:
+                parts.append(f'<separacoes_pendentes>{count_sep}</separacoes_pendentes>')
+        except Exception:
+            pass
+
+        # Memórias com conflito pendente
+        try:
+            from ..models import AgentMemory
+            conflicts = AgentMemory.query.filter_by(
+                user_id=user_id,
+                has_potential_conflict=True,
+                is_directory=False,
+            ).count()
+            if conflicts > 0:
+                parts.append(f'<memorias_com_conflito>{conflicts}</memorias_com_conflito>')
+        except Exception:
+            pass
+
+        parts.append('</operational_context>')
+
+        # Só retorna se tiver conteúdo útil (mais que date/dia)
+        if len(parts) > 2:  # header + footer = sem conteúdo
+            return '\n'.join(parts)
+        return None
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_INJECT] Contexto operacional falhou (ignorado): {e}")
+        return None
+
+
+def _build_session_window(user_id: int) -> Optional[str]:
+    """
+    Memory v2 — Rolling Window: últimas 5 sessões do banco.
+
+    Query direta em agent_sessions.summary (JSONB) — sem XML intermediário.
+    Cada sessão formatada como ~150 chars.
+
+    Returns:
+        XML compacto com resumos das últimas 5 sessões ou None.
+    """
+    try:
+        from ..models import AgentSession
+
+        sessions = AgentSession.query.filter(
+            AgentSession.user_id == user_id,
+            AgentSession.summary.isnot(None),
+        ).order_by(
+            AgentSession.updated_at.desc()
+        ).limit(5).all()
+
+        if not sessions:
+            return None
+
+        parts = ['<recent_sessions count="' + str(len(sessions)) + '">']
+        pendencias_all = []
+
+        for sess in sessions:
+            summary = sess.get_summary() if hasattr(sess, 'get_summary') else sess.summary
+            if not summary:
+                continue
+
+            # Extrair campos do summary JSONB
+            if isinstance(summary, dict):
+                resumo = summary.get('resumo_geral', '')
+                pendencias = summary.get('tarefas_pendentes', [])
+                alertas = summary.get('alertas', [])
+                data = sess.updated_at.strftime('%d/%m') if sess.updated_at else '?'
+
+                compact = f'<session date="{data}">{resumo}'
+                if alertas:
+                    compact += f' alertas={len(alertas)}'
+                compact += '</session>'
+                parts.append(compact)
+
+                # Acumular pendências de todas as sessões
+                for p in pendencias:
+                    if isinstance(p, dict):
+                        pendencias_all.append(p.get('descricao', str(p)))
+                    elif isinstance(p, str):
+                        pendencias_all.append(p)
+
+        # Pendências acumuladas (dedupadas)
+        if pendencias_all:
+            unique_pend = list(dict.fromkeys(pendencias_all))[:5]  # Max 5, preserva ordem
+            parts.append('<pendencias_acumuladas>')
+            for p in unique_pend:
+                parts.append(f'  <item>{p}</item>')
+            parts.append('</pendencias_acumuladas>')
+
+        parts.append('</recent_sessions>')
+        return '\n'.join(parts)
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_INJECT] Session window falhou (ignorado): {e}")
+        return None
+
+
+# Decay rates por categoria (Memory v2)
+# permanent: sem decay (1.0)
+# structural: lento (~60d meia-vida) → 0.9995 ^ horas
+# operational: médio (~30d meia-vida) → 0.999 ^ horas
+# contextual: rápido (~3d meia-vida) → 0.990 ^ horas
+_CATEGORY_DECAY_RATES = {
+    'permanent': 1.0,       # Sem decay — sempre 1.0
+    'structural': 0.9995,   # Meia-vida ~58 dias
+    'operational': 0.999,   # Meia-vida ~29 dias
+    'contextual': 0.990,    # Meia-vida ~2.9 dias
+}
+
+
+def _calculate_category_decay(category: str, hours_since: float) -> float:
+    """Calcula decay baseado na categoria da memória (Memory v2)."""
+    if category == 'permanent':
+        return 1.0
+    rate = _CATEGORY_DECAY_RATES.get(category, 0.995)
+    return rate ** hours_since
+
+
+def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> tuple[Optional[str], list[int]]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
 
-    Chamado pelo UserPromptSubmit hook para injetar memórias
-    automaticamente no início de cada turno via additionalContext.
-
-    Arquitetura em 2 tiers:
+    Memory System v2 — Arquitetura em 4 tiers:
+    - Tier 0 (SEMPRE): Contexto operacional do dia + rolling window de sessões
     - Tier 1 (SEMPRE): user.xml e preferences.xml — garante identidade/preferências
     - Tier 2 (semântica): memórias relevantes ao prompt, excluindo Tier 1
+    - Tier 2b (KG): complementar via Knowledge Graph
     - Fallback: memórias mais recentes se semântica não retornar nada
+
+    v2 changes:
+    - Tier 0: operational context + session window (1B + 1C)
+    - Two-pass budget selection by composite score (1D)
+    - Category-aware decay rates
+    - Exclude cold memories from retrieval
+    - Per-tier char logging
+    - Increment usage_count on injection
 
     Budget adaptativo (T2-2):
     - Opus: 8000 chars (~2000 tokens)
@@ -73,10 +245,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
         model_name: Nome do modelo (para budget adaptativo, ex: "claude-opus-4-6")
 
     Returns:
-        String XML formatada com memórias ou None se vazio
+        Tupla (texto XML formatado ou None, lista de IDs de memórias injetadas)
     """
     if not user_id:
-        return None
+        return None, []
 
     try:
         # Obter Flask app context
@@ -93,6 +265,32 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             from ..models import AgentMemory
             from ..config.feature_flags import MEMORY_INJECTION_MIN_SIMILARITY
 
+            # ── Tier 0: Contexto operacional + Rolling window (Memory v2) ──
+            tier0_parts = []
+            tier0_chars = 0
+
+            op_ctx = _build_operational_context(user_id)
+            if op_ctx:
+                tier0_parts.append(op_ctx)
+                tier0_chars += len(op_ctx)
+
+            session_window = _build_session_window(user_id)
+            if session_window:
+                tier0_parts.append(session_window)
+                tier0_chars += len(session_window)
+
+            # ── Tier 0b: Briefing inter-sessão (Memory v2 — 3A) ──
+            try:
+                from ..config.feature_flags import USE_INTERSESSION_BRIEFING
+                if USE_INTERSESSION_BRIEFING:
+                    from ..services.intersession_briefing import build_intersession_briefing
+                    briefing = build_intersession_briefing(user_id)
+                    if briefing:
+                        tier0_parts.append(briefing)
+                        tier0_chars += len(briefing)
+            except Exception as brief_err:
+                logger.debug(f"[MEMORY_INJECT] Briefing inter-sessão falhou (ignorado): {brief_err}")
+
             # ── Tier 1: SEMPRE injetar memórias protegidas ──
             PROTECTED_PATHS = ["/memories/user.xml", "/memories/preferences.xml"]
             protected_memories = AgentMemory.query.filter(
@@ -103,8 +301,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
             protected_ids = {m.id for m in protected_memories}
 
-            # ── Tier 2: Busca semântica com composite scoring (QW-1) ──
+            # ── Tier 2: Busca semântica com composite scoring (QW-1 + v2 category decay) ──
             additional_memories = []
+            _pass1_scores = {}  # mem.id → composite score original (com similarity)
             semantic_count = 0
             avg_similarity = 0.0
             avg_composite = 0.0
@@ -139,6 +338,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             mem_objects = AgentMemory.query.filter(
                                 AgentMemory.id.in_(memory_ids),
                                 AgentMemory.is_directory == False,  # noqa: E712
+                                AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                             ).all()
 
                             # Mapear similarity por memory_id
@@ -148,18 +348,19 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                                 for r in filtered
                             }
 
-                            # Calcular composite score: 0.3*decay + 0.3*importance + 0.4*similarity
+                            # v2: Composite score com category-aware decay
                             now = agora_utc_naive()
                             scored = []
                             for mem in mem_objects:
                                 similarity = sim_map.get(mem.id, 0)
                                 importance = mem.importance_score if mem.importance_score is not None else 0.5
 
-                                # Recency decay: 0.995 ^ horas_desde_ultimo_acesso
+                                # v2: Decay por categoria
                                 last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
                                 if last_access:
                                     hours_since = max(0, (now - last_access).total_seconds() / 3600)
-                                    decay = 0.995 ** hours_since
+                                    category = getattr(mem, 'category', 'operational') or 'operational'
+                                    decay = _calculate_category_decay(category, hours_since)
                                 else:
                                     decay = 0.5
 
@@ -170,6 +371,8 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             scored.sort(key=lambda x: x[1], reverse=True)
                             scored = scored[:10]
 
+                            # Preservar composite scores originais (com similarity) para PASS 2
+                            _pass1_scores = {s[0].id: s[1] for s in scored}
                             additional_memories = [s[0] for s in scored]
                             if scored:
                                 avg_composite = sum(s[1] for s in scored) / len(scored)
@@ -203,6 +406,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                         graph_mem_objects = AgentMemory.query.filter(
                             AgentMemory.id.in_(graph_memory_ids),
                             AgentMemory.is_directory == False,  # noqa: E712
+                            AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                         ).all()
 
                         # Scoring com similarity proxy (0.5)
@@ -213,12 +417,14 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
                             if last_access:
                                 hours_since = max(0, (now_graph - last_access).total_seconds() / 3600)
-                                decay = 0.995 ** hours_since
+                                category = getattr(mem, 'category', 'operational') or 'operational'
+                                decay = _calculate_category_decay(category, hours_since)
                             else:
                                 decay = 0.5
                             composite = 0.3 * decay + 0.3 * importance + 0.4 * similarity
                             # Só adicionar se composite razoável
                             if composite >= 0.3:
+                                _pass1_scores[mem.id] = composite
                                 additional_memories.append(mem)
                                 graph_count += 1
 
@@ -231,6 +437,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 fallback_query = AgentMemory.query.filter(
                     AgentMemory.user_id == user_id,
                     AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                 )
                 if protected_ids:
                     fallback_query = fallback_query.filter(
@@ -240,13 +447,13 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     AgentMemory.updated_at.desc()
                 ).limit(15).all()
 
-            # ── Montar resultado: protegidas primeiro, depois relevantes ──
+            # ── Montar resultado: Tier 0 + protegidas + relevantes ──
             all_memories = protected_memories + additional_memories
 
-            if not all_memories:
-                return None
+            if not all_memories and not tier0_parts:
+                return None, []
 
-            # ── QW-4 + T2-2: Truncamento inteligente com budget adaptativo ──
+            # ── QW-4 + T2-2 + v2: Budget adaptativo com two-pass selection ──
             # Budget base por modelo
             _model = (model_name or "").lower()
             if "opus" in _model:
@@ -260,28 +467,84 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             prompt_len = len(prompt) if prompt else 0
             prompt_factor = max(0.5, 1.0 - prompt_len / 10000)
             budget = int(base_budget * prompt_factor)
+
+            # ── PASS 1: Calcular tamanhos de todos os candidatos ──
             header = (
                 "<user_memories>\n"
                 "<!-- Memórias persistentes do usuário — use para personalizar respostas -->\n"
             )
             footer = "</user_memories>"
-            current_len = len(header) + len(footer)
-            selected_parts = [header]
-            injected_mems = []  # Track actually injected memory objects
+            overhead = len(header) + len(footer)
 
-            for mem in all_memories:
-                path = mem.path
+            # Tier 0: sempre incluído (fora do budget de memórias)
+            tier0_text = ""
+            if tier0_parts:
+                tier0_text = "\n".join(tier0_parts) + "\n"
+
+            # Tier 1: protegidas sempre incluídas
+            tier1_texts = []
+            tier1_chars = 0
+            for mem in protected_memories:
                 content = (mem.content or "").strip()
                 if not content:
                     continue
-                mem_text = f'<memory path="{path}">\n{content}\n</memory>\n'
-                # Memórias protegidas SEMPRE injetadas (Tier 1 contract)
-                is_protected = mem.path in PROTECTED_PATHS
-                if not is_protected and current_len + len(mem_text) > budget:
-                    break  # Não cabe — parar sem truncar
+                mem_text = f'<memory path="{mem.path}">\n{content}\n</memory>\n'
+                tier1_texts.append((mem, mem_text))
+                tier1_chars += len(mem_text)
+
+            # Budget restante para Tier 2 + 2b
+            budget_remaining = budget - overhead - tier1_chars
+
+            # Tier 2/2b: calcular tamanho de cada candidato e ordenar por composite
+            tier2_candidates = []
+            for mem in additional_memories:
+                content = (mem.content or "").strip()
+                if not content:
+                    continue
+                mem_text = f'<memory path="{mem.path}">\n{content}\n</memory>\n'
+                # Usar composite score original do PASS 1 (inclui similarity)
+                # Fallback: decay + importance (sem similarity) para memórias de fallback
+                if mem.id in _pass1_scores:
+                    composite = _pass1_scores[mem.id]
+                else:
+                    now_sel = agora_utc_naive()
+                    importance = mem.importance_score if mem.importance_score is not None else 0.5
+                    last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
+                    if last_access:
+                        hours_since = max(0, (now_sel - last_access).total_seconds() / 3600)
+                        category = getattr(mem, 'category', 'operational') or 'operational'
+                        decay = _calculate_category_decay(category, hours_since)
+                    else:
+                        decay = 0.5
+                    composite = 0.3 * decay + 0.7 * importance
+                tier2_candidates.append((mem, mem_text, len(mem_text), composite))
+
+            # ── PASS 2: Selecionar por composite score dentro do budget ──
+            tier2_candidates.sort(key=lambda x: x[3], reverse=True)
+            selected_tier2 = []
+            tier2_chars = 0
+            tier2b_chars = 0
+            for mem, mem_text, mem_len, _ in tier2_candidates:
+                if tier2_chars + tier2b_chars + mem_len > budget_remaining:
+                    continue  # v2: SKIP em vez de BREAK — permite menor caber depois
+                selected_tier2.append((mem, mem_text))
+                # Distinguir tier2 vs tier2b para logging
+                if mem in additional_memories[:semantic_count]:
+                    tier2_chars += mem_len
+                else:
+                    tier2b_chars += mem_len
+
+            # ── Montar resultado final ──
+            selected_parts = [tier0_text, header] if tier0_text else [header]
+            injected_mems = []
+
+            for mem, mem_text in tier1_texts:
                 selected_parts.append(mem_text)
                 injected_mems.append(mem)
-                current_len += len(mem_text)
+
+            for mem, mem_text in selected_tier2:
+                selected_parts.append(mem_text)
+                injected_mems.append(mem)
 
             selected_parts.append(footer)
             result = "".join(selected_parts)
@@ -289,26 +552,27 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             total_chars = len(result)
             injected_count = len(injected_mems)
 
-            if injected_count == 0:
-                return None  # Nenhuma memória coube no budget
+            if injected_count == 0 and not tier0_text:
+                return None, []  # Nenhuma memória coube no budget
 
-            # ── Atualizar last_accessed_at para memórias injetadas (QW-1) ──
+            # ── v2: Atualizar last_accessed_at + usage_count para memórias injetadas ──
+            injected_ids = [m.id for m in injected_mems]
             try:
                 from app import db
                 from sqlalchemy import text as sql_text
-                injected_ids = [m.id for m in injected_mems]
                 if injected_ids:
                     ts = agora_utc_naive()
                     db.session.execute(sql_text("""
                         UPDATE agent_memories
-                        SET last_accessed_at = :ts
+                        SET last_accessed_at = :ts,
+                            usage_count = usage_count + 1
                         WHERE id = ANY(:ids)
                     """), {"ids": injected_ids, "ts": ts})
                     db.session.commit()
             except Exception as e:
-                logger.debug(f"[MEMORY_INJECT] last_accessed_at update failed (ignored): {e}")
+                logger.debug(f"[MEMORY_INJECT] last_accessed_at/usage_count update failed (ignored): {e}")
 
-            # ── B1: Log detalhado de injeção ──
+            # ── v2: Log detalhado de injeção com per-tier chars ──
             logger.info(
                 f"[MEMORY_INJECT] "
                 f"user_id={user_id} | "
@@ -322,11 +586,16 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"model={_model or 'unknown'} | "
                 f"avg_similarity={avg_similarity:.2f} | "
                 f"avg_composite={avg_composite:.2f} | "
+                f"tier0_chars={tier0_chars} | "
+                f"tier1_chars={tier1_chars} | "
+                f"tier2_chars={tier2_chars} | "
+                f"tier2b_chars={tier2b_chars} | "
+                f"budget_remaining={max(0, budget_remaining - tier2_chars - tier2b_chars)} | "
                 f"min_similarity_threshold={MEMORY_INJECTION_MIN_SIMILARITY} | "
                 f"prompt_preview={prompt[:50] if prompt else 'None'}"
             )
 
-            return result
+            return result, injected_ids
 
         if ctx is None:
             return _load()
@@ -336,7 +605,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
     except Exception as e:
         logger.warning(f"[MEMORY_INJECT] Erro ao carregar memórias (ignorado): {e}")
-        return None
+        return None, []
 
 
 @dataclass
@@ -405,6 +674,9 @@ class AgentClient:
 
         # Cliente para health check (API direta)
         self._anthropic_client = anthropic.Anthropic(api_key=self.settings.api_key)
+
+        # IDs de memórias injetadas no último turno (para effectiveness tracking)
+        self._last_injected_memory_ids: list[int] = []
 
         logger.info(
             f"[AGENT_CLIENT] Inicializado | "
@@ -1145,10 +1417,12 @@ Nunca invente informações."""
                     additional_context = None
                     if USE_AUTO_MEMORY_INJECTION and user_id:
                         try:
-                            additional_context = _load_user_memories_for_context(
+                            additional_context, injected_mem_ids = _load_user_memories_for_context(
                                 user_id, prompt=prompt,
                                 model_name=str(options_dict.get("model", self.settings.model)),
                             )
+                            # Salvar IDs injetados para effectiveness tracking posterior
+                            self._last_injected_memory_ids = injected_mem_ids
                         except Exception as mem_err:
                             logger.warning(
                                 f"[HOOK:UserPromptSubmit] Erro ao carregar memórias "

@@ -425,18 +425,44 @@ def should_analyze_patterns(user_id: int, threshold: int = 10) -> bool:
     """
     Verifica se é hora de analisar padrões para o usuário.
 
-    Critério: total de sessões do usuário é múltiplo de threshold.
+    Memory v2: Trigger event-driven em vez de threshold fixo.
+    Critérios (qualquer um dispara):
+    1. >= 3 memórias novas desde a última análise de patterns
+    2. Fallback legado: total de sessões é múltiplo de threshold
 
     Args:
         user_id: ID do usuário
-        threshold: A cada N sessões, analisa
+        threshold: A cada N sessões, analisa (fallback legado)
 
     Returns:
         True se deve analisar
     """
     try:
-        from ..models import AgentSession
+        from ..models import AgentSession, AgentMemory
 
+        # v2: Verificar memórias novas desde última análise
+        try:
+            patterns_mem = AgentMemory.get_by_path(user_id, "/memories/learned/patterns.xml")
+            if patterns_mem and patterns_mem.updated_at:
+                last_analysis = patterns_mem.updated_at
+                new_memories_count = AgentMemory.query.filter(
+                    AgentMemory.user_id == user_id,
+                    AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.created_at > last_analysis,
+                    ~AgentMemory.path.like('/memories/context/%'),  # Excluir contextuais
+                    ~AgentMemory.path.like('%/consolidated.xml'),   # Excluir consolidados
+                ).count()
+
+                if new_memories_count >= 3:
+                    logger.info(
+                        f"[PATTERNS] v2 trigger: {new_memories_count} novas memórias "
+                        f"desde última análise ({last_analysis.strftime('%d/%m %H:%M')})"
+                    )
+                    return True
+        except Exception:
+            pass  # Se falhar, cair no fallback
+
+        # Fallback legado: a cada N sessões
         total = AgentSession.query.filter_by(user_id=user_id).count()
         return total > 0 and total % threshold == 0
 
