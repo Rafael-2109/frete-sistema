@@ -5,15 +5,18 @@ Gera bloco XML compacto (~400 chars) com eventos ocorridos entre sessões:
 - Erros de sync Odoo (últimas 6h)
 - Falhas de importação de pedidos
 - Estado de memórias (conflitos, cold candidates)
+- Commits recentes no repositório (git log)
 
 Sem nova tabela — queries diretas em tabelas existentes.
 Best-effort: falhas são logadas silenciosamente.
 
-Custo: zero (queries SQL leves, sem chamada LLM).
+Custo: zero (queries SQL leves + git log, sem chamada LLM).
 Trigger: início de cada sessão, via Tier 0b em client.py.
 """
 
 import logging
+import os
+import subprocess
 from typing import Optional
 
 from app.utils.timezone import agora_utc_naive
@@ -53,6 +56,13 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         memory_alerts = _check_memory_alerts(user_id)
         if memory_alerts:
             parts.append(memory_alerts)
+
+        # 5. Commits recentes no repo (desde última sessão)
+        use_commits = os.getenv('USE_COMMIT_BRIEFING', 'true').lower() == 'true'
+        if use_commits:
+            recent_commits = _check_recent_commits(last_session_at)
+            if recent_commits:
+                parts.append(recent_commits)
 
         if not parts:
             return None
@@ -206,3 +216,116 @@ def _check_memory_alerts(user_id: int) -> Optional[str]:
     except Exception as e:
         logger.debug(f"[BRIEFING] Memory alerts check falhou (ignorado): {e}")
         return None
+
+
+def _check_recent_commits(since) -> Optional[str]:
+    """
+    Verifica commits recentes no repositório git desde a última sessão.
+
+    Roda `git log --oneline -5 --since=...` no diretório do projeto.
+    Para cada commit, extrai módulos afetados (primeiro dir em app/).
+
+    Custo: zero (subprocess local).
+
+    Returns:
+        XML com até 5 commits recentes ou None.
+    """
+    try:
+        # Determinar diretório do projeto (raiz do repo)
+        project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+        # Formatar --since
+        if since:
+            since_str = since.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            # Fallback: últimas 24h
+            from datetime import timedelta
+            fallback = agora_utc_naive() - timedelta(hours=24)
+            since_str = fallback.strftime('%Y-%m-%d %H:%M:%S')
+
+        # git log --oneline -5 --since=...
+        result = subprocess.run(
+            ['git', 'log', '--oneline', '-5', f'--since={since_str}'],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=5,
+        )
+
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+
+        lines = result.stdout.strip().split('\n')
+        if not lines:
+            return None
+
+        # Para cada commit, extrair módulos afetados
+        commits_xml = []
+        for line in lines:
+            parts = line.split(' ', 1)
+            if len(parts) < 2:
+                continue
+            commit_hash = parts[0]
+            message = parts[1]
+
+            # Extrair módulos via git diff-tree (arquivos alterados)
+            modules = _extract_modules_from_commit(commit_hash, project_dir)
+            modules_attr = f' modules="{modules}"' if modules else ''
+
+            # Escapar mensagem para XML
+            safe_msg = (
+                message.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+            )
+            commits_xml.append(f'<commit hash="{commit_hash}"{modules_attr}>{safe_msg}</commit>')
+
+        if not commits_xml:
+            return None
+
+        since_fmt = since.strftime('%d/%m %H:%M') if since else '?'
+        return (
+            f'<recent_commits since="{since_fmt}" count="{len(commits_xml)}">\n'
+            + '\n'.join(commits_xml)
+            + '\n</recent_commits>'
+        )
+
+    except Exception as e:
+        logger.debug(f"[BRIEFING] Git commits check falhou (ignorado): {e}")
+        return None
+
+
+def _extract_modules_from_commit(commit_hash: str, project_dir: str) -> str:
+    """
+    Extrai módulos afetados por um commit (primeiro dir em app/).
+
+    Ex: se commit tocou app/carvia/routes.py e app/agente/sdk/client.py,
+    retorna "carvia,agente".
+
+    Returns:
+        String com módulos separados por vírgula, ou vazio.
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', commit_hash],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=3,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return ''
+
+        modules = set()
+        for file_path in result.stdout.strip().split('\n'):
+            # Extrair módulo: app/MODULO/... → MODULO
+            if file_path.startswith('app/'):
+                parts = file_path.split('/')
+                if len(parts) >= 2:
+                    modules.add(parts[1])
+
+        return ','.join(sorted(modules)) if modules else ''
+
+    except Exception:
+        return ''

@@ -1,11 +1,10 @@
 """
 P1-3: Aprendizado de Padrões entre Sessões (RAG de Comportamento).
 
-Analisa sessões históricas de um usuário para identificar padrões recorrentes:
-- Clientes mais consultados
-- Produtos mais buscados
-- Queries mais frequentes
-- Preferências de workflow
+Analisa sessões históricas e correções do usuário para gerar patterns PRESCRITIVOS:
+- error_patterns: erros recorrentes que o agent cometeu (threshold 3x)
+- anti_patterns: coisas que o agent fez e user corrigiu
+- entity_defaults: defaults de desambiguação (quando "palmito" = VD 15x300g)
 
 Salva padrões em /memories/learned/patterns.xml para uso proativo pelo agente.
 
@@ -36,8 +35,8 @@ MAX_SESSIONS_CHARS = 12000
 # Máximo de sessões recentes a analisar
 MAX_SESSIONS_TO_ANALYZE = 15
 
-PATTERN_PROMPT = """Voce eh um analista de padroes de uso para um sistema de logistica (Nacom Goya).
-Analise o historico de sessoes abaixo e identifique PADROES RECORRENTES.
+PATTERN_PROMPT = """Voce eh um analista de comportamento para um agente de IA em sistema de logistica (Nacom Goya).
+Sua tarefa eh gerar INSTRUCOES PRESCRITIVAS que mudem o comportamento do agente — NAO descricoes do que o usuario faz.
 
 CONTEXTO DO SISTEMA:
 - Gestao de pedidos de venda, estoque, separacoes e fretes
@@ -49,44 +48,42 @@ CONTEXTO DO SISTEMA:
 {sessions}
 </sessoes>
 
-IDENTIFIQUE padroes e gere um JSON com esta estrutura:
+{corrections_block}
+
+GERE um JSON com esta estrutura:
 
 {{
-  "clientes_frequentes": [
+  "error_patterns": [
     {{
-      "nome": "Nome do cliente",
-      "frequencia": "X de Y sessoes",
-      "contexto": "O que o usuario geralmente consulta sobre este cliente"
+      "instrucao": "Instrucao direta do que o agente DEVE fazer diferente. Ex: Quando usuario pede estoque de palmito, verificar TODAS as variantes (VD 15x300g, VD 24x300g, VD 12x500g) — ja errou 3x mostrando so uma.",
+      "frequencia": "X ocorrencias",
+      "severidade": "alta|media"
     }}
   ],
-  "produtos_frequentes": [
+  "anti_patterns": [
     {{
-      "nome": "Nome do produto",
-      "frequencia": "X de Y sessoes",
-      "contexto": "Tipo de consulta mais comum"
+      "instrucao": "O que o agente NAO deve fazer. Ex: Nao sugira consultar SQL manualmente quando a skill cotando-frete esta disponivel — usuario corrigiu 2x.",
+      "frequencia": "X ocorrencias"
     }}
   ],
-  "queries_recorrentes": [
+  "entity_defaults": [
     {{
-      "tipo": "estoque|pedido|separacao|embarque|faturamento|outro",
-      "descricao": "O que o usuario costuma perguntar",
-      "frequencia": "X de Y sessoes"
+      "termo": "Termo ambiguo que o usuario usa. Ex: palmito",
+      "default": "Interpretacao padrao. Ex: VD 15x300g (cod_produto=12345)",
+      "contexto": "Quando aplicar. Ex: Quando usuario diz 'palmito' sem qualificar variante"
     }}
   ],
-  "preferencias": [
-    "Preferencia 1: descricao clara",
-    "Preferencia 2: descricao clara"
-  ],
-  "workflow_tipico": "Descricao do workflow mais comum do usuario (ex: consulta estoque -> cria separacao -> verifica embarque)",
   "confianca": "alta|media|baixa"
 }}
 
-REGRAS:
-- So inclua padroes que aparecem em 3+ sessoes (alta confianca) ou 2+ (media)
-- Arrays vazios se nao houver padroes claros
-- "confianca" = "alta" se 5+ sessoes analisadas com padroes claros, "media" se 3-4, "baixa" se < 3
-- NAO invente padroes — so reporte o que esta nos dados
-- "preferencias" so inclui se for padrao repetido (ex: "prefere parcial", "consulta primeiro Atacadao")
+REGRAS CRITICAS:
+- PRESCRITIVO, nao descritivo: cada item deve ser uma INSTRUCAO que mude comportamento
+- error_patterns: so inclua erros que ocorreram 3+ vezes (padrao confirmado)
+- anti_patterns: so inclua se o usuario CORRIGIU o agente (veja secao <correcoes> se presente)
+- entity_defaults: so inclua defaults que o usuario usa CONSISTENTEMENTE (3+ vezes)
+- Arrays vazios se nao houver evidencia suficiente — NUNCA invente patterns
+- "confianca" = "alta" se padroes claros com 5+ evidencias, "media" se 3-4, "baixa" se < 3
+- NAO inclua patterns genericos tipo "verificar dados antes de responder" — so patterns ESPECIFICOS
 
 RESPONDA APENAS JSON VALIDO, sem markdown, sem comentarios."""
 
@@ -162,16 +159,51 @@ def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
+def _format_corrections_for_analysis(corrections: List[Dict[str, Any]]) -> str:
+    """
+    Formata memórias com correções para incluir no prompt do Haiku.
+
+    Args:
+        corrections: Lista de dicts com {path, content, correction_count}
+
+    Returns:
+        Bloco XML com correções ou string vazia
+    """
+    if not corrections:
+        return ''
+
+    lines = ['<correcoes count="' + str(len(corrections)) + '">']
+    total_chars = 0
+
+    for c in corrections:
+        content = c.get('content', '')[:300]
+        count = c.get('correction_count', 0)
+        path = c.get('path', '')
+        line = f'<correcao path="{path}" vezes="{count}">{content}</correcao>'
+
+        if total_chars + len(line) > 3000:
+            lines.append('... [correcoes adicionais omitidas por limite]')
+            break
+
+        lines.append(line)
+        total_chars += len(line)
+
+    lines.append('</correcoes>')
+    return '\n'.join(lines)
+
+
 def analyze_patterns(
     sessions_data: List[Dict[str, Any]],
     user_id: int,
+    corrections: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Analisa sessões históricas e identifica padrões via Haiku.
+    Analisa sessões históricas e correções para gerar patterns prescritivos via Haiku.
 
     Args:
         sessions_data: Lista de sessões com messages e summaries
         user_id: ID do usuário (para logging)
+        corrections: Lista de memórias com correction_count > 0 (opcional)
 
     Returns:
         Dict com padrões identificados ou None em caso de erro
@@ -187,12 +219,20 @@ def analyze_patterns(
         client = _get_anthropic_client()
         formatted = _format_sessions_for_analysis(sessions_data)
 
+        # Preparar bloco de correções (input adicional para Haiku)
+        corrections_block = _format_corrections_for_analysis(corrections or [])
+        if not corrections_block:
+            corrections_block = '(Nenhuma correcao registrada ainda)'
+
         response = client.messages.create(
             model=HAIKU_MODEL,
             max_tokens=1500,
             messages=[{
                 "role": "user",
-                "content": PATTERN_PROMPT.format(sessions=formatted),
+                "content": PATTERN_PROMPT.format(
+                    sessions=formatted,
+                    corrections_block=corrections_block,
+                ),
             }],
         )
 
@@ -296,8 +336,29 @@ def analyze_and_save(
                     'message_count': sess.message_count,
                 })
 
+            # Buscar memórias com correções (input adicional para patterns prescritivos)
+            corrections = []
+            try:
+                from ..models import AgentMemory
+                correction_memories = AgentMemory.query.filter(
+                    AgentMemory.user_id == user_id,
+                    AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.correction_count > 0,
+                ).order_by(
+                    AgentMemory.correction_count.desc()
+                ).limit(10).all()
+
+                for mem in correction_memories:
+                    corrections.append({
+                        'path': mem.path,
+                        'content': mem.content or '',
+                        'correction_count': mem.correction_count,
+                    })
+            except Exception as e:
+                logger.debug(f"[PATTERNS] Erro ao carregar correções (ignorado): {e}")
+
             # Analisar padrões via Haiku
-            patterns = analyze_patterns(sessions_data, user_id)
+            patterns = analyze_patterns(sessions_data, user_id, corrections=corrections)
             if not patterns:
                 return False
 
@@ -326,75 +387,64 @@ def _save_patterns_to_memory(
     patterns: Dict[str, Any],
 ) -> None:
     """
-    Salva padrões na memória persistente do usuário.
+    Salva padrões prescritivos na memória persistente do usuário.
 
     Path: /memories/learned/patterns.xml
     Sobrescrito a cada análise com padrões mais recentes.
 
+    Formato prescritivo v2:
+    - error_patterns: erros recorrentes que o agent cometeu
+    - anti_patterns: coisas que o agent fez e user corrigiu
+    - entity_defaults: defaults de desambiguação
+
     Args:
         user_id: ID do usuário
-        patterns: Padrões identificados pelo Haiku
+        patterns: Padrões identificados pelo Haiku (formato prescritivo)
     """
     from ..models import AgentMemory
 
     path = "/memories/learned/patterns.xml"
-    timestamp = agora_utc_naive().isoformat()
+    timestamp = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
     confianca = _xml_escape(patterns.get('confianca', 'baixa'))
     sessions_analyzed = patterns.get('_meta', {}).get('sessions_analyzed', 0)
 
-    # Formatar clientes frequentes
-    clientes_xml = ""
-    for c in patterns.get('clientes_frequentes', []):
-        nome = _xml_escape(c.get('nome', ''))
-        freq = _xml_escape(c.get('frequencia', ''))
-        ctx = _xml_escape(c.get('contexto', ''))
-        clientes_xml += (
-            f'\n    <cliente nome="{nome}" frequencia="{freq}">'
-            f'\n      <contexto>{ctx}</contexto>'
-            f'\n    </cliente>'
+    # Formatar error_patterns
+    errors_xml = ""
+    for e in patterns.get('error_patterns', []):
+        instrucao = _xml_escape(e.get('instrucao', ''))
+        freq = _xml_escape(e.get('frequencia', ''))
+        sev = _xml_escape(e.get('severidade', 'media'))
+        errors_xml += (
+            f'\n    <pattern frequencia="{freq}" severidade="{sev}">'
+            f'{instrucao}</pattern>'
         )
 
-    # Formatar produtos frequentes
-    produtos_xml = ""
-    for p in patterns.get('produtos_frequentes', []):
-        nome = _xml_escape(p.get('nome', ''))
-        freq = _xml_escape(p.get('frequencia', ''))
-        ctx = _xml_escape(p.get('contexto', ''))
-        produtos_xml += (
-            f'\n    <produto nome="{nome}" frequencia="{freq}">'
-            f'\n      <contexto>{ctx}</contexto>'
-            f'\n    </produto>'
+    # Formatar anti_patterns
+    anti_xml = ""
+    for a in patterns.get('anti_patterns', []):
+        instrucao = _xml_escape(a.get('instrucao', ''))
+        freq = _xml_escape(a.get('frequencia', ''))
+        anti_xml += f'\n    <avoid frequencia="{freq}">{instrucao}</avoid>'
+
+    # Formatar entity_defaults
+    defaults_xml = ""
+    for d in patterns.get('entity_defaults', []):
+        termo = _xml_escape(d.get('termo', ''))
+        default = _xml_escape(d.get('default', ''))
+        ctx = _xml_escape(d.get('contexto', ''))
+        defaults_xml += (
+            f'\n    <default termo="{termo}" resolve_para="{default}">'
+            f'{ctx}</default>'
         )
 
-    # Formatar queries recorrentes
-    queries_xml = ""
-    for q in patterns.get('queries_recorrentes', []):
-        tipo = _xml_escape(q.get('tipo', 'outro'))
-        desc = _xml_escape(q.get('descricao', ''))
-        freq = _xml_escape(q.get('frequencia', ''))
-        queries_xml += f'\n    <query tipo="{tipo}" frequencia="{freq}">{desc}</query>'
-
-    # Formatar preferências
-    prefs_xml = "\n".join(
-        f"    <preferencia>{_xml_escape(p)}</preferencia>"
-        for p in patterns.get('preferencias', [])
-    )
-
-    # Workflow típico
-    workflow = _xml_escape(patterns.get('workflow_tipico', ''))
-
-    content = f"""<user_patterns updated_at="{timestamp}" confianca="{confianca}" sessoes_analisadas="{sessions_analyzed}">
-  <clientes_frequentes>{clientes_xml}
-  </clientes_frequentes>
-  <produtos_frequentes>{produtos_xml}
-  </produtos_frequentes>
-  <queries_recorrentes>{queries_xml}
-  </queries_recorrentes>
-  <preferencias>
-{prefs_xml}
-  </preferencias>
-  <workflow_tipico>{workflow}</workflow_tipico>
-</user_patterns>"""
+    content = f"""<operational_patterns updated_at="{timestamp}" confianca="{confianca}" sessoes="{sessions_analyzed}">
+  <error_patterns>{errors_xml}
+  </error_patterns>
+  <anti_patterns>{anti_xml}
+  </anti_patterns>
+  <entity_defaults>{defaults_xml}
+  </entity_defaults>
+</operational_patterns>"""
 
     try:
         existing = AgentMemory.get_by_path(user_id, path)
@@ -403,7 +453,7 @@ def _save_patterns_to_memory(
         else:
             AgentMemory.create_file(user_id, path, content)
 
-        logger.debug(f"[PATTERNS] Memory salva em {path}")
+        logger.debug(f"[PATTERNS] Memory prescritiva salva em {path}")
     except Exception as e:
         logger.warning(f"[PATTERNS] Erro ao salvar memory: {e}")
 

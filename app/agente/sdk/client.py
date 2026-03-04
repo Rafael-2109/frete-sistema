@@ -133,11 +133,20 @@ def _build_session_window(user_id: int) -> Optional[str]:
     Query direta em agent_sessions.summary (JSONB) — sem XML intermediário.
     Cada sessão formatada como ~150 chars.
 
+    Pendências têm lifecycle:
+    - TTL automático: pendências de sessões mais antigas que PENDENCIA_TTL_DAYS são ignoradas
+    - Resolução manual: pendências em /memories/system/resolved_pendencias.json são filtradas
+
     Returns:
         XML compacto com resumos das últimas 5 sessões ou None.
     """
     try:
         from ..models import AgentSession
+        from datetime import timedelta
+        import os
+
+        ttl_days = int(os.getenv('PENDENCIA_TTL_DAYS', '7'))
+        cutoff = agora_utc_naive() - timedelta(days=ttl_days)
 
         sessions = AgentSession.query.filter(
             AgentSession.user_id == user_id,
@@ -170,20 +179,29 @@ def _build_session_window(user_id: int) -> Optional[str]:
                 compact += '</session>'
                 parts.append(compact)
 
-                # Acumular pendências de todas as sessões
-                for p in pendencias:
-                    if isinstance(p, dict):
-                        pendencias_all.append(p.get('descricao', str(p)))
-                    elif isinstance(p, str):
-                        pendencias_all.append(p)
+                # Acumular pendências — TTL: ignorar sessões antigas
+                session_expired = sess.updated_at and sess.updated_at < cutoff
+                if not session_expired:
+                    for p in pendencias:
+                        if isinstance(p, dict):
+                            pendencias_all.append(p.get('descricao', str(p)))
+                        elif isinstance(p, str):
+                            pendencias_all.append(p)
 
-        # Pendências acumuladas (dedupadas)
+        # Pendências acumuladas (dedupadas + filtro de resolvidas)
         if pendencias_all:
             unique_pend = list(dict.fromkeys(pendencias_all))[:5]  # Max 5, preserva ordem
-            parts.append('<pendencias_acumuladas>')
-            for p in unique_pend:
-                parts.append(f'  <item>{p}</item>')
-            parts.append('</pendencias_acumuladas>')
+
+            # Filtrar pendências já resolvidas
+            resolved = _load_resolved_pendencias(user_id)
+            if resolved:
+                unique_pend = [p for p in unique_pend if p not in resolved]
+
+            if unique_pend:
+                parts.append('<pendencias_acumuladas>')
+                for p in unique_pend:
+                    parts.append(f'  <item>{p}</item>')
+                parts.append('</pendencias_acumuladas>')
 
         parts.append('</recent_sessions>')
         return '\n'.join(parts)
@@ -191,6 +209,30 @@ def _build_session_window(user_id: int) -> Optional[str]:
     except Exception as e:
         logger.debug(f"[MEMORY_INJECT] Session window falhou (ignorado): {e}")
         return None
+
+
+def _load_resolved_pendencias(user_id: int) -> set:
+    """
+    Carrega pendências resolvidas de /memories/system/resolved_pendencias.json.
+
+    Returns:
+        Set de strings com pendências resolvidas.
+    """
+    try:
+        from ..models import AgentMemory
+        import json
+
+        mem = AgentMemory.get_by_path(user_id, '/memories/system/resolved_pendencias.json')
+        if not mem or not mem.content:
+            return set()
+
+        data = json.loads(mem.content)
+        if isinstance(data, list):
+            return set(data)
+        return set()
+
+    except Exception:
+        return set()
 
 
 # Decay rates por categoria (Memory v2)

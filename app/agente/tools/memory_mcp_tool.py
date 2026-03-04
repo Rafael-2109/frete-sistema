@@ -547,6 +547,52 @@ def _classify_memory_category(path: str, content: str) -> tuple:
     return ('operational', False)
 
 
+def _regenerate_pitfalls_xml(user_id: int, pitfalls: list) -> None:
+    """
+    Regenera /memories/system/pitfalls.xml a partir da lista JSON.
+
+    O XML é o formato injetado no contexto do agente (tier 1 como structural memory).
+    O JSON é a fonte de verdade (editável via tool).
+
+    Args:
+        user_id: ID do usuário
+        pitfalls: Lista de dicts com area, description, hit_count, etc
+    """
+    try:
+        from app.agente.models import AgentMemory
+        from app.utils.timezone import agora_utc_naive
+
+        path = '/memories/system/pitfalls.xml'
+        now = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
+
+        # Agrupar por área
+        by_area: dict[str, list] = {}
+        for p in pitfalls:
+            area = p.get('area', 'geral')
+            by_area.setdefault(area, []).append(p)
+
+        lines = [f'<system_pitfalls updated_at="{now}" count="{len(pitfalls)}">']
+        for area, items in sorted(by_area.items()):
+            lines.append(f'  <area name="{area}">')
+            for item in items:
+                desc = item.get('description', '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+                hits = item.get('hit_count', 1)
+                lines.append(f'    <pitfall hits="{hits}">{desc}</pitfall>')
+            lines.append(f'  </area>')
+        lines.append('</system_pitfalls>')
+
+        content = '\n'.join(lines)
+
+        existing = AgentMemory.get_by_path(user_id, path)
+        if existing:
+            existing.content = content
+        else:
+            mem = AgentMemory.create_file(user_id, path, content)
+            mem.category = 'structural'
+    except Exception as e:
+        logger.debug(f"[MEMORY_MCP] Erro ao regenerar pitfalls XML (ignorado): {e}")
+
+
 def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') -> Optional[str]:
     """
     Verifica se ja existe memoria semanticamente similar para o usuario.
@@ -1391,10 +1437,223 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
+    @tool(
+        "resolve_pendencia",
+        "Marca uma pendência como resolvida para que não apareça mais no briefing de sessão. "
+        "Use quando o usuário confirmar que uma pendência listada já foi tratada, "
+        "ou quando você mesmo completar a tarefa descrita. "
+        "A pendência simplesmente desaparece do contexto de sessões futuras.",
+        {"description": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def resolve_pendencia(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Marca uma pendência como resolvida.
+
+        Salva em /memories/system/resolved_pendencias.json (lista de strings).
+        O _build_session_window() filtra pendências que estão nessa lista.
+
+        Args:
+            args: {"description": str} — texto da pendência (match exato)
+
+        Returns:
+            MCP tool response com confirmação
+        """
+        description = args.get("description", "").strip()
+
+        if not description:
+            return {
+                "content": [{"type": "text", "text": "Erro: description é obrigatório"}],
+                "is_error": True,
+            }
+
+        try:
+            user_id = get_current_user_id()
+
+            def _resolve():
+                import json
+                from ..models import AgentMemory
+                from app import db
+
+                path = '/memories/system/resolved_pendencias.json'
+
+                # Carregar lista existente
+                existing = AgentMemory.get_by_path(user_id, path)
+                if existing and existing.content:
+                    try:
+                        resolved_list = json.loads(existing.content)
+                        if not isinstance(resolved_list, list):
+                            resolved_list = []
+                    except (json.JSONDecodeError, TypeError):
+                        resolved_list = []
+                else:
+                    resolved_list = []
+
+                # Evitar duplicatas
+                if description not in resolved_list:
+                    resolved_list.append(description)
+
+                content = json.dumps(resolved_list, ensure_ascii=False)
+
+                if existing:
+                    existing.content = content
+                else:
+                    AgentMemory.create_file(user_id, path, content)
+
+                db.session.commit()
+                return len(resolved_list)
+
+            total = _execute_with_context(_resolve)
+            logger.info(
+                f"[MEMORY_MCP] resolve_pendencia: '{description[:60]}' "
+                f"(total resolvidas: {total})"
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"Pendência resolvida: '{description}'. Total resolvidas: {total}.",
+                }]
+            }
+
+        except Exception as e:
+            error_msg = f"Erro ao resolver pendência: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
+    @tool(
+        "log_system_pitfall",
+        "Registra uma armadilha/falha OPERACIONAL do sistema (não erro do agente). "
+        "Use quando descobrir um gotcha do ambiente que economizaria tempo se lembrado. "
+        "Exemplos: 'journal_id do Nacom SC deve ser 68, não 47', "
+        "'API do HIBP retorna 429 se bater mais de 1 req/1.5s', "
+        "'campo fiscal X só recalcula via Playwright, não XML-RPC'. "
+        "Diferente de corrections (erros do agente) — são conhecimentos sobre armadilhas do sistema.",
+        {"area": str, "description": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def log_system_pitfall(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Registra falha operacional do sistema.
+
+        Salva em /memories/system/pitfalls.xml (acumulativo, max 20 pitfalls).
+        Pitfalls são injetados no contexto do agente como memória structural.
+
+        Args:
+            args: {
+                "area": str — área do sistema (odoo, ssw, banco, deploy, etc),
+                "description": str — descrição da armadilha/gotcha
+            }
+
+        Returns:
+            MCP tool response com confirmação
+        """
+        area = args.get("area", "").strip().lower()
+        description = args.get("description", "").strip()
+
+        if not area:
+            return {
+                "content": [{"type": "text", "text": "Erro: area é obrigatório (ex: odoo, ssw, banco)"}],
+                "is_error": True,
+            }
+        if not description:
+            return {
+                "content": [{"type": "text", "text": "Erro: description é obrigatório"}],
+                "is_error": True,
+            }
+
+        try:
+            user_id = get_current_user_id()
+
+            def _log_pitfall():
+                import json
+                from ..models import AgentMemory
+                from app import db
+                from app.utils.timezone import agora_utc_naive
+
+                path = '/memories/system/pitfalls.json'
+                now = agora_utc_naive()
+
+                # Carregar lista existente
+                existing = AgentMemory.get_by_path(user_id, path)
+                if existing and existing.content:
+                    try:
+                        pitfalls = json.loads(existing.content)
+                        if not isinstance(pitfalls, list):
+                            pitfalls = []
+                    except (json.JSONDecodeError, TypeError):
+                        pitfalls = []
+                else:
+                    pitfalls = []
+
+                # Dedup por descrição (atualiza timestamp se já existe)
+                found = False
+                for p in pitfalls:
+                    if p.get('description') == description:
+                        p['updated_at'] = now.isoformat()
+                        p['hit_count'] = p.get('hit_count', 1) + 1
+                        found = True
+                        break
+
+                if not found:
+                    pitfalls.append({
+                        'area': area,
+                        'description': description,
+                        'created_at': now.isoformat(),
+                        'updated_at': now.isoformat(),
+                        'hit_count': 1,
+                    })
+
+                # Cap em 20 pitfalls (remove mais antigos)
+                if len(pitfalls) > 20:
+                    pitfalls.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+                    pitfalls = pitfalls[:20]
+
+                content = json.dumps(pitfalls, ensure_ascii=False, indent=2)
+
+                if existing:
+                    existing.content = content
+                else:
+                    mem = AgentMemory.create_file(user_id, path, content)
+                    mem.category = 'structural'  # Lento decay, sempre relevante
+
+                db.session.commit()
+
+                # Regenerar XML de pitfalls para injeção no contexto
+                _regenerate_pitfalls_xml(user_id, pitfalls)
+
+                return len(pitfalls)
+
+            total = _execute_with_context(_log_pitfall)
+            logger.info(
+                f"[MEMORY_MCP] log_system_pitfall: area={area}, "
+                f"desc='{description[:60]}' (total: {total})"
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"Pitfall registrado em '{area}': {description}. Total pitfalls: {total}.",
+                }]
+            }
+
+        except Exception as e:
+            error_msg = f"Erro ao registrar pitfall: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
     # Criar MCP server in-process
     memory_server = create_sdk_mcp_server(
         name="memory-tools",
-        version="1.0.0",
+        version="1.2.0",
         tools=[
             view_memories,
             save_memory,
@@ -1403,10 +1662,12 @@ try:
             list_memories,
             clear_memories,
             search_cold_memories,
+            resolve_pendencia,
+            log_system_pitfall,
         ],
     )
 
-    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (7 operações)")
+    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (9 operações)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

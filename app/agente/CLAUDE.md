@@ -103,11 +103,26 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 ### Services opcionais (ativos, controlados por flag)
 | Service | Flag | Default | O que faz |
 |---------|------|---------|-----------|
-| `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Haiku a cada 10 sessoes, salva patterns em `/memories/learned/patterns.xml` |
+| `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Haiku — gera patterns PRESCRITIVOS (error_patterns, anti_patterns, entity_defaults) em `/memories/learned/patterns.xml`. Input: sessoes + memorias com correction_count>0 |
 | `services/sentiment_detector.py` | `USE_SENTIMENT_DETECTION` | `false` | Detecta frustracao via regex, injeta instrucao de tom. Zero custo API |
 | `services/memory_consolidator.py` | `USE_MEMORY_CONSOLIDATION` | `true` | Consolida memorias redundantes via Haiku quando >15 arquivos ou >6000 chars. Custo ~$0.002. 395 LOC |
 | `services/knowledge_graph_service.py` | `MEMORY_KNOWLEDGE_GRAPH` | `true` | Extrai entidades + relacoes de memorias (3 layers: regex/Voyage/Haiku). Query multi-hop. 806 LOC |
 | `services/insights_service.py` | `USE_AGENT_INSIGHTS` | `true` | Metricas de memoria (utilization, decay, orphans). Endpoint `/insights/memory`. 841 LOC |
+| `services/intersession_briefing.py` | `USE_COMMIT_BRIEFING` | `true` | Injeta commits recentes (git log -5) no briefing inter-sessao. Custo zero |
+| (client.py) | `PENDENCIA_TTL_DAYS` | `7` | Pendencias de sessoes mais antigas que N dias sao auto-removidas |
+
+### MCP Tools de memoria (memory_mcp_tool.py v1.2.0, 9 operacoes)
+| Tool | O que faz |
+|------|-----------|
+| `view_memories` | Le memoria por path |
+| `save_memory` | Cria/atualiza memoria |
+| `update_memory` | Atualiza conteudo existente |
+| `delete_memory` | Remove memoria |
+| `list_memories` | Lista todas as memorias |
+| `clear_memories` | Limpa TODAS (destrutivo) |
+| `search_cold_memories` | Busca no tier frio |
+| `resolve_pendencia` | Marca pendencia como resolvida (desaparece do briefing) |
+| `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
 
 ---
 
