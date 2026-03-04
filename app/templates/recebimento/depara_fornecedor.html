@@ -73,18 +73,32 @@
         </div>
         <div class="card-body">
             <form method="GET" action="{{ url_for('recebimento_views.depara_fornecedor') }}">
-                <div class="row">
-                    <div class="col-md-3">
+                <div class="row g-2">
+                    <div class="col-md-2">
                         <label class="form-label">CNPJ Fornecedor</label>
                         <input type="text" name="cnpj" class="form-control form-control-sm"
                                value="{{ filtros.cnpj }}" placeholder="Digite o CNPJ...">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <label class="form-label">Nome Fornecedor</label>
+                        <input type="text" name="nome_fornecedor" class="form-control form-control-sm"
+                               value="{{ filtros.nome_fornecedor }}" placeholder="Razao social...">
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">Codigo Produto</label>
                         <input type="text" name="cod_produto" class="form-control form-control-sm"
-                               value="{{ filtros.cod_produto }}" placeholder="Fornecedor ou interno...">
+                               value="{{ filtros.cod_produto }}" placeholder="Forn. ou interno...">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <label class="form-label">UM Forn.</label>
+                        <select name="um_fornecedor" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            {% for um in um_fornecedor_options %}
+                            <option value="{{ um }}" {% if filtros.um_fornecedor == um %}selected{% endif %}>{{ um }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">Status</label>
                         <select name="ativo" class="form-select form-select-sm">
                             <option value="true" {% if filtros.ativo == 'true' %}selected{% endif %}>Ativos</option>
@@ -92,7 +106,7 @@
                             <option value="todos" {% if filtros.ativo == 'todos' %}selected{% endif %}>Todos</option>
                         </select>
                     </div>
-                    <div class="col-md-3 d-flex align-items-end">
+                    <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary btn-sm me-2">
                             <i class="fas fa-search"></i> Buscar
                         </button>
@@ -113,8 +127,10 @@
                     <thead class="table-light">
                         <tr>
                             <th>Fornecedor</th>
-                            <th>Cod. Fornecedor</th>
+                            <th>Cod. Forn.</th>
+                            <th>Desc. Produto Forn.</th>
                             <th>Cod. Interno</th>
+                            <th>Nome Produto Interno</th>
                             <th class="text-center">UM Forn.</th>
                             <th class="text-center">Fator</th>
                             <th class="text-center">Sync</th>
@@ -131,16 +147,22 @@
                             </td>
                             <td>
                                 <code>{{ item.cod_produto_fornecedor }}</code>
+                            </td>
+                            <td>
                                 {% if item.descricao_produto_fornecedor %}
-                                <br><small class="text-muted" title="{{ item.descricao_produto_fornecedor }}">
-                                    {{ item.descricao_produto_fornecedor[:50] }}...
-                                </small>
+                                <span title="{{ item.descricao_produto_fornecedor }}">{{ item.descricao_produto_fornecedor }}</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td>
                                 <code class="text-primary">{{ item.cod_produto_interno }}</code>
+                            </td>
+                            <td>
                                 {% if item.nome_produto_interno %}
-                                <br><small class="text-muted">{{ item.nome_produto_interno[:40] }}...</small>
+                                <span title="{{ item.nome_produto_interno }}">{{ item.nome_produto_interno }}</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -193,7 +215,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
+                            <td colspan="10" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
                                 Nenhum De-Para encontrado
                             </td>
@@ -211,7 +233,7 @@
         <ul class="pagination justify-content-center">
             {% if paginacao.page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page - 1 }}&cnpj={{ filtros.cnpj }}&cod_produto={{ filtros.cod_produto }}&ativo={{ filtros.ativo }}">
+                <a class="page-link" href="?page={{ paginacao.page - 1 }}&cnpj={{ filtros.cnpj }}&nome_fornecedor={{ filtros.nome_fornecedor }}&cod_produto={{ filtros.cod_produto }}&um_fornecedor={{ filtros.um_fornecedor }}&ativo={{ filtros.ativo }}">
                     <i class="fas fa-chevron-left"></i>
                 </a>
             </li>
@@ -219,13 +241,13 @@
 
             {% for p in range(1, paginacao.pages + 1) %}
             <li class="page-item {% if p == paginacao.page %}active{% endif %}">
-                <a class="page-link" href="?page={{ p }}&cnpj={{ filtros.cnpj }}&cod_produto={{ filtros.cod_produto }}&ativo={{ filtros.ativo }}">{{ p }}</a>
+                <a class="page-link" href="?page={{ p }}&cnpj={{ filtros.cnpj }}&nome_fornecedor={{ filtros.nome_fornecedor }}&cod_produto={{ filtros.cod_produto }}&um_fornecedor={{ filtros.um_fornecedor }}&ativo={{ filtros.ativo }}">{{ p }}</a>
             </li>
             {% endfor %}
 
             {% if paginacao.page < paginacao.pages %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ paginacao.page + 1 }}&cnpj={{ filtros.cnpj }}&cod_produto={{ filtros.cod_produto }}&ativo={{ filtros.ativo }}">
+                <a class="page-link" href="?page={{ paginacao.page + 1 }}&cnpj={{ filtros.cnpj }}&nome_fornecedor={{ filtros.nome_fornecedor }}&cod_produto={{ filtros.cod_produto }}&um_fornecedor={{ filtros.um_fornecedor }}&ativo={{ filtros.ativo }}">
                     <i class="fas fa-chevron-right"></i>
                 </a>
             </li>

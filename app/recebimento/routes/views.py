@@ -1301,7 +1301,9 @@ def depara_fornecedor():
     # Filtros
     filtros = {
         'cnpj': request.args.get('cnpj', ''),
+        'nome_fornecedor': request.args.get('nome_fornecedor', ''),
         'cod_produto': request.args.get('cod_produto', ''),
+        'um_fornecedor': request.args.get('um_fornecedor', ''),
         'ativo': request.args.get('ativo', 'true')
     }
 
@@ -1314,12 +1316,22 @@ def depara_fornecedor():
             ProdutoFornecedorDepara.cnpj_fornecedor.ilike(f"%{filtros['cnpj']}%")
         )
 
+    if filtros['nome_fornecedor']:
+        query = query.filter(
+            ProdutoFornecedorDepara.razao_fornecedor.ilike(f"%{filtros['nome_fornecedor']}%")
+        )
+
     if filtros['cod_produto']:
         query = query.filter(
             db.or_(
                 ProdutoFornecedorDepara.cod_produto_fornecedor.ilike(f"%{filtros['cod_produto']}%"),
                 ProdutoFornecedorDepara.cod_produto_interno.ilike(f"%{filtros['cod_produto']}%")
             )
+        )
+
+    if filtros['um_fornecedor']:
+        query = query.filter(
+            ProdutoFornecedorDepara.um_fornecedor == filtros['um_fornecedor']
         )
 
     if filtros['ativo'] != 'todos':
@@ -1350,6 +1362,20 @@ def depara_fornecedor():
         'inativos': ProdutoFornecedorDepara.query.filter_by(ativo=False).count()
     }
 
+    # Opcoes distintas de UM Fornecedor (para popular SELECT do filtro)
+    um_fornecedor_options = [
+        row[0] for row in
+        db.session.query(ProdutoFornecedorDepara.um_fornecedor)
+        .filter(
+            ProdutoFornecedorDepara.ativo == True,  # noqa: E712
+            ProdutoFornecedorDepara.um_fornecedor.isnot(None),
+            ProdutoFornecedorDepara.um_fornecedor != ''
+        )
+        .distinct()
+        .order_by(ProdutoFornecedorDepara.um_fornecedor)
+        .all()
+    ]
+
     return render_template(
         'recebimento/depara_fornecedor.html',
         items=paginacao.items,
@@ -1361,7 +1387,8 @@ def depara_fornecedor():
             'items': paginacao.items
         },
         filtros=filtros,
-        stats=stats
+        stats=stats,
+        um_fornecedor_options=um_fornecedor_options
     )
 
 
