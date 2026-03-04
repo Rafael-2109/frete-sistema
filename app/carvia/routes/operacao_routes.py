@@ -80,6 +80,24 @@ def register_operacao_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
+        # Subquery: info de subcontrato (transportadora subcontratada + cte subcontrato)
+        from app.transportadoras.models import Transportadora
+        sub_info_raw = db.session.query(
+            CarviaSubcontrato.operacao_id,
+            Transportadora.razao_social,
+            CarviaSubcontrato.cte_numero,
+        ).join(
+            Transportadora, CarviaSubcontrato.transportadora_id == Transportadora.id
+        ).filter(
+            CarviaSubcontrato.status != 'CANCELADO',
+        ).order_by(CarviaSubcontrato.operacao_id, CarviaSubcontrato.id).all()
+
+        sub_info = {}
+        for op_id, razao, cte_num in sub_info_raw:
+            if op_id not in sub_info:
+                sub_info[op_id] = {'transp_nome': razao, 'sub_cte': cte_num, 'count': 0}
+            sub_info[op_id]['count'] += 1
+
         return render_template(
             'carvia/listar_operacoes.html',
             operacoes=paginacao.items,
@@ -89,6 +107,7 @@ def register_operacao_routes(bp):
             busca=busca,
             sort=sort,
             direction=direction,
+            sub_info=sub_info,
         )
 
     @bp.route('/operacoes/<int:operacao_id>')
@@ -135,7 +154,7 @@ def register_operacao_routes(bp):
         """Cria operacao manual — wizard com selecao de NFs ou fluxo freteiro.
 
         Fluxo wizard (MANUAL_SEM_CTE):
-            GET: Renderiza wizard com 3 secoes (NFs, transportadora, valor)
+            GET: Renderiza wizard com 2 secoes (NFs, valor)
             POST: Cria CarviaOperacao a partir de NFs selecionadas
 
         Fluxo freteiro (MANUAL_FRETEIRO):
@@ -168,6 +187,7 @@ def register_operacao_routes(bp):
                         peso_bruto=form.peso_bruto.data,
                         peso_utilizado=form.peso_bruto.data,
                         valor_mercadoria=form.valor_mercadoria.data,
+                        cte_numero=CarviaOperacao.gerar_numero_cte(),
                         tipo_entrada='MANUAL_FRETEIRO',
                         status='RASCUNHO',
                         observacoes=form.observacoes.data,
@@ -198,16 +218,12 @@ def register_operacao_routes(bp):
         # POST — processar wizard
         nf_ids_raw = request.form.getlist('nf_ids')
         cte_valor_raw = request.form.get('cte_valor', '').strip()
-        transportadora_id = request.form.get('transportadora_id', type=int)
-        modalidade = request.form.get('modalidade', '').strip()
         observacoes = request.form.get('observacoes', '').strip()
 
         # GAP-18: Preservar dados do formulario para re-render apos erro
         form_data = {
             'nf_ids': nf_ids_raw,
             'cte_valor': cte_valor_raw,
-            'transportadora_id': transportadora_id,
-            'modalidade': modalidade,
             'observacoes': observacoes,
         }
 
@@ -295,6 +311,7 @@ def register_operacao_routes(bp):
                 peso_bruto=peso_total,
                 valor_mercadoria=valor_total,
                 cte_valor=cte_valor,
+                cte_numero=CarviaOperacao.gerar_numero_cte(),
                 tipo_entrada='MANUAL_SEM_CTE',
                 status='RASCUNHO',
                 observacoes=observacoes or None,
@@ -312,39 +329,6 @@ def register_operacao_routes(bp):
                     nf_id=nf.id,
                 )
                 db.session.add(junction)
-
-            # Se transportadora selecionada, criar subcontrato
-            if transportadora_id:
-                from app.carvia.services.cotacao_service import CotacaoService
-
-                cotacao = CotacaoService().cotar_subcontrato(
-                    operacao_id=operacao.id,
-                    transportadora_id=transportadora_id,
-                )
-
-                # R7: numero sequencial por transportadora
-                # GAP-28: FOR UPDATE para evitar race condition no numero sequencial
-                max_seq = db.session.query(
-                    func.max(CarviaSubcontrato.numero_sequencial_transportadora)
-                ).filter(
-                    CarviaSubcontrato.transportadora_id == transportadora_id,
-                ).with_for_update().scalar() or 0
-
-                subcontrato = CarviaSubcontrato(
-                    operacao_id=operacao.id,
-                    transportadora_id=transportadora_id,
-                    numero_sequencial_transportadora=max_seq + 1,
-                    valor_cotado=cotacao.get('valor_cotado') if cotacao.get('sucesso') else None,
-                    tabela_frete_id=cotacao.get('tabela_frete_id') if cotacao.get('sucesso') else None,
-                    status='COTADO' if cotacao.get('sucesso') else 'PENDENTE',
-                    observacoes=f'Modalidade: {modalidade}' if modalidade else None,
-                    criado_por=current_user.email,
-                )
-                db.session.add(subcontrato)
-
-                # R4: avancar status se cotacao sucesso
-                if cotacao.get('sucesso'):
-                    operacao.status = 'COTADO'
 
             db.session.commit()
 
@@ -566,6 +550,7 @@ def register_operacao_routes(bp):
                     observacoes=observacoes or None,
                     criado_por=current_user.email,
                 )
+                subcontrato.cte_numero = CarviaSubcontrato.gerar_numero_sub()
                 db.session.add(subcontrato)
 
                 # Atualizar status da operacao se necessario

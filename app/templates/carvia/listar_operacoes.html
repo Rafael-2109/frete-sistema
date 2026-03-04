@@ -66,6 +66,8 @@
                             {{ th_sort('peso_utilizado', 'Peso (kg)', sort, direction, 'text-end') }}
                             {{ th_sort('cte_valor', 'Valor CTe', sort, direction, 'text-end') }}
                             <th>Fatura</th>
+                            <th>Transp. Subcontratada</th>
+                            <th>CTe Subcontrato</th>
                             <th>Tipo</th>
                             {{ th_sort('status', 'Status', sort, direction) }}
                             {{ th_sort('criado_em', 'Criado em', sort, direction) }}
@@ -100,6 +102,19 @@
                                 {% else %}
                                 <span class="text-muted">&mdash;</span>
                                 {% endif %}
+                            </td>
+                            <td>
+                                {% set sub = sub_info.get(op.id) %}
+                                {% if sub %}
+                                    {{ sub.transp_nome|truncate(25) }}
+                                    {% if sub.count > 1 %}<span class="badge bg-secondary">+{{ sub.count - 1 }}</span>{% endif %}
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set sub = sub_info.get(op.id) %}
+                                {{ sub.sub_cte if sub and sub.sub_cte else '&mdash;'|safe }}
                             </td>
                             <td><small class="text-muted">{{ op.tipo_entrada }}</small></td>
                             <td>

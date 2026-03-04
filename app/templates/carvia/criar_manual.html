@@ -5,7 +5,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2><i class="fas fa-plus-circle"></i> Novo CTe CarVia</h2>
-            <p class="text-muted mb-0">Selecione NFs importadas, transportadora e informe o valor do frete</p>
+            <p class="text-muted mb-0">Selecione NFs importadas e informe o valor do frete</p>
         </div>
         <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Voltar
@@ -91,81 +91,10 @@
             </div>
         </div>
 
-        <!-- ====== CARD 2: Transportadora e Modalidade (opcional) ====== -->
+        <!-- ====== CARD 2: Valor do CTe ====== -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-truck"></i> 2. Transportadora e Modalidade
-                    <small class="text-muted">(opcional)</small>
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-8">
-                        <input type="text" id="busca-transp" class="form-control"
-                               placeholder="Buscar transportadora por nome ou CNPJ...">
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-primary w-100" id="btn-buscar-transp">
-                            <i class="fas fa-search"></i> Buscar
-                        </button>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-outline-secondary w-100" id="btn-limpar-transp">
-                            <i class="fas fa-times"></i> Limpar
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Tabela transportadoras -->
-                <div id="transp-container" class="d-none">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover carvia-table">
-                            <thead>
-                                <tr>
-                                    <th style="width:2.5rem"></th>
-                                    <th>Transportadora</th>
-                                    <th>CNPJ</th>
-                                    <th>Modalidades</th>
-                                </tr>
-                            </thead>
-                            <tbody id="transp-tbody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div id="transp-empty" class="text-center text-muted py-3 d-none">
-                    <i class="fas fa-info-circle"></i> Nenhuma transportadora com tabela ativa para o UF de destino.
-                </div>
-
-                <div id="transp-loading" class="text-center py-3 d-none">
-                    <div class="spinner-border text-primary spinner-border-sm" role="status">
-                        <span class="visually-hidden">Carregando...</span>
-                    </div>
-                </div>
-
-                <!-- Transportadora selecionada -->
-                <div id="transp-selecionada" class="alert alert-success d-none mt-3 mb-0">
-                    <div class="d-flex align-items-center gap-2">
-                        <i class="fas fa-check-circle"></i>
-                        <strong><span id="transp-sel-nome"></span></strong>
-                        <span class="badge bg-primary" id="transp-sel-mod"></span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="btn-trocar-transp">
-                            <i class="fas fa-exchange-alt"></i> Trocar
-                        </button>
-                    </div>
-                </div>
-
-                <input type="hidden" name="transportadora_id" id="input-transportadora-id">
-                <input type="hidden" name="modalidade" id="input-modalidade">
-            </div>
-        </div>
-
-        <!-- ====== CARD 3: Valor do CTe ====== -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-dollar-sign"></i> 3. Valor do CTe CarVia</h5>
+                <h5 class="mb-0"><i class="fas fa-dollar-sign"></i> 2. Valor do CTe CarVia</h5>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -211,8 +140,6 @@
     // ====== Estado ======
     let nfsData = [];
     let nfsSelecionadas = new Set();
-    let transpSelecionada = null;
-    let ufDestinoAtual = '';
 
     // ====== Elementos ======
     const selectCliente = document.getElementById('select-cliente');
@@ -223,11 +150,6 @@
     const checkAllNfs = document.getElementById('check-all-nfs');
     const resumoEl = document.getElementById('nfs-resumo');
     const nfIdsContainer = document.getElementById('nf-ids-container');
-    const transpContainer = document.getElementById('transp-container');
-    const transpEmpty = document.getElementById('transp-empty');
-    const transpLoading = document.getElementById('transp-loading');
-    const transpTbody = document.getElementById('transp-tbody');
-    const transpSelEl = document.getElementById('transp-selecionada');
     const btnSubmit = document.getElementById('btn-submit');
     const cteValorInput = document.getElementById('cte_valor');
 
@@ -376,20 +298,7 @@
             resumoEl.classList.add('d-none');
         }
 
-        // Determinar UF destino para busca de transportadoras
-        const novoUf = getUfDestinoSelecionado();
-        if (novoUf && novoUf !== ufDestinoAtual && qtd > 0) {
-            ufDestinoAtual = novoUf;
-            buscarTransportadoras();
-        }
-
         updateSubmitState();
-    }
-
-    function getUfDestinoSelecionado() {
-        const checks = nfsTbody.querySelectorAll('.nf-check:checked');
-        if (checks.length === 0) return '';
-        return checks[0].dataset.uf || '';
     }
 
     // ====== Check all ======
@@ -407,114 +316,7 @@
         updateNfSummary();
     });
 
-    // ====== 3. Buscar transportadoras ======
-    function buscarTransportadoras() {
-        if (!ufDestinoAtual) return;
-
-        const busca = document.getElementById('busca-transp').value;
-
-        transpContainer.classList.add('d-none');
-        transpEmpty.classList.add('d-none');
-        transpLoading.classList.remove('d-none');
-
-        let url = `/carvia/api/transportadoras-modalidade?uf_destino=${encodeURIComponent(ufDestinoAtual)}`;
-        if (busca) url += `&busca=${encodeURIComponent(busca)}`;
-
-        fetch(url)
-            .then(r => r.json())
-            .then(data => {
-                transpLoading.classList.add('d-none');
-
-                if (!data.sucesso || !data.transportadoras.length) {
-                    transpEmpty.classList.remove('d-none');
-                    return;
-                }
-
-                renderTransportadoras(data.transportadoras);
-                transpContainer.classList.remove('d-none');
-            })
-            .catch(() => {
-                transpLoading.classList.add('d-none');
-                transpEmpty.classList.remove('d-none');
-            });
-    }
-
-    function renderTransportadoras(transportadoras) {
-        transpTbody.innerHTML = '';
-
-        transportadoras.forEach(t => {
-            const tr = document.createElement('tr');
-
-            // Botoes de modalidade
-            let modBtns = '';
-            if (t.modalidades && t.modalidades.length) {
-                t.modalidades.forEach(mod => {
-                    modBtns += `<button type="button" class="btn btn-outline-primary btn-sm btn-select-mod" `
-                             + `data-transp-id="${t.id}" data-transp-nome="${t.razao_social}" `
-                             + `data-mod="${mod}">${mod}</button> `;
-                });
-            } else {
-                modBtns = '<span class="text-muted small">Sem modalidade</span>';
-            }
-
-            tr.innerHTML = `
-                <td>
-                    <input type="radio" class="form-check-input" name="transp-radio"
-                           value="${t.id}" data-nome="${t.razao_social}">
-                </td>
-                <td><strong>${t.razao_social}</strong>
-                    ${t.freteiro ? '<span class="badge bg-warning text-dark ms-1">Freteiro</span>' : ''}
-                </td>
-                <td class="cnpj-col">${t.cnpj || '-'}</td>
-                <td>${modBtns}</td>
-            `;
-            transpTbody.appendChild(tr);
-        });
-
-        // Event listeners nos botoes de modalidade
-        transpTbody.querySelectorAll('.btn-select-mod').forEach(btn => {
-            btn.addEventListener('click', function() {
-                selectTransportadora(
-                    parseInt(this.dataset.transpId),
-                    this.dataset.transpNome,
-                    this.dataset.mod
-                );
-            });
-        });
-
-        // Event listeners nos radios (selecao sem modalidade)
-        transpTbody.querySelectorAll('input[name="transp-radio"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                selectTransportadora(
-                    parseInt(this.value),
-                    this.dataset.nome,
-                    ''
-                );
-            });
-        });
-    }
-
-    function selectTransportadora(id, nome, mod) {
-        transpSelecionada = { id, nome, mod };
-
-        document.getElementById('input-transportadora-id').value = id;
-        document.getElementById('input-modalidade').value = mod;
-        document.getElementById('transp-sel-nome').textContent = nome;
-
-        const modBadge = document.getElementById('transp-sel-mod');
-        if (mod) {
-            modBadge.textContent = mod;
-            modBadge.classList.remove('d-none');
-        } else {
-            modBadge.classList.add('d-none');
-        }
-
-        transpSelEl.classList.remove('d-none');
-        transpContainer.classList.add('d-none');
-        updateSubmitState();
-    }
-
-    // ====== 4. Estado do submit ======
+    // ====== 3. Estado do submit ======
     function updateSubmitState() {
         const temNfs = nfsSelecionadas.size > 0;
         const temValor = cteValorInput.value.trim() !== '';
@@ -545,31 +347,6 @@
         radio.addEventListener('change', loadNfs);
     });
 
-    document.getElementById('btn-buscar-transp').addEventListener('click', buscarTransportadoras);
-    document.getElementById('busca-transp').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); buscarTransportadoras(); }
-    });
-
-    document.getElementById('btn-limpar-transp').addEventListener('click', function() {
-        transpSelecionada = null;
-        document.getElementById('input-transportadora-id').value = '';
-        document.getElementById('input-modalidade').value = '';
-        transpSelEl.classList.add('d-none');
-        transpContainer.classList.add('d-none');
-        transpEmpty.classList.add('d-none');
-        document.getElementById('busca-transp').value = '';
-        updateSubmitState();
-    });
-
-    document.getElementById('btn-trocar-transp').addEventListener('click', function() {
-        transpSelecionada = null;
-        document.getElementById('input-transportadora-id').value = '';
-        document.getElementById('input-modalidade').value = '';
-        transpSelEl.classList.add('d-none');
-        buscarTransportadoras();
-        updateSubmitState();
-    });
-
     cteValorInput.addEventListener('input', updateSubmitState);
 
     // ====== Inicializacao ======
@@ -580,7 +357,6 @@
     (function restoreFormData() {
         const savedNfIds = {{ form_data.nf_ids|tojson }};
         const savedCteValor = {{ form_data.cte_valor|tojson }};
-        const savedTranspId = {{ form_data.transportadora_id|tojson }};
         const savedObservacoes = {{ form_data.observacoes|tojson }};
 
         // Restaurar valor CTe e observacoes
@@ -602,11 +378,6 @@
                 updateNfSummary();
                 renderNfs = origRender;  // Restaurar apenas na 1a vez
             };
-        }
-
-        // Restaurar transportadora (salva id no hidden)
-        if (savedTranspId) {
-            document.getElementById('input-transportadora-id').value = savedTranspId;
         }
     })();
     {% endif %}

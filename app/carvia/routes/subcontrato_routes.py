@@ -151,7 +151,7 @@ def register_subcontrato_routes(bp):
                     operacao_id=operacao_id,
                     transportadora_id=transportadora_id,
                     numero_sequencial_transportadora=max_seq + 1,
-                    cte_numero=cte_numero,
+                    cte_numero=cte_numero or SubModel.gerar_numero_sub(),
                     cte_valor=cte_valor if cte_valor else None,
                     valor_cotado=cotacao.get('valor_cotado') if cotacao.get('sucesso') else None,
                     tabela_frete_id=cotacao.get('tabela_frete_id') if cotacao.get('sucesso') else None,

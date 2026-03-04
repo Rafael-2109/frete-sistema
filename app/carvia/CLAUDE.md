@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**24 arquivos** | **~5.9K LOC** | **21 templates** | **Atualizado**: 03/03/2026
+**24 arquivos** | **~5.9K LOC** | **21 templates** | **Atualizado**: 04/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -15,7 +15,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 | # | Documento | Entidade | URL | Tela |
 |---|-----------|----------|-----|------|
 | 1 | **NF Venda** | `CarviaNf` | `/carvia/nfs` | Lista + Detalhe (com itens de produto) |
-| 2 | **CTe CarVia** | `CarviaOperacao` | `/carvia/operacoes` | Lista + Detalhe + Criar/Editar |
+| 2 | **CTe CarVia** | `CarviaOperacao` | `/carvia/operacoes` | Lista (com colunas Transp. Subcontratada + CTe Subcontrato) + Detalhe + Criar/Editar |
 | 3 | **CTe Subcontrato** | `CarviaSubcontrato` | `/carvia/subcontratos` | Lista + Detalhe |
 | 4 | **Fatura CarVia** | `CarviaFaturaCliente` | `/carvia/faturas-cliente` | Lista + Nova + Detalhe |
 | 5 | **Fatura Subcontrato** | `CarviaFaturaTransportadora` | `/carvia/faturas-transportadora` | Lista + Nova + Detalhe |
@@ -110,6 +110,13 @@ Cada subcontrato recebe numero sequencial por transportadora.
 Gerado via `MAX(numero_sequencial_transportadora) + 1` filtrado por `transportadora_id`.
 Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHERE NOT NULL`.
 
+### R8: Numeracao sequencial CTe-### e Sub-###
+Toda CarviaOperacao recebe `cte_numero = CTe-###` (ex: CTe-001, CTe-002).
+Todo CarviaSubcontrato recebe `cte_numero = Sub-###` (ex: Sub-001, Sub-002).
+Gerado via `CarviaOperacao.gerar_numero_cte()` e `CarviaSubcontrato.gerar_numero_sub()` — metodos estaticos com `with_for_update()`.
+Campo `cte_numero VARCHAR(20)` ja existia — sem DDL, apenas backfill.
+Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
+
 ---
 
 ## Modelos
@@ -118,11 +125,11 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 
 | Modelo | Tabela | Gotchas |
 |--------|--------|---------|
-| CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual/referencia). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL, FATURA_REFERENCIA (stub criado por backfill/importacao). **`status`**: ATIVA (default), CANCELADA (soft-delete GAP-20). Campos de auditoria: `cancelado_em`, `cancelado_por`, `motivo_cancelamento`. Rota `POST /carvia/nfs/<id>/cancelar`. Helpers: `get_faturas_cliente()`, `get_faturas_transportadora()` |
+| CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual/referencia). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL, FATURA_REFERENCIA (stub criado por backfill/importacao). **`status`**: ATIVA (default), CANCELADA (soft-delete GAP-20). Campos de auditoria: `cancelado_em`, `cancelado_por`, `motivo_cancelamento`. Rotas: `POST /carvia/nfs/<id>/cancelar`, **`POST /carvia/nfs/<id>/criar-cte`** (cria CTe CarVia diretamente da NF). Helpers: `get_faturas_cliente()`, `get_faturas_transportadora()` |
 | CarviaNfItem | `carvia_nf_itens` | Itens de produto da NF. FK `nf_id`. Cascade delete-orphan |
-| CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo |
+| CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo. **`gerar_numero_cte()`**: static method, retorna CTe-### (R8) |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
-| CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7) |
+| CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7). **`gerar_numero_sub()`**: static method, retorna Sub-### (R8) |
 | CarviaFaturaCliente | `carvia_faturas_cliente` | **UNIQUE(numero_fatura, cnpj_cliente)**. Status: PENDENTE, EMITIDA, PAGA, CANCELADA. `pago_por`/`pago_em` preenchidos ao pagar. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
 | CarviaFaturaClienteItem | `carvia_fatura_cliente_itens` | Itens CTe de detalhe por fatura. FK `fatura_cliente_id` CASCADE. **FK `operacao_id` e `nf_id`** (nullable, resolvidos por LinkingService). Campos: cte_numero, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, frete, icms, iss, st, base_calculo |
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
@@ -305,3 +312,24 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/fix_carvia_faturas_duplicadas.py` + `.sql` — Fix: remover 21 faturas cliente duplicadas (importacao 2x do mesmo PDF)
 - `scripts/migrations/add_unique_faturas_carvia.py` + `.sql` — UNIQUE(numero_fatura, cnpj_cliente) em faturas_cliente + UNIQUE(numero_fatura, transportadora_id) em faturas_transportadora
 - `scripts/migrations/adicionar_status_carvia_nfs.py` + `.sql` — Campo `status` VARCHAR(20) DEFAULT 'ATIVA' + `cancelado_em`, `cancelado_por`, `motivo_cancelamento` + indice
+- `scripts/migrations/backfill_numeracao_sequencial_carvia.py` — Backfill: preenche `cte_numero` NULL com CTe-### (operacoes) e Sub-### (subcontratos). Sem DDL
+
+---
+
+## Componentes UI
+
+### Wizard Criar CTe CarVia (`criar_manual.html`)
+2 cards: **NFs** (selecao com filtro por cliente + checkbox) + **Valor** (R$, obrigatorio).
+Sem step de transportadora (removido — CarVia e sempre a transportadora).
+NF selecionada popula resumo (peso, valor, destino). Submit cria CarviaOperacao + junctions.
+
+### Criar CTe via NF (`POST /carvia/nfs/<id>/criar-cte`)
+Modal no detalhe da NF com valor CTe + observacoes. Cria operacao diretamente da NF (1:1).
+Popula automaticamente: cliente (emitente), destino (destinatario), peso, valor mercadoria.
+
+### Autocomplete Transportadora (`selecionar_transportadora.html`)
+Input com debounce 300ms + dropdown absoluto `.carvia-autocomplete-results`.
+Busca via `GET /carvia/api/opcoes-transportadora?busca=X&uf_destino=Y`.
+Ultimo item fixo: "Criar Nova Transportadora" → modal `#modalCriarTransportadora`.
+Modal usa `POST /carvia/api/cadastrar-transportadora` (JSON). Apos cadastro: fecha modal + auto-seleciona.
+CSS: `css/modules/_carvia.css` (`.carvia-autocomplete-*`)

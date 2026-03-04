@@ -358,9 +358,36 @@
     padding: 0.15rem 0.45rem;
 }
 
-/* Transportadora selected display */
-#transp-selecionada {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+/* ═══════════════════════════════════════════════════════════════
+   Autocomplete Transportadora
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-autocomplete-wrapper {
+    position: relative;
+}
+
+.carvia-autocomplete-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md, 0.5rem) var(--radius-md, 0.5rem);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    display: none;
+}
+
+.carvia-autocomplete-results.show {
+    display: block;
+}
+
+.carvia-autocomplete-criar {
+    border-top: 1px solid var(--border);
+    color: var(--semantic-info);
+    font-weight: 500;
 }

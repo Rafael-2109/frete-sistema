@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 
 from app import db
-from app.carvia.models import CarviaNf, CarviaOperacaoNf
+from app.carvia.models import CarviaNf, CarviaOperacao, CarviaOperacaoNf
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
@@ -135,6 +135,85 @@ def register_nf_routes(bp):
             faturas_cliente=faturas_cliente,
             faturas_transportadora=faturas_transportadora,
         )
+
+    # ==================== CRIAR CTE VIA NF ====================
+
+    @bp.route('/nfs/<int:nf_id>/criar-cte', methods=['POST'])
+    @login_required
+    def criar_cte_from_nf(nf_id):
+        """Cria CTe CarVia (CarviaOperacao) a partir de uma NF"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            flash('NF nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_nfs'))
+
+        if nf.status == 'CANCELADA':
+            flash('NF cancelada nao pode gerar CTe.', 'warning')
+            return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+        # Parse valor CTe (formato BR: "1.234,56" -> 1234.56)
+        cte_valor_raw = request.form.get('cte_valor', '').strip()
+        if not cte_valor_raw:
+            flash('Informe o valor do CTe.', 'warning')
+            return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+        try:
+            cte_valor = float(cte_valor_raw.replace('.', '').replace(',', '.'))
+        except (ValueError, TypeError):
+            flash('Valor do CTe invalido.', 'danger')
+            return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+        observacoes = request.form.get('observacoes', '').strip()
+
+        try:
+            operacao = CarviaOperacao(
+                cnpj_cliente=nf.cnpj_emitente,
+                nome_cliente=nf.nome_emitente or nf.cnpj_emitente,
+                uf_origem=nf.uf_emitente,
+                cidade_origem=nf.cidade_emitente,
+                uf_destino=nf.uf_destinatario or '',
+                cidade_destino=nf.cidade_destinatario or '',
+                peso_bruto=nf.peso_bruto,
+                valor_mercadoria=nf.valor_total,
+                cte_valor=cte_valor,
+                cte_numero=CarviaOperacao.gerar_numero_cte(),
+                tipo_entrada='MANUAL_SEM_CTE',
+                status='RASCUNHO',
+                observacoes=observacoes or None,
+                criado_por=current_user.email,
+            )
+            # R3: calcular peso_utilizado
+            operacao.calcular_peso_utilizado()
+            db.session.add(operacao)
+            db.session.flush()
+
+            # Criar junction NF <-> Operacao
+            junction = CarviaOperacaoNf(
+                operacao_id=operacao.id,
+                nf_id=nf.id,
+            )
+            db.session.add(junction)
+            db.session.commit()
+
+            logger.info(
+                f"CTe CarVia #{operacao.id} ({operacao.cte_numero}) criado a partir de NF #{nf.id} "
+                f"por {current_user.email}"
+            )
+            flash(
+                f'CTe CarVia {operacao.cte_numero} criado com sucesso a partir da NF {nf.numero_nf}.',
+                'success'
+            )
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar CTe via NF {nf_id}: {e}")
+            flash(f'Erro ao criar CTe: {e}', 'danger')
+            return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
 
     # ==================== CANCELAR NF ====================
 

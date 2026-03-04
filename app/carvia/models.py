@@ -18,6 +18,8 @@ Nenhuma entidade CarVia possui endpoint de exclusao. Registros sao CANCELADOS
 Se exclusao for necessaria no futuro, implementar soft-delete com campo `excluido_em`.
 """
 
+from sqlalchemy import func
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 
@@ -243,6 +245,23 @@ class CarviaOperacao(db.Model):
                 return float(self.peso_cubado)
         return None
 
+    @staticmethod
+    def gerar_numero_cte():
+        """Gera proximo numero sequencial CTe-### com FOR UPDATE para evitar race condition."""
+        max_num = db.session.query(
+            func.max(CarviaOperacao.cte_numero)
+        ).filter(
+            CarviaOperacao.cte_numero.ilike('CTe-%'),
+        ).with_for_update().scalar()
+
+        next_num = 1
+        if max_num:
+            try:
+                next_num = int(max_num.replace('CTe-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'CTe-{next_num:03d}'
+
     def __repr__(self):
         return f'<CarviaOperacao {self.id} CTe={self.cte_numero} ({self.status})>'
 
@@ -336,6 +355,23 @@ class CarviaSubcontrato(db.Model):
         backref='subcontratos',
         foreign_keys=[fatura_transportadora_id]
     )
+
+    @staticmethod
+    def gerar_numero_sub():
+        """Gera proximo numero sequencial Sub-### com FOR UPDATE para evitar race condition."""
+        max_num = db.session.query(
+            func.max(CarviaSubcontrato.cte_numero)
+        ).filter(
+            CarviaSubcontrato.cte_numero.ilike('Sub-%'),
+        ).with_for_update().scalar()
+
+        next_num = 1
+        if max_num:
+            try:
+                next_num = int(max_num.replace('Sub-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'Sub-{next_num:03d}'
 
     @property
     def valor_final(self):

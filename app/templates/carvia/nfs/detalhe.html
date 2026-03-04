@@ -27,6 +27,10 @@
             </button>
             {% endif %}
             {% if nf.status != 'CANCELADA' %}
+            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal"
+                    data-bs-target="#modalCriarCte" title="Criar CTe CarVia a partir desta NF">
+                <i class="fas fa-plus"></i> Criar CTe CarVia
+            </button>
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalCancelarNf" title="Cancelar NF">
                 <i class="fas fa-ban"></i> Cancelar NF
             </button>
@@ -287,6 +291,66 @@
     </div>
 </div>
 
+{# Modal Criar CTe CarVia #}
+{% if nf.status != 'CANCELADA' %}
+<div class="modal fade" id="modalCriarCte" tabindex="-1" aria-labelledby="modalCriarCteLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('carvia.criar_cte_from_nf', nf_id=nf.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalCriarCteLabel">
+                        <i class="fas fa-plus-circle text-success"></i> Criar CTe CarVia
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Cliente</small>
+                            <strong>{{ nf.nome_emitente or nf.cnpj_emitente }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Destino</small>
+                            <strong>{{ nf.cidade_destinatario or '-' }}/{{ nf.uf_destinatario or '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Peso Bruto</small>
+                            <strong>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor Mercadoria</small>
+                            <strong>{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</strong>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label for="cte_valor_modal" class="form-label">Valor do CTe (R$) <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" name="cte_valor" id="cte_valor_modal" class="form-control"
+                                   placeholder="0,00" required>
+                        </div>
+                        <div class="form-text">Valor que a CarVia cobra do cliente</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes_modal" class="form-label">Observacoes</label>
+                        <textarea name="observacoes" id="observacoes_modal" class="form-control"
+                                  rows="2" placeholder="Observacoes opcionais..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success" id="btnCriarCte" disabled>
+                        <i class="fas fa-plus"></i> Criar CTe CarVia
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# Modal Cancelar NF #}
 {% if nf.status != 'CANCELADA' %}
 <div class="modal fade" id="modalCancelarNf" tabindex="-1" aria-labelledby="modalCancelarNfLabel" aria-hidden="true">
@@ -345,6 +409,15 @@ const btnConfirmar = document.getElementById('btnConfirmarCancelamento');
 if (motivoInput && btnConfirmar) {
     motivoInput.addEventListener('input', function() {
         btnConfirmar.disabled = this.value.trim().length === 0;
+    });
+}
+
+// Habilitar botao de criar CTe apenas quando valor preenchido
+const cteValorModalInput = document.getElementById('cte_valor_modal');
+const btnCriarCte = document.getElementById('btnCriarCte');
+if (cteValorModalInput && btnCriarCte) {
+    cteValorModalInput.addEventListener('input', function() {
+        btnCriarCte.disabled = this.value.trim().length === 0;
     });
 }
 </script>
