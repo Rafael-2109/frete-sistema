@@ -110,16 +110,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_nfs_cnpj_destinatario",
+      "name": "ix_carvia_nfs_cnpj_emitente",
       "columns": [
-        "cnpj_destinatario"
+        "cnpj_emitente"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_nfs_cnpj_emitente",
+      "name": "ix_carvia_nfs_cnpj_destinatario",
       "columns": [
-        "cnpj_emitente"
+        "cnpj_destinatario"
       ],
       "unique": false
     }

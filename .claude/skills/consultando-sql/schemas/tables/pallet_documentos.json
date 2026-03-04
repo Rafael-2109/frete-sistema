@@ -128,6 +128,13 @@
       "unique": false
     },
     {
+      "name": "ix_pallet_documentos_credito_id",
+      "columns": [
+        "credito_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_documento_validade",
       "columns": [
         "data_validade"
@@ -147,13 +154,6 @@
       "columns": [
         "tipo",
         "recebido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_documentos_credito_id",
-      "columns": [
-        "credito_id"
       ],
       "unique": false
     }

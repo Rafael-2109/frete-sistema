@@ -246,6 +246,20 @@
   ],
   "indices": [
     {
+      "name": "ix_movimentacao_estoque_recebimento_lote_id",
+      "columns": [
+        "recebimento_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_movimentacao_cnpj_responsavel",
+      "columns": [
+        "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_movimentacao_recebimento_fisico",
       "columns": [
         "recebimento_fisico_id"
@@ -360,13 +374,6 @@
       "unique": false
     },
     {
-      "name": "idx_movimentacao_cnpj_responsavel",
-      "columns": [
-        "cnpj_responsavel"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_movimentacao_nf",
       "columns": [
         "numero_nf"
@@ -475,13 +482,6 @@
       "name": "idx_movimentacao_nf_remessa_origem",
       "columns": [
         "nf_remessa_origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_recebimento_lote_id",
-      "columns": [
-        "recebimento_lote_id"
       ],
       "unique": false
     }

@@ -301,16 +301,16 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_status_match",
+      "name": "idx_extrato_item_favorecido_cnpj",
       "columns": [
-        "status_match"
+        "favorecido_cnpj"
       ],
       "unique": false
     },
     {
-      "name": "idx_extrato_item_favorecido_cnpj",
+      "name": "ix_extrato_item_status_match",
       "columns": [
-        "favorecido_cnpj"
+        "status_match"
       ],
       "unique": false
     },
@@ -329,16 +329,16 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_status",
+      "name": "idx_extrato_item_odoo_partner",
       "columns": [
-        "status"
+        "odoo_partner_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_extrato_item_odoo_partner",
+      "name": "ix_extrato_item_status",
       "columns": [
-        "odoo_partner_id"
+        "status"
       ],
       "unique": false
     }

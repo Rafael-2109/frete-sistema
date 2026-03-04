@@ -165,6 +165,13 @@
   ],
   "indices": [
     {
+      "name": "ix_cnab_retorno_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_cnab_retorno_item_seu_numero",
       "columns": [
         "seu_numero"
@@ -187,16 +194,16 @@
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_cnpj_pagador",
+      "name": "ix_cnab_retorno_item_conta_a_receber_id",
       "columns": [
-        "cnpj_pagador"
+        "conta_a_receber_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_cnab_retorno_item_conta_a_receber_id",
+      "name": "ix_cnab_retorno_item_cnpj_pagador",
       "columns": [
-        "conta_a_receber_id"
+        "cnpj_pagador"
       ],
       "unique": false
     },
@@ -225,13 +232,6 @@
       "name": "ix_cnab_retorno_item_codigo_ocorrencia",
       "columns": [
         "codigo_ocorrencia"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cnab_retorno_item_status_match",
-      "columns": [
-        "status_match"
       ],
       "unique": false
     },
