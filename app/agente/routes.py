@@ -242,7 +242,7 @@ async def _async_stream_sdk_client(
     - resume=sdk_session_id restaura contexto da conversa anterior
     - Sem locks, sem connect/disconnect, sem retry de recreate
     """
-    # Buscar sdk_session_id do banco para resume
+    # Buscar sdk_session_id do banco para resume + restaurar transcript
     sdk_session_id_for_resume = None
     if app and our_session_id:
         try:
@@ -258,6 +258,30 @@ async def _async_stream_sdk_client(
                             f"[AGENTE] sdk_session_id para resume: "
                             f"{sdk_session_id_for_resume[:12]}..."
                         )
+                        # Restaurar transcript do DB para disco antes do resume.
+                        # Sem isso, worker Render reciclado perde o JSONL e
+                        # o CLI falha com exit code 1.
+                        transcript = db_session.get_transcript()
+                        if transcript:
+                            from .sdk.session_persistence import restore_session_transcript
+                            restored = restore_session_transcript(
+                                sdk_session_id_for_resume, transcript
+                            )
+                            if restored:
+                                logger.info(
+                                    f"[AGENTE] Transcript restaurado do DB "
+                                    f"({len(transcript) / 1024:.1f} KB)"
+                                )
+                            else:
+                                logger.warning(
+                                    "[AGENTE] Falha ao restaurar transcript "
+                                    "- resume pode falhar com exit 1"
+                                )
+                        else:
+                            logger.debug(
+                                "[AGENTE] Sem transcript no DB para restaurar "
+                                "(primeira msg ou sessão antiga)"
+                            )
         except Exception as e:
             logger.warning(f"[AGENTE] Erro ao buscar sdk_session_id do DB: {e}")
 
@@ -887,6 +911,25 @@ def _save_messages_to_db(
             # Atualiza sdk_session_id se não expirou
             if sdk_session_id and not session_expired:
                 session.set_sdk_session_id(sdk_session_id)
+
+                # Backup do transcript JSONL do disco para o DB.
+                # Permite restaurar o JSONL caso o worker Render recicle.
+                try:
+                    from .sdk.session_persistence import backup_session_transcript
+                    transcript_content = backup_session_transcript(sdk_session_id)
+                    if transcript_content:
+                        session.save_transcript(transcript_content)
+                        logger.info(
+                            f"[AGENTE] Transcript backup salvo no DB "
+                            f"({len(transcript_content) / 1024:.1f} KB)"
+                        )
+                except Exception as backup_err:
+                    # Best-effort: falha no backup não deve impedir o save
+                    logger.warning(
+                        f"[AGENTE] Erro no backup do transcript (ignorado): "
+                        f"{backup_err}"
+                    )
+
             elif session_expired:
                 # Limpa sdk_session_id para forçar nova sessão no próximo request
                 session.set_sdk_session_id(None)

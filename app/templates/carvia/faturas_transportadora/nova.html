@@ -61,7 +61,7 @@
 
     {% else %}
     <!-- Passo 2: Criar fatura com subcontratos selecionados -->
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="transportadora_id" value="{{ transp_selecionada }}">
 
@@ -97,6 +97,13 @@
                     <div class="col-12">
                         <label class="form-label">Observacoes</label>
                         <input type="text" class="form-control" name="observacoes" placeholder="Observacoes opcionais...">
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">Anexar Fatura (PDF)</label>
+                        <input type="file" class="form-control" name="arquivo_fatura" accept=".pdf">
+                        <div class="form-text">Opcional. Anexe o PDF da fatura recebida da transportadora.</div>
                     </div>
                 </div>
             </div>

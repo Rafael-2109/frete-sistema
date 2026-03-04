@@ -462,6 +462,19 @@ def register_fatura_routes(bp):
                 db.session.add(fatura)
                 db.session.flush()
 
+                # Upload de arquivo PDF (opcional)
+                arquivo = request.files.get('arquivo_fatura')
+                if arquivo and arquivo.filename:
+                    from app.utils.file_storage import get_file_storage
+                    storage = get_file_storage()
+                    saved_path = storage.save_file(
+                        arquivo, 'carvia/faturas_transportadora',
+                        allowed_extensions=['pdf'],
+                    )
+                    if saved_path:
+                        fatura.arquivo_pdf_path = saved_path
+                        fatura.arquivo_nome_original = arquivo.filename
+
                 # Vincular subcontratos
                 for sub in subcontratos:
                     sub.fatura_transportadora_id = fatura.id

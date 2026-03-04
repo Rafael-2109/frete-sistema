@@ -19,6 +19,7 @@ Encoding do path:
     Exemplo: /home/user/projetos/frete_sistema → -home-user-projetos-frete-sistema
 """
 
+import json
 import logging
 import os
 import re
@@ -130,12 +131,24 @@ def restore_session_transcript(sdk_session_id: str, transcript: str) -> bool:
     session_path = _get_session_path(sdk_session_id)
 
     try:
-        # Verifica se ja existe no disco (nao precisa restaurar)
+        # Verifica se ja existe no disco E esta valido
         if os.path.exists(session_path):
-            logger.debug(
-                f"[SESSION-PERSIST] JSONL ja existe no disco: {sdk_session_id[:12]}..."
-            )
-            return True
+            if _is_jsonl_valid(session_path):
+                logger.debug(
+                    f"[SESSION-PERSIST] JSONL ja existe e valido no disco: "
+                    f"{sdk_session_id[:12]}..."
+                )
+                return True
+            else:
+                # JSONL corrompido (crash, escrita parcial) — remover e re-restaurar
+                logger.warning(
+                    f"[SESSION-PERSIST] JSONL corrompido no disco, "
+                    f"re-restaurando: {sdk_session_id[:12]}..."
+                )
+                try:
+                    os.remove(session_path)
+                except OSError:
+                    pass
 
         # Cria diretorio se nao existe
         session_dir = os.path.dirname(session_path)
@@ -157,4 +170,37 @@ def restore_session_transcript(sdk_session_id: str, transcript: str) -> bool:
             f"[SESSION-PERSIST] Erro ao restaurar JSONL: {e}",
             exc_info=True,
         )
+        return False
+
+
+def _is_jsonl_valid(path: str) -> bool:
+    """
+    Verifica se um arquivo JSONL esta minimamente valido.
+
+    Criterios:
+    - Arquivo nao vazio (> 0 bytes)
+    - Primeira linha e JSON parseavel
+
+    Um JSONL corrompido (crash/escrita parcial) geralmente
+    tem 0 bytes ou primeira linha truncada.
+
+    Args:
+        path: Caminho do arquivo JSONL
+
+    Returns:
+        True se valido, False se corrompido
+    """
+    try:
+        size = os.path.getsize(path)
+        if size == 0:
+            return False
+
+        with open(path, 'r', encoding='utf-8') as f:
+            first_line = f.readline().strip()
+            if not first_line:
+                return False
+            # Tenta parsear a primeira linha como JSON
+            json.loads(first_line)
+            return True
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return False
