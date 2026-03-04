@@ -149,7 +149,7 @@ class ValidacaoFiscalJob:
         Busca DFEs de compra que ainda nao foram validados.
 
         Criterios:
-        - Tipo: compra (l10n_br_tipo_pedido = 'compra')
+        - Tipo: compra ou rem-conta-ordem (l10n_br_tipo_pedido in TIPOS_DFE_COMPRA)
         - Estado: done (processado)
         - Data de emissao: dentro da janela
         - Nao existe registro em validacao_fiscal_dfe OU status='pendente'

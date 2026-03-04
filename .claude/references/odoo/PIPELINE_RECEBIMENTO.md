@@ -24,7 +24,7 @@ FASE 4: Recebimento Fisico
 **Tela:** `/recebimento/divergencias-fiscais`
 
 ### Entrada
-- DFE com `l10n_br_tipo_pedido='compra'` e `state='done'`
+- DFE com `l10n_br_tipo_pedido in TIPOS_DFE_COMPRA` (compra, rem-conta-ordem) e `state='done'`
 
 ### Validacao
 - NCM vs perfil fiscal
