@@ -213,9 +213,23 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 |--------|---------------|-------|
 | `nfe_xml_parser.py` | Alta | Namespace-agnostic. Fonte de verdade para NF-e. Extrai itens de produto. `is_nfe()` verifica mod==55 |
 | `cte_xml_parser_carvia.py` | Alta | Herda CTeXMLParser. `get_nfs_referenciadas()` para matching. `get_emitente()` para classificacao |
-| `dacte_pdf_parser.py` | Media | Regex-based para DACTE SSW (layout padronizado). Separa chaves modelo=57 (CTe) de modelo=55 (NF-e). Saida identica a `cte_xml_parser_carvia` |
+| `dacte_pdf_parser.py` | Media-Alta | Multi-formato (SSW, Bsoft, ESL, Lonngren, Montenegro). Deteccao automatica via `_detectar_formato()`. Separa chaves modelo=57 (CTe) de modelo=55 (NF-e). Saida identica a `cte_xml_parser_carvia` + campos extras (formato, tipo_servico, cte_carvia_ref, componentes_frete, volumes) |
 | `danfe_pdf_parser.py` | Media | Regex-based com pdfplumber+pypdf fallback. Campo `confianca` (0.0-1.0) |
 | `fatura_pdf_parser.py` | Variavel | 3 camadas: Regex (alta) -> Haiku (media) -> Sonnet (baixa). Campo `confianca` + `metodo_extracao` |
+
+### DACTE Multi-Formato — Deteccao e Suporte
+
+| Formato | Emitente(s) | Deteccao (footer) | Campos Extras |
+|---------|-------------|-------------------|---------------|
+| **SSW** | Tocantins, Velocargas, Dago | `SSW.INF.BR` | Referencia completa |
+| **Bsoft** | Transmenezes | `Bsoft Internetworks` | Peso via "PESO X/KG" |
+| **ESL** | Transperola | `ESL Informatica` | Origem/Destino via "INICIO/TERMINO DA PRESTACAO", UF-Cidade invertido, PESO TAXADO/CUBADO |
+| **Lonngren** | CD Uni Brasil | `Lonngren Sistemas` | Frete via "VALOR TOTAL DO SERVICO" |
+| **Montenegro** | Montenegro | `Impresso por :` | Chave robusta (sem strip global), fallback "A RECEBER" |
+
+**Chave de acesso (3 niveis)**: 1) 44 digitos consecutivos → 2) Blocos formatados com separadores (limpa por match, NAO global) → 3) Busca localizada na secao "Chave de acesso"
+
+**Confianca ponderada**: chave=2x, frete=2x, rota=1.5x cada, numero/emitente/peso=1x cada (total 10 pontos)
 
 ---
 
