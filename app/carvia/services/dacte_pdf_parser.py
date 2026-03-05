@@ -267,6 +267,25 @@ class DactePDFParser:
                 pass
         return None
 
+    def _extrair_peso_sem_unidade(self, texto: str) -> Optional[float]:
+        """Extrai primeiro valor numerico NAO seguido de sufixo de unidade.
+
+        Montenegro: linha de valores tem "25,0000 / UN 1225,000 / KG 10,404 / M3 3121,200 3121,200"
+        Os valores "bare" (sem / UN, / KG, / M3 apos) sao PESO TAXADO e PESO CUBADO.
+
+        Regex: (?!\\d) apos decimais impede backtracking que encurtaria "25,0000"
+        para "25,000" e passaria no lookahead (?!\\s*/).
+        """
+        for m in re.finditer(r'(\d[\d.]*,\d{1,4}(?!\d))(?!\s*/)', texto):
+            val_str = m.group(1).replace('.', '').replace(',', '.')
+            try:
+                v = float(val_str)
+                if v > 0:
+                    return v
+            except ValueError:
+                pass
+        return None
+
     def _extrair_cidade_uf(self, texto: str) -> Optional[Tuple[str, str]]:
         """Extrai PRIMEIRO par (cidade, uf) de um texto. Wrapper de _extrair_todas_cidade_uf."""
         matches = self._extrair_todas_cidade_uf(texto)
@@ -479,38 +498,164 @@ class DactePDFParser:
 
         return None
 
+    # Indicadores de nome de empresa (substring match — case insensitive)
+    _COMPANY_INDICATORS = (
+        'LTDA', 'EIRELI', 'S/A', 'S.A.', 'EPP',
+        'TRANSPORT', 'LOGISTIC', 'DISTRIBUI', 'COMERCI',
+        'INDUSTRI', 'IMPORTA', 'EXPORTA', 'SERVIC',
+    )
+
+    # Palavras/fragmentos de linhas estruturais do DACTE header
+    _SKIP_LINE_KEYWORDS = (
+        'DACTE', 'D A C T E', 'DAC TE',
+        'DOCUMENTO AUXILIAR', 'CONHECIMENTO',
+        'TRANSPORTE ELETR',
+        'MODELO', 'SÉRIE', 'SERIE', 'NÚMERO', 'NUMERO',
+        'CONTROLE', 'FISCO', 'PROTOCOLO', 'CHAVE',
+        'AUTORIZA', 'CONSULTA', 'AUTENTICIDADE',
+        'CFOP', 'NATUREZA', 'TIPO DO CT',
+        'ORIGEM', 'DESTINO', 'REMETENTE', 'DESTINAT',
+        'TOMADOR', 'EXPEDIDOR', 'RECEBEDOR',
+        'DECLARO', 'RECEBI', 'ASSINATURA', 'CARIMBO',
+        'IMPRESSO POR',
+    )
+
+    # Indicadores de linhas de endereco/contato (nao sao nomes de empresa)
+    _ADDRESS_KEYWORDS = (
+        'CNPJ', 'CPF', 'CEP', 'INSCRI', 'FONE', 'TELEFONE',
+        'ENDEREÇO', 'ENDERECO', 'RUA ', 'AVENIDA ', 'RODOVIA',
+        '@', 'WWW.', 'HTTP', '.COM.BR',
+    )
+
     def get_emitente(self) -> Dict:
         """Extrai dados do emitente (quem emitiu o CTe).
 
-        No DACTE SSW, o emitente aparece no topo com CNPJ e nome da empresa.
+        Algoritmo em 2 passes para CNPJ e 2 estrategias para nome:
+
+        CNPJ:
+          Pass 1: Busca linha com label "CNPJ" explicito (mais confiavel)
+          Pass 2: Fallback para 14 digitos em linhas seguras (sem CEP/protocolo)
+
+        Nome:
+          Strategy 1: Texto ANTES de "DACTE"/"D A C T E" na mesma linha
+                      + continuacao antes de "Documento Auxiliar" na proxima
+                      (SSW, ESL, Bsoft — nome no topo antes do titulo)
+          Strategy 2: Primeira linha nao-estrutural com indicador de empresa
+                      ou texto substantivo > 10 chars
+                      (Montenegro, Lonngren — nome em linha separada)
         """
         linhas = self._linhas()
 
-        # CNPJ: buscar nas primeiras 15 linhas (header)
         cnpj = None
         nome = None
         uf = None
         cidade = None
 
+        # === CNPJ: Pass 1 — buscar label "CNPJ" explicito ===
         for i, linha in enumerate(linhas[:20]):
-            if cnpj is None:
+            if 'CNPJ' in linha.upper():
                 cnpj_found = self._extrair_cnpj(linha)
                 if cnpj_found:
                     cnpj = cnpj_found
+                    break
 
-            # Nome do emitente: primeira linha com texto substantivo
-            # (nao "DACTE", nao "MODAL", nao numeros puros)
-            if nome is None and i > 0:
-                texto_limpo = re.sub(r'[^A-ZÀ-Ú\s]', '', linha.upper()).strip()
-                if (len(texto_limpo) > 10
-                        and 'D A C T E' not in texto_limpo
-                        and 'DACTE' not in texto_limpo
-                        and 'MODAL' not in texto_limpo
-                        and 'MODELO' not in texto_limpo
-                        and 'SERIE' not in texto_limpo
-                        and 'NÚMERO' not in linha.upper()
-                        and 'NUMERO' not in linha.upper()):
-                    nome = texto_limpo.strip()
+        # === CNPJ: Pass 2 — fallback em linhas seguras ===
+        if cnpj is None:
+            for i, linha in enumerate(linhas[:15]):
+                upper = linha.upper()
+                # Pular linhas com protocolo, CEP+chave, modelo/serie
+                # que criam falsos positivos de 14 digitos
+                if any(kw in upper for kw in (
+                    'PROTOCOLO', 'CHAVE', 'CEP', 'SÉRIE', 'SERIE',
+                    'NÚMERO', 'NUMERO', 'MODAL', 'MODELO',
+                )):
+                    continue
+                cnpj_found = self._extrair_cnpj(linha)
+                if cnpj_found:
+                    cnpj = cnpj_found
+                    break
+
+        # === NOME: Strategy 1 — texto antes de "DACTE"/"D A C T E" ===
+        nome_parts = []
+        dacte_found_line = None
+
+        for i, linha in enumerate(linhas[:15]):
+            upper = linha.upper()
+            for kw in ('D A C T E', 'DACTE'):
+                pos = upper.find(kw)
+                if pos >= 0:
+                    dacte_found_line = i
+                    if pos > 0:
+                        pre = re.sub(r'[^A-ZÀ-Ú\s]', '', linha[:pos].upper()).strip()
+                        if len(pre) > 3:
+                            nome_parts.append(pre)
+                    break
+            if dacte_found_line is not None:
+                break
+
+        # Continuacao: texto antes de "Documento Auxiliar" nas proximas linhas
+        if dacte_found_line is not None:
+            for j in range(dacte_found_line, min(dacte_found_line + 3, len(linhas))):
+                upper_j = linhas[j].upper()
+                pos_doc = upper_j.find('DOCUMENTO AUXILIAR')
+                if pos_doc < 0:
+                    # Tentar case-sensitive "Documento Auxiliar"
+                    pos_doc = linhas[j].find('Documento Auxiliar')
+                if pos_doc > 0:
+                    pre = re.sub(r'[^A-ZÀ-Ú\s]', '', linhas[j][:pos_doc].upper()).strip()
+                    # Ignorar se parece endereco (RUA, FONE, etc.)
+                    if len(pre) > 3 and not any(kw in pre for kw in (
+                        'RUA ', 'AVENIDA', 'FONE', 'JD', 'JARDIM',
+                    )):
+                        nome_parts.append(pre)
+                    break
+
+        if nome_parts:
+            nome = ' '.join(nome_parts)
+
+        # === NOME: Strategy 2 — primeira linha com indicador de empresa ===
+        # Pass 2a: preferir linhas com indicadores de empresa (LTDA, TRANSPORT, etc.)
+        if nome is None:
+            for i, linha in enumerate(linhas[:20]):
+                upper = linha.upper()
+                if any(kw in upper for kw in self._SKIP_LINE_KEYWORDS):
+                    continue
+                if any(kw in upper for kw in self._ADDRESS_KEYWORDS):
+                    continue
+
+                texto_limpo = re.sub(r'[^A-ZÀ-Ú\s]', '', upper).strip()
+                if len(texto_limpo) < 10:
+                    continue
+
+                # Verificar se tem indicador de empresa
+                if not any(ind in texto_limpo for ind in self._COMPANY_INDICATORS):
+                    continue
+
+                # Lonngren: nome na mesma linha que modelo/serie/numero
+                # Ex: "CD UNI BRASIL LOGISTICA E TRANSPORTES LTDA 57 1 1436"
+                m_modelo = re.search(r'\s57\s+\d{1,3}\s+\d', linha)
+                if m_modelo:
+                    pre = re.sub(r'[^A-ZÀ-Ú\s]', '', linha[:m_modelo.start()].upper()).strip()
+                    if len(pre) > 5:
+                        nome = pre
+                        break
+
+                nome = texto_limpo
+                break
+
+        # Pass 2b: fallback sem indicador (raro — empresa sem LTDA/TRANSPORT/etc.)
+        if nome is None:
+            for i, linha in enumerate(linhas[:20]):
+                upper = linha.upper()
+                if any(kw in upper for kw in self._SKIP_LINE_KEYWORDS):
+                    continue
+                if any(kw in upper for kw in self._ADDRESS_KEYWORDS):
+                    continue
+                texto_limpo = re.sub(r'[^A-ZÀ-Ú\s]', '', upper).strip()
+                if len(texto_limpo) < 10:
+                    continue
+                nome = texto_limpo
+                break
 
         # UF/Cidade: buscar perto da "INSCRICAO ESTADUAL" ou CNPJ
         for i, linha in enumerate(linhas[:20]):
@@ -652,6 +797,9 @@ class DactePDFParser:
 
         Busca a secao pelo nome, depois extrai CNPJ/CPF e nome na regiao.
         Para ao encontrar inicio de outra secao.
+
+        Montenegro: nome pode estar na MESMA linha que o label da secao
+        (ex: "REMETENTE Laiouns Importacao e Exportacao Ltda DESTINATÁRIO ...")
         """
         result = {'cnpj': None, 'nome': None}
         linhas = self._linhas()
@@ -659,7 +807,31 @@ class DactePDFParser:
         if idx is None:
             return result
 
-        # Buscar nas proximas linhas, parando em outra secao
+        # Tentar extrair nome INLINE (mesma linha que o label)
+        # Montenegro: "REMETENTE NomeEmpresa DESTINATÁRIO OutraEmpresa"
+        linha_label = linhas[idx]
+        upper_label = linha_label.upper()
+        pos_secao = upper_label.find(nome_secao.upper())
+        if pos_secao >= 0:
+            # Texto apos o label da secao
+            apos_label = linha_label[pos_secao + len(nome_secao):].strip()
+            # Remover prefixos como ":" ou espacos
+            apos_label = re.sub(r'^[:\s]+', '', apos_label)
+            # Encontrar onde a proxima secao comeca (DESTINATÁRIO, EXPEDIDOR, etc.)
+            proximas_secoes = [s for s in self._SECOES_DACTE
+                               if s != nome_secao.upper()]
+            corte = len(apos_label)
+            for sec in proximas_secoes:
+                pos_sec = apos_label.upper().find(sec)
+                if pos_sec >= 0 and pos_sec < corte:
+                    corte = pos_sec
+            nome_inline = apos_label[:corte].strip()
+            # Limpar e validar
+            nome_inline = re.sub(r'[^A-ZÀ-Úa-zà-ú\s]', '', nome_inline).strip()
+            if len(nome_inline) > 5:
+                result['nome'] = nome_inline.upper()
+
+        # Buscar CNPJ e nome (se inline nao encontrou) nas proximas linhas
         for j in range(idx + 1, min(idx + 7, len(linhas))):
             linha = linhas[j]
             upper_l = linha.upper().strip()
@@ -669,7 +841,15 @@ class DactePDFParser:
                    if sec != nome_secao.upper()):
                 break
 
-            # CNPJ (14 digitos)
+            # CNPJ: priorizar linha com label "CNPJ"/"CPF/CNPJ"
+            if result['cnpj'] is None:
+                if 'CNPJ' in upper_l or 'CPF' in upper_l:
+                    cnpj = self._extrair_cnpj(linha)
+                    if cnpj:
+                        result['cnpj'] = cnpj
+                        continue
+
+            # CNPJ (14 digitos) — sem label
             if result['cnpj'] is None:
                 cnpj = self._extrair_cnpj(linha)
                 if cnpj:
@@ -683,13 +863,16 @@ class DactePDFParser:
                     result['cnpj'] = cpf  # campo generico para doc
                     continue
 
-            # Nome: linha com texto substantivo
+            # Nome: linha com texto substantivo (se inline nao encontrou)
             if result['nome'] is None:
                 texto_limpo = re.sub(r'[^A-ZÀ-Úa-zà-ú\s]', '', linha).strip()
                 if len(texto_limpo) > 5:
+                    # Excluir linhas de endereco/contato (com e sem acento)
                     if not any(label in texto_limpo.upper() for label in [
                         'CNPJ', 'CPF', 'INSCRI', 'ESTADUAL', 'MUNIC',
-                        'ENDERECO', 'CEP', 'TELEFONE', 'PAIS',
+                        'ENDERECO', 'ENDEREÇO', 'CEP', 'TELEFONE', 'PAIS',
+                        'END ', 'CHAVE', 'CONSULTA', 'AUTENTICIDADE',
+                        'WWWCTE', 'FAZENDA', 'CFOP', 'PROTOCOLO',
                     ]):
                         result['nome'] = texto_limpo.upper()
 
@@ -840,14 +1023,22 @@ class DactePDFParser:
                     if peso:
                         return peso
 
-        # Prioridade 3: PESO TAXADO (ESL — peso de calculo efetivo)
+        # Prioridade 3: PESO TAXADO (ESL / Montenegro — peso de calculo efetivo)
+        # Montenegro: label na linha N, valores na linha N+2 (range estendido)
+        # Valores podem estar misturados com QNT / UN, PESO / KG, VOL / M3.
+        # Usar _extrair_peso_sem_unidade() para pegar valor "bare" (sem sufixo).
         for i, linha in enumerate(linhas):
             if 'PESO TAXADO' in linha.upper():
                 peso = self._extrair_peso(linha)
                 if peso:
                     return peso
-                if i + 1 < len(linhas):
-                    peso = self._extrair_peso(linhas[i + 1])
+                for j in range(i + 1, min(i + 4, len(linhas))):
+                    # Tentar primeiro: valor sem sufixo de unidade (Montenegro)
+                    peso = self._extrair_peso_sem_unidade(linhas[j])
+                    if peso:
+                        return peso
+                    # Fallback: extracao generica
+                    peso = self._extrair_peso(linhas[j])
                     if peso:
                         return peso
 
