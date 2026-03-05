@@ -22,7 +22,7 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">Status</label>
                     <select name="status" class="form-select form-select-sm">
                         <option value="">Todos</option>
@@ -34,20 +34,33 @@
                         <option value="CANCELADO" {{ 'selected' if status_filtro == 'CANCELADO' }}>Cancelado</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <label class="form-label small">Fatura</label>
+                    <select name="fatura" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        <option value="COM" {{ 'selected' if fatura_filtro == 'COM' }}>Com Fatura</option>
+                        <option value="SEM" {{ 'selected' if fatura_filtro == 'SEM' }}>Sem Fatura</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Transportadora</label>
+                    <input type="text" name="transportadora" class="form-control form-control-sm"
+                           placeholder="Nome..." value="{{ transp_filtro }}">
+                </div>
+                <div class="col-md-3">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Transportadora, CTe, cliente, cidade..." value="{{ busca }}">
+                           placeholder="CTe, cliente, cidade..." value="{{ busca }}">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                        <i class="fas fa-search"></i> Filtrar
+                        <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if status_filtro or busca %}
-                <div class="col-md-2">
+                {% if status_filtro or busca or transp_filtro or fatura_filtro %}
+                <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-sm btn-outline-secondary w-100">
-                        <i class="fas fa-times"></i> Limpar
+                        <i class="fas fa-times"></i>
                     </a>
                 </div>
                 {% endif %}
@@ -100,7 +113,7 @@
                                     {{ sub.operacao.cidade_destino + '/' + sub.operacao.uf_destino if sub.operacao else '-' }}
                                 </span>
                             </td>
-                            <td class="valor-col">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</td>
+                            <td class="valor-col" title="Cotado: {{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }} | Acertado: {{ sub.valor_acertado|valor_br if sub.valor_acertado else '-' }}">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</td>
                             <td>
                                 <span class="badge carvia-badge-{{ sub.status|lower }}">
                                     {{ sub.status }}
@@ -131,7 +144,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.prev_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.prev_num, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -139,7 +152,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=p, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=p, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -147,7 +160,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.next_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.next_num, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

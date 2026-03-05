@@ -31,6 +31,7 @@ def register_operacao_routes(bp):
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
+        uf_filtro = request.args.get('uf_destino', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -51,6 +52,9 @@ def register_operacao_routes(bp):
 
         if tipo_filtro:
             query = query.filter(CarviaOperacao.tipo_entrada == tipo_filtro)
+
+        if uf_filtro:
+            query = query.filter(CarviaOperacao.uf_destino == uf_filtro.upper())
 
         if busca:
             busca_like = f'%{busca}%'
@@ -104,6 +108,7 @@ def register_operacao_routes(bp):
             paginacao=paginacao,
             status_filtro=status_filtro,
             tipo_filtro=tipo_filtro,
+            uf_filtro=uf_filtro,
             busca=busca,
             sort=sort,
             direction=direction,

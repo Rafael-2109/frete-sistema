@@ -33,12 +33,28 @@ def register_fatura_routes(bp):
         page = request.args.get('page', 1, type=int)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        tipo_frete_filtro = request.args.get('tipo_frete', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
-        query = db.session.query(CarviaFaturaCliente)
+        # Subquery: contar operacoes vinculadas a cada fatura
+        subq_ops = db.session.query(
+            CarviaOperacao.fatura_cliente_id,
+            func.count(CarviaOperacao.id).label('qtd_ops')
+        ).filter(
+            CarviaOperacao.fatura_cliente_id.isnot(None)
+        ).group_by(CarviaOperacao.fatura_cliente_id).subquery()
+
+        query = db.session.query(
+            CarviaFaturaCliente, subq_ops.c.qtd_ops
+        ).outerjoin(
+            subq_ops, CarviaFaturaCliente.id == subq_ops.c.fatura_cliente_id
+        )
+
         if status_filtro:
             query = query.filter(CarviaFaturaCliente.status == status_filtro)
+        if tipo_frete_filtro:
+            query = query.filter(CarviaFaturaCliente.tipo_frete == tipo_frete_filtro)
         if busca:
             busca_like = f'%{busca}%'
             query = query.filter(
@@ -67,14 +83,18 @@ def register_fatura_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
+        today = date.today()
+
         return render_template(
             'carvia/faturas_cliente/listar.html',
             faturas=paginacao.items,
             paginacao=paginacao,
             status_filtro=status_filtro,
+            tipo_frete_filtro=tipo_frete_filtro,
             busca=busca,
             sort=sort,
             direction=direction,
+            today=today,
         )
 
     @bp.route('/faturas-cliente/nova', methods=['GET', 'POST'])
@@ -347,14 +367,32 @@ def register_fatura_routes(bp):
 
         page = request.args.get('page', 1, type=int)
         status_filtro = request.args.get('status', '')
+        pagamento_filtro = request.args.get('pagamento', '')
         busca = request.args.get('busca', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
-        query = db.session.query(CarviaFaturaTransportadora)
+        # Subquery: contar subcontratos por fatura
+        subq_subs = db.session.query(
+            CarviaSubcontrato.fatura_transportadora_id,
+            func.count(CarviaSubcontrato.id).label('qtd_subs')
+        ).filter(
+            CarviaSubcontrato.fatura_transportadora_id.isnot(None)
+        ).group_by(CarviaSubcontrato.fatura_transportadora_id).subquery()
+
+        query = db.session.query(
+            CarviaFaturaTransportadora, subq_subs.c.qtd_subs
+        ).outerjoin(
+            subq_subs, CarviaFaturaTransportadora.id == subq_subs.c.fatura_transportadora_id
+        )
+
         if status_filtro:
             query = query.filter(
                 CarviaFaturaTransportadora.status_conferencia == status_filtro
+            )
+        if pagamento_filtro:
+            query = query.filter(
+                CarviaFaturaTransportadora.status_pagamento == pagamento_filtro
             )
         if busca:
             # GAP-19/36: Expandir busca para incluir razao_social e cnpj da transportadora
@@ -388,14 +426,18 @@ def register_fatura_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
+        today = date.today()
+
         return render_template(
             'carvia/faturas_transportadora/listar.html',
             faturas=paginacao.items,
             paginacao=paginacao,
             status_filtro=status_filtro,
+            pagamento_filtro=pagamento_filtro,
             busca=busca,
             sort=sort,
             direction=direction,
+            today=today,
         )
 
     @bp.route('/faturas-transportadora/nova', methods=['GET', 'POST'])

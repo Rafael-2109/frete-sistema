@@ -31,6 +31,8 @@ def register_despesa_routes(bp):
         tipo_filtro = request.args.get('tipo', '')
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaDespesa)
 
@@ -47,8 +49,24 @@ def register_despesa_routes(bp):
                 )
             )
 
-        query = query.order_by(CarviaDespesa.criado_em.desc())
+        # Ordenacao dinamica
+        sortable_columns = {
+            'tipo_despesa': CarviaDespesa.tipo_despesa,
+            'valor': CarviaDespesa.valor,
+            'data_despesa': CarviaDespesa.data_despesa,
+            'data_vencimento': CarviaDespesa.data_vencimento,
+            'status': CarviaDespesa.status,
+            'criado_em': CarviaDespesa.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaDespesa.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
+
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
+
+        today = date.today()
 
         return render_template(
             'carvia/despesas/listar.html',
@@ -57,7 +75,10 @@ def register_despesa_routes(bp):
             tipo_filtro=tipo_filtro,
             status_filtro=status_filtro,
             busca=busca,
+            sort=sort,
+            direction=direction,
             tipos_despesa=TIPOS_DESPESA,
+            today=today,
         )
 
     @bp.route('/despesas/criar', methods=['GET', 'POST'])

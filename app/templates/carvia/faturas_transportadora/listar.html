@@ -19,14 +19,16 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Buscar por numero da fatura..."
+                           placeholder="Numero, transportadora, CNPJ..."
                            value="{{ busca }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label small">Conferencia</label>
                     <select name="status" class="form-select form-select-sm">
-                        <option value="">Todos os Status</option>
+                        <option value="">Todos</option>
                         <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
                         <option value="EM_CONFERENCIA" {{ 'selected' if status_filtro == 'EM_CONFERENCIA' }}>Em Conferencia</option>
                         <option value="CONFERIDO" {{ 'selected' if status_filtro == 'CONFERIDO' }}>Conferido</option>
@@ -34,15 +36,25 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                    <label class="form-label small">Pagamento</label>
+                    <select name="pagamento" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {{ 'selected' if pagamento_filtro == 'PENDENTE' }}>Pendente</option>
+                        <option value="PAGO" {{ 'selected' if pagamento_filtro == 'PAGO' }}>Pago</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-filter"></i> Filtrar
                     </button>
-                    {% if busca or status_filtro %}
-                    <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-times"></i>
-                    </a>
-                    {% endif %}
                 </div>
+                {% if busca or status_filtro or pagamento_filtro %}
+                <div class="col-md-2">
+                    <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-sm btn-outline-secondary w-100">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+                {% endif %}
             </form>
         </div>
     </div>
@@ -56,25 +68,44 @@
                         <tr>
                             {{ th_sort('numero_fatura', 'Fatura', sort, direction) }}
                             <th>Transportadora</th>
+                            <th>Subs</th>
                             {{ th_sort('data_emissao', 'Emissao', sort, direction) }}
                             {{ th_sort('vencimento', 'Vencimento', sort, direction) }}
                             {{ th_sort('valor_total', 'Valor', sort, direction, 'text-end') }}
+                            <th>Pagamento</th>
                             {{ th_sort('status_conferencia', 'Conferencia', sort, direction) }}
-                            <th>Acao</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for f in faturas %}
+                        {% for f, qtd_subs in faturas %}
                         <tr>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}">
                                     <strong>{{ f.numero_fatura }}</strong>
                                 </a>
                             </td>
-                            <td>{{ f.transportadora.razao_social if f.transportadora else '-' }}</td>
+                            <td>
+                                {{ f.transportadora.razao_social if f.transportadora else '-' }}
+                                {% if f.transportadora and f.transportadora.cnpj %}
+                                <small class="text-muted cnpj-col d-block">{{ f.transportadora.cnpj }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if qtd_subs %}
+                                <span class="badge bg-info">{{ qtd_subs }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '-' }}</td>
-                            <td>{{ f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '-' }}</td>
+                            <td{% if f.vencimento and f.status_pagamento == 'PENDENTE' and f.vencimento < today %} class="carvia-vencido"{% endif %}>{{ f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '-' }}</td>
                             <td class="valor-col">{{ f.valor_total|valor_br }}</td>
+                            <td>
+                                <span class="badge carvia-badge-{{ f.status_pagamento|lower if f.status_pagamento else 'pendente' }}">
+                                    {{ f.status_pagamento or 'PENDENTE' }}
+                                </span>
+                            </td>
                             <td>
                                 <span class="badge carvia-badge-{{ f.status_conferencia|lower|replace('_', '-') if f.status_conferencia else 'pendente' }}">
                                     {{ f.status_conferencia|replace('_', ' ') if f.status_conferencia else 'PENDENTE' }}
@@ -97,7 +128,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=paginacao.prev_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=paginacao.prev_num, status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -105,7 +136,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                     {% if p %}
                     <li class="page-item {{ 'active' if p == paginacao.page }}">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=p, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=p, status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
                     </li>
                     {% else %}
                     <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -113,7 +144,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=paginacao.next_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=paginacao.next_num, status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

@@ -19,7 +19,7 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">Status</label>
                     <select name="status" class="form-select form-select-sm">
                         <option value="">Todos</option>
@@ -30,7 +30,22 @@
                         <option value="CANCELADO" {{ 'selected' if status_filtro == 'CANCELADO' }}>Cancelado</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <label class="form-label small">Tipo</label>
+                    <select name="tipo" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="IMPORTADO" {{ 'selected' if tipo_filtro == 'IMPORTADO' }}>Importado</option>
+                        <option value="MANUAL_SEM_CTE" {{ 'selected' if tipo_filtro == 'MANUAL_SEM_CTE' }}>Manual</option>
+                        <option value="MANUAL_FRETEIRO" {{ 'selected' if tipo_filtro == 'MANUAL_FRETEIRO' }}>Freteiro</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small">UF</label>
+                    <input type="text" name="uf_destino" class="form-control form-control-sm"
+                           maxlength="2" style="text-transform:uppercase"
+                           placeholder="UF" value="{{ uf_filtro }}">
+                </div>
+                <div class="col-md-3">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="Cliente, CNPJ, CTe, cidade..." value="{{ busca }}">
@@ -40,7 +55,7 @@
                         <i class="fas fa-search"></i> Filtrar
                     </button>
                 </div>
-                {% if status_filtro or busca %}
+                {% if status_filtro or tipo_filtro or uf_filtro or busca %}
                 <div class="col-md-2">
                     <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i> Limpar
@@ -90,9 +105,15 @@
                                     {{ op.nome_cliente or op.cnpj_cliente }}
                                 </span>
                             </td>
-                            <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
+                            <td>
+                                {% if op.cidade_origem or op.uf_origem %}
+                                <small class="text-muted">{{ op.cidade_origem or '' }}/{{ op.uf_origem or '' }}</small>
+                                <i class="fas fa-arrow-right fa-xs text-muted"></i>
+                                {% endif %}
+                                {{ op.cidade_destino }}/{{ op.uf_destino }}
+                            </td>
                             <td class="valor-col">{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}</td>
-                            <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
+                            <td class="valor-col" {% if op.valor_mercadoria %}title="Mercadoria: {{ op.valor_mercadoria|valor_br }}"{% endif %}>{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
                             <td>
                                 {% if op.fatura_cliente %}
                                 <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=op.fatura_cliente.id) }}"
@@ -116,7 +137,10 @@
                                 {% set sub = sub_info.get(op.id) %}
                                 {{ sub.sub_cte if sub and sub.sub_cte else '&mdash;'|safe }}
                             </td>
-                            <td><small class="text-muted">{{ op.tipo_entrada }}</small></td>
+                            <td>
+                                {% set tipo_map = {'IMPORTADO': 'IMP', 'MANUAL_SEM_CTE': 'MAN', 'MANUAL_FRETEIRO': 'FRE'} %}
+                                <span class="badge bg-secondary" title="{{ op.tipo_entrada }}">{{ tipo_map.get(op.tipo_entrada, op.tipo_entrada) }}</span>
+                            </td>
                             <td>
                                 <span class="badge carvia-badge-{{ op.status|lower }}">
                                     {{ op.status }}
@@ -141,7 +165,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.prev_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.prev_num, status=status_filtro, tipo=tipo_filtro, uf_destino=uf_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -149,7 +173,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=p, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=p, status=status_filtro, tipo=tipo_filtro, uf_destino=uf_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -157,7 +181,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.next_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_operacoes', page=paginacao.next_num, status=status_filtro, tipo=tipo_filtro, uf_destino=uf_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

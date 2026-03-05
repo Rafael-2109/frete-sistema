@@ -195,19 +195,42 @@
 /* Table Responsive */
 .carvia-table th {
     white-space: nowrap;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    padding: 0.3rem 0.4rem;
 }
 
 .carvia-table .cnpj-col {
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
-    font-size: 0.85rem;
+    font-size: 0.78rem;
 }
 
 .carvia-table .valor-col {
     text-align: right;
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+/* Compact table body */
+.carvia-table td {
+    font-size: 0.82rem;
+    padding: 0.3rem 0.4rem;
+    vertical-align: middle;
+}
+
+/* Ajustar sub-elementos */
+.carvia-table .badge {
+    font-size: 0.7rem;
+}
+
+.carvia-table td small {
+    font-size: 0.75rem;
+}
+
+/* Vencimento vencido */
+.carvia-vencido {
+    color: var(--semantic-danger);
+    font-weight: 600;
 }
 
 /* ═══════════════════════════════════════════════════════════════

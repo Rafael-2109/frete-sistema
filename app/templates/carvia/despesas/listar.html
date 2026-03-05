@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "carvia/_macros.html" import th_sort %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -66,12 +67,12 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Tipo</th>
+                            {{ th_sort('tipo_despesa', 'Tipo', sort, direction) }}
                             <th>Descricao</th>
-                            <th>Valor</th>
-                            <th>Data</th>
-                            <th>Vencimento</th>
-                            <th>Status</th>
+                            {{ th_sort('valor', 'Valor', sort, direction, 'text-end') }}
+                            {{ th_sort('data_despesa', 'Data', sort, direction) }}
+                            {{ th_sort('data_vencimento', 'Vencimento', sort, direction) }}
+                            {{ th_sort('status', 'Status', sort, direction) }}
                             <th></th>
                         </tr>
                     </thead>
@@ -83,7 +84,7 @@
                             <td>{{ d.descricao or '-' }}</td>
                             <td class="valor-col">{{ d.valor|valor_br }}</td>
                             <td>{{ d.data_despesa.strftime('%d/%m/%Y') if d.data_despesa else '-' }}</td>
-                            <td>{{ d.data_vencimento.strftime('%d/%m/%Y') if d.data_vencimento else '-' }}</td>
+                            <td{% if d.data_vencimento and d.status == 'PENDENTE' and d.data_vencimento < today %} class="carvia-vencido"{% endif %}>{{ d.data_vencimento.strftime('%d/%m/%Y') if d.data_vencimento else '-' }}</td>
                             <td>
                                 <span class="badge carvia-badge-{{ d.status|lower }}">
                                     {{ d.status }}
@@ -107,7 +108,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_despesas', page=paginacao.prev_num, tipo=tipo_filtro, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_despesas', page=paginacao.prev_num, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -115,7 +116,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_despesas', page=p, tipo=tipo_filtro, status=status_filtro, busca=busca) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_despesas', page=p, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -123,7 +124,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_despesas', page=paginacao.next_num, tipo=tipo_filtro, status=status_filtro, busca=busca) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_despesas', page=paginacao.next_num, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

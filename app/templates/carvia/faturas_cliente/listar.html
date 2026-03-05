@@ -22,14 +22,16 @@
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Buscar por cliente, CNPJ ou numero..."
+                           placeholder="Cliente, CNPJ ou numero..."
                            value="{{ busca }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
                     <select name="status" class="form-select form-select-sm">
-                        <option value="">Todos os Status</option>
+                        <option value="">Todos</option>
                         {# GAP-01: EMITIDA removido do fluxo #}
                         <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
                         <option value="PAGA" {{ 'selected' if status_filtro == 'PAGA' }}>Paga</option>
@@ -37,15 +39,25 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                    <label class="form-label small">Tipo Frete</label>
+                    <select name="tipo_frete" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="CIF" {{ 'selected' if tipo_frete_filtro == 'CIF' }}>CIF</option>
+                        <option value="FOB" {{ 'selected' if tipo_frete_filtro == 'FOB' }}>FOB</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-filter"></i> Filtrar
                     </button>
-                    {% if busca or status_filtro %}
-                    <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-times"></i>
-                    </a>
-                    {% endif %}
                 </div>
+                {% if busca or status_filtro or tipo_frete_filtro %}
+                <div class="col-md-2">
+                    <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-sm btn-outline-secondary w-100">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+                {% endif %}
             </form>
         </div>
     </div>
@@ -59,24 +71,43 @@
                         <tr>
                             {{ th_sort('numero_fatura', 'Fatura', sort, direction) }}
                             {{ th_sort('nome_cliente', 'Cliente', sort, direction) }}
+                            <th>CTes</th>
+                            <th>Frete</th>
                             {{ th_sort('data_emissao', 'Emissao', sort, direction) }}
                             {{ th_sort('vencimento', 'Vencimento', sort, direction) }}
                             {{ th_sort('valor_total', 'Valor', sort, direction, 'text-end') }}
                             {{ th_sort('status', 'Status', sort, direction) }}
-                            <th>Acao</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for f in faturas %}
+                        {% for f, qtd_ops in faturas %}
                         <tr>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}">
                                     <strong>{{ f.numero_fatura }}</strong>
                                 </a>
                             </td>
-                            <td>{{ f.nome_cliente or f.cnpj_cliente }}</td>
+                            <td>
+                                {{ f.nome_cliente or f.cnpj_cliente }}
+                                <small class="text-muted cnpj-col d-block">{{ f.cnpj_cliente }}</small>
+                            </td>
+                            <td>
+                                {% if qtd_ops %}
+                                <span class="badge bg-info">{{ qtd_ops }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if f.tipo_frete %}
+                                <span class="badge bg-secondary">{{ f.tipo_frete }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '-' }}</td>
-                            <td>{{ f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '-' }}</td>
+                            <td{% if f.vencimento and f.status == 'PENDENTE' and f.vencimento < today %} class="carvia-vencido"{% endif %}>{{ f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '-' }}</td>
                             <td class="valor-col">{{ f.valor_total|valor_br }}</td>
                             <td><span class="badge carvia-badge-{{ f.status|lower }}">{{ f.status }}</span></td>
                             <td>
@@ -96,7 +127,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.prev_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.prev_num, status=status_filtro, tipo_frete=tipo_frete_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -104,7 +135,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                     {% if p %}
                     <li class="page-item {{ 'active' if p == paginacao.page }}">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=p, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=p, status=status_filtro, tipo_frete=tipo_frete_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
                     </li>
                     {% else %}
                     <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -112,7 +143,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.next_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.next_num, status=status_filtro, tipo_frete=tipo_frete_filtro, busca=busca, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

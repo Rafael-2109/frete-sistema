@@ -29,6 +29,7 @@ def register_nf_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo_fonte', '')
         status_filtro = request.args.get('status', '')
+        cte_filtro = request.args.get('cte', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -68,6 +69,14 @@ def register_nf_routes(bp):
                 )
             )
 
+        # Filtro CTe: com/sem CTe vinculado
+        if cte_filtro == 'COM':
+            query = query.filter(subq_ctes.c.qtd_ctes > 0)
+        elif cte_filtro == 'SEM':
+            query = query.filter(
+                db.or_(subq_ctes.c.qtd_ctes.is_(None), subq_ctes.c.qtd_ctes == 0)
+            )
+
         # Ordenacao dinamica
         sortable_columns = {
             'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),
@@ -92,6 +101,7 @@ def register_nf_routes(bp):
             busca=busca,
             tipo_filtro=tipo_filtro,
             status_filtro=status_filtro,
+            cte_filtro=cte_filtro,
             sort=sort,
             direction=direction,
         )

@@ -42,14 +42,22 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label small">CTe</label>
+                    <select name="cte" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="COM" {{ 'selected' if cte_filtro == 'COM' }}>Com CTe</option>
+                        <option value="SEM" {{ 'selected' if cte_filtro == 'SEM' }}>Sem CTe</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                        <i class="fas fa-search"></i> Filtrar
+                        <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if busca or tipo_filtro or status_filtro %}
-                <div class="col-md-2">
+                {% if busca or tipo_filtro or status_filtro or cte_filtro %}
+                <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-sm btn-outline-secondary w-100">
-                        <i class="fas fa-times"></i> Limpar
+                        <i class="fas fa-times"></i>
                     </a>
                 </div>
                 {% endif %}
@@ -85,14 +93,20 @@
                                 <span title="{{ nf.cnpj_emitente }}" class="cnpj-col">
                                     {{ nf.nome_emitente or nf.cnpj_emitente }}
                                 </span>
+                                {% if nf.cidade_emitente or nf.uf_emitente %}
+                                <small class="text-muted d-block">{{ nf.cidade_emitente or '' }}{% if nf.cidade_emitente and nf.uf_emitente %}/{% endif %}{{ nf.uf_emitente or '' }}</small>
+                                {% endif %}
                             </td>
                             <td>
                                 <span title="{{ nf.cnpj_destinatario }}" class="cnpj-col">
                                     {{ nf.nome_destinatario or nf.cnpj_destinatario or '-' }}
                                 </span>
+                                {% if nf.cidade_destinatario or nf.uf_destinatario %}
+                                <small class="text-muted d-block">{{ nf.cidade_destinatario or '' }}{% if nf.cidade_destinatario and nf.uf_destinatario %}/{% endif %}{{ nf.uf_destinatario or '' }}</small>
+                                {% endif %}
                             </td>
                             <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
-                            <td class="valor-col">{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }}</td>
+                            <td class="valor-col" {% if nf.quantidade_volumes %}title="Volumes: {{ nf.quantidade_volumes }}"{% endif %}>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }}</td>
                             <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
                             <td>
                                 <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>
@@ -123,7 +137,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -131,7 +145,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -139,7 +153,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>
