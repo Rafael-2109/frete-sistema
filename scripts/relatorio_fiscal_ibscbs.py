@@ -111,16 +111,17 @@ def _extrair_relatorio_fiscal_impl(data_ini, data_fim, tipos: list = None, inclu
     else:
         domain_state = [['state', '=', 'posted']]
 
-    # Date: invoice_date no range OU (invoice_date=False E date no range)
-    # Isso captura NCs cujo invoice_date é False mas date (data contábil) está no período
+    # Date: invoice_date no range OU date (data contabil/lancamento) no range
+    # Cobre 3 cenarios:
+    #   1. invoice_date no range (caso normal)
+    #   2. date no range (devolucoes cujo invoice_date = data da NF original,
+    #      que pode ser meses antes do lancamento contabil)
     domain_date = [
         '|',
         '&',
         ['invoice_date', '>=', data_ini.isoformat()],
         ['invoice_date', '<=', data_fim.isoformat()],
         '&',
-        '&',
-        ['invoice_date', '=', False],
         ['date', '>=', data_ini.isoformat()],
         ['date', '<=', data_fim.isoformat()],
     ]
