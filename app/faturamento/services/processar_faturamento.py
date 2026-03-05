@@ -328,6 +328,15 @@ class ProcessadorFaturamento:
 
         logger.info(f"📋 Processando NF {nf.numero_nf} - Pedido {nf.origem}")
 
+        # Guard: NF cancelada não deve criar movimentação de estoque
+        produtos_nf = produtos_por_nf.get(nf.numero_nf) if produtos_por_nf else None
+        if not produtos_nf:
+            produtos_nf = FaturamentoProduto.query.filter_by(numero_nf=nf.numero_nf).all()
+
+        if produtos_nf and all(p.status_nf == 'Cancelado' for p in produtos_nf):
+            logger.info(f"🚫 NF {nf.numero_nf} cancelada — pulando criação de movimentação de estoque")
+            return False, 0, 0
+
         # Buscar EmbarqueItems ativos para o pedido
         embarque_items = (
             EmbarqueItem.query.join(Embarque, EmbarqueItem.embarque_id == Embarque.id)

@@ -784,7 +784,10 @@ class FaturamentoService:
 
                         contador_novos += 1
                         nfs_novas.append(numero_nf)
-                        nfs_reprocessar.append(numero_nf)  # NFs novas sempre precisam ser processadas
+                        if status_odoo_raw != 'cancel':
+                            nfs_reprocessar.append(numero_nf)  # NFs novas precisam ser processadas (exceto canceladas)
+                        else:
+                            logger.info(f"🚫 NF {numero_nf} importada já cancelada — pulando processamento de estoque")
                         logger.debug(f"➕ Preparado para INSERT: NF {numero_nf} produto {cod_produto}")
                     
                 except Exception as e:
