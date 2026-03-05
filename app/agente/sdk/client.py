@@ -39,6 +39,17 @@ from claude_agent_sdk import (
     CLIJSONDecodeError,
 )
 
+# SDK 0.1.46+: Task messages para observabilidade de subagentes
+try:
+    from claude_agent_sdk import (
+        TaskStartedMessage,
+        TaskProgressMessage,
+        TaskNotificationMessage,
+    )
+    _HAS_TASK_MESSAGES = True
+except ImportError:
+    _HAS_TASK_MESSAGES = False
+
 # Fallback para API direta (health check)
 import anthropic
 from datetime import datetime
@@ -1228,14 +1239,19 @@ Nunca invente informações."""
 
                 SDK 0.1.29+: PostToolUseHookInput agora inclui tool_use_id
                 para correlação precisa tool_call → tool_result.
+                SDK 0.1.46+: agent_id e agent_type para distinguir subagentes.
                 """
                 try:
                     tool_name = hook_input.get('tool_name', 'unknown')
                     tool_use_id = hook_input.get('tool_use_id', '')
                     tool_input_str = str(hook_input.get('tool_input', ''))[:200]
+                    # SDK 0.1.46+: identificar qual agente executou a tool
+                    agent_id = hook_input.get('agent_id', '')
+                    agent_type = hook_input.get('agent_type', '')
                     logger.info(
                         f"[AUDIT] PostToolUse: {tool_name} "
                         f"| id={tool_use_id[:12] if tool_use_id else 'N/A'} "
+                        f"| agent={agent_type or 'main'}:{agent_id[:12] if agent_id else 'N/A'} "
                         f"| input: {tool_input_str}"
                     )
                     return {}
@@ -1923,6 +1939,54 @@ Nunca invente informações."""
                         logger.info(f"[AGENT_SDK] SDK session_id from init: {sdk_sid[:12]}...")
                     continue
 
+                # ─── SDK 0.1.46+: Task messages (subagentes) ───
+                if _HAS_TASK_MESSAGES:
+                    if isinstance(message, TaskStartedMessage):
+                        task_desc = getattr(message, 'description', '') or ''
+                        task_id = getattr(message, 'task_id', '') or ''
+                        task_type = getattr(message, 'task_type', '') or ''
+                        logger.info(
+                            f"[AGENT_SDK] TaskStarted: {task_desc[:80]} | "
+                            f"task_id={task_id[:12]} | task_type={task_type}"
+                        )
+                        yield StreamEvent(
+                            type='task_started',
+                            content=task_desc,
+                            metadata={
+                                'task_id': task_id,
+                                'task_type': task_type,
+                            }
+                        )
+                        continue
+
+                    if isinstance(message, TaskProgressMessage):
+                        task_desc = getattr(message, 'description', '') or ''
+                        task_id = getattr(message, 'task_id', '') or ''
+                        last_tool = getattr(message, 'last_tool_name', '') or ''
+                        logger.debug(
+                            f"[AGENT_SDK] TaskProgress: {task_desc[:80]} | "
+                            f"task_id={task_id[:12]} | last_tool={last_tool}"
+                        )
+                        yield StreamEvent(
+                            type='task_progress',
+                            content=task_desc,
+                            metadata={
+                                'task_id': task_id,
+                                'last_tool_name': last_tool,
+                            }
+                        )
+                        continue
+
+                    if isinstance(message, TaskNotificationMessage):
+                        summary = getattr(message, 'summary', '') or ''
+                        status = getattr(message, 'status', '') or ''
+                        task_id = getattr(message, 'task_id', '') or ''
+                        logger.info(
+                            f"[AGENT_SDK] TaskNotification: {summary[:80]} | "
+                            f"status={status} | task_id={task_id[:12]}"
+                        )
+                        continue
+
                 # ─── AssistantMessage ───
                 if isinstance(message, AssistantMessage):
                     # Captura usage
@@ -2087,6 +2151,10 @@ Nunca invente informações."""
                     # CRÍTICO: Capturar session_id REAL do SDK para resume
                     result_session_id = message.session_id
 
+                    # SDK 0.1.46+: stop_reason indica motivo do encerramento
+                    # Valores: "end_turn", "max_turns", "tool_use", "budget_exceeded", etc.
+                    stop_reason = getattr(message, 'stop_reason', '') or ''
+
                     if message.result:
                         full_text = message.result
 
@@ -2103,7 +2171,9 @@ Nunca invente informações."""
                             output_tokens = getattr(usage, 'output_tokens', output_tokens) or output_tokens
 
                     logger.info(
-                        f"[AGENT_SDK] ResultMessage | cost={message.total_cost_usd} | "
+                        f"[AGENT_SDK] ResultMessage | "
+                        f"stop_reason={stop_reason} | "
+                        f"cost={message.total_cost_usd} | "
                         f"usage={message.usage} | turns={message.num_turns} | "
                         f"duration={message.duration_ms}ms | "
                         f"tokens_captured=({input_tokens},{output_tokens})"
@@ -2151,6 +2221,8 @@ Nunca invente informações."""
                                 'tool_calls': len(tool_calls),
                                 'self_corrected': correction is not None if correction else False,
                                 'interrupted': is_interrupted,
+                                # SDK 0.1.46+: motivo do encerramento (end_turn, max_turns, etc.)
+                                'stop_reason': stop_reason,
                             },
                             metadata={'message_id': last_message_id or ''}
                         )
@@ -2490,6 +2562,7 @@ Nunca invente informações."""
             elif event.type == 'done':
                 input_tokens = event.content.get('input_tokens', 0)
                 output_tokens = event.content.get('output_tokens', 0)
+                stop_reason = event.content.get('stop_reason', '')
                 # Captura session_id real do done
                 done_session_id = event.content.get('session_id')
                 if done_session_id:

@@ -126,6 +126,23 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 
 ---
 
+## SDK 0.1.46 (CLI 2.1.69)
+
+**Versao**: `claude-agent-sdk==0.1.46` (atualizado 2026-03-05)
+
+### Features adotadas:
+- **`ResultMessage.stop_reason`**: Populado automaticamente no StreamEvent `done` e logado. Valores: `"end_turn"`, `"max_turns"`, `"budget_exceeded"`, etc.
+- **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): Emitidos como SSE events `task_started`/`task_progress` para observabilidade de subagentes. Import com fallback (`_HAS_TASK_MESSAGES`).
+- **`agent_id`/`agent_type` em hooks**: `PostToolUseHookInput` (opcionais). Logados no `[AUDIT] PostToolUse`. **NAO disponivel** em `StopHookInput`.
+
+### Memory leak fixes do CLI 2.1.69:
+- Fix: old message arrays acumulando (~35MB/1000 turns)
+- Fix: bridge polling loop, hook events, teammates leaks
+- Fix: API 400 errors em forked agents
+- Baseline memory ~16MB
+
+---
+
 ## Export critico: Teams
 
 `app/teams/` importa de **6 sub-modulos**: permissions, models, SDK client, flags, session_persistence, pending_questions.
