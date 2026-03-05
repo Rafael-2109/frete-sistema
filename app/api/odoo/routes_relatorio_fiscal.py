@@ -83,10 +83,12 @@ def gerar_relatorio_ibscbs():
         if params.get('export_entrada_nfse', 'false').lower() in ['true', '1']:
             tipos_lista.extend(['in_invoice'])
 
-        # Incluir devoluções se houver saídas ou entradas
-        if 'out_invoice' in tipos_lista:
-            tipos_lista.append('out_refund')
+        # Devoluções (fluxo de mercadoria):
+        # - out_refund (devolução de venda) = mercadoria ENTRA → Entradas
+        # - in_refund (devolução de compra) = mercadoria SAI → Saídas
         if 'in_invoice' in tipos_lista:
+            tipos_lista.append('out_refund')
+        if 'out_invoice' in tipos_lista:
             tipos_lista.append('in_refund')
 
         # Remover duplicatas e usar default se vazio
