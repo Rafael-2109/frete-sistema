@@ -45,6 +45,18 @@ class DactePDFParser:
         'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
     })
 
+    # Codigos IBGE de UF (para validacao de chaves NF-e)
+    _VALID_CUF = frozenset({
+        '11', '12', '13', '14', '15', '16', '17',       # Norte
+        '21', '22', '23', '24', '25', '26', '27', '28', '29',  # Nordeste
+        '31', '32', '33', '35',                           # Sudeste
+        '41', '42', '43',                                 # Sul
+        '50', '51', '52', '53',                           # Centro-Oeste
+    })
+
+    # Regex para marcador NF-e em formatos espacados (SSW: "N F - E :", Bsoft: "N F-e")
+    _NF_MARKER_RE = re.compile(r'N\s*F\s*-?\s*[Ee]\s*:?\s*')
+
     # Formatos detectaveis pelo footer/marca d'agua do PDF
     FORMATO_SSW = 'SSW'
     FORMATO_BSOFT = 'BSOFT'
@@ -1101,14 +1113,200 @@ class DactePDFParser:
 
         return None
 
+    @staticmethod
+    def _calc_cdv_nfe(chave43: str) -> int:
+        """Calcula digito verificador de chave NF-e/CT-e (modulo 11, pesos 2-9)"""
+        pesos = [2, 3, 4, 5, 6, 7, 8, 9]
+        soma = sum(
+            int(d) * pesos[i % 8]
+            for i, d in enumerate(reversed(chave43))
+        )
+        resto = soma % 11
+        cdv = 11 - resto
+        return 0 if cdv >= 10 else cdv
+
+    def _validar_chave_nfe(self, chave: str) -> bool:
+        """Valida chave NF-e: 44 digitos, modelo=55, cUF valido, CDV correto"""
+        if len(chave) != 44 or not chave.isdigit():
+            return False
+        if chave[20:22] != '55':
+            return False
+        if chave[0:2] not in self._VALID_CUF:
+            return False
+        return self._calc_cdv_nfe(chave[:43]) == int(chave[43])
+
+    def _extrair_nfs_ssw_chars(self) -> List[Dict]:
+        """Extrai NFs do SSW usando extracao por caractere da coluna CHAVES.
+
+        SSW DACTEs tem layout de 2 colunas (OBSERVACOES | CHAVES NF-E/CT-E).
+        pdfplumber.extract_text() mescla ambas colunas por Y, corrompendo
+        os digitos das chaves. Esta funcao usa chars individuais filtrados
+        por posicao X para isolar a coluna direita.
+
+        Os digitos sao exibidos individualmente espacados (ex: "3 5 2 6 0 2 ...")
+        seguidos de bloco compacto, totalizando 44+ digitos por chave.
+        """
+        try:
+            import pdfplumber
+        except ImportError:
+            return []
+
+        try:
+            if self.pdf_path:
+                pdf = pdfplumber.open(self.pdf_path)
+            elif self.pdf_bytes:
+                import io
+                pdf = pdfplumber.open(io.BytesIO(self.pdf_bytes))
+            else:
+                return []
+        except Exception:
+            return []
+
+        nfs = []
+        seen = set()
+
+        try:
+            for page in pdf.pages:
+                # Encontrar header "CHAVES" para referencia de posicao
+                words = page.extract_words()
+                chaves_word = None
+                for w in words:
+                    if 'CHAVES' in w['text'].upper():
+                        chaves_word = w
+                        break
+
+                if chaves_word is None:
+                    continue
+
+                # Coluna direita: chars com x >= (largura_pagina/2 - 40)
+                # Coluna esquerda tipicamente ocupa x=17-251, direita x=261+
+                x_threshold = page.width / 2 - 40
+                y_start = chaves_word['top'] - 5
+
+                right_chars = [
+                    c for c in page.chars
+                    if c['x0'] >= x_threshold and c['top'] > y_start
+                ]
+
+                if not right_chars:
+                    continue
+
+                # Agrupar por Y com tolerancia de 3pt (separa linhas visuais)
+                y_groups: Dict[int, list] = {}
+                for c in right_chars:
+                    y_key = round(c['top'] / 3) * 3
+                    y_groups.setdefault(y_key, []).append(c)
+
+                for y_key in sorted(y_groups.keys()):
+                    chars_in_line = sorted(y_groups[y_key], key=lambda c: c['x0'])
+                    line_text = ''.join(c['text'] for c in chars_in_line)
+
+                    for m in self._NF_MARKER_RE.finditer(line_text):
+                        after = line_text[m.end():]
+                        digits = re.sub(r'[^0-9]', '', after)
+                        if len(digits) >= 44:
+                            # Buscar janela de 44 digitos com CDV valido
+                            for start in range(len(digits) - 43):
+                                sub = digits[start:start + 44]
+                                if self._validar_chave_nfe(sub) and sub not in seen:
+                                    seen.add(sub)
+                                    self._adicionar_nf(nfs, sub)
+                                    break  # Uma chave por marcador NF-E
+        except Exception as e:
+            logger.warning(f"SSW char-level NF extraction failed: {e}")
+        finally:
+            pdf.close()
+
+        return nfs
+
+    def _extrair_nfs_marcador_texto(self, seen: set) -> List[Dict]:
+        """Extrai NFs usando marcador NF-e no texto + validacao CDV.
+
+        Funciona para Bsoft (DOCUMENTOS ORIGINARIOS) e outros formatos onde
+        a chave esta formatada com separadores apos o marcador "N F-e" / "NF-E".
+        Digitos sao extraidos apos o marcador, e todas as janelas de 44 digitos
+        sao testadas com CDV para encontrar a chave correta.
+
+        NOTA: NAO modifica 'seen' — a dedup e feita pelo chamador.
+        """
+        nfs = []
+
+        for linha in self._linhas():
+            for m in self._NF_MARKER_RE.finditer(linha):
+                after = linha[m.end():]
+                digits = re.sub(r'[^0-9]', '', after)
+                if len(digits) >= 44:
+                    for start in range(len(digits) - 43):
+                        sub = digits[start:start + 44]
+                        if self._validar_chave_nfe(sub) and sub not in seen:
+                            self._adicionar_nf(nfs, sub)
+                            break  # Uma chave por marcador NF-E
+
+        return nfs
+
+    def _extrair_nfs_doc_originarios(self, seen_nf_nums: set) -> List[Dict]:
+        """Extrai NFs da secao DOCUMENTOS ORIGINARIOS com CNPJ + serie/numero.
+
+        Montenegro: "NF-e 61724241000330 001/000144722"
+        Sem chave de 44 digitos — apenas CNPJ emitente e numero da NF.
+        Usado para matching nivel CNPJ_NUMERO.
+
+        NOTA: NAO modifica 'seen_nf_nums' — dedup feita pelo chamador.
+        """
+        nfs = []
+        linhas = self._linhas()
+        in_doc_section = False
+
+        for linha in linhas:
+            upper = linha.upper()
+
+            # Detectar inicio da secao DOCUMENTOS ORIGINARIOS
+            if 'DOCUMENTO' in upper and 'ORIGIN' in upper:
+                in_doc_section = True
+                continue
+
+            # Sair da secao ao encontrar outro bloco
+            if in_doc_section and any(
+                kw in upper for kw in (
+                    'OBSERVA', 'INFORMA', 'MODAL', 'PLACA',
+                )
+            ):
+                in_doc_section = False
+
+            if not in_doc_section:
+                continue
+
+            # Procurar "NF-e CNPJ serie/numero"
+            # Ex: "NF-e 61724241000330 001/000144722"
+            m = re.search(
+                r'NF-?[Ee]\s+(\d{14})\s+(\d{1,3})\s*/\s*(\d+)',
+                linha,
+            )
+            if m:
+                cnpj = m.group(1)
+                numero_nf = str(int(m.group(3)))
+                key = (cnpj, numero_nf)
+                if key not in seen_nf_nums:
+                    nfs.append({
+                        'chave': None,
+                        'numero_nf': numero_nf,
+                        'cnpj_emitente': cnpj,
+                    })
+
+        return nfs
+
     def get_nfs_referenciadas(self) -> List[Dict]:
         """Extrai NFs referenciadas no DACTE.
 
-        Busca secao "CHAVES NF-E/CT-E" ou similar e extrai chaves de 44
-        digitos com modelo=55 (NF-e). Chaves com modelo=57 (CTe) sao ignoradas.
+        5 niveis de extracao para suportar todos os formatos:
+        1. 44 digitos consecutivos (ESL, Lonngren, Montenegro)
+        2. Blocos formatados com separadores (chaves com pontos/hifens)
+        3. SSW char-level: extracao por caractere da coluna CHAVES
+           (pdfplumber mescla colunas por Y, corrompendo digitos)
+        4. Marcador NF-e + CDV scan (Bsoft DOCUMENTOS ORIGINARIOS)
+        5. DOCUMENTOS ORIGINARIOS com CNPJ + serie/numero sem chave (Montenegro)
 
-        IMPORTANTE: Usa mesma logica robusta de get_chave_acesso_cte() para
-        encontrar chaves formatadas com separadores.
+        Separacao chaves: modelo=55 (NF-e) vs modelo=57 (CTe ignorado).
         """
         nfs = []
         seen = set()
@@ -1133,6 +1331,31 @@ class DactePDFParser:
                     if sub.isdigit() and sub[20:22] == '55' and sub not in seen:
                         seen.add(sub)
                         self._adicionar_nf(nfs, sub)
+
+        # Nivel 3: SSW — extracao por caractere da coluna CHAVES
+        # SSW usa layout 2 colunas que pdfplumber mescla, corrompendo chaves
+        if self.formato == self.FORMATO_SSW:
+            for nf_data in self._extrair_nfs_ssw_chars():
+                if nf_data['chave'] not in seen:
+                    seen.add(nf_data['chave'])
+                    nfs.append(nf_data)
+
+        # Nivel 4: Marcador NF-e + CDV scan (Bsoft, outros)
+        # Busca "N F-e" / "NF-E" no texto, extrai digitos, valida CDV
+        for nf_data in self._extrair_nfs_marcador_texto(seen):
+            if nf_data['chave'] not in seen:
+                seen.add(nf_data['chave'])
+                nfs.append(nf_data)
+
+        # Nivel 5: DOCUMENTOS ORIGINARIOS com CNPJ + serie/numero (sem chave)
+        # Montenegro: "NF-e 61724241000330 001/000144722"
+        # Extrai CNPJ e numero_nf para matching por CNPJ_NUMERO
+        seen_nf_nums = {(nf.get('cnpj_emitente'), nf.get('numero_nf')) for nf in nfs}
+        for nf_data in self._extrair_nfs_doc_originarios(seen_nf_nums):
+            key = (nf_data.get('cnpj_emitente'), nf_data.get('numero_nf'))
+            if key not in seen_nf_nums:
+                seen_nf_nums.add(key)
+                nfs.append(nf_data)
 
         return nfs
 
