@@ -96,8 +96,10 @@ NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
 ### R5: Fatura vincula por status CONFIRMADO + fatura_id IS NULL
 Faturas CarVia selecionam operacoes `status=CONFIRMADO, fatura_cliente_id IS NULL`.
-Faturas Subcontrato selecionam subcontratos `status=CONFIRMADO, fatura_transportadora_id IS NULL`.
-Ao vincular, status muda para FATURADO. NUNCA desvincular apos faturamento.
+Faturas Subcontrato: criacao desacoplada de subcontratos. Subcontratos sao anexados/desanexados
+na tela de detalhe via AJAX (nao na criacao). Ao anexar: `status=FATURADO`, `fatura_transportadora_id=fatura.id`.
+Ao desanexar (se fatura nao CONFERIDO): `status=CONFIRMADO`, `fatura_transportadora_id=NULL`.
+Faturas CarVia: ao vincular, status muda para FATURADO. NUNCA desvincular operacao apos faturamento.
 
 ### R6: Classificacao de CTe por CNPJ emitente
 Na importacao, CTes sao classificados automaticamente:
@@ -257,7 +259,8 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 | `_criar_nf_referencia(nf_numero, cnpj, ...)` | Cria CarviaNf stub (FATURA_REFERENCIA) — idempotente |
 | `_resolver_nf_via_junction(nf_numero, operacao_id)` | Busca NF via junction carvia_operacao_nfs |
 | `_criar_junction_se_necessario(operacao_id, nf_id)` | Cria junction se nao existe — idempotente |
-| `criar_itens_fatura_transportadora(fatura_id)` | Gera itens a partir de subcontratos vinculados |
+| `criar_itens_fatura_transportadora(fatura_id)` | Gera itens a partir de subcontratos vinculados (usado na importacao) |
+| `criar_itens_fatura_transportadora_incremental(fatura_id, sub_ids)` | Gera itens apenas para subcontratos especificos (usado ao anexar) |
 | `criar_itens_fatura_cliente_from_operacoes(fatura_id)` | Gera itens a partir de operacoes (faturas manuais) |
 | `backfill_todas_faturas()` | One-time para dados existentes |
 
@@ -270,7 +273,7 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 - `ImportacaoService.salvar_importacao()` — apos criar NF: `vincular_nf_a_operacoes_orfas` + `vincular_nf_a_itens_fatura_orfaos`
 - `ImportacaoService.salvar_importacao()` — apos criar/reusar CTe: `vincular_operacao_a_itens_fatura_orfaos`
 - `fatura_routes.nova_fatura_cliente()` — ao criar fatura manualmente
-- `fatura_routes.nova_fatura_transportadora()` — ao criar fatura manualmente
+- `fatura_routes.anexar_subcontratos_fatura_transportadora()` — ao anexar subcontratos via AJAX
 
 **Ordem de importacao**: Independente. Re-linking retroativo garante que TODAS as 6 permutacoes (NF, CTe, Fatura) criam vinculos corretos.
 

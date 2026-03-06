@@ -1,10 +1,10 @@
 """
-Consolidação Periódica de Memórias via Haiku.
+Consolidação Periódica de Memórias via Sonnet.
 
 Quando um usuário acumula muitas memórias (>15 arquivos ou >6000 chars totais),
 consolida em resumos compactos para manter a injeção eficiente.
 
-Custo estimado: ~$0.002 por consolidação (~4K input + ~800 output Haiku).
+Custo estimado: ~$0.006 por consolidação (~4K input + ~800 output Sonnet).
 Frequência: ~1x por semana por usuário ativo.
 
 Uso:
@@ -24,7 +24,7 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
 CONSOLIDATION_PROMPT = """Consolide estas {count} notas de memória de um usuário em UM resumo conciso.
 
@@ -115,16 +115,23 @@ def maybe_move_to_cold(user_id: int) -> int:
             )
 
         if moved > 0:
-            db.session.commit()
-            logger.info(
-                f"[MEMORY_CONSOLIDATOR] {moved} memórias movidas para tier frio "
-                f"(user_id={user_id})"
-            )
+            try:
+                db.session.commit()
+                logger.info(
+                    f"[MEMORY_CONSOLIDATOR] {moved} memórias movidas para tier frio com sucesso "
+                    f"(user_id={user_id})"
+                )
+            except Exception as commit_err:
+                db.session.rollback()
+                logger.warning(
+                    f"[MEMORY_CONSOLIDATOR] Erro ao committar cold move (rollback): {commit_err}"
+                )
+                return 0
 
         return moved
 
     except Exception as e:
-        logger.debug(f"[MEMORY_CONSOLIDATOR] Cold move falhou (ignorado): {e}")
+        logger.warning(f"[MEMORY_CONSOLIDATOR] Cold move falhou (ignorado): {e}")
         return 0
 
 
@@ -185,100 +192,119 @@ def _consolidate_if_needed(
     from ..models import AgentMemory
     from app import db
 
-    # 1. Carregar todas as memórias do usuário (exceto diretórios)
-    memories = AgentMemory.query.filter_by(
-        user_id=user_id,
-        is_directory=False,
-    ).all()
+    try:
+        # 1. Carregar todas as memórias do usuário (exceto diretórios)
+        memories = AgentMemory.query.filter_by(
+            user_id=user_id,
+            is_directory=False,
+        ).all()
 
-    if not memories:
-        return None
+        if not memories:
+            return None
 
-    # 2. Verificar thresholds
-    total_files = len(memories)
-    total_chars = sum(len(m.content or "") for m in memories)
+        # 2. Verificar thresholds
+        total_files = len(memories)
+        total_chars = sum(len(m.content or "") for m in memories)
 
-    if total_files <= threshold_files and total_chars <= threshold_chars:
-        logger.debug(
-            f"[MEMORY_CONSOLIDATOR] Abaixo do threshold: "
-            f"{total_files} arquivos, {total_chars} chars"
-        )
-        return None
-
-    logger.info(
-        f"[MEMORY_CONSOLIDATOR] Threshold excedido: "
-        f"{total_files} arquivos (max {threshold_files}), "
-        f"{total_chars} chars (max {threshold_chars}). "
-        f"Iniciando consolidação para user_id={user_id}"
-    )
-
-    # 3. Agrupar memórias por diretório
-    groups: Dict[str, list] = defaultdict(list)
-    for mem in memories:
-        if mem.path in PROTECTED_PATHS:
-            continue
-
-        # Memory v2: memórias permanentes ou com alta importância são imunes
-        if getattr(mem, 'is_permanent', False):
-            logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (permanent): {mem.path}")
-            continue
-        if (getattr(mem, 'importance_score', 0) or 0) >= 0.7:
-            logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (importance={mem.importance_score:.2f}): {mem.path}")
-            continue
-
-        # Extrair diretório pai
-        parts = mem.path.rsplit("/", 1)
-        if len(parts) == 2:
-            parent_dir = parts[0]
-        else:
-            continue
-
-        # Só consolidar diretórios candidatos
-        if parent_dir in CONSOLIDATION_DIRS:
-            groups[parent_dir].append(mem)
-
-    # 4. Consolidar cada grupo que excede min_group
-    consolidated_count = 0
-    archived_count = 0
-    chars_saved = 0
-
-    for dir_path, dir_memories in groups.items():
-        if len(dir_memories) < min_group:
+        if total_files <= threshold_files and total_chars <= threshold_chars:
             logger.debug(
-                f"[MEMORY_CONSOLIDATOR] Pulando {dir_path}: "
-                f"{len(dir_memories)} arquivos (min {min_group})"
+                f"[MEMORY_CONSOLIDATOR] Abaixo do threshold: "
+                f"{total_files} arquivos, {total_chars} chars"
             )
-            continue
+            return None
 
-        # Excluir consolidated.xml existente (se houver) do grupo
-        to_consolidate = [
-            m for m in dir_memories
-            if not m.path.endswith("/consolidated.xml")
-        ]
-
-        if len(to_consolidate) < min_group:
-            continue
-
-        result = _consolidate_group(user_id, dir_path, to_consolidate)
-        if result:
-            consolidated_count += 1
-            archived_count += result["archived"]
-            chars_saved += result["chars_saved"]
-
-    if consolidated_count > 0:
-        db.session.commit()
         logger.info(
-            f"[MEMORY_CONSOLIDATOR] Consolidação concluída: "
-            f"{consolidated_count} grupos, "
-            f"{archived_count} arquivos arquivados, "
-            f"{chars_saved} chars economizados"
+            f"[MEMORY_CONSOLIDATOR] Threshold excedido: "
+            f"{total_files} arquivos (max {threshold_files}), "
+            f"{total_chars} chars (max {threshold_chars}). "
+            f"Iniciando consolidação para user_id={user_id}"
         )
 
-    return {
-        "consolidated": consolidated_count,
-        "archived": archived_count,
-        "chars_saved": chars_saved,
-    } if consolidated_count > 0 else None
+        # 3. Agrupar memórias por diretório
+        groups: Dict[str, list] = defaultdict(list)
+        for mem in memories:
+            if mem.path in PROTECTED_PATHS:
+                continue
+
+            # Memory v2: memórias permanentes ou com alta importância são imunes
+            if getattr(mem, 'is_permanent', False):
+                logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (permanent): {mem.path}")
+                continue
+            if (getattr(mem, 'importance_score', 0) or 0) >= 0.7:
+                logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (importance={mem.importance_score:.2f}): {mem.path}")
+                continue
+
+            # Extrair diretório pai
+            parts = mem.path.rsplit("/", 1)
+            if len(parts) == 2:
+                parent_dir = parts[0]
+            else:
+                continue
+
+            # Só consolidar diretórios candidatos
+            if parent_dir in CONSOLIDATION_DIRS:
+                groups[parent_dir].append(mem)
+
+        # 4. Consolidar cada grupo que excede min_group
+        consolidated_count = 0
+        archived_count = 0
+        chars_saved = 0
+
+        for dir_path, dir_memories in groups.items():
+            if len(dir_memories) < min_group:
+                logger.debug(
+                    f"[MEMORY_CONSOLIDATOR] Pulando {dir_path}: "
+                    f"{len(dir_memories)} arquivos (min {min_group})"
+                )
+                continue
+
+            # Excluir consolidated.xml existente (se houver) do grupo
+            to_consolidate = [
+                m for m in dir_memories
+                if not m.path.endswith("/consolidated.xml")
+            ]
+
+            if len(to_consolidate) < min_group:
+                continue
+
+            result = _consolidate_group(user_id, dir_path, to_consolidate)
+            if result:
+                consolidated_count += 1
+                archived_count += result["archived"]
+                chars_saved += result["chars_saved"]
+
+        # 5. Commit transação se houve consolidações bem-sucedidas
+        if consolidated_count > 0:
+            try:
+                db.session.commit()
+                logger.info(
+                    f"[MEMORY_CONSOLIDATOR] Consolidação concluída com sucesso: "
+                    f"{consolidated_count} grupos, "
+                    f"{archived_count} arquivos arquivados, "
+                    f"{chars_saved} chars economizados"
+                )
+            except Exception as commit_err:
+                db.session.rollback()
+                logger.error(
+                    f"[MEMORY_CONSOLIDATOR] Erro ao committar consolidação (rollback): {commit_err}"
+                )
+                return None
+
+        return {
+            "consolidated": consolidated_count,
+            "archived": archived_count,
+            "chars_saved": chars_saved,
+        } if consolidated_count > 0 else None
+
+    except Exception as e:
+        logger.error(
+            f"[MEMORY_CONSOLIDATOR] Erro crítico em _consolidate_if_needed: {e}"
+        )
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
 
 
 def _consolidate_group(
@@ -287,7 +313,7 @@ def _consolidate_group(
     memories: list,
 ) -> Optional[Dict[str, Any]]:
     """
-    Consolida um grupo de memórias em um único arquivo via Haiku.
+    Consolida um grupo de memórias em um único arquivo via Sonnet.
 
     Args:
         user_id: ID do usuário
@@ -314,17 +340,24 @@ def _consolidate_group(
 
     memories_text = "\n\n---\n\n".join(memory_texts)
 
-    # Chamar Haiku para consolidar
+    # Chamar Sonnet para consolidar
+    # Constantes para limits de output (tokens)
+    CONSOLIDATION_MAX_TOKENS = 1200  # Tokens max para consolidação inicial
+    VERIFICATION_MAX_TOKENS = 800    # Tokens max para verificação de fatos
+    RETRY_MAX_TOKENS = 1200          # Tokens max para retry (mesmo que consolidação)
+    CONSOLIDATION_MAX_OUTPUT_CHARS = 1200  # Limite de caracteres do output final
+    INPUT_LIMIT = 12000  # Limite de input para ambas as chamadas Sonnet
+
     try:
         client = anthropic.Anthropic()
         response = client.messages.create(
-            model=HAIKU_MODEL,
-            max_tokens=1200,
+            model=SONNET_MODEL,
+            max_tokens=CONSOLIDATION_MAX_TOKENS,
             messages=[{
                 "role": "user",
                 "content": CONSOLIDATION_PROMPT.format(
                     count=len(memory_texts),
-                    memories=memories_text[:6000],  # Limitar input
+                    memories=memories_text[:INPUT_LIMIT],  # Limitar input
                 ),
             }],
         )
@@ -333,19 +366,18 @@ def _consolidate_group(
 
         if not consolidated_content or len(consolidated_content) < 20:
             logger.warning(
-                f"[MEMORY_CONSOLIDATOR] Haiku retornou conteúdo insuficiente "
+                f"[MEMORY_CONSOLIDATOR] Sonnet retornou conteúdo insuficiente "
                 f"para {dir_path} ({len(consolidated_content)} chars)"
             )
             return None
 
         # T2-4: Verificação de preservação de fatos
-        # Cross-check: perguntar ao Haiku se algum fato foi perdido
-        # NOTA: Usar mesmo limite de truncamento que a consolidação (6000 chars)
-        INPUT_LIMIT = 6000
+        # Cross-check: perguntar ao Sonnet se algum fato foi perdido
+        # NOTA: Usar mesmo limite de truncamento que a consolidação
         try:
             verify_response = client.messages.create(
-                model=HAIKU_MODEL,
-                max_tokens=500,
+                model=SONNET_MODEL,
+                max_tokens=VERIFICATION_MAX_TOKENS,
                 messages=[{
                     "role": "user",
                     "content": VERIFICATION_PROMPT.format(
@@ -369,30 +401,37 @@ def _consolidate_group(
                     f"Consolide estas {len(memory_texts)} notas em UM resumo. "
                     f"ATENÇÃO: O resumo anterior perdeu estes fatos — INCLUA-OS obrigatoriamente:\n"
                     f"{verify_text}\n\n"
-                    f"NOTAS:\n{memories_text[:6000]}\n\n"
-                    f"RESUMO CONSOLIDADO (máximo 1000 caracteres):"
+                    f"NOTAS:\n{memories_text[:INPUT_LIMIT]}\n\n"
+                    f"RESUMO CONSOLIDADO (máximo {CONSOLIDATION_MAX_OUTPUT_CHARS} caracteres):"
                 )
 
                 retry_response = client.messages.create(
-                    model=HAIKU_MODEL,
-                    max_tokens=1500,
+                    model=SONNET_MODEL,
+                    max_tokens=RETRY_MAX_TOKENS,
                     messages=[{"role": "user", "content": retry_prompt}],
                 )
                 retry_content = retry_response.content[0].text.strip()
 
-                # Validar re-consolidação (mesma regra que consolidação inicial)
-                if retry_content and len(retry_content) >= 20:
+                # Validar re-consolidação: mínimo 20 chars + máximo respeitado
+                if retry_content and len(retry_content) >= 20 and len(retry_content) <= CONSOLIDATION_MAX_OUTPUT_CHARS:
                     consolidated_content = retry_content
-                else:
-                    logger.warning(
-                        f"[MEMORY_CONSOLIDATOR] Re-consolidação insuficiente para {dir_path} "
-                        f"({len(retry_content)} chars), mantendo consolidado original"
+                    logger.info(
+                        f"[MEMORY_CONSOLIDATOR] Re-consolidação para {dir_path}: "
+                        f"{len(consolidated_content)} chars (com fatos recuperados)"
                     )
-
-                logger.info(
-                    f"[MEMORY_CONSOLIDATOR] Re-consolidação para {dir_path}: "
-                    f"{len(consolidated_content)} chars (com fatos recuperados)"
-                )
+                else:
+                    # Truncar se excedeu limite, com warning
+                    if len(retry_content) > CONSOLIDATION_MAX_OUTPUT_CHARS:
+                        logger.warning(
+                            f"[MEMORY_CONSOLIDATOR] Re-consolidação excedeu {CONSOLIDATION_MAX_OUTPUT_CHARS} chars "
+                            f"({len(retry_content)} chars), truncando"
+                        )
+                        consolidated_content = retry_content[:CONSOLIDATION_MAX_OUTPUT_CHARS].rstrip()
+                    else:
+                        logger.warning(
+                            f"[MEMORY_CONSOLIDATOR] Re-consolidação insuficiente para {dir_path} "
+                            f"({len(retry_content)} chars), mantendo consolidado original"
+                        )
             else:
                 logger.info(
                     f"[MEMORY_CONSOLIDATOR] Verificação OK para {dir_path}: "
@@ -408,7 +447,7 @@ def _consolidate_group(
 
     except Exception as e:
         logger.warning(
-            f"[MEMORY_CONSOLIDATOR] Erro ao chamar Haiku para {dir_path}: {e}"
+            f"[MEMORY_CONSOLIDATOR] Erro ao chamar Sonnet para {dir_path}: {e}"
         )
         return None
 
@@ -422,7 +461,7 @@ def _consolidate_group(
             AgentMemoryVersion.save_version(
                 memory_id=existing.id,
                 content=existing.content,
-                changed_by='haiku',
+                changed_by='sonnet',
             )
         existing.content = consolidated_content
     else:
@@ -439,7 +478,7 @@ def _consolidate_group(
             AgentMemoryVersion.save_version(
                 memory_id=mem.id,
                 content=mem.content,
-                changed_by='haiku',
+                changed_by='sonnet',
             )
 
         # Renomear para _archived_

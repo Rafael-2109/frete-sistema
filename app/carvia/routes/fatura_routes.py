@@ -5,13 +5,15 @@ Rotas de Faturas CarVia — Cliente + Transportadora
 import logging
 from datetime import date
 
-from flask import render_template, request, flash, redirect, url_for
+from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.carvia.models import (
     CarviaFaturaCliente, CarviaFaturaTransportadora,
+    CarviaFaturaTransportadoraItem,
     CarviaOperacao, CarviaSubcontrato,
 )
 
@@ -443,7 +445,7 @@ def register_fatura_routes(bp):
     @bp.route('/faturas-transportadora/nova', methods=['GET', 'POST'])
     @login_required
     def nova_fatura_transportadora():
-        """Cria nova fatura de transportadora — agrupa subcontratos confirmados"""
+        """Cria nova fatura de transportadora — form simplificado sem subcontratos"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -451,45 +453,36 @@ def register_fatura_routes(bp):
         if request.method == 'POST':
             transportadora_id = request.form.get('transportadora_id', type=int)
             numero_fatura = request.form.get('numero_fatura', '').strip()
+            valor_total_str = request.form.get('valor_total', '').strip()
             data_emissao_str = request.form.get('data_emissao', '')
             vencimento_str = request.form.get('vencimento', '')
             observacoes = request.form.get('observacoes', '')
-            subcontrato_ids = request.form.getlist('subcontrato_ids', type=int)
 
-            if not transportadora_id or not numero_fatura or not data_emissao_str:
-                flash('Transportadora, numero da fatura e data de emissao sao obrigatorios.', 'warning')
+            # Validacoes
+            if not transportadora_id or not numero_fatura or not data_emissao_str or not vencimento_str:
+                flash('Transportadora, numero da fatura, valor, data de emissao e vencimento sao obrigatorios.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_transportadora'))
 
-            if not subcontrato_ids:
-                flash('Selecione ao menos um subcontrato.', 'warning')
+            try:
+                valor_total = float(valor_total_str.replace(',', '.')) if valor_total_str else 0
+            except (ValueError, TypeError):
+                flash('Valor total invalido.', 'warning')
+                return redirect(url_for('carvia.nova_fatura_transportadora'))
+
+            if valor_total <= 0:
+                flash('Valor total deve ser maior que zero.', 'warning')
+                return redirect(url_for('carvia.nova_fatura_transportadora'))
+
+            # Validar transportadora existe
+            from app.transportadoras.models import Transportadora
+            transportadora = db.session.get(Transportadora, transportadora_id)
+            if not transportadora:
+                flash('Transportadora nao encontrada.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_transportadora'))
 
             try:
                 data_emissao = date.fromisoformat(data_emissao_str)
-                vencimento = date.fromisoformat(vencimento_str) if vencimento_str else None
-
-                # Buscar subcontratos selecionados
-                # GAP-29: FOR UPDATE para evitar faturamento duplo concorrente
-                subcontratos = db.session.query(CarviaSubcontrato).filter(
-                    CarviaSubcontrato.id.in_(subcontrato_ids),
-                    CarviaSubcontrato.transportadora_id == transportadora_id,
-                    CarviaSubcontrato.status == 'CONFIRMADO',
-                    CarviaSubcontrato.fatura_transportadora_id.is_(None),
-                ).with_for_update().all()
-
-                if not subcontratos:
-                    flash('Nenhum subcontrato valido selecionado.', 'warning')
-                    return redirect(url_for('carvia.nova_fatura_transportadora'))
-
-                # Calcular valor total (valor_final = valor_acertado ou valor_cotado)
-                valor_total = sum(
-                    float(sub.valor_final or sub.cte_valor or 0) for sub in subcontratos
-                )
-
-                # GAP-25: Validar valor_total > 0
-                if valor_total <= 0:
-                    flash('Valor total da fatura deve ser maior que zero. Verifique os valores dos subcontratos.', 'warning')
-                    return redirect(url_for('carvia.nova_fatura_transportadora'))
+                vencimento = date.fromisoformat(vencimento_str)
 
                 fatura = CarviaFaturaTransportadora(
                     transportadora_id=transportadora_id,
@@ -517,65 +510,257 @@ def register_fatura_routes(bp):
                         fatura.arquivo_pdf_path = saved_path
                         fatura.arquivo_nome_original = arquivo.filename
 
-                # Vincular subcontratos
-                for sub in subcontratos:
-                    sub.fatura_transportadora_id = fatura.id
-                    sub.status = 'FATURADO'
-
-                # Gerar itens de detalhe a partir dos subcontratos
-                from app.carvia.services.linking_service import LinkingService
-                LinkingService().criar_itens_fatura_transportadora(fatura.id)
-
                 db.session.commit()
 
                 flash(
-                    f'Fatura {numero_fatura} criada. '
-                    f'{len(subcontratos)} subcontratos vinculados. '
-                    f'Valor total: R$ {valor_total:.2f}',
+                    f'Fatura {numero_fatura} criada com sucesso. '
+                    f'Valor: R$ {valor_total:.2f}. '
+                    f'Anexe subcontratos na tela de detalhe.',
                     'success'
                 )
                 return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura.id))
 
+            except IntegrityError:
+                db.session.rollback()
+                flash(
+                    f'Ja existe uma fatura com numero "{numero_fatura}" '
+                    f'para esta transportadora.',
+                    'warning'
+                )
             except Exception as e:
                 db.session.rollback()
                 logger.error(f"Erro ao criar fatura transportadora: {e}")
                 flash(f'Erro: {e}', 'danger')
 
-        # GET — listar transportadoras com subcontratos confirmados disponiveis
-        from app.transportadoras.models import Transportadora
-        transportadoras_disponiveis = db.session.query(
-            Transportadora.id,
-            Transportadora.razao_social,
-            Transportadora.cnpj,
-            db.func.count(CarviaSubcontrato.id).label('qtd_subcontratos'),
-        ).join(
-            CarviaSubcontrato,
-            CarviaSubcontrato.transportadora_id == Transportadora.id,
-        ).filter(
-            CarviaSubcontrato.status == 'CONFIRMADO',
-            CarviaSubcontrato.fatura_transportadora_id.is_(None),
-        ).group_by(
-            Transportadora.id,
-            Transportadora.razao_social,
-            Transportadora.cnpj,
-        ).all()
+        # GET — form simplificado
+        data_hoje = date.today().isoformat()
 
-        # Se transportadora selecionada, buscar subcontratos
-        transp_selecionada = request.args.get('transportadora_id', type=int)
-        subcontratos_disponiveis = []
-        if transp_selecionada:
-            subcontratos_disponiveis = db.session.query(CarviaSubcontrato).filter(
-                CarviaSubcontrato.transportadora_id == transp_selecionada,
+        return render_template(
+            'carvia/faturas_transportadora/nova.html',
+            data_hoje=data_hoje,
+        )
+
+    # ===================== ANEXAR / DESANEXAR SUBCONTRATOS =====================
+
+    @bp.route('/faturas-transportadora/<int:fatura_id>/anexar-subcontratos', methods=['POST'])
+    @login_required
+    def anexar_subcontratos_fatura_transportadora(fatura_id):
+        """Anexa subcontratos confirmados a uma fatura de transportadora existente"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nao e possivel anexar subcontratos a fatura ja conferida.'
+            }), 400
+
+        data = request.get_json(silent=True) or {}
+        subcontrato_ids = data.get('subcontrato_ids', [])
+        if not subcontrato_ids:
+            return jsonify({'sucesso': False, 'erro': 'Nenhum subcontrato selecionado.'}), 400
+
+        try:
+            # FOR UPDATE para evitar vinculacao concorrente
+            subcontratos = db.session.query(CarviaSubcontrato).filter(
+                CarviaSubcontrato.id.in_(subcontrato_ids),
+                CarviaSubcontrato.transportadora_id == fatura.transportadora_id,
+                CarviaSubcontrato.status == 'CONFIRMADO',
+                CarviaSubcontrato.fatura_transportadora_id.is_(None),
+            ).with_for_update().all()
+
+            if not subcontratos:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'Nenhum subcontrato valido para anexar. '
+                            'Verifique se estao CONFIRMADOS e sem fatura vinculada.'
+                }), 400
+
+            # Vincular subcontratos
+            for sub in subcontratos:
+                sub.fatura_transportadora_id = fatura.id
+                sub.status = 'FATURADO'
+
+            # Gerar itens de detalhe incrementalmente
+            from app.carvia.services.linking_service import LinkingService
+            LinkingService().criar_itens_fatura_transportadora_incremental(
+                fatura.id, [sub.id for sub in subcontratos]
+            )
+
+            db.session.commit()
+
+            # Calcular soma total de TODOS os subcontratos vinculados (apos commit)
+            todos_subs = db.session.query(CarviaSubcontrato).filter(
+                CarviaSubcontrato.fatura_transportadora_id == fatura.id,
+            ).all()
+            soma_total = sum(float(s.valor_final or 0) for s in todos_subs)
+
+            logger.info(
+                f"Fatura transportadora #{fatura_id}: {len(subcontratos)} subcontratos "
+                f"anexados por {current_user.email}. Soma total: {soma_total:.2f}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'qtd_anexados': len(subcontratos),
+                'soma_total_subcontratos': round(soma_total, 2),
+                'valor_total_fatura': float(fatura.valor_total or 0),
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao anexar subcontratos fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/faturas-transportadora/<int:fatura_id>/desanexar-subcontrato/<int:sub_id>', methods=['POST'])
+    @login_required
+    def desanexar_subcontrato_fatura_transportadora(fatura_id, sub_id):
+        """Desanexa um subcontrato de uma fatura de transportadora"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nao e possivel desanexar subcontratos de fatura ja conferida.'
+            }), 400
+
+        try:
+            sub = db.session.query(CarviaSubcontrato).filter(
+                CarviaSubcontrato.id == sub_id,
+                CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+            ).with_for_update().first()
+
+            if not sub:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'Subcontrato nao encontrado nesta fatura.'
+                }), 404
+
+            # Reverter subcontrato
+            sub.fatura_transportadora_id = None
+            sub.status = 'CONFIRMADO'
+
+            # Remover item de detalhe
+            CarviaFaturaTransportadoraItem.query.filter_by(
+                fatura_transportadora_id=fatura_id,
+                subcontrato_id=sub_id,
+            ).delete()
+
+            db.session.commit()
+
+            # Calcular soma restante
+            subs_restantes = db.session.query(CarviaSubcontrato).filter(
+                CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+            ).all()
+            soma_restantes = sum(float(s.valor_final or 0) for s in subs_restantes)
+
+            logger.info(
+                f"Fatura transportadora #{fatura_id}: subcontrato #{sub_id} "
+                f"desanexado por {current_user.email}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'soma_valores_restantes': round(soma_restantes, 2),
+                'valor_total_fatura': float(fatura.valor_total or 0),
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao desanexar subcontrato #{sub_id} da fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/subcontratos-disponiveis/<int:transportadora_id>')
+    @login_required
+    def api_subcontratos_disponiveis(transportadora_id):
+        """Lista subcontratos disponiveis para anexar a uma fatura"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            subcontratos = db.session.query(CarviaSubcontrato).filter(
+                CarviaSubcontrato.transportadora_id == transportadora_id,
                 CarviaSubcontrato.status == 'CONFIRMADO',
                 CarviaSubcontrato.fatura_transportadora_id.is_(None),
             ).order_by(CarviaSubcontrato.criado_em.desc()).all()
 
-        return render_template(
-            'carvia/faturas_transportadora/nova.html',
-            transportadoras_disponiveis=transportadoras_disponiveis,
-            transp_selecionada=transp_selecionada,
-            subcontratos_disponiveis=subcontratos_disponiveis,
-        )
+            resultado = []
+            for sub in subcontratos:
+                operacao = sub.operacao if hasattr(sub, 'operacao') else None
+                resultado.append({
+                    'id': sub.id,
+                    'cte_numero': sub.cte_numero or f'#{sub.id}',
+                    'cliente': operacao.nome_cliente if operacao else '-',
+                    'destino': (
+                        f"{operacao.cidade_destino}/{operacao.uf_destino}"
+                        if operacao else '-'
+                    ),
+                    'valor_cotado': float(sub.valor_cotado or 0),
+                    'valor_acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else None,
+                    'valor_final': float(sub.valor_final or 0),
+                })
+
+            return jsonify({'sucesso': True, 'subcontratos': resultado})
+
+        except Exception as e:
+            logger.error(f"Erro ao listar subcontratos disponiveis: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/faturas-transportadora/<int:fatura_id>/atualizar-valor', methods=['POST'])
+    @login_required
+    def atualizar_valor_fatura_transportadora(fatura_id):
+        """Atualiza valor total de uma fatura de transportadora"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Nao e possivel alterar valor de fatura ja conferida.'
+            }), 400
+
+        data = request.get_json(silent=True) or {}
+        try:
+            valor_total = float(data.get('valor_total', 0))
+        except (ValueError, TypeError):
+            return jsonify({'sucesso': False, 'erro': 'Valor invalido.'}), 400
+
+        if valor_total <= 0:
+            return jsonify({'sucesso': False, 'erro': 'Valor deve ser maior que zero.'}), 400
+
+        try:
+            valor_anterior = float(fatura.valor_total or 0)
+            fatura.valor_total = valor_total
+            db.session.commit()
+
+            logger.info(
+                f"Fatura transportadora #{fatura_id}: valor atualizado "
+                f"R$ {valor_anterior:.2f} -> R$ {valor_total:.2f} "
+                f"por {current_user.email}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'valor_total': round(valor_total, 2),
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao atualizar valor fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
     @bp.route('/faturas-transportadora/<int:fatura_id>')
     @login_required

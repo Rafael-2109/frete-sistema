@@ -749,6 +749,104 @@ class LinkingService:
         return count
 
     # ------------------------------------------------------------------
+    # criar_itens_fatura_transportadora_incremental: apenas novos subs
+    # ------------------------------------------------------------------
+
+    def criar_itens_fatura_transportadora_incremental(self, fatura_id, subcontrato_ids):
+        """Gera CarviaFaturaTransportadoraItem para subcontratos especificos.
+
+        Similar a criar_itens_fatura_transportadora() mas NAO verifica existentes
+        globalmente — cria apenas itens para os subcontratos informados.
+        Usado ao anexar subcontratos a fatura existente.
+
+        Args:
+            fatura_id: ID da CarviaFaturaTransportadora
+            subcontrato_ids: Lista de IDs de subcontratos a gerar itens
+
+        Returns:
+            int — numero de itens criados
+        """
+        from app.carvia.models import (
+            CarviaFaturaTransportadora, CarviaFaturaTransportadoraItem,
+            CarviaSubcontrato, CarviaOperacaoNf
+        )
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            logger.warning(f"Fatura transportadora {fatura_id} nao encontrada")
+            return 0
+
+        if not subcontrato_ids:
+            return 0
+
+        subcontratos = CarviaSubcontrato.query.filter(
+            CarviaSubcontrato.id.in_(subcontrato_ids),
+            CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+        ).all()
+
+        if not subcontratos:
+            logger.info(
+                f"Fatura transportadora {fatura_id}: nenhum subcontrato valido "
+                f"entre {subcontrato_ids}"
+            )
+            return 0
+
+        count = 0
+        for sub in subcontratos:
+            # Verificar se item ja existe para este subcontrato (idempotencia)
+            existente = CarviaFaturaTransportadoraItem.query.filter_by(
+                fatura_transportadora_id=fatura_id,
+                subcontrato_id=sub.id,
+            ).first()
+            if existente:
+                logger.info(
+                    f"Item ja existe: fatura={fatura_id} sub={sub.id}, pulando"
+                )
+                continue
+
+            operacao = sub.operacao if hasattr(sub, 'operacao') else None
+
+            # Buscar primeira NF da operacao (para display)
+            nf_id = None
+            nf_numero = None
+            if operacao:
+                junction = CarviaOperacaoNf.query.filter_by(
+                    operacao_id=operacao.id
+                ).first()
+                if junction:
+                    from app.carvia.models import CarviaNf
+                    nf = db.session.get(CarviaNf, junction.nf_id)
+                    if nf:
+                        nf_id = nf.id
+                        nf_numero = nf.numero_nf
+
+            item = CarviaFaturaTransportadoraItem(
+                fatura_transportadora_id=fatura_id,
+                subcontrato_id=sub.id,
+                operacao_id=sub.operacao_id,
+                nf_id=nf_id,
+                cte_numero=sub.cte_numero,
+                cte_data_emissao=sub.cte_data_emissao,
+                contraparte_cnpj=operacao.cnpj_cliente if operacao else None,
+                contraparte_nome=operacao.nome_cliente if operacao else None,
+                nf_numero=nf_numero,
+                valor_mercadoria=operacao.valor_mercadoria if operacao else None,
+                peso_kg=float(operacao.peso_utilizado or 0) if operacao else None,
+                valor_frete=float(sub.valor_final or 0) if sub.valor_final else None,
+                valor_cotado=sub.valor_cotado,
+                valor_acertado=sub.valor_acertado,
+            )
+            db.session.add(item)
+            count += 1
+            logger.info(
+                f"Linking incremental: fat_transp_item criado "
+                f"fatura={fatura_id} sub={sub.id} op={sub.operacao_id}"
+            )
+
+        db.session.flush()
+        return count
+
+    # ------------------------------------------------------------------
     # criar_itens_fatura_cliente_from_operacoes: gera itens (UI manual)
     # ------------------------------------------------------------------
 
