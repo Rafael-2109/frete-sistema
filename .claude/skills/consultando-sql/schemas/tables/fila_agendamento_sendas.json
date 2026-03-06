@@ -91,8 +91,10 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_data_agendamento",
+      "name": "idx_fila_sendas_processo",
       "columns": [
+        "status",
+        "cnpj",
         "data_agendamento"
       ],
       "unique": false
@@ -105,10 +107,8 @@
       "unique": false
     },
     {
-      "name": "idx_fila_sendas_processo",
+      "name": "ix_fila_agendamento_sendas_data_agendamento",
       "columns": [
-        "status",
-        "cnpj",
         "data_agendamento"
       ],
       "unique": false

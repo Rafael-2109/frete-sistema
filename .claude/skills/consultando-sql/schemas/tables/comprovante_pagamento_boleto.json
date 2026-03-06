@@ -200,6 +200,13 @@
       "unique": false
     },
     {
+      "name": "idx_comp_pagador_cnpj",
+      "columns": [
+        "pagador_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
         "tipo"
@@ -210,13 +217,6 @@
       "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
         "ofx_checknum"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_pagador_cnpj",
-      "columns": [
-        "pagador_cnpj_cpf"
       ],
       "unique": false
     },

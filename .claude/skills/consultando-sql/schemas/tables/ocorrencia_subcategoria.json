@@ -25,6 +25,12 @@
       "default": true
     },
     {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "FK → ocorrencia_categoria.id",
+      "nullable": false
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -43,6 +49,21 @@
     {
       "name": "atualizado_por",
       "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "categoria_id",
+      "references": "ocorrencia_categoria.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_ocorrencia_subcategoria_categoria_id",
+      "columns": [
+        "categoria_id"
+      ],
+      "unique": false
     }
   ]
 }

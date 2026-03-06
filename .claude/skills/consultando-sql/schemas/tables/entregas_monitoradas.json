@@ -154,9 +154,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "separacao_lote_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -168,9 +168,9 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "cnpj_cliente"
+        "separacao_lote_id"
       ],
       "unique": false
     }

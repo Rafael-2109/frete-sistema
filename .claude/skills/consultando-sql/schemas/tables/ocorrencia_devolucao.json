@@ -187,14 +187,6 @@
       "unique": false
     },
     {
-      "name": "idx_ocorrencia_status_destino",
-      "columns": [
-        "status",
-        "destino"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_ocorrencia_devolucao_numero_ocorrencia",
       "columns": [
         "numero_ocorrencia"
@@ -202,16 +194,10 @@
       "unique": true
     },
     {
-      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "name": "idx_ocorrencia_status_destino",
       "columns": [
-        "nf_devolucao_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_origem_id",
-      "columns": [
-        "origem_id"
+        "status",
+        "destino"
       ],
       "unique": false
     },
@@ -223,12 +209,26 @@
       "unique": false
     },
     {
+      "name": "ix_ocorrencia_devolucao_origem_id",
+      "columns": [
+        "origem_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_ocorrencia_categoria",
       "columns": [
         "categoria",
         "subcategoria"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
+      "columns": [
+        "nf_devolucao_id"
+      ],
+      "unique": true
     },
     {
       "name": "idx_ocorrencia_responsavel",

@@ -102,20 +102,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_creditos_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_creditos_nf_remessa_id",
-      "columns": [
-        "nf_remessa_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pallet_creditos_cnpj_responsavel",
       "columns": [
         "cnpj_responsavel"
@@ -131,6 +117,13 @@
       "unique": false
     },
     {
+      "name": "ix_pallet_creditos_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_credito_tipo_status",
       "columns": [
         "tipo_responsavel",
@@ -142,6 +135,13 @@
       "name": "idx_credito_vencimento",
       "columns": [
         "data_vencimento",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_creditos_status",
+      "columns": [
         "status"
       ],
       "unique": false
