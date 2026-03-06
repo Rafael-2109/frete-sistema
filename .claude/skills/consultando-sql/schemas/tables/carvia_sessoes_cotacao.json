@@ -1,0 +1,81 @@
+{
+  "name": "carvia_sessoes_cotacao",
+  "description": "Tabela carvia_sessoes_cotacao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_sessao",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_sessao",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "RASCUNHO"
+    },
+    {
+      "name": "valor_contra_proposta",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "resposta_cliente_obs",
+      "type": "text"
+    },
+    {
+      "name": "respondido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "respondido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "enviado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "enviado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_sessoes_cotacao_numero_sessao",
+      "columns": [
+        "numero_sessao"
+      ],
+      "unique": false
+    }
+  ]
+}

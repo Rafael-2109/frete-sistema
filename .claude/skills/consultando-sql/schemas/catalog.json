@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 136,
+  "total_tabelas": 138,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -311,6 +311,24 @@
         "cte_numero",
         "cte_chave_acesso",
         "cte_valor"
+      ]
+    },
+    {
+      "name": "carvia_sessao_demandas",
+      "description": "Tabela carvia_sessao_demandas",
+      "key_fields": [
+        "sessao_id",
+        "ordem",
+        "origem_empresa"
+      ]
+    },
+    {
+      "name": "carvia_sessoes_cotacao",
+      "description": "Tabela carvia_sessoes_cotacao",
+      "key_fields": [
+        "numero_sessao",
+        "nome_sessao",
+        "status"
       ]
     },
     {
@@ -848,7 +866,7 @@
       "key_fields": [
         "codigo",
         "descricao",
-        "criado_por"
+        "categoria_id"
       ]
     },
     {
@@ -857,7 +875,7 @@
       "key_fields": [
         "codigo",
         "descricao",
-        "criado_por"
+        "categoria_id"
       ]
     },
     {

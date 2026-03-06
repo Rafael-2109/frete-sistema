@@ -255,18 +255,39 @@
   ],
   "indices": [
     {
-      "name": "ix_conhecimento_transporte_dfe_id",
-      "columns": [
-        "dfe_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_conhecimento_transporte_odoo_status_codigo",
       "columns": [
         "odoo_status_codigo"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_dfe_id",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": true
     },
     {
       "name": "ix_conhecimento_transporte_tomador_e_empresa",
@@ -290,6 +311,13 @@
       "unique": false
     },
     {
+      "name": "ix_conhecimento_transporte_tipo_cte",
+      "columns": [
+        "tipo_cte"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_conhecimento_transporte_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -297,9 +325,9 @@
       "unique": true
     },
     {
-      "name": "ix_conhecimento_transporte_tipo_cte",
+      "name": "ix_conhecimento_transporte_cte_complementa_chave",
       "columns": [
-        "tipo_cte"
+        "cte_complementa_chave"
       ],
       "unique": false
     },
@@ -326,9 +354,9 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
       "columns": [
-        "cte_complementa_chave"
+        "cte_complementa_id"
       ],
       "unique": false
     },
@@ -336,13 +364,6 @@
       "name": "idx_cte_cnpj_remetente",
       "columns": [
         "cnpj_remetente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
-      "columns": [
-        "cte_complementa_id"
       ],
       "unique": false
     },
@@ -406,27 +427,6 @@
       "name": "ix_conhecimento_transporte_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_remetente",
-      "columns": [
-        "cnpj_remetente"
       ],
       "unique": false
     }

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 208,
+  "total_relationships": 213,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -156,6 +156,24 @@
       "from_table": "carvia_operacoes",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_sessao_demandas",
+      "from_column": "sessao_id",
+      "to_table": "carvia_sessoes_cotacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_sessao_demandas",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_sessao_demandas",
+      "from_column": "tabela_frete_id",
+      "to_table": "tabelas_frete",
       "to_column": "id"
     },
     {
@@ -888,6 +906,18 @@
       "from_table": "ocorrencia_devolucao_subcategoria",
       "from_column": "subcategoria_id",
       "to_table": "ocorrencia_subcategoria",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_responsavel",
+      "from_column": "categoria_id",
+      "to_table": "ocorrencia_categoria",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_subcategoria",
+      "from_column": "categoria_id",
+      "to_table": "ocorrencia_categoria",
       "to_column": "id"
     },
     {

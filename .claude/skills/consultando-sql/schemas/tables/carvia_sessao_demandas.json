@@ -1,0 +1,147 @@
+{
+  "name": "carvia_sessao_demandas",
+  "description": "Tabela carvia_sessao_demandas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "sessao_id",
+      "type": "integer",
+      "description": "FK → carvia_sessoes_cotacao.id",
+      "nullable": false
+    },
+    {
+      "name": "ordem",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "origem_empresa",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "origem_uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "origem_cidade",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "destino_empresa",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "destino_uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "destino_cidade",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_carga",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "peso",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "valor_mercadoria",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "volume",
+      "type": "integer"
+    },
+    {
+      "name": "data_coleta",
+      "type": "date"
+    },
+    {
+      "name": "data_entrega_prevista",
+      "type": "date"
+    },
+    {
+      "name": "data_agendamento",
+      "type": "date"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id"
+    },
+    {
+      "name": "tabela_frete_id",
+      "type": "integer",
+      "description": "FK → tabelas_frete.id"
+    },
+    {
+      "name": "valor_frete_calculado",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "detalhes_calculo",
+      "type": "json"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "sessao_id",
+      "references": "carvia_sessoes_cotacao.id"
+    },
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
+      "column": "tabela_frete_id",
+      "references": "tabelas_frete.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "sessao_id",
+      "ordem"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_sessao_demanda_destino_uf",
+      "columns": [
+        "destino_uf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_sessao_demandas_sessao_id",
+      "columns": [
+        "sessao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

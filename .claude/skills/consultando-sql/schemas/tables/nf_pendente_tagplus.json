@@ -136,9 +136,10 @@
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_origem",
+      "name": "idx_nf_pendente_resolvido",
       "columns": [
-        "origem"
+        "resolvido",
+        "importado"
       ],
       "unique": false
     },
@@ -150,17 +151,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_resolvido",
+      "name": "ix_nf_pendente_tagplus_origem",
       "columns": [
-        "resolvido"
+        "origem"
       ],
       "unique": false
     },
     {
-      "name": "idx_nf_pendente_resolvido",
+      "name": "ix_nf_pendente_tagplus_resolvido",
       "columns": [
-        "resolvido",
-        "importado"
+        "resolvido"
       ],
       "unique": false
     }
