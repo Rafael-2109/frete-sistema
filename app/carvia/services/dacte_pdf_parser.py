@@ -437,7 +437,9 @@ class DactePDFParser:
 
         Strategies (ordem de confiabilidade):
         1. Texto: Procura "NUMERO" no header, pega numero na proxima linha
-           (filtra CEPs — 8 digitos iniciando com 0)
+           1a) Padrao estrutural "57 SERIE NUMERO" (ex: 57 001 000.029.080)
+           1b) Fallback: re.findall(r'\\d+') com filtro de CEPs
+           1c) Regex na mesma linha apos "NUMERO"
         2. Chave: Extrai das posicoes 25-33 da chave de acesso
 
         Prefere texto primeiro porque:
@@ -454,8 +456,17 @@ class DactePDFParser:
         for i, linha in enumerate(linhas):
             upper = linha.upper()
             if 'NÚMERO' in upper or 'NUMERO' in upper:
-                # Buscar numeros na proxima linha
                 if i + 1 < len(linhas):
+                    # 1a) Padrao estrutural "57 SERIE NUMERO" na proxima linha
+                    #     Cobre Bsoft (000.029.080), ESL, Montenegro
+                    m_estrutural = re.search(
+                        r'\b57\s+\d{1,3}\s+(\d[\d.]*\d)', linhas[i + 1]
+                    )
+                    if m_estrutural:
+                        numero_texto = str(int(m_estrutural.group(1).replace('.', '')))
+                        break
+
+                    # 1b) Fallback: extrair numeros individuais (padrao original)
                     nums = re.findall(r'\d+', linhas[i + 1])
                     if nums:
                         # Filtrar CEPs (8 digitos, tipicamente comecam com 0)
@@ -468,7 +479,8 @@ class DactePDFParser:
                         if nums_filtrados:
                             numero_texto = str(int(nums_filtrados[0]))
                             break
-                # Tentar na mesma linha (apos "NUMERO")
+
+                # 1c) Tentar na mesma linha (apos "NUMERO")
                 m = re.search(r'N[ÚU]MERO[^0-9]*(\d{3,9})', upper)
                 if m:
                     numero_texto = str(int(m.group(1)))
