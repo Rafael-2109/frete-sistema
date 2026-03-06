@@ -89,7 +89,7 @@ def _get_anthropic_client() -> anthropic.Anthropic:
 
 def _format_messages_for_summary(messages: List[Dict[str, Any]]) -> str:
     """
-    Formata mensagens da sessão para enviar ao Haiku.
+    Formata mensagens da sessão para enviar ao Sonnet.
 
     Inclui role, content e tools_used. Trunca para MAX_MESSAGES_CHARS.
 
@@ -131,7 +131,7 @@ def summarize_session(
     session_id: str = "",
 ) -> Optional[Dict[str, Any]]:
     """
-    Gera resumo estruturado de uma sessão via Haiku.
+    Gera resumo estruturado de uma sessão via Sonnet.
 
     Args:
         messages: Lista de mensagens da sessão
@@ -204,7 +204,7 @@ def _parse_json_response(
     Tenta parse direto, depois fallback com regex para extrair JSON do texto.
 
     Args:
-        result_text: Texto de resposta do Haiku
+        result_text: Texto de resposta do Sonnet
         session_id: ID da sessão (para logging)
 
     Returns:

@@ -593,7 +593,7 @@ def _stream_chat_response(
 
             # =============================================================
             # P1-1: Prompt Suggestions (best-effort, após done)
-            # Gera 2-3 sugestões contextuais via Haiku (~300-800ms)
+            # Gera 2-3 sugestões contextuais via Sonnet (~300-800ms)
             # O evento 'done' já foi emitido — frontend já mostra resposta
             # =============================================================
             try:

@@ -85,7 +85,7 @@ def generate_suggestions(
     tools_used: Optional[List[str]] = None,
 ) -> List[str]:
     """
-    Gera 2-3 sugestões contextuais de follow-up via Haiku.
+    Gera 2-3 sugestões contextuais de follow-up via Sonnet.
 
     Args:
         user_message: Última mensagem do usuário
@@ -153,7 +153,7 @@ def _parse_suggestions(result_text: str) -> List[str]:
     Tenta parse direto, depois fallback com regex para extrair JSON array.
 
     Args:
-        result_text: Texto de resposta do Haiku
+        result_text: Texto de resposta do Sonnet
 
     Returns:
         Lista de strings (2-3 sugestões) ou []

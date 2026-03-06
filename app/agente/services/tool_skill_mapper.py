@@ -101,7 +101,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     # ── Dados / BI ──
     'consultando-sql': 'Consulta SQL',
     'exportando-arquivos': 'Exportacao de Dados',
-    'lendo-arquivos': 'Leitura de Arquivos',
+    'lendo-arquivos': 'Importacao de Dados',
     'diagnosticando-banco': 'Diagnostico de Banco',
 
     # ── Odoo ──
@@ -114,11 +114,15 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'razao-geral-odoo': 'Razao Geral Odoo',
     'integracao-odoo': 'Integracao Odoo',
 
+    # ── CarVia ──
+    'gerindo-carvia': 'Gestao CarVia',
+
     # ── SSW ──
     'acessando-ssw': 'Consulta SSW',
     'operando-ssw': 'Operacao SSW',
 
     # ── Sistema ──
+    'buscando-rotas': 'Busca de Rotas',
     'frontend-design': 'Design Frontend',
     'memoria-usuario': 'Memoria do Agente',
     'skill-creator': 'Criacao de Skills',
@@ -150,7 +154,7 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     'Catalogo de Dados': 'Dados',
     'Busca de Sessoes': 'Dados',
     'Exportacao de Dados': 'Dados',
-    'Leitura de Arquivos': 'Dados',
+    'Importacao de Dados': 'Dados',
     'Diagnostico de Banco': 'Dados',
 
     # ── Odoo ──
@@ -163,11 +167,15 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     'Razao Geral Odoo': 'Odoo',
     'Integracao Odoo': 'Odoo',
 
+    # ── CarVia ──
+    'Gestao CarVia': 'Logistica',
+
     # ── SSW ──
     'Consulta SSW': 'SSW',
     'Operacao SSW': 'SSW',
 
     # ── Sistema ──
+    'Busca de Rotas': 'Sistema',
     'Monitoramento Render': 'Sistema',
     'Memoria do Agente': 'Sistema',
     'Execucao de Comandos': 'Sistema',

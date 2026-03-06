@@ -219,7 +219,7 @@ def analyze_patterns(
         client = _get_anthropic_client()
         formatted = _format_sessions_for_analysis(sessions_data)
 
-        # Preparar bloco de correções (input adicional para Haiku)
+        # Preparar bloco de correções (input adicional para Sonnet)
         corrections_block = _format_corrections_for_analysis(corrections or [])
         if not corrections_block:
             corrections_block = '(Nenhuma correcao registrada ainda)'
@@ -399,7 +399,7 @@ def _save_patterns_to_memory(
 
     Args:
         user_id: ID do usuário
-        patterns: Padrões identificados pelo Haiku (formato prescritivo)
+        patterns: Padrões identificados pelo Sonnet (formato prescritivo)
     """
     from ..models import AgentMemory
 
