@@ -1035,6 +1035,8 @@ def fechar_frete():
         # ✅ NOVO: Verifica se estamos alterando cotação de embarque existente
         # Fonte 1: payload (mais confiável, sobrevive a perda de sessão)
         embarque_id_payload = data.get('embarque_id')
+        if embarque_id_payload and str(embarque_id_payload).lower() in ('null', 'none', ''):
+            embarque_id_payload = None
         # Fonte 2: session (backup)
         alterando_embarque_session = session.get('alterando_embarque')
 
@@ -1634,6 +1636,8 @@ def fechar_frete():
 
     except Exception as e:
         db.session.rollback()
+        from flask import current_app
+        current_app.logger.error(f"Erro em fechar_frete: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Erro ao criar/alterar embarque: {str(e)}'
@@ -1961,6 +1965,8 @@ def fechar_frete_grupo():
 
     except Exception as e:
         db.session.rollback()
+        from flask import current_app
+        current_app.logger.error(f"Erro em fechar_frete_grupo: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Erro ao criar embarque: {str(e)}'

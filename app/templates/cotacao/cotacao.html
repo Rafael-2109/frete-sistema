@@ -764,7 +764,7 @@
       tipo: 'FRACIONADA',
       transportadora_id: transportadoraSelecionada,
       tabelas_por_cnpj: tabelasPorCnpjSelecionadas,  // ✅ NOVO: Envia tabelas completas
-      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }},
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }},
       pedidos: pedidosSelecionados.map(function (pedido) {
         return {
           id: pedido.separacao_lote_id,
@@ -864,7 +864,7 @@
       transportadora_id: transportadoraId,
       tabela_selecionada: tabelaSelecionada,  // ✅ NOVO: Envia tabela completa
       indice_original: indiceOriginal,  // Mantém para compatibilidade/debug
-      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }},
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }},
       pedidos: {{ pedidos_selecionados| tojson | safe
   }}.map(function (pedido) {
     return {
@@ -990,7 +990,7 @@
       transportadora_id: transportadora_id,
       cnpjs: cnpjs,
       tabelas_por_cnpj: tabelasPorCnpj,  // ✅ NOVO: Envia tabelas completas de todos os CNPJs
-      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }}
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }}
     };
 
     // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
@@ -1086,7 +1086,7 @@
       tabela_selecionada: tabelaSelecionada,
       indice_original: 0,
       tipo_cotacao: 'Manual',
-      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }},
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }},
       pedidos: {{ pedidos_selecionados | tojson | safe }}.map(function (pedido) {
         return {
           id: pedido.separacao_lote_id,
