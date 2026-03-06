@@ -293,16 +293,16 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_cnpj_cliente",
+      "name": "ix_fretes_odoo_purchase_order_id",
       "columns": [
-        "cnpj_cliente"
+        "odoo_purchase_order_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_fretes_odoo_purchase_order_id",
+      "name": "ix_fretes_cnpj_cliente",
       "columns": [
-        "odoo_purchase_order_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },

@@ -136,16 +136,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_faturas_cliente_numero_fatura",
+      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
       "columns": [
-        "numero_fatura"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
+      "name": "ix_carvia_faturas_cliente_numero_fatura",
       "columns": [
-        "cnpj_cliente"
+        "numero_fatura"
       ],
       "unique": false
     }
