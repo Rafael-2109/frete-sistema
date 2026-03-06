@@ -93,6 +93,17 @@ USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "true").lower() == "t
 # Analisa quando total_sessions % threshold == 0
 PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "10"))
 
+# Extracao pos-sessao de conhecimento organizacional (PRD v2.1)
+# Analisa TODAS as mensagens via Sonnet para extrair: definicoes de termos,
+# cargos, regras de negocio, correcoes factuais. Salva como memorias empresa (user_id=0).
+# Custo: ~$0.003 por execucao (Sonnet, contexto completo). Volume baixo (~4 sessoes/dia).
+# Trigger: a cada exchange (min 3 msgs), roda em daemon thread (background).
+# A ultima execucao de cada sessao contem toda a conversa (= extracao de fim de sessao).
+USE_POST_SESSION_EXTRACTION = os.getenv("AGENT_POST_SESSION_EXTRACTION", "true").lower() == "true"
+
+# Minimo de mensagens para iniciar extracao (evita rodar em sessoes triviais)
+POST_SESSION_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_EXTRACTION_MIN_MESSAGES", "3"))
+
 # ====================================================================
 # Dashboard e Analytics (P2)
 # ====================================================================

@@ -730,6 +730,9 @@ class EmbeddingService:
         """Busca memorias via pgvector."""
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
+        # Incluir user_id=0 (memorias empresa) para memoria compartilhada (PRD v2.1)
+        user_ids = [user_id, 0] if user_id != 0 else [0]
+
         sql = text("""
             SELECT
                 id,
@@ -738,7 +741,7 @@ class EmbeddingService:
                 texto_embedado,
                 1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
             FROM agent_memory_embeddings
-            WHERE user_id = :user_id
+            WHERE user_id = ANY(:user_ids)
               AND embedding IS NOT NULL
             ORDER BY embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
@@ -746,7 +749,7 @@ class EmbeddingService:
 
         result = db.session.execute(sql, {
             "query_embedding": embedding_str,
-            "user_id": user_id,
+            "user_ids": user_ids,
             "limit": limit * 2,
         })
 
@@ -773,8 +776,11 @@ class EmbeddingService:
         """Busca memorias fallback sem pgvector."""
         from app.embeddings.models import AgentMemoryEmbedding
 
+        # Incluir user_id=0 (memorias empresa) para memoria compartilhada (PRD v2.1)
+        user_ids = [user_id, 0] if user_id != 0 else [0]
+
         docs = AgentMemoryEmbedding.query.filter(
-            AgentMemoryEmbedding.user_id == user_id,
+            AgentMemoryEmbedding.user_id.in_(user_ids),
             AgentMemoryEmbedding.embedding.isnot(None),
         ).limit(500).all()
 

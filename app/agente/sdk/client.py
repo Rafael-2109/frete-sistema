@@ -487,8 +487,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             # ── Fallback: recência se semântica não retornou nada ──
             if not additional_memories:
                 used_fallback = True
+                # PRD v2.1: incluir memorias empresa (user_id=0)
+                fallback_user_ids = [user_id, 0] if user_id != 0 else [0]
                 fallback_query = AgentMemory.query.filter(
-                    AgentMemory.user_id == user_id,
+                    AgentMemory.user_id.in_(fallback_user_ids),
                     AgentMemory.is_directory == False,  # noqa: E712
                     AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                 )

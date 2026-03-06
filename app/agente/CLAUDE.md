@@ -103,10 +103,11 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 ### Services opcionais (ativos, controlados por flag)
 | Service | Flag | Default | O que faz |
 |---------|------|---------|-----------|
-| `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Haiku — gera patterns PRESCRITIVOS (error_patterns, anti_patterns, entity_defaults) em `/memories/learned/patterns.xml`. Input: sessoes + memorias com correction_count>0 |
+| `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Sonnet — gera patterns PRESCRITIVOS (error_patterns, anti_patterns, entity_defaults) em `/memories/learned/patterns.xml`. Input: sessoes + memorias com correction_count>0 |
 | `services/sentiment_detector.py` | `USE_SENTIMENT_DETECTION` | `false` | Detecta frustracao via regex, injeta instrucao de tom. Zero custo API |
-| `services/memory_consolidator.py` | `USE_MEMORY_CONSOLIDATION` | `true` | Consolida memorias redundantes via Haiku quando >15 arquivos ou >6000 chars. Custo ~$0.002. 395 LOC |
-| `services/knowledge_graph_service.py` | `MEMORY_KNOWLEDGE_GRAPH` | `true` | Extrai entidades + relacoes de memorias (3 layers: regex/Voyage/Haiku). Query multi-hop. 806 LOC |
+| `services/memory_consolidator.py` | `USE_MEMORY_CONSOLIDATION` | `true` | Consolida memorias redundantes via Sonnet quando >15 arquivos ou >6000 chars. Custo ~$0.006. 395 LOC |
+| `services/knowledge_graph_service.py` | `MEMORY_KNOWLEDGE_GRAPH` | `true` | Extrai entidades + relacoes de memorias (3 layers: regex/Voyage/Sonnet). Query multi-hop. 806 LOC. `strip_xml_tags()` exportada para uso externo |
+| (routes.py + pattern_analyzer.py) | `USE_POST_SESSION_EXTRACTION` | `true` | Extrai conhecimento organizacional pos-sessao via Sonnet (background). Salva termos/cargos/regras como memorias empresa (user_id=0). Trigger: a cada exchange (min 3 msgs) |
 | `services/insights_service.py` | `USE_AGENT_INSIGHTS` | `true` | Metricas de memoria (utilization, decay, orphans). Endpoint `/insights/memory`. 841 LOC |
 | `services/intersession_briefing.py` | `USE_COMMIT_BRIEFING` | `true` | Injeta commits recentes (git log -5) no briefing inter-sessao. Custo zero |
 | (client.py) | `PENDENCIA_TTL_DAYS` | `7` | Pendencias de sessoes mais antigas que N dias sao auto-removidas |
@@ -123,6 +124,43 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 | `search_cold_memories` | Busca no tier frio |
 | `resolve_pendencia` | Marca pendencia como resolvida (desaparece do briefing) |
 | `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
+
+---
+
+## Memoria Compartilhada (PRD v2.1)
+
+### Conceito
+- **Memorias pessoais** (`escopo='pessoal'`): pertencentes a um user_id, comportamento original
+- **Memorias empresa** (`escopo='empresa'`): pertencentes a user_id=0 (Sistema), visiveis para todos
+- Paths `/memories/empresa/*` automaticamente salvos com user_id=0
+
+### Tabela usuarios: id=0 = "Sistema"
+- Perfil `sistema`, email `sistema@nacom.com.br`, senha `NOLOGIN`
+- Migration: `scripts/migrations/memoria_compartilhada_escopo.py`
+
+### Colunas adicionadas em agent_memories
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| `escopo` | VARCHAR(20) DEFAULT 'pessoal' | 'pessoal' ou 'empresa' |
+| `created_by` | INTEGER nullable FK usuarios.id | Quem originou (auditoria) |
+
+### Busca inclui user_id=0
+- `service.py:_search_pgvector_memories()` → `WHERE user_id = ANY([user_id, 0])`
+- `service.py:_search_fallback_memories()` → `.filter(user_id.in_([user_id, 0]))`
+- `client.py` fallback recencia → `.filter(user_id.in_([user_id, 0]))`
+- `knowledge_graph_service.py:query_graph_memories()` → `WHERE user_id = ANY([user_id, 0])`
+
+### Extracao pos-sessao
+- `pattern_analyzer.py:extrair_conhecimento_sessao()` — via Sonnet em daemon thread (background)
+- Contexto: TODAS as mensagens da sessao (trunca per-msg a 3K chars, safety cap 40K chars)
+- Categorias: term_definitions, role_identifications, business_rules, corrections
+- Trigger: routes.py a cada exchange (min 3 msgs, flag `USE_POST_SESSION_EXTRACTION`)
+- Custo: ~$0.003 por execucao (Sonnet, volume baixo ~4 sessoes/dia)
+
+### Role Awareness
+- system_prompt.md secao `<role_awareness>` instrui agente a salvar PROATIVAMENTE
+- Paths empresa: termos/, regras/, usuarios/, correcoes/
+- Complementar a extracao pos-sessao (rede de seguranca)
 
 ---
 

@@ -1000,6 +1000,56 @@ def _save_messages_to_db(
                 logger.warning(f"[AGENTE] Erro na análise de padrões (ignorado): {pattern_error}")
 
             # =============================================================
+            # PRD v2.1: Extração pós-sessão de conhecimento organizacional
+            # Analisa TODAS as mensagens via Sonnet para extrair termos,
+            # cargos, regras e correções. Salva como memórias empresa.
+            # Roda em daemon thread (background) — não bloqueia o retorno.
+            # A cada exchange (min 3 msgs), a última extração contém toda
+            # a conversa = efetivamente extração de "fim de sessão".
+            # =============================================================
+            try:
+                from .config.feature_flags import (
+                    USE_POST_SESSION_EXTRACTION,
+                    POST_SESSION_EXTRACTION_MIN_MESSAGES,
+                )
+
+                if USE_POST_SESSION_EXTRACTION and user_message and assistant_message:
+                    msg_count = session.message_count or 0
+                    if msg_count >= POST_SESSION_EXTRACTION_MIN_MESSAGES:
+                        from threading import Thread
+                        from .services.pattern_analyzer import extrair_conhecimento_sessao
+
+                        # Copia mensagens para evitar race condition com a sessão
+                        messages_copy = list(session.get_messages())
+
+                        def _run_extraction_background():
+                            try:
+                                with app.app_context():
+                                    extrair_conhecimento_sessao(
+                                        app=app,
+                                        user_id=user_id,
+                                        session_messages=messages_copy,
+                                    )
+                            except Exception as bg_err:
+                                logger.warning(
+                                    f"[KNOWLEDGE_EXTRACTION] Background error: {bg_err}"
+                                )
+
+                        thread = Thread(
+                            target=_run_extraction_background,
+                            daemon=True,
+                            name=f"knowledge-extraction-{user_id}",
+                        )
+                        thread.start()
+                        logger.info(
+                            f"[AGENTE] Trigger extração pós-sessão em background "
+                            f"para usuário {user_id} (message_count={msg_count})"
+                        )
+            except Exception as extraction_error:
+                # SILENCIOSO: extração falha não deve afetar nada
+                logger.warning(f"[AGENTE] Erro na extração pós-sessão (ignorado): {extraction_error}")
+
+            # =============================================================
             # Fase 4: Embedding de turn para busca semântica (best-effort)
             # Roda APÓS padrões — falha não afeta nada anterior
             # =============================================================
@@ -1075,11 +1125,17 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             if not content or len(content) < 15:
                 continue
 
-            # Extrair fragmentos significativos (>= 20 chars) do conteúdo
+            # PRD v2.1 Fase 4: Strip XML tags antes do fragment matching.
+            # Content e XML (ex: <memoria type="correcao"><content>...</content></memoria>)
+            # mas a resposta do assistant e texto puro. Comparar XML vs texto
+            # sempre retorna False → effective_count = 0 para TODAS memorias.
+            from .services.knowledge_graph_service import strip_xml_tags
+            clean_content = strip_xml_tags(content)
+
+            # Extrair fragmentos significativos (>= 20 chars) do conteudo limpo
             # e verificar se aparecem na resposta
-            # Usamos os primeiros 3 "pedaços" de 30+ chars para match
             fragments = [
-                f.strip() for f in content.split('\n')
+                f.strip() for f in clean_content.split('\n')
                 if len(f.strip()) >= 20
             ][:3]
 

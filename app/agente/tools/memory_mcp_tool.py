@@ -178,7 +178,7 @@ def _execute_with_context(func):
 # em vez de só `memória`, melhorando precision do retrieval em até 49-67%.
 # Custo: ~$0.0003 por save_memory (1 chamada Haiku).
 
-_HAIKU_MODEL = "claude-haiku-4-5-20251001"
+_SONNET_MODEL = "claude-sonnet-4-6"
 
 _CONTEXTUAL_PROMPT = """\
 <user_memories>
@@ -250,8 +250,8 @@ def _generate_memory_context(
                 if not snippet:
                     continue
                 line = f"- {mem.path}: {snippet}"
-                if total_chars + len(line) > 2000:
-                    break  # Cap: ~2000 chars de contexto
+                if total_chars + len(line) > 3000:
+                    break  # Cap: ~3000 chars de contexto
                 lines.append(line)
                 total_chars += len(line)
             existing_text = "\n".join(lines) if lines else "(nenhuma memória anterior)"
@@ -259,14 +259,14 @@ def _generate_memory_context(
             existing_text = "(nenhuma memória anterior — esta é a primeira)"
 
         # Truncar conteúdo para o prompt (economia de tokens)
-        content_truncated = content[:500] if len(content) > 500 else content
+        content_truncated = content[:1000] if len(content) > 1000 else content
 
-        # Chamar Haiku com timeout curto (best-effort, não pode travar o save)
-        # T3-3: max_tokens aumentado de 150→250 para acomodar entidades+relações
-        client = anthropic.Anthropic(timeout=5.0)
+        # Chamar Sonnet para contexto + entidades + relações (roda em background, sem timeout artificial)
+        # T3-3: max_tokens 350 para acomodar entidades+relações ricas
+        client = anthropic.Anthropic()
         response = client.messages.create(
-            model=_HAIKU_MODEL,
-            max_tokens=250,
+            model=_SONNET_MODEL,
+            max_tokens=350,
             messages=[{
                 "role": "user",
                 "content": _CONTEXTUAL_PROMPT.format(
@@ -971,6 +971,17 @@ try:
             content = _sanitize_content(content)
             user_id = get_current_user_id()
 
+            # PRD v2.1: Classificar escopo pelo path
+            # Paths /memories/empresa/* sao memorias compartilhadas (user_id=0)
+            actual_user_id = user_id
+            escopo = 'pessoal'
+            created_by_id = None
+
+            if path.startswith('/memories/empresa/'):
+                actual_user_id = 0  # Usuario Sistema
+                escopo = 'empresa'
+                created_by_id = user_id
+
             def _save():
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
@@ -987,7 +998,7 @@ try:
                 else:
                     category, is_perm = _classify_memory_category(path, content)
 
-                existing = AgentMemory.get_by_path(user_id, path)
+                existing = AgentMemory.get_by_path(actual_user_id, path)
 
                 if existing:
                     # Salvar versão anterior antes de atualizar
@@ -1005,13 +1016,21 @@ try:
                     existing.last_accessed_at = agora_utc_naive()
                     # Se salvando novo conteúdo, limpar flag de conflito
                     existing.has_potential_conflict = False
+                    # PRD v2.1: atualizar escopo e created_by
+                    existing.escopo = escopo
+                    if created_by_id:
+                        existing.created_by = created_by_id
                     action = "atualizado"
                 else:
-                    mem = AgentMemory.create_file(user_id, path, content)
+                    mem = AgentMemory.create_file(actual_user_id, path, content)
                     mem.importance_score = importance
                     mem.category = category
                     mem.is_permanent = is_perm
                     mem.last_accessed_at = agora_utc_naive()
+                    # PRD v2.1: escopo e created_by
+                    mem.escopo = escopo
+                    if created_by_id:
+                        mem.created_by = created_by_id
                     action = "criado"
 
                 db.session.commit()
@@ -1023,7 +1042,7 @@ try:
             # Best-effort: verificar duplicatas semanticas
             dedup_warning = ''
             try:
-                dup_path = _check_memory_duplicate(user_id, content, current_path=path)
+                dup_path = _check_memory_duplicate(actual_user_id, content, current_path=path)
                 if dup_path:
                     dedup_warning = (
                         f" AVISO: conteudo similar ja existe em '{dup_path}'. "
@@ -1033,47 +1052,56 @@ try:
                 pass
 
             # Best-effort: verificar se memórias precisam de consolidação + tier frio
-            try:
-                from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
-                maybe_consolidate(user_id)
-                maybe_move_to_cold(user_id)
-            except Exception as consolidation_err:
-                logger.debug(
-                    f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
-                )
-
-            # Best-effort: embeddar memória para busca semântica + extrair entidades KG
-            haiku_entities = []
-            haiku_relations = []
-            try:
-                from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
-                if MEMORY_SEMANTIC_SEARCH:
-                    haiku_entities, haiku_relations = _embed_memory_best_effort(
-                        user_id, path, content
+            # Skip consolidacao para memorias empresa (user_id=0) por enquanto
+            if actual_user_id != 0:
+                try:
+                    from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
+                    maybe_consolidate(actual_user_id)
+                    maybe_move_to_cold(actual_user_id)
+                except Exception as consolidation_err:
+                    logger.debug(
+                        f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
                     )
-            except Exception as emb_err:
-                logger.debug(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
 
-            # Best-effort: Knowledge Graph — extrair e linkar entidades (T3-3)
-            try:
-                from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
-                if MEMORY_KNOWLEDGE_GRAPH:
-                    # Obter memory_id para linking
-                    def _get_memory_id():
-                        from ..models import AgentMemory
-                        mem = AgentMemory.get_by_path(user_id, path)
-                        return mem.id if mem else None
+            # Best-effort: embeddar memória + KG em daemon thread (não bloqueia retorno)
+            # Sonnet gera tags contextuais mais ricas que Haiku, mas latência maior.
+            # Background thread elimina impacto na UX do save_memory.
+            def _bg_embed_and_kg():
+                try:
+                    _entities = []
+                    _relations = []
+                    try:
+                        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+                        if MEMORY_SEMANTIC_SEARCH:
+                            _entities, _relations = _embed_memory_best_effort(
+                                actual_user_id, path, content
+                            )
+                    except Exception as emb_err:
+                        logger.debug(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
 
-                    mid = _execute_with_context(_get_memory_id)
-                    if mid:
-                        from ..services.knowledge_graph_service import extract_and_link_entities
-                        extract_and_link_entities(
-                            user_id, mid, content,
-                            haiku_entities=haiku_entities,
-                            haiku_relations=haiku_relations,
-                        )
-            except Exception as kg_err:
-                logger.debug(f"[MEMORY_MCP] Knowledge Graph falhou (ignorado): {kg_err}")
+                    try:
+                        from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
+                        if MEMORY_KNOWLEDGE_GRAPH:
+                            def _get_memory_id():
+                                from ..models import AgentMemory
+                                mem = AgentMemory.get_by_path(actual_user_id, path)
+                                return mem.id if mem else None
+
+                            mid = _execute_with_context(_get_memory_id)
+                            if mid:
+                                from ..services.knowledge_graph_service import extract_and_link_entities
+                                extract_and_link_entities(
+                                    actual_user_id, mid, content,
+                                    haiku_entities=_entities,
+                                    haiku_relations=_relations,
+                                )
+                    except Exception as kg_err:
+                        logger.debug(f"[MEMORY_MCP] Knowledge Graph falhou (ignorado): {kg_err}")
+                except Exception as e:
+                    logger.debug(f"[MEMORY_MCP] Background embed+KG falhou: {e}")
+
+            from threading import Thread
+            Thread(target=_bg_embed_and_kg, daemon=True).start()
 
             # Best-effort: Memory v2 — Feedback Loop: se é uma correção,
             # incrementar correction_count nas memórias recentemente injetadas
@@ -1179,50 +1207,54 @@ try:
             _execute_with_context(_update)
             logger.info(f"[MEMORY_MCP] update_memory: {path}")
 
-            # Best-effort: re-embeddar memória atualizada + KG
-            haiku_entities = []
-            haiku_relations = []
-            try:
-                from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
-                if MEMORY_SEMANTIC_SEARCH:
-                    # Ler conteúdo atualizado
-                    def _get_content():
-                        from ..models import AgentMemory
-                        mem = AgentMemory.get_by_path(user_id, path)
-                        return mem.content if mem else None
+            # Best-effort: re-embeddar memória + KG em daemon thread (não bloqueia retorno)
+            def _bg_reembed_and_kg():
+                try:
+                    _entities = []
+                    _relations = []
+                    try:
+                        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+                        if MEMORY_SEMANTIC_SEARCH:
+                            def _get_content():
+                                from ..models import AgentMemory
+                                mem = AgentMemory.get_by_path(user_id, path)
+                                return mem.content if mem else None
 
-                    updated_content = _execute_with_context(_get_content)
-                    if updated_content:
-                        haiku_entities, haiku_relations = _embed_memory_best_effort(
-                            user_id, path, updated_content
-                        )
-            except Exception as emb_err:
-                logger.debug(f"[MEMORY_MCP] Embedding update falhou (ignorado): {emb_err}")
+                            updated_content = _execute_with_context(_get_content)
+                            if updated_content:
+                                _entities, _relations = _embed_memory_best_effort(
+                                    user_id, path, updated_content
+                                )
+                    except Exception as emb_err:
+                        logger.debug(f"[MEMORY_MCP] Embedding update falhou (ignorado): {emb_err}")
 
-            # Best-effort: Knowledge Graph — re-extrair entidades (T3-3)
-            try:
-                from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
-                if MEMORY_KNOWLEDGE_GRAPH:
-                    def _get_mem_for_kg():
-                        from ..models import AgentMemory
-                        mem = AgentMemory.get_by_path(user_id, path)
-                        return (mem.id, mem.content) if mem else (None, None)
+                    try:
+                        from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
+                        if MEMORY_KNOWLEDGE_GRAPH:
+                            def _get_mem_for_kg():
+                                from ..models import AgentMemory
+                                mem = AgentMemory.get_by_path(user_id, path)
+                                return (mem.id, mem.content) if mem else (None, None)
 
-                    mid, mcontent = _execute_with_context(_get_mem_for_kg)
-                    if mid and mcontent:
-                        from ..services.knowledge_graph_service import (
-                            remove_memory_links,
-                            extract_and_link_entities,
-                        )
-                        # Limpar links antigos e re-extrair
-                        remove_memory_links(mid)
-                        extract_and_link_entities(
-                            user_id, mid, mcontent,
-                            haiku_entities=haiku_entities,
-                            haiku_relations=haiku_relations,
-                        )
-            except Exception as kg_err:
-                logger.debug(f"[MEMORY_MCP] Knowledge Graph update falhou (ignorado): {kg_err}")
+                            mid, mcontent = _execute_with_context(_get_mem_for_kg)
+                            if mid and mcontent:
+                                from ..services.knowledge_graph_service import (
+                                    remove_memory_links,
+                                    extract_and_link_entities,
+                                )
+                                remove_memory_links(mid)
+                                extract_and_link_entities(
+                                    user_id, mid, mcontent,
+                                    haiku_entities=_entities,
+                                    haiku_relations=_relations,
+                                )
+                    except Exception as kg_err:
+                        logger.debug(f"[MEMORY_MCP] Knowledge Graph update falhou (ignorado): {kg_err}")
+                except Exception as e:
+                    logger.debug(f"[MEMORY_MCP] Background re-embed+KG falhou: {e}")
+
+            from threading import Thread
+            Thread(target=_bg_reembed_and_kg, daemon=True).start()
 
             return {
                 "content": [{"type": "text", "text": f"Memória atualizada em {path}"}]

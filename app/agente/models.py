@@ -492,6 +492,18 @@ class AgentMemory(db.Model):
     # Flag para memórias com potencial contradição detectada
     has_potential_conflict = db.Column(db.Boolean, default=False, nullable=False)
 
+    # ── Memoria Compartilhada: escopo + auditoria (PRD v2.1) ──
+    # escopo='pessoal': memoria individual (default, comportamento atual)
+    # escopo='empresa': memoria compartilhada (user_id=0, visivel para todos)
+    escopo = db.Column(db.String(20), default='pessoal', nullable=False)
+
+    # Quem originou a memoria empresa (auditoria). NULL para pessoais.
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey('usuarios.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
     updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
@@ -499,6 +511,7 @@ class AgentMemory(db.Model):
     # Relacionamento - cascade delete quando usuário é deletado
     user = db.relationship(
         'Usuario',
+        foreign_keys=[user_id],
         backref=db.backref('agent_memories', lazy='dynamic', cascade='all, delete-orphan')
     )
 

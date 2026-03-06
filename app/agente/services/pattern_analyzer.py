@@ -8,7 +8,7 @@ Analisa sessões históricas e correções do usuário para gerar patterns PRESC
 
 Salva padrões em /memories/learned/patterns.xml para uso proativo pelo agente.
 
-Custo estimado: ~$0.002 por análise (~4K tokens input, ~800 output Haiku).
+Custo estimado: ~$0.006 por análise (~4K tokens input, ~800 output Sonnet).
 Trigger: a cada N sessões do usuário (configurável via PATTERN_LEARNING_THRESHOLD).
 
 Uso:
@@ -27,13 +27,13 @@ import anthropic
 from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
-# Limite de caracteres totais das sessões para enviar ao Haiku
-MAX_SESSIONS_CHARS = 12000
+# Limite de caracteres totais das sessões para enviar ao Sonnet
+MAX_SESSIONS_CHARS = 24000
 
 # Máximo de sessões recentes a analisar
-MAX_SESSIONS_TO_ANALYZE = 15
+MAX_SESSIONS_TO_ANALYZE = 25
 
 PATTERN_PROMPT = """Voce eh um analista de comportamento para um agente de IA em sistema de logistica (Nacom Goya).
 Sua tarefa eh gerar INSTRUCOES PRESCRITIVAS que mudem o comportamento do agente — NAO descricoes do que o usuario faz.
@@ -89,7 +89,7 @@ RESPONDA APENAS JSON VALIDO, sem markdown, sem comentarios."""
 
 
 def _get_anthropic_client() -> anthropic.Anthropic:
-    """Obtém cliente Anthropic para Haiku."""
+    """Obtém cliente Anthropic."""
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY não configurada")
@@ -98,7 +98,7 @@ def _get_anthropic_client() -> anthropic.Anthropic:
 
 def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:
     """
-    Formata sessões do usuário para enviar ao Haiku.
+    Formata sessões do usuário para enviar ao Sonnet.
 
     Extrai resumo de cada sessão: mensagens do usuário e tools usadas.
     Trunca para MAX_SESSIONS_CHARS total.
@@ -128,7 +128,7 @@ def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:
                 session_line += f"\nFerramentas: {tools}"
 
             # Pedidos mencionados
-            for p in summary.get('pedidos_mencionados', [])[:3]:
+            for p in summary.get('pedidos_mencionados', [])[:5]:
                 session_line += f"\nPedido: {p.get('cliente', '')} - {p.get('pedido', '')} ({p.get('status', '')})"
 
         else:
@@ -141,8 +141,8 @@ def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:
                 for tool in msg.get('tools_used', []):
                     tools_used.add(tool)
 
-            for msg in user_msgs[:5]:  # Máximo 5 mensagens por sessão
-                content = msg.get('content', '')[:200]
+            for msg in user_msgs[:10]:  # Máximo 10 mensagens por sessão
+                content = msg.get('content', '')[:500]
                 session_line += f"\n[USER]: {content}"
 
             if tools_used:
@@ -161,7 +161,7 @@ def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:
 
 def _format_corrections_for_analysis(corrections: List[Dict[str, Any]]) -> str:
     """
-    Formata memórias com correções para incluir no prompt do Haiku.
+    Formata memórias com correções para incluir no prompt.
 
     Args:
         corrections: Lista de dicts com {path, content, correction_count}
@@ -198,7 +198,7 @@ def analyze_patterns(
     corrections: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Analisa sessões históricas e correções para gerar patterns prescritivos via Haiku.
+    Analisa sessões históricas e correções para gerar patterns prescritivos via Sonnet.
 
     Args:
         sessions_data: Lista de sessões com messages e summaries
@@ -225,8 +225,8 @@ def analyze_patterns(
             corrections_block = '(Nenhuma correcao registrada ainda)'
 
         response = client.messages.create(
-            model=HAIKU_MODEL,
-            max_tokens=1500,
+            model=SONNET_MODEL,
+            max_tokens=2000,
             messages=[{
                 "role": "user",
                 "content": PATTERN_PROMPT.format(
@@ -245,7 +245,7 @@ def analyze_patterns(
         # Adiciona metadata
         patterns['_meta'] = {
             'generated_at': agora_utc_naive().isoformat(),
-            'model': HAIKU_MODEL,
+            'model': SONNET_MODEL,
             'input_tokens': response.usage.input_tokens,
             'output_tokens': response.usage.output_tokens,
             'sessions_analyzed': len(sessions_data),
@@ -268,7 +268,7 @@ def _parse_json_response(
     result_text: str,
     user_id: int,
 ) -> Optional[Dict[str, Any]]:
-    """Parse seguro da resposta JSON do Haiku."""
+    """Parse seguro da resposta JSON do LLM."""
     # Tentativa 1: parse direto
     try:
         return json.loads(result_text)
@@ -284,7 +284,7 @@ def _parse_json_response(
         pass
 
     logger.warning(
-        f"[PATTERNS] Resposta inválida do Haiku para usuário {user_id}: "
+        f"[PATTERNS] Resposta inválida para usuário {user_id}: "
         f"{result_text[:200]}"
     )
     return None
@@ -357,7 +357,7 @@ def analyze_and_save(
             except Exception as e:
                 logger.debug(f"[PATTERNS] Erro ao carregar correções (ignorado): {e}")
 
-            # Analisar padrões via Haiku
+            # Analisar padrões via Sonnet
             patterns = analyze_patterns(sessions_data, user_id, corrections=corrections)
             if not patterns:
                 return False
@@ -469,6 +469,359 @@ def _xml_escape(text: str) -> str:
         .replace('"', "&quot;")
         .replace("'", "&apos;")
     )
+
+
+# =====================================================================
+# PRD v2.1: EXTRACAO POS-SESSAO DE CONHECIMENTO ORGANIZACIONAL
+# =====================================================================
+#
+# Analisa TODAS as mensagens de uma sessao via Sonnet e extrai:
+# - term_definitions: "integracao de NF = vinculacao DFe x PO"
+# - role_identifications: "sou de compras"
+# - business_rules: "Atacadao sempre pede completo"
+# - corrections: "na verdade, o correto e..."
+#
+# Salva como memorias empresa (user_id=0, escopo='empresa').
+# Rede de seguranca: captura o que o agente NAO salvou via save_memory.
+# Roda em daemon thread (background) a cada exchange, sem bloquear UX.
+# =====================================================================
+
+KNOWLEDGE_EXTRACTION_PROMPT = """Voce eh um extrator de conhecimento organizacional para a Nacom Goya (industria de alimentos).
+Analise a conversa abaixo entre um operador e o agente de IA. Extraia SOMENTE informacoes factuais e uteis para TODA a organizacao.
+
+<conversa>
+{messages}
+</conversa>
+
+Retorne JSON VALIDO com esta estrutura (arrays vazios se nao encontrar nada):
+
+{{
+  "term_definitions": [
+    {{
+      "termo": "nome do termo",
+      "definicao": "o que significa no contexto da empresa",
+      "confianca": "alta|media"
+    }}
+  ],
+  "role_identifications": [
+    {{
+      "nome_usuario": "nome mencionado",
+      "cargo_ou_setor": "compras, expedicao, financeiro, etc."
+    }}
+  ],
+  "business_rules": [
+    {{
+      "regra": "descricao da regra de negocio",
+      "contexto": "quando se aplica"
+    }}
+  ],
+  "corrections": [
+    {{
+      "errado": "o que estava errado",
+      "correto": "o que eh correto",
+      "contexto": "em que situacao"
+    }}
+  ]
+}}
+
+REGRAS CRITICAS:
+- Extraia APENAS o que aparece EXPLICITAMENTE na conversa — NUNCA invente
+- Ignore preferencias pessoais (estilo, formato) — essas sao individuais
+- Foco em: vocabulario operacional, regras de negocio, correcoes factuais
+- Se o operador esclareceu o significado de um termo, isso eh term_definition
+- Se o operador disse seu cargo ou setor, isso eh role_identification
+- Se o operador mencionou regra de cliente/processo, isso eh business_rule
+- Se o operador corrigiu o agente factualmente, isso eh correction
+- "confianca" = "alta" se o operador afirmou com certeza, "media" se foi implicito
+- RESPONDA APENAS JSON VALIDO, sem markdown"""
+
+
+def _format_messages_for_extraction(messages: list[dict]) -> str:
+    """
+    Formata TODAS as mensagens da sessao para o prompt de extracao.
+
+    Usa contexto completo — Sonnet suporta 200K tokens.
+    Per-message: trunca a 3000 chars (cobre 99.9% das mensagens reais).
+    Safety cap: 40K chars total para edge cases extremos (sessoes muito longas).
+    Se over-budget: primeiras 2 msgs + ultimas N que caibam.
+    """
+    MAX_PER_MESSAGE_CHARS = 3000
+    TOTAL_SAFETY_CAP = 40_000
+
+    lines = []
+    total_chars = 0
+
+    for msg in messages:
+        role = msg.get('role', 'unknown').upper()
+        content = msg.get('content', '')
+        # Truncar mensagens individuais muito longas
+        if len(content) > MAX_PER_MESSAGE_CHARS:
+            content = content[:MAX_PER_MESSAGE_CHARS] + '...'
+        line = f"[{role}]: {content}"
+        lines.append(line)
+        total_chars += len(line)
+
+    # Se dentro do safety cap, retornar tudo
+    if total_chars <= TOTAL_SAFETY_CAP:
+        return "\n\n".join(lines)
+
+    # Over-budget: primeiras 2 msgs + ultimas N que caibam em TOTAL_SAFETY_CAP
+    header_lines = lines[:2]
+    header_chars = sum(len(l) for l in header_lines)
+    remaining_budget = TOTAL_SAFETY_CAP - header_chars - 50  # 50 chars para separador
+
+    tail_lines = []
+    tail_chars = 0
+    for line in reversed(lines[2:]):
+        if tail_chars + len(line) > remaining_budget:
+            break
+        tail_lines.insert(0, line)
+        tail_chars += len(line)
+
+    return "\n\n".join(
+        header_lines + ["[... mensagens intermediarias omitidas ...]"] + tail_lines
+    )
+
+
+def _slugify(text: str) -> str:
+    """Converte texto para slug seguro para path de memoria."""
+    import unicodedata
+    # Remove acentos
+    nfkd = unicodedata.normalize('NFKD', text)
+    ascii_text = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    # Converte para lowercase e substitui nao-alfanumericos por hifen
+    slug = re.sub(r'[^a-z0-9]+', '-', ascii_text.lower()).strip('-')
+    return slug[:60]  # Limitar tamanho
+
+
+def _save_empresa_memory(
+    path: str,
+    content: str,
+    created_by: int,
+) -> bool:
+    """
+    Salva memoria empresa (user_id=0) com escopo e auditoria.
+
+    Returns:
+        True se criou/atualizou, False se erro
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+        from app.utils.timezone import agora_utc_naive
+
+        existing = AgentMemory.get_by_path(0, path)
+        if existing:
+            # Atualizar se conteudo mudou
+            if existing.content != content:
+                existing.content = content
+                existing.updated_at = agora_utc_naive()
+                existing.created_by = created_by
+        else:
+            mem = AgentMemory.create_file(0, path, content)
+            mem.escopo = 'empresa'
+            mem.created_by = created_by
+            mem.importance_score = 0.7  # Conhecimento organizacional = alta importancia
+            mem.category = 'structural'  # Termos e regras mudam lentamente
+
+        db.session.commit()
+
+        # Best-effort: gerar embedding
+        try:
+            from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+            if MEMORY_SEMANTIC_SEARCH:
+                from ..tools.memory_mcp_tool import _embed_memory_best_effort
+                _embed_memory_best_effort(0, path, content)
+        except Exception:
+            pass
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"[KNOWLEDGE_EXTRACTION] Erro ao salvar {path}: {e}")
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _save_extracted_knowledge(
+    knowledge: dict,
+    created_by: int,
+) -> dict:
+    """
+    Salva conhecimento extraido como memorias empresa (user_id=0).
+
+    Args:
+        knowledge: Dict com term_definitions, role_identifications, etc.
+        created_by: ID do usuario que originou o conhecimento
+
+    Returns:
+        Dict com contadores {terms, roles, rules, corrections}
+    """
+    counts = {'terms': 0, 'roles': 0, 'rules': 0, 'corrections': 0}
+
+    # Term definitions → /memories/empresa/termos/{slug}.xml
+    for item in knowledge.get('term_definitions', []):
+        termo = item.get('termo', '').strip()
+        definicao = item.get('definicao', '').strip()
+        confianca = item.get('confianca', 'media')
+        if not termo or not definicao:
+            continue
+
+        slug = _slugify(termo)
+        if not slug:
+            continue
+
+        path = f"/memories/empresa/termos/{slug}.xml"
+        content = (
+            f'<termo nome="{_xml_escape(termo)}" confianca="{confianca}">'
+            f'\n  <definicao>{_xml_escape(definicao)}</definicao>'
+            f'\n</termo>'
+        )
+        if _save_empresa_memory(path, content, created_by):
+            counts['terms'] += 1
+
+    # Role identifications → /memories/empresa/usuarios/{slug}.xml
+    for item in knowledge.get('role_identifications', []):
+        nome = item.get('nome_usuario', '').strip()
+        cargo = item.get('cargo_ou_setor', '').strip()
+        if not nome or not cargo:
+            continue
+
+        slug = _slugify(nome)
+        if not slug:
+            continue
+
+        path = f"/memories/empresa/usuarios/{slug}.xml"
+        content = (
+            f'<usuario nome="{_xml_escape(nome)}">'
+            f'\n  <cargo>{_xml_escape(cargo)}</cargo>'
+            f'\n</usuario>'
+        )
+        if _save_empresa_memory(path, content, created_by):
+            counts['roles'] += 1
+
+    # Business rules → /memories/empresa/regras/{slug}.xml
+    for item in knowledge.get('business_rules', []):
+        regra = item.get('regra', '').strip()
+        contexto = item.get('contexto', '').strip()
+        if not regra:
+            continue
+
+        slug = _slugify(regra[:40])
+        if not slug:
+            continue
+
+        path = f"/memories/empresa/regras/{slug}.xml"
+        content = (
+            f'<regra>'
+            f'\n  <descricao>{_xml_escape(regra)}</descricao>'
+            f'\n  <contexto>{_xml_escape(contexto)}</contexto>'
+            f'\n</regra>'
+        )
+        if _save_empresa_memory(path, content, created_by):
+            counts['rules'] += 1
+
+    # Corrections → /memories/empresa/correcoes/{slug}.xml
+    for item in knowledge.get('corrections', []):
+        errado = item.get('errado', '').strip()
+        correto = item.get('correto', '').strip()
+        contexto = item.get('contexto', '').strip()
+        if not errado or not correto:
+            continue
+
+        slug = _slugify(correto[:40])
+        if not slug:
+            continue
+
+        path = f"/memories/empresa/correcoes/{slug}.xml"
+        content = (
+            f'<correcao>'
+            f'\n  <errado>{_xml_escape(errado)}</errado>'
+            f'\n  <correto>{_xml_escape(correto)}</correto>'
+            f'\n  <contexto>{_xml_escape(contexto)}</contexto>'
+            f'\n</correcao>'
+        )
+        if _save_empresa_memory(path, content, created_by):
+            counts['corrections'] += 1
+
+    return counts
+
+
+def extrair_conhecimento_sessao(
+    app,
+    user_id: int,
+    session_messages: list[dict],
+) -> bool:
+    """
+    Extrai conhecimento organizacional de TODAS as mensagens de uma sessao via Sonnet.
+
+    Funcao principal chamada por routes.py em daemon thread apos cada exchange.
+    Rede de seguranca: captura o que o agente NAO salvou via save_memory.
+
+    Args:
+        app: Flask app
+        user_id: ID do usuario (sera o created_by)
+        session_messages: Lista de mensagens da sessao
+
+    Returns:
+        True se extraiu e salvou algo, False caso contrario
+    """
+    if not session_messages or len(session_messages) < 2:
+        return False
+
+    try:
+        client = _get_anthropic_client()
+        formatted = _format_messages_for_extraction(session_messages)
+
+        response = client.messages.create(
+            model=SONNET_MODEL,
+            max_tokens=1500,
+            messages=[{
+                "role": "user",
+                "content": KNOWLEDGE_EXTRACTION_PROMPT.format(messages=formatted),
+            }],
+        )
+
+        result_text = response.content[0].text.strip()
+        knowledge = _parse_json_response(result_text, user_id)
+
+        if not knowledge:
+            return False
+
+        # Verificar se tem algo para salvar
+        total_items = sum(
+            len(knowledge.get(k, []))
+            for k in ('term_definitions', 'role_identifications', 'business_rules', 'corrections')
+        )
+
+        if total_items == 0:
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Nenhum conhecimento extraido para usuario {user_id} "
+                f"({response.usage.input_tokens}+{response.usage.output_tokens} tokens)"
+            )
+            return False
+
+        # Salvar como memorias empresa
+        with app.app_context():
+            counts = _save_extracted_knowledge(
+                knowledge=knowledge,
+                created_by=user_id,
+            )
+
+        logger.info(
+            f"[KNOWLEDGE_EXTRACTION] Usuario {user_id}: "
+            f"extraidos {counts} "
+            f"({response.usage.input_tokens}+{response.usage.output_tokens} tokens)"
+        )
+        return True
+
+    except Exception as e:
+        logger.warning(f"[KNOWLEDGE_EXTRACTION] Erro para usuario {user_id}: {e}")
+        return False
 
 
 def should_analyze_patterns(user_id: int, threshold: int = 10) -> bool:

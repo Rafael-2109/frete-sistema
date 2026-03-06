@@ -72,6 +72,28 @@ def _normalize_name(name: str) -> str:
 # LAYER 1: REGEX (~2ms, zero custo)
 # =====================================================================
 
+def strip_xml_tags(content: str) -> str:
+    """
+    Remove tags XML/HTML, retornando texto puro.
+
+    Usado para:
+    - Regex extraction (KG Layer 1): evitar que tags poluam patterns
+    - Fragment matching (effective_count): comparar texto puro vs resposta
+
+    >>> strip_xml_tags('<memoria type="correcao"><content>SP bom</content></memoria>')
+    'SP bom'
+    >>> strip_xml_tags('texto sem tags')
+    'texto sem tags'
+    """
+    if not content:
+        return ''
+    # Remove tags, preservando o texto entre elas
+    cleaned = re.sub(r'<[^>]+>', ' ', content)
+    # Normaliza espacos multiplos
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    return cleaned.strip()
+
+
 def _extract_entities_regex(content: str) -> List[Tuple[str, str, Optional[str]]]:
     """
     Extrai entidades estruturadas via regex.
@@ -81,6 +103,9 @@ def _extract_entities_regex(content: str) -> List[Tuple[str, str, Optional[str]]
     """
     if not content:
         return []
+
+    # Strip XML tags para regex operar em texto puro (fix KG morto — PRD v2.1 Fase 4)
+    content = strip_xml_tags(content)
 
     entities: List[Tuple[str, str, Optional[str]]] = []
 
@@ -614,14 +639,15 @@ def query_graph_memories(
         if not entity_names:
             return []
 
-        # Buscar entity_ids para o user
+        # Buscar entity_ids para o user (PRD v2.1: incluir user_id=0 para empresa)
+        user_ids = [user_id, 0] if user_id != 0 else [0]
         with db.engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT id, entity_name
                 FROM agent_memory_entities
-                WHERE user_id = :user_id
+                WHERE user_id = ANY(:user_ids)
                   AND entity_name = ANY(:names)
-            """), {"user_id": user_id, "names": entity_names})
+            """), {"user_ids": user_ids, "names": entity_names})
 
             entity_rows = result.fetchall()
             if not entity_rows:

@@ -1,10 +1,10 @@
 """
 P0-2: Sumarização Estruturada de Sessões.
 
-Gera resumos estruturados das sessões do agente usando Haiku.
+Gera resumos estruturados das sessões do agente usando Sonnet.
 Focado no domínio logístico: pedidos, decisões, tarefas, alertas.
 
-Custo estimado: ~$0.001 por chamada Haiku (~2K tokens input, ~500 output).
+Custo estimado: ~$0.003 por chamada Sonnet (~2K tokens input, ~500 output).
 
 Uso:
     Este módulo é chamado automaticamente por _save_messages_to_db() em routes.py
@@ -24,10 +24,10 @@ import anthropic
 from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
-# Limite de caracteres das mensagens para enviar ao Haiku
-MAX_MESSAGES_CHARS = 8000
+# Limite de caracteres das mensagens para enviar ao Sonnet
+MAX_MESSAGES_CHARS = 20000
 
 SUMMARY_PROMPT = """Voce eh um assistente de sumarizacao para um sistema de logistica (Nacom Goya).
 Analise a conversa abaixo e gere um resumo ESTRUTURADO em JSON.
@@ -80,7 +80,7 @@ RESPONDA APENAS JSON VALIDO, sem markdown, sem comentarios."""
 
 
 def _get_anthropic_client() -> anthropic.Anthropic:
-    """Obtém cliente Anthropic para Haiku."""
+    """Obtém cliente Anthropic."""
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY não configurada")
@@ -108,8 +108,8 @@ def _format_messages_for_summary(messages: List[Dict[str, Any]]) -> str:
         tools = msg.get('tools_used', [])
 
         # Trunca conteúdo individual de mensagens longas
-        if len(content) > 1500:
-            content = content[:1500] + '... [truncado]'
+        if len(content) > 3000:
+            content = content[:3000] + '... [truncado]'
 
         line = f"[{role}]: {content}"
         if tools:
@@ -142,7 +142,7 @@ def summarize_session(
 
     Note:
         Esta função é best-effort: falhas são logadas mas não propagadas.
-        O custo é ~$0.001 por chamada.
+        O custo é ~$0.003 por chamada.
     """
     if not messages or len(messages) < 2:
         logger.debug(
@@ -156,8 +156,8 @@ def summarize_session(
         formatted = _format_messages_for_summary(messages)
 
         response = client.messages.create(
-            model=HAIKU_MODEL,
-            max_tokens=1000,
+            model=SONNET_MODEL,
+            max_tokens=1500,
             messages=[{
                 "role": "user",
                 "content": SUMMARY_PROMPT.format(messages=formatted)
@@ -174,7 +174,7 @@ def summarize_session(
         # Adiciona metadata
         summary['_meta'] = {
             'generated_at': agora_utc_naive().isoformat(),
-            'model': HAIKU_MODEL,
+            'model': SONNET_MODEL,
             'input_tokens': response.usage.input_tokens,
             'output_tokens': response.usage.output_tokens,
             'message_count': len(messages),
@@ -199,7 +199,7 @@ def _parse_json_response(
     session_id: str = "",
 ) -> Optional[Dict[str, Any]]:
     """
-    Parse seguro da resposta JSON do Haiku.
+    Parse seguro da resposta JSON do LLM.
 
     Tenta parse direto, depois fallback com regex para extrair JSON do texto.
 
@@ -216,7 +216,7 @@ def _parse_json_response(
     except json.JSONDecodeError:
         pass
 
-    # Tentativa 2: extrair JSON com regex (Haiku pode adicionar texto extra)
+    # Tentativa 2: extrair JSON com regex (LLM pode adicionar texto extra)
     try:
         json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
         if json_match:
@@ -225,7 +225,7 @@ def _parse_json_response(
         pass
 
     logger.warning(
-        f"[SUMMARIZER] Resposta inválida do Haiku para {session_id[:8]}...: "
+        f"[SUMMARIZER] Resposta inválida para {session_id[:8]}...: "
         f"{result_text[:200]}"
     )
     return None

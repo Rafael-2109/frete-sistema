@@ -31,8 +31,10 @@ from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
-# Modelo Haiku 4.5 para custo baixo
+# Modelo Haiku 4.5 para micro-tarefas (extrair_termos, extrair_motivo, normalizar_unidade)
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
+# Sonnet para resolucao semantica complexa (resolver_produto_completo)
+SONNET_MODEL = "claude-sonnet-4-6"
 
 
 # =============================================================================
@@ -578,7 +580,7 @@ class AIResolverService:
             client = self._get_client()
 
             response = client.messages.create(
-                model=HAIKU_MODEL,
+                model=SONNET_MODEL,
                 max_tokens=1500,  # Aumentado para comportar JSON completo com justificativas
                 temperature=0,  # Respostas deterministicas - evita instabilidade
                 messages=[{

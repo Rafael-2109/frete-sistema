@@ -2,9 +2,9 @@
 P1-1: Gerador de Sugestões de Prompt.
 
 Gera 2-3 sugestões contextuais de follow-up após cada resposta do agente.
-Usa Haiku para sugestões relevantes ao domínio logístico.
+Usa Sonnet para sugestões relevantes ao domínio logístico.
 
-Custo estimado: ~$0.001 por chamada (~500 tokens input, ~200 output).
+Custo estimado: ~$0.003 por chamada (~500 tokens input, ~200 output).
 
 Uso:
     Este módulo é chamado por async_stream() em routes.py
@@ -24,10 +24,10 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
-# Limite de caracteres da resposta do assistente para enviar ao Haiku
-MAX_RESPONSE_CHARS = 3000
+# Limite de caracteres da resposta do assistente para enviar ao Sonnet
+MAX_RESPONSE_CHARS = 5000
 
 SUGGESTION_PROMPT = """Voce eh um gerador de sugestoes para um sistema de logistica (Nacom Goya).
 Com base na ultima mensagem do usuario e resposta do assistente, gere 2-3 sugestoes de follow-up.
@@ -72,7 +72,7 @@ Exemplo: ["Sugestao 1", "Sugestao 2", "Sugestao 3"]"""
 
 
 def _get_anthropic_client() -> anthropic.Anthropic:
-    """Obtém cliente Anthropic para Haiku."""
+    """Obtém cliente Anthropic."""
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY não configurada")
@@ -97,7 +97,7 @@ def generate_suggestions(
 
     Note:
         Esta função é best-effort: falhas são logadas mas não propagadas.
-        O custo é ~$0.001 por chamada.
+        O custo é ~$0.003 por chamada.
     """
     if not user_message or not assistant_response:
         logger.debug("[SUGGESTIONS] Mensagem ou resposta vazia — sem sugestões")
@@ -115,14 +115,14 @@ def generate_suggestions(
         client = _get_anthropic_client()
 
         prompt_text = SUGGESTION_PROMPT.format(
-            user_message=user_message[:500],  # Limita mensagem do usuário
+            user_message=user_message[:1000],  # Limita mensagem do usuário
             assistant_response=truncated_response,
             tools_used=tools_str,
         )
 
         response = client.messages.create(
-            model=HAIKU_MODEL,
-            max_tokens=300,
+            model=SONNET_MODEL,
+            max_tokens=400,
             messages=[{
                 "role": "user",
                 "content": prompt_text,
@@ -148,7 +148,7 @@ def generate_suggestions(
 
 def _parse_suggestions(result_text: str) -> List[str]:
     """
-    Parse seguro da resposta JSON do Haiku.
+    Parse seguro da resposta JSON do LLM.
 
     Tenta parse direto, depois fallback com regex para extrair JSON array.
 
@@ -177,7 +177,7 @@ def _parse_suggestions(result_text: str) -> List[str]:
         pass
 
     logger.warning(
-        f"[SUGGESTIONS] Resposta inválida do Haiku: {result_text[:200]}"
+        f"[SUGGESTIONS] Resposta inválida: {result_text[:200]}"
     )
     return []
 

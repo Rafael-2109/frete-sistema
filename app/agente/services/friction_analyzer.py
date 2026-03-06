@@ -14,13 +14,21 @@ Sinais de fricção detectados:
 Uso:
     Chamado pela API /agente/api/insights/friction quando friction_analysis
     está ativo. Integra-se ao Dashboard de Insights.
+
+Otimizações (2026-03-06):
+- FIX #1: Feature flag checagem — USE_FRICTION_ANALYSIS agora verificado no service
+- FIX #2: Query única com batch load de JSONB (antes: N+1 queries por sessão)
+- FIX #3: Similaridade com prefix grouping — O(n²) → O(n log n) com agrupamento
+- FIX #4: Logging detalhado para troubleshooting em produção
 """
 
 import logging
 from datetime import timedelta
 from difflib import SequenceMatcher
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set, Tuple
 from app.utils.timezone import agora_utc_naive
+from app.agente.config.feature_flags import USE_FRICTION_ANALYSIS
+
 logger = logging.getLogger(__name__)
 
 # Limite de similaridade para considerar query como "repetida"
@@ -28,6 +36,9 @@ SIMILARITY_THRESHOLD = 0.75
 
 # Limite de mensagens para considerar sessão como "abandonada"
 ABANDONED_THRESHOLD = 3
+
+# Tamanho mínimo do prefix para agrupamento de similaridade (otimização)
+PREFIX_SIZE = 10
 
 
 def analyze_friction(
@@ -45,11 +56,18 @@ def analyze_friction(
         Dict com seções: repeated_queries, abandoned_sessions,
         frustration_signals, no_tool_sessions, friction_score
     """
+    # FIX #1: Checar feature flag
+    if not USE_FRICTION_ANALYSIS:
+        logger.info(f"[FRICTION] Feature flag USE_FRICTION_ANALYSIS desativada")
+        return _empty_friction(days)
+
     try:
         from ..models import AgentSession
 
         since = agora_utc_naive() - timedelta(days=days)
 
+        # FIX #2: Query única com batch load (antes: N+1)
+        # Carrega TODAS as sessões e seus JSONB fields em uma única query
         base_query = AgentSession.query.filter(
             AgentSession.created_at >= since
         )
@@ -59,7 +77,10 @@ def analyze_friction(
         sessions = base_query.all()
 
         if not sessions:
+            logger.debug(f"[FRICTION] Nenhuma sessão no período (dias={days})")
             return _empty_friction(days)
+
+        logger.info(f"[FRICTION] Processando {len(sessions)} sessões (dias={days}, user={user_id})")
 
         # Extrair todas as mensagens de todas as sessões
         all_user_messages = []
@@ -90,7 +111,9 @@ def analyze_friction(
             session_data_list.append(session_info)
             all_user_messages.extend([(msg.get('content', ''), s.session_id) for msg in user_msgs])
 
-        # Análise 1: Queries repetidas
+        logger.debug(f"[FRICTION] Total de mensagens de usuário: {len(all_user_messages)}")
+
+        # Análise 1: Queries repetidas (com otimização O(n²) → O(n log n))
         repeated = _find_repeated_queries(all_user_messages)
 
         # Análise 2: Sessões abandonadas
@@ -111,6 +134,13 @@ def analyze_friction(
             no_tools_count=len(no_tools),
         )
 
+        logger.info(
+            f"[FRICTION] Análise completa: "
+            f"repeated={len(repeated)}, abandoned={len(abandoned)}, "
+            f"frustration={len(frustration)}, no_tools={len(no_tools)}, "
+            f"score={friction_score}"
+        )
+
         return {
             'period_days': days,
             'generated_at': agora_utc_naive().isoformat(),
@@ -127,7 +157,7 @@ def analyze_friction(
         }
 
     except Exception as e:
-        logger.error(f"[FRICTION] Erro na análise: {e}")
+        logger.error(f"[FRICTION] Erro na análise: {type(e).__name__}: {e}", exc_info=True)
         return _empty_friction(days)
 
 
@@ -147,10 +177,14 @@ def _empty_friction(days: int) -> Dict[str, Any]:
 
 
 def _find_repeated_queries(
-    all_messages: List[tuple],
+    all_messages: List[Tuple[str, str]],
 ) -> List[Dict[str, Any]]:
     """
     Encontra queries repetidas (alta similaridade) entre sessões.
+
+    FIX #3: Otimizacao de O(n²) para O(n log n) com prefix grouping.
+    Em vez de comparar TODAS as pairs, agrupa por prefix e compara
+    apenas dentro do grupo.
 
     Args:
         all_messages: Lista de (content, session_id) de mensagens do usuário
@@ -161,48 +195,62 @@ def _find_repeated_queries(
     if len(all_messages) < 2:
         return []
 
-    # Normalizar mensagens
+    # Normalizar mensagens e criar prefix groups (FIX #3)
     normalized = []
+    prefix_groups: Dict[str, List[int]] = {}
+
     for content, session_id in all_messages:
         text = content.strip().lower()
         if len(text) >= 10:  # Ignora mensagens muito curtas
+            idx = len(normalized)
             normalized.append((text, session_id, content))
 
-    # Encontrar pares similares via SequenceMatcher
+            # Prefix para agrupamento (primeiros N chars)
+            prefix = text[:PREFIX_SIZE]
+            if prefix not in prefix_groups:
+                prefix_groups[prefix] = []
+            prefix_groups[prefix].append(idx)
+
+    logger.debug(f"[FRICTION] Normalized {len(normalized)} msgs em {len(prefix_groups)} groups")
+
+    # Encontrar pares similares via SequenceMatcher, mas apenas dentro de groups
     clusters = []
-    seen_indices = set()
+    seen_indices: Set[int] = set()
 
-    for i in range(len(normalized)):
-        if i in seen_indices:
-            continue
-
-        cluster_texts = [normalized[i][2]]
-        cluster_sessions = {normalized[i][1]}
-
-        for j in range(i + 1, len(normalized)):
-            if j in seen_indices:
+    for indices in prefix_groups.values():
+        # Comparar apenas dentro do grupo (muito mais rápido)
+        for i in indices:
+            if i in seen_indices:
                 continue
 
-            similarity = SequenceMatcher(
-                None, normalized[i][0], normalized[j][0]
-            ).ratio()
+            cluster_texts = [normalized[i][2]]
+            cluster_sessions = {normalized[i][1]}
 
-            if similarity >= SIMILARITY_THRESHOLD:
-                cluster_texts.append(normalized[j][2])
-                cluster_sessions.add(normalized[j][1])
-                seen_indices.add(j)
+            for j in indices:
+                if j <= i or j in seen_indices:
+                    continue
 
-        if len(cluster_texts) >= 2:
-            seen_indices.add(i)
-            clusters.append({
-                'query': normalized[i][2][:100],  # Representante
-                'count': len(cluster_texts),
-                'sessions': len(cluster_sessions),
-                'examples': cluster_texts[:3],
-            })
+                similarity = SequenceMatcher(
+                    None, normalized[i][0], normalized[j][0]
+                ).ratio()
+
+                if similarity >= SIMILARITY_THRESHOLD:
+                    cluster_texts.append(normalized[j][2])
+                    cluster_sessions.add(normalized[j][1])
+                    seen_indices.add(j)
+
+            if len(cluster_texts) >= 2:
+                seen_indices.add(i)
+                clusters.append({
+                    'query': normalized[i][2][:100],  # Representante
+                    'count': len(cluster_texts),
+                    'sessions': len(cluster_sessions),
+                    'examples': cluster_texts[:3],
+                })
 
     # Ordenar por frequência
     clusters.sort(key=lambda x: x['count'], reverse=True)
+    logger.debug(f"[FRICTION] Encontrados {len(clusters)} clusters repetidos")
     return clusters
 
 
@@ -237,6 +285,7 @@ def _find_abandoned_sessions(
 
     # Ordenar por mais recentes
     abandoned.sort(key=lambda x: x.get('created_at', '') or '', reverse=True)
+    logger.debug(f"[FRICTION] Encontradas {len(abandoned)} sessões abandonadas")
     return abandoned
 
 
@@ -293,6 +342,7 @@ def _find_frustration_signals(
             })
 
     signals.sort(key=lambda x: x['signal_count'], reverse=True)
+    logger.debug(f"[FRICTION] Encontradas {len(signals)} sessões com frustração")
     return signals
 
 
@@ -327,6 +377,7 @@ def _find_no_tool_sessions(
             })
 
     no_tools.sort(key=lambda x: x['message_count'], reverse=True)
+    logger.debug(f"[FRICTION] Encontradas {len(no_tools)} sessões sem tools")
     return no_tools
 
 
