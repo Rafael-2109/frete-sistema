@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**24 arquivos** | **~5.9K LOC** | **21 templates** | **Atualizado**: 04/03/2026
+**27 arquivos** | **~6.5K LOC** | **24 templates** | **Atualizado**: 06/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -10,7 +10,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 
 ---
 
-## Estrutura de Telas (5 documentos + 1 importacao + 1 fluxo caixa)
+## Estrutura de Telas (5 documentos + 1 importacao + 1 fluxo caixa + 1 cotacao)
 
 | # | Documento | Entidade | URL | Tela |
 |---|-----------|----------|-----|------|
@@ -22,6 +22,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 | 6 | **Importacao** | `ImportacaoService` | `/carvia/importar` | Upload + Review + Confirmar |
 | 7 | **Fluxo de Caixa** | `FluxoCaixaService` | `/carvia/fluxo-de-caixa` | Accordions por dia + Pagar/Desfazer + Card Saldo |
 | 8 | **Extrato da Conta** | `FluxoCaixaService` | `/carvia/extrato-conta` | Movimentacoes com saldo acumulado + Saldo inicial |
+| 9 | **Sessao Cotacao** | `CarviaSessaoCotacao` | `/carvia/sessoes-cotacao` | Lista + Nova + Detalhe (cotar AJAX + selecionar opcao + enviar + resposta) |
 
 ### Cross-links entre documentos (navegacao completa)
 
@@ -137,6 +138,8 @@ Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
 | CarviaContaMovimentacao | `carvia_conta_movimentacoes` | Movimentacoes financeiras da conta. `tipo_doc`: fatura_cliente/fatura_transportadora/despesa/saldo_inicial/ajuste. `doc_id`=0 para saldo_inicial. **UNIQUE(tipo_doc, doc_id)** impede duplicata. `tipo_movimento`: CREDITO/DEBITO. `valor` sempre positivo. Saldo calculado por SUM (nao armazenado) |
+| CarviaSessaoCotacao | `carvia_sessoes_cotacao` | Sessao de cotacao comercial. `numero_sessao` SC-### (padrao R8 com FOR UPDATE). Status: RASCUNHO→ENVIADO→APROVADO/CONTRA_PROPOSTA, CANCELADO (exceto de APROVADO). `valor_contra_proposta` obrigatorio quando CONTRA_PROPOSTA. Properties: `valor_total_frete`, `qtd_demandas`, `todas_demandas_com_frete`. `gerar_numero_sessao()`: static method |
+| CarviaSessaoDemanda | `carvia_sessao_demandas` | Demanda de rota dentro de sessao. UNIQUE(sessao_id, ordem). FK `transportadora_id` e `tabela_frete_id` (preenchidos ao selecionar opcao). `detalhes_calculo` JSON com breakdown da CalculadoraFrete. `limpar_frete_selecionado()` zera campos ao editar |
 
 ---
 
@@ -285,6 +288,29 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 Busca `TabelaFrete` por `transportadora_id + uf_destino + ativo=True`.
 Testa TODAS as tabelas e retorna menor valor.
 
+### Sessao de Cotacao (Ferramenta Comercial)
+
+`CotacaoService.cotar_todas_opcoes()` — calcula TODAS opcoes de frete para parametros brutos (sem operacao).
+Busca `TabelaFrete` por `uf_destino` + JOIN `Transportadora.ativo=True`. Retorna lista ordenada por valor.
+
+**Fluxo de status**:
+```
+RASCUNHO ── enviar ──> ENVIADO ── resposta ──> APROVADO
+                                           └─> CONTRA_PROPOSTA (com valor)
+CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
+```
+
+**Rotas** (`sessao_cotacao_routes.py`):
+- HTML: `GET /sessoes-cotacao` (listar), `GET|POST /sessoes-cotacao/nova`, `GET /sessoes-cotacao/<id>` (detalhe)
+- HTML: `POST .../adicionar-demanda`, `POST .../remover-demanda/<did>`, `POST .../enviar`, `POST .../resposta`, `POST .../cancelar`
+- API: `POST /api/sessao-cotacao/<id>/cotar-demanda/<did>` (retorna todas opcoes), `POST .../selecionar-opcao/<did>` (grava escolha)
+
+**Validacoes**:
+- Enviar: TODAS demandas devem ter frete selecionado
+- Cancelar: bloqueado se APROVADO
+- Contra proposta: `valor_contra_proposta` obrigatorio
+- Remover demanda: bloqueado se for a unica
+
 ---
 
 ## Interdependencias
@@ -330,6 +356,7 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/add_unique_faturas_carvia.py` + `.sql` — UNIQUE(numero_fatura, cnpj_cliente) em faturas_cliente + UNIQUE(numero_fatura, transportadora_id) em faturas_transportadora
 - `scripts/migrations/adicionar_status_carvia_nfs.py` + `.sql` — Campo `status` VARCHAR(20) DEFAULT 'ATIVA' + `cancelado_em`, `cancelado_por`, `motivo_cancelamento` + indice
 - `scripts/migrations/backfill_numeracao_sequencial_carvia.py` — Backfill: preenche `cte_numero` NULL com CTe-### (operacoes) e Sub-### (subcontratos). Sem DDL
+- `scripts/migrations/criar_tabelas_sessao_cotacao_carvia.py` + `.sql` — 2 tabelas (`carvia_sessoes_cotacao` + `carvia_sessao_demandas`), 5 indices, 2 constraints
 
 ---
 

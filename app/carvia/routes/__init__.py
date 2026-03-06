@@ -14,6 +14,7 @@ def register_routes(bp):
     from app.carvia.routes.api_routes import register_api_routes
     from app.carvia.routes.despesa_routes import register_despesa_routes
     from app.carvia.routes.fluxo_caixa_routes import register_fluxo_caixa_routes
+    from app.carvia.routes.sessao_cotacao_routes import register_sessao_cotacao_routes
 
     register_dashboard_routes(bp)
     register_importacao_routes(bp)
@@ -24,3 +25,4 @@ def register_routes(bp):
     register_api_routes(bp)
     register_despesa_routes(bp)
     register_fluxo_caixa_routes(bp)
+    register_sessao_cotacao_routes(bp)

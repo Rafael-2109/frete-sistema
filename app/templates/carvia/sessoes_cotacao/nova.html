@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-calculator"></i> Nova Sessao de Cotacao</h2>
+            <p class="text-muted mb-0">Criar sessao com primeira demanda de rota</p>
+        </div>
+        <a href="{{ url_for('carvia.listar_sessoes_cotacao') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <form method="POST" action="{{ url_for('carvia.nova_sessao_cotacao') }}">
+        <!-- Card 1: Dados da Sessao -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-folder-open"></i> Dados da Sessao</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label">Nome da Sessao <span class="text-danger">*</span></label>
+                        <input type="text" name="nome_sessao" class="form-control"
+                               placeholder="Ex: Cotacao Abril - Atacadao" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Observacoes</label>
+                        <input type="text" name="observacoes" class="form-control"
+                               placeholder="Obs internas (opcional)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Primeira Demanda -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-route"></i> Primeira Demanda</h5>
+            </div>
+            <div class="card-body">
+                <!-- Origem -->
+                <h6 class="text-muted mb-2"><i class="fas fa-map-marker-alt"></i> Origem</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Empresa <span class="text-danger">*</span></label>
+                        <input type="text" name="origem_empresa" class="form-control"
+                               placeholder="Nome da empresa" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">UF <span class="text-danger">*</span></label>
+                        <select name="origem_uf" class="form-select" required>
+                            <option value="">Selecione</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cidade <span class="text-danger">*</span></label>
+                        <input type="text" name="origem_cidade" class="form-control"
+                               placeholder="Cidade" required>
+                    </div>
+                </div>
+
+                <!-- Destino -->
+                <h6 class="text-muted mb-2"><i class="fas fa-flag-checkered"></i> Destino</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Empresa <span class="text-danger">*</span></label>
+                        <input type="text" name="destino_empresa" class="form-control"
+                               placeholder="Nome da empresa" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">UF <span class="text-danger">*</span></label>
+                        <select name="destino_uf" class="form-select" required>
+                            <option value="">Selecione</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cidade <span class="text-danger">*</span></label>
+                        <input type="text" name="destino_cidade" class="form-control"
+                               placeholder="Cidade" required>
+                    </div>
+                </div>
+
+                <!-- Carga -->
+                <h6 class="text-muted mb-2"><i class="fas fa-box"></i> Carga</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo de Carga</label>
+                        <input type="text" name="tipo_carga" class="form-control"
+                               placeholder="Ex: Quimicos (opcional)">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Peso (kg) <span class="text-danger">*</span></label>
+                        <input type="text" name="peso" class="form-control"
+                               placeholder="0,00" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Valor Mercadoria (R$) <span class="text-danger">*</span></label>
+                        <input type="text" name="valor_mercadoria" class="form-control"
+                               placeholder="0,00" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Volumes</label>
+                        <input type="number" name="volume" class="form-control"
+                               placeholder="Qtd" min="0">
+                    </div>
+                </div>
+
+                <!-- Datas -->
+                <h6 class="text-muted mb-2"><i class="fas fa-calendar"></i> Datas (opcionais)</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Data Coleta</label>
+                        <input type="date" name="data_coleta" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Entrega Prevista</label>
+                        <input type="date" name="data_entrega_prevista" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Agendamento</label>
+                        <input type="date" name="data_agendamento" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <a href="{{ url_for('carvia.listar_sessoes_cotacao') }}" class="btn btn-outline-secondary">
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-plus"></i> Criar Sessao
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

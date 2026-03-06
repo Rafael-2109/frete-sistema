@@ -1,0 +1,542 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-calculator"></i>
+                {{ sessao.numero_sessao }} — {{ sessao.nome_sessao }}
+            </h2>
+            <div class="d-flex gap-3 text-muted small">
+                <span><i class="fas fa-user"></i> {{ sessao.criado_por }}</span>
+                <span><i class="fas fa-clock"></i> {{ sessao.criado_em.strftime('%d/%m/%Y %H:%M') if sessao.criado_em else '-' }}</span>
+                {% if sessao.enviado_em %}
+                <span><i class="fas fa-paper-plane"></i> Enviado {{ sessao.enviado_em.strftime('%d/%m/%Y %H:%M') }} por {{ sessao.enviado_por }}</span>
+                {% endif %}
+                {% if sessao.respondido_em %}
+                <span><i class="fas fa-reply"></i> Respondido {{ sessao.respondido_em.strftime('%d/%m/%Y %H:%M') }} por {{ sessao.respondido_por }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            {% set status_class = {
+                'RASCUNHO': 'carvia-badge-rascunho',
+                'ENVIADO': 'carvia-badge-enviado',
+                'APROVADO': 'carvia-badge-aprovado',
+                'CONTRA_PROPOSTA': 'carvia-badge-contra-proposta',
+                'CANCELADO': 'carvia-badge-cancelado',
+            } %}
+            {% set status_label = {
+                'RASCUNHO': 'Rascunho',
+                'ENVIADO': 'Enviado',
+                'APROVADO': 'Aprovado',
+                'CONTRA_PROPOSTA': 'Contra Proposta',
+                'CANCELADO': 'Cancelado',
+            } %}
+            <span class="badge fs-6 {{ status_class.get(sessao.status, 'bg-secondary') }}">
+                {{ status_label.get(sessao.status, sessao.status) }}
+            </span>
+            <a href="{{ url_for('carvia.listar_sessoes_cotacao') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% if sessao.observacoes %}
+    <div class="alert alert-light mb-3">
+        <i class="fas fa-sticky-note"></i> <strong>Obs:</strong> {{ sessao.observacoes }}
+    </div>
+    {% endif %}
+
+    {# ================================================================= #}
+    {# RESPOSTA DO CLIENTE (APROVADO / CONTRA_PROPOSTA)                  #}
+    {# ================================================================= #}
+    {% if sessao.status in ('APROVADO', 'CONTRA_PROPOSTA') %}
+    <div class="card mb-3 border-{{ 'success' if sessao.status == 'APROVADO' else 'warning' }}">
+        <div class="card-header bg-{{ 'success' if sessao.status == 'APROVADO' else 'warning' }} text-{{ 'white' if sessao.status == 'APROVADO' else 'dark' }}">
+            <h5 class="mb-0">
+                <i class="fas fa-{{ 'check-circle' if sessao.status == 'APROVADO' else 'handshake' }}"></i>
+                Resposta: {{ status_label.get(sessao.status) }}
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if sessao.valor_contra_proposta %}
+            <p class="mb-1"><strong>Valor Contra Proposta:</strong>
+                <span class="fs-5 fw-bold text-warning">{{ sessao.valor_contra_proposta|valor_br }}</span>
+            </p>
+            {% endif %}
+            {% if sessao.resposta_cliente_obs %}
+            <p class="mb-0"><strong>Observacao:</strong> {{ sessao.resposta_cliente_obs }}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ================================================================= #}
+    {# CARD TOTALIZADOR                                                   #}
+    {# ================================================================= #}
+    {% set total_frete = namespace(valor=0) %}
+    {% set total_demandas = demandas|length %}
+    {% set demandas_com_frete = namespace(count=0) %}
+    {% for d in demandas %}
+        {% if d.valor_frete_calculado %}
+            {% set total_frete.valor = total_frete.valor + d.valor_frete_calculado|float %}
+            {% set demandas_com_frete.count = demandas_com_frete.count + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <small class="text-muted">Demandas</small>
+                    <div class="fw-bold fs-5">{{ total_demandas }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Com Frete</small>
+                    <div class="fw-bold fs-5" id="totalComFrete">{{ demandas_com_frete.count }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Valor Total Frete</small>
+                    <div class="fw-bold fs-5 text-primary" id="totalFrete">{{ total_frete.valor|valor_br }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Status</small>
+                    <div>
+                        {% if demandas_com_frete.count == total_demandas and total_demandas > 0 %}
+                        <span class="badge bg-success">Completo</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">{{ demandas_com_frete.count }}/{{ total_demandas }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ================================================================= #}
+    {# TABELA DE DEMANDAS                                                #}
+    {# ================================================================= #}
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Demandas</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Origem</th>
+                            <th>Destino</th>
+                            <th>Tipo Carga</th>
+                            <th class="text-end">Peso (kg)</th>
+                            <th class="text-end">Valor Merc.</th>
+                            <th>Vol.</th>
+                            <th>Coleta</th>
+                            <th>Entrega</th>
+                            <th>Agendamento</th>
+                            <th>Frete Selecionado</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in demandas %}
+                        <tr id="demanda-row-{{ d.id }}">
+                            <td>{{ d.ordem }}</td>
+                            <td>
+                                <strong>{{ d.origem_empresa }}</strong><br>
+                                <small class="text-muted">{{ d.origem_cidade }}-{{ d.origem_uf }}</small>
+                            </td>
+                            <td>
+                                <strong>{{ d.destino_empresa }}</strong><br>
+                                <small class="text-muted">{{ d.destino_cidade }}-{{ d.destino_uf }}</small>
+                            </td>
+                            <td>{{ d.tipo_carga or '-' }}</td>
+                            <td class="text-end valor-col">{{ d.peso|numero_br }}</td>
+                            <td class="text-end valor-col">{{ d.valor_mercadoria|valor_br }}</td>
+                            <td>{{ d.volume or '-' }}</td>
+                            <td>{{ d.data_coleta.strftime('%d/%m/%Y') if d.data_coleta else '-' }}</td>
+                            <td>{{ d.data_entrega_prevista.strftime('%d/%m/%Y') if d.data_entrega_prevista else '-' }}</td>
+                            <td>{{ d.data_agendamento.strftime('%d/%m/%Y') if d.data_agendamento else '-' }}</td>
+                            <td id="frete-cell-{{ d.id }}">
+                                {% if d.valor_frete_calculado %}
+                                <span class="text-success fw-bold">{{ d.valor_frete_calculado|valor_br }}</span>
+                                <br><small class="text-muted">{{ d.transportadora.razao_social if d.transportadora else '-' }}</small>
+                                {% else %}
+                                <span class="text-muted">Nao cotado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    {% if sessao.status == 'RASCUNHO' %}
+                                    <button type="button" class="btn btn-xs btn-outline-primary"
+                                            onclick="cotarDemanda({{ sessao.id }}, {{ d.id }})"
+                                            title="Cotar opcoes de frete">
+                                        <i class="fas fa-search-dollar"></i> Cotar
+                                    </button>
+                                    <form method="POST"
+                                          action="{{ url_for('carvia.remover_demanda', id=sessao.id, did=d.id) }}"
+                                          onsubmit="return confirm('Remover demanda #{{ d.ordem }}?')">
+                                        <button type="submit" class="btn btn-xs btn-outline-danger" title="Remover">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# ================================================================= #}
+    {# FORM ADICIONAR DEMANDA (apenas RASCUNHO)                          #}
+    {# ================================================================= #}
+    {% if sessao.status == 'RASCUNHO' %}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-plus"></i> Adicionar Demanda</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('carvia.adicionar_demanda', id=sessao.id) }}">
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3">
+                        <input type="text" name="origem_empresa" class="form-control form-control-sm"
+                               placeholder="Empresa origem *" required>
+                    </div>
+                    <div class="col-md-1">
+                        <select name="origem_uf" class="form-select form-select-sm" required>
+                            <option value="">UF</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="origem_cidade" class="form-control form-control-sm"
+                               placeholder="Cidade origem *" required>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" name="destino_empresa" class="form-control form-control-sm"
+                               placeholder="Empresa destino *" required>
+                    </div>
+                    <div class="col-md-1">
+                        <select name="destino_uf" class="form-select form-select-sm" required>
+                            <option value="">UF</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="destino_cidade" class="form-control form-control-sm"
+                               placeholder="Cidade destino *" required>
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-2">
+                        <input type="text" name="tipo_carga" class="form-control form-control-sm"
+                               placeholder="Tipo carga">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="peso" class="form-control form-control-sm"
+                               placeholder="Peso (kg) *" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="valor_mercadoria" class="form-control form-control-sm"
+                               placeholder="Valor merc. R$ *" required>
+                    </div>
+                    <div class="col-md-1">
+                        <input type="number" name="volume" class="form-control form-control-sm"
+                               placeholder="Vol." min="0">
+                    </div>
+                    <div class="col-md-1">
+                        <input type="date" name="data_coleta" class="form-control form-control-sm"
+                               title="Data coleta">
+                    </div>
+                    <div class="col-md-1">
+                        <input type="date" name="data_entrega_prevista" class="form-control form-control-sm"
+                               title="Entrega prevista">
+                    </div>
+                    <div class="col-md-1">
+                        <input type="date" name="data_agendamento" class="form-control form-control-sm"
+                               title="Agendamento">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-success btn-sm w-100">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ================================================================= #}
+    {# ACOES                                                              #}
+    {# ================================================================= #}
+    <div class="d-flex justify-content-between">
+        <div>
+            {% if sessao.status not in ('APROVADO', 'CANCELADO') %}
+            <form method="POST" action="{{ url_for('carvia.cancelar_sessao_cotacao', id=sessao.id) }}"
+                  class="d-inline" onsubmit="return confirm('Cancelar esta sessao?')">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="fas fa-ban"></i> Cancelar Sessao
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        <div class="d-flex gap-2">
+            {% if sessao.status == 'RASCUNHO' %}
+            <form method="POST" action="{{ url_for('carvia.enviar_sessao_cotacao', id=sessao.id) }}"
+                  onsubmit="return confirm('Enviar sessao? Apos envio, a sessao sera travada.')">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-paper-plane"></i> Enviar Cotacao
+                </button>
+            </form>
+            {% endif %}
+
+            {% if sessao.status == 'ENVIADO' %}
+            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalResposta">
+                <i class="fas fa-reply"></i> Registrar Resposta
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ================================================================= #}
+{# MODAL OPCOES DE FRETE                                              #}
+{# ================================================================= #}
+<div class="modal fade" id="modalOpcoesFrete" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-search-dollar"></i> Opcoes de Frete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="opcoesLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Calculando opcoes...</p>
+                </div>
+                <div id="opcoesConteudo" style="display:none;">
+                    <div id="opcoesVazio" class="text-center py-4 text-muted" style="display:none;">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p>Nenhuma opcao de frete disponivel para esta rota.</p>
+                    </div>
+                    <div class="table-responsive" id="opcoesTabela" style="display:none;">
+                        <table class="table table-hover table-sm carvia-table">
+                            <thead>
+                                <tr>
+                                    <th>Transportadora</th>
+                                    <th>CNPJ</th>
+                                    <th>Tabela</th>
+                                    <th>Tipo Carga</th>
+                                    <th>Modalidade</th>
+                                    <th class="text-end">Valor Frete</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="opcoesBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ================================================================= #}
+{# MODAL REGISTRAR RESPOSTA                                           #}
+{# ================================================================= #}
+{% if sessao.status == 'ENVIADO' %}
+<div class="modal fade" id="modalResposta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('carvia.registrar_resposta_sessao', id=sessao.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-reply"></i> Registrar Resposta do Cliente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Tipo de Resposta</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_resposta"
+                                       value="APROVADO" id="respostaAprovado" checked
+                                       onchange="toggleContraProposta()">
+                                <label class="form-check-label" for="respostaAprovado">
+                                    <i class="fas fa-check text-success"></i> Aprovado
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_resposta"
+                                       value="CONTRA_PROPOSTA" id="respostaContra"
+                                       onchange="toggleContraProposta()">
+                                <label class="form-check-label" for="respostaContra">
+                                    <i class="fas fa-handshake text-warning"></i> Contra Proposta
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3" id="divContraProposta" style="display:none;">
+                        <label class="form-label">Valor da Contra Proposta (R$)</label>
+                        <input type="text" name="valor_contra_proposta" class="form-control"
+                               id="inputContraProposta" placeholder="0,00">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observacao do Cliente</label>
+                        <textarea name="resposta_cliente_obs" class="form-control" rows="3"
+                                  placeholder="Observacao (opcional)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i> Registrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Estado
+let currentDemandaId = null;
+let currentSessaoId = {{ sessao.id }};
+
+// Toggle contra proposta
+function toggleContraProposta() {
+    const contra = document.getElementById('respostaContra');
+    const div = document.getElementById('divContraProposta');
+    const input = document.getElementById('inputContraProposta');
+    if (contra && div) {
+        div.style.display = contra.checked ? 'block' : 'none';
+        if (input) input.required = contra.checked;
+    }
+}
+
+// Formatar valor em BRL
+function formatBRL(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(valor);
+}
+
+// Cotar demanda (AJAX)
+function cotarDemanda(sessaoId, demandaId) {
+    currentDemandaId = demandaId;
+    const modal = new bootstrap.Modal(document.getElementById('modalOpcoesFrete'));
+    const loading = document.getElementById('opcoesLoading');
+    const conteudo = document.getElementById('opcoesConteudo');
+    const vazio = document.getElementById('opcoesVazio');
+    const tabela = document.getElementById('opcoesTabela');
+    const body = document.getElementById('opcoesBody');
+
+    loading.style.display = 'block';
+    conteudo.style.display = 'none';
+    modal.show();
+
+    fetch(`/carvia/api/sessao-cotacao/${sessaoId}/cotar-demanda/${demandaId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        loading.style.display = 'none';
+        conteudo.style.display = 'block';
+
+        if (!data.sucesso || !data.opcoes || data.opcoes.length === 0) {
+            vazio.style.display = 'block';
+            tabela.style.display = 'none';
+            return;
+        }
+
+        vazio.style.display = 'none';
+        tabela.style.display = 'block';
+        body.innerHTML = '';
+
+        data.opcoes.forEach(function(op) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${op.transportadora_nome}</strong></td>
+                <td class="cnpj-col">${op.transportadora_cnpj || '-'}</td>
+                <td>${op.tabela_nome || '-'}</td>
+                <td>${op.tipo_carga || '-'}</td>
+                <td>${op.modalidade || '-'}</td>
+                <td class="text-end valor-col fw-bold">${formatBRL(op.valor_frete)}</td>
+                <td>
+                    <button class="btn btn-xs btn-success"
+                            onclick="selecionarOpcao(${sessaoId}, ${demandaId}, ${JSON.stringify(op).replace(/"/g, '&quot;')})">
+                        <i class="fas fa-check"></i> Selecionar
+                    </button>
+                </td>
+            `;
+            body.appendChild(tr);
+        });
+    })
+    .catch(err => {
+        loading.style.display = 'none';
+        conteudo.style.display = 'block';
+        vazio.style.display = 'block';
+        vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i><p>Erro ao calcular opcoes: ' + err.message + '</p>';
+        tabela.style.display = 'none';
+    });
+}
+
+// Selecionar opcao de frete (AJAX)
+function selecionarOpcao(sessaoId, demandaId, opcao) {
+    fetch(`/carvia/api/sessao-cotacao/${sessaoId}/selecionar-opcao/${demandaId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            transportadora_id: opcao.transportadora_id,
+            tabela_frete_id: opcao.tabela_frete_id,
+            valor_frete: opcao.valor_frete,
+            detalhes: opcao.detalhes || {},
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Atualizar celula na tabela
+            const cell = document.getElementById('frete-cell-' + demandaId);
+            if (cell) {
+                cell.innerHTML = `
+                    <span class="text-success fw-bold">${formatBRL(data.valor_frete)}</span>
+                    <br><small class="text-muted">${data.transportadora_nome}</small>
+                `;
+            }
+
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalOpcoesFrete'));
+            if (modal) modal.hide();
+
+            // Recarregar pagina para atualizar totalizadores
+            location.reload();
+        } else {
+            alert('Erro ao selecionar: ' + (data.erro || 'desconhecido'));
+        }
+    })
+    .catch(err => {
+        alert('Erro: ' + err.message);
+    });
+}
+</script>
+{% endblock %}

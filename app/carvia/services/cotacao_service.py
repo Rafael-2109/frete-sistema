@@ -143,13 +143,13 @@ class CotacaoService:
 
             resultado = calc.calcular_frete_unificado(
                 peso=peso,
-                valor_nf=valor_mercadoria,
+                valor_mercadoria=valor_mercadoria,
                 tabela_dados=tabela_dados,
             )
 
-            if resultado and 'valor_total' in resultado:
+            if resultado and 'valor_com_icms' in resultado:
                 return {
-                    'valor': resultado['valor_total'],
+                    'valor': resultado['valor_com_icms'],
                     'detalhes': resultado,
                 }
 
@@ -157,6 +157,93 @@ class CotacaoService:
         except Exception as e:
             logger.warning(f"Erro ao calcular frete: {e}")
             return None
+
+    def cotar_todas_opcoes(self, peso: float, valor_mercadoria: float,
+                           uf_destino: str, cidade_destino: str = None,
+                           uf_origem: str = None) -> List[Dict]:
+        """
+        Calcula TODAS as opcoes de frete para uma demanda de cotacao.
+        Nao requer operacao_id — usa parametros brutos.
+
+        Args:
+            peso: Peso em kg
+            valor_mercadoria: Valor da mercadoria R$
+            uf_destino: UF destino (obrigatorio)
+            cidade_destino: Cidade destino (opcional, para log)
+            uf_origem: UF origem (opcional, filtra tabelas)
+
+        Returns:
+            List[Dict] ordenada por valor (menor primeiro):
+            [{'transportadora_id', 'transportadora_nome', 'transportadora_cnpj',
+              'tabela_frete_id', 'tabela_nome', 'tipo_carga', 'modalidade',
+              'valor_frete', 'detalhes'}, ...]
+        """
+        if peso <= 0:
+            logger.warning("Peso invalido para cotacao: %s", peso)
+            return []
+
+        if not uf_destino:
+            logger.warning("UF destino nao informada para cotacao")
+            return []
+
+        try:
+            from app.tabelas.models import TabelaFrete
+            from app.transportadoras.models import Transportadora
+
+            # Buscar tabelas de frete para o destino
+            query = db.session.query(TabelaFrete).join(
+                Transportadora,
+                TabelaFrete.transportadora_id == Transportadora.id
+            ).filter(
+                TabelaFrete.uf_destino == uf_destino.upper(),
+                Transportadora.ativo == True,  # noqa: E712
+            )
+
+            if uf_origem:
+                query = query.filter(TabelaFrete.uf_origem == uf_origem.upper())
+
+            tabelas = query.all()
+
+            if not tabelas:
+                logger.info(
+                    "Nenhuma tabela de frete para UF destino=%s (origem=%s)",
+                    uf_destino, uf_origem or 'qualquer'
+                )
+                return []
+
+            opcoes = []
+            for tabela in tabelas:
+                try:
+                    resultado = self._calcular_com_tabela(
+                        tabela, peso, valor_mercadoria,
+                        uf_destino, cidade_destino
+                    )
+                    if resultado:
+                        transportadora = tabela.transportadora
+                        opcoes.append({
+                            'transportadora_id': transportadora.id,
+                            'transportadora_nome': transportadora.razao_social,
+                            'transportadora_cnpj': transportadora.cnpj,
+                            'tabela_frete_id': tabela.id,
+                            'tabela_nome': tabela.nome_tabela,
+                            'tipo_carga': tabela.tipo_carga,
+                            'modalidade': tabela.modalidade,
+                            'valor_frete': round(resultado['valor'], 2),
+                            'detalhes': resultado.get('detalhes', {}),
+                        })
+                except Exception as e:
+                    logger.warning(
+                        "Erro ao calcular com tabela %s: %s", tabela.id, e
+                    )
+                    continue
+
+            # Ordenar por valor ascendente
+            opcoes.sort(key=lambda x: x['valor_frete'])
+            return opcoes
+
+        except Exception as e:
+            logger.error("Erro ao cotar todas opcoes: %s", e)
+            return []
 
     def listar_opcoes_transportadora(self, uf_destino: str,
                                       cidade_destino: str = None) -> List[Dict]:
