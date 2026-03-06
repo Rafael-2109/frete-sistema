@@ -4,10 +4,24 @@
 <div class="container-fluid mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Cotação de Frete</h1>
-    <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
-      <i class="fas fa-arrow-left"></i> Voltar
-    </a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalCotacaoManual">
+        <i class="fas fa-edit"></i> Cotacao Manual
+      </button>
+      <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </a>
+    </div>
   </div>
+
+  {% if alterando_embarque_info %}
+  <div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <strong>Alterando cotacao do embarque #{{ alterando_embarque_info.numero_embarque }}</strong>
+    <span class="ms-2 text-muted">| Transportadora anterior: {{ alterando_embarque_info.transportadora_anterior or 'N/A' }}</span>
+  </div>
+  {% endif %}
+
   <hr>
 
   {# 1) Cabeçalho: Pedidos em Cotação #}
@@ -467,6 +481,56 @@
     </div>
   </div>
 </div>
+{# Modal de Cotacao Manual #}
+<div class="modal fade" id="modalCotacaoManual" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Cotacao Manual</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="manualTransportadora" class="form-label">Transportadora</label>
+          <select class="form-select" id="manualTransportadora" required>
+            <option value="">Selecione...</option>
+            {% for t in transportadoras %}
+            <option value="{{ t.id }}">{{ t.razao_social }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="manualModalidade" class="form-label">Modalidade</label>
+          <select class="form-select" id="manualModalidade" required>
+            <option value="CIF">CIF</option>
+            <option value="FOB">FOB</option>
+            <option value="PESO">PESO</option>
+            <option value="VALOR">VALOR</option>
+            <option value="VAN">VAN</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="manualValorFrete" class="form-label">Valor do Frete (R$)</label>
+          <input type="number" class="form-control" id="manualValorFrete" step="0.01" min="0" required>
+        </div>
+        <div class="mb-3">
+          <label for="manualTipoCarga" class="form-label">Tipo de Carga</label>
+          <select class="form-select" id="manualTipoCarga" required>
+            <option value="DIRETA">Direta</option>
+            <option value="FRACIONADA">Fracionada</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning" id="btnFecharCotacaoManual">
+          <i class="fas fa-check me-1"></i> Fechar Cotacao Manual
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -700,6 +764,7 @@
       tipo: 'FRACIONADA',
       transportadora_id: transportadoraSelecionada,
       tabelas_por_cnpj: tabelasPorCnpjSelecionadas,  // ✅ NOVO: Envia tabelas completas
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }},
       pedidos: pedidosSelecionados.map(function (pedido) {
         return {
           id: pedido.separacao_lote_id,
@@ -799,6 +864,7 @@
       transportadora_id: transportadoraId,
       tabela_selecionada: tabelaSelecionada,  // ✅ NOVO: Envia tabela completa
       indice_original: indiceOriginal,  // Mantém para compatibilidade/debug
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }},
       pedidos: {{ pedidos_selecionados| tojson | safe
   }}.map(function (pedido) {
     return {
@@ -923,7 +989,8 @@
     const payload = {
       transportadora_id: transportadora_id,
       cnpjs: cnpjs,
-      tabelas_por_cnpj: tabelasPorCnpj  // ✅ NOVO: Envia tabelas completas de todos os CNPJs
+      tabelas_por_cnpj: tabelasPorCnpj,  // ✅ NOVO: Envia tabelas completas de todos os CNPJs
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }}
     };
 
     // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
@@ -965,6 +1032,98 @@
     });
   });
 });
+
+  // Handler: Cotacao Manual
+  $('#btnFecharCotacaoManual').click(function () {
+    const transportadoraId = $('#manualTransportadora').val();
+    const modalidade = $('#manualModalidade').val();
+    const valorFrete = parseFloat($('#manualValorFrete').val()) || 0;
+    const tipoCarga = $('#manualTipoCarga').val();
+
+    if (!transportadoraId) {
+      alert('Selecione uma transportadora.');
+      return;
+    }
+
+    if (valorFrete < 0) {
+      alert('Valor do frete deve ser >= 0.');
+      return;
+    }
+
+    const $btn = $(this);
+    const textoOriginal = $btn.html();
+    $btn.html('<i class="fas fa-spinner fa-spin me-1"></i>Processando...');
+    $btn.prop('disabled', true);
+
+    // Monta tabela com estrutura compativel (mesma estrutura de preparar_cotacao_manual)
+    const tabelaSelecionada = {
+      nome_tabela: 'Cotacao Manual',
+      modalidade: modalidade,
+      frete_minimo_valor: valorFrete,
+      icms_incluso: true,
+      icms: 0,
+      icms_destino: 0,
+      valor_kg: 0,
+      percentual_valor: 0,
+      frete_minimo_peso: 0,
+      percentual_gris: 0,
+      pedagio_por_100kg: 0,
+      valor_tas: 0,
+      percentual_adv: 0,
+      percentual_rca: 0,
+      valor_despacho: 0,
+      valor_cte: 0,
+      gris_minimo: 0,
+      adv_minimo: 0,
+      icms_proprio: null,
+      valor_total: valorFrete,
+      valor_liquido: valorFrete
+    };
+
+    const payload = {
+      tipo: tipoCarga,
+      transportadora_id: transportadoraId,
+      tabela_selecionada: tabelaSelecionada,
+      indice_original: 0,
+      tipo_cotacao: 'Manual',
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else 'null') | tojson }},
+      pedidos: {{ pedidos_selecionados | tojson | safe }}.map(function (pedido) {
+        return {
+          id: pedido.separacao_lote_id,
+          cnpj: pedido.cnpj_cpf,
+          valor: pedido.valor_saldo_total,
+          peso: pedido.peso_total
+        };
+      })
+    };
+
+    console.log('[DEBUG] Cotacao Manual payload:', payload);
+
+    $.ajax({
+      url: "{{ url_for('cotacao.fechar_frete') }}",
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload),
+      timeout: 120000,
+      success: function (response) {
+        if (response.success) {
+          $btn.html('<i class="fas fa-check me-1"></i>Concluido!');
+          setTimeout(function () {
+            window.location.href = response.redirect_url;
+          }, 500);
+        } else {
+          alert('Erro: ' + response.message);
+          $btn.html(textoOriginal);
+          $btn.prop('disabled', false);
+        }
+      },
+      error: function (xhr) {
+        alert('Erro ao processar: ' + (xhr.responseText || 'Timeout'));
+        $btn.html(textoOriginal);
+        $btn.prop('disabled', false);
+      }
+    });
+  });
 
   // Função para incluir pedidos em embarque existente
   function incluirEmEmbarque(embarqueId, tipoCarga) {

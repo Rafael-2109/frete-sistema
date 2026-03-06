@@ -3362,13 +3362,8 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
         if not embarque:
             return False, "Embarque não encontrado"
 
-        # ✅ NOVA VALIDAÇÃO: Se transportadora for "FOB - COLETA", não gera frete
+        # Busca transportadora para verificar FOB
         transportadora = db.session.get(Transportadora,embarque.transportadora_id) if embarque.transportadora_id else None
-        if transportadora and transportadora.razao_social == "FOB - COLETA":
-            return (
-                True,
-                f"Embarque FOB - não gera frete automaticamente (Transportadora: {transportadora.razao_social})",
-            )
 
         # Busca dados do CNPJ no faturamento
         nf_faturamento = RelatorioFaturamentoImportado.query.filter_by(cnpj_cliente=cnpj_cliente).first()
@@ -3399,6 +3394,41 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
         peso_total_cnpj = sum(float(nf.peso_bruto or 0) for nf in nfs_deste_cnpj)
         valor_total_cnpj = sum(float(nf.valor_total or 0) for nf in nfs_deste_cnpj)
         numeros_nfs = ",".join([item.nota_fiscal for item in itens_embarque_cnpj])
+
+        # ✅ FOB - COLETA: Cria Frete com valores zerados
+        if transportadora and transportadora.razao_social == "FOB - COLETA":
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+
+            tabela_dados_fob = TabelaFreteManager.preparar_cotacao_fob()
+
+            novo_frete = Frete(
+                embarque_id=embarque_id,
+                cnpj_cliente=cnpj_cliente,
+                nome_cliente=nf_faturamento.nome_cliente,
+                transportadora_id=embarque.transportadora_id,
+                tipo_carga=embarque.tipo_carga,
+                modalidade='FOB',
+                uf_destino=itens_embarque_cnpj[0].uf_destino,
+                cidade_destino=itens_embarque_cnpj[0].cidade_destino,
+                peso_total=peso_total_cnpj,
+                valor_total_nfs=valor_total_cnpj,
+                quantidade_nfs=len(itens_embarque_cnpj),
+                numeros_nfs=numeros_nfs,
+                valor_cotado=0,
+                valor_considerado=0,
+                fatura_frete_id=None,
+                criado_por=usuario,
+                lancado_em=agora_utc_naive(),
+                lancado_por=usuario,
+            )
+
+            TabelaFreteManager.atribuir_campos_objeto(novo_frete, tabela_dados_fob)
+            novo_frete.tabela_icms_destino = 0
+
+            db.session.add(novo_frete)
+            db.session.commit()
+
+            return True, f"Frete FOB lancado (R$ 0,00) - ID: {novo_frete.id}"
 
         # LÓGICA ESPECÍFICA POR TIPO DE CARGA
         if embarque.tipo_carga == "DIRETA":

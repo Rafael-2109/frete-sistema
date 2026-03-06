@@ -944,7 +944,9 @@ def tela_cotacao():
         peso_total=peso_total,
         todos_mesmo_uf=todos_mesmo_uf,
         embarques_compativeis_direta=embarques_compativeis_direta,
-        embarques_compativeis_fracionada=embarques_compativeis_fracionada
+        embarques_compativeis_fracionada=embarques_compativeis_fracionada,
+        alterando_embarque_info=session.get('alterando_embarque'),
+        transportadoras=Transportadora.query.filter(Transportadora.razao_social != 'FOB - COLETA').order_by(Transportadora.razao_social).all(),
     )
 
 @cotacao_bp.route("/excluir_pedido", methods=["POST"])
@@ -1031,24 +1033,38 @@ def fechar_frete():
         indice_original = data.get('indice_original', 0)
         
         # ✅ NOVO: Verifica se estamos alterando cotação de embarque existente
-        alterando_embarque = session.get('alterando_embarque')
+        # Fonte 1: payload (mais confiável, sobrevive a perda de sessão)
+        embarque_id_payload = data.get('embarque_id')
+        # Fonte 2: session (backup)
+        alterando_embarque_session = session.get('alterando_embarque')
+
+        alterando_embarque = None
         embarque_existente = None
-        
-        if alterando_embarque:
+
+        if embarque_id_payload:
+            embarque_existente = db.session.get(Embarque, int(embarque_id_payload))
+            if embarque_existente:
+                alterando_embarque = {'embarque_id': embarque_existente.id, 'numero_embarque': embarque_existente.numero}
+                print(f"[DEBUG] 🔄 ALTERANDO COTAÇÃO do embarque #{embarque_existente.numero} (via payload)")
+            else:
+                return jsonify({'success': False, 'message': 'Embarque não encontrado para alteração'}), 404
+        elif alterando_embarque_session:
+            alterando_embarque = alterando_embarque_session
             embarque_id = alterando_embarque.get('embarque_id')
-            embarque_existente = db.session.get(Embarque,embarque_id) if embarque_id else None
-            
+            embarque_existente = db.session.get(Embarque, embarque_id) if embarque_id else None
+
             if not embarque_existente:
                 # Remove informação inválida da sessão
                 session.pop('alterando_embarque', None)
                 return jsonify({'success': False, 'message': 'Embarque não encontrado para alteração'}), 404
-            
+
+            print(f"[DEBUG] 🔄 ALTERANDO COTAÇÃO do embarque #{embarque_existente.numero} (via session)")
+
+        if embarque_existente:
             # Verifica se ainda é possível alterar (data embarque não preenchida)
             if embarque_existente.data_embarque:
                 session.pop('alterando_embarque', None)
                 return jsonify({'success': False, 'message': 'Não é possível alterar cotação de embarque já embarcado'}), 400
-            
-            print(f"[DEBUG] 🔄 ALTERANDO COTAÇÃO do embarque #{embarque_existente.numero}")
         else:
             print(f"[DEBUG] ✅ CRIANDO NOVO EMBARQUE")
 
@@ -1291,6 +1307,7 @@ def fechar_frete():
             # Atualiza dados básicos do embarque
             embarque_existente.transportadora_id = transportadora_id
             embarque_existente.tipo_carga = tipo
+            embarque_existente.tipo_cotacao = data.get('tipo_cotacao', embarque_existente.tipo_cotacao)
             embarque_existente.valor_total = valor_mercadorias
             embarque_existente.peso_total = peso_total
             embarque_existente.pallet_total = pallets_total
@@ -1451,7 +1468,7 @@ def fechar_frete():
                 transportadora_id=transportadora_id,
                 status='ativo',
                 numero=novo_numero,
-                tipo_cotacao='Automatica',
+                tipo_cotacao=data.get('tipo_cotacao', 'Automatica'),
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
                 peso_total=peso_total,
