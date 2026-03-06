@@ -639,6 +639,176 @@ class CarviaFaturaTransportadora(db.Model):
         return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'
 
 
+class CarviaSessaoCotacao(db.Model):
+    """Sessao de cotacao — agrupa N demandas de rota para cotar frete"""
+    __tablename__ = 'carvia_sessoes_cotacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    numero_sessao = db.Column(db.String(20), nullable=False, index=True)
+    nome_sessao = db.Column(db.String(255), nullable=False)
+
+    # RASCUNHO, ENVIADO, APROVADO, CONTRA_PROPOSTA, CANCELADO
+    status = db.Column(db.String(20), nullable=False, default='RASCUNHO')
+
+    # Resposta do cliente
+    valor_contra_proposta = db.Column(db.Numeric(15, 2), nullable=True)
+    resposta_cliente_obs = db.Column(db.Text, nullable=True)
+    respondido_em = db.Column(db.DateTime, nullable=True)
+    respondido_por = db.Column(db.String(100), nullable=True)
+
+    # Envio
+    enviado_em = db.Column(db.DateTime, nullable=True)
+    enviado_por = db.Column(db.String(100), nullable=True)
+
+    # Geral
+    observacoes = db.Column(db.Text, nullable=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+    atualizado_em = db.Column(
+        db.DateTime, nullable=False,
+        default=agora_utc_naive, onupdate=agora_utc_naive
+    )
+
+    # Relacionamentos
+    demandas = db.relationship(
+        'CarviaSessaoDemanda',
+        backref='sessao',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+        order_by='CarviaSessaoDemanda.ordem'
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('RASCUNHO','ENVIADO','APROVADO','CONTRA_PROPOSTA','CANCELADO')",
+            name='ck_carvia_sessao_status'
+        ),
+    )
+
+    @staticmethod
+    def gerar_numero_sessao():
+        """Gera proximo numero sequencial SC-### para sessoes de cotacao."""
+        max_row = db.session.query(
+            CarviaSessaoCotacao.numero_sessao
+        ).filter(
+            CarviaSessaoCotacao.numero_sessao.ilike('SC-%'),
+        ).order_by(
+            CarviaSessaoCotacao.id.desc()
+        ).limit(1).scalar()
+
+        next_num = 1
+        if max_row:
+            try:
+                next_num = int(max_row.replace('SC-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'SC-{next_num:03d}'
+
+    @property
+    def valor_total_frete(self):
+        """Soma dos fretes selecionados nas demandas"""
+        total = db.session.query(
+            func.coalesce(func.sum(CarviaSessaoDemanda.valor_frete_calculado), 0)
+        ).filter(
+            CarviaSessaoDemanda.sessao_id == self.id,
+            CarviaSessaoDemanda.valor_frete_calculado.isnot(None)
+        ).scalar()
+        return float(total)
+
+    @property
+    def qtd_demandas(self):
+        """Quantidade de demandas na sessao"""
+        return db.session.query(
+            func.count(CarviaSessaoDemanda.id)
+        ).filter(
+            CarviaSessaoDemanda.sessao_id == self.id
+        ).scalar()
+
+    @property
+    def todas_demandas_com_frete(self):
+        """Verifica se TODAS as demandas tem frete selecionado"""
+        sem_frete = db.session.query(
+            func.count(CarviaSessaoDemanda.id)
+        ).filter(
+            CarviaSessaoDemanda.sessao_id == self.id,
+            CarviaSessaoDemanda.valor_frete_calculado.is_(None)
+        ).scalar()
+        return sem_frete == 0
+
+    def __repr__(self):
+        return f'<CarviaSessaoCotacao {self.numero_sessao} ({self.status})>'
+
+
+class CarviaSessaoDemanda(db.Model):
+    """Demanda de rota dentro de uma sessao de cotacao"""
+    __tablename__ = 'carvia_sessao_demandas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sessao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_sessoes_cotacao.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    ordem = db.Column(db.Integer, nullable=False, default=1)
+
+    # Origem
+    origem_empresa = db.Column(db.String(255), nullable=False)
+    origem_uf = db.Column(db.String(2), nullable=False)
+    origem_cidade = db.Column(db.String(100), nullable=False)
+
+    # Destino
+    destino_empresa = db.Column(db.String(255), nullable=False)
+    destino_uf = db.Column(db.String(2), nullable=False)
+    destino_cidade = db.Column(db.String(100), nullable=False)
+
+    # Carga
+    tipo_carga = db.Column(db.String(100), nullable=True)
+    peso = db.Column(db.Numeric(15, 3), nullable=False)
+    valor_mercadoria = db.Column(db.Numeric(15, 2), nullable=False)
+    volume = db.Column(db.Integer, nullable=True)
+
+    # Datas
+    data_coleta = db.Column(db.Date, nullable=True)
+    data_entrega_prevista = db.Column(db.Date, nullable=True)
+    data_agendamento = db.Column(db.Date, nullable=True)
+
+    # Frete selecionado
+    transportadora_id = db.Column(
+        db.Integer,
+        db.ForeignKey('transportadoras.id'),
+        nullable=True
+    )
+    tabela_frete_id = db.Column(
+        db.Integer,
+        db.ForeignKey('tabelas_frete.id'),
+        nullable=True
+    )
+    valor_frete_calculado = db.Column(db.Numeric(15, 2), nullable=True)
+    detalhes_calculo = db.Column(db.JSON, nullable=True)
+
+    observacoes = db.Column(db.Text, nullable=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    # Relacionamentos
+    transportadora = db.relationship('Transportadora', lazy='joined')
+
+    __table_args__ = (
+        db.UniqueConstraint('sessao_id', 'ordem', name='uq_carvia_sessao_demanda_ordem'),
+        db.Index('ix_carvia_sessao_demanda_destino_uf', 'destino_uf'),
+    )
+
+    def limpar_frete_selecionado(self):
+        """Limpa frete quando demanda e editada (valores stale)"""
+        self.transportadora_id = None
+        self.tabela_frete_id = None
+        self.valor_frete_calculado = None
+        self.detalhes_calculo = None
+
+    def __repr__(self):
+        return f'<CarviaSessaoDemanda {self.id} sessao={self.sessao_id} #{self.ordem}>'
+
+
 class CarviaContaMovimentacao(db.Model):
     """Movimentacoes financeiras da conta CarVia — saldo calculado por SUM"""
     __tablename__ = 'carvia_conta_movimentacoes'
