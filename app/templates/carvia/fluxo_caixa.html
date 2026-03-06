@@ -313,6 +313,10 @@
     {% endif %}
 
 </div>
+
+{# Modal de data de pagamento (modo AJAX — sem form_action) #}
+{% include 'carvia/_modal_data_pagamento.html' %}
+
 {% endblock %}
 
 
@@ -349,13 +353,97 @@
     function atualizarSaldoConta(saldo) {
         var el = document.getElementById('saldoContaValor');
         if (!el) return;
-        // Formatar como R$ brasileiro
         var formatted = 'R$\u00a0' + saldo.toLocaleString('pt-BR', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         });
         el.textContent = formatted;
         el.className = 'stat-value ' + (saldo >= 0 ? 'text-success' : 'text-danger');
+    }
+
+    // --- Modal de data de pagamento ---
+    var modalEl = document.getElementById('modalDataPagamento');
+    var modalInstance = modalEl ? new bootstrap.Modal(modalEl) : null;
+    var inputData = document.getElementById('dataPagamentoInput');
+    var btnConfirmar = document.getElementById('btnConfirmarPagamento');
+
+    // Dados do pagamento pendente (preenchidos ao clicar .btn-pagar)
+    var pendingTipo = null;
+    var pendingId = null;
+    var pendingBtnPagar = null;
+
+    // Setar data de hoje como default ao abrir o modal
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function() {
+            if (inputData && !inputData.value) {
+                inputData.value = new Date().toISOString().slice(0, 10);
+            }
+        });
+    }
+
+    // Confirmar pagamento no modal
+    if (btnConfirmar) {
+        btnConfirmar.addEventListener('click', function() {
+            if (!inputData.value) {
+                inputData.focus();
+                return;
+            }
+
+            var dataPagamento = inputData.value;
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+            fetch('/carvia/api/fluxo-caixa/pagar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    tipo_doc: pendingTipo,
+                    id: parseInt(pendingId),
+                    data_pagamento: dataPagamento
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    // Atualizar UI da linha na tabela
+                    if (pendingBtnPagar) {
+                        var tr = pendingBtnPagar.closest('tr');
+                        tr.classList.add('carvia-fluxo-pago');
+
+                        var badgeStatus = tr.querySelector('.badge[class*="carvia-badge-"]');
+                        if (badgeStatus) {
+                            badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
+                            badgeStatus.textContent = data.novo_status;
+                        }
+
+                        pendingBtnPagar.outerHTML =
+                            '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
+                            'data-tipo="' + pendingTipo + '" data-id="' + pendingId + '" title="Desfazer pagamento">' +
+                            '<i class="fas fa-undo"></i></button>';
+                    }
+
+                    if (typeof data.saldo_atual === 'number') {
+                        atualizarSaldoConta(data.saldo_atual);
+                    }
+
+                    modalInstance.hide();
+                } else {
+                    alert(data.erro || 'Erro ao processar pagamento');
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+            })
+            .finally(function() {
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar';
+                // Restaurar botao original se falhou
+                if (pendingBtnPagar && pendingBtnPagar.disabled) {
+                    pendingBtnPagar.disabled = false;
+                    pendingBtnPagar.innerHTML = '<i class="fas fa-check"></i>';
+                }
+            });
+        });
     }
 
     // --- Pagar / Desfazer via event delegation ---
@@ -365,48 +453,17 @@
 
         if (btnPagar) {
             e.preventDefault();
-            var tipo = btnPagar.dataset.tipo;
-            var id = btnPagar.dataset.id;
-
-            btnPagar.disabled = true;
-            btnPagar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-            fetch('/carvia/api/fluxo-caixa/pagar', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({tipo_doc: tipo, id: parseInt(id)})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.sucesso) {
-                    var tr = btnPagar.closest('tr');
-                    tr.classList.add('carvia-fluxo-pago');
-
-                    var badgeStatus = tr.querySelector('.badge[class*="carvia-badge-"]');
-                    if (badgeStatus) {
-                        badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
-                        badgeStatus.textContent = data.novo_status;
-                    }
-
-                    btnPagar.outerHTML =
-                        '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
-                        'data-tipo="' + tipo + '" data-id="' + id + '" title="Desfazer pagamento">' +
-                        '<i class="fas fa-undo"></i></button>';
-
-                    if (typeof data.saldo_atual === 'number') {
-                        atualizarSaldoConta(data.saldo_atual);
-                    }
-                } else {
-                    alert(data.erro || 'Erro ao processar pagamento');
-                    btnPagar.disabled = false;
-                    btnPagar.innerHTML = '<i class="fas fa-check"></i>';
-                }
-            })
-            .catch(function(err) {
-                alert('Erro de rede: ' + err.message);
-                btnPagar.disabled = false;
-                btnPagar.innerHTML = '<i class="fas fa-check"></i>';
-            });
+            // Armazenar dados e abrir modal
+            pendingTipo = btnPagar.dataset.tipo;
+            pendingId = btnPagar.dataset.id;
+            pendingBtnPagar = btnPagar;
+            // Resetar input de data para hoje
+            if (inputData) {
+                inputData.value = new Date().toISOString().slice(0, 10);
+            }
+            if (modalInstance) {
+                modalInstance.show();
+            }
         }
 
         if (btnDesfazer) {

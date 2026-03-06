@@ -3,7 +3,7 @@ Rotas de Faturas CarVia — Cliente + Transportadora
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
@@ -349,8 +349,38 @@ def register_fatura_routes(bp):
                 )
 
             fatura.status = novo_status
+
+            # Ao marcar como PAGA: registrar pago_em/pago_por e criar movimentacao
+            if novo_status == 'PAGA':
+                data_pagamento_str = request.form.get('data_pagamento', '').strip()
+                if not data_pagamento_str:
+                    flash('Data de pagamento e obrigatoria para marcar como PAGA.', 'warning')
+                    return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+                try:
+                    data_pagamento = date.fromisoformat(data_pagamento_str)
+                except ValueError:
+                    flash('Data de pagamento invalida.', 'warning')
+                    return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+                fatura.pago_em = datetime.combine(data_pagamento, datetime.min.time())
+                fatura.pago_por = current_user.email
+
+                # Criar movimentacao financeira na conta
+                from app.carvia.routes.fluxo_caixa_routes import (
+                    _criar_movimentacao, _gerar_descricao,
+                )
+                descricao = _gerar_descricao('fatura_cliente', fatura)
+                _criar_movimentacao(
+                    'fatura_cliente', fatura_id,
+                    float(fatura.valor_total or 0), descricao, current_user.email,
+                )
+
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
+        except IntegrityError:
+            db.session.rollback()
+            logger.warning(f"Movimentacao duplicada fatura cliente #{fatura_id}")
+            flash('Este lancamento ja foi processado.', 'warning')
         except Exception as e:
             db.session.rollback()
             flash(f'Erro: {e}', 'danger')

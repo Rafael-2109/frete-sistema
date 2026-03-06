@@ -10,7 +10,7 @@ POST /carvia/api/extrato-conta/saldo-inicial - Definir/alterar saldo inicial
 """
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -161,9 +161,20 @@ def register_fluxo_caixa_routes(bp):
 
         tipo_doc = data.get('tipo_doc')
         doc_id = data.get('id')
+        data_pagamento_str = data.get('data_pagamento', '')
 
         if not tipo_doc or not doc_id:
             return jsonify({'erro': 'tipo_doc e id sao obrigatorios'}), 400
+
+        # Validar data de pagamento (obrigatoria)
+        if not data_pagamento_str:
+            return jsonify({'erro': 'Data de pagamento e obrigatoria'}), 400
+        try:
+            data_pagamento = date.fromisoformat(data_pagamento_str)
+        except ValueError:
+            return jsonify({'erro': 'Data de pagamento invalida'}), 400
+
+        pago_em_dt = datetime.combine(data_pagamento, datetime.min.time())
 
         try:
             from app.carvia.models import (
@@ -171,9 +182,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
             )
-            from app.utils.timezone import agora_utc_naive
 
-            agora = agora_utc_naive()
             usuario = current_user.email
 
             if tipo_doc == 'fatura_cliente':
@@ -187,7 +196,7 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Fatura ja esta paga'}), 409
                 doc.status = 'PAGA'
                 doc.pago_por = usuario
-                doc.pago_em = agora
+                doc.pago_em = pago_em_dt
                 novo_status = 'PAGA'
                 valor_mov = float(doc.valor_total or 0)
 
@@ -200,7 +209,7 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Fatura transportadora ja esta paga'}), 409
                 doc.status_pagamento = 'PAGO'
                 doc.pago_por = usuario
-                doc.pago_em = agora
+                doc.pago_em = pago_em_dt
                 novo_status = 'PAGO'
                 valor_mov = float(doc.valor_total or 0)
 
@@ -215,7 +224,7 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Despesa ja esta paga'}), 409
                 doc.status = 'PAGO'
                 doc.pago_por = usuario
-                doc.pago_em = agora
+                doc.pago_em = pago_em_dt
                 novo_status = 'PAGO'
                 valor_mov = float(doc.valor or 0)
 

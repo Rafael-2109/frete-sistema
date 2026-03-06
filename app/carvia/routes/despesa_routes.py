@@ -3,10 +3,11 @@ Rotas de Despesas CarVia — CRUD completo
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
+from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.carvia.models import CarviaDespesa
@@ -256,8 +257,38 @@ def register_despesa_routes(bp):
                 )
 
             despesa.status = novo_status
+
+            # Ao marcar como PAGO: registrar pago_em/pago_por e criar movimentacao
+            if novo_status == 'PAGO':
+                data_pagamento_str = request.form.get('data_pagamento', '').strip()
+                if not data_pagamento_str:
+                    flash('Data de pagamento e obrigatoria para marcar como PAGO.', 'warning')
+                    return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
+                try:
+                    data_pagamento = date.fromisoformat(data_pagamento_str)
+                except ValueError:
+                    flash('Data de pagamento invalida.', 'warning')
+                    return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
+
+                despesa.pago_em = datetime.combine(data_pagamento, datetime.min.time())
+                despesa.pago_por = current_user.email
+
+                # Criar movimentacao financeira na conta
+                from app.carvia.routes.fluxo_caixa_routes import (
+                    _criar_movimentacao, _gerar_descricao,
+                )
+                descricao = _gerar_descricao('despesa', despesa)
+                _criar_movimentacao(
+                    'despesa', despesa_id,
+                    float(despesa.valor or 0), descricao, current_user.email,
+                )
+
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
+        except IntegrityError:
+            db.session.rollback()
+            logger.warning(f"Movimentacao duplicada despesa #{despesa_id}")
+            flash('Este lancamento ja foi processado.', 'warning')
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao atualizar status despesa {despesa_id}: {e}")

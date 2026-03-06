@@ -81,21 +81,27 @@
                     <div class="d-flex gap-2 flex-wrap">
                         {% for status in ['PENDENTE', 'PAGO', 'CANCELADO'] %}
                         {% if status != despesa.status %}
-                        <form method="POST" action="{{ url_for('carvia.atualizar_status_despesa', despesa_id=despesa.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="status" value="{{ status }}">
-                            <button type="submit" class="btn btn-sm
-                                {% if status == 'PAGO' %}btn-success
-                                {% elif status == 'CANCELADO' %}btn-danger
-                                {% else %}btn-warning{% endif %}"
-                                {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar esta despesa?')"{% endif %}>
-                                <i class="fas
-                                    {% if status == 'PAGO' %}fa-check
-                                    {% elif status == 'CANCELADO' %}fa-times
-                                    {% else %}fa-clock{% endif %}"></i>
-                                {{ status }}
+                            {% if status == 'PAGO' %}
+                            {# PAGO abre modal para informar data de pagamento #}
+                            <button type="button" class="btn btn-sm btn-success"
+                                    data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
+                                <i class="fas fa-check"></i> PAGO
                             </button>
-                        </form>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_despesa', despesa_id=despesa.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <button type="submit" class="btn btn-sm
+                                    {% if status == 'CANCELADO' %}btn-danger
+                                    {% else %}btn-warning{% endif %}"
+                                    {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar esta despesa?')"{% endif %}>
+                                    <i class="fas
+                                        {% if status == 'CANCELADO' %}fa-times
+                                        {% else %}fa-clock{% endif %}"></i>
+                                    {{ status }}
+                                </button>
+                            </form>
+                            {% endif %}
                         {% endif %}
                         {% endfor %}
                     </div>
@@ -104,4 +110,28 @@
         </div>
     </div>
 </div>
+
+{# Modal de data de pagamento (modo Form POST) #}
+{% with form_action=url_for('carvia.atualizar_status_despesa', despesa_id=despesa.id), form_status='PAGO' %}
+    {% include 'carvia/_modal_data_pagamento.html' %}
+{% endwith %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+    // Setar data de hoje como default ao abrir o modal
+    var modalEl = document.getElementById('modalDataPagamento');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function() {
+            var input = document.getElementById('dataPagamentoInput');
+            if (input && !input.value) {
+                input.value = new Date().toISOString().slice(0, 10);
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}
