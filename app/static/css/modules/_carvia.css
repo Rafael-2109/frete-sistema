@@ -400,7 +400,7 @@
     border: 1px solid var(--border);
     border-top: none;
     border-radius: 0 0 var(--radius-md, 0.5rem) var(--radius-md, 0.5rem);
-    background: var(--bg-card);
+    background: var(--bg-light);
     box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
     display: none;
 }
