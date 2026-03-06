@@ -224,3 +224,10 @@ TEAMS_STREAM_FLUSH_INTERVAL = float(os.getenv("TEAMS_STREAM_FLUSH_INTERVAL", "4.
 # UserPromptSubmit: pode enriquecer o prompt do usuario antes de processar
 # Default false: ativar apos validar que nao causa overhead excessivo
 USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "false").lower() == "true"
+
+# ====================================================================
+# Async Streaming (migração incremental)
+# ====================================================================
+# Quando true: usa implementação async nativa para streaming SSE
+# Quando false: usa bridge Thread+Queue+asyncio.run (legado)
+USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "false").lower() == "true"

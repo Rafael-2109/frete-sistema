@@ -20,6 +20,7 @@ import logging
 import os
 import tempfile
 import threading
+from contextvars import ContextVar
 from typing import Any, Dict
 
 from claude_agent_sdk import (
@@ -40,15 +41,16 @@ logger = logging.getLogger(__name__)
 _stream_context: Dict[str, Any] = {}  # session_id → {'event_queue': Queue}
 _context_lock = threading.Lock()
 
-# Fix 5: threading.local() para session_id — cada thread ve apenas SEU session_id.
-# Resolve race condition onde Thread B sobrescrevia session_id de Thread A.
+# Fase 1 (Async Migration): threading.local() → ContextVar para session_id.
+# ContextVar funciona em threads E em coroutines (threading.local só em threads).
+# Pré-requisito para Fase 2 (async wait) e Fase 3 (async streaming).
 # O dict global _stream_context continua para event_queue (precisa ser cross-thread).
-_thread_local = threading.local()
+_current_session_id: ContextVar[str | None] = ContextVar('_agent_session_id', default=None)
 
 
 def set_current_session_id(session_id: str) -> None:
-    """Define session_id no contexto da thread atual (thread-safe via threading.local)."""
-    _thread_local.session_id = session_id
+    """Define session_id no contexto atual (funciona em threads E coroutines)."""
+    _current_session_id.set(session_id)
     with _context_lock:
         if session_id not in _stream_context:
             _stream_context[session_id] = {}
@@ -56,13 +58,8 @@ def set_current_session_id(session_id: str) -> None:
 
 
 def get_current_session_id() -> str | None:
-    """
-    Obtém session_id da thread atual.
-
-    Fix 5: Usa threading.local() ao invés de buscar "última ativa" no dict global.
-    Cada daemon thread (Teams) e cada request Flask vê apenas SEU session_id.
-    """
-    return getattr(_thread_local, 'session_id', None)
+    """Obtém session_id do contexto atual."""
+    return _current_session_id.get()
 
 
 def set_event_queue(session_id: str, event_queue: Any) -> None:
@@ -414,14 +411,20 @@ async def can_use_tool(
                 )
 
             # BLOQUEIA até o usuário responder via POST /api/user-answer (ou timeout 55s)
-            # NOTA ARQUITETURAL: Esta é uma chamada BLOQUEANTE (threading.Event.wait)
-            # dentro de uma função async. Isso é INTENCIONAL e SEGURO porque:
-            # - can_use_tool roda dentro de asyncio.run() em uma Thread daemon dedicada
-            #   (criada por ClaudeSDKClient._stream_response via threading.Thread)
-            # - O bloqueio NÃO afeta o event loop principal do Flask
-            # - Se a arquitetura mudar para event loop compartilhado, substituir por:
-            #   await asyncio.get_event_loop().run_in_executor(None, wait_for_answer, session_id)
-            answers = wait_for_answer(current_session_id)
+            # Fase 2 (Async Migration): detecta se estamos em async context.
+            # - Se SIM (running loop): usa async_wait_for_answer (suspende coroutine, não bloqueia thread)
+            # - Se NÃO (sem loop): usa wait_for_answer sync (fallback defensivo)
+            # Hoje can_use_tool roda em asyncio.run() na thread daemon → TEM running loop →
+            # path async é executado. Isso é SEGURO: asyncio.Event.wait() funciona no loop de asyncio.run().
+            import asyncio as _asyncio
+            try:
+                _asyncio.get_running_loop()
+                # Async context: suspende coroutine sem bloquear thread
+                from ..sdk.pending_questions import async_wait_for_answer
+                answers = await async_wait_for_answer(current_session_id)
+            except RuntimeError:
+                # Sync context (fallback defensivo): bloqueia thread
+                answers = wait_for_answer(current_session_id)
 
             if answers is None:
                 logger.warning(

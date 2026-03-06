@@ -20,12 +20,26 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 ### R3: Thread-safety — 3 mecanismos distintos
 | Mecanismo | Para que | Onde |
 |-----------|----------|------|
-| `threading.local()` | `session_id` (isolamento por thread) | `permissions.py:46` |
+| `ContextVar` (`_current_session_id`) | `session_id` (isolamento por thread E coroutine) | `permissions.py:46` |
 | Dict global `_stream_context` + Lock | `event_queue` (cross-thread) | `permissions.py:40-41` |
 | Dict `_teams_task_context` | Associar sessao <> TeamsTask | `permissions.py:98` |
 
-NUNCA substituir `threading.local()` por variavel global — causa race condition entre threads.
+**Fase 1 (Async Migration)**: `threading.local()` substituido por `ContextVar` para session_id.
+ContextVar funciona em threads E coroutines. API externa inalterada (`set/get_current_session_id`).
+NUNCA substituir ContextVar por variavel global — causa race condition entre threads/coroutines.
 `event_queue` PRECISA ser global porque o endpoint SSE acessa de outra thread.
+
+### Async Migration — Dual Event (pending_questions.py)
+`PendingQuestion` agora tem `async_event: Optional[asyncio.Event]` alem do `threading.Event`.
+- `register_question()` cria `asyncio.Event` se em async context
+- `submit_answer()` sinaliza AMBOS events
+- `async_wait_for_answer()` suspende coroutine (nao bloqueia thread)
+- `cancel_pending()` desbloqueia AMBOS events
+- `wait_for_answer()` (sync) mantido como fallback
+
+**CUIDADO**: `asyncio.Event.set()` em `submit_answer()` e chamado de outra thread (Flask route).
+No CPython o GIL protege, mas nao e oficialmente thread-safe. Se houver race condition,
+substituir por `loop.call_soon_threadsafe(pq.async_event.set)`.
 
 ### R5: Stream safety — None sentinel + done_event
 | Camada | Timeout | Funcao |
