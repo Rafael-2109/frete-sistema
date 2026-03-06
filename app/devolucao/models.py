@@ -607,11 +607,19 @@ class OcorrenciaSubcategoria(db.Model):
     codigo = db.Column(db.String(50), nullable=False, unique=True)
     descricao = db.Column(db.String(255), nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
+    categoria_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_categoria.id'),
+        nullable=False,
+        index=True
+    )
 
     criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), default='migration')
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100))
+
+    categoria = db.relationship('OcorrenciaCategoria', backref=db.backref('subcategorias', lazy='dynamic'))
 
     def __repr__(self):
         return f'<OcorrenciaSubcategoria {self.codigo}>'
@@ -622,6 +630,8 @@ class OcorrenciaSubcategoria(db.Model):
             'codigo': self.codigo,
             'descricao': self.descricao,
             'ativo': self.ativo,
+            'categoria_id': self.categoria_id,
+            'categoria_descricao': self.categoria.descricao if self.categoria else None,
         }
 
 
@@ -633,11 +643,19 @@ class OcorrenciaResponsavel(db.Model):
     codigo = db.Column(db.String(50), nullable=False, unique=True)
     descricao = db.Column(db.String(255), nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
+    categoria_id = db.Column(
+        db.Integer,
+        db.ForeignKey('ocorrencia_categoria.id'),
+        nullable=False,
+        index=True
+    )
 
     criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
     criado_por = db.Column(db.String(100), default='migration')
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100))
+
+    categoria = db.relationship('OcorrenciaCategoria', backref=db.backref('responsaveis', lazy='dynamic'))
 
     def __repr__(self):
         return f'<OcorrenciaResponsavel {self.codigo}>'
@@ -648,6 +666,8 @@ class OcorrenciaResponsavel(db.Model):
             'codigo': self.codigo,
             'descricao': self.descricao,
             'ativo': self.ativo,
+            'categoria_id': self.categoria_id,
+            'categoria_descricao': self.categoria.descricao if self.categoria else None,
         }
 
 

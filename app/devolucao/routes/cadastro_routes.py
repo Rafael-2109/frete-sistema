@@ -52,7 +52,19 @@ def listar_ativos(tipo):
     if not Model:
         return jsonify({'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}), 400
 
-    itens = Model.query.filter_by(ativo=True).order_by(Model.descricao).all()
+    query = Model.query.filter_by(ativo=True)
+
+    # Filtro por categoria_ids (subcategorias e responsaveis)
+    categoria_ids_param = request.args.get('categoria_ids', '')
+    if categoria_ids_param and tipo in ('subcategorias', 'responsaveis'):
+        try:
+            cat_ids = [int(x) for x in categoria_ids_param.split(',') if x.strip()]
+        except ValueError:
+            cat_ids = []
+        if cat_ids:
+            query = query.filter(Model.categoria_id.in_(cat_ids))
+
+    itens = query.order_by(Model.descricao).all()
 
     return jsonify({
         'sucesso': True,
@@ -111,12 +123,24 @@ def criar(tipo):
     if existente:
         return jsonify({'sucesso': False, 'erro': f'Codigo "{codigo}" ja existe'}), 409
 
-    item = Model(
+    kwargs = dict(
         codigo=codigo,
         descricao=descricao,
         criado_por=_get_usuario(),
         criado_em=agora_utc_naive(),
     )
+
+    # categoria_id obrigatorio para subcategorias e responsaveis
+    if tipo in ('subcategorias', 'responsaveis'):
+        cat_id = data.get('categoria_id')
+        if not cat_id:
+            return jsonify({'sucesso': False, 'erro': 'Categoria e obrigatoria'}), 400
+        try:
+            kwargs['categoria_id'] = int(cat_id)
+        except (ValueError, TypeError):
+            return jsonify({'sucesso': False, 'erro': 'Categoria invalida'}), 400
+
+    item = Model(**kwargs)
 
     db.session.add(item)
     db.session.commit()
@@ -150,6 +174,17 @@ def editar(tipo, item_id):
         descricao = (data['descricao'] or '').strip()
         if descricao:
             item.descricao = descricao
+
+    # Atualizar categoria_id se fornecido (subcategorias e responsaveis)
+    if tipo in ('subcategorias', 'responsaveis') and 'categoria_id' in data:
+        cat_id = data['categoria_id']
+        if cat_id:
+            try:
+                item.categoria_id = int(cat_id)
+            except (ValueError, TypeError):
+                return jsonify({'sucesso': False, 'erro': 'Categoria invalida'}), 400
+        else:
+            return jsonify({'sucesso': False, 'erro': 'Categoria e obrigatoria'}), 400
 
     item.atualizado_por = _get_usuario()
     item.atualizado_em = agora_utc_naive()

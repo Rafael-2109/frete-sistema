@@ -372,7 +372,7 @@
                                 <select class="form-select" name="responsavel_id">
                                     <option value="">Selecione...</option>
                                     {% for item in opcoes_responsavel %}
-                                    <option value="{{ item.id }}" {% if ocorrencia.responsavel_id == item.id %}selected{% endif %}>
+                                    <option value="{{ item.id }}" data-categoria-id="{{ item.categoria_id }}" {% if ocorrencia.responsavel_id == item.id %}selected{% endif %}>
                                         {{ item.descricao }}
                                     </option>
                                     {% endfor %}
@@ -448,7 +448,7 @@
                                             <select name="subcategoria_ids[]" class="form-select form-select-sm subcategoria-select">
                                                 <option value="">Selecione...</option>
                                                 {% for item in opcoes_subcategoria %}
-                                                <option value="{{ item.id }}" {% if sub.id == item.id %}selected{% endif %}>
+                                                <option value="{{ item.id }}" data-categoria-id="{{ item.categoria_id }}" {% if sub.id == item.id %}selected{% endif %}>
                                                     {{ item.descricao }}
                                                 </option>
                                                 {% endfor %}
@@ -461,7 +461,7 @@
                                             <select name="subcategoria_ids[]" class="form-select form-select-sm subcategoria-select">
                                                 <option value="">Selecione...</option>
                                                 {% for item in opcoes_subcategoria %}
-                                                <option value="{{ item.id }}">{{ item.descricao }}</option>
+                                                <option value="{{ item.id }}" data-categoria-id="{{ item.categoria_id }}">{{ item.descricao }}</option>
                                                 {% endfor %}
                                             </select>
                                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.subcategoria-row').remove()">X</button>

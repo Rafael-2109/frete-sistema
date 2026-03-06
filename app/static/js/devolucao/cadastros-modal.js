@@ -12,6 +12,9 @@
 
 const BASE_URL_CADASTROS = '/devolucao/cadastros/api';
 
+// Tipos que requerem categoria vinculada
+const TIPOS_COM_CATEGORIA = ['subcategorias', 'responsaveis'];
+
 // Cache de dados carregados (para nao recarregar ao trocar aba)
 const _cadastrosCache = {};
 
@@ -54,19 +57,22 @@ async function carregarCadastros(tipo) {
     const tbody = document.getElementById('tbody-' + tipo);
     if (!tbody) return;
 
+    const temCategoria = TIPOS_COM_CATEGORIA.includes(tipo);
+    const colspan = temCategoria ? 3 : 2;
+
     try {
         const response = await fetch(`${BASE_URL_CADASTROS}/${tipo}/todos`);
         const result = await response.json();
 
         if (!result.sucesso) {
-            tbody.innerHTML = '<tr><td colspan="2" class="text-danger">Erro ao carregar</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-danger">Erro ao carregar</td></tr>`;
             return;
         }
 
         _cadastrosCache[tipo] = result.itens;
 
         if (result.itens.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Nenhum item cadastrado</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-muted">Nenhum item cadastrado</td></tr>`;
             return;
         }
 
@@ -74,7 +80,8 @@ async function carregarCadastros(tipo) {
 
     } catch (error) {
         console.error('Erro ao carregar cadastros:', error);
-        tbody.innerHTML = '<tr><td colspan="2" class="text-danger">Erro de conexao</td></tr>';
+        const colspan = TIPOS_COM_CATEGORIA.includes(tipo) ? 3 : 2;
+        tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-danger">Erro de conexao</td></tr>`;
     }
 }
 
@@ -85,9 +92,16 @@ function renderizarLinhaCadastro(tipo, item) {
     const classeInativo = item.ativo ? '' : 'cadastro-item-inativo';
     const btnToggleText = item.ativo ? 'Desativar' : 'Ativar';
     const btnToggleClass = item.ativo ? 'btn-outline-warning' : 'btn-outline-success';
+    const temCategoria = TIPOS_COM_CATEGORIA.includes(tipo);
+
+    let colunaCategoria = '';
+    if (temCategoria) {
+        colunaCategoria = `<td><small class="text-muted">${item.categoria_descricao || '-'}</small></td>`;
+    }
 
     return `
-        <tr class="cadastro-item-row ${classeInativo}" data-id="${item.id}">
+        <tr class="cadastro-item-row ${classeInativo}" data-id="${item.id}" data-categoria-id="${item.categoria_id || ''}">
+            ${colunaCategoria}
             <td>
                 <span class="cadastro-descricao" id="desc-${tipo}-${item.id}">${item.descricao}</span>
                 <input type="text" class="form-control form-control-sm d-none"
@@ -134,6 +148,16 @@ async function confirmarEdicao(tipo, id) {
 
     if (!descricao) return;
 
+    const body = { descricao };
+
+    // Se tipo tem categoria, enviar categoria_id atual (pode ter sido alterada no select)
+    if (TIPOS_COM_CATEGORIA.includes(tipo)) {
+        const selectCat = document.getElementById(`select-categoria-${tipo}`);
+        if (selectCat && selectCat.value) {
+            body.categoria_id = parseInt(selectCat.value);
+        }
+    }
+
     try {
         const response = await fetch(`${BASE_URL_CADASTROS}/${tipo}/${id}`, {
             method: 'PUT',
@@ -141,7 +165,7 @@ async function confirmarEdicao(tipo, id) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
             },
-            body: JSON.stringify({ descricao })
+            body: JSON.stringify(body)
         });
         const result = await response.json();
 
@@ -169,6 +193,19 @@ async function salvarCadastro(tipo) {
         return;
     }
 
+    const body = { descricao };
+
+    // Se tipo requer categoria, incluir categoria_id do select
+    if (TIPOS_COM_CATEGORIA.includes(tipo)) {
+        const selectCat = document.getElementById(`select-categoria-${tipo}`);
+        if (!selectCat || !selectCat.value) {
+            alert('Selecione uma Categoria antes de adicionar.');
+            if (selectCat) selectCat.focus();
+            return;
+        }
+        body.categoria_id = parseInt(selectCat.value);
+    }
+
     try {
         const response = await fetch(`${BASE_URL_CADASTROS}/${tipo}`, {
             method: 'POST',
@@ -176,7 +213,7 @@ async function salvarCadastro(tipo) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
             },
-            body: JSON.stringify({ descricao })
+            body: JSON.stringify(body)
         });
         const result = await response.json();
 
@@ -262,12 +299,23 @@ async function atualizarSelectsNaPagina(tipo) {
                 const opt = document.createElement('option');
                 opt.value = item.id;
                 opt.textContent = item.descricao;
+                // Adicionar data-categoria-id para subcategorias e responsaveis
+                if (item.categoria_id) {
+                    opt.dataset.categoriaId = item.categoria_id;
+                }
                 if (String(item.id) === String(valorAtual)) {
                     opt.selected = true;
                 }
                 select.appendChild(opt);
             });
         });
+
+        // Apos atualizar selects de subcategorias ou responsaveis, re-aplicar filtro cascade
+        if (TIPOS_COM_CATEGORIA.includes(tipo)) {
+            if (typeof filtrarPorCategorias === 'function') {
+                filtrarPorCategorias();
+            }
+        }
 
     } catch (error) {
         console.error('Erro ao atualizar selects:', error);

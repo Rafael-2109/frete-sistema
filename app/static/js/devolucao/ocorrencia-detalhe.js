@@ -80,6 +80,33 @@ document.addEventListener('DOMContentLoaded', function() {
             if (dropdown) dropdown.classList.remove('show');
         }
     });
+
+    // =========================================================================
+    // Filtro Cascade: Categorias -> Subcategorias/Responsaveis
+    // =========================================================================
+
+    // Event listener delegado em #grupo-categorias para change em .categoria-select
+    const grupoCategorias = document.getElementById('grupo-categorias');
+    if (grupoCategorias) {
+        grupoCategorias.addEventListener('change', function(e) {
+            if (e.target.classList.contains('categoria-select')) {
+                filtrarPorCategorias();
+            }
+        });
+
+        // Observer para detectar remocao de rows de categoria (botao X)
+        const observer = new MutationObserver(function(mutations) {
+            for (const mutation of mutations) {
+                if (mutation.removedNodes.length > 0) {
+                    filtrarPorCategorias();
+                }
+            }
+        });
+        observer.observe(grupoCategorias, { childList: true });
+    }
+
+    // Filtro inicial ao carregar pagina
+    filtrarPorCategorias();
 });
 
 // =========================================================================
@@ -521,7 +548,9 @@ function adicionarCategoria() {
 
     const novaRow = primeiraRow.cloneNode(true);
     const select = novaRow.querySelector('select');
-    select.value = ''; // Resetar seleção
+    select.value = ''; // Resetar selecao
+    // Adicionar listener de change para filtro cascade
+    select.addEventListener('change', filtrarPorCategorias);
     grupo.appendChild(novaRow);
 }
 
@@ -534,6 +563,64 @@ function adicionarSubcategoria() {
     const select = novaRow.querySelector('select');
     select.value = '';
     grupo.appendChild(novaRow);
+    // Aplicar filtro cascade na nova row
+    filtrarPorCategorias();
+}
+
+// =========================================================================
+// Filtro Cascade: Subcategorias e Responsaveis por Categorias selecionadas
+// =========================================================================
+
+/**
+ * Obtem todos os categoria_ids selecionados nos selects de categoria
+ */
+function obterCategoriasSelecionadas() {
+    const selects = document.querySelectorAll('#grupo-categorias .categoria-select');
+    return Array.from(selects)
+        .map(s => s.value)
+        .filter(v => v !== '');
+}
+
+/**
+ * Filtra subcategorias e responsaveis com base nas categorias selecionadas (uniao)
+ */
+function filtrarPorCategorias() {
+    const catIds = obterCategoriasSelecionadas();
+
+    // Filtrar subcategorias
+    document.querySelectorAll('.subcategoria-select').forEach(select => {
+        const valorAtual = select.value;
+        let valorMantido = false;
+        select.querySelectorAll('option').forEach(opt => {
+            if (opt.value === '') { opt.style.display = ''; return; }
+            const optCatId = opt.dataset.categoriaId;
+            if (catIds.length === 0 || catIds.includes(optCatId)) {
+                opt.style.display = '';
+                if (opt.value === valorAtual) valorMantido = true;
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+        if (!valorMantido) select.value = '';
+    });
+
+    // Filtrar responsaveis
+    const selectResp = document.querySelector('select[name="responsavel_id"]');
+    if (selectResp) {
+        const valorAtual = selectResp.value;
+        let valorMantido = false;
+        selectResp.querySelectorAll('option').forEach(opt => {
+            if (opt.value === '') { opt.style.display = ''; return; }
+            const optCatId = opt.dataset.categoriaId;
+            if (catIds.length === 0 || catIds.includes(optCatId)) {
+                opt.style.display = '';
+                if (opt.value === valorAtual) valorMantido = true;
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+        if (!valorMantido) selectResp.value = '';
+    }
 }
 
 // =========================================================================
