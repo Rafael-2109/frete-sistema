@@ -50,6 +50,12 @@
                             title="Marcar como pago">
                         <i class="fas fa-check"></i>
                     </button>
+                    <button class="btn btn-xs btn-outline-secondary btn-alterar-vencimento"
+                            data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}"
+                            data-vencimento="{{ l.vencimento.isoformat() if l.vencimento else '' }}"
+                            title="Alterar vencimento">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
                     {% endif %}
                 </td>
             </tr>
@@ -126,9 +132,11 @@
             <p class="text-muted mb-0">Visao consolidada de receitas e despesas CarVia</p>
         </div>
         <div class="d-flex gap-2">
+            {% if visao != 'lista' %}
             <button id="btnExpandirTodos" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-expand-alt"></i> Expandir Todos
             </button>
+            {% endif %}
             <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> Dashboard
             </a>
@@ -149,7 +157,7 @@
                     <input type="date" name="data_fim" class="form-control form-control-sm"
                            value="{{ data_fim }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label small">Status</label>
                     <div class="btn-group btn-group-sm w-100 carvia-fluxo-filtro-status" role="group">
                         <input type="radio" class="btn-check" name="status" id="st-total"
@@ -166,6 +174,36 @@
                     </div>
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label small">Visao</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <input type="radio" class="btn-check" name="visao" id="vis-dias"
+                               value="dias" {{ 'checked' if visao != 'lista' }} autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="vis-dias">Dias</label>
+
+                        <input type="radio" class="btn-check" name="visao" id="vis-lista"
+                               value="lista" {{ 'checked' if visao == 'lista' }} autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="vis-lista">Lista</label>
+                    </div>
+                </div>
+                {% if visao == 'lista' %}
+                <div class="col-md-2">
+                    <label class="form-label small">Direcao</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <input type="radio" class="btn-check" name="direcao" id="dir-todos"
+                               value="todos" {{ 'checked' if direcao == 'todos' }} autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="dir-todos">Todos</label>
+
+                        <input type="radio" class="btn-check" name="direcao" id="dir-receber"
+                               value="receber" {{ 'checked' if direcao == 'receber' }} autocomplete="off">
+                        <label class="btn btn-outline-success" for="dir-receber">Receber</label>
+
+                        <input type="radio" class="btn-check" name="direcao" id="dir-pagar"
+                               value="pagar" {{ 'checked' if direcao == 'pagar' }} autocomplete="off">
+                        <label class="btn btn-outline-danger" for="dir-pagar">Pagar</label>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-search"></i> Filtrar
                     </button>
@@ -228,7 +266,89 @@
         </div>
     </div>
 
-    {# ACCORDIONS POR DIA #}
+    {% if visao == 'lista' %}
+    {# ================================================================= #}
+    {# VISAO LISTA CORRIDA                                               #}
+    {# ================================================================= #}
+    {% if lancamentos %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 carvia-table">
+                <thead>
+                    <tr>
+                        <th>Vencimento</th>
+                        <th>Direcao</th>
+                        <th>Emissao</th>
+                        <th>Fornecedor / Cliente</th>
+                        <th>Tipo</th>
+                        <th>Documento</th>
+                        <th class="text-end">Valor</th>
+                        <th>Status</th>
+                        <th class="text-center">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in lancamentos %}
+                    <tr class="{{ 'carvia-fluxo-pago' if l.pago }}"
+                        data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}">
+                        <td class="text-nowrap">{{ l.vencimento.strftime('%d/%m/%Y') if l.vencimento else '-' }}</td>
+                        <td>
+                            {% if l.direcao == 'A Receber' %}
+                            <span class="badge bg-success">A Receber</span>
+                            {% else %}
+                            <span class="badge bg-danger">A Pagar</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ l.emissao.strftime('%d/%m') if l.emissao else '-' }}</td>
+                        <td>{{ l.fornecedor|truncate(40) }}</td>
+                        <td><span class="badge bg-secondary">{{ l.tipo_label }}</span></td>
+                        <td>{{ l.documento }}</td>
+                        <td class="valor-col">{{ l.valor|valor_br }}</td>
+                        <td>
+                            <span class="badge carvia-badge-{{ l.status|lower }}">
+                                {{ l.status }}
+                            </span>
+                        </td>
+                        <td class="text-center text-nowrap">
+                            <a href="{{ l.url_detalhe }}" class="btn btn-xs btn-outline-primary"
+                               title="Ver detalhe"><i class="fas fa-eye"></i></a>
+                            {% if l.pago %}
+                            <button class="btn btn-xs btn-outline-warning btn-desfazer"
+                                    data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}"
+                                    title="Desfazer pagamento">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            {% else %}
+                            <button class="btn btn-xs btn-outline-success btn-pagar"
+                                    data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}"
+                                    title="Marcar como pago">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-xs btn-outline-secondary btn-alterar-vencimento"
+                                    data-tipo="{{ l.tipo_doc }}" data-id="{{ l.id }}"
+                                    data-vencimento="{{ l.vencimento.isoformat() if l.vencimento else '' }}"
+                                    title="Alterar vencimento">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-chart-line fa-3x mb-3 d-block opacity-50"></i>
+        <p>Nenhum lancamento encontrado no periodo selecionado.</p>
+    </div>
+    {% endif %}
+
+    {% else %}
+    {# ================================================================= #}
+    {# VISAO POR DIAS (ACCORDIONS)                                       #}
+    {# ================================================================= #}
     {% if fluxo.dias %}
     <div class="accordion" id="accordionFluxo">
         {% for dia in fluxo.dias %}
@@ -311,19 +431,44 @@
         <p>Nenhum lancamento encontrado no periodo selecionado.</p>
     </div>
     {% endif %}
+    {% endif %}
 
 </div>
 
 {# Modal de data de pagamento (modo AJAX — sem form_action) #}
 {% include 'carvia/_modal_data_pagamento.html' %}
 
+{# Modal de alterar vencimento #}
+<div class="modal fade" id="modalAlterarVencimento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Alterar Vencimento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <label for="novoVencimentoInput" class="form-label">Nova data de vencimento</label>
+                <input type="date" class="form-control" id="novoVencimentoInput" required>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnConfirmarVencimento">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 
-{% block extra_js %}
+{% block scripts %}
 <script>
 (function() {
     'use strict';
+
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     // --- Expandir/Recolher Todos ---
     var btnExpandir = document.getElementById('btnExpandirTodos');
@@ -395,7 +540,10 @@
 
             fetch('/carvia/api/fluxo-caixa/pagar', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({
                     tipo_doc: pendingTipo,
                     id: parseInt(pendingId),
@@ -415,6 +563,11 @@
                             badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
                             badgeStatus.textContent = data.novo_status;
                         }
+
+                        // Remover botoes pagar + alterar vencimento, inserir desfazer
+                        var tdAcoes = pendingBtnPagar.closest('td');
+                        var btnVenc = tdAcoes.querySelector('.btn-alterar-vencimento');
+                        if (btnVenc) btnVenc.remove();
 
                         pendingBtnPagar.outerHTML =
                             '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
@@ -446,10 +599,62 @@
         });
     }
 
-    // --- Pagar / Desfazer via event delegation ---
+    // --- Modal de alterar vencimento ---
+    var modalVencEl = document.getElementById('modalAlterarVencimento');
+    var modalVencInstance = modalVencEl ? new bootstrap.Modal(modalVencEl) : null;
+    var inputVencimento = document.getElementById('novoVencimentoInput');
+    var btnConfirmarVenc = document.getElementById('btnConfirmarVencimento');
+
+    var vencTipo = null;
+    var vencId = null;
+
+    if (btnConfirmarVenc) {
+        btnConfirmarVenc.addEventListener('click', function() {
+            if (!inputVencimento.value) {
+                inputVencimento.focus();
+                return;
+            }
+
+            btnConfirmarVenc.disabled = true;
+            btnConfirmarVenc.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+            fetch('/carvia/api/fluxo-caixa/alterar-vencimento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    tipo_doc: vencTipo,
+                    id: parseInt(vencId),
+                    novo_vencimento: inputVencimento.value
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    modalVencInstance.hide();
+                    // Recarregar para refletir mudanca (lancamento pode mudar de dia)
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao alterar vencimento');
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+            })
+            .finally(function() {
+                btnConfirmarVenc.disabled = false;
+                btnConfirmarVenc.innerHTML = '<i class="fas fa-save"></i> Salvar';
+            });
+        });
+    }
+
+    // --- Pagar / Desfazer / Alterar Vencimento via event delegation ---
     document.addEventListener('click', function(e) {
         var btnPagar = e.target.closest('.btn-pagar');
         var btnDesfazer = e.target.closest('.btn-desfazer');
+        var btnAlterarVenc = e.target.closest('.btn-alterar-vencimento');
 
         if (btnPagar) {
             e.preventDefault();
@@ -476,7 +681,10 @@
 
             fetch('/carvia/api/fluxo-caixa/desfazer', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({tipo_doc: tipo2, id: parseInt(id2)})
             })
             .then(function(r) { return r.json(); })
@@ -494,7 +702,10 @@
                     btnDesfazer.outerHTML =
                         '<button class="btn btn-xs btn-outline-success btn-pagar" ' +
                         'data-tipo="' + tipo2 + '" data-id="' + id2 + '" title="Marcar como pago">' +
-                        '<i class="fas fa-check"></i></button>';
+                        '<i class="fas fa-check"></i></button>' +
+                        '<button class="btn btn-xs btn-outline-secondary btn-alterar-vencimento" ' +
+                        'data-tipo="' + tipo2 + '" data-id="' + id2 + '" data-vencimento="" ' +
+                        'title="Alterar vencimento"><i class="fas fa-pencil-alt"></i></button>';
 
                     if (typeof data.saldo_atual === 'number') {
                         atualizarSaldoConta(data.saldo_atual);
@@ -511,7 +722,20 @@
                 btnDesfazer.innerHTML = '<i class="fas fa-undo"></i>';
             });
         }
+
+        if (btnAlterarVenc) {
+            e.preventDefault();
+            vencTipo = btnAlterarVenc.dataset.tipo;
+            vencId = btnAlterarVenc.dataset.id;
+            var dataAtual = btnAlterarVenc.dataset.vencimento || '';
+            if (inputVencimento) {
+                inputVencimento.value = dataAtual;
+            }
+            if (modalVencInstance) {
+                modalVencInstance.show();
+            }
+        }
     });
 })();
 </script>
-{% endblock %}
+{% endblock scripts %}

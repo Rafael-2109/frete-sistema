@@ -223,6 +223,65 @@ class FluxoCaixaService:
 
         return resultado
 
+    def obter_lista_corrida(self, data_inicio, data_fim, filtro_status='total', filtro_direcao='todos'):
+        """
+        Retorna lista plana de lancamentos ordenados por vencimento.
+
+        Args:
+            data_inicio: date
+            data_fim: date
+            filtro_status: 'total' | 'pendente' | 'pago'
+            filtro_direcao: 'todos' | 'receber' | 'pagar'
+
+        Returns:
+            dict com 'lancamentos' (lista plana) e 'totais'
+        """
+        from app.carvia.models import (
+            CarviaFaturaCliente,
+            CarviaFaturaTransportadora,
+            CarviaDespesa,
+        )
+
+        lancamentos = []
+        total_receber = 0.0
+        total_pagar = 0.0
+
+        # A Receber
+        if filtro_direcao in ('todos', 'receber'):
+            receber = self._buscar_faturas_cliente(
+                CarviaFaturaCliente, data_inicio, data_fim, filtro_status
+            )
+            for l in receber:
+                l['direcao'] = 'A Receber'
+                lancamentos.append(l)
+                total_receber += l['valor']
+
+        # A Pagar
+        if filtro_direcao in ('todos', 'pagar'):
+            pagar_transp = self._buscar_faturas_transportadora(
+                CarviaFaturaTransportadora, data_inicio, data_fim, filtro_status
+            )
+            pagar_desp = self._buscar_despesas(
+                CarviaDespesa, data_inicio, data_fim, filtro_status
+            )
+            for l in pagar_transp + pagar_desp:
+                l['direcao'] = 'A Pagar'
+                lancamentos.append(l)
+                total_pagar += l['valor']
+
+        # Ordenar por vencimento, depois por id
+        lancamentos.sort(key=lambda x: (x['vencimento'], x['id']))
+
+        return {
+            'lancamentos': lancamentos,
+            'totais': {
+                'a_receber': total_receber,
+                'a_pagar': total_pagar,
+                'saldo_liquido': total_receber - total_pagar,
+                'total_dias': len(set(l['vencimento'] for l in lancamentos)),
+            },
+        }
+
     # ===================================================================
     # Saldo de Conta
     # ===================================================================

@@ -2,9 +2,10 @@
 Rotas de Fluxo de Caixa CarVia
 ================================
 
-GET  /carvia/fluxo-de-caixa              - Tela principal
+GET  /carvia/fluxo-de-caixa              - Tela principal (visao dias ou lista)
 POST /carvia/api/fluxo-caixa/pagar       - Marcar como pago + criar movimentacao
 POST /carvia/api/fluxo-caixa/desfazer    - Desfazer pagamento + remover movimentacao
+POST /carvia/api/fluxo-caixa/alterar-vencimento - Alterar data de vencimento
 GET  /carvia/extrato-conta               - Extrato da conta
 POST /carvia/api/extrato-conta/saldo-inicial - Definir/alterar saldo inicial
 """
@@ -113,6 +114,8 @@ def register_fluxo_caixa_routes(bp):
         data_inicio_str = request.args.get('data_inicio', '')
         data_fim_str = request.args.get('data_fim', '')
         status = request.args.get('status', 'total')
+        visao = request.args.get('visao', 'dias')
+        direcao = request.args.get('direcao', 'todos')
 
         # Validar datas
         try:
@@ -133,20 +136,36 @@ def register_fluxo_caixa_routes(bp):
         if status not in ('total', 'pendente', 'pago'):
             status = 'total'
 
+        # Validar visao e direcao
+        if visao not in ('dias', 'lista'):
+            visao = 'dias'
+        if direcao not in ('todos', 'receber', 'pagar'):
+            direcao = 'todos'
+
         # Buscar dados
         from app.carvia.services.fluxo_caixa_service import FluxoCaixaService
         service = FluxoCaixaService()
-        fluxo = service.obter_fluxo(data_inicio, data_fim, status)
         saldo_conta = service.obter_saldo_conta()
 
-        return render_template(
-            'carvia/fluxo_caixa.html',
-            fluxo=fluxo,
-            data_inicio=data_inicio.isoformat(),
-            data_fim=data_fim.isoformat(),
-            status_filtro=status,
-            saldo_conta=saldo_conta,
-        )
+        template_vars = {
+            'data_inicio': data_inicio.isoformat(),
+            'data_fim': data_fim.isoformat(),
+            'status_filtro': status,
+            'saldo_conta': saldo_conta,
+            'visao': visao,
+            'direcao': direcao,
+        }
+
+        if visao == 'lista':
+            resultado = service.obter_lista_corrida(data_inicio, data_fim, status, direcao)
+            template_vars['fluxo'] = resultado
+            template_vars['lancamentos'] = resultado['lancamentos']
+        else:
+            fluxo = service.obter_fluxo(data_inicio, data_fim, status)
+            template_vars['fluxo'] = fluxo
+            template_vars['lancamentos'] = []
+
+        return render_template('carvia/fluxo_caixa.html', **template_vars)
 
     @bp.route('/api/fluxo-caixa/pagar', methods=['POST'])
     @login_required
@@ -338,6 +357,83 @@ def register_fluxo_caixa_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao desfazer pagamento: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/fluxo-caixa/alterar-vencimento', methods=['POST'])
+    @login_required
+    def api_fluxo_caixa_alterar_vencimento():
+        """Altera a data de vencimento de um lancamento."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        tipo_doc = data.get('tipo_doc')
+        doc_id = data.get('id')
+        novo_vencimento_str = data.get('novo_vencimento', '')
+
+        if not tipo_doc or not doc_id:
+            return jsonify({'erro': 'tipo_doc e id sao obrigatorios'}), 400
+
+        if not novo_vencimento_str:
+            return jsonify({'erro': 'novo_vencimento e obrigatorio'}), 400
+
+        try:
+            novo_vencimento = date.fromisoformat(novo_vencimento_str)
+        except ValueError:
+            return jsonify({'erro': 'Data de vencimento invalida'}), 400
+
+        try:
+            from app.carvia.models import (
+                CarviaFaturaCliente,
+                CarviaFaturaTransportadora,
+                CarviaDespesa,
+            )
+
+            if tipo_doc == 'fatura_cliente':
+                doc = db.session.get(CarviaFaturaCliente, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Fatura cliente nao encontrada'}), 404
+                if doc.status in ('PAGA', 'CANCELADA'):
+                    return jsonify({'erro': f'Fatura com status {doc.status} nao pode ter vencimento alterado'}), 400
+                doc.vencimento = novo_vencimento
+
+            elif tipo_doc == 'fatura_transportadora':
+                doc = db.session.get(CarviaFaturaTransportadora, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
+                if doc.status_conferencia == 'CONFERIDO':
+                    return jsonify({'erro': 'Fatura conferida nao pode ter vencimento alterado'}), 400
+                doc.vencimento = novo_vencimento
+
+            elif tipo_doc == 'despesa':
+                doc = db.session.get(CarviaDespesa, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Despesa nao encontrada'}), 404
+                if doc.status in ('PAGO', 'CANCELADO'):
+                    return jsonify({'erro': f'Despesa com status {doc.status} nao pode ter vencimento alterado'}), 400
+                doc.data_vencimento = novo_vencimento
+
+            else:
+                return jsonify({'erro': f'Tipo de documento invalido: {tipo_doc}'}), 400
+
+            db.session.commit()
+
+            logger.info(
+                f"Vencimento alterado: {tipo_doc} #{doc_id} -> {novo_vencimento.isoformat()} "
+                f"por {current_user.email}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'novo_vencimento': novo_vencimento.strftime('%d/%m/%Y'),
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao alterar vencimento: {e}")
             return jsonify({'erro': str(e)}), 500
 
     # ===================================================================

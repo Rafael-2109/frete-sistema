@@ -196,11 +196,12 @@
 {% endblock %}
 
 
-{% block extra_js %}
+{% block scripts %}
 <script>
 (function() {
     'use strict';
 
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     var btnSaldo = document.getElementById('btnSaldoInicial');
     var inputSaldo = document.getElementById('inputSaldoInicial');
 
@@ -217,7 +218,10 @@
 
             fetch('/carvia/api/extrato-conta/saldo-inicial', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({valor: valor})
             })
             .then(function(r) { return r.json(); })
@@ -259,4 +263,4 @@
     }
 })();
 </script>
-{% endblock %}
+{% endblock scripts %}
