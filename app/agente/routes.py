@@ -1079,7 +1079,7 @@ def _save_messages_to_db(
                     # Limpar para não vazar entre turnos
                     _client._last_injected_memory_ids = []
             except Exception as eff_err:
-                logger.debug(f"[AGENTE] Memory effectiveness tracking falhou (ignorado): {eff_err}")
+                logger.warning(f"[AGENTE] Memory effectiveness tracking falhou (ignorado): {eff_err}")
 
     except Exception as e:
         logger.error(f"[AGENTE] Erro ao salvar mensagens: {e}")
@@ -1117,7 +1117,9 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
         if not injected_memories:
             return
 
+        import re
         assistant_lower = assistant_message.lower()
+        assistant_words = set(assistant_lower.split())
         effective_ids = []
 
         for mem in injected_memories:
@@ -1132,15 +1134,20 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             from .services.knowledge_graph_service import strip_xml_tags
             clean_content = strip_xml_tags(content)
 
-            # Extrair fragmentos significativos (>= 20 chars) do conteudo limpo
-            # e verificar se aparecem na resposta
-            fragments = [
-                f.strip() for f in clean_content.split('\n')
-                if len(f.strip()) >= 20
-            ][:3]
+            # Split por pontuação em frases (não por \n que gera linhas gigantes).
+            # Para cada frase >= 15 chars, verificar se >= 60% das palavras
+            # aparecem na resposta (word overlap, tolerante a parafraseamento).
+            sentences = [
+                s.strip() for s in re.split(r'[.!?\n]+', clean_content)
+                if len(s.strip()) >= 15
+            ][:5]
 
-            for frag in fragments:
-                if frag.lower() in assistant_lower:
+            for sentence in sentences:
+                words = sentence.lower().split()
+                if not words:
+                    continue
+                overlap = sum(1 for w in words if w in assistant_words)
+                if overlap / len(words) >= 0.6:
                     effective_ids.append(mem.id)
                     break
 
@@ -1158,7 +1165,7 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             )
 
     except Exception as e:
-        logger.debug(f"[MEMORY_FEEDBACK] Tracking falhou (ignorado): {e}")
+        logger.warning(f"[MEMORY_FEEDBACK] Tracking falhou (ignorado): {e}")
 
 
 def _embed_session_turn_best_effort(app, session_id, user_id, user_message, assistant_message, session):
