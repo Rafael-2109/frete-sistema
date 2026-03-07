@@ -520,9 +520,9 @@ def _calculate_importance_score(path: str, content: str) -> float:
     return min(score, 1.0)
 
 
-def _classify_memory_category(path: str, content: str) -> tuple:
+def _classify_memory_category(path: str, content: str) -> str:
     """
-    Classifica memória em categoria e permanência por heurística.
+    Classifica memória em categoria por heurística.
 
     Memory System v2: classificação automática zero-custo (<1ms).
     Agent pode override via parâmetro opcional no save_memory.
@@ -540,14 +540,14 @@ def _classify_memory_category(path: str, content: str) -> tuple:
         content: Conteúdo da memória
 
     Returns:
-        Tupla (category: str, is_permanent: bool)
+        category (str): permanent, structural, operational, contextual
     """
     path_lower = path.lower() if path else ''
     content_lower = content.lower() if content else ''
 
     # user.xml e preferences.xml → permanent
     if path_lower in ('/memories/user.xml', '/memories/preferences.xml'):
-        return ('permanent', True)
+        return 'permanent'
 
     # corrections/ com keywords de escopo/permanência → permanent
     if '/corrections/' in path_lower:
@@ -557,7 +557,7 @@ def _classify_memory_category(path: str, content: str) -> tuple:
             'nunca usar', 'identidade', 'papel', 'role',
         ]
         if any(kw in content_lower for kw in permanent_keywords):
-            return ('permanent', True)
+            return 'permanent'
 
         # corrections/ com keywords estruturais → structural
         structural_keywords = [
@@ -566,18 +566,18 @@ def _classify_memory_category(path: str, content: str) -> tuple:
             'modelo', 'api', 'endpoint', 'migration', 'index',
         ]
         if any(kw in content_lower for kw in structural_keywords):
-            return ('structural', False)
+            return 'structural'
 
         # corrections/ (demais) → structural por default
-        return ('structural', False)
+        return 'structural'
 
     # context/ → contextual
     if '/context/' in path_lower:
-        return ('contextual', False)
+        return 'contextual'
 
     # learned/patterns → operational
     # Default → operational
-    return ('operational', False)
+    return 'operational'
 
 
 def _detect_pitfall_hint(path: str, content: str) -> Optional[str]:
@@ -1027,9 +1027,8 @@ try:
                 valid_categories = {'permanent', 'structural', 'operational', 'contextual'}
                 if category_override and category_override in valid_categories:
                     category = category_override
-                    is_perm = (category == 'permanent')
                 else:
-                    category, is_perm = _classify_memory_category(path, content)
+                    category = _classify_memory_category(path, content)
 
                 existing = AgentMemory.get_by_path(actual_user_id, path)
 
@@ -1045,7 +1044,6 @@ try:
                     existing.is_directory = False
                     existing.importance_score = importance
                     existing.category = category
-                    existing.is_permanent = is_perm
                     existing.last_accessed_at = agora_utc_naive()
                     # Se salvando novo conteúdo, limpar flag de conflito
                     existing.has_potential_conflict = False
@@ -1058,7 +1056,6 @@ try:
                     mem = AgentMemory.create_file(actual_user_id, path, content)
                     mem.importance_score = importance
                     mem.category = category
-                    mem.is_permanent = is_perm
                     mem.last_accessed_at = agora_utc_naive()
                     # PRD v2.1: escopo e created_by
                     mem.escopo = escopo

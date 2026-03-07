@@ -10,14 +10,11 @@ Arquitetura:
 - Quando SDK expira, injeta histórico de mensagens como contexto
 """
 
-from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
 from app import db
 from app.utils.timezone import agora_utc_naive
-# Constante para limite de mensagens no contexto
-MAX_MESSAGES_IN_CONTEXT = 50  # Últimas N mensagens enviadas ao SDK
 
 
 class AgentSession(db.Model):
@@ -296,20 +293,6 @@ class AgentSession(db.Model):
         """
         return self.sdk_session_transcript
 
-    def get_messages_for_context(self) -> List[Dict[str, Any]]:
-        """
-        Retorna últimas N mensagens para injetar como contexto.
-
-        Usado quando a sessão SDK expira e precisamos reconstruir o contexto.
-
-        Returns:
-            Lista de mensagens para contexto (máximo MAX_MESSAGES_IN_CONTEXT)
-        """
-        messages = self.get_messages()
-        if len(messages) > MAX_MESSAGES_IN_CONTEXT:
-            return messages[-MAX_MESSAGES_IN_CONTEXT:]
-        return messages
-
     # =========================================================================
     # MÉTODOS DE SUMARIZAÇÃO (P0-2)
     # =========================================================================
@@ -475,9 +458,6 @@ class AgentMemory(db.Model):
     # contextual: alertas, estado sistema, sessões recentes — decay rápido (~3d)
     # cold: memórias depreciadas — só busca explícita, sem injeção automática
     category = db.Column(db.String(20), default='operational', nullable=False, index=True)
-
-    # Flag para memórias que NUNCA devem decair ou ser consolidadas
-    is_permanent = db.Column(db.Boolean, default=False, nullable=False)
 
     # Flag para memórias movidas para tier frio (sem injeção automática)
     is_cold = db.Column(db.Boolean, default=False, nullable=False)
@@ -656,33 +636,6 @@ class AgentMemory(db.Model):
         count = cls.query.filter_by(user_id=user_id).delete(synchronize_session=False)
         return count
 
-    @classmethod
-    def rename(cls, user_id: int, old_path: str, new_path: str) -> bool:
-        """
-        Renomeia arquivo ou diretório.
-
-        Returns:
-            True se sucesso, False se não encontrado
-        """
-        memory = cls.get_by_path(user_id, old_path)
-        if not memory:
-            return False
-
-        # Cria diretórios pai do novo path
-        cls._ensure_parent_dirs(user_id, new_path)
-
-        # Se for diretório, renomeia todos os filhos também
-        if memory.is_directory:
-            children = cls.query.filter(
-                cls.user_id == user_id,
-                cls.path.like(f'{old_path}/%')
-            ).all()
-
-            for child in children:
-                child.path = child.path.replace(old_path, new_path, 1)
-
-        memory.path = new_path
-        return True
 
 
 class AgentMemoryVersion(db.Model):

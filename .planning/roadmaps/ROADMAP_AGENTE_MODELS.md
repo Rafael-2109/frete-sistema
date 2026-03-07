@@ -241,24 +241,24 @@ PROTOCOLO DE EXECUCAO — OBRIGATORIO EM TODA SESSAO
 
 ## S6: Limpeza de dead code e campo redundante
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] DONE — 2026-03-07
 **Impacto**: HIGIENE — reduz confusao e simplifica modelo
 **Esforco estimado**: 30-45min
 
 ### Checklist
 
-- [ ] **S6.1** Ler `models.py` completo para confirmar que itens abaixo sao de fato dead code
-- [ ] **S6.2** Remover `MAX_MESSAGES_IN_CONTEXT` (linha 20)
-- [ ] **S6.3** Remover `get_messages_for_context()` (linhas 299-311)
-- [ ] **S6.4** Remover `AgentMemory.rename()` (linhas 660-685) — SE S3 nao adicionou MCP tool que usa rename. Se S3 criou `move_memory`, MANTER.
-- [ ] **S6.5** Avaliar remocao de `is_permanent`:
-  - Buscar TODOS os usos de `is_permanent` no codebase
-  - Se todos podem ser substituidos por `category == 'permanent'`, remover campo
-  - Se remover campo, criar migration para DROP COLUMN (com .py + .sql)
-  - **ATENCAO**: Se houver queries que filtram por `is_permanent` em producao, NAO remover sem migration de dados
-- [ ] **S6.6** Atualizar `app/agente/CLAUDE.md` removendo referencias aos itens deletados
-- [ ] **S6.7** Verificar que nenhum import quebrou: `grep -r "get_messages_for_context\|MAX_MESSAGES_IN_CONTEXT\|\.rename(" app/agente/`
-- [ ] **S6.8** Verificar que hook `lembrar-regenerar-schemas.py` regenera schemas apos edicao do models.py
+- [x] **S6.1** Ler `models.py` completo para confirmar que itens abaixo sao de fato dead code
+- [x] **S6.2** Remover `MAX_MESSAGES_IN_CONTEXT` (linha 20)
+- [x] **S6.3** Remover `get_messages_for_context()` (linhas 299-311)
+- [x] **S6.4** Remover `AgentMemory.rename()` (linhas 660-685) — S3 NAO criou `move_memory` (11 tools, nenhuma usa rename)
+- [x] **S6.5** Remover `is_permanent`:
+  - Todos os usos substituidos por `category == 'permanent'`
+  - Migration criada: `scripts/migrations/remover_is_permanent_agent_memories.py` + `.sql`
+  - `_classify_memory_category()` refatorada para retornar `str` em vez de `tuple`
+  - `memory_consolidator.py` atualizado (2 locais)
+- [x] **S6.6** `app/agente/CLAUDE.md` verificado — nao tinha referencias a `is_permanent` nem `rename()`
+- [x] **S6.7** Verificado: `grep -rn "get_messages_for_context\|MAX_MESSAGES_IN_CONTEXT\|is_permanent" app/` → 0 resultados
+- [x] **S6.8** Hook `lembrar-regenerar-schemas.py` regenerou schemas apos edicao do models.py
 
 ### Arquivos envolvidos
 - `app/agente/models.py` — remocoes (MODIFICAR)

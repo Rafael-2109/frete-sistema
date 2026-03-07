@@ -97,7 +97,7 @@ def maybe_move_to_cold(user_id: int) -> int:
             AgentMemory.user_id == user_id,
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
-            AgentMemory.is_permanent == False,  # noqa: E712 — permanentes são imunes
+            AgentMemory.category != 'permanent',  # permanentes são imunes
             AgentMemory.usage_count >= 20,
             AgentMemory.effective_count == 0,
         ).all()
@@ -227,7 +227,7 @@ def _consolidate_if_needed(
                 continue
 
             # Memory v2: memórias permanentes ou com alta importância são imunes
-            if getattr(mem, 'is_permanent', False):
+            if getattr(mem, 'category', '') == 'permanent':
                 logger.debug(f"[MEMORY_CONSOLIDATOR] Imune (permanent): {mem.path}")
                 continue
             if (getattr(mem, 'importance_score', 0) or 0) >= 0.7:
