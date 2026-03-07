@@ -1,0 +1,72 @@
+{
+  "name": "perfil_usuario",
+  "description": "[DEBUG] Tabela interna: perfil_usuario",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('perfil_usuario_id_seq'::regclass)"
+    },
+    {
+      "name": "nome",
+      "type": "VARCHAR(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_exibicao",
+      "type": "VARCHAR(100)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "VARCHAR(255)",
+      "nullable": true
+    },
+    {
+      "name": "nivel_hierarquico",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "ativo",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "criado_em",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "criado_por",
+      "type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "criado_por"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "perfil_usuario_nome_key",
+      "columns": [
+        "nome"
+      ],
+      "unique": true
+    }
+  ]
+}

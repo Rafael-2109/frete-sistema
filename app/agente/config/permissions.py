@@ -47,6 +47,20 @@ _context_lock = threading.Lock()
 # O dict global _stream_context continua para event_queue (precisa ser cross-thread).
 _current_session_id: ContextVar[str | None] = ContextVar('_agent_session_id', default=None)
 
+# Debug Mode: permite admin desbloquear tabelas internas e memorias cross-user.
+# Validacao de perfil e em routes.py; aqui apenas armazena estado no contexto.
+_debug_mode: ContextVar[bool] = ContextVar('_agent_debug_mode', default=False)
+
+
+def set_debug_mode(enabled: bool) -> None:
+    """Define debug mode no contexto atual (validacao admin feita em routes.py)."""
+    _debug_mode.set(enabled)
+
+
+def get_debug_mode() -> bool:
+    """Verifica se debug mode esta ativo no contexto atual."""
+    return _debug_mode.get()
+
 
 def set_current_session_id(session_id: str) -> None:
     """Define session_id no contexto atual (funciona em threads E coroutines)."""

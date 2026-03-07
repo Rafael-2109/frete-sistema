@@ -803,7 +803,13 @@ class TextToSQLPipeline:
         max_rows = int(os.getenv("TEXT_TO_SQL_MAX_ROWS", "500"))
         self.executor = SQLExecutor(timeout_seconds=timeout, max_rows=max_rows)
 
-    def run(self, question: str, extra_blocked_tables: set = None) -> dict:
+    def run(
+        self,
+        question: str,
+        extra_blocked_tables: set = None,
+        debug_unblock_tables: set = None,
+        debug_schemas: dict = None,
+    ) -> dict:
         """
         Executa pipeline completo.
 
@@ -811,6 +817,8 @@ class TextToSQLPipeline:
             question: Pergunta em linguagem natural
             extra_blocked_tables: Tabelas bloqueadas adicionais (per-request, thread-safe).
                 Usado para bloqueio condicional (ex: pessoal_* para usuários não autorizados).
+            debug_unblock_tables: Tabelas a desbloquear (debug mode admin).
+            debug_schemas: Schemas das tabelas debug (dict nome -> schema JSON).
 
         Returns:
             Dict com resultado ou erro
@@ -888,8 +896,16 @@ class TextToSQLPipeline:
                 # =====================================================
                 t1 = time.time()
 
-                # Injetar few-shot examples se disponíveis
+                # Debug Mode: injetar catalogo de tabelas internas no contexto
                 gen_question = question
+                if debug_schemas:
+                    debug_addendum = "\n\n[TABELAS DEBUG DISPONIVEIS (modo admin)]:\n"
+                    for dname, dschema in debug_schemas.items():
+                        cols = [c['name'] for c in dschema.get('columns', [])[:8]]
+                        debug_addendum += f"  {dname}: {', '.join(cols)}\n"
+                    gen_question = debug_addendum + "\n" + gen_question
+
+                # Injetar few-shot examples se disponíveis
                 if few_shot_examples:
                     examples_text = "\n\nEXEMPLOS DE QUERIES SIMILARES (use como referencia):\n"
                     for ex in few_shot_examples:
@@ -912,6 +928,11 @@ class TextToSQLPipeline:
             logger.info(f"[TEXT_TO_SQL] Tabelas detectadas: {tables_in_sql}")
 
             # Carregar schemas detalhados das tabelas usadas
+            # Debug Mode: injetar schemas de tabelas debug no provider (temporario)
+            if debug_schemas:
+                for dname, dschema in debug_schemas.items():
+                    if dname not in self.schema_provider._table_cache:
+                        self.schema_provider._table_cache[dname] = dschema
             schema_text = self.schema_provider.get_tables_schema_text(tables_in_sql)
 
             # =====================================================
@@ -987,8 +1008,16 @@ class TextToSQLPipeline:
             # =====================================================
             # Se extra_blocked_tables fornecido, criar validator temporário
             # com tabelas mescladas (thread-safe, não altera o singleton)
-            if extra_blocked_tables:
-                merged_blocked = self.schema_provider.blocked_tables | extra_blocked_tables
+            if extra_blocked_tables or debug_unblock_tables:
+                if extra_blocked_tables:
+                    merged_blocked = self.schema_provider.blocked_tables | extra_blocked_tables
+                else:
+                    merged_blocked = set(self.schema_provider.blocked_tables)
+
+                # Debug mode: subtrair tabelas desbloqueadas
+                if debug_unblock_tables:
+                    merged_blocked = merged_blocked - debug_unblock_tables
+
                 validator = SQLSafetyValidator(blocked_tables=merged_blocked)
             else:
                 validator = self.safety_validator

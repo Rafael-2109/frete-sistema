@@ -1,0 +1,89 @@
+{
+  "name": "vendedor_permission",
+  "description": "[DEBUG] Tabela interna: vendedor_permission",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('vendedor_permission_id_seq'::regclass)"
+    },
+    {
+      "name": "vendedor_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "entity_type",
+      "type": "VARCHAR(20)",
+      "nullable": false
+    },
+    {
+      "name": "entity_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "can_view",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "can_edit",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "granted_by",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "granted_at",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "ativo",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "true"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "granted_by"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_vendedor_permission",
+      "columns": [
+        "vendedor_id",
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "vendedor_permission_vendedor_id_entity_type_entity_id_key",
+      "columns": [
+        "vendedor_id",
+        "entity_type",
+        "entity_id"
+      ],
+      "unique": true
+    }
+  ]
+}

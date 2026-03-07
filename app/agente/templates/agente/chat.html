@@ -84,6 +84,21 @@
                         <small>Use para revisar antes de confirmar.</small>
                     </div>
                 </div>
+
+                <!-- Debug Mode Toggle (Admin only) -->
+                {% if current_user.perfil == 'administrador' %}
+                <div class="header-control has-tooltip">
+                    <label class="debug-toggle" id="debug-mode-container">
+                        <input type="checkbox" id="debug-mode-toggle">
+                        <i class="fas fa-bug debug-icon"></i>
+                    </label>
+                    <div class="control-tooltip">
+                        <strong><i class="fas fa-bug"></i> Modo Debug</strong>
+                        <p>Desbloqueia tabelas internas e memorias de outros usuarios para auditoria.</p>
+                        <small>Apenas administradores. Todas as acoes sao auditadas.</small>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <div class="chat-header-right">
@@ -171,6 +186,11 @@
             <div class="progress-bar-track">
                 <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%"></div>
             </div>
+        </div>
+
+        <!-- Debug Mode Banner -->
+        <div class="debug-mode-banner" id="debug-mode-banner" style="display: none;">
+            <i class="fas fa-bug"></i> MODO DEBUG ATIVO — Tabelas internas e memorias cross-user desbloqueadas
         </div>
 
         <!-- Área de Mensagens -->
@@ -389,7 +409,8 @@ const STORAGE_KEYS = {
     theme: 'agent-theme',
     model: 'agent-model',
     effort: 'agent-effort',
-    planMode: 'agent-plan-mode'
+    planMode: 'agent-plan-mode',
+    debugMode: 'agent-debug-mode'
 };
 
 // ============================================

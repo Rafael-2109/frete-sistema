@@ -137,12 +137,25 @@ def api_chat():
         user_id = current_user.id
         user_name = getattr(current_user, 'nome', 'Usuário')
 
+        # Debug Mode: validação determinística server-side
+        debug_mode = data.get('debug_mode', False)
+        if debug_mode:
+            from .config.feature_flags import USE_DEBUG_MODE
+            if not USE_DEBUG_MODE:
+                debug_mode = False
+            elif current_user.perfil != 'administrador':
+                logger.warning(f"[AGENTE] DEBUG MODE rejeitado: user {user_id} nao e admin")
+                debug_mode = False
+            else:
+                logger.warning(f"[AGENTE] DEBUG MODE ativado por {user_name} (ID:{user_id})")
+
         # Log
         files_info = f" | Arquivos: {len(files)}" if files else ""
+        debug_info = " | DEBUG MODE" if debug_mode else ""
         logger.info(
             f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | "
             f"Modelo: {model or 'default'} | Effort: {effort_level} | "
-            f"Plan: {plan_mode}{files_info}"
+            f"Plan: {plan_mode}{files_info}{debug_info}"
         )
 
         # FEAT-032: Processar arquivos - separar imagens (Vision) dos outros (contexto texto)
@@ -192,6 +205,7 @@ def api_chat():
                 effort_level=effort_level,
                 plan_mode=plan_mode,
                 image_files=image_files,  # FEAT-032: Imagens para Vision API
+                debug_mode=debug_mode,
             )),
             mimetype='text/event-stream',
             headers={
@@ -233,6 +247,7 @@ async def _async_stream_sdk_client(
     plan_mode: bool = False,
     image_files: list = None,
     app=None,
+    debug_mode: bool = False,
 ):
     """
     Streaming via query() + resume — self-contained, sem pool.
@@ -291,6 +306,11 @@ async def _async_stream_sdk_client(
         set_current_user_id(user_id)
     except ImportError:
         pass
+
+    # Debug Mode: setar ContextVar ANTES de qualquer tool ser chamada
+    if debug_mode:
+        from .config.permissions import set_debug_mode
+        set_debug_mode(True)
 
     logger.info(
         f"[AGENTE] query()+resume: session={our_session_id[:8]}... "
@@ -363,6 +383,7 @@ def _stream_chat_response(
     effort_level: str = "off",
     plan_mode: bool = False,
     image_files: List[dict] = None,
+    debug_mode: bool = False,
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -386,6 +407,7 @@ def _stream_chat_response(
         effort_level: Nível de esforço (off/low/medium/high/max)
         plan_mode: Modo somente-leitura
         image_files: Lista de dicts com imagens em base64 para Vision API
+        debug_mode: Admin debug mode (desbloqueia tabelas/memorias cross-user)
 
     Yields:
         Eventos SSE formatados
@@ -589,6 +611,7 @@ def _stream_chat_response(
                 plan_mode=plan_mode,
                 image_files=image_files,
                 app=app,
+                debug_mode=debug_mode,
             )
 
             # =============================================================

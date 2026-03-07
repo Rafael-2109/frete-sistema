@@ -1,0 +1,103 @@
+{
+  "name": "permission_module",
+  "description": "[DEBUG] Tabela interna: permission_module",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('permission_module_id_seq'::regclass)"
+    },
+    {
+      "name": "category_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "nome",
+      "type": "VARCHAR(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_exibicao",
+      "type": "VARCHAR(100)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "VARCHAR(255)",
+      "nullable": true
+    },
+    {
+      "name": "icone",
+      "type": "VARCHAR(50)",
+      "nullable": true
+    },
+    {
+      "name": "cor",
+      "type": "VARCHAR(7)",
+      "nullable": true
+    },
+    {
+      "name": "ordem",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "ativo",
+      "type": "BOOLEAN",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "TIMESTAMP",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "INTEGER",
+      "nullable": true
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "category_id"
+      ],
+      "referred_table": "permission_category",
+      "referred_columns": [
+        "id"
+      ]
+    },
+    {
+      "columns": [
+        "criado_por"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_module_category",
+      "columns": [
+        "category_id",
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_module_category_name",
+      "columns": [
+        "category_id",
+        "nome"
+      ],
+      "unique": true
+    }
+  ]
+}

@@ -77,6 +77,39 @@ _DANGEROUS_PATTERNS = [
 ]
 
 
+def _resolve_user_id(args: dict) -> int:
+    """
+    Resolve user_id efetivo: proprio usuario ou target em debug mode.
+
+    Args:
+        args: Dict dos argumentos da tool (pode conter target_user_id)
+
+    Returns:
+        user_id efetivo para a operacao
+
+    Raises:
+        PermissionError: target_user_id sem debug mode ativo
+    """
+    target = args.get('target_user_id')
+    current = get_current_user_id()
+
+    if target is None or target == current:
+        return current
+
+    # Cross-user requer debug mode (validacao deterministica)
+    from ..config.permissions import get_debug_mode
+    if not get_debug_mode():
+        raise PermissionError(
+            f"Acesso a memorias de outro usuario (ID={target}) requer Modo Debug ativo. "
+            f"Peca ao administrador ativar o toggle de debug."
+        )
+
+    logger.warning(
+        f"[MEMORY_MCP] DEBUG: acesso cross-user user={current} -> target={target}"
+    )
+    return target
+
+
 def _sanitize_content(content: str) -> str:
     """
     Sanitiza conteúdo contra prompt injection.
@@ -861,7 +894,7 @@ try:
         Visualiza memória ou lista diretório.
 
         Args:
-            args: {"path": str} — path da memória (default: /memories)
+            args: {"path": str, "target_user_id": int (opcional, requer debug mode)}
 
         Returns:
             MCP tool response com conteúdo ou listagem
@@ -870,7 +903,7 @@ try:
 
         try:
             path = _validate_path(path)
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _view():
                 from ..models import AgentMemory
@@ -969,7 +1002,7 @@ try:
         try:
             path = _validate_path(path)
             content = _sanitize_content(content)
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             # PRD v2.1: Classificar escopo pelo path
             # Paths /memories/empresa/* sao memorias compartilhadas (user_id=0)
@@ -1172,7 +1205,7 @@ try:
         try:
             path = _validate_path(path)
             new_str = _sanitize_content(new_str)
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _update():
                 from ..models import AgentMemory, AgentMemoryVersion
@@ -1295,7 +1328,7 @@ try:
 
         try:
             path = _validate_path(path)
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             if path == '/memories':
                 return {
@@ -1376,15 +1409,18 @@ try:
             openWorldHint=False,
         ),
     )
-    async def list_memories(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
+    async def list_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
         Lista todas as memórias do usuário.
+
+        Args:
+            args: {"target_user_id": int (opcional, requer debug mode)}
 
         Returns:
             MCP tool response com listagem
         """
         try:
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _list():
                 from ..models import AgentMemory
@@ -1428,15 +1464,18 @@ try:
             openWorldHint=False,
         ),
     )
-    async def clear_memories(args: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
+    async def clear_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
         Limpa todas as memórias do usuário.
+
+        Args:
+            args: {"target_user_id": int (opcional, requer debug mode)}
 
         Returns:
             MCP tool response com confirmação
         """
         try:
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _clear():
                 from ..models import AgentMemory
@@ -1475,6 +1514,9 @@ try:
         """
         Busca memórias no tier frio (is_cold=True).
 
+        Args:
+            args: {"query": str, "target_user_id": int (opcional, requer debug mode)}
+
         Memory v2 — Fase 3B: memórias deprecadas são buscáveis mas não
         injetadas automaticamente no contexto.
 
@@ -1493,7 +1535,7 @@ try:
             }
 
         try:
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _search_cold():
                 from ..models import AgentMemory

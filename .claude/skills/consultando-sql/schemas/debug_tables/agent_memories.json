@@ -1,0 +1,118 @@
+{
+  "name": "agent_memories",
+  "description": "[DEBUG] Tabela interna: agent_memories",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('agent_memories_id_seq'::regclass)"
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "path",
+      "type": "VARCHAR(500)",
+      "nullable": false
+    },
+    {
+      "name": "content",
+      "type": "TEXT",
+      "nullable": true
+    },
+    {
+      "name": "is_directory",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "importance_score",
+      "type": "DOUBLE PRECISION",
+      "nullable": false,
+      "default": "0.5"
+    },
+    {
+      "name": "last_accessed_at",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "user_id"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_agent_memories_importance",
+      "columns": [
+        "user_id",
+        "importance_score"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_agent_memories_last_accessed",
+      "columns": [
+        "user_id",
+        "last_accessed_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_agent_memories_path",
+      "columns": [
+        "path"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_agent_memories_path_pattern",
+      "columns": [
+        "path"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_agent_memories_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_user_memory_path",
+      "columns": [
+        "user_id",
+        "path"
+      ],
+      "unique": true
+    }
+  ]
+}

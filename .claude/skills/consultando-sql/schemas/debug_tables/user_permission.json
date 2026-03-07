@@ -1,0 +1,105 @@
+{
+  "name": "user_permission",
+  "description": "[DEBUG] Tabela interna: user_permission",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('user_permission_id_seq'::regclass)"
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "submodule_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "can_view",
+      "type": "BOOLEAN",
+      "nullable": false
+    },
+    {
+      "name": "can_edit",
+      "type": "BOOLEAN",
+      "nullable": false
+    },
+    {
+      "name": "granted_by",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "granted_at",
+      "type": "TIMESTAMP",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "BOOLEAN",
+      "nullable": false
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "granted_by"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    },
+    {
+      "columns": [
+        "submodule_id"
+      ],
+      "referred_table": "permission_submodule",
+      "referred_columns": [
+        "id"
+      ]
+    },
+    {
+      "columns": [
+        "user_id"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_submodule_permission",
+      "columns": [
+        "submodule_id",
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_user_permission_active",
+      "columns": [
+        "user_id",
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_user_submodule_permission",
+      "columns": [
+        "user_id",
+        "submodule_id"
+      ],
+      "unique": true
+    }
+  ]
+}

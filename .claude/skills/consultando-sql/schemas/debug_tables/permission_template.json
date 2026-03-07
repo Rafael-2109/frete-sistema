@@ -1,0 +1,88 @@
+{
+  "name": "permission_template",
+  "description": "[DEBUG] Tabela interna: permission_template",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('permission_template_id_seq'::regclass)"
+    },
+    {
+      "name": "nome",
+      "type": "VARCHAR(100)",
+      "nullable": false
+    },
+    {
+      "name": "codigo",
+      "type": "VARCHAR(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "VARCHAR(255)",
+      "nullable": true
+    },
+    {
+      "name": "categoria",
+      "type": "VARCHAR(50)",
+      "nullable": true
+    },
+    {
+      "name": "template_data",
+      "type": "JSON",
+      "nullable": false
+    },
+    {
+      "name": "is_system",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "ativo",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "criado_em",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "criado_por",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "atualizado_em",
+      "type": "TIMESTAMP",
+      "nullable": true
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "criado_por"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "permission_template_codigo_key",
+      "columns": [
+        "codigo"
+      ],
+      "unique": true
+    }
+  ]
+}

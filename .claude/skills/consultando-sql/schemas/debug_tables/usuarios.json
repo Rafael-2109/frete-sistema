@@ -1,0 +1,145 @@
+{
+  "name": "usuarios",
+  "description": "[DEBUG] Tabela interna: usuarios",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('usuarios_id_seq'::regclass)"
+    },
+    {
+      "name": "nome",
+      "type": "VARCHAR(100)",
+      "nullable": false
+    },
+    {
+      "name": "email",
+      "type": "VARCHAR(120)",
+      "nullable": false
+    },
+    {
+      "name": "senha_hash",
+      "type": "VARCHAR(200)",
+      "nullable": false
+    },
+    {
+      "name": "perfil",
+      "type": "VARCHAR(30)",
+      "nullable": true
+    },
+    {
+      "name": "status",
+      "type": "VARCHAR(20)",
+      "nullable": true
+    },
+    {
+      "name": "empresa",
+      "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "cargo",
+      "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "telefone",
+      "type": "VARCHAR(20)",
+      "nullable": true
+    },
+    {
+      "name": "vendedor_vinculado",
+      "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "criado_em",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "aprovado_em",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "aprovado_por",
+      "type": "VARCHAR(120)",
+      "nullable": true
+    },
+    {
+      "name": "ultimo_login",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "observacoes",
+      "type": "TEXT",
+      "nullable": true
+    },
+    {
+      "name": "perfil_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "perfil_nome",
+      "type": "VARCHAR(50)",
+      "nullable": true
+    },
+    {
+      "name": "sistema_logistica",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false",
+      "description": "Usuário tem acesso ao sistema de logística"
+    },
+    {
+      "name": "sistema_motochefe",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false",
+      "description": "Usuário tem acesso ao sistema motochefe"
+    },
+    {
+      "name": "sistema_carvia",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_seguranca",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [],
+  "indexes": [
+    {
+      "name": "idx_usuarios_sistema_logistica",
+      "columns": [
+        "sistema_logistica"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_usuarios_sistema_motochefe",
+      "columns": [
+        "sistema_motochefe"
+      ],
+      "unique": false
+    },
+    {
+      "name": "usuarios_email_key",
+      "columns": [
+        "email"
+      ],
+      "unique": true
+    }
+  ]
+}

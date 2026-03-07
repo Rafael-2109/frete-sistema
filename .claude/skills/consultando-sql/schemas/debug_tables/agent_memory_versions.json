@@ -1,0 +1,73 @@
+{
+  "name": "agent_memory_versions",
+  "description": "[DEBUG] Tabela interna: agent_memory_versions",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('agent_memory_versions_id_seq'::regclass)"
+    },
+    {
+      "name": "memory_id",
+      "type": "INTEGER",
+      "nullable": false,
+      "description": "FK para agent_memories.id - memória versionada"
+    },
+    {
+      "name": "content",
+      "type": "TEXT",
+      "nullable": true,
+      "description": "Conteúdo da versão anterior da memória"
+    },
+    {
+      "name": "version",
+      "type": "INTEGER",
+      "nullable": false,
+      "description": "Número da versão (1, 2, 3...). Incrementa a cada update."
+    },
+    {
+      "name": "changed_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "now()"
+    },
+    {
+      "name": "changed_by",
+      "type": "VARCHAR(50)",
+      "nullable": true,
+      "description": "Quem fez a mudança: user, haiku, claude"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "memory_id"
+      ],
+      "referred_table": "agent_memories",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_memory_version_memory_id",
+      "columns": [
+        "memory_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_memory_version",
+      "columns": [
+        "memory_id",
+        "version"
+      ],
+      "unique": true
+    }
+  ]
+}

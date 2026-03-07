@@ -2032,3 +2032,51 @@
         transform: translateY(0);
     }
 }
+
+/* ============================================
+ * Debug Mode (Admin only)
+ * ============================================ */
+
+.debug-toggle {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.debug-toggle:hover {
+    background: var(--hover-bg, rgba(0,0,0,0.05));
+}
+
+.debug-toggle input {
+    display: none;
+}
+
+.debug-toggle .debug-icon {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6c757d);
+    transition: color 0.2s;
+}
+
+.debug-toggle input:checked ~ .debug-icon {
+    color: var(--warning, #ffc107);
+}
+
+.debug-mode-banner {
+    background: var(--warning-bg, #fff3cd);
+    color: var(--warning-text, #856404);
+    padding: 4px 12px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+[data-bs-theme="dark"] .debug-mode-banner {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border-bottom-color: rgba(255, 193, 7, 0.2);
+}

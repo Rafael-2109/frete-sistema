@@ -18,6 +18,7 @@ Referência SDK:
 
 import os
 import sys
+import json
 import logging
 from contextvars import ContextVar
 from typing import Any
@@ -47,6 +48,7 @@ def set_current_user_id(user_id: int) -> None:
     """Define o user_id para o contexto atual (chamado por client.py)."""
     _current_user_id.set(user_id)
 
+
 # Garantir que o path do projeto está disponível para importar o pipeline
 _PROJECT_ROOT = os.path.dirname(
     os.path.dirname(
@@ -64,6 +66,39 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
+
+# =====================================================================
+# DEBUG MODE: Schemas para tabelas bloqueadas (admin only)
+# =====================================================================
+_DEBUG_SCHEMAS_DIR = os.path.join(
+    _PROJECT_ROOT, '.claude', 'skills', 'consultando-sql', 'schemas', 'debug_tables'
+)
+_debug_schemas_cache = None
+
+
+def _load_debug_table_names() -> set:
+    """Retorna nomes de tabelas debug disponiveis (do diretorio debug_tables/)."""
+    if not os.path.isdir(_DEBUG_SCHEMAS_DIR):
+        return set()
+    return {f.replace('.json', '') for f in os.listdir(_DEBUG_SCHEMAS_DIR) if f.endswith('.json')}
+
+
+def _load_debug_schemas() -> dict:
+    """Carrega schemas debug (cached apos primeiro load)."""
+    global _debug_schemas_cache
+    if _debug_schemas_cache is not None:
+        return _debug_schemas_cache
+    schemas = {}
+    if os.path.isdir(_DEBUG_SCHEMAS_DIR):
+        for f in os.listdir(_DEBUG_SCHEMAS_DIR):
+            if f.endswith('.json'):
+                try:
+                    with open(os.path.join(_DEBUG_SCHEMAS_DIR, f)) as fh:
+                        schemas[f.replace('.json', '')] = json.load(fh)
+                except (json.JSONDecodeError, OSError):
+                    pass
+    _debug_schemas_cache = schemas
+    return schemas
 
 
 def _get_pipeline():
@@ -89,7 +124,13 @@ def _get_pipeline():
     return _get_pipeline._instance
 
 
-def _execute_in_app_context(pipeline, pergunta: str, extra_blocked_tables: set = None) -> dict:
+def _execute_in_app_context(
+    pipeline,
+    pergunta: str,
+    extra_blocked_tables: set = None,
+    debug_unblock_tables: set = None,
+    debug_schemas: dict = None,
+) -> dict:
     """
     Executa pipeline garantindo Flask app context.
 
@@ -101,19 +142,26 @@ def _execute_in_app_context(pipeline, pergunta: str, extra_blocked_tables: set =
         pipeline: TextToSQLPipeline instance
         pergunta: Pergunta em linguagem natural
         extra_blocked_tables: Tabelas bloqueadas adicionais (per-request)
+        debug_unblock_tables: Tabelas a desbloquear (debug mode admin)
+        debug_schemas: Schemas das tabelas debug (dict nome -> schema JSON)
     """
+    kwargs = {
+        'extra_blocked_tables': extra_blocked_tables,
+        'debug_unblock_tables': debug_unblock_tables,
+        'debug_schemas': debug_schemas,
+    }
     try:
         from flask import current_app
         # Testar se o app context está ativo
         _ = current_app.name
         # Já dentro de app context — executar direto
-        return pipeline.run(pergunta, extra_blocked_tables=extra_blocked_tables)
+        return pipeline.run(pergunta, **kwargs)
     except RuntimeError:
         # Fora de app context — criar um
         from app import create_app
         app = create_app()
         with app.app_context():
-            return pipeline.run(pergunta, extra_blocked_tables=extra_blocked_tables)
+            return pipeline.run(pergunta, **kwargs)
 
 
 def _format_result(result: dict) -> str:
@@ -361,8 +409,25 @@ try:
             user_id = _current_user_id.get()
             extra_blocked = TABELAS_PESSOAL if user_id not in USUARIOS_PESSOAL else None
 
+            # Debug Mode: desbloquear tabelas internas (admin only)
+            from ..config.permissions import get_debug_mode
+            debug_active = get_debug_mode()
+            debug_unblock = None
+            debug_schemas = None
+
+            if debug_active:
+                debug_unblock = _load_debug_table_names()
+                debug_schemas = _load_debug_schemas()
+                logger.warning(f"[SQL_TOOL] DEBUG MODE: desbloqueando {len(debug_unblock)} tabelas")
+                extra_blocked = None  # Em debug, desbloqueia TUDO (inclusive pessoal_*)
+
             # Executar com app context garantido
-            result = _execute_in_app_context(pipeline, pergunta, extra_blocked_tables=extra_blocked)
+            result = _execute_in_app_context(
+                pipeline, pergunta,
+                extra_blocked_tables=extra_blocked,
+                debug_unblock_tables=debug_unblock,
+                debug_schemas=debug_schemas,
+            )
 
             # Formatar resultado legível (TextContent — backward compat)
             formatted = _format_result(result)

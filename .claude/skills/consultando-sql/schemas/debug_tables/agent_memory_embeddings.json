@@ -1,0 +1,86 @@
+{
+  "name": "agent_memory_embeddings",
+  "description": "[DEBUG] Tabela interna: agent_memory_embeddings",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('agent_memory_embeddings_id_seq'::regclass)"
+    },
+    {
+      "name": "memory_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "path",
+      "type": "VARCHAR(500)",
+      "nullable": false
+    },
+    {
+      "name": "texto_embedado",
+      "type": "TEXT",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "NULL",
+      "nullable": true
+    },
+    {
+      "name": "model_used",
+      "type": "VARCHAR(50)",
+      "nullable": true
+    },
+    {
+      "name": "content_hash",
+      "type": "VARCHAR(32)",
+      "nullable": true
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "now()"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [],
+  "indexes": [
+    {
+      "name": "idx_ame_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_hnsw_agent_memory_embedding",
+      "columns": [
+        "embedding"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_memory_embedding",
+      "columns": [
+        "memory_id"
+      ],
+      "unique": true
+    }
+  ]
+}

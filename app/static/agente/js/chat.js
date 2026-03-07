@@ -31,6 +31,9 @@ let effortLevel = 'auto';
 // FEAT-010: Plan Mode ativado
 let planModeEnabled = false;
 
+// Debug Mode (admin only)
+let debugModeEnabled = false;
+
 // FEAT-003: Estado do painel de thinking
 let thinkingCollapsed = false;
 
@@ -251,6 +254,33 @@ if (planModeToggle) {
         }
 
         console.log('[AGENTE] Plan Mode:', planModeEnabled ? 'ATIVADO (somente leitura)' : 'DESATIVADO');
+    });
+}
+
+// ============================================
+// DEBUG MODE TOGGLE (Admin only)
+// ============================================
+const debugModeToggle = document.getElementById('debug-mode-toggle');
+const debugModeBanner = document.getElementById('debug-mode-banner');
+
+if (debugModeToggle) {
+    // Restaurar de localStorage
+    const savedDebug = localStorage.getItem('agent-debug-mode');
+    if (savedDebug === 'true') {
+        debugModeToggle.checked = true;
+        debugModeEnabled = true;
+        if (debugModeBanner) debugModeBanner.style.display = 'block';
+    }
+
+    debugModeToggle.addEventListener('change', function() {
+        debugModeEnabled = this.checked;
+        localStorage.setItem('agent-debug-mode', this.checked.toString());
+
+        if (debugModeBanner) {
+            debugModeBanner.style.display = this.checked ? 'block' : 'none';
+        }
+
+        console.log('[AGENTE] Debug Mode:', debugModeEnabled ? 'ATIVADO' : 'DESATIVADO');
     });
 }
 
@@ -556,6 +586,7 @@ async function sendMessage(event) {
                 model: currentModel,              // FEAT-001: Modelo selecionado
                 effort_level: resolveEffortLevel(), // Adaptive Thinking effort
                 plan_mode: planModeEnabled,       // FEAT-010: Plan Mode
+                debug_mode: debugModeEnabled,     // Debug Mode (admin)
                 files: files                      // FEAT-028: Arquivos anexados
             })
         });

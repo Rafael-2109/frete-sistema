@@ -1,0 +1,16 @@
+{
+  "name": "alembic_version",
+  "description": "[DEBUG] Tabela interna: alembic_version",
+  "columns": [
+    {
+      "name": "version_num",
+      "type": "VARCHAR(32)",
+      "nullable": false
+    }
+  ],
+  "primary_key": [
+    "version_num"
+  ],
+  "foreign_keys": [],
+  "indexes": []
+}

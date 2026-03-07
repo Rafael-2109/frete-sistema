@@ -1,0 +1,121 @@
+{
+  "name": "agent_sessions",
+  "description": "[DEBUG] Tabela interna: agent_sessions",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('agent_sessions_id_seq'::regclass)"
+    },
+    {
+      "name": "session_id",
+      "type": "VARCHAR(255)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "data",
+      "type": "JSONB",
+      "nullable": false
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "title",
+      "type": "VARCHAR(200)",
+      "nullable": true
+    },
+    {
+      "name": "message_count",
+      "type": "INTEGER",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "total_cost_usd",
+      "type": "NUMERIC(10, 6)",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "last_message",
+      "type": "TEXT",
+      "nullable": true
+    },
+    {
+      "name": "model",
+      "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "summary",
+      "type": "JSONB",
+      "nullable": true
+    },
+    {
+      "name": "summary_updated_at",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "summary_message_count",
+      "type": "INTEGER",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "sdk_session_transcript",
+      "type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [],
+  "indexes": [
+    {
+      "name": "agent_sessions_session_id_key",
+      "columns": [
+        "session_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_agent_sessions_data_gin",
+      "columns": [
+        "data"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_agent_sessions_updated",
+      "columns": [
+        "updated_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_agent_sessions_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    }
+  ]
+}

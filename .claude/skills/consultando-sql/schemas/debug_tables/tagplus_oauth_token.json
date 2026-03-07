@@ -1,0 +1,109 @@
+{
+  "name": "tagplus_oauth_token",
+  "description": "[DEBUG] Tabela interna: tagplus_oauth_token",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('tagplus_oauth_token_id_seq'::regclass)"
+    },
+    {
+      "name": "api_type",
+      "type": "VARCHAR(50)",
+      "nullable": false,
+      "description": "Tipo da API: clientes, notas, produtos"
+    },
+    {
+      "name": "access_token",
+      "type": "TEXT",
+      "nullable": false,
+      "description": "Token de acesso (expira em 24h)"
+    },
+    {
+      "name": "refresh_token",
+      "type": "TEXT",
+      "nullable": true,
+      "description": "Token de renovação (dura 30-90 dias)"
+    },
+    {
+      "name": "expires_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "description": "Timestamp de expiração do access_token"
+    },
+    {
+      "name": "token_type",
+      "type": "VARCHAR(20)",
+      "nullable": true,
+      "default": "'Bearer'::character varying"
+    },
+    {
+      "name": "scope",
+      "type": "VARCHAR(255)",
+      "nullable": true
+    },
+    {
+      "name": "criado_em",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "ultimo_refresh",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "total_refreshes",
+      "type": "INTEGER",
+      "nullable": true,
+      "default": "0",
+      "description": "Contador de quantas vezes o token foi renovado"
+    },
+    {
+      "name": "ultima_requisicao",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "ativo",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "true"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [],
+  "indexes": [
+    {
+      "name": "idx_tagplus_oauth_api_type",
+      "columns": [
+        "api_type"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_tagplus_oauth_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "tagplus_oauth_token_api_type_key",
+      "columns": [
+        "api_type"
+      ],
+      "unique": true
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "name": "session_turn_embeddings",
+  "description": "[DEBUG] Tabela interna: session_turn_embeddings",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('session_turn_embeddings_id_seq'::regclass)"
+    },
+    {
+      "name": "session_id",
+      "type": "VARCHAR(255)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "turn_index",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "user_content",
+      "type": "TEXT",
+      "nullable": false
+    },
+    {
+      "name": "assistant_summary",
+      "type": "TEXT",
+      "nullable": true
+    },
+    {
+      "name": "texto_embedado",
+      "type": "TEXT",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "NULL",
+      "nullable": true
+    },
+    {
+      "name": "model_used",
+      "type": "VARCHAR(50)",
+      "nullable": true
+    },
+    {
+      "name": "content_hash",
+      "type": "VARCHAR(32)",
+      "nullable": true
+    },
+    {
+      "name": "session_title",
+      "type": "VARCHAR(200)",
+      "nullable": true
+    },
+    {
+      "name": "session_created_at",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "now()"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [],
+  "indexes": [
+    {
+      "name": "idx_hnsw_session_turn_embedding",
+      "columns": [
+        "embedding"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ste_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ste_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_session_turn",
+      "columns": [
+        "session_id",
+        "turn_index"
+      ],
+      "unique": true
+    }
+  ]
+}

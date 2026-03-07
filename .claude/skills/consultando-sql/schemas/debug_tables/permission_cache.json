@@ -1,0 +1,75 @@
+{
+  "name": "permission_cache",
+  "description": "[DEBUG] Tabela interna: permission_cache",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('permission_cache_id_seq'::regclass)"
+    },
+    {
+      "name": "cache_key",
+      "type": "VARCHAR(255)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "permission_data",
+      "type": "JSON",
+      "nullable": false
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "expires_at",
+      "type": "TIMESTAMP",
+      "nullable": false
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "user_id"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_cache_expires",
+      "columns": [
+        "expires_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cache_user",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "permission_cache_cache_key_key",
+      "columns": [
+        "cache_key"
+      ],
+      "unique": true
+    }
+  ]
+}

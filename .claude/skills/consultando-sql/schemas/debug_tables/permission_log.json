@@ -1,0 +1,110 @@
+{
+  "name": "permission_log",
+  "description": "[DEBUG] Tabela interna: permission_log",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('permission_log_id_seq'::regclass)"
+    },
+    {
+      "name": "user_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "action",
+      "type": "VARCHAR(50)",
+      "nullable": false
+    },
+    {
+      "name": "entity_type",
+      "type": "VARCHAR(20)",
+      "nullable": true
+    },
+    {
+      "name": "entity_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "details",
+      "type": "JSON",
+      "nullable": true
+    },
+    {
+      "name": "result",
+      "type": "VARCHAR(20)",
+      "nullable": true
+    },
+    {
+      "name": "ip_address",
+      "type": "VARCHAR(45)",
+      "nullable": true
+    },
+    {
+      "name": "user_agent",
+      "type": "VARCHAR(255)",
+      "nullable": true
+    },
+    {
+      "name": "session_id",
+      "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "timestamp",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "user_id"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_log_action_timestamp",
+      "columns": [
+        "action",
+        "timestamp"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_log_result",
+      "columns": [
+        "result",
+        "timestamp"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_log_user_timestamp",
+      "columns": [
+        "user_id",
+        "timestamp"
+      ],
+      "unique": false
+    },
+    {
+      "name": "permission_log_timestamp_idx",
+      "columns": [
+        "timestamp"
+      ],
+      "unique": false
+    }
+  ]
+}

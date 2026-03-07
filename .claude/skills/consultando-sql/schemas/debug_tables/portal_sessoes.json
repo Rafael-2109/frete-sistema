@@ -1,0 +1,68 @@
+{
+  "name": "portal_sessoes",
+  "description": "[DEBUG] Tabela interna: portal_sessoes",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('portal_sessoes_id_seq'::regclass)"
+    },
+    {
+      "name": "portal",
+      "type": "VARCHAR(50)",
+      "nullable": false
+    },
+    {
+      "name": "usuario",
+      "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "cookies_criptografados",
+      "type": "TEXT",
+      "nullable": true
+    },
+    {
+      "name": "storage_state",
+      "type": "JSONB",
+      "nullable": true
+    },
+    {
+      "name": "valido_ate",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "ultima_utilizacao",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "criado_em",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "TIMESTAMP",
+      "nullable": true,
+      "default": "CURRENT_TIMESTAMP"
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [],
+  "indexes": [
+    {
+      "name": "idx_portal_sessoes_portal",
+      "columns": [
+        "portal",
+        "valido_ate"
+      ],
+      "unique": false
+    }
+  ]
+}

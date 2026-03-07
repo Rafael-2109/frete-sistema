@@ -1,0 +1,78 @@
+{
+  "name": "batch_operation",
+  "description": "[DEBUG] Tabela interna: batch_operation",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "default": "nextval('batch_operation_id_seq'::regclass)"
+    },
+    {
+      "name": "operation_type",
+      "type": "VARCHAR(20)",
+      "nullable": false
+    },
+    {
+      "name": "description",
+      "type": "VARCHAR(255)",
+      "nullable": true
+    },
+    {
+      "name": "executed_by",
+      "type": "INTEGER",
+      "nullable": false
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "nullable": false,
+      "default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "completed_at",
+      "type": "TIMESTAMP",
+      "nullable": true
+    },
+    {
+      "name": "status",
+      "type": "VARCHAR(20)",
+      "nullable": true
+    },
+    {
+      "name": "affected_users",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "affected_permissions",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "details",
+      "type": "JSON",
+      "nullable": true
+    },
+    {
+      "name": "error_details",
+      "type": "TEXT",
+      "nullable": true
+    }
+  ],
+  "primary_key": [
+    "id"
+  ],
+  "foreign_keys": [
+    {
+      "columns": [
+        "executed_by"
+      ],
+      "referred_table": "usuarios",
+      "referred_columns": [
+        "id"
+      ]
+    }
+  ],
+  "indexes": []
+}

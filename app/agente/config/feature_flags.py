@@ -231,3 +231,12 @@ USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "false").lower() == "true
 # Quando true: usa implementação async nativa para streaming SSE
 # Quando false: usa bridge Thread+Queue+asyncio.run (legado)
 USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "false").lower() == "true"
+
+# ====================================================================
+# Debug Mode (Admin)
+# ====================================================================
+
+# Debug Mode — permite admin desbloquear tabelas internas e memorias cross-user
+# Controlado por toggle na UI, validado server-side (perfil=administrador)
+# Default true: feature disponivel, mas requer ativacao explicita pelo admin
+USE_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"
