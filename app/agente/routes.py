@@ -69,7 +69,7 @@ HEARTBEAT_INTERVAL_SECONDS = 10  # Envia heartbeat a cada 10s (reduzido de 20s)
 
 # Cache de health check (TTL 30s) — evita chamada API real a cada request
 _health_cache = {'result': None, 'timestamp': 0}
-_HEALTH_CACHE_TTL = 30  # segundos
+_HEALTH_CACHE_TTL = 300  # segundos (5 min — models.retrieve não gasta tokens)
 
 # Timeout global do stream (9 minutos - deixa 1 min de margem antes do timeout do Render)
 MAX_STREAM_DURATION_SECONDS = 540
@@ -868,6 +868,15 @@ def _stream_chat_response(
         except Exception as save_error:
             logger.error(f"[AGENTE] ERRO ao salvar mensagens no finally: {save_error}", exc_info=True)
 
+        # Garantir cleanup do _stream_context mesmo se thread interna não iniciou
+        # (complementa cleanup em linha 719 que só roda se thread executou)
+        try:
+            from .config.permissions import cleanup_session_context
+            if response_state.get('our_session_id'):
+                cleanup_session_context(response_state['our_session_id'])
+        except Exception:
+            pass
+
 
 def _sse_event(event_type: str, data: dict) -> str:
     """Formata evento SSE."""
@@ -1043,20 +1052,30 @@ def _save_messages_to_db(
                         from .services.pattern_analyzer import extrair_conhecimento_sessao
 
                         # Copia mensagens para evitar race condition com a sessão
-                        messages_copy = list(session.get_messages())
+                        messages_for_extraction = list(session.get_messages())
 
                         def _run_extraction_background():
+                            nonlocal messages_for_extraction
                             try:
                                 with app.app_context():
                                     extrair_conhecimento_sessao(
                                         app=app,
                                         user_id=user_id,
-                                        session_messages=messages_copy,
+                                        session_messages=messages_for_extraction,
                                     )
                             except Exception as bg_err:
                                 logger.warning(
                                     f"[KNOWLEDGE_EXTRACTION] Background error: {bg_err}"
                                 )
+                            finally:
+                                # Liberar referência da closure
+                                messages_for_extraction = None
+                                # Liberar session do pool em thread manual
+                                try:
+                                    with app.app_context():
+                                        db.session.remove()
+                                except Exception:
+                                    pass
 
                         thread = Thread(
                             target=_run_extraction_background,
@@ -1113,15 +1132,27 @@ def _save_messages_to_db(
             pass
 
 
+# Threshold de cosine similarity para considerar memória efetiva (semântico)
+# Configurável via env var. 0.50 é mais alto que retrieval (0.40) porque
+# efetividade exige que o agente tenha *usado* a informação, não apenas relevância.
+EFFECTIVENESS_COSINE_THRESHOLD = float(
+    os.getenv("MEMORY_EFFECTIVENESS_COSINE_THRESHOLD", "0.50")
+)
+
+# Threshold de word overlap para fallback heurístico (relaxado de 0.60 para 0.35)
+EFFECTIVENESS_WORD_OVERLAP_THRESHOLD = 0.35
+
+# Máximo de chars da resposta do assistente para embedding (evita diluição semântica)
+EFFECTIVENESS_RESPONSE_MAX_CHARS = 3000
+
+
 def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_memory_ids: list[int] = None) -> None:
     """
     Memory v2 — Feedback Loop: rastreia se memórias injetadas foram usadas.
 
-    Usa IDs determinísticos das memórias injetadas neste turno (passados pelo caller)
-    em vez de heurística temporal. Verifica se fragmentos do conteúdo aparecem na
-    resposta do assistente.
-
-    Se sim: incrementa effective_count.
+    Abordagem híbrida:
+    - Primária: Voyage AI cosine similarity >= threshold (batch único ~200ms)
+    - Fallback: Word overlap relaxado (>= 35%) OU entity overlap (>= 1 entidade em comum)
 
     Best-effort: falhas silenciosas, não afeta fluxo principal.
     """
@@ -1130,6 +1161,7 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             return
 
         from .models import AgentMemory
+        from .services.knowledge_graph_service import strip_xml_tags
         from sqlalchemy import text as sql_text
 
         # Buscar memórias pelos IDs exatos injetados neste turno
@@ -1140,39 +1172,28 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
         if not injected_memories:
             return
 
-        import re
-        assistant_lower = assistant_message.lower()
-        assistant_words = set(assistant_lower.split())
-        effective_ids = []
-
+        # Preparar conteúdos limpos (strip XML tags)
+        memory_contents = {}  # {mem.id: clean_content}
         for mem in injected_memories:
             content = (mem.content or "").strip()
             if not content or len(content) < 15:
                 continue
-
-            # PRD v2.1 Fase 4: Strip XML tags antes do fragment matching.
-            # Content e XML (ex: <memoria type="correcao"><content>...</content></memoria>)
-            # mas a resposta do assistant e texto puro. Comparar XML vs texto
-            # sempre retorna False → effective_count = 0 para TODAS memorias.
-            from .services.knowledge_graph_service import strip_xml_tags
             clean_content = strip_xml_tags(content)
+            if clean_content and len(clean_content) >= 15:
+                memory_contents[mem.id] = clean_content
 
-            # Split por pontuação em frases (não por \n que gera linhas gigantes).
-            # Para cada frase >= 15 chars, verificar se >= 60% das palavras
-            # aparecem na resposta (word overlap, tolerante a parafraseamento).
-            sentences = [
-                s.strip() for s in re.split(r'[.!?\n]+', clean_content)
-                if len(s.strip()) >= 15
-            ][:5]
+        if not memory_contents:
+            return
 
-            for sentence in sentences:
-                words = sentence.lower().split()
-                if not words:
-                    continue
-                overlap = sum(1 for w in words if w in assistant_words)
-                if overlap / len(words) >= 0.6:
-                    effective_ids.append(mem.id)
-                    break
+        # Primária: similaridade semântica via Voyage AI
+        effective_ids = _check_effectiveness_semantic(memory_contents, assistant_message)
+
+        # Se semântico falhou (retornou None), usar fallback heurístico
+        if effective_ids is None:
+            effective_ids = _check_effectiveness_heuristic(memory_contents, assistant_message)
+            method = "heuristic"
+        else:
+            method = "semantic"
 
         if effective_ids:
             db.session.execute(sql_text("""
@@ -1184,11 +1205,203 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             logger.debug(
                 f"[MEMORY_FEEDBACK] effective_count incremented for "
                 f"{len(effective_ids)}/{len(injected_memory_ids)} memories "
-                f"(user_id={user_id})"
+                f"(user_id={user_id}, method={method})"
+            )
+        else:
+            logger.debug(
+                f"[MEMORY_FEEDBACK] No effective memories detected "
+                f"(user_id={user_id}, injected={len(injected_memory_ids)}, method={method})"
             )
 
     except Exception as e:
         logger.warning(f"[MEMORY_FEEDBACK] Tracking falhou (ignorado): {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _check_effectiveness_semantic(
+    memory_contents: dict[int, str],
+    assistant_message: str,
+) -> list[int] | None:
+    """
+    Verifica efetividade via Voyage AI cosine similarity (primária).
+
+    Faz um batch único de embeddings: N conteúdos de memória + 1 resposta truncada.
+    Calcula cosine similarity entre cada memória e a resposta.
+
+    Returns:
+        list[int] de IDs efetivos, ou None se embedding falhou (signal para fallback).
+    """
+    import math
+
+    try:
+        from app.embeddings.config import EMBEDDINGS_ENABLED
+        if not EMBEDDINGS_ENABLED:
+            return None  # Signal fallback
+
+        from app.embeddings.service import EmbeddingService
+
+        # Preparar textos para batch: memórias + resposta truncada
+        mem_ids = list(memory_contents.keys())
+        mem_texts = list(memory_contents.values())
+        response_text = assistant_message[:EFFECTIVENESS_RESPONSE_MAX_CHARS]
+
+        # Batch único: [mem1, mem2, ..., memN, response]
+        all_texts = mem_texts + [response_text]
+
+        svc = EmbeddingService()
+        embeddings = svc.embed_texts(all_texts, input_type="document")
+
+        if not embeddings or len(embeddings) != len(all_texts):
+            return None  # Signal fallback
+
+        # Último embedding é a resposta
+        response_embedding = embeddings[-1]
+        effective_ids = []
+
+        for i, mem_id in enumerate(mem_ids):
+            mem_embedding = embeddings[i]
+
+            # Cosine similarity (Voyage retorna L2-normalized, dot = cosine)
+            dot = sum(a * b for a, b in zip(mem_embedding, response_embedding))
+            norm_a = math.sqrt(sum(a * a for a in mem_embedding))
+            norm_b = math.sqrt(sum(b * b for b in response_embedding))
+
+            if norm_a == 0 or norm_b == 0:
+                continue
+
+            cosine = dot / (norm_a * norm_b)
+
+            if cosine >= EFFECTIVENESS_COSINE_THRESHOLD:
+                effective_ids.append(mem_id)
+                logger.debug(
+                    f"[MEMORY_FEEDBACK] Semantic match: mem_id={mem_id}, cosine={cosine:.3f}"
+                )
+
+        return effective_ids
+
+    except Exception as e:
+        logger.debug(f"[MEMORY_FEEDBACK] Semantic check falhou, usando fallback: {e}")
+        return None  # Signal fallback
+
+
+def _check_effectiveness_heuristic(
+    memory_contents: dict[int, str],
+    assistant_message: str,
+) -> list[int]:
+    """
+    Verifica efetividade via heurística relaxada (fallback).
+
+    Duas estratégias (OR):
+    1. Word overlap >= 35% (relaxado de 60%)
+    2. Entity overlap >= 1 entidade em comum (CNPJs, UFs, IDs numéricos, códigos)
+
+    Returns:
+        list[int] de IDs efetivos (pode ser vazia).
+    """
+    import re
+
+    assistant_lower = assistant_message.lower()
+    assistant_words = set(assistant_lower.split())
+    assistant_entities = _extract_entities_for_matching(assistant_message)
+    effective_ids = []
+
+    for mem_id, clean_content in memory_contents.items():
+        # Estratégia 1: Word overlap relaxado
+        sentences = [
+            s.strip() for s in re.split(r'[.!?\n]+', clean_content)
+            if len(s.strip()) >= 15
+        ][:5]
+
+        word_match = False
+        for sentence in sentences:
+            words = sentence.lower().split()
+            if not words:
+                continue
+            overlap = sum(1 for w in words if w in assistant_words)
+            if overlap / len(words) >= EFFECTIVENESS_WORD_OVERLAP_THRESHOLD:
+                word_match = True
+                logger.debug(
+                    f"[MEMORY_FEEDBACK] Word overlap match: mem_id={mem_id}, "
+                    f"overlap={overlap}/{len(words)}={overlap/len(words):.2f}"
+                )
+                break
+
+        if word_match:
+            effective_ids.append(mem_id)
+            continue
+
+        # Estratégia 2: Entity overlap
+        mem_entities = _extract_entities_for_matching(clean_content)
+        common_entities = mem_entities & assistant_entities
+        if common_entities:
+            effective_ids.append(mem_id)
+            logger.debug(
+                f"[MEMORY_FEEDBACK] Entity match: mem_id={mem_id}, "
+                f"entities={list(common_entities)[:5]}"
+            )
+
+    return effective_ids
+
+
+def _extract_entities_for_matching(text: str) -> set[str]:
+    """
+    Extrai entidades estruturadas de um texto para matching de efetividade.
+
+    Extrai:
+    - CNPJs (14 dígitos, com/sem formatação)
+    - UFs brasileiras (26 siglas, case-sensitive, word boundary)
+    - IDs numéricos >= 4 dígitos
+    - Códigos alfanuméricos (min 3 chars, pelo menos 1 letra + 1 dígito)
+
+    Returns:
+        set[str] de entidades normalizadas.
+    """
+    import re
+
+    entities = set()
+
+    if not text:
+        return entities
+
+    # CNPJs: 14 dígitos (com ou sem formatação XX.XXX.XXX/XXXX-XX)
+    cnpjs_formatted = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', text)
+    for cnpj in cnpjs_formatted:
+        entities.add(re.sub(r'[./-]', '', cnpj))  # Normaliza para só dígitos
+
+    cnpjs_raw = re.findall(r'\b\d{14}\b', text)
+    for cnpj in cnpjs_raw:
+        entities.add(cnpj)
+
+    # UFs brasileiras (case-sensitive, word boundary)
+    UFS_BR = {
+        'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
+        'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
+        'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+    }
+    words = re.findall(r'\b[A-Z]{2}\b', text)
+    for w in words:
+        if w in UFS_BR:
+            entities.add(f"UF:{w}")
+
+    # IDs numéricos >= 4 dígitos (pedidos, NFs, etc.)
+    ids_numericos = re.findall(r'\b\d{4,}\b', text)
+    for id_num in ids_numericos:
+        # Ignorar CNPJs já capturados (14 dígitos)
+        if len(id_num) != 14:
+            entities.add(f"ID:{id_num}")
+
+    # Códigos alfanuméricos (cod_produto, num_pedido): min 3 chars, >= 1 letra + >= 1 dígito
+    codigos = re.findall(r'\b[A-Za-z0-9]{3,}\b', text)
+    for cod in codigos:
+        has_letter = any(c.isalpha() for c in cod)
+        has_digit = any(c.isdigit() for c in cod)
+        if has_letter and has_digit:
+            entities.add(f"COD:{cod.upper()}")
+
+    return entities
 
 
 def _embed_session_turn_best_effort(app, session_id, user_id, user_message, assistant_message, session):

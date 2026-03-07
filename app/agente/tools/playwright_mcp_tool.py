@@ -14,7 +14,7 @@ Suporte SSW:
     - Login: browser_ssw_login faz login automatico via .env
     - Navegacao: browser_ssw_navigate_option vai direto a uma opcao
 
-Tools expostas (12):
+Tools expostas (13):
     - browser_navigate: abre URL e retorna snapshot
     - browser_snapshot: captura snapshot da pagina atual
     - browser_screenshot: captura screenshot visual (PNG) da pagina
@@ -27,6 +27,7 @@ Tools expostas (12):
     - browser_switch_frame: troca frame ativo para interacoes (C2)
     - browser_ssw_login: login automatico SSW via .env (C3)
     - browser_ssw_navigate_option: navega para opcao SSW por numero (C4)
+    - browser_atacadao_login: carrega sessao Atacadao via storage_state (C5)
 
 Referencia SDK:
     https://platform.claude.com/docs/pt-BR/agent-sdk/custom-tools
@@ -1468,12 +1469,178 @@ try:
                 "is_error": True,
             }
 
+    # -----------------------------------------------------------------
+    # Tool 12: browser_atacadao_login (C5)
+    # -----------------------------------------------------------------
+    @tool(
+        "browser_atacadao_login",
+        (
+            "Carrega sessao do portal Atacadao (Hodie Booking) no browser MCP. "
+            "Usa storage_state_atacadao.json para restaurar cookies/sessao. "
+            "Navega para /pedidos e verifica se sessao esta valida. "
+            "Se sessao expirada, retorna erro instruindo re-login interativo "
+            "(CAPTCHA impede login automatico). "
+            "Use ANTES de qualquer interacao com o portal Atacadao."
+        ),
+        {},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+    async def browser_atacadao_login(args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Carrega sessao Atacadao no browser MCP.
+
+        Busca storage_state_atacadao.json (raiz do projeto ou modulo).
+        Navega para /pedidos para verificar sessao.
+        Se redirecionou para login, reporta erro com instrucoes de re-login.
+
+        Returns:
+            MCP tool response com snapshot apos verificacao de sessao.
+        """
+        import pathlib
+
+        atacadao_base_url = "https://atacadao.hodiebooking.com.br"
+        atacadao_pedidos_url = f"{atacadao_base_url}/pedidos"
+
+        # Buscar storage_state_atacadao.json
+        project_root = pathlib.Path(__file__).resolve().parent.parent.parent
+        storage_candidates = [
+            project_root / "storage_state_atacadao.json",
+            project_root / "app" / "portal" / "atacadao" / "storage_state_atacadao.json",
+        ]
+
+        storage_path = None
+        for candidate in storage_candidates:
+            if candidate.exists():
+                storage_path = str(candidate)
+                break
+
+        if not storage_path:
+            return {
+                "content": [{"type": "text", "text": (
+                    "Erro: storage_state_atacadao.json nao encontrado.\n"
+                    "O portal Atacadao usa CAPTCHA, entao o login deve ser feito manualmente.\n\n"
+                    "Para fazer login:\n"
+                    "  python -m app.portal.atacadao.login_interativo\n\n"
+                    "Isso abre o navegador para voce resolver o CAPTCHA e salvar a sessao."
+                )}],
+                "is_error": True,
+            }
+
+        try:
+            # Fechar contexto atual e recriar com storage_state do Atacadao
+            global _playwright, _browser, _context, _page
+
+            # Se ja tem browser, fechar contexto atual e criar novo com storage_state
+            if _browser is not None:
+                if _context is not None:
+                    await _context.close()
+                    _context = None
+                    _page = None
+                    _set_current_frame(None)
+
+                context_opts = {
+                    "viewport": DEFAULT_VIEWPORT,
+                    "storage_state": storage_path,
+                }
+                _context = await _browser.new_context(**context_opts)
+                _page = await _context.new_page()
+                _page.set_default_navigation_timeout(NAVIGATION_TIMEOUT)
+            else:
+                # Nenhum browser ativo — criar do zero com storage_state
+                from playwright.async_api import async_playwright
+
+                _playwright = await async_playwright().start()
+                _browser = await _playwright.chromium.launch(headless=True)
+
+                context_opts = {
+                    "viewport": DEFAULT_VIEWPORT,
+                    "storage_state": storage_path,
+                }
+                _context = await _browser.new_context(**context_opts)
+                _page = await _context.new_page()
+                _page.set_default_navigation_timeout(NAVIGATION_TIMEOUT)
+
+            _touch_browser_activity()
+
+            logger.info(f"[BROWSER] Atacadao: carregando sessao de {storage_path}")
+
+            # Navegar para /pedidos para verificar sessao
+            response = await _page.goto(
+                atacadao_pedidos_url,
+                wait_until="domcontentloaded",
+                timeout=30000,
+            )
+            status = response.status if response else "?"
+
+            # Aguardar carregamento
+            try:
+                await _page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                await asyncio.sleep(3)
+
+            url_atual = _page.url.lower()
+
+            # Verificar se sessao esta valida
+            sessao_valida = False
+
+            if "login" in url_atual or "signin" in url_atual:
+                # Redirecionou para login — sessao expirada
+                sessao_valida = False
+            elif "/pedidos" in url_atual:
+                sessao_valida = True
+            else:
+                # Verificar indicadores de login no DOM
+                for selector in ['a[href*="logout"]', '.user-menu', '.navbar-user']:
+                    try:
+                        count = await _page.locator(selector).count()
+                        if count > 0:
+                            sessao_valida = True
+                            break
+                    except Exception:
+                        pass
+
+            if sessao_valida:
+                await _save_storage_state()
+                snapshot = await _get_snapshot()
+                return {
+                    "content": [{"type": "text", "text": (
+                        f"Atacadao: sessao valida (HTTP {status})\n"
+                        f"  URL: {_page.url}\n"
+                        f"  Storage: {storage_path}\n\n{snapshot}"
+                    )}],
+                }
+            else:
+                snapshot = await _get_snapshot()
+                return {
+                    "content": [{"type": "text", "text": (
+                        f"Atacadao: sessao EXPIRADA (redirecionou para {_page.url})\n\n"
+                        f"O portal usa CAPTCHA — re-login automatico NAO e possivel.\n"
+                        f"Para renovar a sessao:\n"
+                        f"  python -m app.portal.atacadao.login_interativo\n\n"
+                        f"Apos o login, tente novamente.\n\n{snapshot}"
+                    )}],
+                    "is_error": True,
+                }
+
+        except Exception as e:
+            error_msg = f"Erro ao carregar sessao Atacadao: {str(e)[:300]}"
+            logger.error(f"[BROWSER] {error_msg}", exc_info=True)
+            return {
+                "content": [{"type": "text", "text": error_msg}],
+                "is_error": True,
+            }
+
     # =====================================================================
     # MCP SERVER REGISTRATION
     # =====================================================================
     browser_server = create_sdk_mcp_server(
         name="browser",
-        version="2.1.0",
+        version="2.2.0",
         tools=[
             browser_navigate,
             browser_snapshot,
@@ -1487,10 +1654,11 @@ try:
             browser_switch_frame,
             browser_ssw_login,
             browser_ssw_navigate_option,
+            browser_atacadao_login,
         ],
     )
 
-    logger.info("[BROWSER] Custom Tool MCP 'browser' registrado com sucesso (12 tools)")
+    logger.info("[BROWSER] Custom Tool MCP 'browser' registrado com sucesso (13 tools)")
 
 except ImportError as e:
     browser_server = None

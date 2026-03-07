@@ -2592,23 +2592,22 @@ Nunca invente informações."""
         """
         Verifica saúde da conexão com API.
 
+        Usa models.retrieve() (zero tokens, ~200ms) em vez de
+        messages.create() (~2s, gasta tokens).
+
         Returns:
             Dict com status da conexão
         """
         try:
-            # Usa API direta para health check (mais rápido)
-            response = self._anthropic_client.messages.create(
-                model=self.settings.model,
-                max_tokens=10,
-                messages=[{"role": "user", "content": "ping"}]
+            model_info = self._anthropic_client.models.retrieve(
+                model_id=self.settings.model
             )
 
             return {
                 'status': 'healthy',
-                'model': self.settings.model,
+                'model': model_info.id,
                 'api_connected': True,
                 'sdk': 'claude-agent-sdk',
-                'response_id': response.id,
             }
 
         except anthropic.AuthenticationError:
