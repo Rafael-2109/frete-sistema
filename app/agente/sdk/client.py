@@ -267,6 +267,19 @@ def _calculate_category_decay(category: str, hours_since: float) -> float:
     return rate ** hours_since
 
 
+# Correction penalty (S2): cada correção reduz importance em 15%, piso 10%
+_CORRECTION_PENALTY_RATE = 0.15
+_CORRECTION_PENALTY_FLOOR = 0.1
+
+
+def _adjust_importance_for_corrections(importance: float, correction_count: int) -> float:
+    """Penaliza importance_score baseado no número de correções."""
+    if correction_count <= 0:
+        return importance
+    factor = max(_CORRECTION_PENALTY_FLOOR, 1 - _CORRECTION_PENALTY_RATE * correction_count)
+    return importance * factor
+
+
 def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> tuple[Optional[str], list[int]]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
@@ -407,6 +420,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             for mem in mem_objects:
                                 similarity = sim_map.get(mem.id, 0)
                                 importance = mem.importance_score if mem.importance_score is not None else 0.5
+                                importance = _adjust_importance_for_corrections(importance, mem.correction_count or 0)  # S2
 
                                 # v2: Decay por categoria
                                 last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
@@ -467,6 +481,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                         for mem in graph_mem_objects:
                             similarity = graph_sim_map.get(mem.id, 0.5)
                             importance = mem.importance_score if mem.importance_score is not None else 0.5
+                            importance = _adjust_importance_for_corrections(importance, mem.correction_count or 0)  # S2
                             last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
                             if last_access:
                                 hours_since = max(0, (now_graph - last_access).total_seconds() / 3600)
@@ -564,6 +579,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 else:
                     now_sel = agora_utc_naive()
                     importance = mem.importance_score if mem.importance_score is not None else 0.5
+                    importance = _adjust_importance_for_corrections(importance, mem.correction_count or 0)  # S2
                     last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
                     if last_access:
                         hours_since = max(0, (now_sel - last_access).total_seconds() / 3600)
@@ -628,6 +644,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 logger.debug(f"[MEMORY_INJECT] last_accessed_at/usage_count update failed (ignored): {e}")
 
             # ── v2: Log detalhado de injeção com per-tier chars ──
+            penalized_count = sum(1 for m in injected_mems if (m.correction_count or 0) > 0)  # S2
             logger.info(
                 f"[MEMORY_INJECT] "
                 f"user_id={user_id} | "
@@ -636,6 +653,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"graph={graph_count} | "
                 f"fallback={used_fallback} | "
                 f"total_injected={injected_count} | "
+                f"penalized={penalized_count} | "
                 f"total_chars={total_chars} | "
                 f"budget={budget} | "
                 f"model={_model or 'unknown'} | "

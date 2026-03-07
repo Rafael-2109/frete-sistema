@@ -751,6 +751,38 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
         ).filter(*base_filter).scalar()
         avg_importance = round(float(avg_importance_result or 0.5), 3)
 
+        # ── correction_count agregado (campo do modelo, S2) ──
+        corrected_filter = base_filter + [AgentMemory.correction_count > 0]
+        corrected_memories_count = AgentMemory.query.filter(*corrected_filter).count()
+        total_correction_count = db.session.query(
+            func.sum(AgentMemory.correction_count)
+        ).filter(*base_filter).scalar() or 0
+        avg_correction = round(
+            float(total_correction_count) / total_memories, 2
+        ) if total_memories > 0 else 0.0
+
+        # ── Top 5 memórias mais corrigidas (S2) ──
+        top_corrected_raw = AgentMemory.query.filter(
+            *base_filter,
+            AgentMemory.correction_count > 0,
+        ).order_by(
+            AgentMemory.correction_count.desc()
+        ).limit(5).with_entities(
+            AgentMemory.id, AgentMemory.path,
+            AgentMemory.correction_count, AgentMemory.importance_score,
+            AgentMemory.usage_count,
+        ).all()
+
+        top_corrected = [
+            {
+                'id': r.id, 'path': r.path,
+                'correction_count': r.correction_count,
+                'importance_score': round(r.importance_score or 0.5, 3),
+                'usage_count': r.usage_count,
+            }
+            for r in top_corrected_raw
+        ]
+
         # ── Decay distribution (age buckets) ──
         age_buckets = {"<1d": 0, "1-7d": 0, "7-30d": 0, "30-90d": 0, ">90d": 0}
         all_memories = AgentMemory.query.filter(*base_filter).with_entities(
@@ -825,6 +857,12 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
             'accessed_in_period': accessed_count,
             'corrections_count': corrections_count,
             'avg_importance_score': avg_importance,
+            'correction_count_stats': {
+                'memories_with_corrections': corrected_memories_count,
+                'total_corrections': total_correction_count,
+                'avg_per_memory': avg_correction,
+            },
+            'most_corrected_memories': top_corrected,
             'decay_distribution': age_buckets,
             'orphan_embeddings': orphan_count,
             'categories': categories,
