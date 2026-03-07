@@ -167,6 +167,7 @@ class IntegrationTestRunner:
         self._test_extract_regex()
         self._test_haiku_entities()
         self._test_query_graph()
+        self._test_query_graph_hop2()
         self._test_remove_links()
         self._test_stats()
         self._test_user_isolation()
@@ -436,6 +437,166 @@ class IntegrationTestRunner:
                 f"Resultado deve ter source='graph', got '{r.get('source')}'"
             )
             break  # Verifica apenas 1 para nao poluir output
+
+    # -----------------------------------------------------------------
+    # 2.4b Query Graph Hop 2 (Read Path — 2-hop traversal)
+    # -----------------------------------------------------------------
+
+    def _test_query_graph_hop2(self):
+        """Testa busca de memorias via knowledge graph com 2-hop traversal.
+
+        Cenario: PA (regex-extractable) tem relacao com EXPRESSO NORDESTE.
+        EXPRESSO NORDESTE linka para mem4. Ao buscar "PA", hop 2 deve
+        encontrar mem4 via PA → relacao → EXPRESSO NORDESTE → mem4.
+
+        Nota: Voyage esta desabilitado nos testes (EMBEDDINGS_ENABLED=false),
+        entao apenas entidades regex-extractable (UFs, pedidos, CNPJs) sao
+        usadas no prompt.
+        """
+        from app.agente.services.knowledge_graph_service import (
+            extract_and_link_entities,
+            query_graph_memories,
+            _upsert_relation,
+        )
+        from app import db
+        from sqlalchemy import text
+
+        print(f"\n{'='*60}")
+        print("Test 2.4b: Query Graph Hop 2 (2-hop traversal)")
+        print(f"{'='*60}")
+
+        # 1. Criar mem4 com entidade "EXPRESSO NORDESTE" + "BA" + "SE"
+        with db.engine.begin() as conn:
+            result = conn.execute(text("""
+                INSERT INTO agent_memories
+                    (user_id, path, content, is_directory, importance_score,
+                     last_accessed_at, created_at, updated_at)
+                VALUES
+                    (:uid, :path, :content, false, 0.5,
+                     NOW(), NOW(), NOW())
+                RETURNING id
+            """), {
+                "uid": TEST_USER_ID,
+                "path": "/memories/test_kg/mem4",
+                "content": "EXPRESSO NORDESTE cobre rota BA e SE com bom prazo",
+            })
+            mem4_id = result.fetchone()[0]
+            self.memory_ids["mem4"] = mem4_id
+            print(f"   mem4 criada: id={mem4_id}")
+
+        # 2. Extrair entidades de mem4 (BA, SE via regex + EXPRESSO NORDESTE via haiku)
+        stats4 = extract_and_link_entities(
+            user_id=TEST_USER_ID,
+            memory_id=mem4_id,
+            content="EXPRESSO NORDESTE cobre rota BA e SE com bom prazo",
+            haiku_entities=[
+                ("transportadora", "EXPRESSO NORDESTE"),
+            ],
+        )
+        print(f"   mem4 extract stats: {stats4}")
+
+        # 3. Criar relacao: PA opera_com EXPRESSO NORDESTE (weight=2.0)
+        #    PA e regex-extractable (UF) e linka para mem1 (hop 1).
+        #    EXPRESSO NORDESTE linka para mem4 (hop 2 target).
+        with db.engine.begin() as conn:
+            # Buscar entity_ids
+            pa_result = conn.execute(text("""
+                SELECT id FROM agent_memory_entities
+                WHERE user_id = :uid AND entity_name = 'PA'
+            """), {"uid": TEST_USER_ID}).fetchone()
+            pa_id = pa_result[0] if pa_result else 0
+
+            expresso_result = conn.execute(text("""
+                SELECT id FROM agent_memory_entities
+                WHERE user_id = :uid AND entity_name = 'EXPRESSO NORDESTE'
+            """), {"uid": TEST_USER_ID}).fetchone()
+            expresso_id = expresso_result[0] if expresso_result else 0
+
+            print(f"   PA entity_id={pa_id}, EXPRESSO NORDESTE entity_id={expresso_id}")
+
+            self._assert(
+                pa_id > 0 and expresso_id > 0,
+                f"Entidades PA e EXPRESSO NORDESTE devem existir para hop2 test"
+            )
+
+            if pa_id and expresso_id:
+                # Criar relacao explicita PA → EXPRESSO NORDESTE
+                _upsert_relation(
+                    conn,
+                    source_entity_id=pa_id,
+                    target_entity_id=expresso_id,
+                    relation_type='opera_com',
+                    weight=2.0,
+                    memory_id=mem4_id,
+                )
+                print("   Relacao criada: PA opera_com EXPRESSO NORDESTE (weight=2.0)")
+
+        # 4. Query "entregas para PA" — hop 1 encontra mem1, hop 2 encontra mem4
+        #    Hop 1: PA → mem1 (link direto, PA esta em mem1)
+        #    Hop 2: PA → (opera_com) → EXPRESSO NORDESTE → mem4
+        results = query_graph_memories(
+            user_id=TEST_USER_ID,
+            prompt="entregas para PA",
+        )
+        print(f"   Query 'entregas para PA': {len(results)} resultados")
+        for r in results:
+            print(f"     memory_id={r['memory_id']}, similarity={r['similarity']}, source={r['source']}")
+
+        result_mids = {r['memory_id'] for r in results}
+
+        # Assert: mem1 aparece (via hop 1 — PA linka direto para mem1)
+        self._assert(
+            self.memory_ids["mem1"] in result_mids,
+            f"Hop 1 deve encontrar mem1 (id={self.memory_ids['mem1']}) via PA direto"
+        )
+
+        # Assert: mem4 aparece (via hop 2 — PA → EXPRESSO NORDESTE → mem4)
+        self._assert(
+            mem4_id in result_mids,
+            f"Hop 2 deve encontrar mem4 (id={mem4_id}) via PA→EXPRESSO NORDESTE"
+        )
+
+        # 5. Verificar similarity do mem4 (hop 2)
+        hop2_results = [r for r in results if r['memory_id'] == mem4_id]
+        if hop2_results:
+            hop2_sim = hop2_results[0]['similarity']
+            # Com weight=2.0: min(0.5, 0.3*2.0) = min(0.5, 0.6) = 0.5 (capped)
+            self._assert(
+                hop2_sim <= 0.5,
+                f"Hop 2 similarity ({hop2_sim}) deve ser <= 0.5 (cap)"
+            )
+            self._assert(
+                hop2_sim == 0.5,
+                f"Com weight=2.0, similarity deve ser 0.5 (capped), got {hop2_sim}"
+            )
+
+        # 6. Verificar que hop 1 results tem similarity = 0.5
+        hop1_results = [r for r in results if r['memory_id'] == self.memory_ids["mem1"]]
+        if hop1_results:
+            hop1_sim = hop1_results[0]['similarity']
+            self._assert(
+                hop1_sim == 0.5,
+                f"Hop 1 similarity deve ser 0.5, got {hop1_sim}"
+            )
+
+        # 7. Sem duplicatas — mem1 so aparece 1x
+        mem1_count = sum(1 for r in results if r['memory_id'] == self.memory_ids["mem1"])
+        self._assert(
+            mem1_count <= 1,
+            f"mem1 deve aparecer no maximo 1x (sem duplicatas), count={mem1_count}"
+        )
+
+        # 8. Testar exclude_memory_ids filtra hop2
+        results_excl = query_graph_memories(
+            user_id=TEST_USER_ID,
+            prompt="entregas para PA",
+            exclude_memory_ids={mem4_id},
+        )
+        result_mids_excl = {r['memory_id'] for r in results_excl}
+        self._assert(
+            mem4_id not in result_mids_excl,
+            f"mem4 deve ser excluida quando em exclude_memory_ids"
+        )
 
     # -----------------------------------------------------------------
     # 2.5 Remove Links (Delete Path)

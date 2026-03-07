@@ -165,7 +165,7 @@ PROTOCOLO DE EXECUCAO — OBRIGATORIO EM TODA SESSAO
 
 ## S4: Implementar 2-hop no Knowledge Graph
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] DONE — 2026-03-07
 **Impacto**: MEDIO — justifica existencia de `AgentMemoryEntityRelation`
 **Esforco estimado**: 3-4h
 
@@ -174,28 +174,21 @@ PROTOCOLO DE EXECUCAO — OBRIGATORIO EM TODA SESSAO
 
 ### Checklist
 
-- [ ] **S4.1** Ler `query_graph_memories()` em `app/agente/services/knowledge_graph_service.py` (linhas 584-700)
-- [ ] **S4.2** Ler como o resultado e consumido em `app/agente/sdk/client.py` (buscar `query_graph_memories`)
-- [ ] **S4.3** Ler estrutura de `agent_memory_entity_relations` em `models.py` e como `_upsert_relation()` popula
-- [ ] **S4.4** Implementar 2-hop no `query_graph_memories()`:
+- [x] **S4.1** Ler `query_graph_memories()` em `app/agente/services/knowledge_graph_service.py` (linhas 584-700)
+- [x] **S4.2** Ler como o resultado e consumido em `app/agente/sdk/client.py` (buscar `query_graph_memories`)
+- [x] **S4.3** Ler estrutura de `agent_memory_entity_relations` em `models.py` e como `_upsert_relation()` popula
+- [x] **S4.4** Implementar 2-hop no `query_graph_memories()`:
   - Hop 1 (existente): prompt → entidades → entity_ids → memory_ids (via links)
   - Hop 2 (novo): entity_ids → related_entity_ids (via relations) → additional_memory_ids (via links)
-  - SQL do hop 2:
-    ```sql
-    SELECT DISTINCT target_entity_id FROM agent_memory_entity_relations
-    WHERE source_entity_id = ANY(:entity_ids)
-    UNION
-    SELECT DISTINCT source_entity_id FROM agent_memory_entity_relations
-    WHERE target_entity_id = ANY(:entity_ids)
-    ```
-  - Depois: buscar memory_ids linkados a esses related_entity_ids
-  - Aplicar peso menor para hop 2 (ex: similarity=0.35 vs 0.5 para hop 1)
-- [ ] **S4.5** Adicionar limite de resultados hop 2 (max 5 memorias adicionais)
-- [ ] **S4.6** Substituir similarity proxy fixo 0.5 por valor baseado em `weight` da relation:
+  - SQL do hop 2: bidirecional com UNION ALL + GROUP BY + ORDER BY max_weight DESC
+  - 3 queries: related entities → candidate memories → entity-memory mapping (para weight)
+  - Similarity: `min(0.5, 0.3 * max_weight)` — capped para nunca superar hop 1
+- [x] **S4.5** Adicionar limite de resultados hop 2 (max 5 memorias adicionais, `_HOP2_MAX_MEMORIES`)
+- [x] **S4.6** Substituir similarity proxy fixo 0.5 por valor baseado em `weight` da relation:
   - hop 1: `similarity = 0.5` (mantido, entity match direto)
-  - hop 2: `similarity = 0.3 * relation.weight` (ponderado pelo peso da relacao)
-- [ ] **S4.7** Adicionar log `[KG_QUERY]` com contagem: `hop1_memories=N, hop2_memories=M, entities_found=K`
-- [ ] **S4.8** Testar com cenario: memoria sobre "RODONAVES atrasa para AM" → perguntar sobre "entregas no Amazonas" → verificar que memoria aparece via hop 2
+  - hop 2: `similarity = min(0.5, 0.3 * relation.weight)` (ponderado pelo peso da relacao)
+- [x] **S4.7** Adicionar log `[KG_QUERY]` com contagem: `entities_found=K, hop1_memories=N, hop2_memories=M`
+- [x] **S4.8** Teste de integracao: `_test_query_graph_hop2()` com cenario RODONAVES→EXPRESSO NORDESTE→mem4
 
 ### Arquivos envolvidos
 - `app/agente/services/knowledge_graph_service.py` — `query_graph_memories()` (MODIFICAR)

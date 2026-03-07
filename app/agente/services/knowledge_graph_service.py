@@ -50,6 +50,12 @@ _RE_VALOR = re.compile(r'R\$\s*([\d.,]+)')
 # Nota: SE e PA são UFs válidas mas também palavras comuns.
 # Aceitamos como UFs porque o contexto de memórias do agente é logístico.
 
+# Hop 2 traversal limits
+_HOP2_MAX_RELATED_ENTITIES = 15
+_HOP2_MAX_MEMORIES = 5
+_HOP2_SIMILARITY_FACTOR = 0.3
+_HOP2_SIMILARITY_CAP = 0.5
+
 
 def _normalize_name(name: str) -> str:
     """
@@ -588,20 +594,22 @@ def query_graph_memories(
     limit: int = 10,
 ) -> List[Dict]:
     """
-    Busca memórias via knowledge graph a partir do prompt.
+    Busca memórias via knowledge graph a partir do prompt (2-hop traversal).
 
     Pipeline:
     1. Extrai entidades do prompt (Layer 1 regex + Layer 2 Voyage)
     2. Busca entity_ids por (user_id, entity_type, entity_name)
-    3. Busca memory_ids via entity_links
-    4. Filtra: exclui exclude_memory_ids (já encontradas por semântica)
-    5. Retorna com similarity proxy = 0.5
+    3. HOP 1: Busca memory_ids via entity_links (match direto)
+    4. HOP 2: Busca related_entity_ids via entity_relations → memory_ids adicionais
+    5. Combina hop 1 + hop 2, filtrando duplicatas e exclude_memory_ids
+
+    Hop 2 usa queries separadas com try/except próprio — se falhar, hop 1 é preservado.
 
     Args:
         user_id: ID do usuário
         prompt: Prompt do usuário (texto de busca)
         exclude_memory_ids: IDs a excluir (já retornados pela busca semântica)
-        limit: Máximo de resultados
+        limit: Máximo de resultados hop 1
 
     Returns:
         Lista de dicts [{memory_id, similarity, source}]
@@ -655,7 +663,7 @@ def query_graph_memories(
 
             entity_ids = [row[0] for row in entity_rows]
 
-            # Buscar memory_ids via links
+            # ── HOP 1: memory_ids via entity_links (match direto) ──
             result = conn.execute(text("""
                 SELECT DISTINCT memory_id
                 FROM agent_memory_entity_links
@@ -664,15 +672,12 @@ def query_graph_memories(
                 LIMIT :limit
             """), {"entity_ids": entity_ids, "limit": limit * 2})
 
-            memory_rows = result.fetchall()
-            if not memory_rows:
-                return []
+            hop1_memory_ids = {row[0] for row in result.fetchall()}
 
-            # Filtrar excluídos
+            # Construir resultados hop 1
             exclude = exclude_memory_ids or set()
             graph_results = []
-            for row in memory_rows:
-                mid = row[0]
+            for mid in sorted(hop1_memory_ids, reverse=True):
                 if mid not in exclude:
                     graph_results.append({
                         'memory_id': mid,
@@ -686,11 +691,106 @@ def query_graph_memories(
                     if len(graph_results) >= limit:
                         break
 
+            # ── HOP 2: related entities via relations ──
+            # try/except independente — falha não afeta hop 1
+            hop2_count = 0
+            try:
+                # Query 1: Buscar related_entity_ids (bidirecional, excluindo entity_ids originais)
+                # ORDER BY max_weight DESC para priorizar relações mais fortes
+                result = conn.execute(text("""
+                    SELECT entity_id, MAX(weight) as max_weight
+                    FROM (
+                        SELECT target_entity_id AS entity_id, weight
+                        FROM agent_memory_entity_relations
+                        WHERE source_entity_id = ANY(:entity_ids)
+                        UNION ALL
+                        SELECT source_entity_id AS entity_id, weight
+                        FROM agent_memory_entity_relations
+                        WHERE target_entity_id = ANY(:entity_ids)
+                    ) sub
+                    WHERE NOT (entity_id = ANY(:entity_ids))
+                    GROUP BY entity_id
+                    ORDER BY max_weight DESC
+                    LIMIT :max_entities
+                """), {
+                    "entity_ids": entity_ids,
+                    "max_entities": _HOP2_MAX_RELATED_ENTITIES,
+                })
+
+                related_rows = result.fetchall()
+
+                if related_rows:
+                    # Mapa: related_entity_id → max_weight
+                    related_entity_weights: Dict[int, float] = {
+                        row[0]: row[1] for row in related_rows
+                    }
+                    related_entity_ids = list(related_entity_weights.keys())
+
+                    # Query 2: Buscar memory_ids candidatos linkados aos related_entity_ids
+                    # Busca 3x o limite para ter margem após filtrar excluídos
+                    result = conn.execute(text("""
+                        SELECT DISTINCT memory_id
+                        FROM agent_memory_entity_links
+                        WHERE entity_id = ANY(:related_entity_ids)
+                        ORDER BY memory_id DESC
+                        LIMIT :max_memories
+                    """), {
+                        "related_entity_ids": related_entity_ids,
+                        "max_memories": _HOP2_MAX_MEMORIES * 3,
+                    })
+
+                    hop2_candidate_mids = [row[0] for row in result.fetchall()]
+
+                    if hop2_candidate_mids:
+                        # Query 3: Mapear entity_id → memory_id para calcular weight por memória
+                        result = conn.execute(text("""
+                            SELECT entity_id, memory_id
+                            FROM agent_memory_entity_links
+                            WHERE entity_id = ANY(:related_entity_ids)
+                              AND memory_id = ANY(:memory_ids)
+                        """), {
+                            "related_entity_ids": related_entity_ids,
+                            "memory_ids": hop2_candidate_mids,
+                        })
+
+                        # Calcular max weight por memória (a memória pode linkar a
+                        # múltiplas entidades relacionadas — usamos o maior peso)
+                        memory_max_weight: Dict[int, float] = {}
+                        for eid, mid in result.fetchall():
+                            w = related_entity_weights.get(eid, 0.0)
+                            if mid not in memory_max_weight or w > memory_max_weight[mid]:
+                                memory_max_weight[mid] = w
+
+                        # IDs a excluir do hop 2: já em hop 1 + exclude_memory_ids
+                        hop2_exclude = hop1_memory_ids | exclude
+
+                        for mid in hop2_candidate_mids:
+                            if mid in hop2_exclude:
+                                continue
+                            if hop2_count >= _HOP2_MAX_MEMORIES:
+                                break
+
+                            max_w = memory_max_weight.get(mid, 0.5)
+                            similarity = min(
+                                _HOP2_SIMILARITY_CAP,
+                                _HOP2_SIMILARITY_FACTOR * max_w,
+                            )
+
+                            graph_results.append({
+                                'memory_id': mid,
+                                'similarity': round(similarity, 4),
+                                'source': 'graph',
+                            })
+                            hop2_count += 1
+
+            except Exception as e:
+                logger.debug(f"[KG_QUERY] Hop 2 falhou (hop 1 preservado): {e}")
+
             logger.debug(
-                f"[KG] Graph query for user_id={user_id}: "
-                f"{len(entity_names)} entity names → "
-                f"{len(entity_ids)} entity_ids → "
-                f"{len(graph_results)} memories"
+                f"[KG_QUERY] user_id={user_id}: "
+                f"entities_found={len(entity_ids)}, "
+                f"hop1_memories={len(hop1_memory_ids)}, "
+                f"hop2_memories={hop2_count}"
             )
 
             return graph_results
