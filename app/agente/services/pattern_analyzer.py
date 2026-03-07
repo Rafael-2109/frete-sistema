@@ -532,6 +532,12 @@ REGRAS CRITICAS:
 - Extraia APENAS o que aparece EXPLICITAMENTE na conversa — NUNCA invente
 - Ignore preferencias pessoais (estilo, formato) — essas sao individuais
 - Foco em: vocabulario operacional, regras de negocio, correcoes factuais
+- IGNORE COMPLETAMENTE discussoes sobre o proprio sistema de IA, incluindo:
+  termos como "memoria", "embedding", "hook", "PRD", "escopo empresa/pessoal",
+  "knowledge graph", "effective_count", "prompt", "agente", "Claude", "SDK",
+  "Sonnet", "Haiku", "user_id", "daemon thread", "RAG", "KG", "dedup"
+- IGNORE meta-discussoes: conversas SOBRE como o sistema funciona internamente
+- Se a conversa eh sobre desenvolvimento/debugging do proprio sistema, retorne arrays vazios
 - Se o operador esclareceu o significado de um termo, isso eh term_definition
 - Se o operador disse seu cargo ou setor, isso eh role_identification
 - Se o operador mencionou regra de cliente/processo, isso eh business_rule
@@ -622,6 +628,18 @@ def _save_empresa_memory(
                 existing.updated_at = agora_utc_naive()
                 existing.created_by = created_by
         else:
+            # Verificar duplicata semantica ANTES de criar
+            try:
+                from ..tools.memory_mcp_tool import _check_memory_duplicate
+                dup_path = _check_memory_duplicate(0, content, current_path=path)
+                if dup_path:
+                    logger.info(
+                        f"[KNOWLEDGE_EXTRACTION] Dedup: '{path}' similar a '{dup_path}', skipping"
+                    )
+                    return False
+            except Exception:
+                pass  # Se dedup falhar, continuar salvando
+
             mem = AgentMemory.create_file(0, path, content)
             mem.escopo = 'empresa'
             mem.created_by = created_by
@@ -630,14 +648,26 @@ def _save_empresa_memory(
 
         db.session.commit()
 
-        # Best-effort: gerar embedding
+        # Best-effort: gerar embedding + KG extraction
         try:
-            from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+            from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, MEMORY_KNOWLEDGE_GRAPH
+            haiku_entities, haiku_relations = [], []
+
             if MEMORY_SEMANTIC_SEARCH:
                 from ..tools.memory_mcp_tool import _embed_memory_best_effort
-                _embed_memory_best_effort(0, path, content)
-        except Exception:
-            pass
+                haiku_entities, haiku_relations = _embed_memory_best_effort(0, path, content)
+
+            if MEMORY_KNOWLEDGE_GRAPH:
+                from ..services.knowledge_graph_service import extract_and_link_entities
+                mem_for_kg = existing or AgentMemory.get_by_path(0, path)
+                if mem_for_kg:
+                    extract_and_link_entities(
+                        0, mem_for_kg.id, content,
+                        haiku_entities=haiku_entities,
+                        haiku_relations=haiku_relations,
+                    )
+        except Exception as e:
+            logger.debug(f"[KNOWLEDGE_EXTRACTION] Embed/KG falhou (ignorado): {e}")
 
         return True
 

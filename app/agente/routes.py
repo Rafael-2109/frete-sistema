@@ -1683,12 +1683,10 @@ def api_admin_generate_correction():
 @login_required
 def api_admin_save_correction():
     """
-    Salva correcao aprovada pelo admin na memoria de TODOS os usuarios ativos.
+    Salva correcao aprovada pelo admin como memoria empresa (user_id=0).
 
-    Para cada usuario que ja usou o agente:
-    1. Verifica dedup via embeddings (>90% similar → skip)
-    2. Cria/atualiza AgentMemory
-    3. Gera embedding para busca semantica futura
+    Antes: broadcast para TODOS os usuarios (N copias identicas).
+    Agora: salva 1 vez com user_id=0, escopo='empresa', visivel para todos.
 
     POST /agente/api/admin/save-correction
     {
@@ -1700,9 +1698,7 @@ def api_admin_save_correction():
     Response:
     {
         "success": true,
-        "saved_for": 8,
-        "skipped_duplicate": 2,
-        "total_users": 10,
+        "saved_for": "empresa (user_id=0)",
         "path": "/memories/corrections/usar-cotando-frete.xml"
     }
     """
@@ -1728,7 +1724,7 @@ def api_admin_save_correction():
                 'error': 'path deve comecar com /memories/corrections/'
             }), 400
 
-        from .models import AgentSession, AgentMemory
+        from .models import AgentMemory
         from .tools.memory_mcp_tool import (
             _check_memory_duplicate,
             _embed_memory_best_effort,
@@ -1737,6 +1733,14 @@ def api_admin_save_correction():
 
         # Sanitizar conteudo contra prompt injection
         correction = _sanitize_content(correction)
+
+        # Verificar duplicata semantica (escopo empresa, user_id=0)
+        dup_path = _check_memory_duplicate(0, correction, current_path=path)
+        if dup_path:
+            return jsonify({
+                'success': False,
+                'error': f'Correcao similar ja existe: {dup_path}',
+            }), 409
 
         # Wrap em XML estruturado
         admin_name = getattr(current_user, 'nome', None) or str(current_user.id)
@@ -1750,60 +1754,34 @@ def api_admin_save_correction():
             f"</admin_correction>"
         )
 
-        # Obter todos user_ids distintos que ja usaram o agente
-        user_ids = [
-            r[0] for r in db.session.query(AgentSession.user_id).filter(
-                AgentSession.user_id.isnot(None)
-            ).distinct().all()
-        ]
+        # Salvar como memoria empresa (user_id=0) em vez de broadcast
+        existing = AgentMemory.get_by_path(0, path)
+        if existing:
+            existing.content = content
+            existing.updated_at = agora_utc_naive()
+        else:
+            mem = AgentMemory.create_file(0, path, content)
+            mem.escopo = 'empresa'
+            mem.created_by = current_user.id
+            mem.importance_score = 0.9  # Correcoes admin = alta prioridade
+            mem.category = 'permanent'
 
-        saved_count = 0
-        skipped_count = 0
+        db.session.commit()
 
-        for uid in user_ids:
-            try:
-                # Verificar dedup via embeddings (>90% similar → skip)
-                dup_path = _check_memory_duplicate(uid, correction, current_path=path)
-                if dup_path:
-                    skipped_count += 1
-                    continue
-
-                # Criar ou atualizar memoria
-                existing = AgentMemory.get_by_path(uid, path)
-                if existing:
-                    existing.content = content
-                else:
-                    AgentMemory.create_file(uid, path, content)
-
-                db.session.commit()
-
-                # Embedding (best-effort, nao bloqueia)
-                try:
-                    _embed_memory_best_effort(uid, path, content)
-                except Exception:
-                    pass
-
-                saved_count += 1
-
-            except Exception as user_err:
-                logger.warning(
-                    f"[AGENTE] Erro ao salvar correcao para user {uid}: {user_err}"
-                )
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
+        # Embedding (best-effort, nao bloqueia)
+        try:
+            _embed_memory_best_effort(0, path, content)
+        except Exception:
+            pass
 
         logger.info(
-            f"[AGENTE] Correcao admin salva: path={path}, "
-            f"saved={saved_count}, skipped={skipped_count}, total={len(user_ids)}"
+            f"[AGENTE] Correcao admin salva como empresa: path={path}, "
+            f"admin={admin_name}"
         )
 
         return jsonify({
             'success': True,
-            'saved_for': saved_count,
-            'skipped_duplicate': skipped_count,
-            'total_users': len(user_ids),
+            'saved_for': 'empresa (user_id=0)',
             'path': path,
         })
 
