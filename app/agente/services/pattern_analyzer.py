@@ -271,7 +271,9 @@ def _parse_json_response(
     """Parse seguro da resposta JSON do LLM."""
     # Tentativa 1: parse direto
     try:
-        return json.loads(result_text)
+        result = json.loads(result_text)
+        if isinstance(result, dict):
+            return result
     except json.JSONDecodeError:
         pass
 
@@ -279,7 +281,9 @@ def _parse_json_response(
     try:
         json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
         if json_match:
-            return json.loads(json_match.group())
+            result = json.loads(json_match.group())
+            if isinstance(result, dict):
+                return result
     except (json.JSONDecodeError, AttributeError):
         pass
 

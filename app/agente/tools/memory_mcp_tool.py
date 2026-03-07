@@ -1077,28 +1077,27 @@ try:
                                 actual_user_id, path, content
                             )
                     except Exception as emb_err:
-                        logger.debug(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
+                        logger.warning(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
 
                     try:
                         from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
                         if MEMORY_KNOWLEDGE_GRAPH:
-                            def _get_memory_id():
+                            def _kg_extract():
                                 from ..models import AgentMemory
-                                mem = AgentMemory.get_by_path(actual_user_id, path)
-                                return mem.id if mem else None
-
-                            mid = _execute_with_context(_get_memory_id)
-                            if mid:
                                 from ..services.knowledge_graph_service import extract_and_link_entities
-                                extract_and_link_entities(
-                                    actual_user_id, mid, content,
-                                    haiku_entities=_entities,
-                                    haiku_relations=_relations,
-                                )
+                                mem = AgentMemory.get_by_path(actual_user_id, path)
+                                if mem:
+                                    extract_and_link_entities(
+                                        actual_user_id, mem.id, content,
+                                        haiku_entities=_entities,
+                                        haiku_relations=_relations,
+                                    )
+
+                            _execute_with_context(_kg_extract)
                     except Exception as kg_err:
-                        logger.debug(f"[MEMORY_MCP] Knowledge Graph falhou (ignorado): {kg_err}")
+                        logger.warning(f"[MEMORY_MCP] Knowledge Graph falhou (ignorado): {kg_err}")
                 except Exception as e:
-                    logger.debug(f"[MEMORY_MCP] Background embed+KG falhou: {e}")
+                    logger.warning(f"[MEMORY_MCP] Background embed+KG falhou: {e}")
 
             from threading import Thread
             Thread(target=_bg_embed_and_kg, daemon=True).start()
@@ -1231,27 +1230,26 @@ try:
                     try:
                         from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
                         if MEMORY_KNOWLEDGE_GRAPH:
-                            def _get_mem_for_kg():
+                            def _kg_update():
                                 from ..models import AgentMemory
-                                mem = AgentMemory.get_by_path(user_id, path)
-                                return (mem.id, mem.content) if mem else (None, None)
-
-                            mid, mcontent = _execute_with_context(_get_mem_for_kg)
-                            if mid and mcontent:
                                 from ..services.knowledge_graph_service import (
                                     remove_memory_links,
                                     extract_and_link_entities,
                                 )
-                                remove_memory_links(mid)
-                                extract_and_link_entities(
-                                    user_id, mid, mcontent,
-                                    haiku_entities=_entities,
-                                    haiku_relations=_relations,
-                                )
+                                mem = AgentMemory.get_by_path(user_id, path)
+                                if mem:
+                                    remove_memory_links(mem.id)
+                                    extract_and_link_entities(
+                                        user_id, mem.id, mem.content,
+                                        haiku_entities=_entities,
+                                        haiku_relations=_relations,
+                                    )
+
+                            _execute_with_context(_kg_update)
                     except Exception as kg_err:
-                        logger.debug(f"[MEMORY_MCP] Knowledge Graph update falhou (ignorado): {kg_err}")
+                        logger.warning(f"[MEMORY_MCP] Knowledge Graph update falhou (ignorado): {kg_err}")
                 except Exception as e:
-                    logger.debug(f"[MEMORY_MCP] Background re-embed+KG falhou: {e}")
+                    logger.warning(f"[MEMORY_MCP] Background re-embed+KG falhou: {e}")
 
             from threading import Thread
             Thread(target=_bg_reembed_and_kg, daemon=True).start()
