@@ -64,6 +64,12 @@ SEGURANCA_SCAN_ENABLED = os.environ.get("SEGURANCA_SCAN_ENABLED", "true").lower(
 SEGURANCA_SCAN_HOUR = int(os.environ.get("SEGURANCA_SCAN_HOUR", "4"))  # 4h da manhã (após embeddings às 3h)
 _ultima_varredura_seguranca = None  # Timestamp da ultima varredura bem-sucedida
 
+# Limpeza semanal de entidades órfãs do Knowledge Graph (22º módulo)
+KG_CLEANUP_ENABLED = os.environ.get("KG_CLEANUP_ENABLED", "true").lower() == "true"
+KG_CLEANUP_WEEKDAY = int(os.environ.get("KG_CLEANUP_WEEKDAY", "6"))  # 0=Mon, 6=Sun
+KG_CLEANUP_HOUR = int(os.environ.get("KG_CLEANUP_HOUR", "5"))  # 5h (após segurança 4h)
+_ultimo_kg_cleanup = None  # Timestamp do ultimo cleanup bem-sucedido
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -148,7 +154,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup
 
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1480,6 +1486,49 @@ def executar_sincronizacao():
                     sucesso_seguranca = True  # Desabilitado não é falha
                     _ultima_varredura_seguranca = agora_utc_naive()
 
+        # ── 2️⃣2️⃣ LIMPEZA KG ENTIDADES ÓRFÃS (semanal, 22º módulo) ──
+        sucesso_kg_cleanup = False
+        kg_cleanup_executou = False
+
+        if KG_CLEANUP_ENABLED:
+            hora_kg = agora_utc_naive().hour
+            dia_semana_kg = agora_utc_naive().weekday()
+            hoje_kg = agora_utc_naive().date()
+
+            deve_rodar_kg = (
+                hora_kg == KG_CLEANUP_HOUR
+                and dia_semana_kg == KG_CLEANUP_WEEKDAY
+                and (_ultimo_kg_cleanup is None
+                     or _ultimo_kg_cleanup.date() < hoje_kg)
+            )
+
+            if deve_rodar_kg:
+                kg_cleanup_executou = True
+
+                try:
+                    db.session.remove()
+                    db.engine.dispose()
+                    logger.info("♻️ Reconexão antes de KG Cleanup")
+                except Exception:
+                    pass
+
+                try:
+                    logger.info("🧹 Limpeza semanal de entidades órfãs do Knowledge Graph...")
+                    from app.agente.services.knowledge_graph_service import cleanup_orphan_entities
+
+                    count = cleanup_orphan_entities(user_id=None)
+                    sucesso_kg_cleanup = True
+                    logger.info(f"[KG_CLEANUP] Removed {count} orphan entities")
+                    _ultimo_kg_cleanup = agora_utc_naive()
+
+                except Exception as e:
+                    logger.error(f"❌ Erro no KG cleanup: {e}")
+                    _ultimo_kg_cleanup = agora_utc_naive()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1497,6 +1546,9 @@ def executar_sincronizacao():
 
         if seguranca_executou:
             modulos_sync.append(sucesso_seguranca)
+
+        if kg_cleanup_executou:
+            modulos_sync.append(sucesso_kg_cleanup)
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)
@@ -1547,6 +1599,8 @@ def executar_sincronizacao():
                 logger.info("   ❌ Embeddings Reindexação: FALHOU")
             if seguranca_executou and not sucesso_seguranca:
                 logger.info("   ❌ Varredura Segurança: FALHOU")
+            if kg_cleanup_executou and not sucesso_kg_cleanup:
+                logger.info("   ❌ KG Cleanup Entidades Órfãs: FALHOU")
         else:
             logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/{total_modulos} módulos OK")
         logger.info("=" * 60)

@@ -208,7 +208,7 @@ PROTOCOLO DE EXECUCAO — OBRIGATORIO EM TODA SESSAO
 
 ## S5: Agendar `cleanup_orphan_entities()` + expor `has_potential_conflict`
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] DONE
 **Impacto**: BAIXO — manutencao preventiva e melhoria informativa
 **Esforco estimado**: 1-1.5h
 

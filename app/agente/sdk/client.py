@@ -112,16 +112,22 @@ def _build_operational_context(user_id: int) -> Optional[str]:
         except Exception:
             pass
 
-        # Memórias com conflito pendente
+        # Memórias com conflito pendente — listar paths para ação do agente
         try:
             from ..models import AgentMemory
-            conflicts = AgentMemory.query.filter_by(
+            conflict_memories = AgentMemory.query.filter_by(
                 user_id=user_id,
                 has_potential_conflict=True,
                 is_directory=False,
-            ).count()
-            if conflicts > 0:
-                parts.append(f'<memorias_com_conflito>{conflicts}</memorias_com_conflito>')
+            ).with_entities(AgentMemory.path).limit(10).all()
+            if conflict_memories:
+                paths = ', '.join(m.path for m in conflict_memories)
+                parts.append(
+                    f'<memorias_com_conflito count="{len(conflict_memories)}">'
+                    f'Existem {len(conflict_memories)} memorias com possivel contradicao. '
+                    f'Considere revisar: {paths}'
+                    f'</memorias_com_conflito>'
+                )
         except Exception:
             pass
 
