@@ -1583,6 +1583,213 @@ try:
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @tool(
+        "view_memory_history",
+        "Consulta histórico de versões anteriores de uma memória. "
+        "Use para ver quando e por quem a memória foi alterada, "
+        "e o conteúdo de versões anteriores (preview de 200 chars). "
+        "Útil para auditoria ou antes de restaurar uma versão antiga.",
+        {"path": str, "limit": int},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def view_memory_history(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Consulta histórico de versões de uma memória.
+
+        Args:
+            args: {
+                "path": str — path da memória (ex: /memories/preferences.xml),
+                "limit": int — máximo de versões (default 5, max 20),
+                "target_user_id": int (opcional, requer debug mode)
+            }
+
+        Returns:
+            MCP tool response com lista de versões
+        """
+        path = args.get("path", "").strip()
+
+        if not path:
+            return {
+                "content": [{"type": "text", "text": "Erro: path é obrigatório"}],
+                "is_error": True,
+            }
+
+        try:
+            path = _validate_path(path)
+            user_id = _resolve_user_id(args)
+            limit = min(max(int(args.get("limit", 5)), 1), 20)
+
+            def _view_history():
+                from ..models import AgentMemory, AgentMemoryVersion
+
+                memory = AgentMemory.get_by_path(user_id, path)
+                if not memory:
+                    return None, f"Memória não encontrada: {path}"
+
+                versions = AgentMemoryVersion.get_versions(memory.id, limit)
+                if not versions:
+                    return None, f"Nenhuma versão anterior para {path}. A memória existe mas nunca foi modificada."
+
+                lines = [f"Histórico de {path} ({len(versions)} versão(ões)):\n"]
+                for v in versions:
+                    changed_at = v.changed_at.strftime('%d/%m/%Y %H:%M') if v.changed_at else '?'
+                    changed_by = v.changed_by or '?'
+                    preview = (v.content or "")[:200]
+                    if len(v.content or "") > 200:
+                        preview += "..."
+                    lines.append(
+                        f"v{v.version} | {changed_at} | {changed_by}\n"
+                        f"  Preview: {preview}\n"
+                    )
+
+                return versions, "\n".join(lines)
+
+            versions, result_text = _execute_with_context(_view_history)
+
+            if versions is None:
+                logger.info(f"[MEMORY_MCP] view_memory_history: path={path} — {result_text}")
+                return {"content": [{"type": "text", "text": result_text}]}
+
+            logger.info(
+                f"[MEMORY_MCP] view_memory_history: path={path}, "
+                f"versions={len(versions)}"
+            )
+            return {"content": [{"type": "text", "text": result_text}]}
+
+        except ValueError as e:
+            return {"content": [{"type": "text", "text": f"Erro: {str(e)}"}], "is_error": True}
+        except PermissionError as e:
+            return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
+        except Exception as e:
+            error_msg = f"Erro ao consultar histórico: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
+    @tool(
+        "restore_memory_version",
+        "Restaura uma versão anterior de uma memória. "
+        "O conteúdo atual é salvo como nova versão antes da restauração (backup automático). "
+        "Use view_memory_history primeiro para ver versões disponíveis.",
+        {"path": str, "version": int},
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def restore_memory_version(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Restaura versão anterior de uma memória.
+
+        O conteúdo atual é salvo como nova versão (backup) antes de
+        substituir pelo conteúdo da versão alvo.
+
+        Args:
+            args: {
+                "path": str — path da memória,
+                "version": int — número da versão a restaurar,
+                "target_user_id": int (opcional, requer debug mode)
+            }
+
+        Returns:
+            MCP tool response com confirmação
+        """
+        path = args.get("path", "").strip()
+        version_num = args.get("version")
+
+        if not path:
+            return {
+                "content": [{"type": "text", "text": "Erro: path é obrigatório"}],
+                "is_error": True,
+            }
+
+        if version_num is None:
+            return {
+                "content": [{"type": "text", "text": "Erro: version é obrigatório (número inteiro)"}],
+                "is_error": True,
+            }
+
+        try:
+            version_num = int(version_num)
+        except (TypeError, ValueError):
+            return {
+                "content": [{"type": "text", "text": f"Erro: version deve ser inteiro, recebido: {version_num}"}],
+                "is_error": True,
+            }
+
+        try:
+            path = _validate_path(path)
+            user_id = _resolve_user_id(args)
+
+            def _restore():
+                from ..models import AgentMemory, AgentMemoryVersion
+                from app import db
+                from app.utils.timezone import agora_utc_naive
+
+                memory = AgentMemory.get_by_path(user_id, path)
+                if not memory:
+                    return None, f"Memória não encontrada: {path}"
+
+                target_version = AgentMemoryVersion.get_version(memory.id, version_num)
+                if not target_version:
+                    # Listar versões disponíveis para ajudar o usuário
+                    available = AgentMemoryVersion.get_versions(memory.id, 20)
+                    if available:
+                        nums = ", ".join(str(v.version) for v in available)
+                        return None, (
+                            f"Versão {version_num} não encontrada para {path}. "
+                            f"Versões disponíveis: {nums}"
+                        )
+                    return None, f"Versão {version_num} não encontrada para {path}. Nenhuma versão anterior existe."
+
+                # Backup: salvar conteúdo atual como nova versão
+                backup_version = AgentMemoryVersion.save_version(
+                    memory.id, memory.content, changed_by='claude'
+                )
+
+                # Restaurar conteúdo da versão alvo
+                memory.content = target_version.content
+                memory.updated_at = agora_utc_naive()
+
+                db.session.commit()
+
+                preview = (target_version.content or "")[:200]
+                if len(target_version.content or "") > 200:
+                    preview += "..."
+
+                return backup_version, (
+                    f"Memória {path} restaurada para versão {version_num}.\n"
+                    f"Conteúdo anterior (backup) salvo como versão {backup_version.version}.\n"
+                    f"Preview: {preview}"
+                )
+
+            backup, result_text = _execute_with_context(_restore)
+
+            if backup is None:
+                logger.info(f"[MEMORY_MCP] restore_memory_version: path={path} — {result_text}")
+                return {"content": [{"type": "text", "text": result_text}]}
+
+            logger.info(
+                f"[MEMORY_MCP] restore_memory_version: path={path}, "
+                f"restored_to=v{version_num}, backup=v{backup.version}"
+            )
+            return {"content": [{"type": "text", "text": result_text}]}
+
+        except ValueError as e:
+            return {"content": [{"type": "text", "text": f"Erro: {str(e)}"}], "is_error": True}
+        except PermissionError as e:
+            return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
+        except Exception as e:
+            error_msg = f"Erro ao restaurar versão: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
+    @tool(
         "resolve_pendencia",
         "Marca uma pendência como resolvida para que não apareça mais no briefing de sessão. "
         "Use quando o usuário confirmar que uma pendência listada já foi tratada, "
@@ -1798,7 +2005,7 @@ try:
     # Criar MCP server in-process
     memory_server = create_sdk_mcp_server(
         name="memory-tools",
-        version="1.2.0",
+        version="1.3.0",
         tools=[
             view_memories,
             save_memory,
@@ -1807,12 +2014,14 @@ try:
             list_memories,
             clear_memories,
             search_cold_memories,
+            view_memory_history,
+            restore_memory_version,
             resolve_pendencia,
             log_system_pitfall,
         ],
     )
 
-    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (9 operações)")
+    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (11 operações)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

@@ -118,7 +118,7 @@ PROTOCOLO DE EXECUCAO — OBRIGATORIO EM TODA SESSAO
 
 ## S3: Expor `AgentMemoryVersion` via MCP tool
 
-**Status**: [ ] NOT STARTED
+**Status**: [x] DONE — 2026-03-07
 **Impacto**: MEDIO — audit trail existe mas agente nao sabe
 **Esforco estimado**: 2h
 
@@ -127,21 +127,21 @@ PROTOCOLO DE EXECUCAO — OBRIGATORIO EM TODA SESSAO
 
 ### Checklist
 
-- [ ] **S3.1** Ler `AgentMemoryVersion` em `app/agente/models.py` (linhas 688-820)
-- [ ] **S3.2** Ler as 9 tools existentes em `app/agente/tools/memory_mcp_tool.py` para entender padrao
-- [ ] **S3.3** Implementar MCP tool `view_memory_history`:
+- [x] **S3.1** Ler `AgentMemoryVersion` em `app/agente/models.py` (linhas 688-820)
+- [x] **S3.2** Ler as 9 tools existentes em `app/agente/tools/memory_mcp_tool.py` para entender padrao
+- [x] **S3.3** Implementar MCP tool `view_memory_history`:
   - Input: `path` (string), `limit` (int, default 5)
   - Output: lista de versoes com `version`, `changed_at`, `changed_by`, preview do `content` (primeiros 200 chars)
   - Usar `AgentMemoryVersion.get_versions(memory_id, limit)`
   - Tratar caso: memoria nao encontrada, sem versoes
-- [ ] **S3.4** Implementar MCP tool `restore_memory_version`:
+- [x] **S3.4** Implementar MCP tool `restore_memory_version`:
   - Input: `path` (string), `version` (int)
   - Logica: busca versao → salva conteudo atual como nova versao → substitui conteudo pela versao restaurada
   - Usar `AgentMemoryVersion.get_version(memory_id, version)` e `save_version()`
   - Tratar caso: versao nao encontrada, memoria deletada
-- [ ] **S3.5** Registrar ambas tools no servidor MCP (seguir padrao das 9 existentes)
-- [ ] **S3.6** Adicionar ToolAnnotations (readOnlyHint=True para history, False para restore)
-- [ ] **S3.7** Atualizar `app/agente/CLAUDE.md` secao "MCP Tools de memoria" com as 2 novas tools
+- [x] **S3.5** Registrar ambas tools no servidor MCP (seguir padrao das 9 existentes)
+- [x] **S3.6** Adicionar ToolAnnotations (readOnlyHint=True para history, False para restore)
+- [x] **S3.7** Atualizar `app/agente/CLAUDE.md` secao "MCP Tools de memoria" com as 2 novas tools
 - [ ] **S3.8** Testar: criar memoria → atualizar 3x → view_memory_history → restore versao 1 → verificar conteudo
 
 ### Arquivos envolvidos

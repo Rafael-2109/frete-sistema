@@ -126,7 +126,7 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 | `services/intersession_briefing.py` | `USE_COMMIT_BRIEFING` | `true` | Injeta commits recentes (git log -5) no briefing inter-sessao. Custo zero |
 | (client.py) | `PENDENCIA_TTL_DAYS` | `7` | Pendencias de sessoes mais antigas que N dias sao auto-removidas |
 
-### MCP Tools de memoria (memory_mcp_tool.py v1.2.0, 9 operacoes)
+### MCP Tools de memoria (memory_mcp_tool.py v1.3.0, 11 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `view_memories` | Le memoria por path |
@@ -136,6 +136,8 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 | `list_memories` | Lista todas as memorias |
 | `clear_memories` | Limpa TODAS (destrutivo) |
 | `search_cold_memories` | Busca no tier frio |
+| `view_memory_history` | Consulta historico de versoes de uma memoria |
+| `restore_memory_version` | Restaura versao anterior (backup automatico do atual) |
 | `resolve_pendencia` | Marca pendencia como resolvida (desaparece do briefing) |
 | `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
 
