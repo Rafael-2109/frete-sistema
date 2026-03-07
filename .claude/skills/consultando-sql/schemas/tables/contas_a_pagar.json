@@ -165,9 +165,23 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_conta_pagar_cnpj",
       "columns": [
         "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_empresa",
+      "columns": [
+        "empresa"
       ],
       "unique": false
     },
@@ -214,13 +228,6 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_parcela",
       "columns": [
         "parcela"
@@ -228,9 +235,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "ix_contas_a_pagar_vencimento",
       "columns": [
-        "empresa"
+        "vencimento"
       ],
       "unique": false
     },
@@ -252,13 +259,6 @@
       "name": "idx_conta_pagar_vencimento",
       "columns": [
         "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
       ],
       "unique": false
     }

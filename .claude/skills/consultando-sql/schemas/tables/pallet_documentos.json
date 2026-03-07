@@ -121,6 +121,14 @@
   ],
   "indices": [
     {
+      "name": "idx_documento_tipo_recebido",
+      "columns": [
+        "tipo",
+        "recebido"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pallet_documentos_credito_id",
       "columns": [
         "credito_id"
@@ -128,18 +136,9 @@
       "unique": false
     },
     {
-      "name": "idx_documento_emissor",
+      "name": "idx_documento_validade",
       "columns": [
-        "cnpj_emissor",
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_documento_tipo_recebido",
-      "columns": [
-        "tipo",
-        "recebido"
+        "data_validade"
       ],
       "unique": false
     },
@@ -151,9 +150,10 @@
       "unique": false
     },
     {
-      "name": "idx_documento_validade",
+      "name": "idx_documento_emissor",
       "columns": [
-        "data_validade"
+        "cnpj_emissor",
+        "tipo"
       ],
       "unique": false
     }

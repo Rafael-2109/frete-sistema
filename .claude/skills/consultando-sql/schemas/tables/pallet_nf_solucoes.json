@@ -185,17 +185,17 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_tipo_vinculacao",
+      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
       "columns": [
-        "tipo",
-        "vinculacao"
+        "odoo_picking_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "name": "idx_nf_solucao_tipo_vinculacao",
       "columns": [
-        "odoo_picking_id"
+        "tipo",
+        "vinculacao"
       ],
       "unique": false
     },

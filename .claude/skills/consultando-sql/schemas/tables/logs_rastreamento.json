@@ -39,16 +39,16 @@
   ],
   "indices": [
     {
-      "name": "ix_logs_rastreamento_rastreamento_id",
+      "name": "ix_logs_rastreamento_criado_em",
       "columns": [
-        "rastreamento_id"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_logs_rastreamento_criado_em",
+      "name": "ix_logs_rastreamento_rastreamento_id",
       "columns": [
-        "criado_em"
+        "rastreamento_id"
       ],
       "unique": false
     }

@@ -185,6 +185,14 @@
   ],
   "indices": [
     {
+      "name": "idx_lanc_comp_status",
+      "columns": [
+        "comprovante_id",
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_lanc_odoo_move_line",
       "columns": [
         "odoo_move_line_id"
@@ -196,13 +204,6 @@
       "columns": [
         "nf_numero",
         "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lancamento_comprovante_odoo_move_line_id",
-      "columns": [
-        "odoo_move_line_id"
       ],
       "unique": false
     },
@@ -221,10 +222,9 @@
       "unique": false
     },
     {
-      "name": "idx_lanc_comp_status",
+      "name": "ix_lancamento_comprovante_odoo_move_line_id",
       "columns": [
-        "comprovante_id",
-        "status"
+        "odoo_move_line_id"
       ],
       "unique": false
     }
