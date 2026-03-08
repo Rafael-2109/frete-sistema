@@ -93,6 +93,9 @@ Ao apresentar resultados, CITAR estes campos do JSON de saida de cada script:
 - Se `modo=preview`: informar `planilha_path` e instrucao para proximo passo
 - Se `modo=dry-run`: citar `validacao.validas`, `validacao.inconsistentes`
   - Se inconsistentes > 0: listar `validacao.detalhes_inconsistencias` (linha, motivo, dados)
+  - Cada inconsistencia inclui `saldo_portal` (qtd real no portal) e `saldo_parcial` (bool)
+  - Se `saldo_parcial=True`: informar ao usuario que existe saldo parcial (ex: "EAN X tem saldo de 200, voce solicitou 700. Quer agendar com 200?")
+  - Se `saldo_portal=0` para todos: informar "nenhum item tem saldo disponivel no portal"
   - Se tudo valido: informar comando para confirmar
 - Se `modo=confirmado`: citar `resultado.status`, `resultado.link_cargas`, `resultado.controle`
 - **SEMPRE** executar --dry-run primeiro, MESMO que usuario peca "direto"

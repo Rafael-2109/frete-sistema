@@ -78,5 +78,21 @@
   {
     "query": "cadastre a unidade CGR no SSW como parceira, tipo T, razao social Atacadao SA",
     "should_trigger": false
+  },
+  {
+    "query": "consulta o saldo no portal do Atacadao pra ver o que tem disponivel pra agendar",
+    "should_trigger": true
+  },
+  {
+    "query": "no site do atacadao, quero agendar 10 pallets de palmito pra filial Jacarei dia 24/03",
+    "should_trigger": true
+  },
+  {
+    "query": "qual o saldo de palmito no estoque? tem suficiente pro Atacadao?",
+    "should_trigger": false
+  },
+  {
+    "query": "quantos pallets de AZ VI 500 foram produzidos hoje? da pra cobrir o pedido do Atacadao?",
+    "should_trigger": false
   }
 ]

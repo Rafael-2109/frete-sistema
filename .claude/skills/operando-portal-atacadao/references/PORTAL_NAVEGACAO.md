@@ -362,3 +362,57 @@ Colunas da planilha de upload:
 | <= 4000kg | 4 | Toco-Bau |
 | <= 7000kg | 5 | Truck-Bau |
 | > 7000kg | 7 | Carreta-Bau |
+
+---
+
+### GOTCHA CRITICO: Tipos de Celula XLSX
+
+Portal retorna HTTP 500 se tipos de celula estiverem errados (PhpSpreadsheet no PHP/8.2.29).
+Causa raiz identificada apos 5+ testes comparando planilha valida (#47) vs gerada.
+
+| Coluna | Tipo Correto | number_format | ERRADO |
+|--------|-------------|---------------|--------|
+| A (nr_carga) | int | default | string |
+| B (CNPJ CD) | str | default | — |
+| C (filial) | int | default | string |
+| D (pedido) | int | default | string |
+| E (EAN) | int | '0' | string (perde digitos) |
+| F (qtd) | int | default | string |
+| G (data_min) | datetime | 'd-mmm' | string "DD/MM/YYYY" |
+| H (data_des) | datetime | 'd-mmm' | string "DD/MM/YYYY" |
+| I (veiculo) | int | default | string |
+
+Referencia: planilha validada #47 (6 linhas, 2 cargas, aprovada pelo portal).
+
+---
+
+### Fluxo AJAX do Portal (Agendamento em Lote)
+
+O portal usa jQuery AJAX para todas as operacoes de /cargas-planilha:
+
+1. **Upload**: `$.ajax` POST `/cargas-planilha/create?uid=7237&u=TIMESTAMP` com FormData
+2. **Mapeamento**: 9 selects `.select_coluna` (auto-fill via atributo `defval`)
+3. **Analise**: `$.ajax` PUT `/cargas-planilha/analisa` com `$('#analiseForm').serialize()`
+4. **Salvar**: `$.ajax` POST `/cargas-planilha/salvar`
+5. **Cancelar**: `$.ajax` DELETE `/cargas-planilha/delete`
+6. **CSRF**: `$.ajaxSetup` com `X-CSRF-TOKEN` do `meta[name="csrf-token"]` — automatico
+
+O script usa `page.evaluate()` para executar AJAX diretamente (mais robusto que clicks DOM).
+Botao correto para analise: `[name=analisar]` (NAO `button.btn.btn-primary.pull-right`).
+
+---
+
+### Extracao de Saldo na Validacao
+
+Mensagem de critica do portal segue o padrao:
+`"Quantidade solicitada do item {EAN} ,({qtd_solicitada}) é maior do que o saldo ({saldo_portal})"`
+
+O script parseia e extrai:
+- `saldo_portal`: int — saldo REAL disponivel no portal
+- `qtd_solicitada`: int — quantidade que tentamos agendar
+- `saldo_parcial`: bool — True quando 0 < saldo_portal < qtd_solicitada
+
+Cenarios:
+- saldo_portal=0, saldo_parcial=False → item sem saldo algum
+- saldo_portal=200, saldo_parcial=True → saldo parcial, pode agendar com menos
+- Sem critica (bg-white) → saldo total disponivel, linha valida
