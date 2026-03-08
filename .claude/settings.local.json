@@ -134,7 +134,8 @@
       "WebFetch(domain:spiderfoot.org)",
       "WebFetch(domain:www.kali.org)",
       "Bash(tr ;:*)",
-      "Skill(diagnosticando-banco)"
+      "Skill(diagnosticando-banco)",
+      "Bash(sed:*)"
     ],
     "deny": []
   },
