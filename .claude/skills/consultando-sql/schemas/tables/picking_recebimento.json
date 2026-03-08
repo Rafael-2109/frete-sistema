@@ -89,13 +89,6 @@
   ],
   "indices": [
     {
-      "name": "idx_picking_rec_partner",
-      "columns": [
-        "odoo_partner_name"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_picking_rec_partner_cnpj",
       "columns": [
         "odoo_partner_cnpj"
@@ -124,6 +117,14 @@
       "unique": false
     },
     {
+      "name": "idx_picking_rec_company",
+      "columns": [
+        "company_id",
+        "state"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_picking_rec_write",
       "columns": [
         "write_date"
@@ -131,10 +132,9 @@
       "unique": false
     },
     {
-      "name": "idx_picking_rec_company",
+      "name": "idx_picking_rec_partner",
       "columns": [
-        "company_id",
-        "state"
+        "odoo_partner_name"
       ],
       "unique": false
     }

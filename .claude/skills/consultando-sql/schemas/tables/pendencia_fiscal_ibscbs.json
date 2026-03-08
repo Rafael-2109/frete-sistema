@@ -166,13 +166,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
-      "columns": [
-        "cte_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pendencia_fiscal_ibscbs_status",
       "columns": [
         "status"
@@ -213,6 +206,13 @@
         "chave_acesso"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
+      "columns": [
+        "cte_id"
+      ],
+      "unique": false
     }
   ]
 }

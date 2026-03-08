@@ -135,7 +135,8 @@
       "WebFetch(domain:www.kali.org)",
       "Bash(tr ;:*)",
       "Skill(diagnosticando-banco)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "WebFetch(domain:docs.pentagi.com)"
     ],
     "deny": []
   },

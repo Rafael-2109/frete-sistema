@@ -20,6 +20,11 @@
       "nullable": false
     },
     {
+      "name": "codigo_ean",
+      "type": "varchar(50)",
+      "description": "EAN/GTIN. Fonte: Odoo product.template.barcode_nacom"
+    },
+    {
       "name": "palletizacao",
       "type": "float",
       "description": "PALLETIZACAO: qtd / palletizacao = pallets",
@@ -124,6 +129,27 @@
   ],
   "indices": [
     {
+      "name": "ix_cadastro_palletizacao_categoria_produto",
+      "columns": [
+        "categoria_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cadastro_palletizacao_tipo_embalagem",
+      "columns": [
+        "tipo_embalagem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cadastro_palletizacao_codigo_ean",
+      "columns": [
+        "codigo_ean"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_cadastro_palletizacao_linha_producao",
       "columns": [
         "linha_producao"
@@ -138,25 +164,11 @@
       "unique": false
     },
     {
-      "name": "ix_cadastro_palletizacao_categoria_produto",
-      "columns": [
-        "categoria_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_cadastro_palletizacao_cod_produto",
       "columns": [
         "cod_produto"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_cadastro_palletizacao_tipo_embalagem",
-      "columns": [
-        "tipo_embalagem"
-      ],
-      "unique": false
     }
   ]
 }

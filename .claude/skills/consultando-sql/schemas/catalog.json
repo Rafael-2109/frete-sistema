@@ -185,7 +185,7 @@
       "key_fields": [
         "cod_produto",
         "nome_produto",
-        "palletizacao"
+        "codigo_ean"
       ]
     },
     {

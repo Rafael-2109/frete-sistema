@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "versao": "1.0",
+    "versao": "2.0",
     "descricao": "Valores padrao para operacoes no portal Atacadao (Hodie Booking)",
-    "atualizado": "2026-03-07",
+    "atualizado": "2026-03-08",
     "fonte": "app/portal/atacadao/config.py"
   },
   "portal": {
@@ -11,11 +11,34 @@
     "tem_2fa": false
   },
   "veiculos_permitidos": {
+    "_descricao": "Mapeamento select value → nome (para agendamento individual via form HTML)",
     "6": "Kombi/Van - (Cod.: 1 - Max: 5 paletes)",
     "5": "F4000-3/4 - Bau - (Cod.: 3 - Max: 10 paletes) - Ate 2.000 kg",
     "11": "Toco-Bau - (Cod.: 4 - Max: 24 paletes) - Ate 4.000 kg",
     "8": "Truck-Bau - (Cod.: 5 - Max: 75 paletes) - Ate 7.000 kg",
-    "2": "Carreta-Bau - (Cod.: 7 - Max: 80 paletes) - Acima de 7.000 kg"
+    "9": "Truck-Sider - (Cod.: 6 - Max: 75 paletes)",
+    "2": "Carreta-Bau - (Cod.: 7 - Max: 80 paletes) - Acima de 7.000 kg",
+    "4": "Carreta-Sider - (Cod.: 8 - Max: 80 paletes)",
+    "3": "Carreta-Container - (Cod.: 9 - Max: 56 paletes)",
+    "10": "Carreta-Graneleira - (Cod.: 2 - Max: 60 paletes)",
+    "1": "Bitrem-Graneleiro - (Cod.: 10 - Max: 56 paletes)",
+    "7": "Rodotrem-Bau - (Cod.: 11 - Max: 100 paletes)",
+    "12": "Truck-Graneleiro - (Cod.: 12 - Max: 32 paletes)"
+  },
+  "veiculos_planilha": {
+    "_descricao": "Mapeamento Cod. planilha CSV → dados (para agendamento em lote via upload XLSX)",
+    "1": {"nome": "Kombi/Van", "max_pallets": 5, "select_value": "6"},
+    "2": {"nome": "Carreta-Graneleira", "max_pallets": 60, "select_value": "10"},
+    "3": {"nome": "F4000-3/4 Bau", "max_pallets": 10, "select_value": "5"},
+    "4": {"nome": "Toco-Bau", "max_pallets": 24, "select_value": "11"},
+    "5": {"nome": "Truck-Bau", "max_pallets": 75, "select_value": "8"},
+    "6": {"nome": "Truck-Sider", "max_pallets": 75, "select_value": "9"},
+    "7": {"nome": "Carreta-Bau", "max_pallets": 80, "select_value": "2"},
+    "8": {"nome": "Carreta-Sider", "max_pallets": 80, "select_value": "4"},
+    "9": {"nome": "Carreta-Container", "max_pallets": 56, "select_value": "3"},
+    "10": {"nome": "Bitrem-Graneleiro", "max_pallets": 56, "select_value": "1"},
+    "11": {"nome": "Rodotrem-Bau", "max_pallets": 100, "select_value": "7"},
+    "12": {"nome": "Truck-Graneleiro", "max_pallets": 32, "select_value": "12"}
   },
   "regras_veiculo_por_peso": {
     "ate_2000": "5",
@@ -84,10 +107,12 @@
     "limpar_data_elaboracao": "button[data-target_daterangepicker=\"dthr_elaboracao\"][data-action=\"remove\"]",
     "content_wrapper": ".content-wrapper"
   },
-  "diretorios_pdf": {
+  "diretorios_saida": {
     "pedidos": "/tmp/pedidos_atacadao",
     "protocolos": "/tmp/protocolos_atacadao",
-    "agendamentos": "/tmp/agendamentos_atacadao"
+    "agendamentos": "/tmp/agendamentos_atacadao",
+    "saldo": "/tmp/saldo_atacadao",
+    "agendamento_lote": "/tmp/agendamento_atacadao"
   },
   "seletores_relatorio": {
     "_descricao": "Seletores para pagina /relatorio/itens (export CSV de agendamentos)",
@@ -106,5 +131,27 @@
     "dias_futuros": 45,
     "max_dias": 365,
     "_nota": "Range padrao D0-D45 para consulta de agendamentos futuros"
+  },
+  "seletores_saldo": {
+    "_descricao": "Seletores para pagina /relatorio/planilhaPedidos (consulta de saldo)",
+    "toggle_filtros": "a[data-toggle=\"collapse\"][data-target=\"#filtros-collapse\"]",
+    "limpar_datas": "#filtros-collapse > div.filtros-body > div > div.col-md-3.bootstrap-daterangepicker > div > span:nth-child(5) > button",
+    "aplicar_filtros": "#enviarFiltros",
+    "exportar_csv": "#exportarExcel"
+  },
+  "seletores_agendamento_lote": {
+    "_descricao": "Seletores para pagina /cargas-planilha (agendamento em lote via upload)",
+    "download_modelo": "a.btn.btn-primary.pull-right",
+    "upload_browser": "#uploadForm > div > span > button.btn.btn-primary.inputfile-browser",
+    "enviar": "#enviar",
+    "confirmar_mapeamento": "body > div.wrapper > div.content-wrapper > div.content > div > div:nth-child(3) > div > button.btn.btn-primary.pull-right",
+    "salvar": "#salvar2",
+    "modal_sucesso": ".modal-content:has-text(\"Registro criado com sucesso\")",
+    "botao_ok": "#footerModalAlerta > div > div > button"
+  },
+  "agendamento_lote_padrao": {
+    "cnpj_cd": "61724241000330",
+    "cnpj_cd_formatado": "61.724.241/0003-30",
+    "_nota": "CNPJ padrao do CD Nacom Goya para coluna B da planilha"
   }
 }
