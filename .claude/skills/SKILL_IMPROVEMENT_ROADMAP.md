@@ -150,6 +150,12 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | 22 | `frontend-design` | 2 | 44KB | DONE | 2026-02-26 |
 | 23 | `razao-geral-odoo` | 0 | 16KB | DONE | 2026-02-26 |
 
+### P5 — Skills Adicionadas Pos-Roadmap
+
+| # | Skill | Scripts | Size | Status | Data |
+|---|-------|---------|------|--------|------|
+| 27 | `operando-portal-atacadao` | 3 | ~120KB | IN_PROGRESS | 2026-03-07 |
+
 ### SKIP — Meta-skills
 
 | # | Skill | Motivo | Status |

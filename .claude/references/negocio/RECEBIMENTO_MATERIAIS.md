@@ -1,8 +1,8 @@
 # Recebimento de Materiais - Documentacao de Referencia
 
-**Versao**: 1.1
-**Status**: FASE 1 - Validacao Fiscal (com Empresa Compradora + Red. BC ICMS)
-**Atualizado**: 22/01/2026
+**Versao**: 2.0
+**Status**: FASES 1-4 IMPLEMENTADAS
+**Atualizado**: 07/03/2026
 
 ---
 
@@ -14,10 +14,10 @@ Sistema de validacao e recebimento de materiais integrado com Odoo.
 
 | Fase | Descricao | Status |
 |------|-----------|--------|
-| **1** | Validacao Fiscal | ✅ IMPLEMENTADO |
-| 2 | Vinculacao NF-PO | Pendente |
-| 3 | Tratamento de Parciais | Pendente |
-| 4 | Recebimento Fisico (Lotes + Qualidade) | Pendente |
+| **1** | Validacao Fiscal | ✅ IMPLEMENTADO — `validacao_fiscal_service.py`, `validacao_ibscbs_service.py` |
+| **2** | Match NF-PO | ✅ IMPLEMENTADO — `validacao_nf_po_service.py`, `depara_service.py`, `odoo_po_service.py` |
+| **3** | Consolidacao PO | ✅ IMPLEMENTADO — `cross_phase_validation_service.py`, `po_changes_detector_service.py` |
+| **4** | Recebimento Fisico (Lotes + Qualidade) | ✅ IMPLEMENTADO — `recebimento_fisico_service.py`, `recebimento_fisico_odoo_service.py`, `picking_recebimento_sync_service.py` |
 | 5 | Criacao Fatura Automatica | Pendente |
 
 ---
@@ -307,23 +307,41 @@ CREATE TABLE validacao_fiscal_dfe (
 
 ## Arquivos do Modulo
 
-### Models
-- `app/recebimento/models.py` - 4 models (SQLAlchemy)
+### Models (20 models em `app/recebimento/models.py`)
 
-### Services
-- `app/recebimento/services/validacao_fiscal_service.py` - Logica de validacao
+**Fase 1**: PerfilFiscalProdutoFornecedor, DivergenciaFiscal, CadastroPrimeiraCompra, ValidacaoFiscalDfe, NcmIbsCbsValidado, PendenciaFiscalIbsCbs
+**Fase 2**: ProdutoFornecedorDepara, ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao, DivergenciaNfPo
+**Fase 4**: RecebimentoFisico, RecebimentoLote, RecebimentoQualityCheck, PickingRecebimento, PickingRecebimentoProduto, PickingRecebimentoMoveLine, PickingRecebimentoQualityCheck, RecebimentoLf, RecebimentoLfLote
 
-### Jobs
-- `app/recebimento/jobs/validacao_fiscal_job.py` - Job do scheduler
+### Services (13 em `app/recebimento/services/`)
 
-### Routes
-- `app/recebimento/routes/validacao_fiscal_routes.py` - API endpoints
+- `validacao_fiscal_service.py` — Validacao fiscal (Fase 1)
+- `validacao_ibscbs_service.py` — Validacao IBS/CBS (Fase 1)
+- `validacao_nf_po_service.py` — Match NF x PO (Fase 2)
+- `depara_service.py` — De-Para fornecedor/produto (Fase 2)
+- `odoo_po_service.py` — Operacoes PO no Odoo (Fase 2)
+- `cross_phase_validation_service.py` — Validacao cross-phase (Fase 3)
+- `po_changes_detector_service.py` — Deteccao de mudancas em PO (Fase 3)
+- `recebimento_fisico_service.py` — Recebimento fisico local (Fase 4)
+- `recebimento_fisico_odoo_service.py` — Recebimento fisico Odoo (Fase 4)
+- `picking_recebimento_sync_service.py` — Sync picking Odoo (Fase 4)
+- `recebimento_lf_service.py` — Recebimento La Famiglia (Fase 4)
+- `recebimento_lf_odoo_service.py` — Recebimento LF Odoo (Fase 4)
+- `playwright_nfe_transmissao.py` — Transmissao NF-e via Playwright
 
-### Migrations
-- `scripts/migrations/criar_tabelas_validacao_fiscal.py` - Script Python (criacao inicial)
-- `scripts/migrations/sql/validacao_fiscal.sql` - Script SQL (criacao inicial)
-- `scripts/migrations/adicionar_empresa_compradora_reducao_bc.py` - Script Python (v1.1 - Empresa Compradora + Red. BC)
-- `scripts/migrations/sql/adicionar_empresa_compradora_reducao_bc.sql` - Script SQL (v1.1 - Empresa Compradora + Red. BC)
+### Routes (5 em `app/recebimento/routes/`)
+
+- `validacao_fiscal_routes.py` — API Fase 1
+- `validacao_nf_po_routes.py` — API Fase 2
+- `recebimento_fisico_routes.py` — API Fase 4
+- `recebimento_lf_routes.py` — API Fase 4 (La Famiglia)
+- `views.py` — Views/templates
+
+### Jobs (3 em `app/recebimento/jobs/`)
+
+- `validacao_fiscal_job.py` — Job scheduler Fase 1
+- `validacao_recebimento_job.py` — Job scheduler Fase 2/4
+- `validacao_ibscbs_job.py` — Job scheduler IBS/CBS
 
 ---
 

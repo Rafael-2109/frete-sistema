@@ -1,6 +1,6 @@
-# MCP Capabilities — Estado do Sistema (Fev/2026)
+# MCP Capabilities — Estado do Sistema (Mar/2026)
 
-**Atualizado**: 2026-02-17
+**Atualizado**: 2026-03-07
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.38 | Wrapper MCP (in-process) |
+| `claude-agent-sdk` | 0.1.48 | Wrapper MCP (in-process). CLI 2.1.71, fix input_json_delta streaming #644 |
 | `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
 
 ---
@@ -130,15 +130,6 @@ Criado em 2026-02-17 para preencher gap entre SDK wrapper e MCP spec.
 
 **Adocao MCP (fev/2026)**: 10,000+ servidores publicos. Adotado por Claude, ChatGPT, Cursor, Gemini, VS Code.
 Doado para AAIF (Linux Foundation) em dez/2025 — co-fundadores: Anthropic, Block, OpenAI.
-
----
-
-## Proximos Passos
-
-1. Migrar `schema_mcp_tool.py` para Enhanced (alta prioridade)
-2. Migrar `render_logs_tool.py` para Enhanced (media prioridade)
-3. Monitorar `claude-agent-sdk` >= 0.2.0 para suporte nativo a outputSchema
-4. Avaliar migracao para `mcp.server.fastmcp.FastMCP` se SDK nao evoluir
 
 ---
 
