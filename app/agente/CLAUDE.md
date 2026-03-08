@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~15.4K | **Arquivos**: 35 | **Atualizado**: 27/02/2026
+**LOC**: ~20.7K | **Arquivos**: 41 | **Atualizado**: 08/03/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -180,16 +180,18 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 
 ---
 
-## SDK 0.1.46 (CLI 2.1.69)
+## SDK 0.1.48 (CLI 2.1.71)
 
-**Versao**: `claude-agent-sdk==0.1.46` (atualizado 2026-03-05)
+**Versao**: `claude-agent-sdk==0.1.48` (atualizado 2026-03-08)
 
 ### Features adotadas:
 - **`ResultMessage.stop_reason`**: Populado automaticamente no StreamEvent `done` e logado. Valores: `"end_turn"`, `"max_turns"`, `"budget_exceeded"`, etc.
 - **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): Emitidos como SSE events `task_started`/`task_progress` para observabilidade de subagentes. Import com fallback (`_HAS_TASK_MESSAGES`).
 - **`agent_id`/`agent_type` em hooks**: `PostToolUseHookInput` (opcionais). Logados no `[AUDIT] PostToolUse`. **NAO disponivel** em `StopHookInput`.
+- **`effort` field nativo**: `ClaudeAgentOptions.effort` (Literal["low"|"medium"|"high"|"max"]) — substituiu `max_thinking_tokens` (deprecated)
+- **Fix `input_json_delta` streaming** (#644): Corrige parsing de tool use delta events
 
-### Memory leak fixes do CLI 2.1.69:
+### Memory leak fixes do CLI 2.1.69+:
 - Fix: old message arrays acumulando (~35MB/1000 turns)
 - Fix: bridge polling loop, hook events, teammates leaks
 - Fix: API 400 errors em forked agents

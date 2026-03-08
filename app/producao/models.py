@@ -71,6 +71,7 @@ class CadastroPalletizacao(db.Model):
     # Dados do produto (conforme CSV)
     cod_produto = db.Column(db.String(50), nullable=False, unique=True, index=True)  # Cód.Produto
     nome_produto = db.Column(db.String(255), nullable=False)  # Descrição Produto
+    codigo_ean = db.Column(db.String(50), nullable=True, index=True)  # EAN/GTIN. Fonte: Odoo product.template.barcode_nacom
     
     # Fatores de conversão (conforme CSV)
     palletizacao = db.Column(db.Float, nullable=False)  # PALLETIZACAO: qtd / palletizacao = pallets
@@ -129,6 +130,7 @@ class CadastroPalletizacao(db.Model):
             'id': self.id,
             'cod_produto': self.cod_produto,
             'nome_produto': self.nome_produto,
+            'codigo_ean': self.codigo_ean,
             'palletizacao': float(self.palletizacao) if self.palletizacao else 0,
             'peso_bruto': float(self.peso_bruto) if self.peso_bruto else 0,
             'altura_cm': float(self.altura_cm) if self.altura_cm else 0,

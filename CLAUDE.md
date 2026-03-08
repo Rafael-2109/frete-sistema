@@ -1,6 +1,6 @@
 # Sistema de Fretes — Instrucoes de Projeto
 
-**Ultima Atualizacao**: 27/02/2026
+**Ultima Atualizacao**: 08/03/2026
 
 ---
 
@@ -130,9 +130,19 @@ Documentos adicionais:
 | Modulo | Caminhos corretos |
 |--------|-------------------|
 | Carteira de Pedidos | `app/carteira/routes/`, `app/carteira/services/`, `app/carteira/utils/`, `app/templates/carteira/` |
-| Agente Web | `app/agente/` (Claude Agent SDK) |
-| Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` |
+| Agente Web | `app/agente/` (Claude Agent SDK) — ver `app/agente/CLAUDE.md` |
+| Financeiro | `app/financeiro/routes/`, `app/financeiro/services/`, `app/financeiro/workers/` — ver `app/financeiro/CLAUDE.md` |
+| Odoo | `app/odoo/services/`, `app/odoo/utils/`, `app/odoo/jobs/` — ver `app/odoo/CLAUDE.md` |
+| CarVia | `app/carvia/routes/`, `app/carvia/services/`, `app/templates/carvia/` — ver `app/carvia/CLAUDE.md` |
+| Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` — ver `app/seguranca/CLAUDE.md` |
+| Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` |
+| Recebimento | `app/recebimento/routes/`, `app/recebimento/services/`, `app/recebimento/workers/` |
+| Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/README.md` |
+| Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |
+| Producao | `app/producao/routes.py`, `app/producao/models.py` |
 | **OBSOLETO** | `app/carteira/main_routes.py` — NAO usar |
+
+> Para lista completa de modulos e rotas: `.claude/references/INDEX.md`
 
 ---
 
@@ -179,16 +189,16 @@ Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao auto
 Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
 
 **Criados:**
-- `app/carvia/CLAUDE.md` — 3.3K LOC, 16 arquivos, 16 templates
-- `app/financeiro/CLAUDE.md` — ~43.5K LOC, 70 arquivos
-- `app/odoo/CLAUDE.md` — ~17.9K LOC, 31 arquivos
-- `app/agente/CLAUDE.md` — ~15.4K LOC, 35 arquivos
-- `app/seguranca/CLAUDE.md` — ~2.5K LOC, 14 arquivos, 8 templates
+- `app/carvia/CLAUDE.md` — ~13.8K LOC, 26 arquivos, 32 templates
+- `app/financeiro/CLAUDE.md` — ~43.5K LOC, 75 arquivos
+- `app/odoo/CLAUDE.md` — ~17.9K LOC, 41 arquivos
+- `app/agente/CLAUDE.md` — ~20.7K LOC, 41 arquivos
+- `app/seguranca/CLAUDE.md` — ~2K LOC, 14 arquivos, 8 templates
 
-**Planejados:**
-- `app/recebimento/CLAUDE.md` — P0 (27.3K LOC, 28 arquivos)
-- `app/carteira/CLAUDE.md` — P1 (19K LOC, 49 arquivos)
-- `app/pallet/CLAUDE.md` — P2 (13.3K LOC, 27 arquivos)
+**Planejados (ainda nao criados):**
+- `app/recebimento/CLAUDE.md` — P0 (maior modulo sem CLAUDE.md)
+- `app/carteira/CLAUDE.md` — P1
+- `app/pallet/CLAUDE.md` — P2
 
 ---
 

@@ -136,7 +136,8 @@
       "Bash(tr ;:*)",
       "Skill(diagnosticando-banco)",
       "Bash(sed:*)",
-      "WebFetch(domain:docs.pentagi.com)"
+      "WebFetch(domain:docs.pentagi.com)",
+      "WebFetch(domain:pentagi.com)"
     ],
     "deny": []
   },

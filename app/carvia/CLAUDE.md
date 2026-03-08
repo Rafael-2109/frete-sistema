@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**27 arquivos** | **~6.5K LOC** | **24 templates** | **Atualizado**: 06/03/2026
+**26 arquivos** | **~13.8K LOC** | **32 templates** | **Atualizado**: 08/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -53,7 +53,7 @@ NF Venda ──── N:M ──── CTe CarVia ──── FK ──── F
 app/carvia/
   ├── routes/          # 8 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api, fluxo_caixa)
   ├── services/        # 10 services (parsers incl. dacte_pdf_parser, matching, importacao, cotacao, fatura_pdf_parser, linking, fluxo_caixa)
-  ├── models.py        # 11 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem, Despesa, ContaMovimentacao)
+  ├── models.py        # 13 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem, Despesa, ContaMovimentacao, SessaoCotacao, SessaoDemanda)
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/

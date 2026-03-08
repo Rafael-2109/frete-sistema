@@ -44,6 +44,8 @@ ATACADAO_URLS = {
     "carga_detalhe": f"{ATACADAO_BASE_URL}/cargas/{{carga_id}}",
     "agendamento_status": f"{ATACADAO_BASE_URL}/agendamentos/{{protocolo}}",
     "relatorio_itens": f"{ATACADAO_BASE_URL}/relatorio/itens",
+    "planilha_pedidos": f"{ATACADAO_BASE_URL}/relatorio/planilhaPedidos",
+    "cargas_planilha": f"{ATACADAO_BASE_URL}/cargas-planilha",
 }
 
 # Credenciais (lidas do .env)

@@ -1,6 +1,6 @@
 # Odoo — Guia de Desenvolvimento
 
-**31 arquivos** | **~17.9K LOC** | **Atualizado**: 27/02/2026
+**41 arquivos** | **~17.9K LOC** | **Atualizado**: 08/03/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
@@ -119,8 +119,8 @@ cache_produtos = {p['id']: p for p in produtos}
 | Sem models proprios | Este modulo ESCREVE em 8+ models de outros modulos. NUNCA adicionar model aqui | Todos os services |
 | Imports LAZY obrigatorios | Models de outros modulos importados DENTRO dos metodos (evita circular import) | Todos os services |
 | Ordem de sync | SEMPRE faturamento primeiro, carteira depois. Inverter perde saldos | `sincronizacao_integrada_service.py:70-106` |
-| l10n_br _compute stale via XML-RPC | Campos `nfe_infnfe_*` NAO recomputados quando invoice criada via robo → SEFAZ 225. Somente UI (Playwright) forca recomputacao | `playwright_nfe_transmissao.py`, GOTCHAS.md |
-| Odoo SPA: NUNCA networkidle | Long-polling mantem conexao aberta. Usar `domcontentloaded` + `wait_for_selector` | `playwright_nfe_transmissao.py:444` |
+| l10n_br _compute stale via XML-RPC | Campos `nfe_infnfe_*` NAO recomputados quando invoice criada via robo → SEFAZ 225. Somente UI (Playwright) forca recomputacao | `app/recebimento/services/playwright_nfe_transmissao.py`, GOTCHAS.md |
+| Odoo SPA: NUNCA networkidle | Long-polling mantem conexao aberta. Usar `domcontentloaded` + `wait_for_selector` | `app/recebimento/services/playwright_nfe_transmissao.py:444` |
 | IDs de UI frageis | `menu_id=124`, `action=243` mudam se Odoo reinstalar. Preferir URL minima sem eles | IDS_FIXOS.md secao "IDs de UI" |
 
 ---

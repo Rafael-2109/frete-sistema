@@ -396,6 +396,15 @@ def processar_importacao_palletizacao():
                 lote_minimo_compra = int(row.get('LOTE_MINIMO_COMPRA', 0) or 0) if pd.notna(row.get('LOTE_MINIMO_COMPRA')) else None
                 custo_produto = float(row.get('CUSTO_PRODUTO', 0) or 0) if pd.notna(row.get('CUSTO_PRODUTO')) else None
 
+                # EAN/GTIN (opcional) — aceita CODIGO_EAN ou EAN
+                codigo_ean = None
+                for col_ean in ['CODIGO_EAN', 'EAN', 'codigo_ean', 'ean', 'GTIN']:
+                    if pd.notna(row.get(col_ean)):
+                        codigo_ean = str(row.get(col_ean, '')).strip()
+                        if codigo_ean and codigo_ean != 'nan':
+                            break
+                        codigo_ean = None
+
                 if palletizacao_existente:
                     # ✏️ ATUALIZAR EXISTENTE
                     palletizacao_existente.nome_produto = nome_produto
@@ -417,6 +426,9 @@ def processar_importacao_palletizacao():
                     palletizacao_existente.lead_time = lead_time
                     palletizacao_existente.lote_minimo_compra = lote_minimo_compra
                     palletizacao_existente.custo_produto = custo_produto
+                    # EAN (se presente no Excel, atualizar; se ausente, manter valor existente)
+                    if codigo_ean is not None:
+                        palletizacao_existente.codigo_ean = codigo_ean
                     palletizacao_existente.updated_by = current_user.nome
                     palletizacao_existente.ativo = True  # Reativar se estava inativo
                     produtos_atualizados += 1
@@ -425,6 +437,7 @@ def processar_importacao_palletizacao():
                     nova_palletizacao = CadastroPalletizacao()
                     nova_palletizacao.cod_produto = cod_produto
                     nova_palletizacao.nome_produto = nome_produto
+                    nova_palletizacao.codigo_ean = codigo_ean
                     nova_palletizacao.palletizacao = palletizacao
                     nova_palletizacao.peso_bruto = peso_bruto
                     nova_palletizacao.altura_cm = altura_cm
@@ -435,7 +448,7 @@ def processar_importacao_palletizacao():
                     nova_palletizacao.tipo_materia_prima = tipo_materia_prima
                     nova_palletizacao.tipo_embalagem = tipo_embalagem
                     nova_palletizacao.linha_producao = linha_producao
-                    # 🔧 CORRIGIDO: Adicionar campos de produção
+                    # Adicionar campos de produção
                     nova_palletizacao.produto_comprado = produto_comprado
                     nova_palletizacao.produto_produzido = produto_produzido
                     nova_palletizacao.produto_vendido = produto_vendido

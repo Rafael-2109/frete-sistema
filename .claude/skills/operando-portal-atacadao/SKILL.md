@@ -80,10 +80,23 @@ Ao apresentar resultados, CITAR estes campos do JSON de saida de cada script:
   `agendamento_disponivel`, `agenda_perdida`, `em_dia`, `entregue`, `sem_cruzamento`
 - Se `--cruzar-local`: citar `total_separacoes_local` e `total_entregas_local`
 
+### consultar_saldo.py
+- `total_registros`: numero total de linhas do CSV
+- `csv_path`: caminho do CSV exportado em `/tmp/saldo_atacadao/`
+- `resumo.total_produtos_distintos`: quantos EANs unicos
+- `resumo.total_saldo`: soma de todo saldo disponivel
+- `resumo.por_filial`: saldo agrupado por filial
+- Se `--cruzar-local`: citar `cruzamento.com_match`, `cruzamento.sem_match`
+- Se `--cruzar-local`: listar `cruzamento.produtos_identificados` (EAN → cod_produto)
+
 ### agendar_lote.py
-- Resultado do `--dry-run`: apresentar preview COMPLETO antes de pedir confirmacao
-- Mencionar verificacao de `ProdutoDeParaAtacadao` (De-Para de produtos)
-- Apos confirmacao: citar `protocolo` gerado, `status`, erros se houver
+- Se `modo=preview`: informar `planilha_path` e instrucao para proximo passo
+- Se `modo=dry-run`: citar `validacao.validas`, `validacao.inconsistentes`
+  - Se inconsistentes > 0: listar `validacao.detalhes_inconsistencias` (linha, motivo, dados)
+  - Se tudo valido: informar comando para confirmar
+- Se `modo=confirmado`: citar `resultado.status`, `resultado.link_cargas`, `resultado.controle`
+- **SEMPRE** executar --dry-run primeiro, MESMO que usuario peca "direto"
+- AskUserQuestion antes de --confirmar
 
 ## ANTI-ALUCINACAO
 
@@ -162,15 +175,51 @@ Consultar agendamentos futuros de um CNPJ?
               "resumo": {"total": N, "por_status": {...}},
               "resumo_cruzamento": {...} (se --cruzar-local)}
 
-Consultar saldo disponivel para agendamento (pedido/filial)?
-  -> consultar_saldo.py --pedido VCD12345 [--filial CNPJ]
-  -> Captura produtos com quantidades do portal
+Consultar saldo disponivel para agendamento?
+  -> consultar_saldo.py [--cnpj 75315333003043] [--filial 183] [--cruzar-local]
+  -> Sem --cnpj: exporta saldo de TODAS as filiais
+  -> Com --cnpj: filtra resultados por CNPJ do fornecedor
+  -> Com --filial: filtra resultados por codigo de filial (loja Atacadao)
+  -> Com --cruzar-local: cruza EAN do CSV com CadastroPalletizacao.codigo_ean
+     para identificar cod_produto Nacom → util antes de agendar
+  -> Output: {"sucesso": true, "total_registros": N, "csv_path": "...",
+              "resumo": {"total_saldo": N, "por_filial": {...}},
+              "cruzamento": {"com_match": N, "sem_match": N} (se --cruzar-local)}
 
-Agendar entrega em lote?
-  -> Verificar De-Para: consultar_saldo.py --pedido X (confirma mapeamento)
-  -> agendar_lote.py --lote-id LOTE123 --data 2026-03-15 --dry-run
-  -> AskUserQuestion: "Confirmar agendamento?"
-  -> agendar_lote.py --lote-id LOTE123 --data 2026-03-15
+Agendar entrega em lote (TODOS os produtos/filiais)?
+  -> PASSO 1: consultar_saldo.py --cruzar-local (obter CSV de saldo + identificar produtos)
+  -> PASSO 2: agendar_lote.py --saldo-csv /tmp/saldo_atacadao/saldo.csv \
+       --data DD/MM/YYYY --veiculo 7 --dry-run
+     Parametros opcionais: --multiplicar N, --dividir-por N, --cnpj-cd CNPJ
+  -> PASSO 3: Reportar validacao (validas/inconsistentes)
+  -> PASSO 4: AskUserQuestion: "Confirmar agendamento de N linhas para DD/MM/YYYY?"
+  -> PASSO 5: agendar_lote.py --planilha /tmp/agendamento_atacadao/agendamento.xlsx --confirmar
+  -> OU: usuario pode preparar planilha manualmente e usar --planilha diretamente
+
+Agendar produto ESPECIFICO? (ex: "10 pallets de palmito pro Atacadao de Jacarei dia 24/3")
+  -> PRE-PASSO: Resolver entidades (se usuario informou nome de produto, nao EAN)
+     a) resolvendo-entidades: nome do produto → cod_produto + EAN
+        Ex: "AZ VI 500 campo belo" → cod_produto=12345, EAN=17898075642344
+     b) Se filial informada por nome de cidade:
+        consultar_saldo.py --cruzar-local → verificar quais filiais tem o EAN
+        e identificar o codigo de filial correspondente a cidade (ex: Jacarei=filial 183)
+        NOTA: o portal so tem codigos de filial (numeros), nao nomes de cidade.
+        Se nao conseguir resolver, AskUserQuestion com as filiais disponiveis.
+  -> PASSO 1: consultar_saldo.py --filial <CODIGO> --cruzar-local
+     (confirma saldo disponivel para o produto naquela filial)
+  -> PASSO 2: agendar_lote.py --saldo-csv /tmp/saldo_atacadao/saldo.csv \
+       --ean <EAN> --filial <CODIGO> --pallets 10 \
+       --data 24/03/2026,25/03/2026,26/03/2026 --veiculo 7 --dry-run
+     Notas:
+       --ean: filtra saldo para um EAN especifico
+       --filial: filtra saldo para uma filial especifica
+       --pallets N: converte N pallets → unidades via cadastro_palletizacao
+       --qtd N: alternativa em unidades (sem conversao)
+       --data: aceita virgula para multiplas datas (uma planilha com varias linhas)
+       --veiculo: codigo do veiculo na planilha (7=Carreta-Bau padrao)
+  -> PASSO 3: Reportar validacao (validas/inconsistentes) + qtd convertida em unidades
+  -> PASSO 4: AskUserQuestion: "Confirmar agendamento?"
+  -> PASSO 5: agendar_lote.py --planilha /tmp/agendamento_atacadao/agendamento.xlsx --confirmar
 
 Sessao expirada? (detectada no Passo 1 ou por erro do script)
   -> PARAR IMEDIATAMENTE. NAO tentar executar mais scripts.
@@ -212,8 +261,8 @@ Requerem `create_app()` + `app.app_context()` quando acessam banco (acoes 2-4).
 | 0 | `atacadao_common.py` | Funcoes compartilhadas (sessao, sessao download, screenshot, saida JSON) | IMPLEMENTADO |
 | 1 | `imprimir_pedidos.py` | Imprimir pedidos como PDF — detalhe (--pedido) ou listagem (--cnpj) | IMPLEMENTADO |
 | 2 | `consultar_agendamentos.py` | Export CSV de agendamentos futuros por CNPJ, cruzamento local opcional | IMPLEMENTADO |
-| 3 | `consultar_saldo.py` | Consultar saldo disponivel por pedido/filial | PENDENTE |
-| 4 | `agendar_lote.py` | Agendar entrega em lote (--dry-run obrigatorio) | PENDENTE |
+| 3 | `consultar_saldo.py` | Export CSV de saldo disponivel de /relatorio/planilhaPedidos, cruzamento com EAN local opcional | IMPLEMENTADO |
+| 4 | `agendar_lote.py` | Agendamento em lote via upload de planilha XLSX em /cargas-planilha (--dry-run obrigatorio) | IMPLEMENTADO |
 
 ---
 

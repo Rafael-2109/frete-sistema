@@ -17,6 +17,8 @@
 | Detalhe Carga | `/cargas/{carga_id}` | Sim (config.py) |
 | Status Agendamento | `/agendamentos/{protocolo}` | Sim (config.py) |
 | Relatorio Itens (CSV) | `/relatorio/itens` | Sim (consultar_agendamentos.py) |
+| Planilha Pedidos (Saldo) | `/relatorio/planilhaPedidos` | Sim (consultar_saldo.py) |
+| Cargas Planilha (Lote) | `/cargas-planilha` | Sim (agendar_lote.py) |
 
 ---
 
@@ -194,7 +196,169 @@ Nivel 2 (fallback): Preenche input com `DD/MM/YYYY - DD/MM/YYYY` e dispara `chan
 | `entregue` | `EntregaMonitorada.entregue=True` |
 
 ### Acao 3: Consultar Saldo
-[A ser preenchido]
+
+#### URL
+`/relatorio/planilhaPedidos` — Export CSV com saldo disponivel para agendamento
+
+#### Fluxo Completo
+
+| Passo | Acao | Seletor / Tecnica |
+|-------|------|-------------------|
+| 1 | Criar sessao com downloads | `criar_sessao_download(headless=True)` |
+| 2 | Verificar sessao | `verificar_sessao_sync(page)` -> navega /pedidos |
+| 3 | Navegar para saldo | `page.goto('/relatorio/planilhaPedidos')` |
+| 4 | Abrir filtros | JS `$('#filtros-collapse').collapse('show')` / click toggle |
+| 5 | Limpar datas agendamento | `button[data-action="remove"]` (para trazer todo saldo) |
+| 6 | Filtrar Unidade (CNPJ) | Modal `#modal-unidades` (opcional, mesmos seletores de /pedidos) |
+| 7 | Aplicar filtros | `#enviarFiltros` |
+| 8 | Screenshot evidencia | `capturar_screenshot(page, 'saldo_...')` |
+| 9 | Export CSV | `#exportarExcel` com `page.expect_download()` |
+| 10 | Parsear CSV | `csv.reader`, delimitador auto (`;` ou `,`), multi-encoding |
+
+#### Seletores Saldo
+
+| Elemento | Seletor |
+|----------|---------|
+| Toggle filtros | `a[data-toggle="collapse"][data-target="#filtros-collapse"]` |
+| Limpar datas | `#filtros-collapse > div.filtros-body > div > div.col-md-3.bootstrap-daterangepicker > div > span:nth-child(5) > button` |
+| Aplicar filtros | `#enviarFiltros` |
+| Exportar CSV | `#exportarExcel` |
+
+#### Colunas do CSV de Saldo (11 colunas, A-K)
+
+| # | Coluna (pos.) | Significado | Uso |
+|---|---------------|-------------|-----|
+| A (0) | Nr. da carga | Sequencial por agendamento | Referencia |
+| B (1) | CNPJ do fornecedor | CNPJ formatado | Filtrar |
+| C (2) | Filial | Codigo da loja destino | Identificar destino |
+| D (3) | pedido_cliente | Numero do pedido (formato `{="..."}`) | Verificar saldo |
+| E (4) | Nr pedido portal | Numero interno portal | **IGNORAR** |
+| F (5) | Codigo EAN | EAN do produto (formato `{="..."}`) | **IDENTIFICAR PRODUTO** |
+| G (6) | Qtd total pedido | Quantidade total | **IGNORAR** |
+| H (7) | Saldo disponivel | Saldo para agendar | **DADO PRINCIPAL** |
+| I (8) | Data de | Data inicio agendamento | Referencia |
+| J (9) | Data ate | Data fim agendamento | Referencia |
+| K (10) | Codigo veiculo | Tipo de veiculo (Cod. planilha) | Para planilha upload |
+
+#### Formato EAN
+
+Portal exporta EAN com formato Excel-safe: `{="17898075642344"}` -> limpar para `17898075642344`.
+Script `consultar_saldo.py` limpa automaticamente via `_limpar_ean()`.
+
+#### GOTCHA: Pedidos Fantasmas (saldo=1)
+
+**O Atacadao gera pedidos fantasmas com saldo disponivel = 1 por item.**
+Esses registros NAO representam saldo real e devem ser IGNORADOS.
+
+- `consultar_saldo.py`: Filtra automaticamente registros com `saldo_disponivel < 2` (constante `SALDO_MINIMO_VALIDO`)
+- `agendar_lote.py`: Filtra automaticamente ao ler CSV de saldo (funcao `_saldo_valido()`)
+- No resumo JSON, fantasmas ja estao excluidos dos totais
+
+#### GOTCHA: EANs Invalidos (codigos internos do portal)
+
+**EANs validos do Atacadao comecam com "17" (prefixo Brasil).**
+EANs que comecam com `000`, `037`, `37`, `57` sao codigos internos do portal — NAO sao EAN/GTIN reais.
+
+- `consultar_saldo.py`: Filtra automaticamente via constante `PREFIXOS_EAN_INVALIDOS = ("000", "037", "37", "57")`
+- `agendar_lote.py`: Filtra automaticamente ao ler CSV de saldo (funcao `_limpar_ean_raw()`)
+- Registros com EAN invalido sao REMOVIDOS do resultado — nao aparecem no resumo nem na planilha de agendamento
+
+#### Cruzamento Local (--cruzar-local)
+
+| Fonte | Tabela | Campo chave |
+|-------|--------|-------------|
+| Palletizacao | `cadastro_palletizacao` | `codigo_ean` |
+
+Permite identificar `cod_produto` Nacom a partir do EAN do portal.
 
 ### Acao 4: Agendar em Lote
-[A ser preenchido]
+
+#### URL
+`/cargas-planilha` — Upload de planilha XLSX para agendamento em massa
+
+#### Fluxo Completo (3 fases)
+
+**FASE 1 — Construir Planilha**
+
+| Passo | Acao | Tecnica |
+|-------|------|---------|
+| 1 | Ler CSV de saldo | Output de `consultar_saldo.py` |
+| 2 | Limpar formatos `{="..."}` | `_limpar_ean_saldo()` |
+| 3 | Calcular quantidades | `--dividir-por N`, `--multiplicar N` |
+| 4 | Gerar XLSX | `openpyxl`, 9 colunas (A-I) |
+
+Colunas da planilha de upload:
+
+| Col | Conteudo | Origem |
+|-----|----------|--------|
+| A | Nr. da carga | Sequencial |
+| B | CNPJ CD | `61.724.241/0003-30` (padrao) |
+| C | Filial | CSV saldo col C |
+| D | Nr. do pedido | CSV saldo col D (limpo) |
+| E | Codigo EAN | CSV saldo col F (limpo) |
+| F | Quantidade | Saldo / divisor |
+| G | Data de | `--data` parametro |
+| H | Data ate | `--data` parametro |
+| I | Codigo veiculo | `--veiculo` parametro (Cod. planilha) |
+
+**FASE 2 — Upload e Validacao**
+
+| Passo | Acao | Seletor |
+|-------|------|---------|
+| 6 | Navegar para /cargas-planilha | `page.goto()` |
+| 7 | Selecionar arquivo | `#uploadForm input[type="file"]` via `set_input_files()` |
+| 8 | Enviar | `#enviar` |
+| 9 | Aguardar mapeamento colunas | `button.btn.btn-primary.pull-right` (auto-preenchido) |
+| 10 | Confirmar mapeamento | Click no botao |
+| 11 | Aguardar validacao | Tabela com linhas `bg-white` (valida) ou `bg-danger` (erro) |
+| 12 | Extrair resultado | JS evalua tabela: contagem validas/inconsistentes |
+
+**FASE 3 — Salvar (somente --confirmar)**
+
+| Passo | Acao | Seletor |
+|-------|------|---------|
+| 14 | Clicar salvar | `#salvar2` |
+| 15 | Aguardar modal sucesso | `.modal-content:has-text("Registro criado com sucesso")` |
+| 16 | Capturar link cargas | `a.btn.btn-primary[href*="cargas"]` com `controle=UUID` |
+| 17 | Clicar OK | `#footerModalAlerta > div > div > button` |
+
+#### Seletores Agendamento Lote
+
+| Elemento | Seletor |
+|----------|---------|
+| Download modelo | `a.btn.btn-primary.pull-right` |
+| Upload browser | `#uploadForm > div > span > button.btn.btn-primary.inputfile-browser` |
+| Input file | `#uploadForm input[type="file"]` |
+| Enviar | `#enviar` |
+| Confirmar mapeamento | `body > div.wrapper > div.content-wrapper > div.content > div > div:nth-child(3) > div > button.btn.btn-primary.pull-right` |
+| Salvar | `#salvar2` |
+| Modal sucesso | `.modal-content:has-text("Registro criado com sucesso")` |
+| Botao OK | `#footerModalAlerta > div > div > button` |
+
+#### Veiculos — DUPLO MAPEAMENTO
+
+| select value | Nome | Cod. planilha | Max Pallets |
+|-------------|------|---------------|-------------|
+| 1 | Bitrem-Graneleiro | 10 | 56 |
+| 2 | Carreta-Bau | 7 | 80 |
+| 3 | Carreta-Container | 9 | 56 |
+| 4 | Carreta-Sider | 8 | 80 |
+| 5 | F4000-3/4 Bau | 3 | 10 |
+| 6 | Kombi/Van | 1 | 5 |
+| 7 | Rodotrem-Bau | 11 | 100 |
+| 8 | Truck-Bau | 5 | 75 |
+| 9 | Truck-Sider | 6 | 75 |
+| 10 | Carreta-Graneleira | 2 | 60 |
+| 11 | Toco-Bau | 4 | 24 |
+| 12 | Truck-Graneleiro | 12 | 32 |
+
+**Na planilha de upload, usar Cod. planilha (coluna I). No form HTML, usar select value.**
+
+#### Auto-selecao por Peso (Cod. planilha)
+
+| Peso | Cod. | Veiculo |
+|------|------|---------|
+| <= 2000kg | 3 | F4000-3/4 Bau |
+| <= 4000kg | 4 | Toco-Bau |
+| <= 7000kg | 5 | Truck-Bau |
+| > 7000kg | 7 | Carreta-Bau |
