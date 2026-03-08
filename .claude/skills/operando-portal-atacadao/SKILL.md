@@ -25,25 +25,89 @@ Portal: `https://atacadao.hodiebooking.com.br`
 
 ---
 
+## WORKFLOW OBRIGATORIO (seguir SEMPRE, nesta ordem)
+
+```
+PASSO 1 — VERIFICAR SESSAO (ANTES de qualquer script)
+  Executar: ls -la app/portal/atacadao/storage_state_atacadao.json
+  Se NAO existe ou tamanho 0 → PARAR. Informar:
+    "Sessao expirada. Execute: python -m app.portal.atacadao.login_interativo"
+  Se existe → prosseguir
+
+PASSO 2 — EXECUTAR SCRIPT
+  Rodar o script com argumentos corretos (ver Decision Tree)
+  Para agendar_lote.py: SEMPRE --dry-run primeiro, MESMO que usuario peca "direto"
+
+PASSO 3 — REPORTAR OUTPUT (campos obrigatorios por script)
+  Apresentar ao usuario os campos-chave do JSON de saida (ver REGRAS DE REPORT)
+  NUNCA parafrasear, inventar ou omitir campos do JSON
+```
+
+**VIOLAR ESTA ORDEM = EVAL FAIL**
+
 ## REGRAS CRITICAS
 
-1. Sessao **OBRIGATORIA** — `storage_state_atacadao.json` deve existir antes de qualquer operacao
-2. Se sessao expirada, **PARAR** e instruir usuario a fazer re-login interativo (CAPTCHA manual)
+1. Sessao **OBRIGATORIA** — verificar `storage_state_atacadao.json` ANTES de executar qualquer script (Passo 1)
+2. Se sessao expirada, **PARAR IMEDIATAMENTE** e informar o comando exato:
+   `python -m app.portal.atacadao.login_interativo`
+   NAO tentar executar scripts com sessao expirada. NAO tentar automatizar login (CAPTCHA).
 3. `--dry-run` e **OBRIGATORIO** na primeira execucao de `agendar_lote.py` — MESMO que usuario peca "direto"
 4. Screenshot capturado **ANTES** de qualquer submit destrutivo — evidencia do formulario
 5. Agente DEVE usar AskUserQuestion para confirmar antes de agendar sem --dry-run
 6. NUNCA inventar protocolos, pedidos ou dados — usar EXATAMENTE o que o portal retorna
 7. De-Para de produtos (`ProdutoDeParaAtacadao`) deve estar completo ANTES de agendar
 
+## REGRAS DE REPORT (Passo 3 — campos obrigatorios)
+
+Ao apresentar resultados, CITAR estes campos do JSON de saida de cada script:
+
+### imprimir_pedidos.py
+- `modo`: "detalhe" ou "listagem" — informar qual modo foi usado
+- `pdf_path`: caminho completo do PDF gerado em `/tmp/pedidos_atacadao/`
+- `pdf_size_kb`: tamanho do arquivo
+- Se `sucesso=false`: citar o campo `erro` e NAO inventar dados
+
+### impressao_protocolo.py (GeradorPDFProtocoloAtacadao)
+- `pdf_path`: caminho completo do PDF em `/tmp/protocolos_atacadao/`
+- Gerar um PDF por protocolo (iterar se multiplos)
+
+### consultar_agendamentos.py
+- `total_registros`: numero total de registros
+- `csv_path`: caminho do CSV exportado
+- `resumo.por_status`: apresentar contadores EXATAMENTE como retornados (NAO inventar status)
+- `periodo.de` e `periodo.ate`: periodo consultado
+- Se `--cruzar-local`: citar `resumo_cruzamento` com TODOS os contadores:
+  `agendamento_disponivel`, `agenda_perdida`, `em_dia`, `entregue`, `sem_cruzamento`
+- Se `--cruzar-local`: citar `total_separacoes_local` e `total_entregas_local`
+
+### agendar_lote.py
+- Resultado do `--dry-run`: apresentar preview COMPLETO antes de pedir confirmacao
+- Mencionar verificacao de `ProdutoDeParaAtacadao` (De-Para de produtos)
+- Apos confirmacao: citar `protocolo` gerado, `status`, erros se houver
+
 ## ANTI-ALUCINACAO
 
 - **Protocolos**: Sempre numeros inteiros capturados do portal. NAO inventar.
 - **Produtos**: Codigos do Atacadao != nossos codigos. Sempre usar De-Para.
 - **Status**: EXATAMENTE o texto do portal (ex: "Aguardando aprovacao"). NAO traduzir.
-- **Resultados do script**: Apresentar EXATAMENTE o que o JSON de saida retorna.
-- **Sessao**: Portal tem CAPTCHA. Re-login NAO pode ser automatizado.
+- **Resultados do script**: Apresentar EXATAMENTE o que o JSON de saida retorna (ver REGRAS DE REPORT).
+- **Sessao**: Portal tem CAPTCHA. Re-login NAO pode ser automatizado. Comando: `python -m app.portal.atacadao.login_interativo`
 - **CSV do portal**: Colunas do CSV podem mudar. NAO assumir nomes de colunas — usar os que o script retorna em `registros[0].keys()`.
 - **Fidelidade ao output**: Ao reportar resultados, citar valores EXATAMENTE do JSON de saida. NAO parafrasear status, NAO inventar contadores, NAO arredondar valores.
+- **Sessao expirada**: Se script falha ou retorna erro de sessao, NAO tentar novamente. PARAR e pedir re-login.
+
+## GLOSSARIO
+
+| Termo | Significado |
+|-------|-------------|
+| **protocolo** | Numero inteiro = senha de agendamento no portal. NAO confundir com pedido. |
+| **agenda_perdida** | Agendamento cuja `data_agendamento < hoje` E sem NF emitida. Indica entrega que perdeu a janela. |
+| **agendamento_disponivel** | Agendamento com data futura E com separacao local associada. |
+| **em_dia** | Agendamento com data futura mas sem separacao local (ok, ainda ha tempo). |
+| **entregue** | Agendamento que ja tem NF/entrega confirmada no sistema local. |
+| **sem_cruzamento** | Agendamento do portal sem correspondencia no sistema local. |
+| **De-Para** | `ProdutoDeParaAtacadao` — mapeia codigo Atacadao → codigo interno. OBRIGATORIO antes de agendar. |
+| **storage_state** | `storage_state_atacadao.json` — cookies/sessao do Playwright. Requer re-login quando expira. |
 
 ### Mapeamento CSV do Relatorio → Sistema Local
 
@@ -108,8 +172,12 @@ Agendar entrega em lote?
   -> AskUserQuestion: "Confirmar agendamento?"
   -> agendar_lote.py --lote-id LOTE123 --data 2026-03-15
 
-Sessao expirada?
-  -> NAO usar esta skill. Instruir: "python -m app.portal.atacadao.login_interativo"
+Sessao expirada? (detectada no Passo 1 ou por erro do script)
+  -> PARAR IMEDIATAMENTE. NAO tentar executar mais scripts.
+  -> Informar ao usuario: "Sessao expirada. Execute no terminal:
+     python -m app.portal.atacadao.login_interativo
+     Depois repita a solicitacao."
+  -> NAO tentar automatizar login (portal tem CAPTCHA)
 
 Consultar dados de agendamento SEM acessar portal?
   -> NAO usar esta skill. Usar consultando-sql ou gerindo-expedicao
@@ -120,13 +188,16 @@ Consultar dados de agendamento SEM acessar portal?
 ## Arquitetura
 
 ```
-Agente Web
-  1. Le atacadao_defaults.json (timeouts, veiculos, status)
-  2. Verifica sessao via browser_atacadao_login (MCP tool) ou script
-  3. AskUserQuestion (dados variaveis: protocolo, pedido, data)
-  4. Executa script [--dry-run] -> preview
-  5. AskUserQuestion ("Confirmar execucao?") [se destrutivo]
-  6. Executa script sem --dry-run -> executa de verdade
+Agente Web — SEGUIR EXATAMENTE ESTA ORDEM:
+  1. VERIFICAR SESSAO: ls -la app/portal/atacadao/storage_state_atacadao.json
+     Se nao existe → PARAR, pedir: python -m app.portal.atacadao.login_interativo
+  2. Resolver parametros (CNPJ, pedido) — usar resolvendo-entidades se necessario
+  3. Executar script com argumentos corretos (ver Decision Tree)
+     Se agendar_lote.py → SEMPRE --dry-run primeiro
+  4. REPORTAR campos-chave do JSON de saida (ver REGRAS DE REPORT)
+     NUNCA omitir pdf_path, modo, total_registros, csv_path, etc.
+  5. Se destrutivo: AskUserQuestion ("Confirmar execucao?") + mostrar preview
+  6. Se confirmado: executar sem --dry-run
 ```
 
 Scripts sao standalone (Playwright sync), importam de `app.portal.atacadao.*`.

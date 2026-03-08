@@ -1,6 +1,6 @@
 # GOTCHAS Criticos - Integracao Odoo
 
-**Ultima verificacao:** Janeiro/2026
+**Ultima verificacao:** Marco/2026
 
 ---
 

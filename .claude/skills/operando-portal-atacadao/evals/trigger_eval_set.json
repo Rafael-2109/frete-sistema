@@ -1,0 +1,82 @@
+[
+  {
+    "query": "preciso imprimir o protocolo 84523 no portal do Atacadao, da pra gerar o PDF da senha?",
+    "should_trigger": true
+  },
+  {
+    "query": "entra no site do Atacadao e verifica se o agendamento do CNPJ 75315333002490 ja foi aprovado, quero ver a data que eles confirmaram",
+    "should_trigger": true
+  },
+  {
+    "query": "quero agendar o lote SEP-2026-0312 no portal Atacadao pra dia 20/03, pedido VCD8847. verifica antes se o de-para ta completo",
+    "should_trigger": true
+  },
+  {
+    "query": "consulta no hodie booking qual saldo disponivel do pedido VCD8847 na filial Osasco, quero saber se da pra agendar tudo de uma vez",
+    "should_trigger": true
+  },
+  {
+    "query": "abre o portal do atacadao e imprime as senhas dos protocolos 84523, 84524 e 84525 tudo de uma vez",
+    "should_trigger": true
+  },
+  {
+    "query": "acessa o site Atacadao pra verificar se os agendamentos da proxima semana estao confirmados ou ainda aguardando aprovacao, CNPJs 75315333002490 e 75315333001180",
+    "should_trigger": true
+  },
+  {
+    "query": "preciso navegar no portal hodiebooking pra ver os pedidos disponiveis pra agendar, quais filiais tem saldo aberto?",
+    "should_trigger": true
+  },
+  {
+    "query": "entra no portal Atacadao e imprime protocolo 91022, a sessao pode ter expirado entao verifica primeiro",
+    "should_trigger": true
+  },
+  {
+    "query": "no site do atacadao, captura os produtos e quantidades do pedido VCD9103 pra eu comparar com o que tem na separacao",
+    "should_trigger": true
+  },
+  {
+    "query": "faz dry-run do agendamento no portal Atacadao pro lote SEP-2026-0315, data 25/03, quero ver preview antes de confirmar",
+    "should_trigger": true
+  },
+  {
+    "query": "consultar saldo Atacadao do pedido VCD8847",
+    "should_trigger": false
+  },
+  {
+    "query": "verificar agendamento do Atacadao, ta confirmado pra semana que vem?",
+    "should_trigger": false
+  },
+  {
+    "query": "tem pedido do Atacadao na carteira? quero ver o que ta pendente de separacao pra eles",
+    "should_trigger": false
+  },
+  {
+    "query": "status da entrega do Atacadao, NF 93421 foi entregue? tem canhoto?",
+    "should_trigger": false
+  },
+  {
+    "query": "faturas CarVia do Atacadao, quanto tem pendente de conferencia com a transportadora?",
+    "should_trigger": false
+  },
+  {
+    "query": "quanto custa frete pra filial Osasco do Atacadao? 3500kg de palmito, preciso de cotacao",
+    "should_trigger": false
+  },
+  {
+    "query": "quantos agendamentos confirmados tivemos no Atacadao no ultimo mes? quero um ranking por filial",
+    "should_trigger": false
+  },
+  {
+    "query": "crie separacao do VCD8847 pra amanha, pedido do Atacadao Osasco com 500 caixas de palmito",
+    "should_trigger": false
+  },
+  {
+    "query": "rastreie a NF 93421 do Atacadao no Odoo, quero ver se o lancamento ta correto",
+    "should_trigger": false
+  },
+  {
+    "query": "cadastre a unidade CGR no SSW como parceira, tipo T, razao social Atacadao SA",
+    "should_trigger": false
+  }
+]

@@ -2,22 +2,48 @@
 """Improve a skill description based on eval results.
 
 Takes eval results (from run_eval.py) and generates an improved description
-using Claude with extended thinking.
+using Claude via `claude -p` subprocess. Uses the Claude Code CLI which
+handles authentication automatically (no separate ANTHROPIC_API_KEY needed).
 """
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
-
-import anthropic
 
 from scripts.utils import parse_skill_md
 
 
+def _call_claude(prompt: str, model: str | None = None) -> str:
+    """Call claude -p with a prompt and return the text response.
+
+    Uses the Claude Code CLI which handles authentication automatically.
+    Removes CLAUDECODE env var to allow nesting inside a Claude Code session.
+    """
+    cmd = ["claude", "-p", prompt]
+    if model:
+        cmd.extend(["--model", model])
+
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=env,
+            timeout=300,
+        )
+        return result.stdout.decode("utf-8", errors="replace").strip()
+    except subprocess.TimeoutExpired:
+        print("Warning: claude -p timed out after 300s", file=sys.stderr)
+        return ""
+
+
 def improve_description(
-    client: anthropic.Anthropic,
     skill_name: str,
     skill_content: str,
     current_description: str,
@@ -111,24 +137,7 @@ I'd encourage you to be creative and mix up the style in different iterations si
 
 Please respond with only the new description text in <new_description> tags, nothing else."""
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=16000,
-        thinking={
-            "type": "enabled",
-            "budget_tokens": 10000,
-        },
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    # Extract thinking and text from response
-    thinking_text = ""
-    text = ""
-    for block in response.content:
-        if block.type == "thinking":
-            thinking_text = block.thinking
-        elif block.type == "text":
-            text = block.text
+    text = _call_claude(prompt, model=model)
 
     # Parse out the <new_description> tags
     match = re.search(r"<new_description>(.*?)</new_description>", text, re.DOTALL)
@@ -138,43 +147,28 @@ Please respond with only the new description text in <new_description> tags, not
     transcript: dict = {
         "iteration": iteration,
         "prompt": prompt,
-        "thinking": thinking_text,
         "response": text,
         "parsed_description": description,
         "char_count": len(description),
         "over_limit": len(description) > 1024,
     }
 
-    # If over 1024 chars, ask the model to shorten it
+    # If over 1024 chars, ask the model to shorten it (single-turn with context)
     if len(description) > 1024:
-        shorten_prompt = f"Your description is {len(description)} characters, which exceeds the hard 1024 character limit. Please rewrite it to be under 1024 characters while preserving the most important trigger words and intent coverage. Respond with only the new description in <new_description> tags."
-        shorten_response = client.messages.create(
-            model=model,
-            max_tokens=16000,
-            thinking={
-                "type": "enabled",
-                "budget_tokens": 10000,
-            },
-            messages=[
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": text},
-                {"role": "user", "content": shorten_prompt},
-            ],
+        shorten_prompt = (
+            f"Here is a skill description that is {len(description)} characters. "
+            f"It exceeds the hard 1024 character limit. Please rewrite it to be "
+            f"under 1024 characters while preserving the most important trigger "
+            f"words and intent coverage.\n\n"
+            f"Original description:\n{description}\n\n"
+            f"Respond with only the new description in <new_description> tags."
         )
-
-        shorten_thinking = ""
-        shorten_text = ""
-        for block in shorten_response.content:
-            if block.type == "thinking":
-                shorten_thinking = block.thinking
-            elif block.type == "text":
-                shorten_text = block.text
+        shorten_text = _call_claude(shorten_prompt, model=model)
 
         match = re.search(r"<new_description>(.*?)</new_description>", shorten_text, re.DOTALL)
         shortened = match.group(1).strip().strip('"') if match else shorten_text.strip().strip('"')
 
         transcript["rewrite_prompt"] = shorten_prompt
-        transcript["rewrite_thinking"] = shorten_thinking
         transcript["rewrite_response"] = shorten_text
         transcript["rewrite_description"] = shortened
         transcript["rewrite_char_count"] = len(shortened)
@@ -216,9 +210,7 @@ def main():
         print(f"Current: {current_description}", file=sys.stderr)
         print(f"Score: {eval_results['summary']['passed']}/{eval_results['summary']['total']}", file=sys.stderr)
 
-    client = anthropic.Anthropic()
     new_description = improve_description(
-        client=client,
         skill_name=name,
         skill_content=content,
         current_description=current_description,

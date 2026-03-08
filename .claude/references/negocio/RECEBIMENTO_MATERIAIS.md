@@ -371,19 +371,12 @@ Integrado ao scheduler existente (`app/scheduler/sincronizacao_incremental_defin
 
 ## Proximas Fases
 
-### Fase 2: Vinculacao NF-PO
-- Vincular NF de compra com Pedido de Compra
-- Validar quantidades e valores
-
-### Fase 3: Tratamento de Parciais
-- Recebimento parcial de NFs
-- Controle de saldo
-
-### Fase 4: Recebimento Fisico
-- Gestao de lotes
-- Controle de qualidade
-- Inspecao de materiais
-
-### Fase 5: Criacao Fatura Automatica
-- Gerar fatura no Odoo
+### Fase 5: Criacao Fatura Automatica (Pendente)
+- Gerar fatura no Odoo a partir do recebimento validado
 - Integracao contabil
+
+### Skills Relacionadas
+
+- `validacao-nf-po` — Debug/operacao da Fase 2
+- `conciliando-odoo-po` — Split/consolidacao de POs (Fase 3)
+- `recebimento-fisico-odoo` — Debug/operacao da Fase 4
