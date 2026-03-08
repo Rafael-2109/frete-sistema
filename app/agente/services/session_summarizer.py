@@ -29,8 +29,8 @@ SONNET_MODEL = "claude-sonnet-4-6"
 # Limite de caracteres das mensagens para enviar ao Sonnet
 MAX_MESSAGES_CHARS = 20000
 
-SUMMARY_PROMPT = """Voce eh um assistente de sumarizacao para um sistema de logistica (Nacom Goya).
-Analise a conversa abaixo e gere um resumo ESTRUTURADO em JSON.
+# System prompt estático — separado para habilitar prompt caching (cache_control ephemeral)
+SUMMARY_SYSTEM_PROMPT = """Voce eh um assistente de sumarizacao para um sistema de logistica (Nacom Goya).
 
 CONTEXTO DO SISTEMA:
 - Gestao de pedidos de venda, estoque, separacoes e fretes
@@ -38,21 +38,17 @@ CONTEXTO DO SISTEMA:
 - Produtos: palmito, azeitona, conservas, molhos
 - Operacoes: roteirizacao, expedicao, faturamento, NF-e
 
-<conversa>
-{messages}
-</conversa>
-
 GERE UM JSON com esta estrutura exata:
 
-{{
+{
   "resumo_geral": "frase curta (max 100 chars) descrevendo o que foi feito na sessao",
   "pedidos_mencionados": [
-    {{
+    {
       "cliente": "nome do cliente",
       "pedido": "numero do pedido (se mencionado)",
       "status": "o que foi discutido/decidido sobre este pedido",
       "acao_pendente": "proxima acao necessaria (se houver)"
-    }}
+    }
   ],
   "decisoes_tomadas": [
     "decisao 1 - descricao clara e concisa"
@@ -65,7 +61,7 @@ GERE UM JSON com esta estrutura exata:
   ],
   "ferramentas_usadas": ["consultar_sql", "save_memory"],
   "topicos_abordados": ["separacao", "estoque", "frete"]
-}}
+}
 
 REGRAS:
 - Arrays vazios se nao houver itens: []
@@ -158,10 +154,15 @@ def summarize_session(
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=1500,
+            system=[{
+                "type": "text",
+                "text": SUMMARY_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{
                 "role": "user",
-                "content": SUMMARY_PROMPT.format(messages=formatted)
-            }]
+                "content": f"Analise a conversa abaixo e gere um resumo ESTRUTURADO em JSON.\n\n<conversa>\n{formatted}\n</conversa>",
+            }],
         )
 
         result_text = response.content[0].text.strip()

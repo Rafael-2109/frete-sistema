@@ -35,7 +35,8 @@ MAX_SESSIONS_CHARS = 24000
 # Máximo de sessões recentes a analisar
 MAX_SESSIONS_TO_ANALYZE = 25
 
-PATTERN_PROMPT = """Voce eh um analista de comportamento para um agente de IA em sistema de logistica (Nacom Goya).
+# System prompt estático — separado para habilitar prompt caching (cache_control ephemeral)
+PATTERN_SYSTEM_PROMPT = """Voce eh um analista de comportamento para um agente de IA em sistema de logistica (Nacom Goya).
 Sua tarefa eh gerar INSTRUCOES PRESCRITIVAS que mudem o comportamento do agente — NAO descricoes do que o usuario faz.
 
 CONTEXTO DO SISTEMA:
@@ -43,12 +44,6 @@ CONTEXTO DO SISTEMA:
 - Clientes: Atacadao, Assai, Carrefour, Sam's Club, outros
 - Produtos: palmito, azeitona, conservas, molhos
 - Operacoes: roteirizacao, expedicao, faturamento, NF-e, embarques
-
-<sessoes>
-{sessions}
-</sessoes>
-
-{corrections_block}
 
 GERE um JSON com esta estrutura:
 
@@ -224,15 +219,22 @@ def analyze_patterns(
         if not corrections_block:
             corrections_block = '(Nenhuma correcao registrada ainda)'
 
+        user_content = (
+            f"<sessoes>\n{formatted}\n</sessoes>\n\n"
+            f"{corrections_block}"
+        )
+
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=2000,
+            system=[{
+                "type": "text",
+                "text": PATTERN_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{
                 "role": "user",
-                "content": PATTERN_PROMPT.format(
-                    sessions=formatted,
-                    corrections_block=corrections_block,
-                ),
+                "content": user_content,
             }],
         )
 
@@ -490,12 +492,9 @@ def _xml_escape(text: str) -> str:
 # Roda em daemon thread (background) a cada exchange, sem bloquear UX.
 # =====================================================================
 
-KNOWLEDGE_EXTRACTION_PROMPT = """Voce eh um extrator de conhecimento organizacional para a Nacom Goya (industria de alimentos).
-Analise a conversa abaixo entre um operador e o agente de IA. Extraia SOMENTE informacoes factuais e uteis para TODA a organizacao.
-
-<conversa>
-{messages}
-</conversa>
+# System prompt estático para extração de conhecimento — prompt caching
+KNOWLEDGE_EXTRACTION_SYSTEM_PROMPT = """Voce eh um extrator de conhecimento organizacional para a Nacom Goya (industria de alimentos).
+Analise a conversa e extraia SOMENTE informacoes factuais e uteis para TODA a organizacao.
 
 Retorne JSON VALIDO com esta estrutura (arrays vazios se nao encontrar nada):
 
@@ -814,9 +813,14 @@ def extrair_conhecimento_sessao(
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=1500,
+            system=[{
+                "type": "text",
+                "text": KNOWLEDGE_EXTRACTION_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{
                 "role": "user",
-                "content": KNOWLEDGE_EXTRACTION_PROMPT.format(messages=formatted),
+                "content": f"<conversa>\n{formatted}\n</conversa>",
             }],
         )
 

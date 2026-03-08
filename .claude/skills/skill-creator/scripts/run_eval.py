@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import select
+import signal
 import subprocess
 import sys
 import time
@@ -88,6 +89,7 @@ def run_single_query(
             stderr=subprocess.DEVNULL,
             cwd=project_root,
             env=env,
+            start_new_session=True,
         )
 
         triggered = False
@@ -100,9 +102,13 @@ def run_single_query(
         try:
             while time.time() - start_time < timeout:
                 if process.poll() is not None:
-                    remaining = process.stdout.read()
-                    if remaining:
-                        buffer += remaining.decode("utf-8", errors="replace")
+                    # Process exited, but orphan children may keep pipe open.
+                    # Use select with timeout to avoid blocking indefinitely.
+                    ready_final, _, _ = select.select([process.stdout], [], [], 2.0)
+                    if ready_final:
+                        remaining = process.stdout.read()
+                        if remaining:
+                            buffer += remaining.decode("utf-8", errors="replace")
                     break
 
                 ready, _, _ = select.select([process.stdout], [], [], 1.0)
@@ -170,10 +176,18 @@ def run_single_query(
                     elif event.get("type") == "result":
                         return triggered
         finally:
-            # Clean up process on any exit path (return, exception, timeout)
+            # Clean up process AND its children (MCP servers etc.) on any exit
             if process.poll() is None:
-                process.kill()
-                process.wait()
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+            if process.stdout:
+                process.stdout.close()
 
         return triggered
     finally:
@@ -264,8 +278,10 @@ def _run_eval_inner(
 ) -> dict:
     """Inner implementation of run_eval (without hide/restore logic)."""
     results = []
+    future_timeout = timeout + 15  # Allow extra time beyond subprocess timeout
 
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+    executor = ProcessPoolExecutor(max_workers=num_workers)
+    try:
         future_to_info = {}
         for item in eval_set:
             for run_idx in range(runs_per_query):
@@ -289,10 +305,15 @@ def _run_eval_inner(
             if query not in query_triggers:
                 query_triggers[query] = []
             try:
-                query_triggers[query].append(future.result())
+                query_triggers[query].append(future.result(timeout=future_timeout))
+            except TimeoutError:
+                print(f"Warning: future timed out after {future_timeout}s: {query[:60]}", file=sys.stderr)
+                query_triggers[query].append(False)
             except Exception as e:
                 print(f"Warning: query failed: {e}", file=sys.stderr)
                 query_triggers[query].append(False)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     for query, triggers in query_triggers.items():
         item = query_items[query]

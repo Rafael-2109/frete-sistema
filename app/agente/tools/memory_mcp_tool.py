@@ -213,24 +213,31 @@ def _execute_with_context(func):
 
 _SONNET_MODEL = "claude-sonnet-4-6"
 
-_CONTEXTUAL_PROMPT = """\
+_CONTEXTUAL_SYSTEM_PROMPT = """\
+Voce eh um analisador de memorias de um sistema de logistica (Nacom Goya).
+Dada uma memoria sendo salva e o contexto das memorias existentes do usuario, gere:
+
+1. CONTEXTO: 1-2 frases situando esta memoria no conjunto do usuario (maximo 80 tokens)
+2. ENTIDADES: lista de entidades no formato tipo:nome separadas por | (ex: transportadora:RODONAVES|uf:AM|cliente:ATACADAO)
+3. RELACOES: lista de relacoes no formato origem>tipo>destino separadas por | (ex: RODONAVES>atrasa_para>AM)
+
+Tipos de entidade validos: uf, pedido, cnpj, valor, transportadora, produto, cliente, fornecedor, regra
+Se nao houver entidades ou relacoes claras, escreva ENTIDADES: nenhuma e RELACOES: nenhuma
+
+Responda EXATAMENTE no formato abaixo. Cada secao eh obrigatoria.
+CONTEXTO: ...
+ENTIDADES: ...
+RELACOES: ...\
+"""
+
+_CONTEXTUAL_USER_TEMPLATE = """\
 <user_memories>
 {existing_memories}
 </user_memories>
 
-Aqui está a memória sendo salva pelo usuário:
 <memory path="{path}">
 {content}
-</memory>
-
-Responda no formato abaixo. Cada seção é obrigatória.
-
-CONTEXTO: 1-2 frases situando esta memória no conjunto do usuário (máximo 80 tokens)
-ENTIDADES: lista de entidades no formato tipo:nome separadas por | (ex: transportadora:RODONAVES|uf:AM|cliente:ATACADAO)
-RELACOES: lista de relações no formato origem>tipo>destino separadas por | (ex: RODONAVES>atrasa_para>AM)
-
-Tipos de entidade válidos: uf, pedido, cnpj, valor, transportadora, produto, cliente, fornecedor, regra
-Se não houver entidades ou relações claras, escreva ENTIDADES: nenhuma e RELACOES: nenhuma\
+</memory>\
 """
 
 
@@ -300,9 +307,14 @@ def _generate_memory_context(
         response = client.messages.create(
             model=_SONNET_MODEL,
             max_tokens=350,
+            system=[{
+                "type": "text",
+                "text": _CONTEXTUAL_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{
                 "role": "user",
-                "content": _CONTEXTUAL_PROMPT.format(
+                "content": _CONTEXTUAL_USER_TEMPLATE.format(
                     existing_memories=existing_text,
                     path=path,
                     content=content_truncated,

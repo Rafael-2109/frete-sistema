@@ -59,6 +59,7 @@ def run_loop(
     live_report_path: Path | None = None,
     log_dir: Path | None = None,
     hide_real_skill: bool = False,
+    max_total_time: int = 3600,
 ) -> dict:
     """Run the eval + improvement loop."""
     project_root = find_project_root()
@@ -76,11 +77,20 @@ def run_loop(
 
     history = []
     exit_reason = "unknown"
+    loop_start_time = time.time()
 
     for iteration in range(1, max_iterations + 1):
+        # Check global time limit before starting new iteration
+        elapsed_total = time.time() - loop_start_time
+        if elapsed_total >= max_total_time:
+            exit_reason = f"max_total_time ({max_total_time}s exceeded after {elapsed_total:.0f}s)"
+            if verbose:
+                print(f"\nGlobal time limit reached ({elapsed_total:.0f}s >= {max_total_time}s).", file=sys.stderr)
+            break
+
         if verbose:
             print(f"\n{'='*60}", file=sys.stderr)
-            print(f"Iteration {iteration}/{max_iterations}", file=sys.stderr)
+            print(f"Iteration {iteration}/{max_iterations} (elapsed: {elapsed_total:.0f}s / {max_total_time}s)", file=sys.stderr)
             print(f"Description: {current_description}", file=sys.stderr)
             print(f"{'='*60}", file=sys.stderr)
 
@@ -258,6 +268,7 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
     parser.add_argument("--hide-real-skill", action="store_true",
                         help="Temporarily hide the real skill during eval so the temp command file gets triggered")
+    parser.add_argument("--max-total-time", type=int, default=3600, help="Global time limit in seconds (default: 3600)")
     parser.add_argument("--report", default="auto", help="Generate HTML report at this path (default: 'auto' for temp file, 'none' to disable)")
     parser.add_argument("--results-dir", default=None, help="Save all outputs (results.json, report.html, log.txt) to a timestamped subdirectory here")
     args = parser.parse_args()
@@ -309,6 +320,7 @@ def main():
         live_report_path=live_report_path,
         log_dir=log_dir,
         hide_real_skill=args.hide_real_skill,
+        max_total_time=args.max_total_time,
     )
 
     # Save JSON output

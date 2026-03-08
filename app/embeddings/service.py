@@ -58,6 +58,9 @@ class EmbeddingService:
 
     # TTL de 5 minutos para cache de deteccao pgvector (P0.6)
     _PGVECTOR_CACHE_TTL = 300
+    # Cache para disponibilidade de iterative_scan (pgvector 0.8.0+)
+    _iterative_scan_available = None  # Optional[bool]: None = não verificado, True/False = resultado
+    _iterative_scan_checked_at: float = 0
 
     def __init__(self, model: str = None, dimensions: int = None):
         self.model = model or VOYAGE_DEFAULT_MODEL
@@ -181,6 +184,53 @@ class EmbeddingService:
 
         return results
 
+    def _enable_iterative_scan(self):
+        """
+        Habilita hnsw.iterative_scan = relaxed_order se pgvector >= 0.8.0.
+
+        Previne 'overfiltering' quando busca vetorial tem WHERE clauses restritivas.
+        Sem isso, HNSW pode não retornar candidatos suficientes quando muitos
+        registros são filtrados pelo WHERE.
+
+        Usa SET LOCAL (escopo da transação) para evitar efeitos colaterais.
+        Resultado cacheado por 5 min para evitar queries desnecessárias.
+        """
+        now = _time.time()
+        if (
+            EmbeddingService._iterative_scan_available is not None
+            and now - EmbeddingService._iterative_scan_checked_at < self._PGVECTOR_CACHE_TTL
+        ):
+            if EmbeddingService._iterative_scan_available:
+                try:
+                    db.session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
+                except Exception:
+                    pass  # Falha silenciosa — query funciona sem iterative_scan
+            return
+
+        # Verificar versão do pgvector
+        try:
+            result = db.session.execute(
+                text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+            )
+            row = result.fetchone()
+            if row:
+                version = row[0]  # ex: "0.8.0"
+                major, minor = int(version.split('.')[0]), int(version.split('.')[1])
+                if (major, minor) >= (0, 8):
+                    EmbeddingService._iterative_scan_available = True
+                    db.session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
+                    logger.info(f"[EmbeddingService] pgvector {version}: iterative_scan habilitado")
+                else:
+                    EmbeddingService._iterative_scan_available = False
+                    logger.info(f"[EmbeddingService] pgvector {version}: iterative_scan indisponível (requer 0.8.0+)")
+            else:
+                EmbeddingService._iterative_scan_available = False
+        except Exception as e:
+            EmbeddingService._iterative_scan_available = False
+            logger.debug(f"[EmbeddingService] iterative_scan check failed: {e}")
+
+        EmbeddingService._iterative_scan_checked_at = now
+
     def _search_pgvector_ssw(
         self,
         query_embedding: List[float],
@@ -190,6 +240,10 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Busca via pgvector usando operador de cosine distance."""
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        # Habilitar iterative_scan para queries com WHERE (pgvector 0.8.0+)
+        if subdir_filter:
+            self._enable_iterative_scan()
 
         # Query com operador <=> (cosine distance) do pgvector
         # similarity = 1 - distance
@@ -462,6 +516,10 @@ class EmbeddingService:
         """Busca entidades financeiras via pgvector."""
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
+        # Habilitar iterative_scan para queries com WHERE filter (pgvector 0.8.0+)
+        if entity_type != 'all':
+            self._enable_iterative_scan()
+
         where_clause = ""
         if entity_type != 'all':
             where_clause = "AND entity_type = :entity_type"
@@ -598,6 +656,9 @@ class EmbeddingService:
         min_similarity: float,
     ) -> List[Dict[str, Any]]:
         """Busca session turns via pgvector."""
+        # Habilitar iterative_scan para queries com WHERE user_id (pgvector 0.8.0+)
+        self._enable_iterative_scan()
+
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
         sql = text("""
@@ -728,6 +789,9 @@ class EmbeddingService:
         min_similarity: float,
     ) -> List[Dict[str, Any]]:
         """Busca memorias via pgvector."""
+        # Habilitar iterative_scan para queries com WHERE user_id (pgvector 0.8.0+)
+        self._enable_iterative_scan()
+
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
         # Incluir user_id=0 (memorias empresa) para memoria compartilhada (PRD v2.1)
@@ -1099,6 +1163,10 @@ class EmbeddingService:
         """Busca motivos de devolucao via pgvector."""
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
+        # Habilitar iterative_scan para queries com WHERE filter (pgvector 0.8.0+)
+        if motivo_filter:
+            self._enable_iterative_scan()
+
         where_clause = ""
         if motivo_filter:
             where_clause = "AND motivo_classificado = :motivo_filter"
@@ -1354,6 +1422,10 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Busca rotas/templates via pgvector."""
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        # Habilitar iterative_scan para queries com WHERE filter (pgvector 0.8.0+)
+        if tipo:
+            self._enable_iterative_scan()
 
         where_clause = ""
         if tipo:

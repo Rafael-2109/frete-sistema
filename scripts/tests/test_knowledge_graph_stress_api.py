@@ -216,7 +216,7 @@ class ApiStressTestRunner:
             return (None, [], [])
 
         import anthropic
-        from app.agente.tools.memory_mcp_tool import _CONTEXTUAL_PROMPT, _HAIKU_MODEL
+        from app.agente.tools.memory_mcp_tool import _CONTEXTUAL_SYSTEM_PROMPT, _CONTEXTUAL_USER_TEMPLATE, _SONNET_MODEL
         from app.agente.services.knowledge_graph_service import parse_contextual_response
 
         self.api_calls += 1
@@ -251,11 +251,16 @@ class ApiStressTestRunner:
             # Chamada com timeout de 15s (produção usa 5s)
             client = anthropic.Anthropic(timeout=15.0)
             response = client.messages.create(
-                model=_HAIKU_MODEL,
+                model=_SONNET_MODEL,
                 max_tokens=250,
+                system=[{
+                    "type": "text",
+                    "text": _CONTEXTUAL_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }],
                 messages=[{
                     "role": "user",
-                    "content": _CONTEXTUAL_PROMPT.format(
+                    "content": _CONTEXTUAL_USER_TEMPLATE.format(
                         existing_memories=existing_text,
                         path=path,
                         content=content_truncated,

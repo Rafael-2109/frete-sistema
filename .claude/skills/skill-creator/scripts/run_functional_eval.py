@@ -80,12 +80,14 @@ def run_executor(
             cwd=project_root,
             env=env,
             timeout=timeout,
+            start_new_session=True,
         )
         duration = time.time() - t0
         output = result.stdout.decode("utf-8", errors="replace")
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         duration = time.time() - t0
-        output = ""
+        # Capture any partial stdout collected before timeout
+        output = exc.stdout.decode("utf-8", errors="replace") if exc.stdout else ""
 
     # Parse stream-json events
     events = []
@@ -405,7 +407,8 @@ def run_functional_evals(
         # Within a config, we can parallelize with_skill runs
         # but without_skill runs must be sequential (shared SKILL.md hide/restore)
         if config == "with_skill" and max_workers > 1:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            executor = ThreadPoolExecutor(max_workers=max_workers)
+            try:
                 futures = {}
                 for eval_item, cfg in config_tasks:
                     future = executor.submit(
@@ -431,6 +434,8 @@ def run_functional_evals(
                         print(f"Timeout in eval-{eval_id}/{cfg}: exceeded {timeout + 120}s", file=sys.stderr)
                     except Exception as e:
                         print(f"Error in eval-{eval_id}/{cfg}: {e}", file=sys.stderr)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
         else:
             # Sequential execution (required for without_skill due to file hide/restore)
             for eval_item, cfg in config_tasks:

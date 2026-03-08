@@ -24,12 +24,64 @@ from dataclasses import dataclass
 import asyncio
 
 import anthropic
+from pydantic import BaseModel, Field
 
 from app import db
 from app.devolucao.models import NFDevolucaoLinha, DeParaProdutoCliente
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# PYDANTIC MODELS PARA STRUCTURED OUTPUTS (constrained decoding)
+# =============================================================================
+
+class DeParaAnaliseCliente(BaseModel):
+    """Analise extraida da descricao do produto do cliente."""
+    materia_prima: Optional[str] = None
+    estado: Optional[str] = None
+    embalagem: Optional[str] = None
+    gramatura: Optional[str] = None
+    marca: Optional[str] = None
+
+
+class DeParaOutraOpcao(BaseModel):
+    """Opcao alternativa de produto."""
+    codigo: str
+    confianca: float = Field(ge=0.0, le=1.0)
+    motivo: str = ""
+    gramatura: Optional[str] = None
+
+
+class DeParaResponse(BaseModel):
+    """Resposta estruturada do De-Para de produtos.
+
+    Usada com client.messages.parse(output_format=DeParaResponse)
+    para garantir JSON valido via constrained decoding (Structured Outputs).
+    """
+    analise_cliente: Optional[DeParaAnaliseCliente] = None
+    codigo_interno: Optional[str] = None
+    confianca: float = Field(ge=0.0, le=1.0, default=0.0)
+    justificativa: str = ""
+    gramatura_match: Optional[bool] = None
+    unidade_detectada: Optional[str] = None
+    qtd_convertida_caixas: Optional[float] = None
+    outras_opcoes: list[DeParaOutraOpcao] = []
+
+
+class TermosBuscaResponse(BaseModel):
+    """Resposta estruturada da extracao de termos de busca."""
+    termos: list[str] = []
+    materia_prima: Optional[str] = None
+
+
+class ObservacaoResponse(BaseModel):
+    """Resposta estruturada da extracao de observacoes de NFD."""
+    numeros_nf_venda: list[str] = []
+    motivo_sugerido: Optional[str] = None
+    descricao_motivo: Optional[str] = None
+    confianca: float = Field(ge=0.0, le=1.0, default=0.0)
 
 # Modelo Haiku 4.5 para micro-tarefas (extrair_termos, extrair_motivo, normalizar_unidade)
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
@@ -170,26 +222,16 @@ ABREVIACOES COMPOSTAS CRITICAS (clientes costumam usar):
 # PROMPTS ESPECIALIZADOS
 # =============================================================================
 
-PROMPT_DEPARA_PRODUTO = """Voce e um especialista em produtos alimenticios da Nacom Goya.
+# System prompt estático para De-Para — prompt caching (cache_control ephemeral)
+# GLOSSARIO_PRODUTOS + regras de matching (~4K chars estáticos)
+DEPARA_SYSTEM_PROMPT = f"""Voce e um especialista em produtos alimenticios da Nacom Goya.
 
-{glossario}
+{GLOSSARIO_PRODUTOS}
 
 === CONTEXTO ===
 - A Nacom Goya comercializa: azeitonas, cogumelos, palmitos, pessegos, pimentas, condimentos
 - Cada cliente usa codigos e descricoes PROPRIOS para nossos produtos
 - Precisamos mapear o codigo/descricao do CLIENTE para o NOSSO codigo interno
-
-=== PRODUTO DO CLIENTE ===
-Codigo cliente: {codigo_cliente}
-Descricao cliente: {descricao_cliente}
-CNPJ (prefixo): {prefixo_cnpj}
-Unidade cliente: {unidade_cliente}
-Quantidade: {quantidade}
-
-{historico_faturamento}
-
-=== NOSSOS PRODUTOS CANDIDATOS ===
-{produtos_candidatos}
 
 === PASSO 1: EXTRAIR INFORMACOES DO PRODUTO DO CLIENTE ===
 Analise a descricao do cliente e extraia:
@@ -566,33 +608,63 @@ class AIResolverService:
             # Usar todos os produtos para busca de nome depois
             candidatos = todos_produtos
 
-            prompt = PROMPT_DEPARA_PRODUTO.format(
-                glossario=GLOSSARIO_PRODUTOS,
-                codigo_cliente=codigo_cliente,
-                descricao_cliente=descricao_cliente,
-                prefixo_cnpj=prefixo_cnpj[:8],
-                unidade_cliente=unidade_cliente or 'NAO INFORMADA',
-                quantidade=quantidade or 'NAO INFORMADA',
-                historico_faturamento=historico_str,
-                produtos_candidatos=produtos_str
+            # Prompt caching: system prompt estático (~4K chars) + user content dinâmico
+            user_content = (
+                f"=== PRODUTO DO CLIENTE ===\n"
+                f"Codigo cliente: {codigo_cliente}\n"
+                f"Descricao cliente: {descricao_cliente}\n"
+                f"CNPJ (prefixo): {prefixo_cnpj[:8]}\n"
+                f"Unidade cliente: {unidade_cliente or 'NAO INFORMADA'}\n"
+                f"Quantidade: {quantidade or 'NAO INFORMADA'}\n\n"
+                f"{historico_str}\n\n"
+                f"=== NOSSOS PRODUTOS CANDIDATOS ===\n"
+                f"{produtos_str}"
             )
 
             client = self._get_client()
 
-            response = client.messages.create(
-                model=SONNET_MODEL,
-                max_tokens=1500,  # Aumentado para comportar JSON completo com justificativas
-                temperature=0,  # Respostas deterministicas - evita instabilidade
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
-
-            result_text = response.content[0].text.strip()
-
-            # 5. Parsear resposta JSON
-            resultado = self._parsear_resposta_produto(result_text, candidatos)
+            # 5. Structured Outputs via parse() — constrained decoding garante JSON valido
+            try:
+                parsed_response = client.messages.parse(
+                    model=SONNET_MODEL,
+                    max_tokens=1500,
+                    temperature=0,
+                    output_format=DeParaResponse,
+                    system=[{
+                        "type": "text",
+                        "text": DEPARA_SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{
+                        "role": "user",
+                        "content": user_content,
+                    }],
+                )
+                resultado = self._converter_depara_response(
+                    parsed_response.parsed, candidatos
+                )
+                logger.info("[AI_RESOLVER] Structured Outputs: parse() OK")
+            except Exception as parse_err:
+                # Fallback: create() + _extrair_json() (comportamento anterior)
+                logger.warning(
+                    f"[AI_RESOLVER] parse() falhou ({parse_err}), fallback para create()"
+                )
+                response = client.messages.create(
+                    model=SONNET_MODEL,
+                    max_tokens=1500,
+                    temperature=0,
+                    system=[{
+                        "type": "text",
+                        "text": DEPARA_SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{
+                        "role": "user",
+                        "content": user_content,
+                    }],
+                )
+                result_text = response.content[0].text.strip()
+                resultado = self._parsear_resposta_produto(result_text, candidatos)
 
             logger.info(
                 f"[AI_RESOLVER] Produto resolvido: {codigo_cliente} -> "
@@ -863,24 +935,42 @@ class AIResolverService:
             )
 
             client = self._get_client()
-            response = client.messages.create(
-                model=HAIKU_MODEL,
-                max_tokens=300,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}]
-            )
 
-            result_text = response.content[0].text.strip()
-            dados = self._extrair_json(result_text)
+            # Structured Outputs: parse() garante JSON valido
+            try:
+                parsed_response = client.messages.parse(
+                    model=HAIKU_MODEL,
+                    max_tokens=300,
+                    temperature=0,
+                    output_format=TermosBuscaResponse,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                parsed = parsed_response.parsed
+                resultado = {
+                    'termos': parsed.termos,
+                    'materia_prima': parsed.materia_prima
+                }
+                logger.debug("[AI_RESOLVER] Termos: Structured Outputs OK")
+            except Exception as parse_err:
+                # Fallback: create() + _extrair_json()
+                logger.debug(f"[AI_RESOLVER] Termos parse() fallback: {parse_err}")
+                response = client.messages.create(
+                    model=HAIKU_MODEL,
+                    max_tokens=300,
+                    temperature=0,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                result_text = response.content[0].text.strip()
+                dados = self._extrair_json(result_text)
 
-            termos = dados.get('termos', [])
-            if not isinstance(termos, list):
-                termos = [termos] if termos else []
+                termos = dados.get('termos', [])
+                if not isinstance(termos, list):
+                    termos = [termos] if termos else []
 
-            resultado = {
-                'termos': termos,
-                'materia_prima': dados.get('materia_prima')
-            }
+                resultado = {
+                    'termos': termos,
+                    'materia_prima': dados.get('materia_prima')
+                }
 
             logger.info(
                 f"[AI_RESOLVER] Termos extraidos: {resultado['termos']} "
@@ -1464,6 +1554,59 @@ class AIResolverService:
 
         return '\n'.join(linhas)
 
+    def _converter_depara_response(
+        self,
+        parsed: DeParaResponse,
+        candidatos: List[Dict],
+        metodo_resolucao: str = 'LIBERDADE_TOTAL'
+    ) -> ResultadoResolucaoProduto:
+        """Converte DeParaResponse (Structured Outputs) para ResultadoResolucaoProduto.
+
+        Substitui _parsear_resposta_produto para respostas via parse().
+        Nao precisa de _extrair_json() pois JSON ja e garantido pelo constrained decoding.
+        """
+        codigo_interno = parsed.codigo_interno
+        confianca = parsed.confianca
+        justificativa = parsed.justificativa
+
+        # Buscar nome do produto usando funcao auxiliar
+        nome_interno = self._buscar_nome_produto(codigo_interno, candidatos)
+
+        # Montar sugestao principal
+        sugestao_principal = None
+        if codigo_interno:
+            sugestao_principal = ProdutoSugestao(
+                codigo_interno=codigo_interno,
+                nome_interno=nome_interno,
+                confianca=confianca,
+                justificativa=justificativa
+            )
+
+        # Outras opcoes
+        outras = []
+        for opcao in parsed.outras_opcoes[:3]:
+            if opcao.codigo and opcao.codigo != codigo_interno:
+                nome = self._buscar_nome_produto(opcao.codigo, candidatos)
+                outras.append(ProdutoSugestao(
+                    codigo_interno=opcao.codigo,
+                    nome_interno=nome,
+                    confianca=opcao.confianca,
+                    justificativa=opcao.motivo
+                ))
+
+        # Determinar se requer confirmacao
+        requer_confirmacao = confianca < 0.9
+
+        return ResultadoResolucaoProduto(
+            sucesso=codigo_interno is not None,
+            confianca=confianca,
+            sugestao_principal=sugestao_principal,
+            outras_sugestoes=outras,
+            requer_confirmacao=requer_confirmacao,
+            mensagem='Analise concluida' if codigo_interno else 'Produto nao identificado',
+            metodo_resolucao=metodo_resolucao
+        )
+
     def _parsear_resposta_produto(
         self,
         texto: str,
@@ -1611,32 +1754,47 @@ class AIResolverService:
 
             client = self._get_client()
 
-            response = client.messages.create(
-                model=HAIKU_MODEL,
-                max_tokens=500,  # Aumentado para comportar observacoes longas
-                temperature=0,  # Respostas deterministicas
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
+            # Structured Outputs: parse() garante JSON valido
+            try:
+                parsed_response = client.messages.parse(
+                    model=HAIKU_MODEL,
+                    max_tokens=500,
+                    temperature=0,
+                    output_format=ObservacaoResponse,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+                parsed = parsed_response.parsed
+                numeros_nf_venda = parsed.numeros_nf_venda
+                numero_nf_venda = numeros_nf_venda[0] if numeros_nf_venda else None
+                motivo_final = parsed.motivo_sugerido
+                confianca_final = parsed.confianca
+                descricao_motivo = parsed.descricao_motivo
+                logger.debug("[AI_RESOLVER] Observacao: Structured Outputs OK")
+            except Exception as parse_err:
+                # Fallback: create() + _extrair_json()
+                logger.debug(f"[AI_RESOLVER] Observacao parse() fallback: {parse_err}")
+                response = client.messages.create(
+                    model=HAIKU_MODEL,
+                    max_tokens=500,
+                    temperature=0,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+                result_text = response.content[0].text.strip()
+                dados = self._extrair_json(result_text)
 
-            result_text = response.content[0].text.strip()
-
-            # Parsear JSON
-            dados = self._extrair_json(result_text)
-
-            # Extrair lista de NFs (novo formato)
-            numeros_nf_venda = dados.get('numeros_nf_venda', [])
-            if not isinstance(numeros_nf_venda, list):
-                numeros_nf_venda = [numeros_nf_venda] if numeros_nf_venda else []
-
-            # Manter compatibilidade com campo antigo
-            numero_nf_venda = numeros_nf_venda[0] if numeros_nf_venda else dados.get('numero_nf_venda')
-
-            # Usar motivo semantico se Haiku deu confianca baixa ou motivo generico
-            motivo_final = dados.get('motivo_sugerido')
-            confianca_final = float(dados.get('confianca', 0))
+                numeros_nf_venda = dados.get('numeros_nf_venda', [])
+                if not isinstance(numeros_nf_venda, list):
+                    numeros_nf_venda = [numeros_nf_venda] if numeros_nf_venda else []
+                numero_nf_venda = numeros_nf_venda[0] if numeros_nf_venda else dados.get('numero_nf_venda')
+                motivo_final = dados.get('motivo_sugerido')
+                confianca_final = float(dados.get('confianca', 0))
+                descricao_motivo = dados.get('descricao_motivo')
 
             if motivo_semantico and (
                 confianca_final < 0.7
@@ -1650,7 +1808,7 @@ class AIResolverService:
                 numero_nf_venda=numero_nf_venda,
                 numeros_nf_venda=numeros_nf_venda,
                 motivo_sugerido=motivo_final,
-                descricao_motivo=dados.get('descricao_motivo'),
+                descricao_motivo=descricao_motivo,
                 confianca=confianca_final,
                 texto_original=texto
             )

@@ -26,33 +26,24 @@ logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
 
-CONSOLIDATION_PROMPT = """Consolide estas {count} notas de memória de um usuário em UM resumo conciso.
+# System prompt estático para consolidação — prompt caching (cache_control ephemeral)
+CONSOLIDATION_SYSTEM_PROMPT = """Voce eh um consolidador de memorias de um sistema de logistica (Nacom Goya).
+Consolide notas de memoria em UM resumo conciso.
 
 REGRAS:
-- Mantenha TODOS os fatos, preferências, regras e correções — NÃO perca informação
-- Elimine apenas redundâncias, reformulações e informações duplicadas
-- Organize por tópico (preferências, regras, correções, contexto)
-- Formato: texto corrido organizado, máximo 800 caracteres
-- Linguagem: português brasileiro
-- NÃO adicione interpretações ou suposições — apenas o que está escrito
+- Mantenha TODOS os fatos, preferencias, regras e correcoes — NAO perca informacao
+- Elimine apenas redundancias, reformulacoes e informacoes duplicadas
+- Organize por topico (preferencias, regras, correcoes, contexto)
+- Formato: texto corrido organizado, maximo 800 caracteres
+- Linguagem: portugues brasileiro
+- NAO adicione interpretacoes ou suposicoes — apenas o que esta escrito"""
 
-NOTAS PARA CONSOLIDAR:
-{memories}
+# System prompt estático para verificação — prompt caching
+VERIFICATION_SYSTEM_PROMPT = """Voce eh um verificador de qualidade de consolidacao de memorias.
+Compare notas originais com um resumo e identifique fatos perdidos.
 
-RESUMO CONSOLIDADO:"""
-
-VERIFICATION_PROMPT = """Compare as NOTAS ORIGINAIS com o RESUMO abaixo.
-
-Liste APENAS os fatos que estão nas notas originais mas NÃO estão no resumo.
-Se TODOS os fatos foram preservados, responda exatamente: "TODOS_PRESERVADOS"
-
-NOTAS ORIGINAIS:
-{originals}
-
-RESUMO:
-{summary}
-
-FATOS PERDIDOS (ou "TODOS_PRESERVADOS"):"""
+REGRA: Liste APENAS os fatos que estao nas notas originais mas NAO estao no resumo.
+Se TODOS os fatos foram preservados, responda exatamente: "TODOS_PRESERVADOS"."""
 
 # Diretórios protegidos — NUNCA consolidar estes arquivos
 PROTECTED_PATHS = {
@@ -353,11 +344,17 @@ def _consolidate_group(
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=CONSOLIDATION_MAX_TOKENS,
+            system=[{
+                "type": "text",
+                "text": CONSOLIDATION_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{
                 "role": "user",
-                "content": CONSOLIDATION_PROMPT.format(
-                    count=len(memory_texts),
-                    memories=memories_text[:INPUT_LIMIT],  # Limitar input
+                "content": (
+                    f"Consolide estas {len(memory_texts)} notas em UM resumo.\n\n"
+                    f"NOTAS PARA CONSOLIDAR:\n{memories_text[:INPUT_LIMIT]}\n\n"
+                    f"RESUMO CONSOLIDADO:"
                 ),
             }],
         )
@@ -378,11 +375,17 @@ def _consolidate_group(
             verify_response = client.messages.create(
                 model=SONNET_MODEL,
                 max_tokens=VERIFICATION_MAX_TOKENS,
+                system=[{
+                    "type": "text",
+                    "text": VERIFICATION_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }],
                 messages=[{
                     "role": "user",
-                    "content": VERIFICATION_PROMPT.format(
-                        originals=memories_text[:INPUT_LIMIT],
-                        summary=consolidated_content,
+                    "content": (
+                        f"NOTAS ORIGINAIS:\n{memories_text[:INPUT_LIMIT]}\n\n"
+                        f"RESUMO:\n{consolidated_content}\n\n"
+                        f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
                     ),
                 }],
             )
@@ -408,6 +411,11 @@ def _consolidate_group(
                 retry_response = client.messages.create(
                     model=SONNET_MODEL,
                     max_tokens=RETRY_MAX_TOKENS,
+                    system=[{
+                        "type": "text",
+                        "text": CONSOLIDATION_SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
                     messages=[{"role": "user", "content": retry_prompt}],
                 )
                 retry_content = retry_response.content[0].text.strip()

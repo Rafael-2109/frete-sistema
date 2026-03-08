@@ -29,7 +29,8 @@ SONNET_MODEL = "claude-sonnet-4-6"
 # Limite de caracteres da resposta do assistente para enviar ao Sonnet
 MAX_RESPONSE_CHARS = 5000
 
-SUGGESTION_PROMPT = """Voce eh um gerador de sugestoes para um sistema de logistica (Nacom Goya).
+# System prompt estático — separado para habilitar prompt caching (cache_control ephemeral)
+SUGGESTION_SYSTEM_PROMPT = """Voce eh um gerador de sugestoes para um sistema de logistica (Nacom Goya).
 Com base na ultima mensagem do usuario e resposta do assistente, gere 2-3 sugestoes de follow-up.
 
 CONTEXTO DO SISTEMA:
@@ -37,18 +38,6 @@ CONTEXTO DO SISTEMA:
 - Clientes: Atacadao, Assai, Carrefour, Sam's Club, outros
 - Produtos: palmito, azeitona, conservas, molhos
 - Operacoes: roteirizacao, expedicao, faturamento, NF-e, embarques
-
-<mensagem_usuario>
-{user_message}
-</mensagem_usuario>
-
-<resposta_assistente>
-{assistant_response}
-</resposta_assistente>
-
-<ferramentas_usadas>
-{tools_used}
-</ferramentas_usadas>
 
 GERE um JSON array com 2-3 strings. Cada string eh uma sugestao de follow-up.
 
@@ -114,18 +103,23 @@ def generate_suggestions(
     try:
         client = _get_anthropic_client()
 
-        prompt_text = SUGGESTION_PROMPT.format(
-            user_message=user_message[:1000],  # Limita mensagem do usuário
-            assistant_response=truncated_response,
-            tools_used=tools_str,
+        user_content = (
+            f"<mensagem_usuario>\n{user_message[:1000]}\n</mensagem_usuario>\n\n"
+            f"<resposta_assistente>\n{truncated_response}\n</resposta_assistente>\n\n"
+            f"<ferramentas_usadas>\n{tools_str}\n</ferramentas_usadas>"
         )
 
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=400,
+            system=[{
+                "type": "text",
+                "text": SUGGESTION_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{
                 "role": "user",
-                "content": prompt_text,
+                "content": user_content,
             }],
         )
 
