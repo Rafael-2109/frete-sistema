@@ -93,6 +93,7 @@ Gotchas rapidos:
 | **CarVia (frete subcontratado)** | `app/carvia/CLAUDE.md` |
 | **CarVia — Revisao de Gaps (37 gaps)** | `app/carvia/REVISAO_GAPS.md` |
 | **Botoes, badges e cores (qual classe usar)** | `.claude/references/design/GUIA_COMPONENTES_UI.md` |
+| **Portal Atacadao (automacao Hodie Booking)** | `.claude/skills/operando-portal-atacadao/SKILL.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 Documentos adicionais:

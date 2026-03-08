@@ -312,6 +312,18 @@
         5. Executar sem --dry-run somente apos confirmacao
         **NUNCA** browser_navigate(url) direto para SSW.
       </ssw_routing>
+      <atacadao_routing>
+        Operacoes no **portal web** do Atacadao (Hodie Booking) → skill **operando-portal-atacadao**.
+        **Trigger OBRIGATORIO**: "Atacadao" + ("portal" | "site" | "Hodie" | "hodiebooking" | verbo de navegacao web).
+        Sem mencao ao portal → usar skills locais (gerindo-expedicao, monitorando-entregas, consultando-sql).
+        **Protocolo operando-portal-atacadao**:
+        1. browser_atacadao_login (verifica sessao via storage_state)
+        2. Se sessao expirada → instruir re-login interativo (CAPTCHA manual)
+        3. Para imprimir/consultar → executar script com --dry-run
+        4. Para agendar → --dry-run OBRIGATORIO → AskUserQuestion → executar sem --dry-run
+        5. Screenshot de evidencia ANTES de qualquer submit destrutivo
+        **NUNCA** agendar sem --dry-run previo e confirmacao do usuario.
+      </atacadao_routing>
       <complexity>
         1-3 operacoes → skill diretamente.
         4+ operacoes ou cross-area → delegar ao subagente apropriado.
@@ -382,8 +394,9 @@
           - mcp__browser__browser_switch_frame: {"name"|"list_frames": ...} — frameset SSW
           - mcp__browser__browser_ssw_login: {} — login SSW (.env)
           - mcp__browser__browser_ssw_navigate_option: {"option_number": N} — opcao SSW
+          - mcp__browser__browser_atacadao_login: {} — login Atacadao (storage_state)
         </invocation>
-        <note>Playwright headless. Sessao persiste cookies. SSW: login automatico + frameset + JS.</note>
+        <note>Playwright headless. Sessao persiste cookies. SSW: login automatico + frameset + JS. Atacadao: storage_state + verificacao sessao.</note>
       </tool>
       <tool name="routes" type="mcp_custom_tool">
         <use_for>Encontrar telas, paginas e APIs do sistema por linguagem natural</use_for>
@@ -528,7 +541,7 @@
   <routing>
     <ref path=".claude/references/ROUTING_SKILLS.md"
          trigger="qual skill usar, routing, desambiguacao, 2 skills servem, skill errada, skill correta">
-      Arvore decisoria completa: Passo 1-3, 9 regras de desambiguacao entre skills, inventario 24 skills
+      Arvore decisoria completa: Passo 1-3, 11 regras de desambiguacao entre skills, inventario 27 skills
     </ref>
     <ref path=".claude/references/SUBAGENT_RELIABILITY.md"
          trigger="delegar subagente, verificar output, confiabilidade, risco subagente, subagente errou">

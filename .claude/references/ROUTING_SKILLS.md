@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 26/02/2026
+**Ultima Atualizacao**: 07/03/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -20,6 +20,7 @@
 | SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
 | SSW consulta (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
+| PORTAL ATACADAO (automacao web Hodie Booking) | "portal Atacadao", "site do Atacadao", "Hodie Booking", "entrar no portal", "imprimir protocolo no site", "agendar no portal" + OBRIGATORIO mencionar portal/site/Hodie | -> `operando-portal-atacadao` |
 | CARVIA (frete subcontratado) | "operacoes CarVia", "subcontratos pendentes", "cotar subcontrato", "faturas CarVia", "conferencia transportadora" | -> `gerindo-carvia` |
 | LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `buscando-rotas` |
 
@@ -82,10 +83,12 @@ Se a resposta esta no reference -> NAO usar skill.
 | acessando-ssw vs operando-ssw | **Consultar/entender** SSW -> acessando-ssw. **Executar/cadastrar/criar** no SSW -> operando-ssw. Sinal: "cadastre", "crie unidade", "inclua cidade" -> operando. "como funciona", "o que e", "passo a passo" -> acessando |
 | gerindo-expedicao vs acessando-ssw | Estoque/separacao/embarque **Nacom** -> gerindo-expedicao. Romaneio/manifesto **SSW** -> acessando-ssw |
 | monitorando-entregas vs acessando-ssw | Entrega rastreada no **sistema local** -> monitorando-entregas. Baixa/ocorrencia no **SSW** -> acessando-ssw |
+| operando-portal-atacadao vs gerindo-expedicao | **Portal web** do Atacadao (imprimir, agendar, consultar saldo no site) -> operando-portal-atacadao. **Dados locais** do Atacadao (pedidos, separacao, estoque) -> gerindo-expedicao. Sinal: "portal", "site", "Hodie", "navegar" -> operando-portal-atacadao. Sem mencao ao portal -> gerindo-expedicao |
+| operando-portal-atacadao vs monitorando-entregas | **Portal web** (verificar agendamento no site) -> operando-portal-atacadao. **Sistema local** (status entrega, NF, canhoto) -> monitorando-entregas. Sinal: "no portal", "no site" -> operando-portal-atacadao. Sem mencao -> monitorando-entregas |
 
 ---
 
-## Skills — Inventario Completo (26 total)
+## Skills — Inventario Completo (27 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
@@ -103,6 +106,9 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
 ### Skills SSW (Claude Code)
 `acessando-ssw`, `operando-ssw`
+
+### Skills Portal Atacadao (Claude Code)
+`operando-portal-atacadao`
 
 ### Skills CarVia (Claude Code)
 `gerindo-carvia`

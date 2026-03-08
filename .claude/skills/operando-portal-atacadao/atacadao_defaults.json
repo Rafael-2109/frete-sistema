@@ -1,0 +1,110 @@
+{
+  "_meta": {
+    "versao": "1.0",
+    "descricao": "Valores padrao para operacoes no portal Atacadao (Hodie Booking)",
+    "atualizado": "2026-03-07",
+    "fonte": "app/portal/atacadao/config.py"
+  },
+  "portal": {
+    "base_url": "https://atacadao.hodiebooking.com.br",
+    "tem_captcha": true,
+    "tem_2fa": false
+  },
+  "veiculos_permitidos": {
+    "6": "Kombi/Van - (Cod.: 1 - Max: 5 paletes)",
+    "5": "F4000-3/4 - Bau - (Cod.: 3 - Max: 10 paletes) - Ate 2.000 kg",
+    "11": "Toco-Bau - (Cod.: 4 - Max: 24 paletes) - Ate 4.000 kg",
+    "8": "Truck-Bau - (Cod.: 5 - Max: 75 paletes) - Ate 7.000 kg",
+    "2": "Carreta-Bau - (Cod.: 7 - Max: 80 paletes) - Acima de 7.000 kg"
+  },
+  "regras_veiculo_por_peso": {
+    "ate_2000": "5",
+    "ate_4000": "11",
+    "ate_7000": "8",
+    "acima_7000": "2",
+    "_nota": "Selecao automatica de veiculo baseada no peso total da carga"
+  },
+  "valores_padrao": {
+    "transportadora_id": "1",
+    "transportadora_nome": "Agregado",
+    "carga_especie": "1",
+    "carga_especie_nome": "Paletizada",
+    "incluir_nf": false,
+    "_nota": "ID 1 = Agregado (transportadora padrao). Especie 1 = Paletizada"
+  },
+  "timeouts": {
+    "page_load_ms": 30000,
+    "element_wait_ms": 10000,
+    "form_submit_ms": 20000,
+    "modal_wait_ms": 5000,
+    "session_check_ms": 15000
+  },
+  "status_agendamento": {
+    "aguardando": "Aguardando aprovacao",
+    "aprovado": "Aguardando check-in",
+    "checkin": "Check-in realizado",
+    "checkout": "Check-out realizado",
+    "confirmado": "Confirmado",
+    "entregue": "Entregue",
+    "finalizado": "Finalizado",
+    "cancelado": "Cancelado",
+    "no_show": "No show",
+    "recusado": "Recusado",
+    "rejeitado": "Rejeitado"
+  },
+  "status_positivos": [
+    "Aguardando check-in",
+    "Check-in realizado",
+    "Check-out realizado",
+    "Confirmado",
+    "Entregue",
+    "Finalizado"
+  ],
+  "status_negativos": [
+    "Cancelado",
+    "No show",
+    "Recusado",
+    "Rejeitado"
+  ],
+  "seletores_unidade": {
+    "_descricao": "Seletores para filtro de Unidade (CNPJ) via modal na pagina /pedidos",
+    "toggle_filtros": "a[data-toggle=\"collapse\"][data-target=\"#filtros-collapse\"]",
+    "abrir_modal_unidade": "#filtro-unidade > div.input-group.f_editando > span:nth-child(3) > button",
+    "campo_cnpj_modal": "#modal-unidades > div > div > div.modal-body > form > div > div.col-md-5.form-group > input",
+    "botao_filtrar_modal": "#modal-unidades > div > div > div.modal-body > form > div > div.col-md-1.form-group > button",
+    "radio_unidade": "input[name=\"m_unidades_modal-unidades\"]",
+    "botao_confirmar_modal": "#modal-unidades > div > div > div.modal-footer > div > div > button.btn.btn-primary.selecionar",
+    "modal_unidades": "#modal-unidades"
+  },
+  "seletores_pedido": {
+    "_descricao": "Seletores para filtro e navegacao de pedidos na pagina /pedidos",
+    "campo_nr_pedido": "#nr_pedido",
+    "botao_filtrar": "#enviarFiltros",
+    "link_exibir": "a[href*=\"/pedidos/\"][title=\"Exibir\"]",
+    "limpar_data_elaboracao": "button[data-target_daterangepicker=\"dthr_elaboracao\"][data-action=\"remove\"]",
+    "content_wrapper": ".content-wrapper"
+  },
+  "diretorios_pdf": {
+    "pedidos": "/tmp/pedidos_atacadao",
+    "protocolos": "/tmp/protocolos_atacadao",
+    "agendamentos": "/tmp/agendamentos_atacadao"
+  },
+  "seletores_relatorio": {
+    "_descricao": "Seletores para pagina /relatorio/itens (export CSV de agendamentos)",
+    "toggle_filtros": "a[data-toggle=\"collapse\"][data-target=\"#filtros-collapse\"]",
+    "abrir_modal_unidade": "#filtro-unidade > div.input-group.f_editando > span:nth-child(3) > button",
+    "campo_cnpj_modal": "#modal-unidades > div > div > div.modal-body > form > div > div.col-md-5.form-group > input",
+    "botao_filtrar_modal": "#modal-unidades > div > div > div.modal-body > form > div > div.col-md-1.form-group > button",
+    "radio_unidade": "input[name=\"m_unidades_modal-unidades\"]",
+    "botao_confirmar_modal": "#modal-unidades > div > div > div.modal-footer > div > div > button.btn.btn-primary.selecionar",
+    "modal_unidades": "#modal-unidades",
+    "botao_filtrar": "#enviarFiltros",
+    "botao_exportar": "#exportarExcel",
+    "container_data_agendamento": "#filtros-collapse > div.filtros-body > div > div:nth-child(6)"
+  },
+  "relatorio_padrao": {
+    "dias_futuros": 45,
+    "max_dias": 365,
+    "_nota": "Range padrao D0-D45 para consulta de agendamentos futuros"
+  }
+}
