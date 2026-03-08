@@ -3,30 +3,37 @@ name: diagnosticando-banco
 description: >-
   Esta skill deve ser usada quando o usuario pergunta "como esta o banco?",
   "indices nao usados", "queries lentas", "cache hit rate", "conexoes ativas",
-  "vacuum", "bloat", ou precisa de diagnostico de saude do PostgreSQL.
-  Nao usar para consultas analiticas de dados de negocio (usar consultando-sql),
-  logs do servidor (usar mcp__render__consultar_logs), ou performance da
-  aplicacao web (usar mcp__render__status_servicos).
+  "vacuum", "bloat", "recomendacao de indice", "otimizar query", "EXPLAIN",
+  "indice hipotetico", "por que essa query e lenta?", "saude do banco",
+  ou precisa de diagnostico de saude, performance e otimizacao do PostgreSQL.
+  Tambem usar quando o usuario quer analisar plano de execucao de uma query,
+  receber sugestoes de indices para melhorar performance, ou investigar
+  problemas de lentidao no banco.
   - Conexoes: "quantas conexoes?", "conexoes idle", "pool"
   - Vacuum: "precisa de vacuum?", "dead tuples", "tabelas inchadas"
   - Sequences: "sequences proximas do limite?", "risco de overflow INTEGER"
   - Tamanho: "maiores tabelas", "tamanho do banco", "quanto ocupa?"
+  - Indices: "quais indices criar?", "indice pra essa query", "indices redundantes"
+  - Performance: "query lenta", "EXPLAIN ANALYZE", "plano de execucao"
 
   NAO USAR QUANDO:
   - Consultas analiticas de dados de negocio → usar **consultando-sql**
   - Metricas de CPU/memoria do servico → usar **mcp__render__get_metrics**
   - Logs de aplicacao → usar **mcp__render__list_logs**
   - Status de deploy → usar **mcp__render__list_deploys**
-allowed-tools: Read, Bash, Glob, Grep
+allowed-tools: Read, Bash, Glob, Grep, mcp__postgres__analyze_db_health, mcp__postgres__get_top_queries, mcp__postgres__analyze_workload_indexes, mcp__postgres__analyze_query_indexes, mcp__postgres__explain_query, mcp__postgres__execute_sql, mcp__postgres__list_schemas, mcp__postgres__list_objects, mcp__postgres__get_object_details
 ---
 
-# Diagnosticando Banco — Health Check PostgreSQL
+# Diagnosticando Banco — Health Check & Otimizacao PostgreSQL
 
 Skill para diagnosticos de saude, performance e otimizacao do banco PostgreSQL.
+Combina um script local com o Postgres MCP Pro (9 tools DBA-level).
 
 > **ESCOPO:** Esta skill executa checks read-only no banco. Nao modifica dados nem estrutura.
 > Para consultas de dados de negocio, use `consultando-sql`.
 > Para metricas de infra (CPU, memoria, HTTP), use `mcp__render__get_metrics`.
+
+---
 
 ## Quando NAO Usar Esta Skill
 
@@ -41,68 +48,154 @@ Skill para diagnosticos de saude, performance e otimizacao do banco PostgreSQL.
 
 ## REGRAS CRITICAS
 
-### R1: FIDELIDADE AO OUTPUT DO SCRIPT
+### R1: FIDELIDADE AO OUTPUT
 ```
 OBRIGATORIO: Toda informacao apresentada ao usuario DEVE vir EXATAMENTE
-dos campos do JSON retornado pelo script.
+do output da tool ou script utilizado.
 
 PROIBIDO:
-- Inventar valores que nao existem no JSON (ex: "shared_buffers = 256MB")
-- Arredondar ou alterar percentuais do JSON (usar EXATAMENTE hit_rate_pct)
-- Especular causa de problemas sem evidencia no JSON
-- Inventar recomendacoes com valores especificos (ex: "aumente para 512MB")
+- Inventar valores que nao existem no output (ex: "shared_buffers = 256MB")
+- Arredondar ou alterar percentuais do output
+- Especular causa de problemas sem evidencia no output
+- Inventar recomendacoes com valores especificos nao fornecidos pela tool
 
 PERMITIDO:
-- Usar as faixas de interpretacao da SKILL.md (cache >= 99% = EXCELENTE)
-- Citar a acao_sugerida que JA EXISTE no JSON de cada check
+- Usar as faixas de interpretacao desta SKILL.md (cache >= 99% = EXCELENTE)
+- Citar acoes sugeridas que existem no output
 - Alertar sobre dados criticos (sequences > 50%, cache < 90%)
 ```
 
-### R2: MODO DE EXECUCAO
-```
-AMBIENTE LOCAL (Claude Code / dev):
-  → Executar health_check_banco.py via Bash
+### R2: MODO DE EXECUCAO — QUAL USAR
 
-AMBIENTE PRODUCAO (agente web / Render):
-  → Usar mcp__render__query_render_postgres com postgresId
-  → SQLs prontas na secao "SQL Templates para Render MCP"
+O sistema oferece 3 modos. A escolha depende do contexto:
 
-NUNCA: Executar o script Python em producao (nao tem acesso ao banco)
-NUNCA: Usar mcp__render__ em ambiente local
 ```
+MODO 1 — POSTGRES MCP PRO (preferido para producao)
+  Quando: Claude Code com acesso ao MCP server "postgres"
+  Como: Chamar tools mcp__postgres__* diretamente
+  Vantagem: 9 tools DBA-level, recomendacao de indices, EXPLAIN hipotetico
+  Usar para: health check, queries lentas, otimizacao de indices, EXPLAIN
+
+MODO 2 — SCRIPT LOCAL (dev/staging)
+  Quando: Ambiente local com acesso ao banco via .env
+  Como: Executar health_check_banco.py via Bash
+  Vantagem: JSON estruturado, resumo executivo, 9 checks combinaveis
+  Usar para: checks rapidos em dev, validacao pre-deploy
+
+MODO 3 — RENDER MCP SQL (fallback para producao)
+  Quando: MCP postgres NAO disponivel (ex: agente web)
+  Como: mcp__render__query_render_postgres com SQLs desta skill
+  Vantagem: Funciona sem postgres-mcp instalado
+  Usar para: checks basicos quando Modo 1 indisponivel
+```
+
+**Regra de selecao**: Tentar Modo 1 primeiro. Se tool nao disponivel, usar Modo 2 (local) ou Modo 3 (producao).
 
 ### R3: RESULTADOS VAZIOS OU ERROS
 ```
-Se o script retorna "dados": [] ou total: 0:
+Se o output retorna lista vazia ou total: 0:
   → Informar CLARAMENTE: "Nenhum [tipo] encontrado"
   → NAO inventar explicacao para resultado vazio
 
-Se o script falha (erro de conexao, permissao):
+Se a tool/script falha (erro de conexao, permissao):
   → Mostrar a mensagem de erro EXATA
   → Sugerir verificar conexao com o banco
   → NAO tentar adivinhar a causa
-
-Se pg_stat_statements nao esta disponivel:
-  → Informar: "pg_stat_statements nao habilitado"
-  → NAO inventar dados de queries lentas
 ```
 
 ---
 
-## DECISION TREE — Qual Check Usar?
+## DECISION TREE — Qual Ferramenta Usar?
 
-| Se a pergunta menciona... | Use este check | O que retorna |
-|----------------------------|----------------|---------------|
-| **Saude geral, visao completa** | `--all --resumo` | Resumo executivo de todos os checks |
-| **Indices nao usados** | `--check unused_indexes` | Indices com 0 scans + espaco desperdicado |
-| **Indices duplicados** | `--check duplicate_indexes` | Indices com mesma definicao na mesma tabela |
-| **Queries lentas** | `--check top_queries` | Top N queries por tempo total (requer pg_stat_statements) |
-| **Cache / buffer** | `--check cache_hit_rate` | Hit rate de heap e index cache |
-| **Conexoes** | `--check connections` | Breakdown por estado + utilizacao |
-| **Bloat de indices** | `--check index_bloat` | Maiores indices com analise de eficiencia |
-| **Maiores tabelas** | `--check table_sizes` | Top N tabelas por tamanho total |
-| **Vacuum / dead tuples** | `--check vacuum_stats` | Tabelas com dead tuples + ultimo vacuum |
-| **Sequences / overflow** | `--check sequence_capacity` | Uso % de sequences (risco INTEGER overflow) |
+### Diagnosticos de saude (checks existentes)
+
+| Se a pergunta menciona... | Modo 1 (MCP Pro) | Modo 2 (Script) | Modo 3 (Render SQL) |
+|----------------------------|------------------|-----------------|---------------------|
+| **Saude geral, visao completa** | `analyze_db_health` | `--all --resumo` | Multiplas SQLs |
+| **Queries lentas** | `get_top_queries` | `--check top_queries` | SQL pg_stat_statements |
+| **Indices nao usados** | `analyze_db_health` | `--check unused_indexes` | SQL pg_stat_user_indexes |
+| **Indices duplicados** | `analyze_db_health` | `--check duplicate_indexes` | — |
+| **Cache / buffer** | `analyze_db_health` | `--check cache_hit_rate` | SQL pg_statio |
+| **Conexoes** | `analyze_db_health` | `--check connections` | SQL pg_stat_activity |
+| **Bloat de indices** | `analyze_db_health` | `--check index_bloat` | — |
+| **Maiores tabelas** | `execute_sql` | `--check table_sizes` | SQL pg_stat_user_tables |
+| **Vacuum / dead tuples** | `analyze_db_health` | `--check vacuum_stats` | SQL pg_stat_user_tables |
+| **Sequences / overflow** | `analyze_db_health` | `--check sequence_capacity` | SQL pg_sequences |
+
+### Otimizacao de performance (capacidades NOVAS — apenas Modo 1)
+
+| Se a pergunta menciona... | Tool MCP Pro | O que retorna |
+|----------------------------|-------------|---------------|
+| **Recomendacao de indices para o banco** | `analyze_workload_indexes` | Analisa workload completo e sugere indices otimos |
+| **Recomendacao de indice para query X** | `analyze_query_indexes` | Sugere indices para ate 10 queries especificas |
+| **EXPLAIN / plano de execucao** | `explain_query` | EXPLAIN com suporte a indices hipoteticos |
+| **Estrutura de tabela/objeto** | `get_object_details` | Colunas, constraints, indices de um objeto |
+| **Listar tabelas/views de um schema** | `list_objects` | Objetos de um schema |
+
+Estas capacidades so estao disponiveis via Postgres MCP Pro (Modo 1).
+Se o usuario pedir e o MCP nao estiver disponivel, informar que requer o server postgres-mcp.
+
+### Cenarios Compostos
+
+**"Diagnostico completo"** ou **"o que precisa de atencao"**:
+1. Modo 1: `analyze_db_health` (cobre tudo em uma chamada)
+2. Modo 2: `--all --resumo` primeiro → detalhar problemas
+3. Priorizar: sequences > 50% → cache < 90% → vacuum > 10% → indices
+
+**"Essa query ta lenta, o que fazer?"**:
+1. `explain_query` com a query do usuario → ver plano de execucao
+2. `analyze_query_indexes` com a query → receber recomendacao de indice
+3. Apresentar: plano atual + indice sugerido + ganho estimado
+
+**"Quais indices criar pra melhorar performance?"**:
+1. `analyze_workload_indexes` → analisa queries reais do pg_stat_statements
+2. Apresentar: indices sugeridos com impacto estimado
+3. Se usuario quiser validar: `explain_query` com indice hipotetico
+
+---
+
+## Modo 1: Postgres MCP Pro (producao — preferido)
+
+### Tools Disponiveis
+
+| Tool | Descricao | Quando usar |
+|------|-----------|-------------|
+| `mcp__postgres__analyze_db_health` | Health check completo: cache, conexoes, constraints, indices, sequences, vacuum | Diagnostico geral, substitui `--all` |
+| `mcp__postgres__get_top_queries` | Queries mais lentas via pg_stat_statements | "queries lentas", "o que ta pesado" |
+| `mcp__postgres__analyze_workload_indexes` | Recomendacao de indices para workload inteiro | "quais indices criar", "otimizar banco" |
+| `mcp__postgres__analyze_query_indexes` | Recomendacao de indices para queries especificas (ate 10) | "indice pra essa query", "otimizar SELECT" |
+| `mcp__postgres__explain_query` | EXPLAIN com suporte a indices hipoteticos | "EXPLAIN", "plano de execucao", "por que lento" |
+| `mcp__postgres__execute_sql` | Executa SQL (read-only em modo restricted) | Queries ad-hoc nao cobertas pelas tools acima |
+| `mcp__postgres__list_schemas` | Lista schemas do banco | Explorar estrutura |
+| `mcp__postgres__list_objects` | Lista objetos de um schema (tabelas, views, sequences) | "quais tabelas existem" |
+| `mcp__postgres__get_object_details` | Detalhes de objeto (colunas, constraints, indices) | "mostra a estrutura da tabela X" |
+
+### Exemplo de uso: Diagnostico completo
+
+```
+1. Chamar mcp__postgres__analyze_db_health
+2. Se problemas de performance → mcp__postgres__get_top_queries
+3. Se queries lentas identificadas → mcp__postgres__analyze_query_indexes com as queries
+4. Apresentar resultado consolidado ao usuario
+```
+
+### Exemplo de uso: Otimizar query
+
+```
+1. mcp__postgres__explain_query com a query do usuario
+2. mcp__postgres__analyze_query_indexes com a mesma query
+3. Se indice sugerido → mcp__postgres__explain_query novamente COM indice hipotetico
+4. Mostrar: plano antes vs depois + indice sugerido
+```
+
+---
+
+## Modo 2: Script Local (dev/staging)
+
+```bash
+source .venv/bin/activate && \
+python .claude/skills/diagnosticando-banco/scripts/health_check_banco.py [opcoes]
+```
 
 ### Combinando Checks
 
@@ -114,37 +207,14 @@ health_check_banco.py --check unused_indexes cache_hit_rate connections
 health_check_banco.py --all --resumo
 ```
 
-### Cenarios Compostos
-
-Quando o usuario pede "diagnostico completo" ou "o que precisa de atencao":
-
-1. Executar `--all --resumo` primeiro
-2. Se `resumo_executivo.total_problemas > 0`: detalhar cada problema
-3. Se `saude_geral == "CRITICO"`: alertar imediatamente
-4. Priorizar problemas: sequences > 50% → cache < 90% → vacuum > 10% → indices
+**Para parametros completos, retornos JSON e exemplos**: LER `SCRIPTS.md`
 
 ---
 
-## Modos de Execucao
+## Modo 3: Render MCP SQL (fallback producao)
 
-### Modo 1: Script Local (dev/staging)
-
-```bash
-source .venv/bin/activate && \
-python .claude/skills/diagnosticando-banco/scripts/health_check_banco.py --all --resumo
-```
-
-### Modo 2: Render MCP (producao)
-
-Para producao, executar as SQLs diretamente via `mcp__render__query_render_postgres` com `postgresId = "dpg-d13m38vfte5s738t6p50-a"`.
-
-SQLs prontas para uso direto — ver secao "SQL Templates para Render MCP" abaixo.
-
----
-
-## SQL Templates para Render MCP
-
-Quando nao puder executar o script (ex: producao via agente web), usar estas queries diretamente:
+Para producao quando Postgres MCP Pro nao estiver disponivel.
+Usar `mcp__render__query_render_postgres` com `postgresId = "dpg-d13m38vfte5s738t6p50-a"`.
 
 ### Indices Nao Usados
 ```sql
@@ -200,7 +270,6 @@ SELECT sequencename, last_value,
 FROM pg_sequences WHERE schemaname = 'public' AND last_value IS NOT NULL
 ORDER BY last_value DESC;
 ```
-**Nota:** Query assume INTEGER (2.1B limite). No Render MCP, `data_type` causa erro de casting — usar versao simplificada acima.
 
 ---
 
@@ -237,42 +306,54 @@ ORDER BY last_value DESC;
 
 ---
 
-## Script Principal
-
-### health_check_banco.py
-
-```bash
-source .venv/bin/activate && \
-python .claude/skills/diagnosticando-banco/scripts/health_check_banco.py [opcoes]
-```
-
-**Para parametros completos, retornos JSON e exemplos**: LER `SCRIPTS.md`
-
----
-
 ## Formato de Resposta ao Usuario
 
-### Diagnostico Completo (--all)
+### Diagnostico Completo
 ```
-## Saude do Banco: [STATUS do resumo_executivo.saude_geral]
+## Saude do Banco: [STATUS]
 
 ### Problemas Encontrados
-- [Listar resumo_executivo.problemas — EXATAMENTE como vem do JSON]
+- [Listar problemas — EXATAMENTE como vem do output]
 
 ### Destaques
-- [Listar resumo_executivo.destaques — EXATAMENTE como vem do JSON]
+- [Listar destaques positivos — EXATAMENTE como vem do output]
 
 ### Detalhes [se solicitado]
-[Expandir checks individuais com dados EXATOS do JSON]
+[Expandir checks individuais com dados EXATOS do output]
 ```
 
-### Check Especifico
+### Recomendacao de Indices (novo)
 ```
-## [Nome do Check]: [Status/Resultado principal]
+## Indices Recomendados
 
-[Dados EXATOS do JSON formatados para leitura humana]
+### Indice 1: [nome sugerido]
+- Tabela: [tabela]
+- Colunas: [colunas]
+- Impacto estimado: [ganho projetado pela tool]
+- Query beneficiada: [query que melhora]
 
-Acao sugerida: [EXATAMENTE o campo acao_sugerida do JSON]
+### Como criar:
+CREATE INDEX CONCURRENTLY [nome] ON [tabela] ([colunas]);
+
+Nota: Usar CONCURRENTLY para nao bloquear operacoes.
+```
+
+### Analise de Query (novo)
+```
+## Analise de Performance: [query resumida]
+
+### Plano de Execucao Atual
+[Output do EXPLAIN formatado]
+
+### Gargalos Identificados
+- [Seq Scan onde Index Scan seria melhor]
+- [Custo alto em operacoes especificas]
+
+### Indice Sugerido
+[CREATE INDEX recomendado]
+
+### Plano Estimado COM Indice
+[Output do EXPLAIN com indice hipotetico, se disponivel]
 ```
 
 ---
@@ -281,8 +362,10 @@ Acao sugerida: [EXATAMENTE o campo acao_sugerida do JSON]
 
 | Extensao | Necessaria para | Status Render |
 |----------|----------------|---------------|
-| pg_stat_statements | `top_queries` | Instalada (v1.10) |
-| HypoPG | Indices hipoteticos | NAO disponivel |
+| pg_stat_statements | `top_queries`, `analyze_workload_indexes` | Instalada (v1.12) |
+| HypoPG | Indices hipoteticos no `explain_query` | NAO disponivel |
+
+**Nota sobre HypoPG**: `explain_query` suporta indices hipoteticos, mas depende da extensao HypoPG estar instalada no servidor. No Render, HypoPG nao esta disponivel, entao indices hipoteticos nao funcionarao no EXPLAIN. O `analyze_workload_indexes` e `analyze_query_indexes` ainda funcionam normalmente (usam algoritmo proprio para recomendar indices).
 
 ---
 
