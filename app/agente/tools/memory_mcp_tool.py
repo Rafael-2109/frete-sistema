@@ -695,12 +695,17 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
     """
     Verifica se ja existe memoria semanticamente similar para o usuario.
 
-    Busca em agent_memory_embeddings por conteudo com cosine > 0.90,
+    Busca em agent_memory_embeddings por conteudo com cosine > 0.85,
     excluindo o path atual (para nao detectar self-match em updates).
+
+    IMPORTANTE: O content recebido e XML raw, mas os embeddings no banco foram
+    gerados a partir de texto contextual enriquecido pelo Sonnet. Para evitar
+    falsos negativos (similarity ~0.69 entre XML e texto narrativo), fazemos
+    strip_xml_tags antes de buscar, elevando a similarity para faixa detectavel.
 
     Args:
         user_id: ID do usuario
-        content: Conteudo da nova memoria
+        content: Conteudo da nova memoria (pode conter tags XML)
         current_path: Path sendo atualizado (excluido da busca)
 
     Returns:
@@ -712,10 +717,16 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
             return None
 
         from app.embeddings.service import EmbeddingService
+        from ..services.knowledge_graph_service import strip_xml_tags
+
+        # Strip XML para alinhar com embeddings contextuais no banco.
+        # XML raw vs texto enriquecido causa similarity ~0.69 (abaixo do threshold).
+        # Texto limpo vs texto enriquecido sobe para ~0.85+ (detectavel).
+        clean_content = strip_xml_tags(content)
 
         svc = EmbeddingService()
         results = svc.search_memories(
-            content, user_id=user_id, limit=3, min_similarity=0.90
+            clean_content, user_id=user_id, limit=3, min_similarity=0.85
         )
 
         if not results:
@@ -726,7 +737,7 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
             # Excluir self-match
             if path and path != current_path:
                 similarity = r.get('similarity', 0)
-                if similarity >= 0.90:
+                if similarity >= 0.85:
                     logger.info(
                         f"[MEMORY_MCP] Duplicata detectada: {current_path} ~ {path} "
                         f"(sim={similarity:.3f})"
