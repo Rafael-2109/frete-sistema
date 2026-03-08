@@ -94,18 +94,6 @@ Criado em 2026-02-17 para preencher gap entre SDK wrapper e MCP spec.
 
 ---
 
-## Candidatas para Migracao Enhanced
-
-| Tool | Prioridade | Schema Proposto |
-|---|---|---|
-| `consultar_schema` | Alta | `{table, columns: [{name, type, nullable, pk}], relationships}` |
-| `consultar_valores_campo` | Alta | `{table, field, values: [], count}` |
-| `consultar_logs` | Media | `{logs: [{timestamp, level, message}], count, filters}` |
-| `status_servicos` | Media | `{services: [{name, status, last_deploy}]}` |
-| `search_sessions` | Media | `{sessions: [{id, title, excerpt}], count}` |
-
----
-
 ## Features NAO Implementaveis (sem mudanca no SDK)
 
 | Feature | Barreira | Alternativa Existente |

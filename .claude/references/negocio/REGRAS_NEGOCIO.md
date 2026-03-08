@@ -1,10 +1,13 @@
 # Regras de Negocio - Sistema de Fretes
 
-**Ultima Atualizacao**: 07/12/2025
+**Ultima Atualizacao**: 07/03/2026
 **Uso**: Consultar quando precisar de logica de dominio detalhada
 
 > **NOTA**: As regras CRITICAS de `sincronizado_nf` e `status` estao no `CLAUDE.md` principal.
 > Este arquivo contem regras de negocio detalhadas e especificas.
+>
+> **Cross-reference**: Modulos com CLAUDE.md proprio (regras especificas de cada dominio):
+> `app/seguranca/CLAUDE.md`, `app/carvia/CLAUDE.md`, `app/financeiro/CLAUDE.md`, `app/odoo/CLAUDE.md`, `app/agente/CLAUDE.md`
 
 Este documento descreve as regras de negocio especificas do sistema logistico.
 
