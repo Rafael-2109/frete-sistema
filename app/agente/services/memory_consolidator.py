@@ -315,6 +315,7 @@ def _consolidate_group(
         Dict com métricas ou None se falha
     """
     from ..models import AgentMemory, AgentMemoryVersion
+    from app import db
 
     # Formatar memórias para o prompt
     memory_texts = []
@@ -493,7 +494,20 @@ def _consolidate_group(
         old_name = mem.path.split("/")[-1]
         archived_path = f"{dir_path}/_archived_{old_name}"
         mem.path = archived_path
+        mem.is_cold = True  # Excluir da injeção automática
         archived += 1
+
+    # Remover embeddings stale das memórias archived
+    try:
+        from sqlalchemy import text as sql_text
+        archived_ids = [m.id for m in memories if m.path != consolidated_path]
+        if archived_ids:
+            db.session.execute(sql_text("""
+                DELETE FROM agent_memory_embeddings
+                WHERE memory_id = ANY(:ids)
+            """), {"ids": archived_ids})
+    except Exception as emb_err:
+        logger.debug(f"[MEMORY_CONSOLIDATOR] Embedding cleanup falhou (ignorado): {emb_err}")
 
     chars_saved = original_chars - len(consolidated_content)
 
