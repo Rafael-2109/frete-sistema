@@ -51,7 +51,11 @@ substituir por `loop.call_soon_threadsafe(pq.async_event.set)`.
 
 NUNCA remover o `yield None` no `finally` do generator — frontend trava esperando eventos.
 
-**`streaming_done_event`** (`client.py:1319`): `asyncio.Event()` que controla o prompt generator. Se NAO chamar `.set()` em QUALQUER error path, o generator fica preso em `done_event.wait(timeout=600)` → processo zombie por 10min. Chamado em 6 locais: ResultMessage (1617), ProcessError (1674), CLINotFoundError (1695), CLIJSONDecodeError (1716), BaseExceptionGroup (1773), Generic Exception (1820). **Ao adicionar NOVO error handler em `_stream_response()`, DEVE chamar `streaming_done_event.set()`.**
+**`streaming_done_event`** (`client.py:2627`): `asyncio.Event()` que controla o prompt generator. Se NAO chamar `.set()` em QUALQUER error path, o generator fica preso em `done_event.wait(timeout=600)` → processo zombie por 10min. Chamado em 6 locais nos except handlers + 1 bloco `finally` como rede de seguranca.
+
+**DC-8 (CancelledError bypass)**: `asyncio.CancelledError` e `BaseException` (NAO `Exception`) desde Python 3.9. Teams usa `asyncio.wait_for(timeout=240)` que cancela via `CancelledError` — bypassa TODOS os 5 except handlers. O bloco `finally` em `_stream_response()` garante que `streaming_done_event.set()` SEMPRE e chamado, mesmo para `CancelledError`, `KeyboardInterrupt` e `SystemExit`. **O path persistente (`_stream_response_persistent`) e IMUNE porque `streaming_done_event = None`.**
+
+**REGRA**: Ao adicionar NOVO error handler em `_stream_response()`, o `finally` block e a rede de seguranca definitiva — NAO precisa chamar `.set()` no novo handler (mas e boa pratica como defense-in-depth).
 
 ### AskUserQuestion: blocking cross-arquivo
 Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes.py`

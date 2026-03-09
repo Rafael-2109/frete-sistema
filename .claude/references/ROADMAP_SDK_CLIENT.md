@@ -1,6 +1,6 @@
 # Migração: query() → ClaudeSDKClient — ROADMAP VIVO
 
-> **Última atualização**: 2026-03-08
+> **Última atualização**: 2026-03-09
 > **Status geral**: EM PROGRESSO
 > **Progresso**: ██████░░░░ 60% (Fase 0 ✅ + Fase 1 ✅ + Fase 2 ✅ + Fase 3 ✅)
 > **POC**: CONCLUÍDA (2.15x speedup) — `scripts/poc_sdk_client.py`
@@ -366,6 +366,33 @@ Se SDK mudar internals, `_force_kill_subprocess()` falha graciosamente (try/exce
 
 **Rollback temporário (2026-03-09)**: `AGENT_PERSISTENT_SDK_CLIENT=false` até fix ser deployed.
 
+### DC-8: CancelledError Bypassa streaming_done_event (RISCO CRÍTICO — FIXADO)
+
+**Fonte**: `app/agente/sdk/client.py` — `_stream_response()` linhas 2641-2856
+
+**Problema**: O método tem 5 except handlers (ProcessError, CLINotFoundError, CLIJSONDecodeError, BaseExceptionGroup, Exception), cada um chamando `streaming_done_event.set()`. MAS `asyncio.CancelledError` é `BaseException` desde Python 3.9 — **NÃO é `Exception`** — e bypassa TODOS os handlers.
+
+**Cadeia de eventos no Teams**:
+1. Teams recebe mensagem → thread non-daemon inicia
+2. `asyncio.run(_stream_with_timeout())` é chamado
+3. `_stream_with_timeout()` wrapa em `asyncio.wait_for(timeout=240)`
+4. Após 240s, `wait_for` **cancela** a coroutine com `CancelledError`
+5. `CancelledError` propaga por `_stream_response()` — **NÃO é capturado**
+6. `streaming_done_event.set()` **NUNCA é chamado**
+7. `_make_streaming_prompt()` fica bloqueado em `done_event.wait(timeout=600)` por **10 minutos**
+8. Subprocess CLI fica ativo consumindo CPU
+9. A cada retry, um NOVO subprocess é criado → acumula
+
+**Fix aplicado (2026-03-09)**: Bloco `finally` após todos os except handlers garante que `streaming_done_event.set()` é SEMPRE chamado. Guard `is_set()` evita log duplicado quando except handler já liberou. Defense-in-depth: handlers individuais mantidos.
+
+**Nota**: O path persistente (`_stream_response_persistent`) é **imune** porque `streaming_done_event = None`.
+
+**Critérios para re-habilitar `AGENT_PERSISTENT_SDK_CLIENT=true`**:
+1. Fix DC-8 (finally block) deployed e validado por 48h sem picos de CPU
+2. Canary: habilitar para 1 conversa Teams de baixo tráfego por 24h
+3. Monitorar: CPU < 50%, memória estável, zero orphan subprocesses no health check
+4. Expandir: todas as conversas Teams → web admin → todos os usuários
+
 ---
 
 ## 5. FASES DE IMPLEMENTAÇÃO
@@ -593,6 +620,7 @@ Se SDK mudar internals, `_force_kill_subprocess()` falha graciosamente (try/exce
 | R11 | asyncio.Event.set() cross-thread (DC-6) | BAIXA | MUITO BAIXA | GIL protege no CPython; monitorar; fallback `loop.call_soon_threadsafe()` | ACEITO |
 | R12 | Feature flags lidas no connect ficam stale | BAIXA | BAIXA | Flags são env vars, constantes por lifecycle do worker | ACEITO |
 | R13 | disconnect() cross-task mata subprocess zombie (DC-7) | CRÍTICA | CERTA | `_force_kill_subprocess()` + acesso direto a `transport.close()` | **FIXADO** |
+| R14 | CancelledError bypassa streaming_done_event (DC-8) | CRÍTICA | CERTA | `finally` block em `_stream_response()` garante `.set()` | **FIXADO** |
 
 ---
 
@@ -717,6 +745,7 @@ AGENT_PERSISTENT_SDK_CLIENT=false
 | 2026-03-08 | 2 | Tasks 2.1-2.2 | CONCLUÍDO | Interrupt real via submit_coroutine(client.interrupt()). interrupt_ack já emitido por _parse_sdk_message |
 | 2026-03-08 | 3 | Tasks 3.1-3.3 | CONCLUÍDO | submit_coroutine() em 2 paths Teams. our_session_id adicionado a get_response(). _safe_flush() com app_context no daemon. Non-daemon thread mantido |
 | 2026-03-09 | FIX | DC-7 subprocess zombie | CONCLUÍDO | _force_kill_subprocess() bypassa query.close() e chama transport.close() diretamente. Fix em disconnect_client() e get_or_create_client(). Rollback temporário: flag=false |
+| 2026-03-09 | FIX | DC-8 CancelledError bypass | CONCLUÍDO | finally block em _stream_response(). Health check com monitoramento threads/processes. Orphan cleanup em Teams. Documentado em CLAUDE.md R5 |
 
 ---
 

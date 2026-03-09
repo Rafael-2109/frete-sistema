@@ -687,6 +687,39 @@ def _flush_partial_to_db(task_id: str, partial_text: str) -> None:
             pass
 
 
+def _cleanup_orphan_claude_processes():
+    """Kill orphan claude CLI subprocesses spawned by this worker.
+
+    Chamado nos paths de erro/timeout de _obter_resposta_agente_streaming().
+    Após CancelledError (DC-8) ou timeout, o subprocess claude pode ficar
+    órfão consumindo CPU. Esta função encontra e mata esses processos.
+
+    Usa pgrep para encontrar filhos diretos do PID atual com 'claude' no comando.
+    Falha silenciosamente se pgrep não disponível ou sem processos.
+    """
+    try:
+        import subprocess as sp
+        import os
+        import signal
+        result = sp.run(
+            ['pgrep', '-P', str(os.getpid()), '-f', 'claude'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            for pid_str in pids:
+                try:
+                    pid = int(pid_str.strip())
+                    os.kill(pid, signal.SIGTERM)
+                    logger.warning(
+                        f"[TEAMS-STREAM] Killed orphan claude process: pid={pid}"
+                    )
+                except (ValueError, ProcessLookupError, PermissionError):
+                    pass
+    except Exception as e:
+        logger.debug(f"[TEAMS-STREAM] Orphan cleanup skipped: {e}")
+
+
 def _obter_resposta_agente_streaming(
     mensagem: str,
     usuario: str,
@@ -885,6 +918,7 @@ def _obter_resposta_agente_streaming(
 
     except asyncio.TimeoutError:
         logger.error("[TEAMS-STREAM] Timeout ao aguardar resposta do agente")
+        _cleanup_orphan_claude_processes()
         return (
             "Desculpe, a consulta demorou muito. "
             "Tente novamente com uma pergunta mais especifica."
@@ -895,6 +929,7 @@ def _obter_resposta_agente_streaming(
             f"[TEAMS-STREAM] Erro ao obter resposta do agente: {e}",
             exc_info=True,
         )
+        _cleanup_orphan_claude_processes()
         return (
             "Desculpe, ocorreu um erro ao processar sua mensagem. "
             "Tente novamente."

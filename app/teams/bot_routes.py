@@ -382,10 +382,41 @@ def bot_execute():
 
 @teams_bp.route('/bot/health', methods=['GET'])
 def bot_health():
-    """Health check para o bot Azure Function."""
+    """Health check para o bot Azure Function.
+
+    Inclui monitoramento de threads Teams ativas e subprocesses claude
+    órfãos para diagnóstico de DC-8 (CancelledError bypass).
+    """
+    import threading
+    import os
+    import subprocess as sp
+
     from app.agente.config.feature_flags import TEAMS_ASYNC_MODE
+
+    # Contar threads Teams ativas
+    teams_threads = [
+        t for t in threading.enumerate()
+        if t.name.startswith('teams-task-') and t.is_alive()
+    ]
+
+    # Contar subprocesses claude filhos deste worker
+    claude_process_count = 0
+    try:
+        result = sp.run(
+            ['pgrep', '-P', str(os.getpid()), '-f', 'claude'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            claude_process_count = len(result.stdout.strip().split('\n'))
+    except Exception:
+        claude_process_count = -1  # -1 = não foi possível verificar
+
     return jsonify({
         "status": "ok",
         "service": "teams-bot",
         "async_mode": TEAMS_ASYNC_MODE,
+        "pid": os.getpid(),
+        "active_teams_threads": len(teams_threads),
+        "teams_thread_names": [t.name for t in teams_threads[:10]],
+        "claude_child_processes": claude_process_count,
     })

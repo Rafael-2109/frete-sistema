@@ -2855,6 +2855,21 @@ Nunca invente informações."""
             if state.streaming_done_event:
                 state.streaming_done_event.set()
 
+        finally:
+            # CRITICAL: Sempre liberar prompt generator.
+            # Cobre CancelledError, KeyboardInterrupt, SystemExit e qualquer
+            # BaseException que bypasse os except handlers acima.
+            # asyncio.CancelledError é BaseException (não Exception) desde Python 3.9.
+            # Sem isto, _make_streaming_prompt bloqueia em done_event.wait(600)
+            # mantendo subprocess CLI vivo por até 10 minutos (zombie).
+            # Ref: DC-8 (CancelledError bypass)
+            if state.streaming_done_event and not state.streaming_done_event.is_set():
+                state.streaming_done_event.set()
+                logger.warning(
+                    "[AGENT_SDK] streaming_done_event released via finally "
+                    f"(elapsed={time.time() - state.stream_start_time:.1f}s)"
+                )
+
     @staticmethod
     async def _make_streaming_prompt(
         text: str,
