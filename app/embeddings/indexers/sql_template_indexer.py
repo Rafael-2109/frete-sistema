@@ -276,7 +276,7 @@ def index_sql_templates(
             stats["errors"] += len(batch)
             continue
 
-        for j, (template, embedding) in enumerate(zip(batch, embeddings)):
+        for template, embedding in zip(batch, embeddings):
             try:
                 embedding_json = json.dumps(embedding)
                 tokens_est = max(1, len(template["texto_embedado"]) // 4)
@@ -347,7 +347,7 @@ def save_successful_query(question: str, sql: str, tables_used: list) -> bool:
     if not EMBEDDINGS_ENABLED or not SQL_TEMPLATE_SEARCH:
         return False
 
-    try:
+    def _do_save():
         from app import db as _db
         from app.embeddings.service import EmbeddingService
         from app.embeddings.config import VOYAGE_DEFAULT_MODEL
@@ -414,9 +414,24 @@ def save_successful_query(question: str, sql: str, tables_used: list) -> bool:
         logger.info(f"[SQL_TEMPLATE_INDEXER] Template salvo: {question[:60]}")
         return True
 
+    try:
+        # Garantir app_context: chamado de skills (subprocess sem contexto ativo)
+        # e do scheduler (com contexto). _has_app_context() detecta e cria se necessário.
+        if _has_app_context():
+            return _do_save()
+        else:
+            from app import create_app
+            app = create_app()
+            with app.app_context():
+                return _do_save()
+
     except Exception as e:
         logger.error(f"[SQL_TEMPLATE_INDEXER] Erro salvando template: {e}")
-        _db.session.rollback()  # Idempotente, seguro chamar sempre
+        try:
+            from app import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
         return False
 
 
@@ -451,10 +466,13 @@ def main():
                 FROM sql_template_embeddings
             """)).fetchone()
             print(f"\n=== SQL Template Embeddings ===")
-            print(f"Total: {result[0]}")
-            print(f"Com embedding: {result[1]}")
-            print(f"Execucoes totais: {result[2]}")
-            print(f"Ultimo uso: {result[3]}")
+            if result:
+                print(f"Total: {result[0]}")
+                print(f"Com embedding: {result[1]}")
+                print(f"Execucoes totais: {result[2]}")
+                print(f"Ultimo uso: {result[3]}")
+            else:
+                print("Tabela vazia ou nao encontrada")
             return
 
         # Coletar templates

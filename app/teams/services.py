@@ -420,12 +420,9 @@ def _obter_resposta_agente(
     # Modelo padrão para Teams (Sonnet por velocidade)
     from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
 
-    # Executa a coroutine de forma sincrona.
-    # asyncio.run() instala ThreadedChildWatcher automaticamente,
-    # necessário para o SDK gerenciar o CLI subprocess.
-    # new_event_loop() NÃO instala child watcher → "Command failed with exit code 1".
-    # Mesmo padrão do web agent (routes.py:628).
-    #
+    # Pool key para path persistente (ClaudeSDKClient por sessão)
+    our_session_id = session.session_id if session else None
+
     # wait_for(240s) garante que a thread SEMPRE termina em tempo finito,
     # mesmo se o SDK travar. Sem isso, uma thread non-daemon bloquearia
     # o shutdown do worker indefinidamente.
@@ -441,11 +438,25 @@ def _obter_resposta_agente(
                     user_id=user_id,
                     model=TEAMS_DEFAULT_MODEL,
                     can_use_tool=can_use_tool,
+                    our_session_id=our_session_id,
                 ),
                 timeout=MAX_TEAMS_RESPONSE_SECONDS,
             )
 
-        response = asyncio.run(_get_response_with_timeout())
+        # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
+        from app.agente.config.feature_flags import USE_PERSISTENT_SDK_CLIENT
+
+        if USE_PERSISTENT_SDK_CLIENT:
+            # Path v3: submeter ao daemon thread do pool de ClaudeSDKClient.
+            # O client DEVE rodar no MESMO event loop em que foi conectado.
+            from app.agente.sdk.client_pool import submit_coroutine
+            future = submit_coroutine(_get_response_with_timeout())
+            response = future.result(timeout=MAX_TEAMS_RESPONSE_SECONDS + 10)
+        else:
+            # Path v2: event loop efêmero (cria + destrói por chamada).
+            # asyncio.run() instala ThreadedChildWatcher automaticamente,
+            # necessário para o SDK gerenciar o CLI subprocess.
+            response = asyncio.run(_get_response_with_timeout())
 
         resposta_texto = _extrair_texto_resposta(response)
         new_sdk_session_id = getattr(response, 'session_id', None)
@@ -684,6 +695,7 @@ def _obter_resposta_agente_streaming(
     user_id: int = None,
     can_use_tool=None,
     session=None,
+    app=None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Obtem resposta do Agente Claude SDK com flush parcial progressivo ao DB.
@@ -736,6 +748,9 @@ def _obter_resposta_agente_streaming(
     contexto_teams = _get_teams_context()
     prompt_completo = contexto_teams + mensagem
 
+    # Pool key para path persistente (ClaudeSDKClient por sessão)
+    our_session_id = session.session_id if session else None
+
     MAX_TEAMS_RESPONSE_SECONDS = 240
 
     try:
@@ -745,6 +760,27 @@ def _obter_resposta_agente_streaming(
             errors = []
             last_flush_time = time.monotonic()
 
+            # Helper: flush com app_context para daemon thread.
+            # No daemon thread, não há Flask app_context — wrapping necessário.
+            # _safe_flush é sync (sem await), portanto atômico no event loop.
+            _needs_app_ctx = False
+            try:
+                from flask import current_app
+                _ = current_app.name
+            except RuntimeError:
+                _needs_app_ctx = True
+
+            def _safe_flush(text):
+                if not _needs_app_ctx:
+                    _flush_partial_to_db(task_id, text)
+                elif app:
+                    with app.app_context():
+                        _flush_partial_to_db(task_id, text)
+                else:
+                    logger.warning(
+                        "[TEAMS-STREAM] Flush ignorado: sem app_context disponível"
+                    )
+
             async for event in client.stream_response(
                 prompt=prompt_completo,
                 user_name=usuario,
@@ -752,6 +788,7 @@ def _obter_resposta_agente_streaming(
                 sdk_session_id=sdk_session_id,
                 can_use_tool=can_use_tool,
                 user_id=user_id,
+                our_session_id=our_session_id,
             ):
                 if event.type == 'init':
                     result_session_id = event.content.get('session_id')
@@ -762,7 +799,7 @@ def _obter_resposta_agente_streaming(
                     # Flush periodico ao DB
                     now = time.monotonic()
                     if now - last_flush_time >= TEAMS_STREAM_FLUSH_INTERVAL:
-                        _flush_partial_to_db(task_id, full_text)
+                        _safe_flush(full_text)
                         last_flush_time = now
                         logger.debug(
                             f"[TEAMS-STREAM] Flush parcial: "
@@ -773,7 +810,7 @@ def _obter_resposta_agente_streaming(
                     # Flush imediato antes de tool_call — texto fica visivel
                     # enquanto tool executa (pode levar 5-30s)
                     if full_text:
-                        _flush_partial_to_db(task_id, full_text)
+                        _safe_flush(full_text)
                         last_flush_time = time.monotonic()
                         logger.debug(
                             f"[TEAMS-STREAM] Flush pre-tool: "
@@ -811,7 +848,20 @@ def _obter_resposta_agente_streaming(
                 timeout=MAX_TEAMS_RESPONSE_SECONDS,
             )
 
-        resposta_texto, new_sdk_session_id = asyncio.run(_stream_with_timeout())
+        # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
+        from app.agente.config.feature_flags import USE_PERSISTENT_SDK_CLIENT
+
+        if USE_PERSISTENT_SDK_CLIENT:
+            # Path v3: submeter ao daemon thread do pool de ClaudeSDKClient.
+            # O client DEVE rodar no MESMO event loop em que foi conectado.
+            from app.agente.sdk.client_pool import submit_coroutine
+            future = submit_coroutine(_stream_with_timeout())
+            resposta_texto, new_sdk_session_id = future.result(
+                timeout=MAX_TEAMS_RESPONSE_SECONDS + 10
+            )
+        else:
+            # Path v2: event loop efêmero (cria + destrói por chamada)
+            resposta_texto, new_sdk_session_id = asyncio.run(_stream_with_timeout())
 
         # Extrair e sanitizar resposta
         if resposta_texto:
@@ -944,6 +994,7 @@ def process_teams_task_async(
                             user_id=teams_user_id,
                             can_use_tool=agent_can_use_tool,
                             session=session,
+                            app=app,
                         )
                     else:
                         resposta_texto, new_sdk_session_id = _obter_resposta_agente(

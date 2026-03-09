@@ -28,6 +28,16 @@ from app.embeddings.config import EMBEDDINGS_ENABLED
 logger = logging.getLogger(__name__)
 
 
+def _has_app_context() -> bool:
+    """Verifica se esta dentro de um Flask app_context."""
+    try:
+        from flask import current_app
+        _ = current_app.name
+        return True
+    except (RuntimeError, ImportError):
+        return False
+
+
 # ============================================================
 # ABREVIACOES DE PRODUTO
 # Replicado de resolver_entidades.py — fonte canonica para
@@ -371,6 +381,15 @@ def buscar_produtos_hibrido(
         - categoria_produto, subcategoria, palletizacao, peso_bruto
         - score (float), matches (list), source ("texto"|"semantica"|"ambos")
     """
+    # Guard: garantir app_context (chamado de skills subprocess e in-process)
+    if not _has_app_context():
+        from app import create_app
+        app = create_app()
+        with app.app_context():
+            return buscar_produtos_hibrido(
+                termo, modo, limite, min_similarity, filtro_ativo, filtro_vendido,
+            )
+
     if modo == "texto":
         return _buscar_texto(termo, limite, filtro_ativo, filtro_vendido)
 

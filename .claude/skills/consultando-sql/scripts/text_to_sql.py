@@ -886,7 +886,9 @@ class TextToSQLPipeline:
                 try:
                     from app.embeddings.indexers.sql_template_indexer import save_successful_query
                     tables_in_sql = extract_tables_from_sql(sql)
-                    save_successful_query(question, sql, tables_in_sql)
+                    _app = create_app()
+                    with _app.app_context():
+                        save_successful_query(question, sql, tables_in_sql)
                 except Exception:
                     pass
 
@@ -1050,7 +1052,9 @@ class TextToSQLPipeline:
             # Best-effort: salvar query bem-sucedida como template para few-shot
             try:
                 from app.embeddings.indexers.sql_template_indexer import save_successful_query
-                save_successful_query(question, sql, tables_in_sql)
+                _app = create_app()
+                with _app.app_context():
+                    save_successful_query(question, sql, tables_in_sql)
             except Exception:
                 pass  # Nao bloquear pipeline
 

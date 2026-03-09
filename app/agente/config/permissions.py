@@ -31,6 +31,36 @@ from claude_agent_sdk import (
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# HELPER: Flask app_context para daemon thread
+# =============================================================================
+# Replicado de tools/memory_mcp_tool.py. O daemon thread (SDK persistente ou
+# Teams async) NÃO possui Flask app_context. Pontos que acessam db.session
+# DEVEM usar _execute_with_context() para garantir app_context.
+# Fix DC-2: permissions.py:347-352 e 375-380 acessavam db.session sem wrapper.
+# =============================================================================
+def _get_app_context():
+    """Obtém Flask app context (None se já dentro de um)."""
+    try:
+        from flask import current_app
+        _ = current_app.name
+        return None
+    except RuntimeError:
+        from app import create_app
+        app = create_app()
+        return app.app_context()
+
+
+def _execute_with_context(func):
+    """Executa função dentro de Flask app context (se necessário)."""
+    ctx = _get_app_context()
+    if ctx is None:
+        return func()
+    else:
+        with ctx:
+            return func()
+
 # =============================================================================
 # ASKUSERQUESTION: Context storage global thread-safe
 # =============================================================================
@@ -340,22 +370,27 @@ async def can_use_tool(
                         f"[PERMISSION] AskUserQuestion via Teams (tentativa {attempts + 1}): "
                         f"session={current_session_id[:8]}... task={teams_task_id[:8]}..."
                     )
+                    # Fix DC-2: wrap em _execute_with_context() para garantir
+                    # app_context no daemon thread (SDK persistente / Teams async)
                     try:
-                        from app.teams.models import TeamsTask
-                        from app import db
+                        def _update_task_awaiting():
+                            from app.teams.models import TeamsTask
+                            from app import db
 
-                        task = db.session.get(TeamsTask, teams_task_id)
-                        if task:
-                            task.status = 'awaiting_user_input'
-                            task.pending_questions = questions
-                            task.pending_question_session_id = current_session_id
-                            db.session.commit()
-                            logger.info(
-                                f"[PERMISSION] TeamsTask {teams_task_id[:8]}... "
-                                f"atualizada: awaiting_user_input ({len(questions)} perguntas)"
-                            )
-                        else:
-                            logger.error(f"[PERMISSION] TeamsTask {teams_task_id} não encontrada")
+                            task = db.session.get(TeamsTask, teams_task_id)
+                            if task:
+                                task.status = 'awaiting_user_input'
+                                task.pending_questions = questions
+                                task.pending_question_session_id = current_session_id
+                                db.session.commit()
+                                logger.info(
+                                    f"[PERMISSION] TeamsTask {teams_task_id[:8]}... "
+                                    f"atualizada: awaiting_user_input ({len(questions)} perguntas)"
+                                )
+                            else:
+                                logger.error(f"[PERMISSION] TeamsTask {teams_task_id} não encontrada")
+
+                        _execute_with_context(_update_task_awaiting)
                     except Exception as e:
                         logger.error(f"[PERMISSION] Erro ao atualizar TeamsTask: {e}", exc_info=True)
 
@@ -369,19 +404,26 @@ async def can_use_tool(
                             f"session={current_session_id[:8]}..."
                         )
 
-                        # Fix 4: Atualizar TeamsTask para nao ficar presa em awaiting_user_input
+                        # Fix 4 + DC-2: Atualizar TeamsTask para nao ficar presa em awaiting_user_input
                         # Sem isso, o polling do bot continua re-enviando Adaptive Cards (Bug 1)
+                        # DC-2: wrap em _execute_with_context() para daemon thread
                         try:
-                            task = db.session.get(TeamsTask, teams_task_id)
-                            if task and task.status == 'awaiting_user_input':
-                                task.status = 'processing'
-                                task.pending_questions = None
-                                task.pending_question_session_id = None
-                                db.session.commit()
-                                logger.info(
-                                    f"[PERMISSION] TeamsTask {teams_task_id[:8]}... "
-                                    f"resetada de awaiting_user_input para processing (timeout)"
-                                )
+                            def _reset_task_timeout():
+                                from app.teams.models import TeamsTask
+                                from app import db
+
+                                task = db.session.get(TeamsTask, teams_task_id)
+                                if task and task.status == 'awaiting_user_input':
+                                    task.status = 'processing'
+                                    task.pending_questions = None
+                                    task.pending_question_session_id = None
+                                    db.session.commit()
+                                    logger.info(
+                                        f"[PERMISSION] TeamsTask {teams_task_id[:8]}... "
+                                        f"resetada de awaiting_user_input para processing (timeout)"
+                                    )
+
+                            _execute_with_context(_reset_task_timeout)
                         except Exception:
                             logger.error(
                                 "[PERMISSION] Erro ao resetar task apos timeout",

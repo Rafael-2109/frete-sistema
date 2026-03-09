@@ -28,6 +28,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+
+def _has_app_context() -> bool:
+    """Verifica se esta dentro de um Flask app_context."""
+    try:
+        from flask import current_app
+        _ = current_app.name
+        return True
+    except (RuntimeError, ImportError):
+        return False
+
+
 # Diretorio raiz do projeto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 APP_DIR = os.path.join(PROJECT_ROOT, 'app')
@@ -707,122 +718,132 @@ def index_routes(
     from app.embeddings.config import VOYAGE_DEFAULT_MODEL
     from sqlalchemy import text
 
-    svc = EmbeddingService()
     stats = {"embedded": 0, "skipped": 0, "errors": 0, "total_tokens_est": 0}
 
     if not cards:
         return stats
 
-    # Verificar hashes existentes para skip
-    existing_hashes = {}
-    if not reindex:
-        try:
-            result = _db.session.execute(
-                text("SELECT blueprint_name, function_name, content_hash FROM route_template_embeddings WHERE content_hash IS NOT NULL")
-            )
-            for row in result.fetchall():
-                key = f"{row[0]}.{row[1]}"
-                existing_hashes[key] = row[2]
-        except Exception:
-            pass  # Tabela pode nao existir ainda
+    def _do_index():
+        svc = EmbeddingService()
 
-    # Filtrar itens que precisam de (re)embedding
-    to_embed = []
-    for card in cards:
-        key = f"{card['blueprint_name']}.{card['function_name']}"
-        if not reindex and key in existing_hashes and existing_hashes[key] == card['content_hash']:
-            stats["skipped"] += 1
-            continue
-        to_embed.append(card)
+        # Verificar hashes existentes para skip
+        existing_hashes = {}
+        if not reindex:
+            try:
+                result = _db.session.execute(
+                    text("SELECT blueprint_name, function_name, content_hash FROM route_template_embeddings WHERE content_hash IS NOT NULL")
+                )
+                for row in result.fetchall():
+                    key = f"{row[0]}.{row[1]}"
+                    existing_hashes[key] = row[2]
+            except Exception:
+                pass  # Tabela pode nao existir ainda
 
-    if not to_embed:
-        logger.info(f"[ROUTE_INDEXER] Nada novo (skipped={stats['skipped']})")
+        # Filtrar itens que precisam de (re)embedding
+        to_embed = []
+        for card in cards:
+            key = f"{card['blueprint_name']}.{card['function_name']}"
+            if not reindex and key in existing_hashes and existing_hashes[key] == card['content_hash']:
+                stats["skipped"] += 1
+                continue
+            to_embed.append(card)
+
+        if not to_embed:
+            logger.info(f"[ROUTE_INDEXER] Nada novo (skipped={stats['skipped']})")
+            return stats
+
+        # Batch embedding
+        batch_size = 128
+        for i in range(0, len(to_embed), batch_size):
+            batch = to_embed[i:i + batch_size]
+            texts = [c["texto_embedado"] for c in batch]
+
+            try:
+                embeddings = svc.embed_texts(texts, input_type="document")
+            except Exception as e:
+                logger.error(f"[ROUTE_INDEXER] Erro batch {i}: {e}")
+                stats["errors"] += len(batch)
+                continue
+
+            for card, embedding in zip(batch, embeddings):
+                try:
+                    embedding_json = json.dumps(embedding)
+                    tokens_est = max(1, len(card["texto_embedado"]) // 4)
+                    stats["total_tokens_est"] += tokens_est
+
+                    _db.session.execute(
+                        text("""
+                            INSERT INTO route_template_embeddings
+                                (tipo, blueprint_name, function_name,
+                                 url_path, http_methods, template_path,
+                                 menu_path, permission_decorator,
+                                 source_file, source_line, docstring, ajax_endpoints,
+                                 texto_embedado, embedding, model_used, content_hash,
+                                 created_at, updated_at)
+                            VALUES
+                                (:tipo, :blueprint_name, :function_name,
+                                 :url_path, :http_methods, :template_path,
+                                 :menu_path, :permission_decorator,
+                                 :source_file, :source_line, :docstring, :ajax_endpoints,
+                                 :texto_embedado, :embedding, :model_used, :content_hash,
+                                 NOW(), NOW())
+                            ON CONFLICT ON CONSTRAINT uq_route_blueprint_function
+                            DO UPDATE SET
+                                tipo = EXCLUDED.tipo,
+                                url_path = EXCLUDED.url_path,
+                                http_methods = EXCLUDED.http_methods,
+                                template_path = EXCLUDED.template_path,
+                                menu_path = EXCLUDED.menu_path,
+                                permission_decorator = EXCLUDED.permission_decorator,
+                                source_file = EXCLUDED.source_file,
+                                source_line = EXCLUDED.source_line,
+                                docstring = EXCLUDED.docstring,
+                                ajax_endpoints = EXCLUDED.ajax_endpoints,
+                                texto_embedado = EXCLUDED.texto_embedado,
+                                embedding = EXCLUDED.embedding,
+                                model_used = EXCLUDED.model_used,
+                                content_hash = EXCLUDED.content_hash,
+                                updated_at = NOW()
+                        """),
+                        {
+                            "tipo": card["tipo"],
+                            "blueprint_name": card["blueprint_name"],
+                            "function_name": card["function_name"],
+                            "url_path": card["url_path"],
+                            "http_methods": card["http_methods"],
+                            "template_path": card.get("template_path"),
+                            "menu_path": card.get("menu_path"),
+                            "permission_decorator": card.get("permission_decorator"),
+                            "source_file": card["source_file"],
+                            "source_line": card.get("source_line"),
+                            "docstring": card.get("docstring"),
+                            "ajax_endpoints": card.get("ajax_endpoints"),
+                            "texto_embedado": card["texto_embedado"],
+                            "embedding": embedding_json,
+                            "model_used": VOYAGE_DEFAULT_MODEL,
+                            "content_hash": card["content_hash"],
+                        }
+                    )
+                    stats["embedded"] += 1
+
+                except Exception as e:
+                    logger.error(f"[ROUTE_INDEXER] Erro salvando {card['blueprint_name']}.{card['function_name']}: {e}")
+                    stats["errors"] += 1
+
+            _db.session.commit()
+            if i + batch_size < len(to_embed):
+                time.sleep(0.5)
+
+        logger.info(f"[ROUTE_INDEXER] Concluido: {stats}")
         return stats
 
-    # Batch embedding
-    batch_size = 128
-    for i in range(0, len(to_embed), batch_size):
-        batch = to_embed[i:i + batch_size]
-        texts = [c["texto_embedado"] for c in batch]
-
-        try:
-            embeddings = svc.embed_texts(texts, input_type="document")
-        except Exception as e:
-            logger.error(f"[ROUTE_INDEXER] Erro batch {i}: {e}")
-            stats["errors"] += len(batch)
-            continue
-
-        for card, embedding in zip(batch, embeddings):
-            try:
-                embedding_json = json.dumps(embedding)
-                tokens_est = max(1, len(card["texto_embedado"]) // 4)
-                stats["total_tokens_est"] += tokens_est
-
-                _db.session.execute(
-                    text("""
-                        INSERT INTO route_template_embeddings
-                            (tipo, blueprint_name, function_name,
-                             url_path, http_methods, template_path,
-                             menu_path, permission_decorator,
-                             source_file, source_line, docstring, ajax_endpoints,
-                             texto_embedado, embedding, model_used, content_hash,
-                             created_at, updated_at)
-                        VALUES
-                            (:tipo, :blueprint_name, :function_name,
-                             :url_path, :http_methods, :template_path,
-                             :menu_path, :permission_decorator,
-                             :source_file, :source_line, :docstring, :ajax_endpoints,
-                             :texto_embedado, :embedding, :model_used, :content_hash,
-                             NOW(), NOW())
-                        ON CONFLICT ON CONSTRAINT uq_route_blueprint_function
-                        DO UPDATE SET
-                            tipo = EXCLUDED.tipo,
-                            url_path = EXCLUDED.url_path,
-                            http_methods = EXCLUDED.http_methods,
-                            template_path = EXCLUDED.template_path,
-                            menu_path = EXCLUDED.menu_path,
-                            permission_decorator = EXCLUDED.permission_decorator,
-                            source_file = EXCLUDED.source_file,
-                            source_line = EXCLUDED.source_line,
-                            docstring = EXCLUDED.docstring,
-                            ajax_endpoints = EXCLUDED.ajax_endpoints,
-                            texto_embedado = EXCLUDED.texto_embedado,
-                            embedding = EXCLUDED.embedding,
-                            model_used = EXCLUDED.model_used,
-                            content_hash = EXCLUDED.content_hash,
-                            updated_at = NOW()
-                    """),
-                    {
-                        "tipo": card["tipo"],
-                        "blueprint_name": card["blueprint_name"],
-                        "function_name": card["function_name"],
-                        "url_path": card["url_path"],
-                        "http_methods": card["http_methods"],
-                        "template_path": card.get("template_path"),
-                        "menu_path": card.get("menu_path"),
-                        "permission_decorator": card.get("permission_decorator"),
-                        "source_file": card["source_file"],
-                        "source_line": card.get("source_line"),
-                        "docstring": card.get("docstring"),
-                        "ajax_endpoints": card.get("ajax_endpoints"),
-                        "texto_embedado": card["texto_embedado"],
-                        "embedding": embedding_json,
-                        "model_used": VOYAGE_DEFAULT_MODEL,
-                        "content_hash": card["content_hash"],
-                    }
-                )
-                stats["embedded"] += 1
-
-            except Exception as e:
-                logger.error(f"[ROUTE_INDEXER] Erro salvando {card['blueprint_name']}.{card['function_name']}: {e}")
-                stats["errors"] += 1
-
-        _db.session.commit()
-        if i + batch_size < len(to_embed):
-            time.sleep(0.5)
-
-    logger.info(f"[ROUTE_INDEXER] Concluido: {stats}")
-    return stats
+    if _has_app_context():
+        return _do_index()
+    else:
+        from app import create_app
+        app = create_app()
+        with app.app_context():
+            return _do_index()
 
 
 # =====================================================================

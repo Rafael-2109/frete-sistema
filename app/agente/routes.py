@@ -347,6 +347,7 @@ async def _async_stream_sdk_client(
             image_files=image_files,
             sdk_session_id=sdk_session_id_for_resume,
             can_use_tool=can_use_tool,
+            our_session_id=our_session_id,
         ):
             should_continue = _process_stream_event(event)
             if should_continue:
@@ -673,8 +674,24 @@ def _stream_chat_response(
                         'timeout': True
                     }))
 
-            asyncio.run(async_stream_with_timeout())
-            logger.info("[AGENTE] asyncio.run() completado com sucesso")
+            # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
+            from .config.feature_flags import USE_PERSISTENT_SDK_CLIENT
+
+            if USE_PERSISTENT_SDK_CLIENT:
+                # Path v3: submeter ao daemon thread do pool de ClaudeSDKClient.
+                # O event loop persistente é compartilhado por todos os clients.
+                # O ClaudeSDKClient DEVE rodar no MESMO event loop em que foi
+                # conectado — submit_coroutine() garante isso.
+                from .sdk.client_pool import submit_coroutine
+                future = submit_coroutine(async_stream_with_timeout())
+                # Bloqueia esta thread até o coroutine completar no daemon thread.
+                # Events são emitidos via event_queue durante a execução.
+                future.result(timeout=MAX_STREAM_DURATION_SECONDS)
+                logger.info("[AGENTE] submit_coroutine() completado com sucesso")
+            else:
+                # Path v2: event loop efêmero (cria + destrói por request)
+                asyncio.run(async_stream_with_timeout())
+                logger.info("[AGENTE] asyncio.run() completado com sucesso")
 
         except (Exception, BaseExceptionGroup) as e:
             if isinstance(e, BaseExceptionGroup):
@@ -2092,26 +2109,68 @@ def api_rename_session(session_db_id: int):
 
 
 # =============================================================================
-# API - SDK CLIENT (Interrupt não suportado com query() — mantém endpoint para
-# compatibilidade com frontend, retornando resposta informativa)
+# API - SDK CLIENT (Interrupt)
+#
+# Com USE_PERSISTENT_SDK_CLIENT=true: interrupt real via ClaudeSDKClient.
+# Com flag=false (query()): retorna 501 (sem processo persistente).
+#
+# O interrupt envia sinal ao subprocess CLI. O SDK emite ResultMessage com
+# subtype='interrupted', que _parse_sdk_message() converte em interrupt_ack
+# SSE event (já tratado pelo frontend em chat.js:919).
 # =============================================================================
 
 @agente_bp.route('/api/interrupt', methods=['POST'])
 @login_required
 def api_interrupt():
-    """
-    Interrupt não suportado na arquitetura query() + resume.
+    """Interrompe a geração atual do agente."""
+    from .config.feature_flags import USE_PERSISTENT_SDK_CLIENT
 
-    query() é self-contained (spawna CLI, executa, limpa).
-    Não mantém processo persistente para interromper.
+    if not USE_PERSISTENT_SDK_CLIENT:
+        return jsonify({
+            'success': False,
+            'error': 'Interrupt não disponível nesta versão. O processamento será concluído automaticamente.',
+            'info': 'Arquitetura query() + resume não suporta interrupt. Aguarde a conclusão ou envie nova mensagem.',
+        }), 501  # 501 Not Implemented
 
-    O próximo turno com resume continua de onde parou.
-    """
-    return jsonify({
-        'success': False,
-        'error': 'Interrupt não disponível nesta versão. O processamento será concluído automaticamente.',
-        'info': 'Arquitetura query() + resume não suporta interrupt. Aguarde a conclusão ou envie nova mensagem.',
-    }), 501  # 501 Not Implemented
+    # Path persistente: interrupt real via ClaudeSDKClient
+    data = request.get_json(silent=True) or {}
+    session_id = data.get('session_id')
+
+    if not session_id:
+        return jsonify({
+            'success': False,
+            'error': 'session_id é obrigatório.',
+        }), 400
+
+    from .sdk.client_pool import get_pooled_client, submit_coroutine
+
+    pooled = get_pooled_client(session_id)
+    if not pooled or not pooled.connected:
+        return jsonify({
+            'success': False,
+            'error': 'Sessão não encontrada no pool ou client desconectado.',
+        }), 404
+
+    try:
+        future = submit_coroutine(pooled.client.interrupt())
+        future.result(timeout=10)  # Interrupt é rápido — 10s é generoso
+        logger.info(
+            f"[AGENTE] Interrupt enviado com sucesso: "
+            f"session={session_id[:8]}..."
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Interrupt enviado. O stream emitirá interrupt_ack quando processado.',
+        }), 200
+    except Exception as e:
+        logger.warning(
+            f"[AGENTE] Erro ao enviar interrupt: "
+            f"session={session_id[:8]}... error={e}"
+        )
+        return jsonify({
+            'success': False,
+            'error': f'Falha ao enviar interrupt: {str(e)}',
+        }), 500
 
 
 # =============================================================================
@@ -2532,6 +2591,16 @@ def api_health():
             except Exception:
                 mcp_status[mcp_name] = 'error'
 
+        # Pool status (quando USE_PERSISTENT_SDK_CLIENT=true)
+        pool_status = None
+        try:
+            from .config.feature_flags import USE_PERSISTENT_SDK_CLIENT
+            if USE_PERSISTENT_SDK_CLIENT:
+                from .sdk.client_pool import get_pool_status
+                pool_status = get_pool_status()
+        except Exception:
+            pass
+
         result = {
             'success': True,
             'status': health.get('status', 'unknown'),
@@ -2541,6 +2610,10 @@ def api_health():
             'mcp_servers': mcp_status,
             'timestamp': agora_utc_naive().isoformat(),
         }
+
+        # Incluir pool status se disponível
+        if pool_status is not None:
+            result['sdk_client_pool'] = pool_status
 
         # Atualizar cache
         _health_cache['result'] = result

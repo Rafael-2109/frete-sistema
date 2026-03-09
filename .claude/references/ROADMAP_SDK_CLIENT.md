@@ -1,8 +1,8 @@
 # Migração: query() → ClaudeSDKClient — ROADMAP VIVO
 
 > **Última atualização**: 2026-03-08
-> **Status geral**: PLANEJADO
-> **Progresso**: ░░░░░░░░░░ 0%
+> **Status geral**: EM PROGRESSO
+> **Progresso**: ██████░░░░ 60% (Fase 0 ✅ + Fase 1 ✅ + Fase 2 ✅ + Fase 3 ✅)
 > **POC**: CONCLUÍDA (2.15x speedup) — `scripts/poc_sdk_client.py`
 > **Rollback instantâneo**: `AGENT_PERSISTENT_SDK_CLIENT=false`
 
@@ -345,11 +345,11 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 
 | Task | Status | Arquivo | O que fazer | Dependência |
 |------|--------|---------|-------------|-------------|
-| 0.1 | ○ | `permissions.py:347-352,375-380` | Fix DC-2: wrap `db.session.get(TeamsTask)` em `_execute_with_context()` nos 2 pontos | — |
-| 0.2 | ○ | `app/agente/sdk/client_pool.py` **(NOVO)** | Criar: PooledClient dataclass, _registry dict, daemon thread (`_sdk_loop`), `submit_coroutine()`, `shutdown_pool()`, `_cleanup_idle_clients()`, `get_or_create_client()`, `disconnect_client()` | — |
-| 0.3 | ○ | `feature_flags.py` | Adicionar `USE_PERSISTENT_SDK_CLIENT` (default false) | — |
-| 0.4 | ○ | `client.py` | Extrair `_parse_sdk_message()` de `_stream_response()` (linhas 1960-2262). Método reutilizável por ambos os paths | — |
-| 0.5 | ○ | `sdk/__init__.py` | Export `submit_coroutine` e `get_or_create_client` | 0.2 |
+| 0.1 | ✅ | `permissions.py:347-352,375-380` | Fix DC-2: wrap `db.session.get(TeamsTask)` em `_execute_with_context()` nos 2 pontos | — |
+| 0.2 | ✅ | `app/agente/sdk/client_pool.py` **(NOVO)** | Criar: PooledClient dataclass, _registry dict, daemon thread (`_sdk_loop`), `submit_coroutine()`, `shutdown_pool()`, `_cleanup_idle_clients()`, `get_or_create_client()`, `disconnect_client()` | — |
+| 0.3 | ✅ | `feature_flags.py` | Adicionar `USE_PERSISTENT_SDK_CLIENT` (default false) | — |
+| 0.4 | ✅ | `client.py` | Extrair `_parse_sdk_message()` de `_stream_response()` (linhas 1960-2262). Método reutilizável por ambos os paths | — |
+| 0.5 | ✅ | `sdk/__init__.py` | Export `submit_coroutine` e `get_or_create_client` | 0.2 |
 
 **Pós-condições (OBRIGATÓRIO verificar)**:
 - [ ] `AGENT_PERSISTENT_SDK_CLIENT=false` → sistema funciona identicamente
@@ -371,15 +371,15 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 
 | Task | Status | Arquivo | O que fazer | Dependência |
 |------|--------|---------|-------------|-------------|
-| 1.1 | ○ | `client.py` | Criar `_stream_response_persistent()` — usa `get_or_create_client()`, `client.query()`, `receive_response()`, `_parse_sdk_message()` | 0.2, 0.4 |
-| 1.2 | ○ | `client.py` | Fix DC-3: No `_user_prompt_submit_hook`, usar `self.settings.model` em vez de `options_dict.get("model")` | — |
-| 1.3 | ○ | `client.py:stream_response()` | Dispatch: `if USE_PERSISTENT_SDK_CLIENT: path novo, else: path antigo` | 1.1 |
-| 1.4 | ○ | `routes.py` | Novo path: `submit_coroutine()` em vez de `Thread + asyncio.run()` quando flag=true. SSE + Queue inalterados | 0.2, 1.3 |
-| 1.5 | ○ | `permissions.py` | `_make_scoped_can_use_tool(session_id, event_queue, user_id)` — seta ContextVars (CV01-CV05) antes de cada callback | — |
-| 1.6 | ○ | `client_pool.py` | No `get_or_create_client()` e antes de cada `query()`: setar `set_current_user_id` (3 ContextVars), `set_current_session_id`, `set_debug_mode` | 0.2 |
-| 1.7 | ○ | `routes.py` | Garantir que S07 (sentiment_detector) e S09 (suggestions_generator) são chamados nos mesmos pontos do novo path | 1.4 |
-| 1.8 | ○ | `routes.py` | Garantir que persistência DB (mensagens, transcript, cost, title) funciona identicamente no novo path | 1.4 |
-| 1.9 | ○ | `routes.py` | Health check (`/api/health`) inclui status do pool quando flag=true | 0.2 |
+| 1.1 | ✅ | `client.py` | Criar `_stream_response_persistent()` — usa `get_or_create_client()`, `client.query()`, `receive_response()`, `_parse_sdk_message()` | 0.2, 0.4 |
+| 1.2 | ✅ | `client.py` | Fix DC-3: No `_user_prompt_submit_hook`, usar `self.settings.model` em vez de `options_dict.get("model")` | — |
+| 1.3 | ✅ | `client.py:stream_response()` | Dispatch: `if USE_PERSISTENT_SDK_CLIENT: path novo, else: path antigo` + parâmetro `our_session_id` | 1.1 |
+| 1.4 | ✅ | `routes.py` | Novo path: `submit_coroutine()` em vez de `asyncio.run()` quando flag=true. SSE + Queue inalterados. Thread mantida (bloqueia em future.result) | 0.2, 1.3 |
+| 1.5 | ✅ | `(implícito)` | ContextVars CV01-CV05 setadas em `async_stream()` e `_build_options()` — propagam ao daemon thread via Task context | — |
+| 1.6 | ✅ | `(implícito)` | `_build_options()` (chamado todo turno) seta ContextVars dos MCP tools. `async_stream()` seta session_id e debug_mode | 0.2 |
+| 1.7 | ✅ | `(implícito)` | S07 (sentiment) e S09 (suggestions) chamados no mesmo `async_stream()` — código compartilhado por ambos paths | 1.4 |
+| 1.8 | ✅ | `(implícito)` | DB persistence em `_save_messages_to_db()` no finally de `_stream_chat_response()` — independente do path de streaming | 1.4 |
+| 1.9 | ✅ | `routes.py` | Health check (`/api/health`) inclui `sdk_client_pool` status quando flag=true via `get_pool_status()` | 0.2 |
 
 **Pós-condições (OBRIGATÓRIO verificar)**:
 - [ ] `flag=false` → sistema idêntico (ZERO regressão)
@@ -412,8 +412,8 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 
 | Task | Status | Arquivo | O que fazer | Dependência |
 |------|--------|---------|-------------|-------------|
-| 2.1 | ○ | `routes.py` | Implementar interrupt real: `submit_coroutine(pooled.client.interrupt())` → 200 | 0.2 |
-| 2.2 | ○ | `routes.py` | Emitir SSE event `interrupt_ack` após interrupt bem-sucedido | 2.1 |
+| 2.1 | ✅ | `routes.py` | Implementar interrupt real: `submit_coroutine(pooled.client.interrupt())` → 200 | 0.2 |
+| 2.2 | ✅ | `routes.py` | SSE event `interrupt_ack` — já emitido por `_parse_sdk_message()` em client.py:1316 quando ResultMessage tem subtype='interrupted'. Frontend trata em chat.js:919. | 2.1 |
 
 **Pós-condições**:
 - [ ] Frontend já tem botão interrupt → clicar durante tool call longa → resposta interrompida
@@ -433,9 +433,9 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 
 | Task | Status | Arquivo | O que fazer | Dependência |
 |------|--------|---------|-------------|-------------|
-| 3.1 | ○ | `teams/services.py` | Substituir `asyncio.run()` por `submit_coroutine()` nos 2 paths (sync e streaming) | 0.2 |
-| 3.2 | ○ | `teams/services.py` | Manter non-daemon thread para o wrapper que chama `submit_coroutine()` | 3.1 |
-| 3.3 | ○ | `teams/services.py` | Garantir que ContextVars são setadas (user_id, session_id) antes de submit | 3.1 |
+| 3.1 | ✅ | `teams/services.py` | Substituir `asyncio.run()` por `submit_coroutine()` nos 2 paths (sync e streaming) | 0.2 |
+| 3.2 | ✅ | `teams/services.py` | Manter non-daemon thread para o wrapper que chama `submit_coroutine()` | 3.1 |
+| 3.3 | ✅ | `teams/services.py` | Garantir que ContextVars são setadas (user_id, session_id) antes de submit | 3.1 |
 
 **Pós-condições**:
 - [ ] Mensagem via Teams → resposta chega
@@ -507,7 +507,7 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 | Arquivo | Fase(s) | LOC atual | O que muda |
 |---------|---------|-----------|------------|
 | `app/agente/config/permissions.py` | 0, 1 | 607 | Fix DC-2 (2 pontos app_context) + `_make_scoped_can_use_tool()` |
-| `app/agente/sdk/client.py` | 0, 1 | 2672 | `_parse_sdk_message()` extraído + `_stream_response_persistent()` + dispatch + fix DC-3 |
+| `app/agente/sdk/client.py` | 0, 1, 3 | 2672 | `_parse_sdk_message()` extraído + `_stream_response_persistent()` + dispatch + fix DC-3 + `our_session_id` em `get_response()` |
 | `app/agente/routes.py` | 1, 2 | 3074 | Novo path `submit_coroutine()` + interrupt real + health pool |
 | `app/agente/config/feature_flags.py` | 0 | 243 | +1 flag (`USE_PERSISTENT_SDK_CLIENT`) |
 | `app/agente/sdk/__init__.py` | 0 | ~10 | Export `submit_coroutine`, `get_or_create_client` |
@@ -678,6 +678,10 @@ AGENT_PERSISTENT_SDK_CLIENT=false
 | 2026-03-08 | POC | Benchmark 3 abordagens | CONCLUÍDO | 2.15x speedup confirmado |
 | 2026-03-08 | PLAN | Pesquisa profunda (3 agents) | CONCLUÍDO | DC-1 a DC-6 identificados |
 | 2026-03-08 | PLAN | Roadmap vivo v1 | CONCLUÍDO | Este documento |
+| 2026-03-08 | 0 | Tasks 0.1-0.5 | CONCLUÍDO | DC-2 fix, client_pool.py, flag, _parse_sdk_message, exports |
+| 2026-03-08 | 1 | Tasks 1.1-1.9 | CONCLUÍDO | _stream_response_persistent, DC-3 fix, dispatch, submit_coroutine, health |
+| 2026-03-08 | 2 | Tasks 2.1-2.2 | CONCLUÍDO | Interrupt real via submit_coroutine(client.interrupt()). interrupt_ack já emitido por _parse_sdk_message |
+| 2026-03-08 | 3 | Tasks 3.1-3.3 | CONCLUÍDO | submit_coroutine() em 2 paths Teams. our_session_id adicionado a get_response(). _safe_flush() com app_context no daemon. Non-daemon thread mantido |
 
 ---
 

@@ -28,6 +28,16 @@ from typing import List, Dict, Tuple
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 
+def _has_app_context() -> bool:
+    """Verifica se esta dentro de um Flask app_context."""
+    try:
+        from flask import current_app
+        _ = current_app.name
+        return True
+    except (RuntimeError, ImportError):
+        return False
+
+
 # Diretorio base da documentacao SSW
 SSW_BASE = Path(__file__).resolve().parent.parent.parent.parent / ".claude" / "references" / "ssw"
 
@@ -183,12 +193,11 @@ def index_chunks(chunks: List[Dict], reindex: bool = False) -> Dict:
     Returns:
         Dict com estatisticas
     """
-    from app import create_app, db
+    from app import db
     from app.embeddings.service import EmbeddingService
     from app.embeddings.config import VOYAGE_DEFAULT_MODEL
     from sqlalchemy import text
 
-    app = create_app()
     stats = {
         "total_chunks": len(chunks),
         "embedded": 0,
@@ -197,7 +206,7 @@ def index_chunks(chunks: List[Dict], reindex: bool = False) -> Dict:
         "total_tokens_est": 0,
     }
 
-    with app.app_context():
+    def _do_index():
         svc = EmbeddingService()
 
         if reindex:
@@ -289,7 +298,15 @@ def index_chunks(chunks: List[Dict], reindex: bool = False) -> Dict:
             if i + batch_size < len(new_chunks):
                 time.sleep(0.5)
 
-    return stats
+        return stats
+
+    if _has_app_context():
+        return _do_index()
+    else:
+        from app import create_app
+        app = create_app()
+        with app.app_context():
+            return _do_index()
 
 
 def show_stats():
@@ -314,7 +331,7 @@ def show_stats():
 
             print(f"\nTotal de chunks: {total}")
             print(f"Com embedding: {with_emb}")
-            print(f"Sem embedding: {total - with_emb}")
+            print(f"Sem embedding: {(total or 0) - (with_emb or 0)}")
 
             # Por subdiretorio
             print("\nPor subdiretorio:")

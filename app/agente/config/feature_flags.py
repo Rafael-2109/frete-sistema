@@ -231,6 +231,24 @@ USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "false").lower() == "true
 # Quando true: usa implementação async nativa para streaming SSE
 # Quando false: usa bridge Thread+Queue+asyncio.run (legado)
 USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "false").lower() == "true"
+# ====================================================================
+# Persistent SDK Client (migração query() → ClaudeSDKClient)
+# ====================================================================
+# Quando true: usa ClaudeSDKClient persistente (subprocess vivo entre turnos)
+#   - Pool por sessão no daemon thread com event loop persistente
+#   - ~2x menor latência (sem overhead spawn/destroy CLI por turno)
+#   - Habilita interrupt, model switch, MCP server recovery
+# Quando false: usa query() standalone (status quo — spawn + destroy por turno)
+# Rollback instantâneo: AGENT_PERSISTENT_SDK_CLIENT=false + restart
+# Ref: .claude/references/ROADMAP_SDK_CLIENT.md
+USE_PERSISTENT_SDK_CLIENT = os.getenv("AGENT_PERSISTENT_SDK_CLIENT", "false").lower() == "true"
+
+# Timeout em segundos para idle clients no pool (disconnect automático)
+# Libera recursos de clients sem atividade por este período
+PERSISTENT_CLIENT_IDLE_TIMEOUT = int(os.getenv("AGENT_CLIENT_IDLE_TIMEOUT", "900"))  # 15 min
+
+# Intervalo em segundos entre limpezas de clients idle
+PERSISTENT_CLIENT_CLEANUP_INTERVAL = int(os.getenv("AGENT_CLIENT_CLEANUP_INTERVAL", "60"))  # 1 min
 
 # ====================================================================
 # Debug Mode (Admin)
