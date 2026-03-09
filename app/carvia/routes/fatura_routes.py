@@ -132,7 +132,7 @@ def register_fatura_routes(bp):
                 operacoes = db.session.query(CarviaOperacao).filter(
                     CarviaOperacao.id.in_(operacao_ids),
                     CarviaOperacao.cnpj_cliente == cnpj_cliente,
-                    CarviaOperacao.status == 'CONFIRMADO',
+                    CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
                     CarviaOperacao.fatura_cliente_id.is_(None),
                 ).with_for_update().all()
 
@@ -195,7 +195,7 @@ def register_fatura_routes(bp):
             db.func.count(CarviaOperacao.id).label('qtd_operacoes'),
             db.func.sum(CarviaOperacao.cte_valor).label('valor_total'),
         ).filter(
-            CarviaOperacao.status == 'CONFIRMADO',
+            CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
             CarviaOperacao.fatura_cliente_id.is_(None),
         ).group_by(
             CarviaOperacao.cnpj_cliente,
@@ -208,7 +208,7 @@ def register_fatura_routes(bp):
         if cnpj_selecionado:
             operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
                 CarviaOperacao.cnpj_cliente == cnpj_selecionado,
-                CarviaOperacao.status == 'CONFIRMADO',
+                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
             ).order_by(CarviaOperacao.criado_em.desc()).all()
 
@@ -599,7 +599,7 @@ def register_fatura_routes(bp):
             subcontratos = db.session.query(CarviaSubcontrato).filter(
                 CarviaSubcontrato.id.in_(subcontrato_ids),
                 CarviaSubcontrato.transportadora_id == fatura.transportadora_id,
-                CarviaSubcontrato.status == 'CONFIRMADO',
+                CarviaSubcontrato.status.in_(['COTADO', 'CONFIRMADO']),
                 CarviaSubcontrato.fatura_transportadora_id.is_(None),
             ).with_for_update().all()
 
@@ -607,7 +607,7 @@ def register_fatura_routes(bp):
                 return jsonify({
                     'sucesso': False,
                     'erro': 'Nenhum subcontrato valido para anexar. '
-                            'Verifique se estao CONFIRMADOS e sem fatura vinculada.'
+                            'Verifique se estao COTADOS ou CONFIRMADOS e sem fatura vinculada.'
                 }), 400
 
             # Vincular subcontratos
@@ -719,7 +719,7 @@ def register_fatura_routes(bp):
         try:
             subcontratos = db.session.query(CarviaSubcontrato).filter(
                 CarviaSubcontrato.transportadora_id == transportadora_id,
-                CarviaSubcontrato.status == 'CONFIRMADO',
+                CarviaSubcontrato.status.in_(['COTADO', 'CONFIRMADO']),
                 CarviaSubcontrato.fatura_transportadora_id.is_(None),
             ).order_by(CarviaSubcontrato.criado_em.desc()).all()
 
