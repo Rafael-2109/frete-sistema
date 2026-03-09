@@ -63,7 +63,7 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 
 | Servico | Tipo | Plano | Dominio |
 |---------|------|-------|---------|
-| sistema-fretes | Web Service | Pro 4GB 2CPU | sistema-fretes.onrender.com |
+| sistema-fretes | Web Service | Pro Plus 8GB 4CPU | sistema-fretes.onrender.com |
 | frete-sistema | Web Service | Free | frete-sistema.onrender.com (DEPRECATED) |
 | sistema-fretes-worker-atacadao | Background Worker | Standard 2GB 1CPU | — |
 | sistema-fretes-redis | Key Value | Starter 256MB | — |

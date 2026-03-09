@@ -333,6 +333,39 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 
 **Mitigação**: Monitorar. Se race condition aparecer, substituir por `loop.call_soon_threadsafe(pq.async_event.set)`.
 
+### DC-7: disconnect() Cross-Task Causa Subprocess Zombie (RISCO CRÍTICO — FIXADO)
+
+**Fonte**: `app/agente/sdk/client_pool.py` — `disconnect_client()` e `_periodic_cleanup()`
+
+**Problema**: `disconnect()` chama `query.close()` (query.py:659-667) que faz:
+```python
+self._tg.cancel_scope.cancel()
+with suppress(CancelledError):
+    await self._tg.__aexit__(None, None, None)  # ← FALHA: Task B ≠ Task A
+await self.transport.close()  # ← NUNCA ALCANÇADO
+```
+O `__aexit__()` lança `RuntimeError("Attempted to exit cancel scope in a different task")`.
+`suppress()` só captura `CancelledError`, NÃO `RuntimeError`.
+`transport.close()` (que chama `_process.terminate()`) NUNCA é alcançado.
+
+**Consequência em produção**:
+- CPU: avg 2.87 / max 3.99 de 4.0 CPUs em sistema OCIOSO
+- Memória: crescimento monotônico 1762MB → 3684MB (de 8192MB limite)
+- Cada interação cria novo subprocess (~100-150MB + CPU constante)
+- Cleanup remove do registry mas NÃO mata subprocess → zombie acumula
+
+**Fix aplicado (2026-03-09)**:
+- `_force_kill_subprocess(client)`: Acessa `client._transport.close()` diretamente, bypassando `query.close()`
+- `transport.close()` é SAFE de qualquer task porque usa `suppress(Exception)` em todos os pontos críticos
+- `_process.terminate()` é OS-level (sem cancel scope)
+- Fallback: se `transport.close()` falhar, `_process.terminate()` direto
+- Aplicado em `disconnect_client()` e `get_or_create_client()` (substituição de client antigo)
+
+**Fragilidade**: Acessa internals do SDK (`_transport`, `_query`, `_process`). Versão pinada 0.1.48.
+Se SDK mudar internals, `_force_kill_subprocess()` falha graciosamente (try/except + getattr).
+
+**Rollback temporário (2026-03-09)**: `AGENT_PERSISTENT_SDK_CLIENT=false` até fix ser deployed.
+
 ---
 
 ## 5. FASES DE IMPLEMENTAÇÃO
@@ -559,6 +592,7 @@ O padrão `_make_streaming_prompt()` + `streaming_done_event` + `await done_even
 | R10 | MCP server falha persiste entre turnos | BAIXA | BAIXA | `client.reconnect_mcp_server()` on failure; retry automático | PLANEJADO |
 | R11 | asyncio.Event.set() cross-thread (DC-6) | BAIXA | MUITO BAIXA | GIL protege no CPython; monitorar; fallback `loop.call_soon_threadsafe()` | ACEITO |
 | R12 | Feature flags lidas no connect ficam stale | BAIXA | BAIXA | Flags são env vars, constantes por lifecycle do worker | ACEITO |
+| R13 | disconnect() cross-task mata subprocess zombie (DC-7) | CRÍTICA | CERTA | `_force_kill_subprocess()` + acesso direto a `transport.close()` | **FIXADO** |
 
 ---
 
@@ -682,6 +716,7 @@ AGENT_PERSISTENT_SDK_CLIENT=false
 | 2026-03-08 | 1 | Tasks 1.1-1.9 | CONCLUÍDO | _stream_response_persistent, DC-3 fix, dispatch, submit_coroutine, health |
 | 2026-03-08 | 2 | Tasks 2.1-2.2 | CONCLUÍDO | Interrupt real via submit_coroutine(client.interrupt()). interrupt_ack já emitido por _parse_sdk_message |
 | 2026-03-08 | 3 | Tasks 3.1-3.3 | CONCLUÍDO | submit_coroutine() em 2 paths Teams. our_session_id adicionado a get_response(). _safe_flush() com app_context no daemon. Non-daemon thread mantido |
+| 2026-03-09 | FIX | DC-7 subprocess zombie | CONCLUÍDO | _force_kill_subprocess() bypassa query.close() e chama transport.close() diretamente. Fix em disconnect_client() e get_or_create_client(). Rollback temporário: flag=false |
 
 ---
 

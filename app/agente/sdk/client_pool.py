@@ -27,6 +27,70 @@ from typing import Any, Coroutine, Dict, Optional
 
 logger = logging.getLogger('sistema_fretes')
 
+
+# =============================================================================
+# Force Kill — bypass para subprocess zombie
+# =============================================================================
+
+async def _force_kill_subprocess(client) -> bool:
+    """Mata o subprocess CLI quando disconnect() falha.
+
+    disconnect() chama query.close() que falha com RuntimeError
+    ("Attempted to exit cancel scope in a different task") quando
+    chamado de task diferente do connect(). Nesse caso, transport.close()
+    NUNCA é alcançado e o subprocess fica zombie.
+
+    Este método acessa transport.close() diretamente. É SAFE porque:
+    - _stderr_task_group.cancel_scope.cancel() + __aexit__() → suppress(Exception)
+    - _write_lock é anyio.Lock (sem restrição cross-task)
+    - _process.terminate() é OS-level (sem cancel scope)
+
+    Ref: subprocess_cli.py:449-488 (transport.close)
+    Ref: query.py:659-667 (query.close — onde falha)
+
+    Args:
+        client: ClaudeSDKClient com subprocess potencialmente zombie
+
+    Returns:
+        True se conseguiu matar, False se não encontrou subprocess
+    """
+    # Tentar via client._transport (acesso direto)
+    transport = getattr(client, '_transport', None)
+
+    # Fallback: via client._query.transport
+    if not transport:
+        query = getattr(client, '_query', None)
+        if query:
+            transport = getattr(query, 'transport', None)
+
+    if not transport:
+        logger.debug("[SDK_POOL] _force_kill_subprocess: nenhum transport encontrado")
+        return False
+
+    try:
+        await transport.close()
+        logger.info("[SDK_POOL] _force_kill_subprocess: transport.close() OK")
+        return True
+    except Exception as e:
+        logger.warning(f"[SDK_POOL] _force_kill_subprocess: transport.close() falhou: {e}")
+        # Último recurso: terminate direto no processo
+        try:
+            process = getattr(transport, '_process', None)
+            if process and process.returncode is None:
+                process.terminate()
+                logger.info("[SDK_POOL] _force_kill_subprocess: process.terminate() OK")
+                return True
+            else:
+                logger.debug(
+                    "[SDK_POOL] _force_kill_subprocess: processo já terminou "
+                    f"(returncode={getattr(process, 'returncode', 'N/A')})"
+                )
+                return False
+        except Exception as e2:
+            logger.error(f"[SDK_POOL] _force_kill_subprocess: FALHA TOTAL: {e2}")
+            return False
+
+
 # =============================================================================
 # Tipos
 # =============================================================================
@@ -229,17 +293,22 @@ async def get_or_create_client(
     with _registry_lock:
         # Se havia um client antigo desconectado, limpar
         old = _registry.get(session_id)
-        if old and old.connected:
-            logger.warning(
-                f"[SDK_POOL] Replacing connected client: session={session_id[:8]}... "
-                "(possível race condition)"
-            )
-            try:
-                await old.client.disconnect()
-            except Exception as e:
-                logger.warning(f"[SDK_POOL] Erro ao desconectar client antigo: {e}")
-
         _registry[session_id] = pooled
+
+    # Limpar client antigo FORA do lock (I/O assíncrono)
+    if old and old.connected:
+        logger.warning(
+            f"[SDK_POOL] Replacing connected client: session={session_id[:8]}... "
+            "(possível race condition)"
+        )
+        try:
+            await old.client.disconnect()
+        except Exception as e:
+            logger.warning(
+                f"[SDK_POOL] Erro ao desconectar client antigo: {e}, "
+                "tentando force kill"
+            )
+            await _force_kill_subprocess(old.client)
 
     logger.info(
         f"[SDK_POOL] Client criado e conectado: "
@@ -277,9 +346,25 @@ async def disconnect_client(session_id: str) -> bool:
             )
         except Exception as e:
             logger.warning(
-                f"[SDK_POOL] Erro ao desconectar client: "
+                f"[SDK_POOL] disconnect() falhou (esperado — cross-task cancel scope): "
                 f"session={session_id[:8]}... error={e}"
             )
+            # disconnect() falha com RuntimeError quando chamado de task
+            # diferente do connect(). O subprocess fica zombie.
+            # Force kill via transport.close() diretamente.
+            killed = await _force_kill_subprocess(pooled.client)
+            pooled.connected = False
+            if killed:
+                logger.info(
+                    f"[SDK_POOL] Subprocess morto via force kill: "
+                    f"session={session_id[:8]}... "
+                    f"duration={time.time() - pooled.created_at:.0f}s"
+                )
+            else:
+                logger.error(
+                    f"[SDK_POOL] FALHA ao matar subprocess: "
+                    f"session={session_id[:8]}... — POSSÍVEL ZOMBIE"
+                )
 
     return True
 
