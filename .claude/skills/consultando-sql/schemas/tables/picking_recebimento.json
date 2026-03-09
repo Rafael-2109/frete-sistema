@@ -117,17 +117,17 @@
       "unique": false
     },
     {
-      "name": "idx_picking_rec_company",
+      "name": "idx_picking_rec_write",
       "columns": [
-        "company_id",
-        "state"
+        "write_date"
       ],
       "unique": false
     },
     {
-      "name": "idx_picking_rec_write",
+      "name": "idx_picking_rec_company",
       "columns": [
-        "write_date"
+        "company_id",
+        "state"
       ],
       "unique": false
     },

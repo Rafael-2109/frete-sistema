@@ -48,6 +48,22 @@
       "type": "varchar(100)"
     },
     {
+      "name": "cliente_nome",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cliente_email",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cliente_telefone",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "cliente_responsavel",
+      "type": "varchar(255)"
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },

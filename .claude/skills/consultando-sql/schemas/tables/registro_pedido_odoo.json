@@ -114,6 +114,13 @@
   ],
   "indices": [
     {
+      "name": "idx_registro_odoo_order",
+      "columns": [
+        "odoo_order_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_registro_status",
       "columns": [
         "status_odoo"
@@ -124,14 +131,6 @@
       "name": "idx_registro_criado_em",
       "columns": [
         "criado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_registro_rede_cnpj",
-      "columns": [
-        "rede",
-        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -150,9 +149,10 @@
       "unique": false
     },
     {
-      "name": "idx_registro_odoo_order",
+      "name": "idx_registro_rede_cnpj",
       "columns": [
-        "odoo_order_id"
+        "rede",
+        "cnpj_cliente"
       ],
       "unique": false
     }

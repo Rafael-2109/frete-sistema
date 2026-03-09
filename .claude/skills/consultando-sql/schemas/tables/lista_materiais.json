@@ -81,9 +81,10 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_cod_produto_componente",
+      "name": "idx_lista_materiais_status_data",
       "columns": [
-        "cod_produto_componente"
+        "status",
+        "criado_em"
       ],
       "unique": false
     },
@@ -95,17 +96,16 @@
       "unique": false
     },
     {
-      "name": "idx_lista_materiais_status_data",
+      "name": "ix_lista_materiais_status",
       "columns": [
-        "status",
-        "criado_em"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_status",
+      "name": "ix_lista_materiais_cod_produto_componente",
       "columns": [
-        "status"
+        "cod_produto_componente"
       ],
       "unique": false
     }
