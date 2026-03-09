@@ -191,13 +191,6 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_nf_po_dfe_chave_nfe",
-      "columns": [
-        "chave_nfe"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_validacao_nf_po_dfe_po_modificada_apos_validacao",
       "columns": [
         "po_modificada_apos_validacao"
@@ -205,9 +198,9 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
+      "name": "ix_validacao_nf_po_dfe_chave_nfe",
       "columns": [
-        "cnpj_fornecedor"
+        "chave_nfe"
       ],
       "unique": false
     },
@@ -219,9 +212,9 @@
       "unique": true
     },
     {
-      "name": "ix_validacao_nf_po_dfe_status",
+      "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
       "columns": [
-        "status"
+        "cnpj_fornecedor"
       ],
       "unique": false
     },
@@ -229,6 +222,13 @@
       "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
       "columns": [
         "odoo_po_vinculado_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_nf_po_dfe_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

@@ -84,13 +84,6 @@
   ],
   "indices": [
     {
-      "name": "ix_fila_agendamento_sendas_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_fila_sendas_processo",
       "columns": [
         "status",
@@ -100,16 +93,23 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_status",
+      "name": "ix_fila_agendamento_sendas_data_agendamento",
       "columns": [
-        "status"
+        "data_agendamento"
       ],
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_data_agendamento",
+      "name": "ix_fila_agendamento_sendas_cnpj",
       "columns": [
-        "data_agendamento"
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fila_agendamento_sendas_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

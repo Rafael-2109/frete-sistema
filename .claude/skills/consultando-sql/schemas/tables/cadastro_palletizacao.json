@@ -129,11 +129,11 @@
   ],
   "indices": [
     {
-      "name": "ix_cadastro_palletizacao_cod_produto",
+      "name": "ix_cadastro_palletizacao_tipo_materia_prima",
       "columns": [
-        "cod_produto"
+        "tipo_materia_prima"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_cadastro_palletizacao_categoria_produto",
@@ -150,11 +150,11 @@
       "unique": false
     },
     {
-      "name": "ix_cadastro_palletizacao_codigo_ean",
+      "name": "ix_cadastro_palletizacao_cod_produto",
       "columns": [
-        "codigo_ean"
+        "cod_produto"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_cadastro_palletizacao_linha_producao",
@@ -164,9 +164,9 @@
       "unique": false
     },
     {
-      "name": "ix_cadastro_palletizacao_tipo_materia_prima",
+      "name": "ix_cadastro_palletizacao_codigo_ean",
       "columns": [
-        "tipo_materia_prima"
+        "codigo_ean"
       ],
       "unique": false
     }
