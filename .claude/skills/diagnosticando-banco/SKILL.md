@@ -135,6 +135,26 @@ Se a tool/script falha (erro de conexao, permissao):
 Estas capacidades so estao disponiveis via Postgres MCP Pro (Modo 1).
 Se o usuario pedir e o MCP nao estiver disponivel, informar que requer o server postgres-mcp.
 
+### R4: NAO IMPROVISAR CAPACIDADES DO MODO 1
+
+```
+QUANDO O USUARIO PEDIR:
+- Recomendacao de indices para o banco (analyze_workload_indexes)
+- Recomendacao de indice para query especifica (analyze_query_indexes)
+- EXPLAIN / plano de execucao (explain_query)
+
+E O MCP POSTGRES NAO ESTIVER DISPONIVEL:
+
+→ INFORMAR: "Essa capacidade requer o server postgres-mcp que nao esta ativo."
+→ NAO IMPROVISAR: NAO tentar substituir com queries manuais, scripts ou Modo 3
+→ MOTIVO: Essas tools usam algoritmos internos (workload analysis, hypothetical indexes)
+          que NAO podem ser replicados com SQL simples. Improvisar gera resultados
+          de qualidade inferior e pode levar a recomendacoes incorretas.
+
+EXCECAO: get_object_details e list_objects podem ser substituidos por queries
+information_schema/pg_catalog (Modo 3), pois retornam dados factuais.
+```
+
 ### Cenarios Compostos
 
 **"Diagnostico completo"** ou **"o que precisa de atencao"**:

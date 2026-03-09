@@ -1,7 +1,7 @@
 {
   "skill_name": "diagnosticando-banco",
-  "version": 1,
-  "changelog": "v1: Initial evals covering all 9 checks, combined mode, edge cases, and Render MCP mode",
+  "version": 2,
+  "changelog": "v2: Added evals for Postgres MCP Pro tools (analyze_db_health, workload indexes, explain_query, query indexes). Updated existing evals to accept both script and MCP modes.",
   "evals": [
     {
       "id": 0,
@@ -9,13 +9,21 @@
       "expected_output": "Resumo executivo com saude_geral, problemas e destaques cobrindo cache, conexoes, indices, vacuum e sequences",
       "files": [],
       "expectations": [
-        "Executou health_check_banco.py com --all (e opcionalmente --resumo)",
-        "Apresentou saude_geral (EXCELENTE/BOM/ATENCAO/CRITICO) baseado EXATAMENTE no campo resumo_executivo.saude_geral do JSON",
-        "Listou problemas encontrados correspondendo ao campo resumo_executivo.problemas do JSON",
-        "Listou destaques positivos correspondendo ao campo resumo_executivo.destaques do JSON",
-        "Mencionou cache hit rate com percentual EXATO do JSON (heap.hit_rate_pct)",
-        "Mencionou conexoes com total/max_connections EXATOS do JSON",
-        "NAO inventou dados que nao existem no JSON de saida (ex: nao inventar tamanho do banco se nao executou table_sizes)"
+        "Usou analyze_db_health (Modo 1) OU health_check_banco.py --all (Modo 2) — qualquer um e valido",
+        "Apresentou status geral de saude baseado EXATAMENTE no output da tool/script",
+        "Listou problemas encontrados conforme output",
+        "Listou destaques positivos conforme output",
+        "Mencionou cache hit rate com percentual EXATO do output",
+        "Mencionou conexoes com dados EXATOS do output",
+        "NAO inventou dados que nao existem no output"
+      ],
+      "assertions": [
+        {"text": "Usou analyze_db_health (Modo 1 MCP) OU executou health_check_banco.py --all (Modo 2 script)"},
+        {"text": "Apresentou um status geral de saúde do banco (EXCELENTE, BOM, ATENCAO ou CRITICO)"},
+        {"text": "Mencionou cache hit rate com percentual concreto vindo do output"},
+        {"text": "Mencionou conexões com dados concretos (número ou estado)"},
+        {"text": "Listou problemas encontrados OU informou claramente que não há problemas"},
+        {"text": "NÃO inventou dados — informações coerentes com saída de ferramenta real"}
       ]
     },
     {
@@ -24,12 +32,19 @@
       "expected_output": "Lista de indices nao usados com tamanho desperdicado e indices duplicados se houver",
       "files": [],
       "expectations": [
-        "Executou health_check_banco.py com --check unused_indexes duplicate_indexes",
-        "Para unused_indexes: mostrou total de indices e espaco_desperdicado EXATOS do JSON",
-        "Para unused_indexes: listou indices com nome da tabela e tamanho de cada um",
-        "Para duplicate_indexes: mostrou total de grupos duplicados do JSON",
-        "Se nao houver duplicados (total=0), informou claramente que nao ha duplicados",
-        "NAO sugeriu remover indices sem base no JSON (ex: nao disse 'remova idx_X' se idx_X nao aparece na lista)"
+        "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check unused_indexes duplicate_indexes (Modo 2)",
+        "Para unused_indexes: mostrou total e espaco desperdicado EXATOS do output",
+        "Para unused_indexes: listou indices com nome da tabela e tamanho",
+        "Para duplicate_indexes: mostrou total de grupos duplicados",
+        "Se nao houver duplicados (total=0), informou claramente",
+        "NAO sugeriu remover indices sem base no output"
+      ],
+      "assertions": [
+        {"text": "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check unused_indexes duplicate_indexes (Modo 2)"},
+        {"text": "Para índices não usados: mostrou total com espaço desperdiçado OU informou que não há índices não usados"},
+        {"text": "Para índices não usados: listou índices com nome da tabela e tamanho (se houver)"},
+        {"text": "Para índices duplicados: abordou o tema e mostrou total OU informou que não há duplicados"},
+        {"text": "NÃO sugeriu remover índices sem base no output da ferramenta"}
       ]
     },
     {
@@ -38,13 +53,18 @@
       "expected_output": "Cache hit rate com status e conexoes por estado com utilizacao percentual",
       "files": [],
       "expectations": [
-        "Executou health_check_banco.py com --check cache_hit_rate connections",
-        "Mostrou hit_rate_pct do heap E do index com valores EXATOS do JSON",
-        "Classificou status do cache (EXCELENTE/BOM/ATENCAO/CRITICO) usando EXATAMENTE o campo status do JSON",
-        "Mostrou total_ativas e max_connections EXATOS do JSON",
-        "Mostrou utilizacao_pct EXATO do JSON",
-        "Listou breakdown por estado (active, idle, idle in transaction) conforme campo por_estado do JSON",
-        "NAO inventou recomendacoes de shared_buffers com valores especificos que nao existem no JSON"
+        "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check cache_hit_rate connections (Modo 2)",
+        "Mostrou hit rate com valores EXATOS do output",
+        "Classificou status do cache (EXCELENTE/BOM/ATENCAO/CRITICO) conforme faixas da SKILL.md",
+        "Mostrou informacoes de conexoes com dados EXATOS do output",
+        "NAO inventou recomendacoes com valores especificos nao fornecidos pelo output"
+      ],
+      "assertions": [
+        {"text": "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check cache_hit_rate connections (Modo 2)"},
+        {"text": "Mostrou hit rate do cache com valor percentual concreto vindo do output"},
+        {"text": "Classificou o status do cache (EXCELENTE/BOM/ATENCAO/CRITICO) de acordo com as faixas da skill"},
+        {"text": "Mostrou informações de conexões com dados concretos (número, estados, ou utilização percentual)"},
+        {"text": "NÃO inventou recomendações com valores específicos não fornecidos pelo output (ex: 'aumente shared_buffers para 512MB')"}
       ]
     },
     {
@@ -53,12 +73,18 @@
       "expected_output": "Tabelas com dead tuples altos e ranking das maiores tabelas com tamanho",
       "files": [],
       "expectations": [
-        "Executou health_check_banco.py com --check vacuum_stats table_sizes",
-        "Para vacuum_stats: mostrou total_com_dead e total_problematicas EXATOS do JSON",
-        "Para vacuum_stats: listou tabelas com dead_ratio_pct e indicou quais precisam de VACUUM (dead_ratio > 10%)",
-        "Para table_sizes: mostrou tamanho_total_top EXATO do JSON",
-        "Para table_sizes: listou tabelas com tamanho_total, linhas_vivas e dead_ratio_pct",
+        "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check vacuum_stats table_sizes (Modo 2)",
+        "Mostrou informacoes de vacuum com dados EXATOS do output",
+        "Indicou quais tabelas precisam de VACUUM (dead_ratio > 10%)",
+        "Listou maiores tabelas com tamanho",
         "NAO executou VACUUM nem sugeriu executar sem que o usuario pedisse explicitamente"
+      ],
+      "assertions": [
+        {"text": "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check vacuum_stats table_sizes (Modo 2)"},
+        {"text": "Apresentou informações de vacuum com dados concretos (dead tuples, dead_ratio ou last_vacuum)"},
+        {"text": "Indicou quais tabelas precisam de VACUUM (dead_ratio > 10%) OU informou que nenhuma precisa"},
+        {"text": "Listou maiores tabelas com tamanho (em MB/GB)"},
+        {"text": "NÃO executou VACUUM nem sugeriu executá-lo sem pedido explícito do usuário"}
       ]
     },
     {
@@ -67,13 +93,95 @@
       "expected_output": "Lista de sequences com uso percentual, alertas criticos e atencao",
       "files": [],
       "expectations": [
-        "Executou health_check_banco.py com --check sequence_capacity",
-        "Mostrou total_sequences, alertas_criticos e atencao EXATOS do JSON",
-        "Listou sequences com uso_pct, tipo (integer/bigint) e valor_atual",
+        "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check sequence_capacity (Modo 2)",
+        "Listou sequences com uso percentual e tipo (integer/bigint)",
         "Identificou sequences com uso > 50% como alertas CRITICOS (se houver)",
-        "Identificou sequences entre 10-50% como ATENCAO (se houver)",
         "Se nao houver alertas, informou claramente que nenhuma sequence esta em risco",
-        "NAO inventou valores de uso_pct que nao existem no JSON"
+        "NAO inventou valores que nao existem no output"
+      ],
+      "assertions": [
+        {"text": "Usou analyze_db_health (Modo 1) OU health_check_banco.py --check sequence_capacity (Modo 2)"},
+        {"text": "Listou sequences com percentual de uso e tipo (integer/bigint) OU informou que não há sequences em risco"},
+        {"text": "Identificou sequences com uso > 50% como alertas críticos OU informou claramente que nenhuma está em risco"},
+        {"text": "NÃO inventou valores que não existem no output (ex: números de last_value fabricados)"}
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Quais sao as queries mais lentas do banco? Quero ver o top 10.",
+      "expected_output": "Lista das 10 queries mais lentas com tempo total, medio e numero de chamadas",
+      "files": [],
+      "expectations": [
+        "Usou get_top_queries (Modo 1) OU health_check_banco.py --check top_queries (Modo 2) OU SQL pg_stat_statements via Render MCP (Modo 3)",
+        "Listou queries com tempo de execucao conforme output",
+        "Mostrou numero de chamadas (calls) de cada query",
+        "NAO inventou tempos ou queries que nao existem no output",
+        "Se pg_stat_statements nao disponivel, informou claramente"
+      ],
+      "assertions": [
+        {"text": "Usou get_top_queries (Modo 1 MCP), health_check_banco.py --check top_queries (Modo 2 script), OU SQL em pg_stat_statements via Render MCP (Modo 3 fallback)"},
+        {"text": "Listou queries com tempo de execução (total ou médio) vindos do output"},
+        {"text": "Mostrou número de chamadas (calls) de cada query OU informou que pg_stat_statements não está disponível"},
+        {"text": "NÃO inventou queries ou tempos que não existem no output"}
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Quais indices eu deveria criar pra melhorar a performance do banco?",
+      "expected_output": "Recomendacoes de indices baseadas no workload real com impacto estimado",
+      "files": [],
+      "expectations": [
+        "Usou analyze_workload_indexes via Postgres MCP Pro",
+        "Apresentou indices recomendados com tabela e colunas",
+        "Mostrou impacto ou ganho estimado de cada indice",
+        "Incluiu o CREATE INDEX para cada recomendacao",
+        "Se MCP nao disponivel, informou que essa capacidade requer o server postgres-mcp"
+      ],
+      "assertions": [
+        {"text": "Usou analyze_workload_indexes via Postgres MCP Pro OU informou que essa capacidade requer o server postgres-mcp"},
+        {"text": "Se MCP disponível: apresentou índices recomendados com tabela e colunas"},
+        {"text": "Se MCP disponível: incluiu CREATE INDEX para cada recomendação"},
+        {"text": "Se MCP não disponível: informou explicitamente que essa capacidade requer postgres-mcp (não tentou improvisar)"}
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Essa query ta lenta, me ajuda a entender por que:\nSELECT cp.* FROM carteira_principal cp WHERE cp.cnpj_cliente = '12345678000100' AND cp.qtd_saldo_produto_pedido > 0 ORDER BY cp.dt_emissao_pedido DESC",
+      "expected_output": "Plano de execucao da query com identificacao de gargalos e sugestao de indice",
+      "files": [],
+      "expectations": [
+        "Usou explain_query para obter plano de execucao da query fornecida",
+        "Apresentou o plano de execucao conforme output da tool",
+        "Identificou gargalos (Seq Scan, Sort, etc.) baseado no plano",
+        "Usou analyze_query_indexes para sugerir indice otimo",
+        "Apresentou CREATE INDEX recomendado",
+        "Se MCP nao disponivel, informou que EXPLAIN e recomendacao requerem postgres-mcp"
+      ],
+      "assertions": [
+        {"text": "Usou explain_query para obter plano de execução da query OU informou que requer postgres-mcp"},
+        {"text": "Se MCP disponível: apresentou o plano de execução (Seq Scan, Index Scan, Sort, etc.)"},
+        {"text": "Identificou gargalos no plano (ex: Seq Scan, Sort custoso) baseado no output real"},
+        {"text": "Usou analyze_query_indexes OU sugeriu índice baseado na query fornecida"},
+        {"text": "Apresentou CREATE INDEX recomendado para a query específica"}
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Me mostra a estrutura da tabela faturamento_produto com todos os indices",
+      "expected_output": "Colunas, tipos, constraints e indices da tabela faturamento_produto",
+      "files": [],
+      "expectations": [
+        "Usou get_object_details com a tabela faturamento_produto",
+        "Listou colunas com tipos de dados",
+        "Listou indices existentes na tabela",
+        "Listou constraints (PK, FK, unique) se existirem",
+        "NAO inventou colunas ou indices que nao existem no output"
+      ],
+      "assertions": [
+        {"text": "Usou get_object_details com a tabela faturamento_produto OU consultou informações da tabela por outro meio"},
+        {"text": "Listou colunas da tabela com tipos de dados"},
+        {"text": "Listou índices existentes na tabela faturamento_produto"},
+        {"text": "NÃO inventou colunas ou índices que não existem no output real"}
       ]
     }
   ]
