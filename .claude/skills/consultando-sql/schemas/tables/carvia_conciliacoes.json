@@ -1,0 +1,72 @@
+{
+  "name": "carvia_conciliacoes",
+  "description": "Tabela carvia_conciliacoes",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "extrato_linha_id",
+      "type": "integer",
+      "description": "FK → carvia_extrato_linhas.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "documento_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "valor_alocado",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "conciliado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "conciliado_em",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "extrato_linha_id",
+      "references": "carvia_extrato_linhas.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "extrato_linha_id",
+      "tipo_documento",
+      "documento_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_conc_doc",
+      "columns": [
+        "tipo_documento",
+        "documento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conciliacoes_extrato_linha_id",
+      "columns": [
+        "extrato_linha_id"
+      ],
+      "unique": false
+    }
+  ]
+}

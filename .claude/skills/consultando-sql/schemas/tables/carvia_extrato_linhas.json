@@ -1,0 +1,106 @@
+{
+  "name": "carvia_extrato_linhas",
+  "description": "Tabela carvia_extrato_linhas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "fitid",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "data",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "memo",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "checknum",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "refnum",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "trntype",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "status_conciliacao",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "total_conciliado",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "arquivo_ofx",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "conta_bancaria",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_extrato_linhas_data",
+      "columns": [
+        "data"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
+      "columns": [
+        "arquivo_ofx"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_extrato_linhas_status_conciliacao",
+      "columns": [
+        "status_conciliacao"
+      ],
+      "unique": false
+    }
+  ]
+}

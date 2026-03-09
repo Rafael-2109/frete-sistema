@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 138,
+  "total_tabelas": 140,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -225,6 +225,15 @@
       ]
     },
     {
+      "name": "carvia_conciliacoes",
+      "description": "Tabela carvia_conciliacoes",
+      "key_fields": [
+        "extrato_linha_id",
+        "tipo_documento",
+        "documento_id"
+      ]
+    },
+    {
       "name": "carvia_conta_movimentacoes",
       "description": "Tabela carvia_conta_movimentacoes",
       "key_fields": [
@@ -239,6 +248,15 @@
       "key_fields": [
         "tipo_despesa",
         "descricao",
+        "valor"
+      ]
+    },
+    {
+      "name": "carvia_extrato_linhas",
+      "description": "Tabela carvia_extrato_linhas",
+      "key_fields": [
+        "fitid",
+        "data",
         "valor"
       ]
     },

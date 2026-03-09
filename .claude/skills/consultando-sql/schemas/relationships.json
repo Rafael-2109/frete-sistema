@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 213,
+  "total_relationships": 214,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -84,6 +84,12 @@
       "from_table": "bi_performance_transportadora",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_conciliacoes",
+      "from_column": "extrato_linha_id",
+      "to_table": "carvia_extrato_linhas",
       "to_column": "id"
     },
     {

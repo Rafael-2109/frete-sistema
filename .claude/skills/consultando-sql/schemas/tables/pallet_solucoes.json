@@ -169,17 +169,17 @@
       "unique": false
     },
     {
-      "name": "idx_solucao_tipo_data",
+      "name": "ix_pallet_solucoes_nf_venda",
       "columns": [
-        "tipo",
-        "criado_em"
+        "nf_venda"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_nf_venda",
+      "name": "idx_solucao_tipo_data",
       "columns": [
-        "nf_venda"
+        "tipo",
+        "criado_em"
       ],
       "unique": false
     },

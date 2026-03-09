@@ -46,16 +46,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_logs_criado_em",
+      "name": "ix_portal_logs_integracao_id",
       "columns": [
-        "criado_em"
+        "integracao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_logs_integracao_id",
+      "name": "ix_portal_logs_criado_em",
       "columns": [
-        "integracao_id"
+        "criado_em"
       ],
       "unique": false
     }

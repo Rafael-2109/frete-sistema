@@ -192,18 +192,18 @@
       "unique": false
     },
     {
-      "name": "ix_recebimento_lf_odoo_lf_invoice_id",
-      "columns": [
-        "odoo_lf_invoice_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_recebimento_lf_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_recebimento_lf_odoo_lf_invoice_id",
+      "columns": [
+        "odoo_lf_invoice_id"
+      ],
+      "unique": false
     }
   ]
 }
