@@ -167,6 +167,12 @@ def register_sessao_cotacao_routes(bp):
                     flash(e, 'danger')
                 return redirect(url_for('carvia.nova_sessao_cotacao'))
 
+            # Campos opcionais de contato do cliente
+            cliente_nome = request.form.get('cliente_nome', '').strip() or None
+            cliente_email = request.form.get('cliente_email', '').strip() or None
+            cliente_telefone = request.form.get('cliente_telefone', '').strip() or None
+            cliente_responsavel = request.form.get('cliente_responsavel', '').strip() or None
+
             try:
                 numero = CarviaSessaoCotacao.gerar_numero_sessao()
 
@@ -175,6 +181,10 @@ def register_sessao_cotacao_routes(bp):
                     nome_sessao=nome_sessao,
                     observacoes=observacoes,
                     criado_por=current_user.email,
+                    cliente_nome=cliente_nome,
+                    cliente_email=cliente_email,
+                    cliente_telefone=cliente_telefone,
+                    cliente_responsavel=cliente_responsavel,
                 )
                 db.session.add(sessao)
                 db.session.flush()  # pegar sessao.id

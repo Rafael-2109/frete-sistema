@@ -95,8 +95,9 @@ CTe Subcontrato: PENDENTE → COTADO → CONFIRMADO → FATURADO → CONFERIDO  
 ```
 NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
-### R5: Fatura vincula por status CONFIRMADO + fatura_id IS NULL
-Faturas CarVia selecionam operacoes `status=CONFIRMADO, fatura_cliente_id IS NULL`.
+### R5: Fatura vincula por status elegivel + fatura_id IS NULL
+Faturas CarVia selecionam operacoes `status IN (RASCUNHO, COTADO, CONFIRMADO), fatura_cliente_id IS NULL`.
+Subcontratos disponiveis para fatura transportadora: `status IN (COTADO, CONFIRMADO), fatura_transportadora_id IS NULL`.
 Faturas Subcontrato: criacao desacoplada de subcontratos. Subcontratos sao anexados/desanexados
 na tela de detalhe via AJAX (nao na criacao). Ao anexar: `status=FATURADO`, `fatura_transportadora_id=fatura.id`.
 Ao desanexar (se fatura nao CONFERIDO): `status=CONFIRMADO`, `fatura_transportadora_id=NULL`.
@@ -138,7 +139,7 @@ Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
 | CarviaContaMovimentacao | `carvia_conta_movimentacoes` | Movimentacoes financeiras da conta. `tipo_doc`: fatura_cliente/fatura_transportadora/despesa/saldo_inicial/ajuste. `doc_id`=0 para saldo_inicial. **UNIQUE(tipo_doc, doc_id)** impede duplicata. `tipo_movimento`: CREDITO/DEBITO. `valor` sempre positivo. Saldo calculado por SUM (nao armazenado) |
-| CarviaSessaoCotacao | `carvia_sessoes_cotacao` | Sessao de cotacao comercial. `numero_sessao` SC-### (padrao R8 com FOR UPDATE). Status: RASCUNHO→ENVIADO→APROVADO/CONTRA_PROPOSTA, CANCELADO (exceto de APROVADO). `valor_contra_proposta` obrigatorio quando CONTRA_PROPOSTA. Properties: `valor_total_frete`, `qtd_demandas`, `todas_demandas_com_frete`. `gerar_numero_sessao()`: static method |
+| CarviaSessaoCotacao | `carvia_sessoes_cotacao` | Sessao de cotacao comercial. `numero_sessao` COTACAO-### (prefixo atualizado de SC-###, backfill aplicado). Status: RASCUNHO→ENVIADO→APROVADO/CONTRA_PROPOSTA, CANCELADO (exceto de APROVADO). `valor_contra_proposta` obrigatorio quando CONTRA_PROPOSTA. **Campos contato cliente**: `cliente_nome`, `cliente_email`, `cliente_telefone`, `cliente_responsavel` (todos opcionais). Properties: `valor_total_frete`, `qtd_demandas`, `todas_demandas_com_frete`. `gerar_numero_sessao()`: static method (busca max de ambos prefixos SC e COTACAO) |
 | CarviaSessaoDemanda | `carvia_sessao_demandas` | Demanda de rota dentro de sessao. UNIQUE(sessao_id, ordem). FK `transportadora_id` e `tabela_frete_id` (preenchidos ao selecionar opcao). `detalhes_calculo` JSON com breakdown da CalculadoraFrete. `limpar_frete_selecionado()` zera campos ao editar |
 
 ---
@@ -282,16 +283,29 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 
 ---
 
-## Cotacao — Reutiliza Infraestrutura Existente
+## Cotacao — Fluxo via CidadeAtendida
 
-`CotacaoService.cotar_subcontrato()` usa `CalculadoraFrete.calcular_frete_unificado()`.
-Busca `TabelaFrete` por `transportadora_id + uf_destino + ativo=True`.
-Testa TODAS as tabelas e retorna menor valor.
+`CotacaoService` usa o MESMO fluxo do sistema principal:
+```
+Cidade nome + UF → buscar_cidade_unificada() → Cidade.codigo_ibge
+→ CidadeAtendida → grupo_empresarial → TabelaFrete → TabelaFreteManager → CalculadoraFrete
+```
+
+**Reutiliza** (NAO cria novas utils):
+- `buscar_cidade_unificada(cidade, uf)` de `app/utils/frete_simulador.py`
+- `CidadeAtendida.query.filter(codigo_ibge)` de `app/vinculos/models.py`
+- `GrupoEmpresarialService.obter_transportadoras_grupo()` de `app/utils/grupo_empresarial.py`
+- `TabelaFreteManager.preparar_dados_tabela()` de `app/utils/tabela_frete_manager.py`
+- `CalculadoraFrete.calcular_frete_unificado()` de `app/utils/calculadora_frete.py`
+
+**Retorno enriquecido**: `lead_time` (do vinculo CidadeAtendida), `icms_destino` (da Cidade)
+**Fallback**: Se cidade nao encontrada ou sem vinculos, busca por UF (comportamento anterior)
 
 ### Sessao de Cotacao (Ferramenta Comercial)
 
-`CotacaoService.cotar_todas_opcoes()` — calcula TODAS opcoes de frete para parametros brutos (sem operacao).
-Busca `TabelaFrete` por `uf_destino` + JOIN `Transportadora.ativo=True`. Retorna lista ordenada por valor.
+**Prefixo**: `COTACAO-###` (anteriormente SC-###, backfill aplicado)
+**Campos contato cliente**: `cliente_nome`, `cliente_email`, `cliente_telefone`, `cliente_responsavel` (opcionais)
+**Autocomplete cidade**: Via `GET /localidades/ajax/cidades_por_uf/<uf>` + cache client-side + filtro debounce 200ms
 
 **Fluxo de status**:
 ```
@@ -303,7 +317,7 @@ CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
 **Rotas** (`sessao_cotacao_routes.py`):
 - HTML: `GET /sessoes-cotacao` (listar), `GET|POST /sessoes-cotacao/nova`, `GET /sessoes-cotacao/<id>` (detalhe)
 - HTML: `POST .../adicionar-demanda`, `POST .../remover-demanda/<did>`, `POST .../enviar`, `POST .../resposta`, `POST .../cancelar`
-- API: `POST /api/sessao-cotacao/<id>/cotar-demanda/<did>` (retorna todas opcoes), `POST .../selecionar-opcao/<did>` (grava escolha)
+- API: `POST /api/sessao-cotacao/<id>/cotar-demanda/<did>` (retorna todas opcoes + lead_time + breakdown), `POST .../selecionar-opcao/<did>` (grava escolha)
 
 **Validacoes**:
 - Enviar: TODAS demandas devem ter frete selecionado
@@ -318,9 +332,13 @@ CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
 | Importa de | O que | Cuidado |
 |-----------|-------|---------|
 | `app/transportadoras/models.py` | `Transportadora` | Campo `razao_social` (NAO `nome`), `cnpj`, `freteiro`, `ativo` |
-| `app/tabelas/models.py` | `TabelaFrete` | FK de subcontratos. Filtro por `uf_destino + ativo` |
+| `app/tabelas/models.py` | `TabelaFrete` | FK de subcontratos. NAO tem campo `ativo` (filtrar por `Transportadora.ativo`) |
 | `app/odoo/utils/cte_xml_parser.py` | `CTeXMLParser` | Classe pai de CTeXMLParserCarvia |
 | `app/utils/calculadora_frete.py` | `CalculadoraFrete` | Calculo unificado de frete |
+| `app/utils/frete_simulador.py` | `buscar_cidade_unificada` | Resolve nome+UF para Cidade obj |
+| `app/vinculos/models.py` | `CidadeAtendida` | Vinculos cidade→transportadora via codigo_ibge |
+| `app/utils/grupo_empresarial.py` | `GrupoEmpresarialService` | Grupo empresarial (filiais mesma transportadora) |
+| `app/utils/tabela_frete_manager.py` | `TabelaFreteManager` | Prepara dict para CalculadoraFrete |
 | `app/utils/timezone.py` | `agora_utc_naive` | Todos os models |
 
 | Exporta para | O que | Cuidado |
@@ -357,6 +375,8 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/adicionar_status_carvia_nfs.py` + `.sql` — Campo `status` VARCHAR(20) DEFAULT 'ATIVA' + `cancelado_em`, `cancelado_por`, `motivo_cancelamento` + indice
 - `scripts/migrations/backfill_numeracao_sequencial_carvia.py` — Backfill: preenche `cte_numero` NULL com CTe-### (operacoes) e Sub-### (subcontratos). Sem DDL
 - `scripts/migrations/criar_tabelas_sessao_cotacao_carvia.py` + `.sql` — 2 tabelas (`carvia_sessoes_cotacao` + `carvia_sessao_demandas`), 5 indices, 2 constraints
+- `scripts/migrations/adicionar_contato_sessao_cotacao_carvia.py` + `.sql` — 4 campos contato cliente (cliente_nome, cliente_email, cliente_telefone, cliente_responsavel)
+- `scripts/migrations/backfill_prefixo_cotacao_carvia.py` + `.sql` — DML: renomeia SC-### → COTACAO-### em numero_sessao
 
 ---
 

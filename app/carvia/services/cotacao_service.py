@@ -4,15 +4,18 @@ Cotacao Service — Wrapper de CalculadoraFrete para CarVia
 
 Reutiliza:
 - app/utils/calculadora_frete.py: CalculadoraFrete.calcular_frete_unificado()
-- app/utils/frete_simulador.py: calcular_fretes_possiveis()
+- app/utils/frete_simulador.py: buscar_cidade_unificada()
 - app/utils/tabela_frete_manager.py: TabelaFreteManager
+- app/utils/grupo_empresarial.py: GrupoEmpresarialService
+- app/vinculos/models.py: CidadeAtendida
 
-Fluxo por subcontrato:
-1. Buscar peso_utilizado da operacao pai
-2. Resolver cidade destino -> Cidade (localidades)
-3. Buscar tabelas_frete para a transportadora + UF/cidade
-4. Chamar CalculadoraFrete.calcular_frete_unificado()
-5. Gravar valor_cotado e tabela_frete_id no subcontrato
+Fluxo de cotacao (cotar_todas_opcoes e cotar_subcontrato):
+1. Resolver cidade destino -> Cidade (buscar_cidade_unificada)
+2. Cidade.codigo_ibge -> CidadeAtendida (vinculos)
+3. CidadeAtendida.transportadora_id -> grupo_empresarial -> lista de IDs
+4. TabelaFrete.filter(transportadora_id.in_(grupo_ids), uf_origem, uf_destino, nome_tabela)
+5. TabelaFreteManager.preparar_dados_tabela(tf) -> dict
+6. CalculadoraFrete.calcular_frete_unificado(peso, valor, tabela_dados, cidade)
 """
 
 import logging
@@ -26,10 +29,42 @@ logger = logging.getLogger(__name__)
 class CotacaoService:
     """Servico de cotacao de frete para subcontratos CarVia"""
 
+    def _resolver_cidade(self, cidade_nome: str, uf: str):
+        """
+        Resolve nome de cidade + UF para objeto Cidade.
+
+        Returns:
+            Cidade ou None
+        """
+        from app.utils.frete_simulador import buscar_cidade_unificada
+        return buscar_cidade_unificada(cidade=cidade_nome, uf=uf)
+
+    def _buscar_vinculos_cidade(self, codigo_ibge: str):
+        """
+        Busca vinculos CidadeAtendida para um codigo IBGE.
+
+        Returns:
+            List[CidadeAtendida]
+        """
+        from app.vinculos.models import CidadeAtendida
+        return CidadeAtendida.query.filter(
+            CidadeAtendida.codigo_ibge == codigo_ibge
+        ).all()
+
+    def _obter_grupo_transportadora(self, transportadora_id: int) -> List[int]:
+        """
+        Retorna IDs de todas transportadoras do mesmo grupo empresarial.
+        """
+        from app.utils.grupo_empresarial import GrupoEmpresarialService
+        grupo_service = GrupoEmpresarialService()
+        return grupo_service.obter_transportadoras_grupo(transportadora_id)
+
     def cotar_subcontrato(self, operacao_id: int,
                           transportadora_id: int) -> Dict:
         """
         Calcula cotacao de frete para um subcontrato.
+
+        Fluxo: cidade_destino -> CidadeAtendida -> grupo -> TabelaFrete -> CalculadoraFrete
 
         Args:
             operacao_id: ID da operacao CarVia
@@ -57,6 +92,7 @@ class CotacaoService:
         peso = float(operacao.peso_utilizado or operacao.peso_bruto or 0)
         valor_mercadoria = float(operacao.valor_mercadoria or 0)
         uf_destino = operacao.uf_destino
+        uf_origem = operacao.uf_origem
         cidade_destino = operacao.cidade_destino
 
         if peso <= 0:
@@ -66,27 +102,62 @@ class CotacaoService:
             return {'sucesso': False, 'erro': 'UF destino nao informada'}
 
         try:
-            # Buscar tabelas de frete da transportadora para o destino
+            # Resolver cidade destino para obter codigo_ibge e icms
+            cidade_obj = self._resolver_cidade(cidade_destino, uf_destino) if cidade_destino else None
+
+            # Buscar tabelas via CidadeAtendida se cidade foi resolvida
             from app.tabelas.models import TabelaFrete
-            tabelas = db.session.query(TabelaFrete).filter(
-                TabelaFrete.transportadora_id == transportadora_id,
-                TabelaFrete.uf_destino == uf_destino,
-                TabelaFrete.ativo == True,  # noqa: E712
-            ).all()
+
+            tabelas = []
+            if cidade_obj:
+                vinculos = self._buscar_vinculos_cidade(cidade_obj.codigo_ibge)
+                # Filtrar vinculos pela transportadora solicitada (ou seu grupo)
+                grupo_ids = self._obter_grupo_transportadora(transportadora_id)
+
+                for vinculo in vinculos:
+                    if vinculo.transportadora_id not in grupo_ids:
+                        continue
+
+                    # Buscar tabela de frete pelo nome_tabela do vinculo
+                    query = TabelaFrete.query.filter(
+                        TabelaFrete.transportadora_id.in_(grupo_ids),
+                        TabelaFrete.uf_destino == uf_destino,
+                        TabelaFrete.nome_tabela == vinculo.nome_tabela,
+                    )
+                    if uf_origem:
+                        query = query.filter(TabelaFrete.uf_origem == uf_origem)
+
+                    tabelas.extend(query.all())
+
+            # Fallback: busca direta por transportadora + UF (sem CidadeAtendida)
+            if not tabelas:
+                grupo_ids = self._obter_grupo_transportadora(transportadora_id)
+                query = TabelaFrete.query.filter(
+                    TabelaFrete.transportadora_id.in_(grupo_ids),
+                    TabelaFrete.uf_destino == uf_destino,
+                )
+                if uf_origem:
+                    query = query.filter(TabelaFrete.uf_origem == uf_origem)
+                tabelas = query.all()
 
             if not tabelas:
                 return {
                     'sucesso': False,
-                    'erro': f'Nenhuma tabela de frete ativa para '
+                    'erro': f'Nenhuma tabela de frete para '
                             f'{transportadora.razao_social} -> {uf_destino}',
                 }
 
-            # Tentar calcular com cada tabela e retornar a melhor
+            # Deduplicar tabelas por ID
+            tabelas_unicas = {t.id: t for t in tabelas}
+
+            # Calcular com cada tabela e retornar a melhor
             melhor = None
-            for tabela in tabelas:
+            for tabela in tabelas_unicas.values():
                 try:
                     resultado = self._calcular_com_tabela(
-                        tabela, peso, valor_mercadoria, uf_destino, cidade_destino
+                        tabela, peso, valor_mercadoria,
+                        uf_destino, cidade_destino,
+                        cidade_icms=cidade_obj.icms if cidade_obj else None,
                     )
                     if resultado and (melhor is None or resultado['valor'] < melhor['valor']):
                         melhor = resultado
@@ -117,34 +188,37 @@ class CotacaoService:
     def _calcular_com_tabela(self, tabela, peso: float,
                               valor_mercadoria: float,
                               uf_destino: str,
-                              cidade_destino: str) -> Optional[Dict]:
-        """Calcula frete usando uma tabela especifica"""
+                              cidade_destino: str,
+                              cidade_icms: float = None) -> Optional[Dict]:
+        """Calcula frete usando uma tabela especifica.
+
+        Args:
+            tabela: TabelaFrete ORM object
+            peso: Peso em kg
+            valor_mercadoria: Valor da mercadoria R$
+            uf_destino: UF destino
+            cidade_destino: Nome da cidade destino (para log)
+            cidade_icms: ICMS da cidade destino (se resolvido)
+        """
         try:
             from app.utils.calculadora_frete import CalculadoraFrete
+            from app.utils.tabela_frete_manager import TabelaFreteManager
 
             calc = CalculadoraFrete()
 
-            # Preparar dados da tabela no formato esperado
-            tabela_dados = {
-                'valor_kg': float(tabela.valor_kg or 0),
-                'percentual_valor': float(tabela.percentual_valor or 0),
-                'frete_minimo_valor': float(tabela.frete_minimo_valor or 0),
-                'frete_minimo_peso': float(tabela.frete_minimo_peso or 0),
-                'icms': float(tabela.icms or 0),
-                'percentual_gris': float(tabela.percentual_gris or 0),
-                'pedagio_por_100kg': float(tabela.pedagio_por_100kg or 0),
-                'valor_tas': float(tabela.valor_tas or 0),
-                'percentual_adv': float(tabela.percentual_adv or 0),
-                'percentual_rca': float(tabela.percentual_rca or 0),
-                'valor_despacho': float(tabela.valor_despacho or 0),
-                'valor_cte': float(tabela.valor_cte or 0),
-                'icms_incluso': bool(tabela.icms_incluso),
-            }
+            # Usar TabelaFreteManager para preparar dados no formato correto
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(tabela)
+
+            # Preparar parametro cidade com ICMS se disponivel
+            cidade_param = None
+            if cidade_icms is not None:
+                cidade_param = {'icms': cidade_icms}
 
             resultado = calc.calcular_frete_unificado(
                 peso=peso,
                 valor_mercadoria=valor_mercadoria,
                 tabela_dados=tabela_dados,
+                cidade=cidade_param,
             )
 
             if resultado and 'valor_com_icms' in resultado:
@@ -163,20 +237,25 @@ class CotacaoService:
                            uf_origem: str = None) -> List[Dict]:
         """
         Calcula TODAS as opcoes de frete para uma demanda de cotacao.
-        Nao requer operacao_id — usa parametros brutos.
+
+        Fluxo:
+        1. buscar_cidade_unificada(cidade_destino, uf_destino) -> Cidade (codigo_ibge, icms)
+        2. CidadeAtendida.filter(codigo_ibge) -> vinculos
+        3. Para cada vinculo: grupo -> TabelaFrete -> CalculadoraFrete
+        4. Retorno enriquecido: +lead_time, +icms_destino
 
         Args:
             peso: Peso em kg
             valor_mercadoria: Valor da mercadoria R$
             uf_destino: UF destino (obrigatorio)
-            cidade_destino: Cidade destino (opcional, para log)
+            cidade_destino: Cidade destino (usado para resolver CidadeAtendida)
             uf_origem: UF origem (opcional, filtra tabelas)
 
         Returns:
             List[Dict] ordenada por valor (menor primeiro):
             [{'transportadora_id', 'transportadora_nome', 'transportadora_cnpj',
               'tabela_frete_id', 'tabela_nome', 'tipo_carga', 'modalidade',
-              'valor_frete', 'detalhes'}, ...]
+              'valor_frete', 'detalhes', 'lead_time', 'icms_destino'}, ...]
         """
         if peso <= 0:
             logger.warning("Peso invalido para cotacao: %s", peso)
@@ -190,52 +269,148 @@ class CotacaoService:
             from app.tabelas.models import TabelaFrete
             from app.transportadoras.models import Transportadora
 
-            # Buscar tabelas de frete para o destino
-            query = db.session.query(TabelaFrete).join(
-                Transportadora,
-                TabelaFrete.transportadora_id == Transportadora.id
-            ).filter(
-                TabelaFrete.uf_destino == uf_destino.upper(),
-                Transportadora.ativo == True,  # noqa: E712
-            )
+            # 1. Resolver cidade destino para IBGE e ICMS
+            cidade_obj = None
+            if cidade_destino:
+                cidade_obj = self._resolver_cidade(cidade_destino, uf_destino)
+                if not cidade_obj:
+                    logger.info(
+                        "Cidade '%s/%s' nao encontrada na tabela cidades",
+                        cidade_destino, uf_destino,
+                    )
 
-            if uf_origem:
-                query = query.filter(TabelaFrete.uf_origem == uf_origem.upper())
-
-            tabelas = query.all()
-
-            if not tabelas:
-                logger.info(
-                    "Nenhuma tabela de frete para UF destino=%s (origem=%s)",
-                    uf_destino, uf_origem or 'qualquer'
-                )
-                return []
-
+            # 2. Buscar vinculos via CidadeAtendida
             opcoes = []
-            for tabela in tabelas:
-                try:
-                    resultado = self._calcular_com_tabela(
-                        tabela, peso, valor_mercadoria,
-                        uf_destino, cidade_destino
+            vinculos_encontrados = False
+
+            if cidade_obj:
+                vinculos = self._buscar_vinculos_cidade(cidade_obj.codigo_ibge)
+                if vinculos:
+                    vinculos_encontrados = True
+                    # Agrupar vinculos por transportadora para evitar duplicatas
+                    processados = set()  # (transportadora_id, tabela_nome)
+
+                    for vinculo in vinculos:
+                        grupo_ids = self._obter_grupo_transportadora(
+                            vinculo.transportadora_id
+                        )
+
+                        # Buscar transportadora do vinculo (verificar ativo)
+                        transportadora = db.session.get(
+                            Transportadora, vinculo.transportadora_id
+                        )
+                        if not transportadora or not transportadora.ativo:
+                            continue
+
+                        # Buscar tabelas de frete pelo nome_tabela do vinculo
+                        query = TabelaFrete.query.filter(
+                            TabelaFrete.transportadora_id.in_(grupo_ids),
+                            TabelaFrete.uf_destino == uf_destino.upper(),
+                            TabelaFrete.nome_tabela == vinculo.nome_tabela,
+                        )
+                        if uf_origem:
+                            query = query.filter(
+                                TabelaFrete.uf_origem == uf_origem.upper()
+                            )
+
+                        tabelas = query.all()
+
+                        for tabela in tabelas:
+                            chave = (tabela.transportadora_id, tabela.nome_tabela)
+                            if chave in processados:
+                                continue
+                            processados.add(chave)
+
+                            try:
+                                resultado = self._calcular_com_tabela(
+                                    tabela, peso, valor_mercadoria,
+                                    uf_destino, cidade_destino,
+                                    cidade_icms=cidade_obj.icms,
+                                )
+                                if resultado:
+                                    # Buscar transportadora real da tabela
+                                    transp_tabela = db.session.get(
+                                        Transportadora, tabela.transportadora_id
+                                    )
+                                    opcoes.append({
+                                        'transportadora_id': tabela.transportadora_id,
+                                        'transportadora_nome': (
+                                            transp_tabela.razao_social
+                                            if transp_tabela else transportadora.razao_social
+                                        ),
+                                        'transportadora_cnpj': (
+                                            transp_tabela.cnpj
+                                            if transp_tabela else transportadora.cnpj
+                                        ),
+                                        'tabela_frete_id': tabela.id,
+                                        'tabela_nome': tabela.nome_tabela,
+                                        'tipo_carga': tabela.tipo_carga,
+                                        'modalidade': tabela.modalidade,
+                                        'valor_frete': round(resultado['valor'], 2),
+                                        'detalhes': resultado.get('detalhes', {}),
+                                        'lead_time': vinculo.lead_time,
+                                        'icms_destino': cidade_obj.icms,
+                                    })
+                            except Exception as e:
+                                logger.warning(
+                                    "Erro ao calcular com tabela %s: %s",
+                                    tabela.id, e,
+                                )
+                                continue
+
+            # 3. Fallback: busca direta por UF (sem CidadeAtendida)
+            # Usado quando cidade nao foi informada ou nao tem vinculos
+            if not vinculos_encontrados:
+                query = db.session.query(TabelaFrete).join(
+                    Transportadora,
+                    TabelaFrete.transportadora_id == Transportadora.id
+                ).filter(
+                    TabelaFrete.uf_destino == uf_destino.upper(),
+                    Transportadora.ativo == True,  # noqa: E712
+                )
+                if uf_origem:
+                    query = query.filter(
+                        TabelaFrete.uf_origem == uf_origem.upper()
                     )
-                    if resultado:
-                        transportadora = tabela.transportadora
-                        opcoes.append({
-                            'transportadora_id': transportadora.id,
-                            'transportadora_nome': transportadora.razao_social,
-                            'transportadora_cnpj': transportadora.cnpj,
-                            'tabela_frete_id': tabela.id,
-                            'tabela_nome': tabela.nome_tabela,
-                            'tipo_carga': tabela.tipo_carga,
-                            'modalidade': tabela.modalidade,
-                            'valor_frete': round(resultado['valor'], 2),
-                            'detalhes': resultado.get('detalhes', {}),
-                        })
-                except Exception as e:
-                    logger.warning(
-                        "Erro ao calcular com tabela %s: %s", tabela.id, e
+
+                tabelas_fallback = query.all()
+
+                if not tabelas_fallback:
+                    logger.info(
+                        "Nenhuma tabela de frete para UF destino=%s (origem=%s)",
+                        uf_destino, uf_origem or 'qualquer',
                     )
-                    continue
+                    return []
+
+                for tabela in tabelas_fallback:
+                    try:
+                        resultado = self._calcular_com_tabela(
+                            tabela, peso, valor_mercadoria,
+                            uf_destino, cidade_destino,
+                            cidade_icms=cidade_obj.icms if cidade_obj else None,
+                        )
+                        if resultado:
+                            transportadora = tabela.transportadora
+                            opcoes.append({
+                                'transportadora_id': transportadora.id,
+                                'transportadora_nome': transportadora.razao_social,
+                                'transportadora_cnpj': transportadora.cnpj,
+                                'tabela_frete_id': tabela.id,
+                                'tabela_nome': tabela.nome_tabela,
+                                'tipo_carga': tabela.tipo_carga,
+                                'modalidade': tabela.modalidade,
+                                'valor_frete': round(resultado['valor'], 2),
+                                'detalhes': resultado.get('detalhes', {}),
+                                'lead_time': None,
+                                'icms_destino': (
+                                    cidade_obj.icms if cidade_obj else None
+                                ),
+                            })
+                    except Exception as e:
+                        logger.warning(
+                            "Erro ao calcular com tabela %s: %s", tabela.id, e
+                        )
+                        continue
 
             # Ordenar por valor ascendente
             opcoes.sort(key=lambda x: x['valor_frete'])
@@ -248,7 +423,10 @@ class CotacaoService:
     def listar_opcoes_transportadora(self, uf_destino: str,
                                       cidade_destino: str = None) -> List[Dict]:
         """
-        Lista transportadoras com tabelas ativas para o destino.
+        Lista transportadoras com vinculos/tabelas para o destino.
+
+        Se cidade_destino informada, prioriza CidadeAtendida.
+        Fallback: busca por UF.
 
         Returns:
             Lista de dicts com transportadora_id, nome, tem_tabela
@@ -257,25 +435,46 @@ class CotacaoService:
             from app.transportadoras.models import Transportadora
             from app.tabelas.models import TabelaFrete
 
-            # Buscar transportadoras que tem tabela para a UF
-            subquery = db.session.query(
-                TabelaFrete.transportadora_id
-            ).filter(
-                TabelaFrete.uf_destino == uf_destino,
-                TabelaFrete.ativo == True,  # noqa: E712
-            ).distinct().subquery()
+            ids_encontrados = set()
+            resultado = []
 
-            transportadoras = db.session.query(Transportadora).filter(
-                Transportadora.id.in_(subquery),
-                Transportadora.ativo == True,  # noqa: E712
-            ).order_by(Transportadora.razao_social).all()
+            # Tentar via CidadeAtendida primeiro
+            if cidade_destino:
+                cidade_obj = self._resolver_cidade(cidade_destino, uf_destino)
+                if cidade_obj:
+                    vinculos = self._buscar_vinculos_cidade(cidade_obj.codigo_ibge)
+                    for vinculo in vinculos:
+                        t = db.session.get(Transportadora, vinculo.transportadora_id)
+                        if t and t.ativo and t.id not in ids_encontrados:
+                            ids_encontrados.add(t.id)
+                            resultado.append({
+                                'id': t.id,
+                                'nome': t.razao_social,
+                                'cnpj': t.cnpj,
+                                'freteiro': t.freteiro,
+                            })
 
-            return [{
-                'id': t.id,
-                'nome': t.razao_social,
-                'cnpj': t.cnpj,
-                'freteiro': t.freteiro,
-            } for t in transportadoras]
+            # Fallback por UF se nao encontrou via CidadeAtendida
+            if not resultado:
+                subquery = db.session.query(
+                    TabelaFrete.transportadora_id
+                ).filter(
+                    TabelaFrete.uf_destino == uf_destino,
+                ).distinct().subquery()
+
+                transportadoras = db.session.query(Transportadora).filter(
+                    Transportadora.id.in_(subquery),
+                    Transportadora.ativo == True,  # noqa: E712
+                ).order_by(Transportadora.razao_social).all()
+
+                resultado = [{
+                    'id': t.id,
+                    'nome': t.razao_social,
+                    'cnpj': t.cnpj,
+                    'freteiro': t.freteiro,
+                } for t in transportadoras]
+
+            return sorted(resultado, key=lambda x: x['nome'])
 
         except Exception as e:
             logger.error(f"Erro ao listar opcoes: {e}")

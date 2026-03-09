@@ -44,6 +44,31 @@
         </div>
     </div>
 
+    {# ================================================================= #}
+    {# DADOS DO CLIENTE (se preenchidos)                                  #}
+    {# ================================================================= #}
+    {% if sessao.cliente_nome or sessao.cliente_email or sessao.cliente_telefone or sessao.cliente_responsavel %}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <span class="fw-bold text-muted"><i class="fas fa-user-tie"></i> Cliente:</span>
+                {% if sessao.cliente_nome %}
+                <span><strong>{{ sessao.cliente_nome }}</strong></span>
+                {% endif %}
+                {% if sessao.cliente_responsavel %}
+                <span><i class="fas fa-id-badge"></i> {{ sessao.cliente_responsavel }}</span>
+                {% endif %}
+                {% if sessao.cliente_email %}
+                <span><i class="fas fa-envelope"></i> {{ sessao.cliente_email }}</span>
+                {% endif %}
+                {% if sessao.cliente_telefone %}
+                <span><i class="fas fa-phone"></i> {{ sessao.cliente_telefone }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if sessao.observacoes %}
     <div class="alert alert-light mb-3">
         <i class="fas fa-sticky-note"></i> <strong>Obs:</strong> {{ sessao.observacoes }}
@@ -211,7 +236,7 @@
                                placeholder="Empresa origem *" required>
                     </div>
                     <div class="col-md-1">
-                        <select name="origem_uf" class="form-select form-select-sm" required>
+                        <select name="origem_uf" id="addOrigemUf" class="form-select form-select-sm" required>
                             <option value="">UF</option>
                             {% for uf in ufs %}
                             <option value="{{ uf }}">{{ uf }}</option>
@@ -219,15 +244,19 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <input type="text" name="origem_cidade" class="form-control form-control-sm"
-                               placeholder="Cidade origem *" required>
+                        <div class="carvia-autocomplete-wrapper">
+                            <input type="text" name="origem_cidade" id="addOrigemCidade"
+                                   class="form-control form-control-sm"
+                                   placeholder="Cidade origem *" required autocomplete="off">
+                            <div class="carvia-autocomplete-results" id="addOrigemCidadeResults"></div>
+                        </div>
                     </div>
                     <div class="col-md-3">
                         <input type="text" name="destino_empresa" class="form-control form-control-sm"
                                placeholder="Empresa destino *" required>
                     </div>
                     <div class="col-md-1">
-                        <select name="destino_uf" class="form-select form-select-sm" required>
+                        <select name="destino_uf" id="addDestinoUf" class="form-select form-select-sm" required>
                             <option value="">UF</option>
                             {% for uf in ufs %}
                             <option value="{{ uf }}">{{ uf }}</option>
@@ -235,8 +264,12 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <input type="text" name="destino_cidade" class="form-control form-control-sm"
-                               placeholder="Cidade destino *" required>
+                        <div class="carvia-autocomplete-wrapper">
+                            <input type="text" name="destino_cidade" id="addDestinoCidade"
+                                   class="form-control form-control-sm"
+                                   placeholder="Cidade destino *" required autocomplete="off">
+                            <div class="carvia-autocomplete-results" id="addDestinoCidadeResults"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="row g-2 mb-2">
@@ -341,6 +374,7 @@
                                     <th>Tabela</th>
                                     <th>Tipo Carga</th>
                                     <th>Modalidade</th>
+                                    <th class="text-center">Lead Time</th>
                                     <th class="text-end">Valor Frete</th>
                                     <th></th>
                                 </tr>
@@ -416,11 +450,18 @@
 
 {% block scripts %}
 <script>
+// =====================================================================
 // Estado
+// =====================================================================
 let currentDemandaId = null;
 let currentSessaoId = {{ sessao.id }};
 
+// Cache de cidades por UF (compartilhado com autocomplete)
+const cidadeCache = {};
+
+// =====================================================================
 // Toggle contra proposta
+// =====================================================================
 function toggleContraProposta() {
     const contra = document.getElementById('respostaContra');
     const div = document.getElementById('divContraProposta');
@@ -431,7 +472,9 @@ function toggleContraProposta() {
     }
 }
 
+// =====================================================================
 // Formatar valor em BRL
+// =====================================================================
 function formatBRL(valor) {
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
@@ -439,7 +482,9 @@ function formatBRL(valor) {
     }).format(valor);
 }
 
+// =====================================================================
 // Cotar demanda (AJAX)
+// =====================================================================
 function cotarDemanda(sessaoId, demandaId) {
     currentDemandaId = demandaId;
     const modal = new bootstrap.Modal(document.getElementById('modalOpcoesFrete'));
@@ -453,12 +498,12 @@ function cotarDemanda(sessaoId, demandaId) {
     conteudo.style.display = 'none';
     modal.show();
 
-    fetch(`/carvia/api/sessao-cotacao/${sessaoId}/cotar-demanda/${demandaId}`, {
+    fetch('/carvia/api/sessao-cotacao/' + sessaoId + '/cotar-demanda/' + demandaId, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
     })
-    .then(r => r.json())
-    .then(data => {
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
         loading.style.display = 'none';
         conteudo.style.display = 'block';
 
@@ -472,37 +517,138 @@ function cotarDemanda(sessaoId, demandaId) {
         tabela.style.display = 'block';
         body.innerHTML = '';
 
-        data.opcoes.forEach(function(op) {
+        data.opcoes.forEach(function(op, idx) {
+            const leadTime = op.lead_time != null ? op.lead_time + ' dias' : '-';
+            const rowId = 'opcao-row-' + idx;
+            const detailId = 'opcao-detail-' + idx;
+
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${op.transportadora_nome}</strong></td>
-                <td class="cnpj-col">${op.transportadora_cnpj || '-'}</td>
-                <td>${op.tabela_nome || '-'}</td>
-                <td>${op.tipo_carga || '-'}</td>
-                <td>${op.modalidade || '-'}</td>
-                <td class="text-end valor-col fw-bold">${formatBRL(op.valor_frete)}</td>
-                <td>
-                    <button class="btn btn-xs btn-success"
-                            onclick="selecionarOpcao(${sessaoId}, ${demandaId}, ${JSON.stringify(op).replace(/"/g, '&quot;')})">
-                        <i class="fas fa-check"></i> Selecionar
-                    </button>
-                </td>
-            `;
+            tr.id = rowId;
+            tr.innerHTML =
+                '<td><strong>' + op.transportadora_nome + '</strong></td>' +
+                '<td class="cnpj-col">' + (op.transportadora_cnpj || '-') + '</td>' +
+                '<td>' + (op.tabela_nome || '-') + '</td>' +
+                '<td>' + (op.tipo_carga || '-') + '</td>' +
+                '<td>' + (op.modalidade || '-') + '</td>' +
+                '<td class="text-center">' + leadTime + '</td>' +
+                '<td class="text-end valor-col fw-bold">' + formatBRL(op.valor_frete) + '</td>' +
+                '<td class="text-nowrap">' +
+                    '<button class="btn btn-xs btn-outline-info me-1" onclick="toggleDetalhes(\'' + detailId + '\')" title="Ver detalhes">' +
+                        '<i class="fas fa-info-circle"></i>' +
+                    '</button>' +
+                    '<button class="btn btn-xs btn-success" ' +
+                        'onclick="selecionarOpcaoFromIdx(' + sessaoId + ',' + demandaId + ',' + idx + ')">' +
+                        '<i class="fas fa-check"></i> Selecionar' +
+                    '</button>' +
+                '</td>';
             body.appendChild(tr);
+
+            // Linha de detalhes (breakdown) — inicialmente oculta
+            var detailTr = document.createElement('tr');
+            detailTr.id = detailId;
+            detailTr.style.display = 'none';
+            detailTr.className = 'table-light';
+            detailTr.innerHTML = '<td colspan="8">' + buildBreakdownHTML(op.detalhes) + '</td>';
+            body.appendChild(detailTr);
         });
+
+        // Armazenar opcoes para uso no selecionar
+        window._opcoesAtual = data.opcoes;
     })
-    .catch(err => {
+    .catch(function(err) {
         loading.style.display = 'none';
         conteudo.style.display = 'block';
         vazio.style.display = 'block';
-        vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i><p>Erro ao calcular opcoes: ' + err.message + '</p>';
+        vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i>' +
+            '<p>Erro ao calcular opcoes: ' + err.message + '</p>';
         tabela.style.display = 'none';
     });
 }
 
-// Selecionar opcao de frete (AJAX)
+// =====================================================================
+// Toggle detalhes do breakdown
+// =====================================================================
+function toggleDetalhes(detailId) {
+    var row = document.getElementById(detailId);
+    if (row) {
+        row.style.display = row.style.display === 'none' ? '' : 'none';
+    }
+}
+
+// =====================================================================
+// Build breakdown HTML a partir dos detalhes da CalculadoraFrete
+// =====================================================================
+function buildBreakdownHTML(detalhes) {
+    if (!detalhes || typeof detalhes !== 'object') {
+        return '<em class="text-muted">Sem detalhes disponiveis</em>';
+    }
+
+    var items = [
+        {label: 'Frete Base (kg)', key: 'frete_peso'},
+        {label: 'Ad Valorem (% valor)', key: 'advalorem'},
+        {label: 'GRIS', key: 'gris'},
+        {label: 'Pedagio', key: 'pedagio'},
+        {label: 'TAS', key: 'tas'},
+        {label: 'ADV', key: 'adv'},
+        {label: 'RCA', key: 'rca'},
+        {label: 'Despacho', key: 'despacho'},
+        {label: 'CTe', key: 'cte'},
+        {label: 'Valor Bruto', key: 'valor_bruto'},
+        {label: 'ICMS Aplicado', key: 'icms_aplicado'},
+        {label: 'Valor com ICMS', key: 'valor_com_icms'},
+    ];
+
+    var html = '<div class="row g-2 px-3 py-2">';
+    items.forEach(function(item) {
+        var val = detalhes[item.key];
+        if (val != null && val !== 0 && val !== undefined) {
+            var formatted = typeof val === 'number' ? formatBRL(val) : val;
+            var isBold = item.key === 'valor_com_icms' || item.key === 'valor_bruto';
+            html += '<div class="col-auto">' +
+                '<small class="text-muted">' + item.label + '</small><br>' +
+                (isBold ? '<strong>' : '') + formatted + (isBold ? '</strong>' : '') +
+                '</div>';
+        }
+    });
+
+    // Adicionar detalhes extras se existirem (detalhes aninhados)
+    if (detalhes.detalhes && typeof detalhes.detalhes === 'object') {
+        var d = detalhes.detalhes;
+        var extraItems = [
+            {label: 'Frete Peso', key: 'frete_peso'},
+            {label: 'GRIS', key: 'gris'},
+            {label: 'Pedagio', key: 'pedagio'},
+            {label: 'TAS', key: 'tas'},
+            {label: 'ADV', key: 'adv'},
+            {label: 'RCA', key: 'rca'},
+            {label: 'Despacho', key: 'despacho'},
+            {label: 'CTe', key: 'cte'},
+        ];
+        extraItems.forEach(function(item) {
+            var val = d[item.key];
+            if (val != null && val !== 0 && val !== undefined && !detalhes[item.key]) {
+                html += '<div class="col-auto">' +
+                    '<small class="text-muted">' + item.label + '</small><br>' +
+                    formatBRL(val) +
+                    '</div>';
+            }
+        });
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// =====================================================================
+// Selecionar opcao de frete (AJAX) — usa indice
+// =====================================================================
+function selecionarOpcaoFromIdx(sessaoId, demandaId, idx) {
+    var opcao = window._opcoesAtual[idx];
+    selecionarOpcao(sessaoId, demandaId, opcao);
+}
+
 function selecionarOpcao(sessaoId, demandaId, opcao) {
-    fetch(`/carvia/api/sessao-cotacao/${sessaoId}/selecionar-opcao/${demandaId}`, {
+    fetch('/carvia/api/sessao-cotacao/' + sessaoId + '/selecionar-opcao/' + demandaId, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -512,31 +658,124 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
             detalhes: opcao.detalhes || {},
         }),
     })
-    .then(r => r.json())
-    .then(data => {
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
         if (data.sucesso) {
             // Atualizar celula na tabela
-            const cell = document.getElementById('frete-cell-' + demandaId);
+            var cell = document.getElementById('frete-cell-' + demandaId);
             if (cell) {
-                cell.innerHTML = `
-                    <span class="text-success fw-bold">${formatBRL(data.valor_frete)}</span>
-                    <br><small class="text-muted">${data.transportadora_nome}</small>
-                `;
+                cell.innerHTML =
+                    '<span class="text-success fw-bold">' + formatBRL(data.valor_frete) + '</span>' +
+                    '<br><small class="text-muted">' + data.transportadora_nome + '</small>';
             }
 
             // Fechar modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalOpcoesFrete'));
+            var modal = bootstrap.Modal.getInstance(document.getElementById('modalOpcoesFrete'));
             if (modal) modal.hide();
 
-            // Recarregar pagina para atualizar totalizadores
+            // Recarregar para atualizar totalizadores
             location.reload();
         } else {
             alert('Erro ao selecionar: ' + (data.erro || 'desconhecido'));
         }
     })
-    .catch(err => {
+    .catch(function(err) {
         alert('Erro: ' + err.message);
     });
 }
+
+// =====================================================================
+// Autocomplete de cidade (form Adicionar Demanda)
+// =====================================================================
+(function() {
+    var debounceTimer = null;
+
+    function setupCidadeAutocomplete(ufSelectId, cidadeInputId, resultsId) {
+        var ufSelect = document.getElementById(ufSelectId);
+        var cidadeInput = document.getElementById(cidadeInputId);
+        var resultsDiv = document.getElementById(resultsId);
+
+        if (!ufSelect || !cidadeInput || !resultsDiv) return;
+
+        ufSelect.addEventListener('change', function() {
+            cidadeInput.value = '';
+            resultsDiv.classList.remove('show');
+            var uf = this.value;
+            if (uf) carregarCidades(uf);
+        });
+
+        cidadeInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                var uf = ufSelect.value;
+                var termo = cidadeInput.value.trim();
+                if (!uf || termo.length < 2) {
+                    resultsDiv.classList.remove('show');
+                    return;
+                }
+                filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+            }, 200);
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!cidadeInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.classList.remove('show');
+            }
+        });
+
+        cidadeInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') resultsDiv.classList.remove('show');
+        });
+    }
+
+    function carregarCidades(uf) {
+        if (cidadeCache[uf]) return;
+        fetch('/localidades/ajax/cidades_por_uf/' + uf)
+            .then(function(r) { return r.json(); })
+            .then(function(cidades) { cidadeCache[uf] = cidades; })
+            .catch(function(err) { console.warn('Erro ao carregar cidades:', err); });
+    }
+
+    function filtrarCidades(uf, termo, resultsDiv, cidadeInput) {
+        var cidades = cidadeCache[uf];
+        if (!cidades) {
+            fetch('/localidades/ajax/cidades_por_uf/' + uf)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    cidadeCache[uf] = data;
+                    filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+                });
+            return;
+        }
+
+        var termoUpper = termo.toUpperCase();
+        var filtradas = cidades.filter(function(c) {
+            return c.toUpperCase().indexOf(termoUpper) !== -1;
+        }).slice(0, 15);
+
+        if (filtradas.length === 0) {
+            resultsDiv.classList.remove('show');
+            return;
+        }
+
+        resultsDiv.innerHTML = '';
+        filtradas.forEach(function(cidade) {
+            var item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.style.cursor = 'pointer';
+            item.textContent = cidade;
+            item.addEventListener('click', function() {
+                cidadeInput.value = cidade;
+                resultsDiv.classList.remove('show');
+            });
+            resultsDiv.appendChild(item);
+        });
+        resultsDiv.classList.add('show');
+    }
+
+    // Inicializar autocomplete para o form de adicionar demanda
+    setupCidadeAutocomplete('addOrigemUf', 'addOrigemCidade', 'addOrigemCidadeResults');
+    setupCidadeAutocomplete('addDestinoUf', 'addDestinoCidade', 'addDestinoCidadeResults');
+})();
 </script>
 {% endblock %}

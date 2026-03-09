@@ -660,6 +660,12 @@ class CarviaSessaoCotacao(db.Model):
     enviado_em = db.Column(db.DateTime, nullable=True)
     enviado_por = db.Column(db.String(100), nullable=True)
 
+    # Dados do cliente (opcionais)
+    cliente_nome = db.Column(db.String(255), nullable=True)
+    cliente_email = db.Column(db.String(255), nullable=True)
+    cliente_telefone = db.Column(db.String(50), nullable=True)
+    cliente_responsavel = db.Column(db.String(255), nullable=True)
+
     # Geral
     observacoes = db.Column(db.Text, nullable=True)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
@@ -687,22 +693,38 @@ class CarviaSessaoCotacao(db.Model):
 
     @staticmethod
     def gerar_numero_sessao():
-        """Gera proximo numero sequencial SC-### para sessoes de cotacao."""
-        max_row = db.session.query(
-            CarviaSessaoCotacao.numero_sessao
+        """Gera proximo numero sequencial COTACAO-### para sessoes de cotacao.
+
+        Busca max de AMBOS prefixos (SC-% e COTACAO-%) para garantir
+        continuidade apos backfill do prefixo.
+        """
+        from sqlalchemy import cast, Integer
+
+        # Extrair o numero de ambos prefixos e pegar o maior
+        max_num_cotacao = db.session.query(
+            db.func.max(
+                cast(
+                    db.func.replace(CarviaSessaoCotacao.numero_sessao, 'COTACAO-', ''),
+                    Integer
+                )
+            )
+        ).filter(
+            CarviaSessaoCotacao.numero_sessao.ilike('COTACAO-%'),
+        ).scalar() or 0
+
+        max_num_sc = db.session.query(
+            db.func.max(
+                cast(
+                    db.func.replace(CarviaSessaoCotacao.numero_sessao, 'SC-', ''),
+                    Integer
+                )
+            )
         ).filter(
             CarviaSessaoCotacao.numero_sessao.ilike('SC-%'),
-        ).order_by(
-            CarviaSessaoCotacao.id.desc()
-        ).limit(1).scalar()
+        ).scalar() or 0
 
-        next_num = 1
-        if max_row:
-            try:
-                next_num = int(max_row.replace('SC-', '')) + 1
-            except (ValueError, TypeError):
-                pass
-        return f'SC-{next_num:03d}'
+        next_num = max(max_num_cotacao, max_num_sc) + 1
+        return f'COTACAO-{next_num:03d}'
 
     @property
     def valor_total_frete(self):

@@ -34,7 +34,38 @@
             </div>
         </div>
 
-        <!-- Card 2: Primeira Demanda -->
+        <!-- Card 2: Dados do Cliente (opcional) -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-user-tie"></i> Dados do Cliente <small class="text-muted">(opcional)</small></h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Nome / Razao Social</label>
+                        <input type="text" name="cliente_nome" class="form-control"
+                               placeholder="Ex: Atacadao S.A.">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Responsavel</label>
+                        <input type="text" name="cliente_responsavel" class="form-control"
+                               placeholder="Nome do contato">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="cliente_email" class="form-control"
+                               placeholder="email@empresa.com">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Telefone</label>
+                        <input type="text" name="cliente_telefone" class="form-control"
+                               placeholder="(11) 99999-9999">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Primeira Demanda -->
         <div class="card mb-3">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-route"></i> Primeira Demanda</h5>
@@ -50,7 +81,7 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">UF <span class="text-danger">*</span></label>
-                        <select name="origem_uf" class="form-select" required>
+                        <select name="origem_uf" id="origemUf" class="form-select" required>
                             <option value="">Selecione</option>
                             {% for uf in ufs %}
                             <option value="{{ uf }}">{{ uf }}</option>
@@ -59,8 +90,11 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Cidade <span class="text-danger">*</span></label>
-                        <input type="text" name="origem_cidade" class="form-control"
-                               placeholder="Cidade" required>
+                        <div class="carvia-autocomplete-wrapper">
+                            <input type="text" name="origem_cidade" id="origemCidade" class="form-control"
+                                   placeholder="Cidade" required autocomplete="off">
+                            <div class="carvia-autocomplete-results" id="origemCidadeResults"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -74,7 +108,7 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">UF <span class="text-danger">*</span></label>
-                        <select name="destino_uf" class="form-select" required>
+                        <select name="destino_uf" id="destinoUf" class="form-select" required>
                             <option value="">Selecione</option>
                             {% for uf in ufs %}
                             <option value="{{ uf }}">{{ uf }}</option>
@@ -83,8 +117,11 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Cidade <span class="text-danger">*</span></label>
-                        <input type="text" name="destino_cidade" class="form-control"
-                               placeholder="Cidade" required>
+                        <div class="carvia-autocomplete-wrapper">
+                            <input type="text" name="destino_cidade" id="destinoCidade" class="form-control"
+                                   placeholder="Cidade" required autocomplete="off">
+                            <div class="carvia-autocomplete-results" id="destinoCidadeResults"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -142,4 +179,106 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    // Cache de cidades por UF
+    const cidadeCache = {};
+    let debounceTimer = null;
+
+    function setupCidadeAutocomplete(ufSelectId, cidadeInputId, resultsId) {
+        const ufSelect = document.getElementById(ufSelectId);
+        const cidadeInput = document.getElementById(cidadeInputId);
+        const resultsDiv = document.getElementById(resultsId);
+
+        if (!ufSelect || !cidadeInput || !resultsDiv) return;
+
+        // Ao trocar UF, limpar cidade e carregar lista
+        ufSelect.addEventListener('change', function() {
+            cidadeInput.value = '';
+            resultsDiv.classList.remove('show');
+            const uf = this.value;
+            if (uf) carregarCidades(uf);
+        });
+
+        // Autocomplete no input de cidade
+        cidadeInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                const uf = ufSelect.value;
+                const termo = cidadeInput.value.trim();
+                if (!uf || termo.length < 2) {
+                    resultsDiv.classList.remove('show');
+                    return;
+                }
+                filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+            }, 200);
+        });
+
+        // Fechar dropdown ao clicar fora
+        document.addEventListener('click', function(e) {
+            if (!cidadeInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.classList.remove('show');
+            }
+        });
+
+        // Fechar com Escape
+        cidadeInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') resultsDiv.classList.remove('show');
+        });
+    }
+
+    function carregarCidades(uf) {
+        if (cidadeCache[uf]) return;
+        fetch('/localidades/ajax/cidades_por_uf/' + uf)
+            .then(function(r) { return r.json(); })
+            .then(function(cidades) { cidadeCache[uf] = cidades; })
+            .catch(function(err) { console.warn('Erro ao carregar cidades:', err); });
+    }
+
+    function filtrarCidades(uf, termo, resultsDiv, cidadeInput) {
+        const cidades = cidadeCache[uf];
+        if (!cidades) {
+            // Carregar e tentar novamente
+            fetch('/localidades/ajax/cidades_por_uf/' + uf)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    cidadeCache[uf] = data;
+                    filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+                });
+            return;
+        }
+
+        const termoUpper = termo.toUpperCase();
+        const filtradas = cidades.filter(function(c) {
+            return c.toUpperCase().indexOf(termoUpper) !== -1;
+        }).slice(0, 15);
+
+        if (filtradas.length === 0) {
+            resultsDiv.classList.remove('show');
+            return;
+        }
+
+        resultsDiv.innerHTML = '';
+        filtradas.forEach(function(cidade) {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.style.cursor = 'pointer';
+            item.textContent = cidade;
+            item.addEventListener('click', function() {
+                cidadeInput.value = cidade;
+                resultsDiv.classList.remove('show');
+            });
+            resultsDiv.appendChild(item);
+        });
+        resultsDiv.classList.add('show');
+    }
+
+    // Inicializar autocomplete para origem e destino
+    setupCidadeAutocomplete('origemUf', 'origemCidade', 'origemCidadeResults');
+    setupCidadeAutocomplete('destinoUf', 'destinoCidade', 'destinoCidadeResults');
+})();
+</script>
 {% endblock %}
