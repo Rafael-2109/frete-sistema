@@ -229,30 +229,9 @@
   ],
   "indices": [
     {
-      "name": "ix_baixa_pagamento_item_cnpj_beneficiario",
+      "name": "ix_baixa_pagamento_item_statement_line_id",
       "columns": [
-        "cnpj_beneficiario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_baixa_pag_item_titulo",
-      "columns": [
-        "titulo_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_baixa_pagamento_item_status_match",
-      "columns": [
-        "status_match"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_baixa_pag_item_lote",
-      "columns": [
-        "lote_id"
+        "statement_line_id"
       ],
       "unique": false
     },
@@ -264,9 +243,9 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_statement_line_id",
+      "name": "idx_baixa_pag_item_status",
       "columns": [
-        "statement_line_id"
+        "status"
       ],
       "unique": false
     },
@@ -278,16 +257,16 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status",
+      "name": "idx_baixa_pag_item_status_match",
       "columns": [
-        "status"
+        "status_match"
       ],
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status_match",
+      "name": "idx_baixa_pag_item_cnpj",
       "columns": [
-        "status_match"
+        "cnpj_beneficiario"
       ],
       "unique": false
     },
@@ -299,9 +278,30 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_cnpj",
+      "name": "idx_baixa_pag_item_titulo",
+      "columns": [
+        "titulo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_cnpj_beneficiario",
       "columns": [
         "cnpj_beneficiario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_baixa_pag_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_status_match",
+      "columns": [
+        "status_match"
       ],
       "unique": false
     }

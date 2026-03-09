@@ -78,6 +78,14 @@
       "type": "timestamp",
       "description": "Data de criação",
       "nullable": false
+    },
+    {
+      "name": "razao_social",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
     }
   ],
   "indices": [

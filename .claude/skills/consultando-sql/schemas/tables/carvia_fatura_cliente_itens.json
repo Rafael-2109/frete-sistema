@@ -93,16 +93,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fatura_cliente_itens_operacao_id",
+      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
       "columns": [
-        "operacao_id"
+        "fatura_cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
+      "name": "ix_carvia_fatura_cliente_itens_operacao_id",
       "columns": [
-        "fatura_cliente_id"
+        "operacao_id"
       ],
       "unique": false
     },

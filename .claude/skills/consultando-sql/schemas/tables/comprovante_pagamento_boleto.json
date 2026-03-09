@@ -193,16 +193,16 @@
       "unique": false
     },
     {
+      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "columns": [
+        "numero_agendamento"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
       "columns": [
         "odoo_statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_beneficiario_cnpj",
-      "columns": [
-        "beneficiario_cnpj_cpf"
       ],
       "unique": false
     },
@@ -214,16 +214,16 @@
       "unique": false
     },
     {
-      "name": "idx_comp_pagador_cnpj",
+      "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
-        "pagador_cnpj_cpf"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_tipo",
+      "name": "idx_comp_pagador_cnpj",
       "columns": [
-        "tipo"
+        "pagador_cnpj_cpf"
       ],
       "unique": false
     },
@@ -249,11 +249,11 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "name": "idx_comp_beneficiario_cnpj",
       "columns": [
-        "numero_agendamento"
+        "beneficiario_cnpj_cpf"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "idx_comp_ofx_checknum",
