@@ -563,11 +563,12 @@ class CarteiraAgrupada {
             let matchAgendamento = true;
             if (this.filtrosAtivos.agendamento) {
                 if (this.filtrosAtivos.agendamento === 'sep-aguardando') {
-                    // Pedidos com separação que têm protocolo mas não confirmados
-                    matchAgendamento = (temProtocoloSeparacao || protocolo) && !agendamentoConfirmado;
+                    // Pedidos com separação que NÃO têm agendamento confirmado
+                    // (inclui: aguardando aprovação OU sem agendamento realizado)
+                    matchAgendamento = status !== 'pendente' && !agendamentoConfirmado;
                 } else if (this.filtrosAtivos.agendamento === 'sep-confirmado') {
-                    // Pedidos com separação que têm protocolo e confirmados
-                    matchAgendamento = (temProtocoloSeparacao || protocolo) && agendamentoConfirmado;
+                    // Pedidos com separação e agendamento confirmado
+                    matchAgendamento = status !== 'pendente' && agendamentoConfirmado;
                 } else {
                     // Filtros originais (sem/com agendamento)
                     matchAgendamento = agendamento === this.filtrosAtivos.agendamento;
