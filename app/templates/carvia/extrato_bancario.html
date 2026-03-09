@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    {# HEADER #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-file-invoice-dollar"></i> Extrato Bancario CarVia</h2>
+            <p class="text-muted mb-0">Linhas importadas do OFX com status de conciliacao</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarOFX">
+                <i class="fas fa-file-upload"></i> Importar OFX
+            </button>
+            <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-exchange-alt"></i> Conciliar
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'extrato_bancario' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# CARDS RESUMO #}
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value" style="font-size:1.5rem">{{ resumo.total_linhas }}</div>
+                    <div class="stat-label">Total Linhas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-success" style="font-size:1.5rem">{{ resumo.conciliadas }}</div>
+                    <div class="stat-label">Conciliadas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-warning" style="font-size:1.5rem">{{ resumo.pendentes }}</div>
+                    <div class="stat-label">Pendentes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value" style="font-size:1.5rem">{{ resumo.valor_pendente|valor_br }}</div>
+                    <div class="stat-label">R$ Pendente</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# FILTROS #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">De</label>
+                    <input type="date" name="data_inicio" class="form-control form-control-sm"
+                           value="{{ data_inicio }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Ate</label>
+                    <input type="date" name="data_fim" class="form-control form-control-sm"
+                           value="{{ data_fim }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
+                        <option value="CONCILIADO" {{ 'selected' if status_filtro == 'CONCILIADO' }}>Conciliado</option>
+                        <option value="PARCIAL" {{ 'selected' if status_filtro == 'PARCIAL' }}>Parcial</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Busca</label>
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Descricao, memo..." value="{{ busca }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# TABELA #}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover carvia-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descricao</th>
+                        <th class="text-end">Valor</th>
+                        <th>Status</th>
+                        <th>Docs Conciliados</th>
+                        <th style="width:100px">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in linhas %}
+                    <tr class="{{ 'carvia-extrato-row-credito' if linha.tipo == 'CREDITO' else 'carvia-extrato-row-debito' }}">
+                        <td class="text-nowrap">{{ linha.data.strftime('%d/%m/%Y') if linha.data }}</td>
+                        <td>
+                            <div class="carvia-conciliacao-row-primary">{{ linha.descricao or '-' }}</div>
+                            {% if linha.memo and linha.memo != linha.descricao %}
+                            <div class="carvia-conciliacao-row-secondary">{{ linha.memo }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end carvia-conciliacao-valor {{ 'text-success' if linha.tipo == 'CREDITO' else 'text-danger' }}">
+                            {{ linha.valor|valor_br }}
+                        </td>
+                        <td>
+                            {% if linha.status_conciliacao == 'CONCILIADO' %}
+                                <span class="badge carvia-badge-conciliado">Conciliado</span>
+                            {% elif linha.status_conciliacao == 'PARCIAL' %}
+                                <span class="badge carvia-badge-parcial">Parcial</span>
+                                <small class="d-block text-muted" style="font-size:0.68rem">
+                                    {{ linha.total_conciliado|valor_br }} / {{ linha.valor|abs|valor_br }}
+                                </small>
+                            {% else %}
+                                <span class="badge carvia-badge-pendente">Pendente</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for conc in linha.conciliacoes.all() %}
+                                <span class="badge bg-secondary" style="font-size:0.65rem">
+                                    {% if conc.tipo_documento == 'fatura_cliente' %}FAT
+                                    {% elif conc.tipo_documento == 'fatura_transportadora' %}FTRANSP
+                                    {% else %}DESP
+                                    {% endif %}-{{ conc.documento_id }}
+                                    ({{ conc.valor_alocado|valor_br }})
+                                </span>
+                            {% else %}
+                                <span class="text-muted small">—</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% if linha.status_conciliacao == 'PENDENTE' %}
+                                <button class="btn btn-xs btn-outline-success"
+                                        onclick="abrirModalConciliar({{ linha.id }})"
+                                        title="Conciliar">
+                                    <i class="fas fa-link"></i>
+                                </button>
+                            {% elif linha.status_conciliacao in ('CONCILIADO', 'PARCIAL') %}
+                                <button class="btn btn-xs btn-outline-danger btn-desconciliar"
+                                        data-linha-id="{{ linha.id }}"
+                                        title="Desvincular tudo">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                                {% if linha.status_conciliacao == 'PARCIAL' %}
+                                <button class="btn btn-xs btn-outline-success"
+                                        onclick="abrirModalConciliar({{ linha.id }})"
+                                        title="Conciliar mais">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            {% if resumo.total_linhas == 0 %}
+                                Nenhuma linha importada. Clique em "Importar OFX" para comecar.
+                            {% else %}
+                                Nenhuma linha encontrada com os filtros selecionados.
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% include 'carvia/_modal_importar_ofx.html' %}
+{% include 'carvia/_modal_conciliar_inline.html' %}
+
+<script>
+(function() {
+    // Desconciliar linha inteira
+    document.querySelectorAll('.btn-desconciliar').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Desvincular todas as conciliacoes desta linha?')) return;
+
+            const linhaId = this.dataset.linhaId;
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            fetch('{{ url_for("carvia.api_desconciliar") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({extrato_linha_id: parseInt(linhaId)}),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.sucesso) {
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao desconciliar');
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-unlink"></i>';
+                }
+            })
+            .catch(err => {
+                alert('Erro: ' + err.message);
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-unlink"></i>';
+            });
+        });
+    });
+})();
+</script>
+
+{% endblock %}

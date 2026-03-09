@@ -143,6 +143,16 @@
                         {% endif %}
                         {% endfor %}
                     </div>
+                    {# Badge conciliacao bancaria #}
+                    {% if fatura.conciliado %}
+                    <div class="mt-2">
+                        <span class="badge carvia-badge-conciliado"><i class="fas fa-check-double"></i> Conciliado no Banco</span>
+                    </div>
+                    {% elif fatura.total_conciliado and fatura.total_conciliado > 0 %}
+                    <div class="mt-2">
+                        <span class="badge carvia-badge-parcial"><i class="fas fa-exchange-alt"></i> Parcialmente Conciliado ({{ fatura.total_conciliado|valor_br }})</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -248,8 +258,11 @@
                     <thead>
                         <tr>
                             <th>CTe Subcontrato</th>
+                            <th>Emissao</th>
                             <th>NF</th>
                             <th>Cliente</th>
+                            <th>UF</th>
+                            <th>Cidade</th>
                             <th>Peso</th>
                             <th>Valor Cotado</th>
                             <th>Valor Acertado</th>
@@ -261,9 +274,14 @@
                         {% for item in itens %}
                         <tr>
                             <td>{{ item.cte_numero or '-' }}</td>
+                            <td>{{ item.cte_data_emissao.strftime('%d/%m/%Y') if item.cte_data_emissao else '-' }}</td>
                             <td>{{ item.nf_numero or '-' }}</td>
                             <td>
                                 <span title="{{ item.contraparte_cnpj or '' }}">{{ item.contraparte_nome or item.contraparte_cnpj or '-' }}</span>
+                            </td>
+                            <td>{{ item.operacao.uf_destino if item.operacao else '-' }}</td>
+                            <td class="text-truncate-col" title="{{ item.operacao.cidade_destino if item.operacao else '' }}">
+                                {{ item.operacao.cidade_destino if item.operacao else '-' }}
                             </td>
                             <td class="valor-col">{{ item.peso_kg|numero_br(1) if item.peso_kg else '-' }} kg</td>
                             <td class="valor-col">{{ item.valor_cotado|valor_br if item.valor_cotado else '-' }}</td>

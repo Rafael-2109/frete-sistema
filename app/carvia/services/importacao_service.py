@@ -1350,20 +1350,16 @@ class ImportacaoService:
         return None
 
     def _buscar_operacao_existente_por_nfs(self, cte_data: Dict):
-        """Busca operacao existente no banco por NFs referenciadas (chave de acesso)."""
+        """Busca operacao existente no banco por NFs referenciadas (chave de acesso ou CNPJ+numero)."""
         nfs_ref = cte_data.get('nfs_referenciadas', [])
         for nf_ref in nfs_ref:
-            chave = nf_ref.get('chave')
-            if chave:
-                nf_existente = CarviaNf.query.filter_by(
-                    chave_acesso_nf=chave
+            nf_existente = self._buscar_nf_no_banco(nf_ref)
+            if nf_existente:
+                junction = CarviaOperacaoNf.query.filter_by(
+                    nf_id=nf_existente.id
                 ).first()
-                if nf_existente:
-                    junction = CarviaOperacaoNf.query.filter_by(
-                        nf_id=nf_existente.id
-                    ).first()
-                    if junction:
-                        return CarviaOperacao.query.get(junction.operacao_id)
+                if junction:
+                    return CarviaOperacao.query.get(junction.operacao_id)
         return None
 
     def _encontrar_transportadora(self, cnpj_digits: str):

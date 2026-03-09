@@ -427,6 +427,10 @@ class CarviaFaturaCliente(db.Model):
     pago_por = db.Column(db.String(100))
     pago_em = db.Column(db.DateTime)
 
+    # Conciliacao bancaria
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    conciliado = db.Column(db.Boolean, nullable=False, default=False)
+
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
@@ -598,6 +602,10 @@ class CarviaDespesa(db.Model):
     pago_por = db.Column(db.String(100))
     pago_em = db.Column(db.DateTime)
 
+    # Conciliacao bancaria
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    conciliado = db.Column(db.Boolean, nullable=False, default=False)
+
     observacoes = db.Column(db.Text)
     criado_por = db.Column(db.String(150))
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
@@ -638,6 +646,10 @@ class CarviaFaturaTransportadora(db.Model):
     status_pagamento = db.Column(db.String(20), default='PENDENTE', index=True)
     pago_por = db.Column(db.String(100))
     pago_em = db.Column(db.DateTime)
+
+    # Conciliacao bancaria
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    conciliado = db.Column(db.Boolean, nullable=False, default=False)
 
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
@@ -898,3 +910,82 @@ class CarviaContaMovimentacao(db.Model):
 
     def __repr__(self):
         return f'<CarviaContaMovimentacao {self.tipo_doc}:{self.doc_id} {self.tipo_movimento} {self.valor}>'
+
+
+class CarviaExtratoLinha(db.Model):
+    """Linhas importadas do extrato bancario OFX — base para conciliacao"""
+    __tablename__ = 'carvia_extrato_linhas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fitid = db.Column(db.String(100), nullable=False, unique=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    valor = db.Column(db.Numeric(15, 2), nullable=False)
+    tipo = db.Column(db.String(10), nullable=False)  # CREDITO | DEBITO
+    descricao = db.Column(db.String(500))
+    memo = db.Column(db.String(500))
+    checknum = db.Column(db.String(50))
+    refnum = db.Column(db.String(50))
+    trntype = db.Column(db.String(20))
+    status_conciliacao = db.Column(
+        db.String(20), nullable=False, default='PENDENTE', index=True
+    )  # PENDENTE | CONCILIADO | PARCIAL
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    arquivo_ofx = db.Column(db.String(255), nullable=False, index=True)
+    conta_bancaria = db.Column(db.String(50))
+    criado_por = db.Column(db.String(100), nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    # Relacionamentos
+    conciliacoes = db.relationship(
+        'CarviaConciliacao',
+        backref='extrato_linha',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @property
+    def valor_absoluto(self):
+        """Valor absoluto da linha (sem sinal)"""
+        return abs(float(self.valor or 0))
+
+    @property
+    def saldo_a_conciliar(self):
+        """Quanto falta conciliar nesta linha"""
+        return self.valor_absoluto - float(self.total_conciliado or 0)
+
+    def __repr__(self):
+        return f'<CarviaExtratoLinha {self.fitid} {self.tipo} {self.valor}>'
+
+
+class CarviaConciliacao(db.Model):
+    """Junction N:N — vincula linha do extrato a documento financeiro"""
+    __tablename__ = 'carvia_conciliacoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    extrato_linha_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_extrato_linhas.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    tipo_documento = db.Column(db.String(30), nullable=False)
+    # fatura_cliente | fatura_transportadora | despesa
+    documento_id = db.Column(db.Integer, nullable=False)
+    valor_alocado = db.Column(db.Numeric(15, 2), nullable=False)
+    conciliado_por = db.Column(db.String(100), nullable=False)
+    conciliado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'extrato_linha_id', 'tipo_documento', 'documento_id',
+            name='uq_carvia_conc_linha_doc'
+        ),
+        db.CheckConstraint('valor_alocado > 0', name='ck_carvia_conc_valor'),
+        db.Index('ix_carvia_conc_doc', 'tipo_documento', 'documento_id'),
+    )
+
+    def __repr__(self):
+        return (
+            f'<CarviaConciliacao linha={self.extrato_linha_id} '
+            f'{self.tipo_documento}:{self.documento_id} {self.valor_alocado}>'
+        )

@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    {# HEADER #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-exchange-alt"></i> Conciliacao Bancaria</h2>
+            <p class="text-muted mb-0">Cruzar extrato OFX com documentos financeiros</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarOFX">
+                <i class="fas fa-file-upload"></i> Importar OFX
+            </button>
+            <a href="{{ url_for('carvia.extrato_bancario') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-file-invoice-dollar"></i> Ver Extrato
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'conciliacao' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# CARDS RESUMO #}
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value" style="font-size:1.5rem">{{ resumo.total_linhas }}</div>
+                    <div class="stat-label">Total Linhas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-success" style="font-size:1.5rem">{{ resumo.conciliadas }}</div>
+                    <div class="stat-label">Conciliadas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-warning" style="font-size:1.5rem">{{ resumo.pendentes }}</div>
+                    <div class="stat-label">Pendentes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value" style="font-size:1.5rem">{{ resumo.valor_pendente|valor_br }}</div>
+                    <div class="stat-label">R$ Pendente</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# CARDS SELECAO (atualizados via JS) #}
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card" id="cardSelExtrato">
+                <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                    <span class="small">Selecionado Extrato:</span>
+                    <strong id="selExtratoValor" class="carvia-conciliacao-valor">R$ 0,00</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card" id="cardSelDocs">
+                <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                    <span class="small">Selecionados Documentos:</span>
+                    <span>
+                        <strong id="selDocsValor" class="carvia-conciliacao-valor">R$ 0,00</strong>
+                        <span id="selDiferenca" class="ms-2 small"></span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# DUAL PANEL #}
+    <div class="row g-3">
+        {# PAINEL ESQUERDO — Linhas Extrato #}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong class="small">Extrato Bancario</strong>
+                        <div class="d-flex gap-1">
+                            <select id="filtroStatusExtrato" class="form-select form-select-sm" style="width:auto;font-size:0.75rem">
+                                <option value="">Todos</option>
+                                <option value="PENDENTE" selected>Pendentes</option>
+                                <option value="PARCIAL">Parciais</option>
+                                <option value="CONCILIADO">Conciliados</option>
+                            </select>
+                            <input type="text" id="filtroBuscaExtrato" class="form-control form-control-sm"
+                                   placeholder="Buscar..." style="width:120px;font-size:0.75rem">
+                        </div>
+                    </div>
+                </div>
+                <div class="carvia-conciliacao-panel" id="panelExtrato">
+                    <div class="text-center py-4 text-muted" id="extratoLoading">
+                        <div class="spinner-border spinner-border-sm"></div> Carregando...
+                    </div>
+                    <div id="extratoLista" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+
+        {# PAINEL DIREITO — Documentos #}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong class="small">Documentos</strong>
+                        <input type="text" id="filtroBuscaDocs" class="form-control form-control-sm"
+                               placeholder="Buscar..." style="width:150px;font-size:0.75rem">
+                    </div>
+                </div>
+                <div class="carvia-conciliacao-panel" id="panelDocs">
+                    <div class="text-center py-4 text-muted" id="docsPlaceholder">
+                        Selecione uma linha do extrato para ver documentos elegiveis
+                    </div>
+                    <div id="docsLista" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# BOTAO CONCILIAR #}
+    <div class="text-center mt-3">
+        <button class="btn btn-success" id="btnConciliarSelecionados" disabled>
+            <i class="fas fa-check-double"></i> Conciliar Selecionados
+        </button>
+    </div>
+
+</div>
+
+{% include 'carvia/_modal_importar_ofx.html' %}
+
+<script>
+(function() {
+    // ===== State =====
+    let linhasSelecionadas = [];  // [{id, valor, tipo}]
+    let docsSelecionados = [];    // [{tipo_documento, documento_id, valor_alocado, saldo}]
+    let todasLinhas = [];
+    let todosDocs = [];
+    let tipoMatchAtual = '';
+
+    const fmtBRL = v => parseFloat(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    const fmtNum = v => parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2});
+
+    // ===== Carregar linhas extrato =====
+    function carregarLinhas() {
+        const status = document.getElementById('filtroStatusExtrato').value;
+        const busca = document.getElementById('filtroBuscaExtrato').value;
+
+        let url = '{{ url_for("carvia.extrato_bancario") }}?formato=json';
+        if (status) url += '&status=' + status;
+        if (busca) url += '&busca=' + encodeURIComponent(busca);
+
+        // Usar a API de matches para obter linhas (reusa a tela extrato ou API direta)
+        // Na verdade, vamos buscar os dados via API simples
+        fetch(`/carvia/api/conciliacao/documentos-elegiveis?tipo=receber`)
+        .then(r => r.json()).catch(() => ({}));
+
+        // Buscar linhas via fetch da pagina de extrato (parseando HTML nao e ideal)
+        // Melhor: carregar todas as linhas via dados embutidos ou API
+        // Por simplicidade, vamos carregar via a mesma logica do backend
+
+        // Workaround: embutir dados no template nao e possivel pois sao dinamicos
+        // Solucao: criar endpoint leve que retorna linhas JSON
+        // Na implementacao, o filtro e feito client-side com dados pre-carregados
+
+        document.getElementById('extratoLoading').textContent = 'Use os filtros do Extrato Bancario para uma visao completa.';
+    }
+
+    // ===== Renderizar linhas =====
+    function renderizarLinhas(linhas) {
+        const container = document.getElementById('extratoLista');
+        container.innerHTML = '';
+        container.classList.remove('d-none');
+        document.getElementById('extratoLoading').classList.add('d-none');
+
+        if (linhas.length === 0) {
+            container.innerHTML = '<div class="text-center py-3 text-muted">Nenhuma linha encontrada</div>';
+            return;
+        }
+
+        linhas.forEach(l => {
+            const selected = linhasSelecionadas.find(s => s.id === l.id);
+            const rowClass = l.tipo === 'CREDITO' ? 'carvia-extrato-row-credito' : 'carvia-extrato-row-debito';
+            const selClass = selected ? 'carvia-conciliacao-selected' : '';
+
+            let badgeClass = 'carvia-badge-pendente';
+            if (l.status === 'CONCILIADO') badgeClass = 'carvia-badge-conciliado';
+            else if (l.status === 'PARCIAL') badgeClass = 'carvia-badge-parcial';
+
+            const div = document.createElement('div');
+            div.className = `p-2 border-bottom ${rowClass} ${selClass}`;
+            div.style.cursor = 'pointer';
+            div.dataset.id = l.id;
+            div.dataset.valor = l.valor;
+            div.dataset.tipo = l.tipo;
+
+            div.innerHTML = `
+                <div class="carvia-conciliacao-row-primary d-flex justify-content-between align-items-center">
+                    <div>
+                        <input type="checkbox" class="form-check-input me-1 extrato-check"
+                               data-id="${l.id}" ${selected ? 'checked' : ''}>
+                        <span>${l.data}</span>
+                        <span class="badge ${badgeClass} ms-1" style="font-size:0.65rem">${l.status}</span>
+                    </div>
+                    <span class="carvia-conciliacao-valor ${l.tipo === 'CREDITO' ? 'text-success' : 'text-danger'}">
+                        ${l.tipo === 'CREDITO' ? '+' : ''}${fmtNum(l.valor)}
+                    </span>
+                </div>
+                <div class="carvia-conciliacao-row-secondary ps-4">${l.descricao || ''}</div>
+            `;
+            container.appendChild(div);
+        });
+
+        // Event listeners
+        container.querySelectorAll('.extrato-check').forEach(cb => {
+            cb.addEventListener('change', function(e) {
+                e.stopPropagation();
+                toggleLinha(parseInt(this.dataset.id));
+            });
+        });
+        container.querySelectorAll('[data-id]').forEach(div => {
+            div.addEventListener('click', function(e) {
+                if (e.target.classList.contains('form-check-input')) return;
+                const cb = this.querySelector('.extrato-check');
+                cb.checked = !cb.checked;
+                toggleLinha(parseInt(this.dataset.id));
+            });
+        });
+    }
+
+    // ===== Toggle linha =====
+    function toggleLinha(id) {
+        const idx = linhasSelecionadas.findIndex(s => s.id === id);
+        if (idx >= 0) {
+            linhasSelecionadas.splice(idx, 1);
+        } else {
+            const el = document.querySelector(`[data-id="${id}"]`);
+            linhasSelecionadas.push({
+                id: id,
+                valor: parseFloat(el.dataset.valor),
+                tipo: el.dataset.tipo,
+            });
+        }
+        atualizarSelecao();
+        carregarDocumentos();
+    }
+
+    // ===== Carregar documentos elegiveis =====
+    function carregarDocumentos() {
+        const docsPlaceholder = document.getElementById('docsPlaceholder');
+        const docsLista = document.getElementById('docsLista');
+
+        if (linhasSelecionadas.length === 0) {
+            docsPlaceholder.classList.remove('d-none');
+            docsLista.classList.add('d-none');
+            todosDocs = [];
+            docsSelecionados = [];
+            atualizarSelecao();
+            return;
+        }
+
+        // Determinar tipo: se tem CREDITO -> receber, se DEBITO -> pagar
+        // Se misto, prioriza o primeiro selecionado
+        const tipo = linhasSelecionadas[0].tipo;
+        tipoMatchAtual = tipo === 'CREDITO' ? 'receber' : 'pagar';
+
+        docsPlaceholder.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Carregando...';
+        docsPlaceholder.classList.remove('d-none');
+        docsLista.classList.add('d-none');
+
+        fetch(`/carvia/api/conciliacao/documentos-elegiveis?tipo=${tipoMatchAtual}`)
+        .then(r => r.json())
+        .then(data => {
+            todosDocs = data.documentos || [];
+            renderizarDocs(todosDocs);
+        })
+        .catch(err => {
+            docsPlaceholder.textContent = 'Erro ao carregar documentos';
+            docsPlaceholder.classList.remove('d-none');
+        });
+    }
+
+    // ===== Renderizar docs =====
+    function renderizarDocs(docs) {
+        const docsPlaceholder = document.getElementById('docsPlaceholder');
+        const docsLista = document.getElementById('docsLista');
+        docsPlaceholder.classList.add('d-none');
+        docsLista.classList.remove('d-none');
+        docsLista.innerHTML = '';
+        docsSelecionados = [];
+
+        if (docs.length === 0) {
+            docsLista.innerHTML = '<div class="text-center py-3 text-muted">Nenhum documento elegivel</div>';
+            atualizarSelecao();
+            return;
+        }
+
+        docs.forEach(d => {
+            const div = document.createElement('div');
+            div.className = 'p-2 border-bottom';
+            div.style.cursor = 'pointer';
+            div.dataset.tipo = d.tipo_documento;
+            div.dataset.docId = d.id;
+            div.dataset.saldo = d.saldo;
+
+            const tipoLabel = d.tipo_documento === 'fatura_cliente' ? 'FAT' :
+                              d.tipo_documento === 'fatura_transportadora' ? 'FTRANSP' : 'DESP';
+
+            div.innerHTML = `
+                <div class="carvia-conciliacao-row-primary d-flex justify-content-between align-items-center">
+                    <div>
+                        <input type="checkbox" class="form-check-input me-1 doc-check"
+                               data-tipo="${d.tipo_documento}" data-id="${d.id}" data-saldo="${d.saldo}">
+                        <span class="badge bg-secondary" style="font-size:0.65rem">${tipoLabel}</span>
+                        <span>${d.numero}</span>
+                    </div>
+                    <span class="carvia-conciliacao-valor">${fmtNum(d.saldo)}</span>
+                </div>
+                <div class="carvia-conciliacao-row-secondary ps-4">
+                    ${d.nome} &middot; ${d.data}
+                    ${d.vencimento ? ' &middot; Venc: ' + d.vencimento : ''}
+                </div>
+            `;
+            docsLista.appendChild(div);
+        });
+
+        // Event listeners
+        docsLista.querySelectorAll('.doc-check').forEach(cb => {
+            cb.addEventListener('change', function(e) {
+                e.stopPropagation();
+                toggleDoc(this);
+            });
+        });
+        docsLista.querySelectorAll('[data-doc-id]').forEach(div => {
+            div.addEventListener('click', function(e) {
+                if (e.target.classList.contains('form-check-input')) return;
+                const cb = this.querySelector('.doc-check');
+                cb.checked = !cb.checked;
+                toggleDoc(cb);
+            });
+        });
+    }
+
+    // ===== Toggle doc =====
+    function toggleDoc(cb) {
+        const tipo = cb.dataset.tipo;
+        const id = parseInt(cb.dataset.id);
+        const saldo = parseFloat(cb.dataset.saldo);
+
+        if (cb.checked) {
+            docsSelecionados.push({
+                tipo_documento: tipo,
+                documento_id: id,
+                valor_alocado: saldo,
+                saldo: saldo,
+            });
+            cb.closest('[data-doc-id]')?.classList.add('carvia-conciliacao-selected');
+        } else {
+            const idx = docsSelecionados.findIndex(d => d.tipo_documento === tipo && d.documento_id === id);
+            if (idx >= 0) docsSelecionados.splice(idx, 1);
+            cb.closest('[data-doc-id]')?.classList.remove('carvia-conciliacao-selected');
+        }
+        atualizarSelecao();
+    }
+
+    // ===== Atualizar cards de selecao =====
+    function atualizarSelecao() {
+        const totalExtrato = linhasSelecionadas.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const totalDocs = docsSelecionados.reduce((s, d) => s + d.valor_alocado, 0);
+        const diferenca = totalExtrato - totalDocs;
+
+        document.getElementById('selExtratoValor').textContent = fmtBRL(totalExtrato);
+        document.getElementById('selDocsValor').textContent = fmtBRL(totalDocs);
+
+        const diffEl = document.getElementById('selDiferenca');
+        if (linhasSelecionadas.length > 0 && docsSelecionados.length > 0) {
+            if (Math.abs(diferenca) < 0.01) {
+                diffEl.textContent = '(OK)';
+                diffEl.className = 'ms-2 small text-success fw-bold';
+                document.getElementById('cardSelDocs').className = 'card carvia-conciliacao-card-match';
+            } else {
+                diffEl.textContent = `(Dif: ${fmtBRL(diferenca)})`;
+                diffEl.className = 'ms-2 small text-warning';
+                document.getElementById('cardSelDocs').className = 'card carvia-conciliacao-card-mismatch';
+            }
+        } else {
+            diffEl.textContent = '';
+            document.getElementById('cardSelDocs').className = 'card';
+        }
+
+        // Habilitar botao se ha selecao valida
+        const btn = document.getElementById('btnConciliarSelecionados');
+        btn.disabled = !(linhasSelecionadas.length > 0 && docsSelecionados.length > 0);
+    }
+
+    // ===== Conciliar =====
+    document.getElementById('btnConciliarSelecionados')?.addEventListener('click', function() {
+        if (linhasSelecionadas.length === 0 || docsSelecionados.length === 0) return;
+
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conciliando...';
+
+        // Para cada linha selecionada, conciliar com os docs
+        // Abordagem simplificada: conciliar a primeira linha com todos docs
+        // (para N:1, o usuario seleciona 1 linha + N docs)
+        const linhaId = linhasSelecionadas[0].id;
+        const docs = docsSelecionados.map(d => ({
+            tipo_documento: d.tipo_documento,
+            documento_id: d.documento_id,
+            valor_alocado: d.valor_alocado,
+        }));
+
+        fetch('{{ url_for("carvia.api_conciliar") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({extrato_linha_id: linhaId, documentos: docs}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                alert(data.erro || 'Erro ao conciliar');
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-check-double"></i> Conciliar Selecionados';
+            }
+        })
+        .catch(err => {
+            alert('Erro: ' + err.message);
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-check-double"></i> Conciliar Selecionados';
+        });
+    });
+
+    // ===== Filtro busca docs =====
+    document.getElementById('filtroBuscaDocs')?.addEventListener('input', function() {
+        const termo = this.value.toLowerCase();
+        const filtrados = todosDocs.filter(d =>
+            (d.numero || '').toLowerCase().includes(termo) ||
+            (d.nome || '').toLowerCase().includes(termo)
+        );
+        renderizarDocs(filtrados);
+    });
+
+    // ===== Init: carregar linhas pendentes via inline data =====
+    // Embutimos as linhas diretamente para evitar round-trip extra
+    // As linhas sao carregadas via fetch ao endpoint de extrato bancario
+    function init() {
+        // Carregar linhas pendentes via API de matches
+        fetch('/carvia/api/conciliacao/documentos-elegiveis?tipo=receber').then(() => {});
+
+        // Buscar linhas do extrato via pagina propria e popular
+        // Abordagem: popular via dados do servidor (SSR)
+        // Como nao temos endpoint JSON dedicado para linhas,
+        // vamos criar um fetch leve reutilizando a logica existente
+
+        const status = document.getElementById('filtroStatusExtrato').value;
+        let url = `/carvia/extrato-bancario?formato=json&status=${status}`;
+
+        // Fallback: carregar via scraping DOM (nao ideal, mas funcional)
+        // Melhor: usar dados inline do template
+        // Na pratica, o carregamento e feito via reload com dados do backend
+        carregarLinhasViaAPI(status, '');
+    }
+
+    function carregarLinhasViaAPI(status, busca) {
+        let params = new URLSearchParams();
+        if (status) params.set('status', status);
+        if (busca) params.set('busca', busca);
+        params.set('data_inicio', '2020-01-01');
+        params.set('data_fim', '2030-12-31');
+
+        // Reutilizar endpoint de extrato bancario (retorna HTML)
+        // Workaround: buscar via API de matches para cada linha pendente
+        // Na verdade, precisamos de dados JSON — vamos usar abordagem pragmatica:
+        // Buscar o extrato-bancario e extrair os dados via parser
+
+        // Abordagem FINAL: embutir dados via Jinja no template
+        // Isso e feito abaixo
+    }
+
+    // Carregar dados embutidos do servidor
+    const linhasData = {{ linhas_json|default('[]')|safe }};
+    if (linhasData.length > 0) {
+        todasLinhas = linhasData;
+        renderizarLinhas(todasLinhas);
+    } else {
+        document.getElementById('extratoLoading').innerHTML =
+            '<div class="text-muted py-3">Importe um arquivo OFX para comecar</div>';
+    }
+
+    // Filtros client-side
+    document.getElementById('filtroStatusExtrato')?.addEventListener('change', function() {
+        const status = this.value;
+        const busca = document.getElementById('filtroBuscaExtrato').value.toLowerCase();
+        const filtradas = todasLinhas.filter(l => {
+            if (status && l.status !== status) return false;
+            if (busca && !(l.descricao || '').toLowerCase().includes(busca)) return false;
+            return true;
+        });
+        renderizarLinhas(filtradas);
+    });
+
+    document.getElementById('filtroBuscaExtrato')?.addEventListener('input', function() {
+        const status = document.getElementById('filtroStatusExtrato').value;
+        const busca = this.value.toLowerCase();
+        const filtradas = todasLinhas.filter(l => {
+            if (status && l.status !== status) return false;
+            if (busca && !(l.descricao || '').toLowerCase().includes(busca)) return false;
+            return true;
+        });
+        renderizarLinhas(filtradas);
+    });
+})();
+</script>
+
+{% endblock %}

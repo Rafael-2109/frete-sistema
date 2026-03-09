@@ -238,6 +238,15 @@
     font-size: 0.82rem;
     padding: 0.3rem 0.4rem;
     vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* Colunas de texto longo — truncation com ellipsis */
+.carvia-table .text-truncate-col {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
 }
 
 /* Ajustar sub-elementos */
@@ -458,4 +467,86 @@
     font-size: 0.78rem;
     padding: 0.15rem 0.6rem;
     border-radius: var(--radius-pill, 50rem);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Conciliacao Bancaria
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Dual-panel containers */
+.carvia-conciliacao-panel {
+    max-height: 65vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 0.5rem);
+}
+
+/* Row principal (data + valor + badge) */
+.carvia-conciliacao-row-primary {
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+/* Row secundaria (descricao) */
+.carvia-conciliacao-row-secondary {
+    font-size: 0.72rem;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Linha selecionada */
+.carvia-conciliacao-selected {
+    background: hsla(210, 80%, 55%, 0.08);
+}
+
+[data-bs-theme="dark"] .carvia-conciliacao-selected {
+    background: hsla(210, 80%, 55%, 0.15);
+}
+
+/* Borda lateral colorida por tipo */
+.carvia-extrato-row-credito {
+    border-left: 3px solid var(--semantic-success, #198754);
+}
+
+.carvia-extrato-row-debito {
+    border-left: 3px solid var(--semantic-danger, #dc3545);
+}
+
+/* Cards topo — match/mismatch */
+.carvia-conciliacao-card-match {
+    border-color: var(--semantic-success, #198754);
+}
+
+.carvia-conciliacao-card-mismatch {
+    border-color: var(--amber-50, hsl(45, 100%, 50%));
+}
+
+/* Badge de status conciliacao */
+.carvia-badge-conciliado {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+}
+
+.carvia-badge-parcial {
+    --_badge-bg: var(--amber-55);
+    --_badge-color: hsl(0 0% 10%);
+}
+
+/* Valor mono nos paineis */
+.carvia-conciliacao-valor {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-weight: 600;
+}
+
+/* Light mode adjustments */
+[data-bs-theme="light"] .carvia-badge-conciliado,
+[data-theme="light"] .carvia-badge-conciliado {
+    --_badge-bg: hsl(145 65% 35%);
+}
+
+[data-bs-theme="light"] .carvia-extrato-row-credito {
+    border-left-color: hsl(145 65% 35%);
+}
+
+[data-bs-theme="light"] .carvia-extrato-row-debito {
+    border-left-color: hsl(0 65% 45%);
 }

@@ -1,0 +1,97 @@
+{# Modal de importacao OFX — reutilizado em conciliacao.html e extrato_bancario.html #}
+<div class="modal fade" id="modalImportarOFX" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-upload"></i> Importar Extrato OFX</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="ofxUploadArea" class="carvia-upload-area">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <p class="mb-1">Arraste o arquivo OFX aqui</p>
+                    <p class="text-muted small">ou clique para selecionar</p>
+                    <input type="file" id="ofxFileInput" accept=".ofx" class="d-none">
+                </div>
+                <div id="ofxUploadProgress" class="d-none mt-3 text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Importando...</span>
+                </div>
+                <div id="ofxUploadResultado" class="d-none mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const area = document.getElementById('ofxUploadArea');
+    const input = document.getElementById('ofxFileInput');
+    const progress = document.getElementById('ofxUploadProgress');
+    const resultado = document.getElementById('ofxUploadResultado');
+
+    if (!area) return;
+
+    area.addEventListener('click', () => input.click());
+    area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+    area.addEventListener('drop', e => {
+        e.preventDefault();
+        area.classList.remove('dragover');
+        if (e.dataTransfer.files.length) uploadOFX(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', () => { if (input.files.length) uploadOFX(input.files[0]); });
+
+    function uploadOFX(file) {
+        if (!file.name.toLowerCase().endsWith('.ofx')) {
+            alert('Selecione um arquivo .ofx');
+            return;
+        }
+
+        area.classList.add('d-none');
+        progress.classList.remove('d-none');
+        resultado.classList.add('d-none');
+
+        const formData = new FormData();
+        formData.append('arquivo', file);
+
+        fetch('{{ url_for("carvia.api_importar_ofx") }}', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(r => r.json())
+        .then(data => {
+            progress.classList.add('d-none');
+            resultado.classList.remove('d-none');
+
+            if (data.sucesso) {
+                let html = '<div class="alert alert-success mb-0">';
+                html += `<strong>${data.total_importadas}</strong> transacoes importadas`;
+                if (data.total_duplicadas > 0) {
+                    html += `<br><small class="text-muted">${data.total_duplicadas} duplicadas (ignoradas)</small>`;
+                }
+                if (data.periodo) {
+                    html += `<br><small>Periodo: ${data.periodo.inicio} a ${data.periodo.fim}</small>`;
+                }
+                html += '</div>';
+                resultado.innerHTML = html;
+
+                // Recarregar apos 1.5s
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                resultado.innerHTML = `<div class="alert alert-danger mb-0">${data.erro}</div>`;
+                area.classList.remove('d-none');
+            }
+        })
+        .catch(err => {
+            progress.classList.add('d-none');
+            resultado.innerHTML = `<div class="alert alert-danger mb-0">Erro: ${err.message}</div>`;
+            resultado.classList.remove('d-none');
+            area.classList.remove('d-none');
+        });
+    }
+})();
+</script>

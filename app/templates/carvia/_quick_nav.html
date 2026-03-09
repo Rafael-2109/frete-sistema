@@ -2,7 +2,7 @@
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, nfs, operacoes, subcontratos,
    faturas_cliente, faturas_transportadora, despesas, importar, fluxo_caixa,
-   extrato, sessoes_cotacao
+   extrato, sessoes_cotacao, conciliacao, extrato_bancario
 #}
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
     <a href="{{ url_for('carvia.dashboard') }}"
@@ -28,5 +28,13 @@
     <a href="{{ url_for('carvia.listar_faturas_transportadora') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'faturas_transportadora' else 'btn-outline-secondary' }}">
         Fatura Subcontrato
+    </a>
+    <a href="{{ url_for('carvia.conciliacao') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'conciliacao' else 'btn-outline-secondary' }}">
+        Conciliacao
+    </a>
+    <a href="{{ url_for('carvia.extrato_bancario') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'extrato_bancario' else 'btn-outline-secondary' }}">
+        Extrato Bancario
     </a>
 </nav>
