@@ -25,6 +25,9 @@
         </div>
     </div>
 
+    {% set carvia_active = 'faturas_cliente' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     <div class="row g-4">
         <!-- Info da fatura -->
         <div class="col-md-5">
@@ -61,7 +64,14 @@
                         </div>
                         <div class="col-12">
                             <small class="text-muted d-block">Valor Total</small>
-                            <h3 class="text-success mb-0">{{ fatura.valor_total|valor_br }}</h3>
+                            <h3 class="text-success mb-0 d-inline">{{ fatura.valor_total|valor_br }}</h3>
+                            {% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
+                                    data-bs-toggle="modal" data-bs-target="#modalEditarValor"
+                                    title="Editar valor (admin)">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
                     {% if fatura.observacoes %}
@@ -300,6 +310,34 @@
 {% with form_action=url_for('carvia.atualizar_status_fatura_cliente', fatura_id=fatura.id), form_status='PAGA' %}
     {% include 'carvia/_modal_data_pagamento.html' %}
 {% endwith %}
+
+<!-- Modal Editar Valor (admin only) -->
+{% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') %}
+<div class="modal fade" id="modalEditarValor" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('carvia.editar_valor_fatura_cliente', fatura_id=fatura.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Valor Total</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Valor Total (R$)</label>
+                    <input type="text" class="form-control" name="valor_total" inputmode="decimal"
+                           value="{{ fatura.valor_total|numero_br(2) if fatura.valor_total else '' }}"
+                           placeholder="0,00" required>
+                    <small class="text-muted">Formato: 1.234,56</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Modal Editar Vencimento -->
 <div class="modal fade" id="modalEditarVencimento" tabindex="-1" aria-labelledby="modalEditarVencimentoLabel" aria-hidden="true">

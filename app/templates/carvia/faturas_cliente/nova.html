@@ -12,6 +12,9 @@
         </a>
     </div>
 
+    {% set carvia_active = 'faturas_cliente' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     {% if not cnpj_selecionado %}
     <!-- Passo 1: Selecionar cliente -->
     <div class="card">
@@ -79,8 +82,8 @@
                         <small class="text-muted">{{ cnpj_selecionado }}</small>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Numero da Fatura *</label>
-                        <input type="text" class="form-control" name="numero_fatura" required placeholder="FAT-001">
+                        <label class="form-label">Numero da Fatura</label>
+                        <input type="text" class="form-control" disabled value="Gerado automaticamente (FAT-###)">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Data Emissao *</label>

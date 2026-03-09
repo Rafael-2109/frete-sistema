@@ -12,6 +12,9 @@
         </a>
     </div>
 
+    {% set carvia_active = 'sessoes_cotacao' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     <form method="POST" action="{{ url_for('carvia.nova_sessao_cotacao') }}">
         <!-- Card 1: Dados da Sessao -->
         <div class="card mb-3">

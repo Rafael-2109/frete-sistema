@@ -37,11 +37,20 @@
                 <i class="fas fa-unlink"></i> Desvincular Fatura
             </button>
             {% endif %}
+            {% if operacao.status in ('RASCUNHO', 'COTADO', 'CONFIRMADO') and not operacao.fatura_cliente_id and operacao.cte_valor and operacao.cte_valor > 0 %}
+            <button type="button" class="btn btn-success btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#modalCriarFaturaRapida">
+                <i class="fas fa-file-invoice-dollar"></i> Criar Fatura
+            </button>
+            {% endif %}
             <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
         </div>
     </div>
+
+    {% set carvia_active = 'operacoes' %}
+    {% include 'carvia/_quick_nav.html' %}
 
     <div class="row g-4">
         <!-- Info Principal -->
@@ -91,6 +100,13 @@
                         <div class="col-6">
                             <small class="text-muted d-block">Valor CTe CarVia</small>
                             <strong class="text-success">{{ operacao.cte_valor|valor_br if operacao.cte_valor else '-' }}</strong>
+                            {% if operacao.status != 'CANCELADO' %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
+                                    data-bs-toggle="modal" data-bs-target="#modalEditarCteValor"
+                                    title="Editar valor CTe">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
                     {% if operacao.observacoes %}
@@ -349,44 +365,137 @@
             {% endif %}
         </div>
     </div>
-</div>
-{% endblock %}
 
-{# GAP-23: Modal de confirmacao para desvincular fatura #}
-{% if operacao.status == 'FATURADO' and operacao.fatura_cliente_id %}
-<div class="modal fade" id="modalDesvincularFatura" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{{ url_for('carvia.desvincular_fatura', operacao_id=operacao.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header bg-warning bg-opacity-10">
-                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-warning"></i> Desvincular Fatura</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Esta acao ira:</p>
-                    <ul>
-                        <li>Remover a vinculacao com a fatura <strong>{{ operacao.fatura_cliente.numero_fatura }}</strong></li>
-                        <li>Reverter o status da operacao para <strong>CONFIRMADO</strong></li>
-                        <li>Limpar a referencia desta operacao nos itens da fatura</li>
-                    </ul>
-                    <div class="alert alert-warning mb-0">
-                        <i class="fas fa-info-circle"></i>
-                        A fatura em si nao sera excluida. Apos desvincular, a operacao
-                        ficara disponivel para ser incluida em outra fatura.
+    {# GAP-23: Modal de confirmacao para desvincular fatura #}
+    {% if operacao.status == 'FATURADO' and operacao.fatura_cliente_id %}
+    <div class="modal fade" id="modalDesvincularFatura" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('carvia.desvincular_fatura', operacao_id=operacao.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="modal-header bg-warning bg-opacity-10">
+                        <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-warning"></i> Desvincular Fatura</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-warning">
-                        <i class="fas fa-unlink"></i> Confirmar Desvinculacao
-                    </button>
-                </div>
-            </form>
+                    <div class="modal-body">
+                        <p>Esta acao ira:</p>
+                        <ul>
+                            <li>Remover a vinculacao com a fatura <strong>{{ operacao.fatura_cliente.numero_fatura }}</strong></li>
+                            <li>Reverter o status da operacao para <strong>CONFIRMADO</strong></li>
+                            <li>Limpar a referencia desta operacao nos itens da fatura</li>
+                        </ul>
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-info-circle"></i>
+                            A fatura em si nao sera excluida. Apos desvincular, a operacao
+                            ficara disponivel para ser incluida em outra fatura.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-unlink"></i> Confirmar Desvinculacao
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
+    {% endif %}
+
+    {# Modal para editar valor CTe CarVia #}
+    {% if operacao.status != 'CANCELADO' %}
+    <div class="modal fade" id="modalEditarCteValor" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('carvia.editar_cte_valor', operacao_id=operacao.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Editar Valor CTe</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label">Valor CTe (R$)</label>
+                        <input type="text" class="form-control" name="cte_valor" inputmode="decimal"
+                               value="{{ operacao.cte_valor|numero_br(2) if operacao.cte_valor else '' }}"
+                               placeholder="0,00" required>
+                        <small class="text-muted">Formato: 1.234,56</small>
+                        {% if operacao.fatura_cliente_id %}
+                        <div class="alert alert-info mt-2 mb-0 py-1 px-2 small">
+                            <i class="fas fa-info-circle"></i>
+                            Operacao faturada: o valor total da fatura sera recalculado.
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Modal para criar fatura rapida #}
+    {% if operacao.status in ('RASCUNHO', 'COTADO', 'CONFIRMADO') and not operacao.fatura_cliente_id and operacao.cte_valor and operacao.cte_valor > 0 %}
+    <div class="modal fade" id="modalCriarFaturaRapida" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('carvia.criar_fatura_rapida') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="operacao_id" value="{{ operacao.id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-file-invoice-dollar text-success"></i> Criar Fatura Rapida</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <small class="text-muted d-block">Cliente</small>
+                                <strong>{{ operacao.nome_cliente or operacao.cnpj_cliente }}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">CTe</small>
+                                <strong>{{ operacao.cte_numero or '#' ~ operacao.id }}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Valor CTe</small>
+                                <strong class="text-success">{{ operacao.cte_valor|valor_br }}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block">Numero Fatura</small>
+                                <strong class="text-muted">Gerado automaticamente (FAT-###)</strong>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label class="form-label">Data Emissao <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" name="data_emissao" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Vencimento</label>
+                                <input type="date" class="form-control" name="vencimento">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Observacoes</label>
+                                <input type="text" class="form-control" name="observacoes" placeholder="Opcional...">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check"></i> Criar Fatura
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
+{% endblock %}
 
 {% block scripts %}
 <script>

@@ -12,6 +12,9 @@
         </a>
     </div>
 
+    {% set carvia_active = 'operacoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     <form method="POST" id="form-wizard">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="tipo_entrada" value="MANUAL_SEM_CTE">

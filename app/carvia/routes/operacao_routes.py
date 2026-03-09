@@ -773,6 +773,70 @@ def register_operacao_routes(bp):
 
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
+    # ==================== EDITAR VALOR CTe ====================
+
+    @bp.route('/operacoes/<int:operacao_id>/editar-cte-valor', methods=['POST'])
+    @login_required
+    def editar_cte_valor(operacao_id):
+        """Edita valor do CTe CarVia. Se FATURADO, recalcula valor_total da fatura."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            flash('Operacao nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_operacoes'))
+
+        if operacao.status == 'CANCELADO':
+            flash('Operacao cancelada nao pode ser editada.', 'warning')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+        cte_valor_raw = request.form.get('cte_valor', '').strip()
+        if not cte_valor_raw:
+            flash('Informe o valor do CTe.', 'warning')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+        try:
+            # Parse formato BR: "1.234,56" -> 1234.56
+            cte_valor = float(cte_valor_raw.replace('.', '').replace(',', '.'))
+        except (ValueError, TypeError):
+            flash('Valor invalido.', 'danger')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+        try:
+            valor_anterior = float(operacao.cte_valor or 0)
+            operacao.cte_valor = cte_valor
+
+            # Se operacao faturada, recalcular valor_total da fatura
+            if operacao.fatura_cliente_id:
+                fatura = operacao.fatura_cliente
+                if fatura:
+                    soma = db.session.query(
+                        func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+                    ).filter(
+                        CarviaOperacao.fatura_cliente_id == fatura.id,
+                    ).scalar()
+                    fatura.valor_total = soma
+                    logger.info(
+                        f"Fatura #{fatura.id}: valor_total recalculado para {soma} "
+                        f"(editar CTe #{operacao_id} por {current_user.email})"
+                    )
+
+            db.session.commit()
+            logger.info(
+                f"Operacao #{operacao_id}: cte_valor alterado "
+                f"R$ {valor_anterior:.2f} -> R$ {cte_valor:.2f} "
+                f"por {current_user.email}"
+            )
+            flash(f'Valor CTe atualizado: R$ {cte_valor:.2f}', 'success')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao editar cte_valor operacao #{operacao_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
     @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/recotar', methods=['POST'])
     @login_required
     def recotar_subcontrato(operacao_id, sub_id):

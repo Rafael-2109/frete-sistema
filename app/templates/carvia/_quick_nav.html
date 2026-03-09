@@ -1,0 +1,32 @@
+{# Navegacao rapida CarVia — incluir em todas as telas do modulo.
+   Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
+   Valores validos para carvia_active: dashboard, nfs, operacoes, subcontratos,
+   faturas_cliente, faturas_transportadora, despesas, importar, fluxo_caixa,
+   extrato, sessoes_cotacao
+#}
+<nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
+    <a href="{{ url_for('carvia.dashboard') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'dashboard' else 'btn-outline-secondary' }}">
+        <i class="fas fa-tachometer-alt"></i> Dashboard
+    </a>
+    <a href="{{ url_for('carvia.listar_nfs') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'nfs' else 'btn-outline-secondary' }}">
+        NFs
+    </a>
+    <a href="{{ url_for('carvia.listar_operacoes') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'operacoes' else 'btn-outline-secondary' }}">
+        CTe CarVia
+    </a>
+    <a href="{{ url_for('carvia.listar_subcontratos') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'subcontratos' else 'btn-outline-secondary' }}">
+        Subcontratos
+    </a>
+    <a href="{{ url_for('carvia.listar_faturas_cliente') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'faturas_cliente' else 'btn-outline-secondary' }}">
+        Fatura CarVia
+    </a>
+    <a href="{{ url_for('carvia.listar_faturas_transportadora') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'faturas_transportadora' else 'btn-outline-secondary' }}">
+        Fatura Subcontrato
+    </a>
+</nav>

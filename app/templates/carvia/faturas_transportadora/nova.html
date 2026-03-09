@@ -12,6 +12,9 @@
         </a>
     </div>
 
+    {% set carvia_active = 'faturas_transportadora' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="transportadora_id" id="transportadora_id_input" value="">
@@ -35,8 +38,8 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Numero da Fatura <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="numero_fatura" required placeholder="NF-001">
+                        <label class="form-label">Numero da Fatura</label>
+                        <input type="text" class="form-control" disabled value="Gerado automaticamente (FTRANSP-###)">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Valor Total (R$) <span class="text-danger">*</span></label>

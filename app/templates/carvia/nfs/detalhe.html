@@ -41,6 +41,9 @@
         </div>
     </div>
 
+    {% set carvia_active = 'nfs' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     {# Alerta de cancelamento #}
     {% if nf.status == 'CANCELADA' %}
     <div class="alert alert-danger d-flex align-items-start gap-3 mb-4">

@@ -439,6 +439,23 @@ class CarviaFaturaCliente(db.Model):
         cascade='all, delete-orphan'
     )
 
+    @staticmethod
+    def gerar_numero_fatura():
+        """Gera proximo numero sequencial FAT-###."""
+        max_num = db.session.query(
+            func.max(CarviaFaturaCliente.numero_fatura)
+        ).filter(
+            CarviaFaturaCliente.numero_fatura.ilike('FAT-%'),
+        ).scalar()
+
+        next_num = 1
+        if max_num:
+            try:
+                next_num = int(max_num.replace('FAT-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'FAT-{next_num:03d}'
+
     def __repr__(self):
         return f'<CarviaFaturaCliente {self.numero_fatura} ({self.status})>'
 
@@ -634,6 +651,23 @@ class CarviaFaturaTransportadora(db.Model):
         lazy='dynamic',
         cascade='all, delete-orphan'
     )
+
+    @staticmethod
+    def gerar_numero_fatura():
+        """Gera proximo numero sequencial FTRANSP-###."""
+        max_num = db.session.query(
+            func.max(CarviaFaturaTransportadora.numero_fatura)
+        ).filter(
+            CarviaFaturaTransportadora.numero_fatura.ilike('FTRANSP-%'),
+        ).scalar()
+
+        next_num = 1
+        if max_num:
+            try:
+                next_num = int(max_num.replace('FTRANSP-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'FTRANSP-{next_num:03d}'
 
     def __repr__(self):
         return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'

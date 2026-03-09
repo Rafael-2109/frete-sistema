@@ -109,14 +109,13 @@ def register_fatura_routes(bp):
 
         if request.method == 'POST':
             cnpj_cliente = request.form.get('cnpj_cliente', '').strip()
-            numero_fatura = request.form.get('numero_fatura', '').strip()
             data_emissao_str = request.form.get('data_emissao', '')
             vencimento_str = request.form.get('vencimento', '')
             observacoes = request.form.get('observacoes', '')
             operacao_ids = request.form.getlist('operacao_ids', type=int)
 
-            if not cnpj_cliente or not numero_fatura or not data_emissao_str:
-                flash('CNPJ, numero da fatura e data de emissao sao obrigatorios.', 'warning')
+            if not cnpj_cliente or not data_emissao_str:
+                flash('CNPJ e data de emissao sao obrigatorios.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_cliente'))
 
             if not operacao_ids:
@@ -149,6 +148,9 @@ def register_fatura_routes(bp):
                 if valor_total <= 0:
                     flash('Valor total da fatura deve ser maior que zero. Verifique os valores das operacoes.', 'warning')
                     return redirect(url_for('carvia.nova_fatura_cliente'))
+
+                # Gerar numero automaticamente
+                numero_fatura = CarviaFaturaCliente.gerar_numero_fatura()
 
                 fatura = CarviaFaturaCliente(
                     cnpj_cliente=cnpj_cliente,
@@ -281,6 +283,56 @@ def register_fatura_routes(bp):
             faturas_transportadora=faturas_transportadora,
         )
 
+    @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST'])
+    @login_required
+    def editar_valor_fatura_cliente(fatura_id):
+        """Edita valor total de uma fatura cliente (admin only)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        if getattr(current_user, 'perfil', '') != 'administrador':
+            flash('Apenas administradores podem editar o valor da fatura.', 'danger')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            flash(f'Nao e possivel editar valor de fatura {fatura.status.lower()}.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        valor_raw = request.form.get('valor_total', '').strip()
+        if not valor_raw:
+            flash('Informe o valor.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        try:
+            valor_total = float(valor_raw.replace('.', '').replace(',', '.'))
+        except (ValueError, TypeError):
+            flash('Valor invalido.', 'danger')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        try:
+            valor_anterior = float(fatura.valor_total or 0)
+            fatura.valor_total = valor_total
+            db.session.commit()
+
+            logger.info(
+                f"Fatura cliente #{fatura_id}: valor alterado "
+                f"R$ {valor_anterior:.2f} -> R$ {valor_total:.2f} "
+                f"por {current_user.email}"
+            )
+            flash(f'Valor atualizado: R$ {valor_total:.2f}', 'success')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao editar valor fatura cliente {fatura_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
     @bp.route('/faturas-cliente/<int:fatura_id>/editar-vencimento', methods=['POST'])
     @login_required
     def editar_vencimento_fatura_cliente(fatura_id):
@@ -387,6 +439,83 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
+    # ===================== CRIAR FATURA RAPIDA =====================
+
+    @bp.route('/faturas-cliente/criar-rapida', methods=['POST'])
+    @login_required
+    def criar_fatura_rapida():
+        """Cria fatura cliente a partir de uma unica operacao (atalho do detalhe)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        operacao_id = request.form.get('operacao_id', type=int)
+        data_emissao_str = request.form.get('data_emissao', '')
+        vencimento_str = request.form.get('vencimento', '')
+        observacoes = request.form.get('observacoes', '')
+
+        if not operacao_id or not data_emissao_str:
+            flash('Operacao e data de emissao sao obrigatorios.', 'warning')
+            return redirect(request.referrer or url_for('carvia.listar_operacoes'))
+
+        try:
+            data_emissao = date.fromisoformat(data_emissao_str)
+            vencimento = date.fromisoformat(vencimento_str) if vencimento_str else None
+
+            # Buscar operacao com lock
+            operacao = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id == operacao_id,
+                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.fatura_cliente_id.is_(None),
+            ).with_for_update().first()
+
+            if not operacao:
+                flash('Operacao nao encontrada ou ja faturada.', 'warning')
+                return redirect(url_for('carvia.listar_operacoes'))
+
+            valor_total = float(operacao.cte_valor or 0)
+            if valor_total <= 0:
+                flash('Valor do CTe deve ser maior que zero.', 'warning')
+                return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+            numero_fatura = CarviaFaturaCliente.gerar_numero_fatura()
+
+            fatura = CarviaFaturaCliente(
+                cnpj_cliente=operacao.cnpj_cliente,
+                nome_cliente=operacao.nome_cliente,
+                numero_fatura=numero_fatura,
+                data_emissao=data_emissao,
+                valor_total=valor_total,
+                vencimento=vencimento,
+                status='PENDENTE',
+                observacoes=observacoes or None,
+                criado_por=current_user.email,
+            )
+            db.session.add(fatura)
+            db.session.flush()
+
+            # Vincular operacao
+            operacao.fatura_cliente_id = fatura.id
+            operacao.status = 'FATURADO'
+
+            # Gerar itens de detalhe
+            from app.carvia.services.linking_service import LinkingService
+            LinkingService().criar_itens_fatura_cliente_from_operacoes(fatura.id)
+
+            db.session.commit()
+
+            flash(
+                f'Fatura {numero_fatura} criada. Valor: R$ {valor_total:.2f}',
+                'success'
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar fatura rapida: {e}")
+            flash(f'Erro: {e}', 'danger')
+            return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
     # ===================== FATURAS TRANSPORTADORA =====================
 
     @bp.route('/faturas-transportadora')
@@ -482,15 +611,14 @@ def register_fatura_routes(bp):
 
         if request.method == 'POST':
             transportadora_id = request.form.get('transportadora_id', type=int)
-            numero_fatura = request.form.get('numero_fatura', '').strip()
             valor_total_str = request.form.get('valor_total', '').strip()
             data_emissao_str = request.form.get('data_emissao', '')
             vencimento_str = request.form.get('vencimento', '')
             observacoes = request.form.get('observacoes', '')
 
             # Validacoes
-            if not transportadora_id or not numero_fatura or not data_emissao_str or not vencimento_str:
-                flash('Transportadora, numero da fatura, valor, data de emissao e vencimento sao obrigatorios.', 'warning')
+            if not transportadora_id or not data_emissao_str or not vencimento_str:
+                flash('Transportadora, valor, data de emissao e vencimento sao obrigatorios.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_transportadora'))
 
             try:
@@ -513,6 +641,9 @@ def register_fatura_routes(bp):
             try:
                 data_emissao = date.fromisoformat(data_emissao_str)
                 vencimento = date.fromisoformat(vencimento_str)
+
+                # Gerar numero automaticamente
+                numero_fatura = CarviaFaturaTransportadora.gerar_numero_fatura()
 
                 fatura = CarviaFaturaTransportadora(
                     transportadora_id=transportadora_id,
@@ -553,8 +684,7 @@ def register_fatura_routes(bp):
             except IntegrityError:
                 db.session.rollback()
                 flash(
-                    f'Ja existe uma fatura com numero "{numero_fatura}" '
-                    f'para esta transportadora.',
+                    'Erro de duplicidade ao criar fatura. Tente novamente.',
                     'warning'
                 )
             except Exception as e:

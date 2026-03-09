@@ -12,6 +12,9 @@
         </a>
     </div>
 
+    {% set carvia_active = 'importar' %}
+    {% include 'carvia/_quick_nav.html' %}
+
     <!-- Resumo -->
     {% set faturas = resultado.get('faturas_parseadas', []) %}
     <div class="row g-3 mb-4">

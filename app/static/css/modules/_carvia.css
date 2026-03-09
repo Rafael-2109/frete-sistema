@@ -442,3 +442,20 @@
     color: var(--semantic-info);
     font-weight: 500;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Quick Nav — Navegacao rapida entre telas CarVia
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-quick-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0;
+}
+
+.carvia-quick-nav .btn {
+    font-size: 0.78rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: var(--radius-pill, 50rem);
+}
