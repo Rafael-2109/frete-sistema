@@ -251,8 +251,8 @@
 }
 
 .btn-check:checked + .btn-outline-secondary {
-    background: var(--bg-light);
-    color: var(--text);
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
     border-color: var(--amber-50);
     font-weight: 700;
 }

@@ -537,12 +537,11 @@ def register_operacao_routes(bp):
                 )
 
                 # Gerar numero sequencial por transportadora
-                # GAP-28: FOR UPDATE para evitar race condition no numero sequencial
                 max_seq = db.session.query(
                     db.func.max(CarviaSubcontrato.numero_sequencial_transportadora)
                 ).filter(
                     CarviaSubcontrato.transportadora_id == transportadora_id,
-                ).with_for_update().scalar() or 0
+                ).scalar() or 0
 
                 subcontrato = CarviaSubcontrato(
                     operacao_id=operacao_id,

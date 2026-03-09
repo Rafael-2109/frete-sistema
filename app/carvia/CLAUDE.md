@@ -117,7 +117,7 @@ Unique index parcial: `(transportadora_id, numero_sequencial_transportadora) WHE
 ### R8: Numeracao sequencial CTe-### e Sub-###
 Toda CarviaOperacao recebe `cte_numero = CTe-###` (ex: CTe-001, CTe-002).
 Todo CarviaSubcontrato recebe `cte_numero = Sub-###` (ex: Sub-001, Sub-002).
-Gerado via `CarviaOperacao.gerar_numero_cte()` e `CarviaSubcontrato.gerar_numero_sub()` — metodos estaticos com `with_for_update()`.
+Gerado via `CarviaOperacao.gerar_numero_cte()` e `CarviaSubcontrato.gerar_numero_sub()` — metodos estaticos.
 Campo `cte_numero VARCHAR(20)` ja existia — sem DDL, apenas backfill.
 Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 

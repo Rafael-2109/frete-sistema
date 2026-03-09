@@ -157,12 +157,11 @@ def register_subcontrato_routes(bp):
                 )
 
                 # Gerar numero sequencial por transportadora
-                # GAP-28: FOR UPDATE para evitar race condition no numero sequencial
                 max_seq = db.session.query(
                     db.func.max(SubModel.numero_sequencial_transportadora)
                 ).filter(
                     SubModel.transportadora_id == transportadora_id,
-                ).with_for_update().scalar() or 0
+                ).scalar() or 0
 
                 subcontrato = SubModel(
                     operacao_id=operacao_id,

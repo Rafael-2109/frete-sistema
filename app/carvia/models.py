@@ -247,12 +247,12 @@ class CarviaOperacao(db.Model):
 
     @staticmethod
     def gerar_numero_cte():
-        """Gera proximo numero sequencial CTe-### com FOR UPDATE para evitar race condition."""
+        """Gera proximo numero sequencial CTe-###."""
         max_num = db.session.query(
             func.max(CarviaOperacao.cte_numero)
         ).filter(
             CarviaOperacao.cte_numero.ilike('CTe-%'),
-        ).with_for_update().scalar()
+        ).scalar()
 
         next_num = 1
         if max_num:
@@ -358,12 +358,12 @@ class CarviaSubcontrato(db.Model):
 
     @staticmethod
     def gerar_numero_sub():
-        """Gera proximo numero sequencial Sub-### com FOR UPDATE para evitar race condition."""
+        """Gera proximo numero sequencial Sub-###."""
         max_num = db.session.query(
             func.max(CarviaSubcontrato.cte_numero)
         ).filter(
             CarviaSubcontrato.cte_numero.ilike('Sub-%'),
-        ).with_for_update().scalar()
+        ).scalar()
 
         next_num = 1
         if max_num:
