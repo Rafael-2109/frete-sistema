@@ -205,6 +205,7 @@
             div.dataset.id = l.id;
             div.dataset.valor = l.valor;
             div.dataset.tipo = l.tipo;
+            div.dataset.saldo = l.saldo_a_conciliar;
 
             div.innerHTML = `
                 <div class="carvia-conciliacao-row-primary d-flex justify-content-between align-items-center">
@@ -216,6 +217,7 @@
                     </div>
                     <span class="carvia-conciliacao-valor ${l.tipo === 'CREDITO' ? 'text-success' : 'text-danger'}">
                         ${l.tipo === 'CREDITO' ? '+' : ''}${fmtNum(l.valor)}
+                        ${l.saldo_a_conciliar < Math.abs(l.valor) - 0.01 ? '<small class="text-muted ms-1">(saldo: ' + fmtNum(l.saldo_a_conciliar) + ')</small>' : ''}
                     </span>
                 </div>
                 <div class="carvia-conciliacao-row-secondary ps-4">${l.descricao || ''}</div>
@@ -250,6 +252,7 @@
             linhasSelecionadas.push({
                 id: id,
                 valor: parseFloat(el.dataset.valor),
+                saldo: parseFloat(el.dataset.saldo),
                 tipo: el.dataset.tipo,
             });
         }
@@ -377,11 +380,14 @@
 
     // ===== Atualizar cards de selecao =====
     function atualizarSelecao() {
-        const totalExtrato = linhasSelecionadas.reduce((s, l) => s + Math.abs(l.valor), 0);
+        const totalExtrato = linhasSelecionadas.reduce((s, l) => s + l.saldo, 0);
         const totalDocs = docsSelecionados.reduce((s, d) => s + d.valor_alocado, 0);
         const diferenca = totalExtrato - totalDocs;
 
-        document.getElementById('selExtratoValor').textContent = fmtBRL(totalExtrato);
+        document.getElementById('selExtratoValor').textContent =
+            linhasSelecionadas.length > 1
+                ? `${fmtBRL(totalExtrato)} (${linhasSelecionadas.length} linhas)`
+                : fmtBRL(totalExtrato);
         document.getElementById('selDocsValor').textContent = fmtBRL(totalDocs);
 
         const diffEl = document.getElementById('selDiferenca');
@@ -405,43 +411,73 @@
         btn.disabled = !(linhasSelecionadas.length > 0 && docsSelecionados.length > 0);
     }
 
-    // ===== Conciliar =====
-    document.getElementById('btnConciliarSelecionados')?.addEventListener('click', function() {
+    // ===== Conciliar (alocacao greedy N linhas x M docs) =====
+    document.getElementById('btnConciliarSelecionados')?.addEventListener('click', async function() {
         if (linhasSelecionadas.length === 0 || docsSelecionados.length === 0) return;
 
         this.disabled = true;
         this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conciliando...';
 
-        // Para cada linha selecionada, conciliar com os docs
-        // Abordagem simplificada: conciliar a primeira linha com todos docs
-        // (para N:1, o usuario seleciona 1 linha + N docs)
-        const linhaId = linhasSelecionadas[0].id;
-        const docs = docsSelecionados.map(d => ({
-            tipo_documento: d.tipo_documento,
-            documento_id: d.documento_id,
-            valor_alocado: d.valor_alocado,
+        // Clone saldos dos docs para alocacao greedy
+        const docsRestantes = docsSelecionados.map(d => ({
+            ...d,
+            saldo_restante: d.valor_alocado,
         }));
 
-        fetch('{{ url_for("carvia.api_conciliar") }}', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({extrato_linha_id: linhaId, documentos: docs}),
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.sucesso) {
-                location.reload();
-            } else {
-                alert(data.erro || 'Erro ao conciliar');
+        let erro = null;
+        let totalConciliados = 0;
+
+        for (const linha of linhasSelecionadas) {
+            let restante = linha.saldo;
+            const docsParaLinha = [];
+
+            for (const doc of docsRestantes) {
+                if (restante <= 0.01) break;
+                if (doc.saldo_restante <= 0.01) continue;
+
+                const alocar = Math.min(restante, doc.saldo_restante);
+                docsParaLinha.push({
+                    tipo_documento: doc.tipo_documento,
+                    documento_id: doc.documento_id,
+                    valor_alocado: Math.round(alocar * 100) / 100,
+                });
+                restante -= alocar;
+                doc.saldo_restante -= alocar;
+            }
+
+            if (docsParaLinha.length === 0) continue;
+
+            try {
+                const resp = await fetch('{{ url_for("carvia.api_conciliar") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        extrato_linha_id: linha.id,
+                        documentos: docsParaLinha,
+                    }),
+                });
+                const data = await resp.json();
+                if (!data.sucesso) {
+                    erro = data.erro || 'Erro ao conciliar';
+                    break;
+                }
+                totalConciliados++;
+            } catch (e) {
+                erro = e.message;
+                break;
+            }
+        }
+
+        if (erro) {
+            alert(erro);
+            if (totalConciliados > 0) location.reload();
+            else {
                 this.disabled = false;
                 this.innerHTML = '<i class="fas fa-check-double"></i> Conciliar Selecionados';
             }
-        })
-        .catch(err => {
-            alert('Erro: ' + err.message);
-            this.disabled = false;
-            this.innerHTML = '<i class="fas fa-check-double"></i> Conciliar Selecionados';
-        });
+        } else {
+            location.reload();
+        }
     });
 
     // ===== Filtro busca docs =====

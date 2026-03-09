@@ -870,6 +870,56 @@ def create_app(config_name=None):
                 except Exception:
                     count_pendentes_motochefe = 0
 
+            # 🆕 Contadores CarVia vencimentos (para navbar)
+            carvia_vencidos = 0
+            carvia_vencimento_dia = 0
+            if current_user.is_authenticated and getattr(current_user, 'sistema_carvia', False):
+                try:
+                    from app.carvia.models import (
+                        CarviaFaturaCliente, CarviaFaturaTransportadora, CarviaDespesa
+                    )
+                    from app.utils.timezone import agora_brasil_naive
+                    hoje = agora_brasil_naive().date()
+
+                    # Faturas cliente (contas a receber): pendentes nao pagas/canceladas
+                    venc_cli = db.session.query(db.func.count(CarviaFaturaCliente.id)).filter(
+                        CarviaFaturaCliente.vencimento < hoje,
+                        CarviaFaturaCliente.status.notin_(['PAGA', 'CANCELADA']),
+                    ).scalar() or 0
+
+                    dia_cli = db.session.query(db.func.count(CarviaFaturaCliente.id)).filter(
+                        CarviaFaturaCliente.vencimento == hoje,
+                        CarviaFaturaCliente.status.notin_(['PAGA', 'CANCELADA']),
+                    ).scalar() or 0
+
+                    # Faturas transportadora (contas a pagar): pendentes nao pagas
+                    venc_transp = db.session.query(db.func.count(CarviaFaturaTransportadora.id)).filter(
+                        CarviaFaturaTransportadora.vencimento < hoje,
+                        CarviaFaturaTransportadora.status_pagamento == 'PENDENTE',
+                    ).scalar() or 0
+
+                    dia_transp = db.session.query(db.func.count(CarviaFaturaTransportadora.id)).filter(
+                        CarviaFaturaTransportadora.vencimento == hoje,
+                        CarviaFaturaTransportadora.status_pagamento == 'PENDENTE',
+                    ).scalar() or 0
+
+                    # Despesas (contas a pagar): pendentes nao canceladas
+                    venc_desp = db.session.query(db.func.count(CarviaDespesa.id)).filter(
+                        CarviaDespesa.data_vencimento < hoje,
+                        CarviaDespesa.status == 'PENDENTE',
+                    ).scalar() or 0
+
+                    dia_desp = db.session.query(db.func.count(CarviaDespesa.id)).filter(
+                        CarviaDespesa.data_vencimento == hoje,
+                        CarviaDespesa.status == 'PENDENTE',
+                    ).scalar() or 0
+
+                    carvia_vencidos = venc_cli + venc_transp + venc_desp
+                    carvia_vencimento_dia = dia_cli + dia_transp + dia_desp
+                except Exception:
+                    carvia_vencidos = 0
+                    carvia_vencimento_dia = 0
+
             return {
                 # 'user_can_access': user_can_access,
                 # 'user_is_admin': user_is_admin,
@@ -879,6 +929,8 @@ def create_app(config_name=None):
                 "is_admin_comercial": is_admin_comercial,
                 "user_perfil": current_user.perfil if current_user.is_authenticated else None,
                 "count_pendentes_motochefe": count_pendentes_motochefe,  # 🆕 Contador global
+                "carvia_vencidos": carvia_vencidos,  # 🆕 CarVia vencidos
+                "carvia_vencimento_dia": carvia_vencimento_dia,  # 🆕 CarVia vencimento dia
             }
         except Exception as e:
             app.logger.error(f"Erro ao registrar helpers de permissão: {e}")
@@ -891,6 +943,8 @@ def create_app(config_name=None):
                 "is_admin_comercial": False,
                 "user_perfil": None,
                 "count_pendentes_motochefe": 0,  # 🆕 Fallback
+                "carvia_vencidos": 0,  # 🆕 Fallback
+                "carvia_vencimento_dia": 0,  # 🆕 Fallback
             }
 
     # 📦 Módulos de Carteira de Pedidos

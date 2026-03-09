@@ -150,6 +150,21 @@
           </li>
           {% endif %}
 
+          {# 🆕 Link DIRETO na barra: CarVia Vencimentos #}
+          {% if current_user.is_authenticated and current_user.sistema_carvia %}
+          <li class="nav-item">
+            <a class="nav-link {% if carvia_vencidos > 0 %}text-warning{% endif %}"
+               href="{{ url_for('carvia.fluxo_caixa') }}"
+               title="CarVia — Vencimentos financeiros">
+                <i class="fas fa-truck-moving"></i>
+                {% if carvia_vencidos > 0 or carvia_vencimento_dia > 0 %}
+                <span class="badge bg-danger rounded-pill">Venc {{ carvia_vencidos }}</span>
+                <span class="badge bg-warning text-dark rounded-pill">Dia {{ carvia_vencimento_dia }}</span>
+                {% endif %}
+            </a>
+          </li>
+          {% endif %}
+
           <!-- OPERACIONAL - Fluxo principal do dia a dia -->
           {% if not is_comercial_only %}
           <li class="nav-item dropdown">
