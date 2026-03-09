@@ -348,10 +348,7 @@
     opacity: 0.6;
 }
 
-/* Segmented control para filtro */
-.carvia-fluxo-filtro-status .btn-check:checked + .btn {
-    font-weight: 600;
-}
+/* Segmented control — checked state handled by _buttons.css */
 
 /* Light mode adjustments */
 [data-bs-theme="light"] .carvia-fluxo-badge-saldo.positivo {

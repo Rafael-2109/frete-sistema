@@ -238,6 +238,50 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   BTN-CHECK CHECKED STATE
+   Radio/checkbox toggle buttons (Bootstrap btn-check pattern).
+   Without these rules, the @layer components overrides prevent Bootstrap's
+   :checked styles from showing — buttons look identical when selected.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-check:checked + .btn-outline-primary {
+    background: var(--amber-55);
+    color: hsl(0 0% 10%);
+    border-color: var(--amber-55);
+}
+
+.btn-check:checked + .btn-outline-secondary {
+    background: var(--bg-light);
+    color: var(--text);
+    border-color: var(--amber-50);
+    font-weight: 700;
+}
+
+.btn-check:checked + .btn-outline-success {
+    background: var(--semantic-success);
+    color: hsl(0 0% 100%);
+    border-color: var(--semantic-success);
+}
+
+.btn-check:checked + .btn-outline-danger {
+    background: var(--semantic-danger);
+    color: hsl(0 0% 100%);
+    border-color: var(--semantic-danger);
+}
+
+.btn-check:checked + .btn-outline-warning {
+    background: var(--amber-50);
+    color: hsl(0 0% 10%);
+    border-color: var(--amber-50);
+}
+
+.btn-check:checked + .btn-outline-info {
+    background: hsl(0 0% 45%);
+    color: hsl(0 0% 100%);
+    border-color: hsl(0 0% 45%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    LINK VARIANT
    Transparent, no border, link-like appearance
    ═══════════════════════════════════════════════════════════════════════════ */
