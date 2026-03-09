@@ -3,14 +3,15 @@
 Migration: Adicionar coluna dedup_embedding em agent_memory_embeddings.
 
 Contexto (2026-03-09):
-  O dedup de memórias compara embed(texto_limpo, type="query") contra
-  embed(contexto_sonnet + [path]: XML, type="document"). Essa lacuna de
-  representação derruba similarity em 0.07-0.19 pontos, gerando falsos
-  negativos com threshold 0.85 (diagnóstico: 4/4 duplicatas não detectadas).
+  O dedup de memórias comparava embed(texto_limpo) contra
+  embed(contexto_sonnet + [path]: XML). Essa lacuna de representação
+  derruba similarity em 0.07-0.19 pontos, gerando falsos negativos
+  com threshold 0.85 (diagnóstico: 4/4 duplicatas não detectadas).
 
   Fix: armazenar um segundo embedding gerado a partir do texto limpo
   (sem contexto Sonnet, sem path, sem XML) na coluna dedup_embedding.
-  O dedup busca contra essa coluna — ambos os lados na mesma representação.
+  O dedup busca contra essa coluna — ambos os lados com input_type="document",
+  mesma representação, comparação simétrica.
 
 Uso:
     source .venv/bin/activate
