@@ -42,6 +42,11 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         # 1. Última sessão do usuário (para saber "desde quando" informar)
         last_session_at = _get_last_session_time(user_id)
 
+        # 1b. Último intent/tarefa da sessão anterior (continuidade)
+        last_intent = _check_last_session_intent(user_id)
+        if last_intent:
+            parts.append(last_intent)
+
         # 2. Erros de sync Odoo (últimas 6h ou desde última sessão)
         odoo_errors = _check_odoo_sync_errors(last_session_at)
         if odoo_errors:
@@ -90,6 +95,64 @@ def _get_last_session_time(user_id: int):
 
         return last.updated_at if last else None
     except Exception:
+        return None
+
+
+def _check_last_session_intent(user_id: int) -> Optional[str]:
+    """
+    Extrai intent/tarefa da última sessão do usuário para continuidade.
+
+    Busca summary JSONB da última sessão e extrai:
+    - tarefas_pendentes[0] (prioridade: é o que o usuário precisa continuar)
+    - resumo_geral (fallback: o que foi feito na sessão anterior)
+
+    Returns:
+        XML tag com último intent ou None se não houver sessão/summary.
+    """
+    try:
+        from ..models import AgentSession
+
+        last = AgentSession.query.filter_by(
+            user_id=user_id,
+        ).order_by(
+            AgentSession.updated_at.desc()
+        ).first()
+
+        if not last or not last.summary or not isinstance(last.summary, dict):
+            return None
+
+        summary = last.summary
+
+        # Prioridade: tarefa pendente (o que falta fazer)
+        tarefas = summary.get('tarefas_pendentes', [])
+        if tarefas and isinstance(tarefas, list) and len(tarefas) > 0:
+            tarefa = str(tarefas[0]).strip()
+            if tarefa:
+                # Escapar para XML
+                safe = (
+                    tarefa.replace('&', '&amp;')
+                    .replace('<', '&lt;')
+                    .replace('>', '&gt;')
+                    .replace('"', '&quot;')
+                )
+                remaining = f' remaining="{len(tarefas)}"' if len(tarefas) > 1 else ''
+                return f'<last_session_intent type="tarefa_pendente"{remaining}>{safe}</last_session_intent>'
+
+        # Fallback: resumo geral (o que foi feito)
+        resumo = summary.get('resumo_geral', '')
+        if resumo and isinstance(resumo, str) and resumo.strip():
+            safe = (
+                resumo.strip().replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+            )
+            return f'<last_session_intent type="resumo">{safe}</last_session_intent>'
+
+        return None
+
+    except Exception as e:
+        logger.debug(f"[BRIEFING] Last session intent check falhou (ignorado): {e}")
         return None
 
 

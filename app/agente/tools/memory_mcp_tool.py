@@ -110,6 +110,25 @@ def _resolve_user_id(args: dict) -> int:
     return target
 
 
+def _resolve_empresa_user_id(user_id: int, path: str) -> int:
+    """
+    Resolve user_id real: paths /memories/empresa/* pertencem a user_id=0 (Sistema).
+
+    Centraliza a lógica que antes estava inline em save_memory.
+    Usado por todas as tools que acessam memórias por path.
+
+    Args:
+        user_id: ID do operador (usuário logado)
+        path: Path da memória
+
+    Returns:
+        0 se path empresa, senão user_id original
+    """
+    if path.startswith('/memories/empresa/'):
+        return 0
+    return user_id
+
+
 def _sanitize_content(content: str) -> str:
     """
     Sanitiza conteúdo contra prompt injection.
@@ -1197,15 +1216,16 @@ try:
         try:
             path = _validate_path(path)
             user_id = _resolve_user_id(args)
+            actual_user_id = _resolve_empresa_user_id(user_id, path)
 
             def _view():
                 from ..models import AgentMemory
 
-                memory = AgentMemory.get_by_path(user_id, path)
+                memory = AgentMemory.get_by_path(actual_user_id, path)
 
                 # Caso especial: /memories é diretório virtual raiz
                 if path == '/memories':
-                    items = AgentMemory.list_directory(user_id, path)
+                    items = AgentMemory.list_directory(actual_user_id, path)
                     if not items:
                         return "Diretório: /memories\n(vazio — nenhuma memória salva)"
 
@@ -1221,7 +1241,7 @@ try:
 
                 # Se diretório, lista conteúdo
                 if memory.is_directory:
-                    items = AgentMemory.list_directory(user_id, path)
+                    items = AgentMemory.list_directory(actual_user_id, path)
                     if not items:
                         return f"Diretório: {path}\n(vazio)"
 
@@ -1299,14 +1319,9 @@ try:
 
             # PRD v2.1: Classificar escopo pelo path
             # Paths /memories/empresa/* sao memorias compartilhadas (user_id=0)
-            actual_user_id = user_id
-            escopo = 'pessoal'
-            created_by_id = None
-
-            if path.startswith('/memories/empresa/'):
-                actual_user_id = 0  # Usuario Sistema
-                escopo = 'empresa'
-                created_by_id = user_id
+            actual_user_id = _resolve_empresa_user_id(user_id, path)
+            escopo = 'empresa' if actual_user_id == 0 else 'pessoal'
+            created_by_id = user_id if escopo == 'empresa' else None
 
             def _save():
                 from ..models import AgentMemory, AgentMemoryVersion
@@ -1532,12 +1547,13 @@ try:
             path = _validate_path(path)
             new_str = _sanitize_content(new_str)
             user_id = _resolve_user_id(args)
+            actual_user_id = _resolve_empresa_user_id(user_id, path)
 
             def _update():
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
 
-                memory = AgentMemory.get_by_path(user_id, path)
+                memory = AgentMemory.get_by_path(actual_user_id, path)
                 if not memory:
                     raise FileNotFoundError(f"Arquivo não encontrado: {path}")
                 if memory.is_directory:
@@ -1575,13 +1591,13 @@ try:
                         if MEMORY_SEMANTIC_SEARCH:
                             def _get_content():
                                 from ..models import AgentMemory
-                                mem = AgentMemory.get_by_path(user_id, path)
+                                mem = AgentMemory.get_by_path(actual_user_id, path)
                                 return mem.content if mem else None
 
                             updated_content = _execute_with_context(_get_content)
                             if updated_content:
                                 _entities, _relations = _embed_memory_best_effort(
-                                    user_id, path, updated_content
+                                    actual_user_id, path, updated_content
                                 )
                     except Exception as emb_err:
                         logger.debug(f"[MEMORY_MCP] Embedding update falhou (ignorado): {emb_err}")
@@ -1595,11 +1611,11 @@ try:
                                     remove_memory_links,
                                     extract_and_link_entities,
                                 )
-                                mem = AgentMemory.get_by_path(user_id, path)
+                                mem = AgentMemory.get_by_path(actual_user_id, path)
                                 if mem:
                                     remove_memory_links(mem.id)
                                     extract_and_link_entities(
-                                        user_id, mem.id, mem.content,
+                                        actual_user_id, mem.id, mem.content,
                                         haiku_entities=_entities,
                                         haiku_relations=_relations,
                                     )
@@ -1655,6 +1671,7 @@ try:
         try:
             path = _validate_path(path)
             user_id = _resolve_user_id(args)
+            actual_user_id = _resolve_empresa_user_id(user_id, path)
 
             if path == '/memories':
                 return {
@@ -1667,7 +1684,7 @@ try:
                 from app import db
                 from sqlalchemy import text as sql_text
 
-                memory = AgentMemory.get_by_path(user_id, path)
+                memory = AgentMemory.get_by_path(actual_user_id, path)
                 if not memory:
                     raise FileNotFoundError(f"Path não encontrado: {path}")
 
@@ -1680,7 +1697,7 @@ try:
                     if memory.is_directory:
                         # Coletar IDs de todos os arquivos do diretório
                         children = AgentMemory.query.filter(
-                            AgentMemory.user_id == user_id,
+                            AgentMemory.user_id == actual_user_id,
                             db.or_(
                                 AgentMemory.id == memory.id,
                                 AgentMemory.path.like(f'{path}/%')
@@ -1709,7 +1726,7 @@ try:
                 except Exception as kg_err:
                     logger.debug(f"[MEMORY_MCP] KG cleanup falhou (ignorado): {kg_err}")
 
-                count = AgentMemory.delete_by_path(user_id, path)
+                count = AgentMemory.delete_by_path(actual_user_id, path)
                 db.session.commit()
                 return f"{tipo} deletado: {path}" + (f" ({count} itens)" if count > 1 else "")
 
@@ -1751,9 +1768,10 @@ try:
             def _list():
                 from ..models import AgentMemory
 
-                memories = AgentMemory.query.filter_by(
-                    user_id=user_id,
-                    is_directory=False,
+                # Incluir memórias pessoais (user_id) E empresa (user_id=0)
+                memories = AgentMemory.query.filter(
+                    AgentMemory.user_id.in_([user_id, 0]),
+                    AgentMemory.is_directory == False,  # noqa: E712
                 ).order_by(AgentMemory.path).all()
 
                 if not memories:
@@ -1868,9 +1886,10 @@ try:
                 from app import db
 
                 # Buscar memórias cold que contenham o query no conteúdo ou path
+                # Incluir pessoais (user_id) E empresa (user_id=0)
                 query_lower = f"%{query.lower()}%"
                 cold_memories = AgentMemory.query.filter(
-                    AgentMemory.user_id == user_id,
+                    AgentMemory.user_id.in_([user_id, 0]),
                     AgentMemory.is_directory == False,  # noqa: E712
                     AgentMemory.is_cold == True,  # noqa: E712
                     db.or_(
@@ -1947,12 +1966,13 @@ try:
         try:
             path = _validate_path(path)
             user_id = _resolve_user_id(args)
+            actual_user_id = _resolve_empresa_user_id(user_id, path)
             limit = min(max(int(args.get("limit", 5)), 1), 20)
 
             def _view_history():
                 from ..models import AgentMemory, AgentMemoryVersion
 
-                memory = AgentMemory.get_by_path(user_id, path)
+                memory = AgentMemory.get_by_path(actual_user_id, path)
                 if not memory:
                     return None, f"Memória não encontrada: {path}"
 
@@ -2051,13 +2071,14 @@ try:
         try:
             path = _validate_path(path)
             user_id = _resolve_user_id(args)
+            actual_user_id = _resolve_empresa_user_id(user_id, path)
 
             def _restore():
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
                 from app.utils.timezone import agora_utc_naive
 
-                memory = AgentMemory.get_by_path(user_id, path)
+                memory = AgentMemory.get_by_path(actual_user_id, path)
                 if not memory:
                     return None, f"Memória não encontrada: {path}"
 
