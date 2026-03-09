@@ -142,16 +142,9 @@
   ],
   "indices": [
     {
-      "name": "ix_historico_requisicao_compras_num_requisicao",
+      "name": "ix_historico_requisicao_compras_operacao",
       "columns": [
-        "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_historico_requisicao_compras_alterado_em",
-      "columns": [
-        "alterado_em"
+        "operacao"
       ],
       "unique": false
     },
@@ -193,9 +186,16 @@
       "unique": false
     },
     {
-      "name": "ix_historico_requisicao_compras_operacao",
+      "name": "ix_historico_requisicao_compras_num_requisicao",
       "columns": [
-        "operacao"
+        "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_historico_requisicao_compras_alterado_em",
+      "columns": [
+        "alterado_em"
       ],
       "unique": false
     }

@@ -180,6 +180,13 @@
       "unique": false
     },
     {
+      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -204,13 +211,6 @@
       "name": "ix_pendencia_fiscal_ibscbs_ncm_prefixo",
       "columns": [
         "ncm_prefixo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
-      "columns": [
-        "tipo_documento"
       ],
       "unique": false
     }

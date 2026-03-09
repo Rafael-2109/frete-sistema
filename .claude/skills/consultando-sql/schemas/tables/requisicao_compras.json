@@ -135,13 +135,6 @@
       "unique": false
     },
     {
-      "name": "ix_requisicao_compras_requisicao_odoo_id",
-      "columns": [
-        "requisicao_odoo_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_requisicao_compras_cod_produto",
       "columns": [
         "cod_produto"
@@ -159,6 +152,13 @@
       "name": "ix_requisicao_compras_company_id",
       "columns": [
         "company_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_requisicao_odoo_id",
+      "columns": [
+        "requisicao_odoo_id"
       ],
       "unique": false
     },
