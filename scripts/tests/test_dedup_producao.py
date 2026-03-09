@@ -161,7 +161,8 @@ def run_diagnostico():
 
             # ── Layer 1: dedup_embedding + fallback ──
             if svc:
-                query_embedding = svc.embed_query(clean_content)
+                # DEDUP: input_type="document" (mesmo tipo do armazenado)
+                query_embedding = svc.embed_texts([clean_content], input_type="document")[0]
                 embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
                 svc._enable_iterative_scan()
 

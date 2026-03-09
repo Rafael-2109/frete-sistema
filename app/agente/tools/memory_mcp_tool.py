@@ -784,7 +784,10 @@ def _dedup_embedding_search(
     from sqlalchemy import text
 
     svc = EmbeddingService()
-    query_embedding = svc.embed_query(clean_content)
+    # DEDUP: usar input_type="document" (mesmo tipo do armazenado)
+    # embed_query() usa input_type="query" — cria representação assimétrica
+    # que reduz similaridade em ~0.07-0.15 pontos (Voyage AI asymmetric search)
+    query_embedding = svc.embed_texts([clean_content], input_type="document")[0]
     embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
     # Incluir user_id=0 (memórias empresa) para memória compartilhada
