@@ -220,7 +220,7 @@
                         ${l.saldo_a_conciliar < Math.abs(l.valor) - 0.01 ? '<small class="text-muted ms-1">(saldo: ' + fmtNum(l.saldo_a_conciliar) + ')</small>' : ''}
                     </span>
                 </div>
-                <div class="carvia-conciliacao-row-secondary ps-4">${l.descricao || ''}</div>
+                <div class="carvia-conciliacao-row-secondary ps-4">${l.razao_social ? '<strong>' + l.razao_social + '</strong>' : ''}${l.razao_social && l.descricao ? ' — ' : ''}${l.descricao || ''}</div>
             `;
             container.appendChild(div);
         });

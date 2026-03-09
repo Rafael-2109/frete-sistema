@@ -935,6 +935,10 @@ class CarviaExtratoLinha(db.Model):
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 
+    # Enriquecimento via CSV bancario
+    razao_social = db.Column(db.String(255))  # Contraparte (importado do CSV bancario)
+    observacao = db.Column(db.Text)  # Notas livres do usuario
+
     # Relacionamentos
     conciliacoes = db.relationship(
         'CarviaConciliacao',

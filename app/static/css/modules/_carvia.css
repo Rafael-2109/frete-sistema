@@ -550,3 +550,41 @@
 [data-bs-theme="light"] .carvia-extrato-row-debito {
     border-left-color: hsl(0 65% 45%);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   CSV Review — Match manual + edicao inline
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Row de review CSV com transicao de desaparecimento */
+.carvia-csv-match-row {
+    transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+
+.carvia-csv-match-row.matched {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 !important;
+    margin: 0;
+}
+
+/* Edicao inline no extrato */
+.carvia-editable {
+    cursor: pointer;
+    border-bottom: 1px dashed var(--border);
+}
+
+.carvia-editable:hover {
+    border-color: var(--bs-primary);
+}
+
+.carvia-editable-input {
+    font-size: 0.82rem;
+    width: 100%;
+    max-width: 200px;
+}
+
+/* Sem correspondencia — muted */
+.carvia-csv-sem-match {
+    opacity: 0.6;
+}

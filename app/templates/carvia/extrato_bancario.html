@@ -13,6 +13,9 @@
             <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarOFX">
                 <i class="fas fa-file-upload"></i> Importar OFX
             </button>
+            <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarCSV">
+                <i class="fas fa-file-csv"></i> Importar CSV
+            </button>
             <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-exchange-alt"></i> Conciliar
             </a>
@@ -103,9 +106,11 @@
                     <tr>
                         <th>Data</th>
                         <th>Descricao</th>
+                        <th>Razao Social</th>
                         <th class="text-end">Valor</th>
                         <th>Status</th>
                         <th>Docs Conciliados</th>
+                        <th>Obs</th>
                         <th style="width:100px">Acoes</th>
                     </tr>
                 </thead>
@@ -117,6 +122,19 @@
                             <div class="carvia-conciliacao-row-primary">{{ linha.descricao or '-' }}</div>
                             {% if linha.memo and linha.memo != linha.descricao %}
                             <div class="carvia-conciliacao-row-secondary">{{ linha.memo }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if linha.razao_social %}
+                            <span class="carvia-editable" data-id="{{ linha.id }}" data-campo="razao_social"
+                                  data-valor="{{ linha.razao_social }}" title="Clique para editar">
+                                {{ linha.razao_social }}
+                            </span>
+                            {% else %}
+                            <span class="carvia-editable text-muted" data-id="{{ linha.id }}" data-campo="razao_social"
+                                  data-valor="" title="Adicionar razao social">
+                                <i class="fas fa-plus-circle" style="font-size:0.75rem"></i>
+                            </span>
                             {% endif %}
                         </td>
                         <td class="text-end carvia-conciliacao-valor {{ 'text-success' if linha.tipo == 'CREDITO' else 'text-danger' }}">
@@ -148,6 +166,19 @@
                             {% endfor %}
                         </td>
                         <td>
+                            {% if linha.observacao %}
+                            <span class="carvia-editable" data-id="{{ linha.id }}" data-campo="observacao"
+                                  data-valor="{{ linha.observacao }}" title="{{ linha.observacao }}">
+                                <i class="fas fa-sticky-note text-warning" style="font-size:0.75rem"></i>
+                            </span>
+                            {% else %}
+                            <span class="carvia-editable text-muted" data-id="{{ linha.id }}" data-campo="observacao"
+                                  data-valor="" title="Adicionar observacao">
+                                <i class="far fa-sticky-note" style="font-size:0.75rem"></i>
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
                             {% if linha.status_conciliacao == 'PENDENTE' %}
                                 <button class="btn btn-xs btn-outline-success"
                                         onclick="abrirModalConciliar({{ linha.id }})"
@@ -172,7 +203,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">
+                        <td colspan="8" class="text-center text-muted py-4">
                             {% if resumo.total_linhas == 0 %}
                                 Nenhuma linha importada. Clique em "Importar OFX" para comecar.
                             {% else %}
@@ -188,6 +219,7 @@
 </div>
 
 {% include 'carvia/_modal_importar_ofx.html' %}
+{% include 'carvia/_modal_importar_csv.html' %}
 {% include 'carvia/_modal_conciliar_inline.html' %}
 
 <script>
@@ -220,6 +252,84 @@
                 alert('Erro: ' + err.message);
                 this.disabled = false;
                 this.innerHTML = '<i class="fas fa-unlink"></i>';
+            });
+        });
+    });
+
+    // Edicao inline — razao_social e observacao
+    document.querySelectorAll('.carvia-editable').forEach(el => {
+        el.addEventListener('click', function(e) {
+            e.stopPropagation();
+
+            // Evitar dupla edicao
+            if (this.querySelector('input')) return;
+
+            const id = this.dataset.id;
+            const campo = this.dataset.campo;
+            const valorAtual = this.dataset.valor || '';
+            const textoOriginal = this.innerHTML;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = valorAtual;
+            input.className = 'form-control form-control-sm carvia-editable-input';
+            input.placeholder = campo === 'razao_social' ? 'Razao social...' : 'Observacao...';
+
+            this.innerHTML = '';
+            this.appendChild(input);
+            input.focus();
+            input.select();
+
+            const salvar = () => {
+                const novoValor = input.value.trim();
+
+                fetch('{{ url_for("carvia.api_editar_extrato") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        extrato_id: parseInt(id),
+                        campo: campo,
+                        valor: novoValor,
+                    }),
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        // Atualizar display
+                        el.dataset.valor = novoValor;
+                        if (campo === 'razao_social') {
+                            el.innerHTML = novoValor || '<i class="fas fa-plus-circle" style="font-size:0.75rem"></i>';
+                            el.className = novoValor
+                                ? 'carvia-editable'
+                                : 'carvia-editable text-muted';
+                        } else {
+                            el.innerHTML = novoValor
+                                ? '<i class="fas fa-sticky-note text-warning" style="font-size:0.75rem"></i>'
+                                : '<i class="far fa-sticky-note" style="font-size:0.75rem"></i>';
+                            el.title = novoValor || 'Adicionar observacao';
+                            el.className = novoValor
+                                ? 'carvia-editable'
+                                : 'carvia-editable text-muted';
+                        }
+                    } else {
+                        alert(data.erro || 'Erro ao salvar');
+                        el.innerHTML = textoOriginal;
+                    }
+                })
+                .catch(err => {
+                    alert('Erro: ' + err.message);
+                    el.innerHTML = textoOriginal;
+                });
+            };
+
+            input.addEventListener('blur', salvar);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    el.innerHTML = textoOriginal;
+                }
             });
         });
     });

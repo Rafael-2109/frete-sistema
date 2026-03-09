@@ -1,0 +1,105 @@
+{# Modal de importacao CSV bancario — enriquecer extrato com razao social #}
+<div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-csv"></i> Importar CSV Bancario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Importe o CSV do extrato bancario para preencher automaticamente
+                    a razao social (contraparte) nas linhas do extrato OFX.
+                </p>
+                <div id="csvUploadArea" class="carvia-upload-area">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <p class="mb-1">Arraste o arquivo CSV aqui</p>
+                    <p class="text-muted small">ou clique para selecionar</p>
+                    <input type="file" id="csvFileInput" accept=".csv" class="d-none">
+                </div>
+                <div id="csvUploadProgress" class="d-none mt-3 text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Processando CSV...</span>
+                </div>
+                <div id="csvUploadResultado" class="d-none mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const area = document.getElementById('csvUploadArea');
+    const input = document.getElementById('csvFileInput');
+    const progress = document.getElementById('csvUploadProgress');
+    const resultado = document.getElementById('csvUploadResultado');
+
+    if (!area) return;
+
+    area.addEventListener('click', () => input.click());
+    area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+    area.addEventListener('drop', e => {
+        e.preventDefault();
+        area.classList.remove('dragover');
+        if (e.dataTransfer.files.length) uploadCSV(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', () => { if (input.files.length) uploadCSV(input.files[0]); });
+
+    function uploadCSV(file) {
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            alert('Selecione um arquivo .csv');
+            return;
+        }
+
+        area.classList.add('d-none');
+        progress.classList.remove('d-none');
+        resultado.classList.add('d-none');
+
+        const formData = new FormData();
+        formData.append('arquivo', file);
+
+        fetch('{{ url_for("carvia.api_importar_csv") }}', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(r => r.json())
+        .then(data => {
+            progress.classList.add('d-none');
+            resultado.classList.remove('d-none');
+
+            if (data.sucesso) {
+                const r = data.resumo;
+                let html = '<div class="alert alert-success mb-0">';
+                html += `<strong>${r.total_csv}</strong> linhas no CSV<br>`;
+                html += `<strong>${r.total_auto}</strong> auto-matches encontrados<br>`;
+                if (r.total_manual > 0) {
+                    html += `<strong>${r.total_manual}</strong> pendentes de match manual<br>`;
+                }
+                if (r.total_sem_ofx > 0) {
+                    html += `<small class="text-muted">${r.total_sem_ofx} sem correspondencia no OFX</small><br>`;
+                }
+                html += '</div>';
+                resultado.innerHTML = html;
+
+                // Redirecionar para pagina de review
+                setTimeout(() => {
+                    window.location = data.redirect_url;
+                }, 1200);
+            } else {
+                resultado.innerHTML = `<div class="alert alert-danger mb-0">${data.erro}</div>`;
+                area.classList.remove('d-none');
+            }
+        })
+        .catch(err => {
+            progress.classList.add('d-none');
+            resultado.innerHTML = `<div class="alert alert-danger mb-0">Erro: ${err.message}</div>`;
+            resultado.classList.remove('d-none');
+            area.classList.remove('d-none');
+        });
+    }
+})();
+</script>

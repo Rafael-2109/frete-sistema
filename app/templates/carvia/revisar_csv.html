@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    {# HEADER #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-file-csv"></i> Resultado da Importacao CSV</h2>
+            <p class="text-muted mb-0">Revisar matches antes de aplicar razao social ao extrato</p>
+        </div>
+        <a href="{{ url_for('carvia.extrato_bancario') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar ao Extrato
+        </a>
+    </div>
+
+    {% set carvia_active = 'extrato_bancario' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# CARDS RESUMO #}
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value" style="font-size:1.5rem">{{ resumo.total_csv }}</div>
+                    <div class="stat-label">Total CSV</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-success" style="font-size:1.5rem" id="contadorAuto">{{ resumo.total_auto }}</div>
+                    <div class="stat-label">Auto-matches</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-warning" style="font-size:1.5rem" id="contadorManual">{{ resumo.total_manual }}</div>
+                    <div class="stat-label">Match Manual</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="stat-value text-muted" style="font-size:1.5rem">{{ resumo.total_sem_ofx }}</div>
+                    <div class="stat-label">Sem Correspondencia</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# SECAO 1: AUTO-MATCHES #}
+    {% if auto_matched %}
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong class="small"><i class="fas fa-check-circle text-success"></i> Auto-matches ({{ auto_matched|length }})</strong>
+            <button class="btn btn-success btn-sm" id="btnAplicarAuto" onclick="aplicarAutoMatches()">
+                <i class="fas fa-check-double"></i> Aplicar Todos Auto-matches
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm carvia-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th class="text-end">Valor</th>
+                        <th>Razao Social (CSV)</th>
+                        <th>Linha OFX (descricao)</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyAuto">
+                    {% for m in auto_matched %}
+                    <tr>
+                        <td class="text-nowrap">{{ m.data_fmt }}</td>
+                        <td class="text-end carvia-conciliacao-valor">{{ m.valor_fmt }}</td>
+                        <td><strong>{{ m.razao_social }}</strong></td>
+                        <td class="text-muted">{{ m.descricao_ofx or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {# SECAO 2: PENDENTES DE MATCH MANUAL #}
+    {% if pendentes_manual %}
+    <div class="card mb-3">
+        <div class="card-header py-2">
+            <strong class="small"><i class="fas fa-hand-pointer text-warning"></i> Pendentes de Match Manual ({{ pendentes_manual|length }})</strong>
+        </div>
+        <div class="card-body p-0">
+            {% for p in pendentes_manual %}
+            <div class="p-3 border-bottom carvia-csv-match-row" id="manualRow{{ p.csv_index }}">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <span class="text-nowrap">{{ p.data_fmt }}</span>
+                        <span class="carvia-conciliacao-valor ms-2">{{ p.valor_fmt }}</span>
+                        <strong class="ms-2">{{ p.razao_social }}</strong>
+                        {% if p.historico %}
+                        <span class="text-muted small ms-1">({{ p.historico }})</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if p.candidatos_ofx %}
+                <div class="d-flex align-items-center gap-2">
+                    <select class="form-select form-select-sm" style="max-width:400px;font-size:0.8rem"
+                            id="selectManual{{ p.csv_index }}">
+                        <option value="">-- Selecione linha OFX --</option>
+                        {% for c in p.candidatos_ofx %}
+                        <option value="{{ c.id }}">[{{ c.data_fmt }}] {{ c.descricao or 'Sem descricao' }} — R$ {{ c.valor_fmt }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-sm btn-outline-success"
+                            onclick="vincularManual({{ p.csv_index }})">
+                        <i class="fas fa-link"></i> Vincular
+                    </button>
+                </div>
+                {% else %}
+                <span class="text-muted small">Nenhuma linha OFX candidata encontrada</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# SECAO 3: SEM CORRESPONDENCIA #}
+    {% if sem_correspondencia %}
+    <div class="card mb-3 carvia-csv-sem-match">
+        <div class="card-header py-2">
+            <strong class="small"><i class="fas fa-info-circle text-muted"></i> Sem Correspondencia no OFX ({{ sem_correspondencia|length }})</strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm carvia-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th class="text-end">Valor</th>
+                        <th>Razao Social</th>
+                        <th>Historico</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sem_correspondencia %}
+                    <tr>
+                        <td class="text-nowrap">{{ s.data_fmt }}</td>
+                        <td class="text-end carvia-conciliacao-valor">{{ s.valor_fmt }}</td>
+                        <td>{{ s.razao_social }}</td>
+                        <td class="text-muted">{{ s.historico or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {# VAZIO #}
+    {% if not auto_matched and not pendentes_manual and not sem_correspondencia %}
+    <div class="card">
+        <div class="card-body text-center text-muted py-4">
+            Nenhum resultado para exibir.
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+(function() {
+    const jobId = '{{ job_id }}';
+
+    window.aplicarAutoMatches = function() {
+        const btn = document.getElementById('btnAplicarAuto');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Aplicando...';
+
+        fetch('{{ url_for("carvia.api_aplicar_csv") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({job_id: jobId}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                btn.innerHTML = '<i class="fas fa-check"></i> ' + data.total_aplicados + ' aplicados';
+                btn.className = 'btn btn-sm btn-success disabled';
+                // Riscar linhas auto-matched
+                const tbody = document.getElementById('tbodyAuto');
+                if (tbody) {
+                    tbody.querySelectorAll('tr').forEach(tr => {
+                        tr.style.opacity = '0.5';
+                        tr.style.textDecoration = 'line-through';
+                    });
+                }
+            } else {
+                alert(data.erro || 'Erro ao aplicar');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-double"></i> Aplicar Todos Auto-matches';
+            }
+        })
+        .catch(err => {
+            alert('Erro: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-double"></i> Aplicar Todos Auto-matches';
+        });
+    };
+
+    window.vincularManual = function(csvIndex) {
+        const select = document.getElementById('selectManual' + csvIndex);
+        const extratoId = select ? select.value : '';
+        if (!extratoId) {
+            alert('Selecione uma linha OFX');
+            return;
+        }
+
+        const row = document.getElementById('manualRow' + csvIndex);
+        const btn = row.querySelector('button');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        fetch('{{ url_for("carvia.api_match_csv_manual") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                job_id: jobId,
+                csv_index: csvIndex,
+                extrato_id: parseInt(extratoId),
+            }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                // Fade out e remover
+                row.classList.add('matched');
+                setTimeout(() => row.remove(), 350);
+
+                // Atualizar contadores
+                const cManual = document.getElementById('contadorManual');
+                if (cManual) cManual.textContent = Math.max(0, parseInt(cManual.textContent) - 1);
+                const cAuto = document.getElementById('contadorAuto');
+                if (cAuto) cAuto.textContent = parseInt(cAuto.textContent) + 1;
+            } else {
+                alert(data.erro || 'Erro ao vincular');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-link"></i> Vincular';
+            }
+        })
+        .catch(err => {
+            alert('Erro: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link"></i> Vincular';
+        });
+    };
+})();
+</script>
+
+{% endblock %}

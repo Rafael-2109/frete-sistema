@@ -12,17 +12,42 @@ Tela 1 - Conciliacao Ativa:
 Tela 2 - Extrato Bancario:
   GET  /carvia/extrato-bancario                     - Visao extrato full-width
   GET  /carvia/api/conciliacao/matches/<linha_id>   - Docs elegiveis para modal inline
+
+CSV Razao Social:
+  POST /carvia/api/conciliacao/importar-csv         - Upload CSV bancario
+  GET  /carvia/revisar-csv?job_id=UUID              - Pagina review pos-importacao
+  POST /carvia/api/conciliacao/aplicar-csv           - Aplicar auto-matches
+  POST /carvia/api/conciliacao/match-csv-manual      - Match manual individual
+  POST /carvia/api/extrato/editar                    - Editar razao_social ou observacao
 """
 
 import logging
+import uuid
 from datetime import date
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
+
+# Storage temporario de jobs CSV (module-level, sem Redis)
+# Formato: {uuid_str: {resultado: dict, criado_em: datetime, usuario: str}}
+_csv_jobs = {}
+_CSV_TTL_MINUTOS = 30
+
+
+def _limpar_jobs_expirados():
+    """Remove jobs com mais de 30 minutos."""
+    agora = agora_utc_naive()
+    expirados = [
+        k for k, v in _csv_jobs.items()
+        if (agora - v['criado_em']).total_seconds() > _CSV_TTL_MINUTOS * 60
+    ]
+    for k in expirados:
+        del _csv_jobs[k]
 
 
 def register_conciliacao_routes(bp):
@@ -52,6 +77,7 @@ def register_conciliacao_routes(bp):
             'valor': float(l.valor),
             'tipo': l.tipo,
             'descricao': l.descricao or '',
+            'razao_social': l.razao_social or '',
             'status': l.status_conciliacao,
             'saldo_a_conciliar': l.saldo_a_conciliar,
         } for l in linhas])
@@ -324,3 +350,239 @@ def register_conciliacao_routes(bp):
             'documentos': docs,
             'conciliacoes_existentes': conciliacoes_existentes,
         })
+
+    # ===================================================================
+    # CSV Razao Social: Upload
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/importar-csv', methods=['POST'])
+    @login_required
+    def api_importar_csv():
+        """Upload e processamento de CSV bancario para enriquecer razao social."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        _limpar_jobs_expirados()
+
+        if 'arquivo' not in request.files:
+            return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
+
+        arquivo = request.files['arquivo']
+        if not arquivo.filename:
+            return jsonify({'erro': 'Arquivo sem nome'}), 400
+
+        nome = arquivo.filename.lower()
+        if not nome.endswith('.csv'):
+            return jsonify({'erro': 'Arquivo deve ser .csv'}), 400
+
+        try:
+            from app.carvia.services.carvia_csv_razao_service import (
+                parsear_csv_banco,
+                match_csv_com_extrato,
+            )
+
+            conteudo = arquivo.read()
+            csv_linhas = parsear_csv_banco(conteudo)
+            resultado = match_csv_com_extrato(csv_linhas)
+
+            # Armazenar resultado com TTL
+            job_id = str(uuid.uuid4())
+            _csv_jobs[job_id] = {
+                'resultado': resultado,
+                'criado_em': agora_utc_naive(),
+                'usuario': current_user.email,
+            }
+
+            logger.info(
+                f"CSV importado: {resultado['resumo']['total_csv']} linhas, "
+                f"{resultado['resumo']['total_auto']} auto-matches, "
+                f"por {current_user.email}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'job_id': job_id,
+                'resumo': resultado['resumo'],
+                'redirect_url': url_for('carvia.revisar_csv', job_id=job_id),
+            })
+
+        except ValueError as e:
+            logger.warning(f"Erro ao parsear CSV: {e}")
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            logger.error(f"Erro ao processar CSV: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # CSV Razao Social: Pagina de Review
+    # ===================================================================
+
+    @bp.route('/revisar-csv')
+    @login_required
+    def revisar_csv():
+        """Pagina de review pos-importacao CSV."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        _limpar_jobs_expirados()
+
+        job_id = request.args.get('job_id', '')
+        if not job_id or job_id not in _csv_jobs:
+            flash('Sessao de importacao CSV expirada ou invalida. Importe novamente.', 'warning')
+            return redirect(url_for('carvia.extrato_bancario'))
+
+        job = _csv_jobs[job_id]
+        resultado = job['resultado']
+
+        return render_template(
+            'carvia/revisar_csv.html',
+            job_id=job_id,
+            auto_matched=resultado['auto_matched'],
+            pendentes_manual=resultado['pendentes_manual'],
+            sem_correspondencia=resultado['sem_correspondencia'],
+            resumo=resultado['resumo'],
+        )
+
+    # ===================================================================
+    # CSV Razao Social: Aplicar Auto-matches
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/aplicar-csv', methods=['POST'])
+    @login_required
+    def api_aplicar_csv():
+        """Aplica todos auto-matches de um job CSV no banco."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        job_id = data.get('job_id', '')
+        if not job_id or job_id not in _csv_jobs:
+            return jsonify({'erro': 'Job expirado ou invalido'}), 400
+
+        try:
+            from app.carvia.services.carvia_csv_razao_service import aplicar_matches
+
+            job = _csv_jobs[job_id]
+            matches = job['resultado']['auto_matched']
+
+            total = aplicar_matches(matches, current_user.email)
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'total_aplicados': total,
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao aplicar auto-matches CSV: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # CSV Razao Social: Match Manual Individual
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/match-csv-manual', methods=['POST'])
+    @login_required
+    def api_match_csv_manual():
+        """Aplica match manual individual de CSV para extrato."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        job_id = data.get('job_id', '')
+        csv_index = data.get('csv_index')
+        extrato_id = data.get('extrato_id')
+
+        if not job_id or job_id not in _csv_jobs:
+            return jsonify({'erro': 'Job expirado ou invalido'}), 400
+        if csv_index is None or extrato_id is None:
+            return jsonify({'erro': 'csv_index e extrato_id obrigatorios'}), 400
+
+        try:
+            from app.carvia.services.carvia_csv_razao_service import aplicar_matches
+
+            job = _csv_jobs[job_id]
+            pendentes = job['resultado']['pendentes_manual']
+
+            # Encontrar o item CSV
+            item = None
+            item_idx = None
+            for i, p in enumerate(pendentes):
+                if p['csv_index'] == csv_index:
+                    item = p
+                    item_idx = i
+                    break
+
+            if item is None:
+                return jsonify({'erro': 'Item CSV nao encontrado no job'}), 400
+
+            # Aplicar match
+            total = aplicar_matches([{
+                'extrato_id': int(extrato_id),
+                'razao_social': item['razao_social'],
+            }], current_user.email)
+
+            db.session.commit()
+
+            # Remover do job
+            if item_idx is not None:
+                pendentes.pop(item_idx)
+
+            return jsonify({
+                'sucesso': True,
+                'razao_social': item['razao_social'],
+                'extrato_id': extrato_id,
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao aplicar match CSV manual: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # Editar Razao Social / Observacao
+    # ===================================================================
+
+    @bp.route('/api/extrato/editar', methods=['POST'])
+    @login_required
+    def api_editar_extrato():
+        """Edita razao_social ou observacao de uma linha do extrato."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        extrato_id = data.get('extrato_id')
+        campo = data.get('campo', '')
+        valor = data.get('valor', '')
+
+        if not extrato_id:
+            return jsonify({'erro': 'extrato_id obrigatorio'}), 400
+        if not campo:
+            return jsonify({'erro': 'campo obrigatorio'}), 400
+
+        try:
+            from app.carvia.services.carvia_csv_razao_service import atualizar_campo_extrato
+
+            resultado = atualizar_campo_extrato(int(extrato_id), campo, valor)
+            db.session.commit()
+
+            return jsonify(resultado)
+
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao editar extrato: {e}")
+            return jsonify({'erro': str(e)}), 500
