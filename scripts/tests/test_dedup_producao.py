@@ -2,8 +2,10 @@
 """
 Diagnóstico de dedup de memórias — roda em produção (read-only).
 
-Simula _check_memory_duplicate() com conteúdos variantes de memórias
-existentes e reporta se o dedup detectaria a duplicata.
+Testa AMBAS as camadas do dedup:
+- Layer 0: Text overlap (overlap coefficient de palavras normalizadas)
+- Layer 1: dedup_embedding (embedding de texto limpo, threshold 0.85)
+  + fallback para embedding contextualizado (threshold 0.70)
 
 Uso:
     source .venv/bin/activate
@@ -14,6 +16,7 @@ Não grava nada — apenas lê embeddings e gera novos para comparação.
 """
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from app import create_app
@@ -21,8 +24,6 @@ from app.agente.services.knowledge_graph_service import strip_xml_tags
 
 
 # ── Cenários de teste ──────────────────────────────────────────────
-# Cada cenário: conteúdo XML que o Agent tentaria salvar,
-# com a memória existente que DEVERIA ser detectada como duplicata.
 CENARIOS = [
     {
         "nome": "Atacadão NF completa (variante)",
@@ -33,7 +34,6 @@ CENARIOS = [
             '</regra>'
         ),
         "duplicata_esperada_path": "/memories/empresa/regras/atacadao-sempre-pede-nf-completa.xml",
-        "duplicata_esperada_id": 139,
     },
     {
         "nome": "Dry-run Odoo (variante)",
@@ -44,7 +44,6 @@ CENARIOS = [
             '</regra>'
         ),
         "duplicata_esperada_path": "/memories/empresa/regras/antes-de-executar-acoes-em-lote-no-odoo.xml",
-        "duplicata_esperada_id": 112,
     },
     {
         "nome": "Assaí confirmação manual (variante)",
@@ -55,7 +54,6 @@ CENARIOS = [
             '</regra>'
         ),
         "duplicata_esperada_path": "/memories/empresa/regras/cotacoes-para-a-rede-assai-no-odoo-preci.xml",
-        "duplicata_esperada_id": 141,
     },
     {
         "nome": "Assaí múltiplas lojas (variante)",
@@ -66,7 +64,6 @@ CENARIOS = [
             '</regra>'
         ),
         "duplicata_esperada_path": "/memories/empresa/regras/a-rede-assai-opera-com-multiplas-lojas-i.xml",
-        "duplicata_esperada_id": 111,
     },
     {
         "nome": "Fato NOVO (NÃO deve detectar duplicata)",
@@ -77,7 +74,6 @@ CENARIOS = [
             '</regra>'
         ),
         "duplicata_esperada_path": None,
-        "duplicata_esperada_id": None,
     },
 ]
 
@@ -88,20 +84,48 @@ def run_diagnostico():
     with app.app_context():
         from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
         from app.embeddings.service import EmbeddingService
+        from app import db
+        from sqlalchemy import text
+        from app.agente.tools.memory_mcp_tool import (
+            _text_overlap_check,
+            _normalize_words_for_dedup,
+        )
 
         print("=" * 72)
-        print("DIAGNÓSTICO DE DEDUP DE MEMÓRIAS")
+        print("DIAGNÓSTICO DE DEDUP DE MEMÓRIAS (Layer 0 + Layer 1)")
         print("=" * 72)
         print(f"EMBEDDINGS_ENABLED: {EMBEDDINGS_ENABLED}")
         print(f"MEMORY_SEMANTIC_SEARCH: {MEMORY_SEMANTIC_SEARCH}")
 
-        if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
-            print("\n⚠ Embeddings desabilitados — dedup semântico NÃO funciona!")
-            return
+        # Verificar se dedup_embedding existe
+        has_dedup_col = False
+        try:
+            col_check = db.session.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'agent_memory_embeddings'
+                  AND column_name = 'dedup_embedding'
+            """)).fetchone()
+            has_dedup_col = col_check is not None
+        except Exception:
+            pass
 
-        svc = EmbeddingService()
-        print(f"Modelo: {svc.model}")
-        print(f"Dimensões: {svc.dimensions}")
+        dedup_count = 0
+        if has_dedup_col:
+            dedup_count = db.session.execute(text("""
+                SELECT COUNT(*) FROM agent_memory_embeddings
+                WHERE dedup_embedding IS NOT NULL
+            """)).scalar()
+
+        print(f"Coluna dedup_embedding: {'SIM' if has_dedup_col else 'NÃO (migration pendente)'}")
+        if has_dedup_col:
+            total_emb = db.session.execute(text(
+                "SELECT COUNT(*) FROM agent_memory_embeddings"
+            )).scalar()
+            print(f"  Populados: {dedup_count}/{total_emb}")
+
+        svc = EmbeddingService() if EMBEDDINGS_ENABLED and MEMORY_SEMANTIC_SEARCH else None
+        if svc:
+            print(f"Modelo: {svc.model}")
         print()
 
         resultados = []
@@ -109,59 +133,100 @@ def run_diagnostico():
         for i, cenario in enumerate(CENARIOS, 1):
             print(f"─── Cenário {i}: {cenario['nome']} ───")
 
-            # 1. Strip XML (exatamente como _check_memory_duplicate faz)
             clean_content = strip_xml_tags(cenario['conteudo_novo'])
             print(f"  Query (stripped): \"{clean_content[:80]}...\"")
 
-            # 2. Buscar via search_memories (exatamente como _check_memory_duplicate faz)
-            # user_id=0 = memórias empresa
-            results = svc.search_memories(
-                clean_content, user_id=0, limit=5, min_similarity=0.50
-            )
+            esperada = cenario['duplicata_esperada_path']
+            detectou_layer0 = False
+            detectou_layer1_dedup = False
+            detectou_layer1_fallback = False
 
-            if not results:
-                print(f"  Resultados: NENHUM (similarity < 0.50)")
-                detectou = cenario['duplicata_esperada_path'] is None
-                resultados.append(('OK' if detectou else 'FALHOU', cenario['nome'], None, None))
-                print(f"  Veredicto: {'✓ OK (fato novo, sem match)' if detectou else '✗ FALHOU (deveria ter encontrado)'}")
-                print()
-                continue
+            # ── Layer 0: Text overlap ──
+            print(f"  [Layer 0 — Text Overlap]")
+            words_new = _normalize_words_for_dedup(clean_content)
+            print(f"    Palavras: {sorted(words_new)}")
 
-            # 3. Mostrar top resultados
-            print(f"  Top {len(results)} resultados:")
-            melhor_match = None
-            for r in results:
-                path = r.get('path', '')
-                sim = r.get('similarity', 0)
-                marker = ""
-                if path == cenario.get('duplicata_esperada_path'):
-                    marker = " ◄ ESPERADO"
-                    melhor_match = sim
-                acima_threshold = "✓ ACIMA 0.85" if sim >= 0.85 else "✗ ABAIXO 0.85"
-                print(f"    {sim:.4f} | {acima_threshold} | {path}{marker}")
-
-            # 4. Verificar se dedup detectaria
-            if cenario['duplicata_esperada_path'] is None:
-                # Fato novo — nenhum match deve estar acima de 0.85
-                falsos_positivos = [r for r in results if r.get('similarity', 0) >= 0.85]
-                if falsos_positivos:
-                    print(f"  Veredicto: ✗ FALSO POSITIVO — {len(falsos_positivos)} match(es) acima de 0.85")
-                    resultados.append(('FALSO_POS', cenario['nome'], falsos_positivos[0]['similarity'], falsos_positivos[0]['path']))
+            try:
+                text_dup = _text_overlap_check(
+                    user_id=0, clean_content=clean_content,
+                    current_path='/memories/test-dedup-diagnostico'
+                )
+                if text_dup:
+                    print(f"    ✓ Detectou: {text_dup}")
+                    detectou_layer0 = True
                 else:
-                    print(f"  Veredicto: ✓ OK — nenhum falso positivo")
-                    resultados.append(('OK', cenario['nome'], results[0]['similarity'] if results else None, None))
+                    print(f"    Nenhuma duplicata")
+            except Exception as e:
+                print(f"    ⚠ Erro: {e}")
+
+            # ── Layer 1: dedup_embedding + fallback ──
+            if svc:
+                query_embedding = svc.embed_query(clean_content)
+                embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+                svc._enable_iterative_scan()
+
+                # 1A. dedup_embedding (threshold 0.85)
+                if has_dedup_col and dedup_count is not None and dedup_count > 0:
+                    print(f"  [Layer 1A — dedup_embedding (threshold 0.85)]")
+                    result = db.session.execute(text("""
+                        SELECT
+                            path,
+                            1 - (dedup_embedding <=> CAST(:query AS vector)) AS similarity
+                        FROM agent_memory_embeddings
+                        WHERE user_id = ANY(:user_ids)
+                          AND dedup_embedding IS NOT NULL
+                        ORDER BY dedup_embedding <=> CAST(:query AS vector)
+                        LIMIT 5
+                    """), {"query": embedding_str, "user_ids": [0]})
+
+                    for row in result.fetchall():
+                        sim = float(row.similarity)
+                        marker = " ◄ ESPERADO" if row.path == esperada else ""
+                        status = "✓ ACIMA 0.85" if sim >= 0.85 else "  abaixo 0.85"
+                        print(f"    {sim:.4f} | {status} | {row.path}{marker}")
+                        if row.path == esperada and sim >= 0.85:
+                            detectou_layer1_dedup = True
+                else:
+                    print(f"  [Layer 1A — dedup_embedding: N/A (não populado)]")
+
+                # 1B. fallback embedding contextualizado (threshold 0.70)
+                print(f"  [Layer 1B — embedding contextualizado (fallback 0.70)]")
+                results = svc.search_memories(
+                    clean_content, user_id=0, limit=5, min_similarity=0.50
+                )
+                if results:
+                    for r in results:
+                        path = r.get('path', '')
+                        sim = r.get('similarity', 0)
+                        marker = " ◄ ESPERADO" if path == esperada else ""
+                        status = "✓ ACIMA 0.70" if sim >= 0.70 else "  abaixo 0.70"
+                        print(f"    {sim:.4f} | {status} | {path}{marker}")
+                        if path == esperada and sim >= 0.70:
+                            detectou_layer1_fallback = True
+                else:
+                    print(f"    Nenhum resultado (similarity < 0.50)")
+
+            # ── Veredicto ──
+            if esperada is None:
+                if detectou_layer0:
+                    resultados.append(('FALSO_POS', cenario['nome'], 'L0'))
+                    print(f"  VEREDICTO: ✗ FALSO POSITIVO")
+                else:
+                    resultados.append(('OK', cenario['nome'], '-'))
+                    print(f"  VEREDICTO: ✓ OK (fato novo)")
             else:
-                # Duplicata esperada — deve estar acima de 0.85
-                if melhor_match is not None and melhor_match >= 0.85:
-                    print(f"  Veredicto: ✓ DEDUP FUNCIONA — duplicata detectada (sim={melhor_match:.4f})")
-                    resultados.append(('OK', cenario['nome'], melhor_match, cenario['duplicata_esperada_path']))
-                elif melhor_match is not None:
-                    print(f"  Veredicto: ✗ FALSO NEGATIVO — duplicata encontrada mas sim={melhor_match:.4f} < 0.85")
-                    resultados.append(('FALSO_NEG', cenario['nome'], melhor_match, cenario['duplicata_esperada_path']))
+                if detectou_layer0:
+                    resultados.append(('OK', cenario['nome'], 'L0'))
+                    print(f"  VEREDICTO: ✓ DETECTADO (Layer 0 — text overlap)")
+                elif detectou_layer1_dedup:
+                    resultados.append(('OK', cenario['nome'], 'L1A'))
+                    print(f"  VEREDICTO: ✓ DETECTADO (Layer 1A — dedup_embedding ≥0.85)")
+                elif detectou_layer1_fallback:
+                    resultados.append(('OK', cenario['nome'], 'L1B'))
+                    print(f"  VEREDICTO: ✓ DETECTADO (Layer 1B — fallback ≥0.70)")
                 else:
-                    # A duplicata esperada nem apareceu no top 5
-                    print(f"  Veredicto: ✗ FALSO NEGATIVO — duplicata esperada nem apareceu nos resultados")
-                    resultados.append(('FALSO_NEG', cenario['nome'], 0, cenario['duplicata_esperada_path']))
+                    resultados.append(('FALSO_NEG', cenario['nome'], '-'))
+                    print(f"  VEREDICTO: ✗ FALSO NEGATIVO")
 
             print()
 
@@ -174,22 +239,23 @@ def run_diagnostico():
         falso_pos = sum(1 for r in resultados if r[0] == 'FALSO_POS')
         total = len(resultados)
 
-        for status, nome, sim, path in resultados:
-            icon = {'OK': '✓', 'FALSO_NEG': '✗', 'FALSO_POS': '⚠', 'FALHOU': '✗'}[status]
-            sim_str = f" (sim={sim:.4f})" if sim is not None else ""
-            print(f"  {icon} {nome}{sim_str}")
+        for status, nome, layer in resultados:
+            icon = {'OK': '✓', 'FALSO_NEG': '✗', 'FALSO_POS': '⚠'}[status]
+            layer_info = f" [{layer}]" if layer != '-' else ""
+            print(f"  {icon} {nome}{layer_info}")
 
         print()
         print(f"  Resultado: {ok}/{total} OK | {falso_neg} falsos negativos | {falso_pos} falsos positivos")
 
-        if falso_neg > 0:
-            print()
-            print("  ⚠ FALSOS NEGATIVOS = dedup NÃO está pegando duplicatas!")
-            print("  O threshold 0.85 está alto demais para a lacuna de representação")
-            print("  entre query (texto limpo) e embedding armazenado (contexto Sonnet + XML).")
-        elif ok == total:
-            print()
-            print("  ✓ Dedup está funcionando corretamente para todos os cenários!")
+        if ok == total:
+            print("\n  ✓ Dedup funcionando corretamente!")
+        if falso_neg > 0 and not has_dedup_col:
+            print("\n  ℹ Layer 1A indisponível — rode a migration:")
+            print("    python scripts/migrations/adicionar_dedup_embedding.py")
+            print("    python scripts/migrations/backfill_dedup_embedding.py")
+        elif falso_neg > 0 and dedup_count == 0:
+            print("\n  ℹ dedup_embedding não populado — rode o backfill:")
+            print("    python scripts/migrations/backfill_dedup_embedding.py")
 
         print()
 

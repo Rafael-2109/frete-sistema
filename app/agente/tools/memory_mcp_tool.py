@@ -401,11 +401,17 @@ def _embed_memory_best_effort(
                 user_id, path, content
             )
 
-        # Build texto embedado (com ou sem contexto)
+        # Build texto embedado (com ou sem contexto) — para RETRIEVAL
         if context_prefix:
             texto_embedado = f"{context_prefix}\n\n[{path}]: {content}"
         else:
             texto_embedado = f"[{path}]: {content}"
+
+        # Build texto limpo — para DEDUP
+        # Mesma representação que _check_memory_duplicate usa na query,
+        # eliminando a lacuna de representação que causava falsos negativos.
+        from ..services.knowledge_graph_service import strip_xml_tags
+        dedup_texto = strip_xml_tags(content)
 
         # Hash baseado no conteúdo original (não no texto_embedado).
         # Motivo: se só o contexto mudar (outras memórias adicionadas),
@@ -432,29 +438,35 @@ def _embed_memory_best_effort(
             if existing and existing[0] == c_hash:
                 return  # Conteúdo não mudou
 
-            # Gerar embedding
+            # Gerar embeddings: retrieval (contextual) + dedup (texto limpo)
             svc = EmbeddingService()
-            embeddings = svc.embed_texts([texto_embedado], input_type="document")
+            embeddings = svc.embed_texts(
+                [texto_embedado, dedup_texto], input_type="document"
+            )
 
-            if not embeddings:
+            if not embeddings or len(embeddings) < 2:
                 return
 
             embedding_str = json.dumps(embeddings[0])
+            dedup_embedding_str = json.dumps(embeddings[1])
 
-            # Upsert
+            # Upsert (inclui dedup_embedding)
             db.session.execute(text("""
                 INSERT INTO agent_memory_embeddings
                     (memory_id, user_id, path,
-                     texto_embedado, embedding, model_used, content_hash)
+                     texto_embedado, embedding, dedup_embedding,
+                     model_used, content_hash)
                 VALUES
                     (:memory_id, :user_id, :path,
-                     :texto_embedado, :embedding, :model_used, :content_hash)
+                     :texto_embedado, :embedding, CAST(:dedup_embedding AS vector),
+                     :model_used, :content_hash)
                 ON CONFLICT ON CONSTRAINT uq_memory_embedding
                 DO UPDATE SET
                     user_id = EXCLUDED.user_id,
                     path = EXCLUDED.path,
                     texto_embedado = EXCLUDED.texto_embedado,
                     embedding = EXCLUDED.embedding,
+                    dedup_embedding = EXCLUDED.dedup_embedding,
                     model_used = EXCLUDED.model_used,
                     content_hash = EXCLUDED.content_hash,
                     updated_at = :updated_at
@@ -464,13 +476,14 @@ def _embed_memory_best_effort(
                 "path": path,
                 "texto_embedado": texto_embedado,
                 "embedding": embedding_str,
+                "dedup_embedding": dedup_embedding_str,
                 "model_used": VOYAGE_DEFAULT_MODEL,
                 "content_hash": c_hash,
                 "updated_at": agora_utc_naive(),
             })
             db.session.commit()
 
-            logger.debug(f"[MEMORY_MCP] Embedding salvo para {path}")
+            logger.debug(f"[MEMORY_MCP] Embedding salvo para {path} (retrieval + dedup)")
 
         _execute_with_context(_do_embed)
 
@@ -707,13 +720,15 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
     """
     Verifica se ja existe memoria semanticamente similar para o usuario.
 
-    Busca em agent_memory_embeddings por conteudo com cosine > 0.85,
-    excluindo o path atual (para nao detectar self-match em updates).
-
-    IMPORTANTE: O content recebido e XML raw, mas os embeddings no banco foram
-    gerados a partir de texto contextual enriquecido pelo Sonnet. Para evitar
-    falsos negativos (similarity ~0.69 entre XML e texto narrativo), fazemos
-    strip_xml_tags antes de buscar, elevando a similarity para faixa detectavel.
+    Duas camadas de detecção:
+    - Layer 0 (text overlap): Comparação textual por overlap coefficient de
+      palavras normalizadas (sem acentos, >3 chars, sem stopwords). Zero custo
+      de API. Threshold: 0.65. Captura duplicatas óbvias com wording diferente.
+    - Layer 1 (dedup_embedding): Busca contra coluna dedup_embedding que armazena
+      embedding do texto limpo (sem contexto Sonnet, sem path, sem XML).
+      Threshold: 0.85. Ambos os lados na mesma representação — sem lacuna.
+      Fallback para embedding contextual (threshold 0.70) se dedup_embedding
+      ainda não foi populado (registros pré-migration).
 
     Args:
         user_id: ID do usuario
@@ -721,45 +736,206 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
         current_path: Path sendo atualizado (excluido da busca)
 
     Returns:
-        Path da memoria duplicada ou None se nao houver duplicata
+        Path da memoria duplicata ou None se nao houver duplicata
     """
+    from ..services.knowledge_graph_service import strip_xml_tags
+
+    clean_content = strip_xml_tags(content)
+
+    # ── Layer 0: Text overlap (fast, free) ──
+    try:
+        text_dup = _text_overlap_check(user_id, clean_content, current_path)
+        if text_dup:
+            return text_dup
+    except Exception as e:
+        logger.debug(f"[MEMORY_MCP] Text overlap check falhou (ignorado): {e}")
+
+    # ── Layer 1: Dedup embedding (threshold 0.85, mesma representação) ──
     try:
         from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
         if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
             return None
 
-        from app.embeddings.service import EmbeddingService
-        from ..services.knowledge_graph_service import strip_xml_tags
-
-        # Strip XML para alinhar com embeddings contextuais no banco.
-        # XML raw vs texto enriquecido causa similarity ~0.69 (abaixo do threshold).
-        # Texto limpo vs texto enriquecido sobe para ~0.85+ (detectavel).
-        clean_content = strip_xml_tags(content)
-
-        svc = EmbeddingService()
-        results = svc.search_memories(
-            clean_content, user_id=user_id, limit=3, min_similarity=0.85
-        )
-
-        if not results:
-            return None
-
-        for r in results:
-            path = r.get('path', '')
-            # Excluir self-match
-            if path and path != current_path:
-                similarity = r.get('similarity', 0)
-                if similarity >= 0.85:
-                    logger.info(
-                        f"[MEMORY_MCP] Duplicata detectada: {current_path} ~ {path} "
-                        f"(sim={similarity:.3f})"
-                    )
-                    return path
+        dup = _dedup_embedding_search(user_id, clean_content, current_path)
+        if dup:
+            return dup
 
     except Exception as e:
-        logger.debug(f"[MEMORY_MCP] Dedup check falhou (ignorado): {e}")
+        logger.debug(f"[MEMORY_MCP] Dedup embedding check falhou (ignorado): {e}")
 
     return None
+
+
+def _dedup_embedding_search(
+    user_id: int, clean_content: str, current_path: str
+) -> Optional[str]:
+    """
+    Layer 1: Busca contra dedup_embedding (texto limpo, mesma representação).
+
+    Query e embedding armazenado estão na mesma representação (strip_xml_tags),
+    eliminando a lacuna que causava falsos negativos (sim 0.66-0.78 no embedding
+    contextualizado quando o threshold era 0.85).
+
+    Fallback: se dedup_embedding não existe (registros pré-migration), usa
+    embedding contextualizado com threshold mais baixo (0.70).
+    """
+    from app.embeddings.service import EmbeddingService
+    from app import db
+    from sqlalchemy import text
+
+    svc = EmbeddingService()
+    query_embedding = svc.embed_query(clean_content)
+    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+    # Incluir user_id=0 (memórias empresa) para memória compartilhada
+    user_ids = [user_id, 0] if user_id != 0 else [0]
+
+    # Habilitar iterative_scan (pgvector 0.8.0+)
+    svc._enable_iterative_scan()
+
+    # Buscar primeiro contra dedup_embedding (threshold 0.85)
+    result = db.session.execute(text("""
+        SELECT
+            path,
+            1 - (dedup_embedding <=> CAST(:query AS vector)) AS similarity
+        FROM agent_memory_embeddings
+        WHERE user_id = ANY(:user_ids)
+          AND dedup_embedding IS NOT NULL
+          AND path != :current_path
+        ORDER BY dedup_embedding <=> CAST(:query AS vector)
+        LIMIT 3
+    """), {
+        "query": embedding_str,
+        "user_ids": user_ids,
+        "current_path": current_path or '',
+    })
+
+    for row in result.fetchall():
+        similarity = float(row.similarity)
+        if similarity >= 0.85:
+            logger.info(
+                f"[MEMORY_MCP] Duplicata detectada (dedup_embedding): "
+                f"{current_path} ~ {row.path} (sim={similarity:.3f})"
+            )
+            return row.path
+
+    # Fallback: registros sem dedup_embedding (pré-migration)
+    # Usa embedding contextualizado com threshold mais baixo
+    result_fallback = db.session.execute(text("""
+        SELECT
+            path,
+            1 - (embedding <=> CAST(:query AS vector)) AS similarity
+        FROM agent_memory_embeddings
+        WHERE user_id = ANY(:user_ids)
+          AND embedding IS NOT NULL
+          AND dedup_embedding IS NULL
+          AND path != :current_path
+        ORDER BY embedding <=> CAST(:query AS vector)
+        LIMIT 3
+    """), {
+        "query": embedding_str,
+        "user_ids": user_ids,
+        "current_path": current_path or '',
+    })
+
+    for row in result_fallback.fetchall():
+        similarity = float(row.similarity)
+        if similarity >= 0.70:
+            logger.info(
+                f"[MEMORY_MCP] Duplicata detectada (embedding fallback): "
+                f"{current_path} ~ {row.path} (sim={similarity:.3f})"
+            )
+            return row.path
+
+    return None
+
+
+# Stopwords PT-BR para Layer 0 (text overlap).
+# Palavras funcionais que não carregam significado semântico discriminante.
+_DEDUP_STOPWORDS = frozenset({
+    'para', 'como', 'todo', 'toda', 'pela', 'pelo', 'mais', 'esta',
+    'esse', 'essa', 'isso', 'isto', 'aqui', 'seus', 'suas', 'dele',
+    'dela', 'nosso', 'nossa', 'voce', 'eles', 'elas', 'cada', 'qual',
+    'quais', 'onde', 'quando', 'porque', 'muito', 'pouco', 'outro',
+    'outra', 'mesmo', 'mesma', 'ainda', 'apos', 'antes', 'sobre',
+    'entre', 'desde', 'deve', 'pode', 'sido', 'sera', 'seria',
+    'todas', 'todos', 'algumas', 'alguns', 'estas', 'estes',
+    'com', 'que', 'dos', 'das', 'nos', 'nas', 'uma',
+})
+
+
+def _normalize_words_for_dedup(text: str) -> set:
+    """
+    Normaliza texto para set de palavras significativas.
+    Remove acentos, filtra stopwords e palavras curtas (<=3 chars).
+    """
+    import re
+    import unicodedata
+
+    nfkd = unicodedata.normalize('NFKD', text.lower())
+    ascii_text = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    return set(
+        w for w in re.findall(r'\w+', ascii_text)
+        if len(w) > 3 and w not in _DEDUP_STOPWORDS
+    )
+
+
+def _text_overlap_check(
+    user_id: int, clean_content: str, current_path: str
+) -> Optional[str]:
+    """
+    Layer 0: Text-level duplicate check usando overlap coefficient.
+
+    Overlap coefficient = |A ∩ B| / min(|A|, |B|).
+    Mais robusto que Jaccard para memórias de tamanhos diferentes
+    (ex: uma memória é versão resumida da outra).
+
+    Threshold: 0.65 (65% de overlap).
+    Zero custo de API — apenas comparação textual contra memórias do banco.
+
+    Diagnosticado em 2026-03-09: overlap coefficient para duplicatas conhecidas:
+    - "Atacadão pede NF completa" vs "Atacadão exige NF completa": ~0.75
+    - "Dry-run lote Odoo" vs "Dry-run obrigatório Odoo": ~0.83
+    """
+    from ..models import AgentMemory
+    from ..services.knowledge_graph_service import strip_xml_tags
+
+    words_new = _normalize_words_for_dedup(clean_content)
+    if len(words_new) < 3:
+        return None  # Conteúdo muito curto para comparação
+
+    def _check():
+        # Incluir memórias empresa (user_id=0) na busca
+        user_ids = [user_id, 0] if user_id != 0 else [0]
+        memories = AgentMemory.query.filter(
+            AgentMemory.user_id.in_(user_ids),
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.path != current_path,
+        ).with_entities(AgentMemory.path, AgentMemory.content).all()
+
+        for mem_path, mem_content in memories:
+            mem_clean = strip_xml_tags(mem_content or '')
+            words_existing = _normalize_words_for_dedup(mem_clean)
+
+            if len(words_existing) < 3:
+                continue
+
+            # Overlap coefficient: intersection / min(|A|, |B|)
+            intersection = len(words_new & words_existing)
+            min_size = min(len(words_new), len(words_existing))
+
+            if min_size > 0 and intersection / min_size >= 0.65:
+                overlap_ratio = intersection / min_size
+                logger.info(
+                    f"[MEMORY_MCP] Duplicata detectada (text overlap): "
+                    f"{current_path} ~ {mem_path} "
+                    f"(overlap={intersection}/{min_size}={overlap_ratio:.2f})"
+                )
+                return mem_path
+
+        return None
+
+    return _execute_with_context(_check)
 
 
 def _track_correction_feedback(user_id: int, correction_path: str, correction_content: str) -> None:
@@ -830,9 +1006,14 @@ def _detect_conflicts_async(user_id: int, new_path: str, new_content: str) -> No
     """
     Memory v2 — Detecção de contradições (assíncrona/best-effort).
 
-    Após salvar, busca memórias semanticamente similares (cosine 0.50-0.85)
-    no mesmo domínio (parent path). Se encontrar com entidades em comum,
-    marca a NOVA memória com has_potential_conflict=True.
+    Após salvar, busca memórias semanticamente similares (cosine 0.50-0.85
+    no embedding contextualizado) no mesmo domínio (parent path).
+    Se encontrar com entidades em comum, marca a NOVA memória com
+    has_potential_conflict=True.
+
+    NOTA: Usa embedding contextualizado (não dedup_embedding) porque queremos
+    capturar memórias RELACIONADAS (mesmo tema, info diferente), não duplicatas.
+    Duplicatas são detectadas pelo _check_memory_duplicate via dedup_embedding.
 
     O alerta aparece na PRÓXIMA injeção (não bloqueia o save atual).
     """
@@ -861,13 +1042,13 @@ def _detect_conflicts_async(user_id: int, new_path: str, new_content: str) -> No
             r_path = r.get('path', '')
             similarity = r.get('similarity', 0)
 
-            # Excluir self-match e duplicatas (>0.90 já detectadas pelo dedup)
-            if r_path == new_path or similarity >= 0.90:
+            # Excluir self-match e duplicatas (>0.85 no dedup_embedding)
+            if r_path == new_path or similarity >= 0.85:
                 continue
 
             # Faixa de conflito: similar o suficiente para ser relacionado,
             # mas diferente o suficiente para potencialmente contradizer
-            if 0.50 <= similarity <= 0.85:
+            if 0.50 <= similarity < 0.85:
                 # Verificar se está no mesmo domínio (parent path)
                 r_parent = r_path.rsplit('/', 1)[0] if '/' in r_path else ''
                 if r_parent == parent or parent in r_parent or r_parent in parent:
