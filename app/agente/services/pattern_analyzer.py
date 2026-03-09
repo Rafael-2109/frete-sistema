@@ -628,9 +628,13 @@ def _save_empresa_memory(
                 existing.created_by = created_by
         else:
             # Verificar duplicata semantica ANTES de criar
+            # created_by (NÃO 0) para cross-namespace dedup:
+            # Checa [created_by, 0] → detecta duplicata pessoal↔empresa.
             try:
                 from ..tools.memory_mcp_tool import _check_memory_duplicate
-                dup_path = _check_memory_duplicate(0, content, current_path=path)
+                dup_path = _check_memory_duplicate(
+                    created_by or 0, content, current_path=path
+                )
                 if dup_path:
                     logger.info(
                         f"[KNOWLEDGE_EXTRACTION] Dedup: '{path}' similar a '{dup_path}', skipping"

@@ -168,6 +168,18 @@ def _validate_path(path: str) -> str:
 
 
 # =====================================================================
+# EXCEÇÕES DE DOMÍNIO
+# =====================================================================
+
+class DuplicateMemoryError(Exception):
+    """Raised when dedup gate detects duplicate memory before commit."""
+
+    def __init__(self, dup_path: str):
+        self.dup_path = dup_path
+        super().__init__(f"Duplicate memory: {dup_path}")
+
+
+# =====================================================================
 # HELPERS PARA ACESSO AO BANCO
 # =====================================================================
 def _get_app_context():
@@ -491,6 +503,80 @@ def _embed_memory_best_effort(
         logger.debug(f"[MEMORY_MCP] _embed_memory_best_effort falhou: {e}")
 
     return haiku_entities, haiku_relations
+
+
+def _save_dedup_embedding_only(user_id: int, path: str, content: str) -> None:
+    """
+    Salva APENAS o dedup_embedding de forma síncrona (~100ms Voyage).
+
+    Garante que o próximo save_memory() detecte esta memória via Layer 1.
+    O daemon thread posteriormente preencherá o embedding contextual completo.
+
+    content_hash=NULL sinaliza ao daemon que processamento completo é necessário.
+
+    Args:
+        user_id: ID do usuário (pode ser 0 para empresa)
+        path: Path da memória
+        content: Conteúdo da memória (pode conter XML)
+    """
+    import json
+
+    from app.embeddings.config import EMBEDDINGS_ENABLED, MEMORY_SEMANTIC_SEARCH
+    if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
+        return
+
+    from ..models import AgentMemory
+    from app.embeddings.service import EmbeddingService
+    from ..services.knowledge_graph_service import strip_xml_tags
+    from app import db
+    from sqlalchemy import text
+    from app.utils.timezone import agora_utc_naive
+    from app.embeddings.config import VOYAGE_DEFAULT_MODEL
+
+    mem = AgentMemory.get_by_path(user_id, path)
+    if not mem:
+        return
+
+    dedup_texto = strip_xml_tags(content)
+    if not dedup_texto.strip():
+        return
+
+    svc = EmbeddingService()
+    embeddings = svc.embed_texts([dedup_texto], input_type="document")
+    if not embeddings:
+        return
+
+    dedup_embedding_str = json.dumps(embeddings[0])
+
+    # Upsert: apenas dedup_embedding + placeholder texto_embedado.
+    # content_hash=NULL sinaliza ao daemon que processamento completo é necessário.
+    # ON CONFLICT: atualiza apenas dedup_embedding (não sobrescreve embedding contextual
+    # caso daemon já tenha rodado — improvável mas seguro).
+    db.session.execute(text("""
+        INSERT INTO agent_memory_embeddings
+            (memory_id, user_id, path,
+             texto_embedado, dedup_embedding,
+             model_used, content_hash)
+        VALUES
+            (:memory_id, :user_id, :path,
+             :texto_embedado, CAST(:dedup_embedding AS vector),
+             :model_used, NULL)
+        ON CONFLICT ON CONSTRAINT uq_memory_embedding
+        DO UPDATE SET
+            dedup_embedding = EXCLUDED.dedup_embedding,
+            updated_at = :updated_at
+    """), {
+        "memory_id": mem.id,
+        "user_id": user_id,
+        "path": path,
+        "texto_embedado": dedup_texto,
+        "dedup_embedding": dedup_embedding_str,
+        "model_used": VOYAGE_DEFAULT_MODEL,
+        "updated_at": agora_utc_naive(),
+    })
+    db.session.commit()
+
+    logger.debug(f"[MEMORY_MCP] Sync dedup embed salvo para {path}")
 
 
 def _calculate_importance_score(path: str, content: str) -> float:
@@ -1260,6 +1346,26 @@ try:
                         existing.created_by = created_by_id
                     action = "atualizado"
                 else:
+                    # Dedup gate ANTES do commit (Bug 1+2 fix):
+                    # Verificar duplicata ANTES de criar — se detectar, raise em vez de salvar.
+                    # Defensive: falha no dedup NÃO deve impedir o save (best-effort gate).
+                    # user_id (NÃO actual_user_id) para cross-namespace dedup:
+                    # Se empresa (actual=0), user_id original garante check [user, 0]
+                    # em vez de [0] — detecta duplicata pessoal↔empresa.
+                    try:
+                        dup_path = _check_memory_duplicate(
+                            user_id, content, current_path=path
+                        )
+                        if dup_path:
+                            raise DuplicateMemoryError(dup_path)
+                    except DuplicateMemoryError:
+                        raise  # Propagar — este É o gate
+                    except Exception as dedup_gate_err:
+                        logger.debug(
+                            f"[MEMORY_MCP] Dedup gate check failed "
+                            f"(allowing save): {dedup_gate_err}"
+                        )
+
                     mem = AgentMemory.create_file(actual_user_id, path, content)
                     mem.importance_score = importance
                     mem.category = category
@@ -1273,20 +1379,36 @@ try:
                 db.session.commit()
                 return action
 
-            action = _execute_with_context(_save)
+            try:
+                action = _execute_with_context(_save)
+            except DuplicateMemoryError as dup_err:
+                logger.info(
+                    f"[MEMORY_MCP] Dedup gate blocked: {path} ~ {dup_err.dup_path}"
+                )
+                return {
+                    "content": [{
+                        "type": "text",
+                        "text": (
+                            f"Memoria NAO salva: conteudo similar ja existe em "
+                            f"'{dup_err.dup_path}'. Use update_memory para atualizar "
+                            f"o conteudo existente, ou altere significativamente o conteudo."
+                        ),
+                    }]
+                }
+
             logger.info(f"[MEMORY_MCP] save_memory: {path} ({action})")
 
-            # Best-effort: verificar duplicatas semanticas
-            dedup_warning = ''
-            try:
-                dup_path = _check_memory_duplicate(actual_user_id, content, current_path=path)
-                if dup_path:
-                    dedup_warning = (
-                        f" AVISO: conteudo similar ja existe em '{dup_path}'. "
-                        f"Considere consolidar."
+            # Sync dedup embed: garante que próximos saves detectem esta memória
+            # via Layer 1 (elimina race condition do Bug 3 — daemon thread assíncrono)
+            if action == "criado":
+                try:
+                    _execute_with_context(
+                        lambda: _save_dedup_embedding_only(actual_user_id, path, content)
                     )
-            except Exception:
-                pass
+                except Exception as sync_emb_err:
+                    logger.debug(
+                        f"[MEMORY_MCP] Sync dedup embed failed (ignorado): {sync_emb_err}"
+                    )
 
             # Best-effort: verificar se memórias precisam de consolidação + tier frio
             # Skip consolidacao para memorias empresa (user_id=0) por enquanto
@@ -1365,7 +1487,7 @@ try:
                 pass
 
             return {
-                "content": [{"type": "text", "text": f"Memória {action} em {path}{dedup_warning}{pitfall_hint}"}]
+                "content": [{"type": "text", "text": f"Memória {action} em {path}{pitfall_hint}"}]
             }
 
         except Exception as e:
