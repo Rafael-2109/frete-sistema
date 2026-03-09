@@ -143,6 +143,12 @@ def _build_operational_context(user_id: int) -> Optional[str]:
         return None
 
 
+def _normalize_pendencia(text: str) -> str:
+    """Normaliza texto de pendência para comparação: lowercase, strip, collapse whitespace."""
+    import re
+    return re.sub(r'\s+', ' ', text.strip().lower())
+
+
 def _build_session_window(user_id: int) -> Optional[str]:
     """
     Memory v2 — Rolling Window: últimas 5 sessões do banco.
@@ -209,13 +215,17 @@ def _build_session_window(user_id: int) -> Optional[str]:
         if pendencias_all:
             unique_pend = list(dict.fromkeys(pendencias_all))[:5]  # Max 5, preserva ordem
 
-            # Filtrar pendências já resolvidas
+            # Filtrar pendências já resolvidas (matching normalizado)
             resolved = _load_resolved_pendencias(user_id)
             if resolved:
-                unique_pend = [p for p in unique_pend if p not in resolved]
+                unique_pend = [p for p in unique_pend if _normalize_pendencia(p) not in resolved]
 
             if unique_pend:
                 parts.append('<pendencias_acumuladas>')
+                parts.append('  <instruction>Verifique SILENCIOSAMENTE cada item contra '
+                             'evidencias (commits recentes, sessoes anteriores, memorias). '
+                             'Se resolvido, chame resolve_pendencia com o texto EXATO do item. '
+                             'Mencione ao usuario apenas pendencias REALMENTE pendentes.</instruction>')
                 for p in unique_pend:
                     parts.append(f'  <item>{p}</item>')
                 parts.append('</pendencias_acumuladas>')
@@ -233,7 +243,7 @@ def _load_resolved_pendencias(user_id: int) -> set:
     Carrega pendências resolvidas de /memories/system/resolved_pendencias.json.
 
     Returns:
-        Set de strings com pendências resolvidas.
+        Set de strings normalizadas com pendências resolvidas.
     """
     try:
         from ..models import AgentMemory
@@ -245,7 +255,7 @@ def _load_resolved_pendencias(user_id: int) -> set:
 
         data = json.loads(mem.content)
         if isinstance(data, list):
-            return set(data)
+            return {_normalize_pendencia(item) for item in data if isinstance(item, str)}
         return set()
 
     except Exception:

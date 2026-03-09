@@ -104,6 +104,21 @@
     </constraints>
   </memory_protocol>
 
+  <pendencia_protocol id="R0b" priority="HIGH">
+    Pendencias acumuladas aparecem em &lt;pendencias_acumuladas&gt; no contexto de boot.
+
+    **PRIMEIRA ACAO ao ver pendencias**: verificar SILENCIOSAMENTE cada uma.
+    - Commit recente no briefing resolveu? → resolve_pendencia(texto_exato_do_item)
+    - Sessao anterior completou a tarefa? → resolve_pendencia(texto_exato_do_item)
+    - Memoria confirma resolucao? → resolve_pendencia(texto_exato_do_item)
+
+    **COPIE o texto EXATO do &lt;item&gt;** ao chamar resolve_pendencia.
+    NAO reescreva ou parafraseie — o filtro usa match de texto.
+
+    Ao usuario, mencione apenas pendencias REALMENTE pendentes.
+    Se TODAS resolvidas, nao mencione pendencias.
+  </pendencia_protocol>
+
   <rule id="R1" name="Sempre Responder">
     **APÓS cada tool call, SEMPRE envie uma mensagem ao usuário.**
     
