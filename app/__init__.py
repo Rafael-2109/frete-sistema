@@ -42,6 +42,51 @@ from sqlalchemy import text # noqa: E402
 # 🔄 Carrega as variáveis de ambiente do .env
 load_dotenv()
 
+# 📡 Sentry — Application Performance Monitoring
+# Inicializado cedo para capturar erros durante o startup
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    try:
+        import sentry_sdk  # type: ignore[import-untyped]
+        from sentry_sdk.integrations.flask import FlaskIntegration
+
+        def _before_send_transaction(event, hint):
+            """Descarta transacoes de static files e health checks."""
+            url = event.get("request", {}).get("url", "")
+            transaction = event.get("transaction", "")
+            if any(p in (url + transaction) for p in ("/static/", "/healthz", "/favicon.ico")):
+                return None
+            return event
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            integrations=[
+                FlaskIntegration(
+                    transaction_style="endpoint",
+                    http_methods_to_capture=("GET", "POST", "PUT", "DELETE", "PATCH"),
+                ),
+            ],
+            # Performance: amostra 10% das transacoes (ajustar conforme volume)
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            # Profiling: amostra 10% das transacoes amostradas
+            profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+            # Envia PII (user info) para contexto de erro
+            send_default_pii=True,
+            # Release tracking — usa RENDER_GIT_COMMIT se disponivel
+            release=os.getenv("RENDER_GIT_COMMIT", "dev"),
+            # Ambiente: production, development, testing
+            environment=os.getenv("ENVIRONMENT", "development"),
+            # Filtra transacoes de static files e health checks
+            before_send_transaction=_before_send_transaction,
+            # Breadcrumbs para contexto de erro
+            max_breadcrumbs=50,
+            # Stack traces em mensagens para melhor debugging
+            attach_stacktrace=True,
+        )
+        print(f"✅ Sentry inicializado (env={os.getenv('ENVIRONMENT', 'development')})")
+    except Exception as e:
+        print(f"⚠️ Erro ao inicializar Sentry: {e}")
+
 # 🔥 IMPORTAÇÃO CRÍTICA: Registrar tipos PostgreSQL ANTES de TUDO
 # Isso garante que os tipos sejam registrados antes de qualquer conexão
 if "postgres" in os.getenv("DATABASE_URL", ""):

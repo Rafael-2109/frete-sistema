@@ -163,3 +163,8 @@ tesserocr==2.10.0          # OCR via Tesseract C API (requer tesseract-ocr no si
 # ==========================================
 voyageai>=0.3.0            # SDK Voyage AI (embeddings + reranking) — recomendado pela Anthropic
 pgvector>=0.3.0            # Python bindings para pgvector (busca vetorial no PostgreSQL)
+
+# ==========================================
+# APPLICATION MONITORING (APM)
+# ==========================================
+sentry-sdk[flask]==2.54.0  # Error tracking, performance monitoring, distributed tracing

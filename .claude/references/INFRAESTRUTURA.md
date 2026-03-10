@@ -71,6 +71,25 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 
 ---
 
+## Sentry — Application Monitoring (APM)
+
+| Recurso | Valor |
+|---------|-------|
+| SDK | `sentry-sdk[flask]==2.54.0` |
+| Integracao | `app/__init__.py` (condicional via `SENTRY_DSN`) |
+| MCP Server | `@sentry/mcp-server@latest` (env: `SENTRY_AUTH_TOKEN`) |
+| Escopo | Erros da aplicacao Flask (complementa `diagnosticando-banco` que cobre saude do PostgreSQL) |
+
+### Env Vars (Render)
+
+| Variavel | Default | Descricao |
+|----------|---------|-----------|
+| `SENTRY_DSN` | — | DSN do projeto Sentry (sem = Sentry desabilitado) |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | % de transacoes HTTP amostradas para performance |
+| `SENTRY_PROFILES_SAMPLE_RATE` | `0.1` | % de profiles coletados |
+
+---
+
 ## Odoo ERP
 
 | Recurso | Valor |
