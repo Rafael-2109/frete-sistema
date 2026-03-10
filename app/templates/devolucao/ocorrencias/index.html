@@ -211,6 +211,7 @@
                             <th>Ocorrencia</th>
                             <th>NFD</th>
                             <th>Cliente</th>
+                            <th>Vendedor</th>
                             <th>Transp. Retorno</th>
                             <th>Valor</th>
                             <th>Devolucao</th>
@@ -254,25 +255,41 @@
                                     {% set tipo_doc = oc.nf_devolucao.tipo_documento or 'NFD' %}
                                     {% set numero = oc.nf_devolucao.numero_nfd or oc.nf_devolucao.numero_nf_venda or '?' %}
 
-                                    {# Linha 1: Formato unificado - NF|NFD - ##### - Status #}
+                                    {# Linha 1: Formato unificado - NF|NFD|NC - ##### - Status #}
                                     <strong>
-                                        <span class="text-{{ 'primary' if tipo_doc == 'NFD' else 'secondary' }}">{{ tipo_doc }}</span>
-                                        <span class="text-muted mx-1">-</span>
-                                        {{ numero }}
+                                        {% if tipo_doc == 'NF' and oc.nf_devolucao.status_odoo == 'Revertida' %}
+                                            <span class="text-secondary">NC</span>
+                                            <span class="text-muted mx-1">-</span>
+                                            {{ oc.nf_devolucao.numero_nota_credito or numero }}
+                                        {% else %}
+                                            <span class="text-{{ 'primary' if tipo_doc == 'NFD' else 'secondary' }}">{{ tipo_doc }}</span>
+                                            <span class="text-muted mx-1">-</span>
+                                            {{ numero }}
+                                        {% endif %}
                                         <span class="text-muted mx-1">-</span>
                                         {# Status baseado no tipo de documento #}
                                         {% if tipo_doc == 'NFD' %}
                                             {% if oc.nf_devolucao.odoo_status_codigo == '06' %}
-                                                <span class="badge bg-success badge-sm" title="Status Odoo: {{ oc.nf_devolucao.odoo_status_descricao or 'Concluído' }}{% if oc.nf_devolucao.data_entrada %} | Entrada: {{ oc.nf_devolucao.data_entrada|formatar_data_segura }}{% endif %}">Entrada OK</span>
+                                                <span class="badge bg-success badge-sm devolucao-badge-data" title="Status Odoo: {{ oc.nf_devolucao.odoo_status_descricao or 'Concluido' }}{% if oc.nf_devolucao.data_entrada %} | Entrada: {{ oc.nf_devolucao.data_entrada|formatar_data_segura }}{% endif %}">
+                                                    Entrada OK
+                                                    {% if oc.nf_devolucao.data_entrada %}
+                                                    <br><span class="devolucao-badge-date">{{ oc.nf_devolucao.data_entrada|formatar_data_segura }}</span>
+                                                    {% endif %}
+                                                </span>
                                             {% else %}
-                                                <span class="badge bg-warning text-dark badge-sm" title="Status Odoo: {{ oc.nf_devolucao.odoo_status_descricao or 'Pendente' }} | Aguardando entrada física">Pendente</span>
+                                                <span class="badge bg-warning text-dark badge-sm" title="Status Odoo: {{ oc.nf_devolucao.odoo_status_descricao or 'Pendente' }} | Aguardando entrada fisica">Pendente</span>
                                             {% endif %}
                                         {% else %}
                                             {# NF de venda - verificar se foi revertida #}
                                             {% if oc.nf_devolucao.status_odoo == 'Revertida' %}
-                                                <span class="badge bg-danger badge-sm" title="NF revertida no Odoo">Reversão</span>
+                                                <span class="badge bg-danger badge-sm devolucao-badge-data" title="NF revertida no Odoo">
+                                                    Reversao
+                                                    {% if oc.nf_devolucao.data_entrada %}
+                                                    <br><span class="devolucao-badge-date">{{ oc.nf_devolucao.data_entrada|formatar_data_segura }}</span>
+                                                    {% endif %}
+                                                </span>
                                             {% else %}
-                                                <span class="badge bg-warning text-dark badge-sm" title="Pendente de reversão">Pendente</span>
+                                                <span class="badge bg-warning text-dark badge-sm" title="Pendente de reversao">Pendente</span>
                                             {% endif %}
                                         {% endif %}
                                     </strong>
@@ -304,16 +321,32 @@
                             <!-- Coluna 3: Cliente + CNPJ + UF-Cidade -->
                             <td>
                                 {% if oc.nf_devolucao and oc.nf_devolucao.nome_emitente %}
-                                {{ oc.nf_devolucao.nome_emitente[:25] }}{% if oc.nf_devolucao.nome_emitente|length > 25 %}...{% endif %}
+                                    {% if oc.raz_social_red %}
+                                    <strong>{{ oc.raz_social_red[:40] }}{% if oc.raz_social_red|length > 40 %}...{% endif %}</strong>
+                                    <br><small class="text-muted">{{ oc.nf_devolucao.nome_emitente[:40] }}{% if oc.nf_devolucao.nome_emitente|length > 40 %}...{% endif %}</small>
+                                    {% else %}
+                                    {{ oc.nf_devolucao.nome_emitente[:40] }}{% if oc.nf_devolucao.nome_emitente|length > 40 %}...{% endif %}
+                                    {% endif %}
                                 <br><small class="text-muted">{{ oc.nf_devolucao.cnpj_emitente|formatar_cnpj if oc.nf_devolucao.cnpj_emitente else '' }}</small>
                                 {# Linha 3: UF-Cidade #}
                                 {% if oc.nf_devolucao.uf_emitente or oc.nf_devolucao.municipio_emitente %}
-                                <br><small class="text-secondary"><i class="bi bi-geo-alt"></i> {{ oc.nf_devolucao.uf_emitente or '' }}{% if oc.nf_devolucao.uf_emitente and oc.nf_devolucao.municipio_emitente %}-{% endif %}{{ oc.nf_devolucao.municipio_emitente[:15] if oc.nf_devolucao.municipio_emitente else '' }}{% if oc.nf_devolucao.municipio_emitente and oc.nf_devolucao.municipio_emitente|length > 15 %}...{% endif %}</small>
+                                <br><small class="text-secondary"><i class="bi bi-geo-alt"></i> {{ oc.nf_devolucao.uf_emitente or '' }}{% if oc.nf_devolucao.uf_emitente and oc.nf_devolucao.municipio_emitente %}-{% endif %}{{ oc.nf_devolucao.municipio_emitente[:25] if oc.nf_devolucao.municipio_emitente else '' }}{% if oc.nf_devolucao.municipio_emitente and oc.nf_devolucao.municipio_emitente|length > 25 %}...{% endif %}</small>
                                 {% endif %}
                                 {% elif oc.nf_devolucao and oc.nf_devolucao.entrega_monitorada %}
-                                {{ oc.nf_devolucao.entrega_monitorada.cliente[:25] }}{% if oc.nf_devolucao.entrega_monitorada.cliente|length > 25 %}...{% endif %}
+                                {{ oc.nf_devolucao.entrega_monitorada.cliente[:40] }}{% if oc.nf_devolucao.entrega_monitorada.cliente|length > 40 %}...{% endif %}
                                 {% else %}
                                 -
+                                {% endif %}
+                            </td>
+                            <!-- Coluna 3b: Vendedor/Equipe -->
+                            <td>
+                                {% if oc.vendedor_info.vendedor %}
+                                {{ oc.vendedor_info.vendedor[:25] }}{% if oc.vendedor_info.vendedor|length > 25 %}...{% endif %}
+                                {% if oc.vendedor_info.equipe %}
+                                <br><small class="text-muted">{{ oc.vendedor_info.equipe }}</small>
+                                {% endif %}
+                                {% else %}
+                                <small class="text-muted">-</small>
                                 {% endif %}
                             </td>
                             <!-- Coluna 4: Transp. Retorno + Entrega Prevista + % Descartado -->

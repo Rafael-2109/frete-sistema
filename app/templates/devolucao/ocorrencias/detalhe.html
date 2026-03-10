@@ -26,9 +26,15 @@
                     {% set numero = nfd.numero_nfd or nfd.numero_nf_venda or '?' %}
 
                     <h6 class="mb-0">
+                        {% if tipo_doc == 'NF' and nfd.status_odoo == 'Revertida' %}
+                        <span class="text-secondary">NC</span>
+                        <span class="text-muted">-</span>
+                        {{ nfd.numero_nota_credito or numero }}
+                        {% else %}
                         <span class="text-{{ 'primary' if tipo_doc == 'NFD' else 'secondary' }}">{{ tipo_doc }}</span>
                         <span class="text-muted">-</span>
                         {{ numero }}
+                        {% endif %}
                         <span class="text-muted">-</span>
                         {# Status baseado no tipo de documento #}
                         {% if tipo_doc == 'NFD' %}
@@ -153,7 +159,12 @@
             <div class="row mb-2">
                 <div class="col-md-4">
                     <small class="text-muted">Cliente/Emitente</small><br>
+                    {% if raz_social_red %}
+                    <strong>{{ raz_social_red[:40] }}{% if raz_social_red|length > 40 %}...{% endif %}</strong>
+                    <br><small class="text-muted">{{ nfd.nome_emitente or (entrega.cliente if entrega else '-') }}</small>
+                    {% else %}
                     {{ nfd.nome_emitente or (entrega.cliente if entrega else '-') }}
+                    {% endif %}
                     {% if nfd.cnpj_emitente %}
                     <br><small class="text-muted">CNPJ: {{ nfd.cnpj_emitente|formatar_cnpj }}</small>
                     {% endif %}
@@ -183,6 +194,20 @@
                     {% else %}
                     -
                     {% endif %}
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3">
+                    <small class="text-muted">Vendedor</small><br>
+                    {{ vendedor_info.vendedor if vendedor_info and vendedor_info.vendedor else '-' }}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Equipe de Vendas</small><br>
+                    {{ vendedor_info.equipe if vendedor_info and vendedor_info.equipe else '-' }}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Data Entrada</small><br>
+                    {{ nfd.data_entrada|formatar_data_segura if nfd and nfd.data_entrada else '-' }}
                 </div>
             </div>
             <div class="row">
@@ -328,6 +353,11 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">Secao Comercial</h6>
                     <div>
+                        {% if current_user.perfil in ['administrador', 'gerente_comercial'] %}
+                        <button type="button" class="btn btn-sm btn-outline-warning me-1" onclick="abrirPermissoesCadastro()">
+                            <i class="bi bi-shield-lock"></i> Autorizacao
+                        </button>
+                        {% endif %}
                         <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="abrirCadastrosCom('categorias')">
                             Cadastros
                         </button>
@@ -516,18 +546,16 @@
                     <form id="form-upload-anexo" enctype="multipart/form-data">
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Arquivo</label>
-                                <input type="file" class="form-control" name="arquivo" id="arquivo-anexo" required>
+                                <label class="form-label">Arquivo(s)</label>
+                                <input type="file" class="form-control" name="arquivo" id="arquivo-anexo" required multiple>
+                                <small class="text-muted d-block mt-1">
+                                    PDF, DOC, DOCX, TXT | MSG, EML | JPG, PNG, GIF, WEBP | XLSX, XLS, CSV
+                                </small>
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">Tipo</label>
-                                <select class="form-select" name="tipo" id="tipo-anexo">
-                                    <option value="DOCUMENTO">Documento</option>
-                                    <option value="EMAIL">Email (.msg/.eml)</option>
-                                    <option value="FOTO">Foto</option>
-                                    <option value="PLANILHA">Planilha</option>
-                                    <option value="OUTROS">Outros</option>
-                                </select>
+                                <label class="form-label">Tipo <small class="text-muted">(auto)</small></label>
+                                <input type="text" class="form-control" id="tipo-anexo-display" readonly placeholder="Auto-detectado">
+                                <input type="hidden" name="tipo" id="tipo-anexo" value="DOCUMENTO">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Descricao</label>
@@ -546,8 +574,13 @@
             </div>
 
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">Anexos Existentes</h6>
+                    {% if anexos %}
+                    <button class="btn btn-sm btn-outline-success" onclick="downloadAllAnexos()">
+                        <i class="bi bi-download"></i> Baixar Todos
+                    </button>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     <div id="lista-anexos">
@@ -573,9 +606,11 @@
                                             </span>
                                         </td>
                                         <td>
-                                            {{ anexo.nome_original }}
                                             {% if anexo.descricao %}
-                                            <br><small class="text-muted">{{ anexo.descricao }}</small>
+                                            <strong>{{ anexo.descricao }}</strong>
+                                            <br><small class="text-muted">{{ anexo.nome_original }}</small>
+                                            {% else %}
+                                            {{ anexo.nome_original }}
                                             {% endif %}
                                         </td>
                                         <td><small>{{ anexo.tamanho_kb }} KB</small></td>
@@ -1128,8 +1163,14 @@
                                                 data-valor-unitario="{{ linha.valor_unitario or 0 }}"
                                                 data-qtd-original="{{ linha.quantidade or 0 }}">
                                                 <td>
-                                                    <small class="text-muted">{{ linha.codigo_produto_interno or linha.codigo_produto_cliente or '-' }}</small><br>
-                                                    {{ linha.descricao_produto_interno or linha.descricao_produto_cliente or 'Produto nao resolvido' }}
+                                                    {% if linha.codigo_produto_interno %}
+                                                    <code class="text-primary">{{ linha.codigo_produto_interno }}</code>
+                                                    <small class="text-muted">{{ linha.descricao_produto_interno or '' }}</small><br>
+                                                    {% endif %}
+                                                    <small class="text-secondary">
+                                                        Cliente: <code>{{ linha.codigo_produto_cliente or '-' }}</code>
+                                                        {{ linha.descricao_produto_cliente or '' }}
+                                                    </small>
                                                 </td>
                                                 <td class="text-center">{{ "%.0f"|format(linha.quantidade or 0) }} {{ linha.unidade_medida or 'UN' }}</td>
                                                 <td class="text-end">R$ {{ "%.2f"|format(linha.valor_total or 0) }}</td>
@@ -1595,21 +1636,6 @@
     </div>
 </div>
 
-<style>
-/* Estilo para ícone de collapse rotacionar quando aberto */
-.collapse-icon {
-    transition: transform 0.2s ease;
-}
-[data-bs-toggle="collapse"][aria-expanded="true"] .collapse-icon,
-[data-bs-toggle="collapse"]:not(.collapsed) .collapse-icon {
-    transform: rotate(180deg);
-}
-/* Destacar header ao passar o mouse - usa variavel do tema */
-.card-header[role="button"]:hover {
-    background-color: var(--bg-light);
-}
-</style>
-
 {% endblock %}
 
 {% block scripts %}
@@ -1623,6 +1649,8 @@ const PREFIXO_CNPJ = '{{ nfd.prefixo_cnpj_emitente or "" }}';
 </script>
 <!-- Modal de Cadastros -->
 {% include 'devolucao/ocorrencias/_modal_cadastros.html' %}
+<!-- Modal de Permissoes -->
+{% include 'devolucao/ocorrencias/_modal_permissoes.html' %}
 <!-- Scripts -->
 <script src="{{ 'js/devolucao/cadastros-modal.js'|asset_url }}"></script>
 <script src="{{ 'js/devolucao/ocorrencia-detalhe.js'|asset_url }}"></script>

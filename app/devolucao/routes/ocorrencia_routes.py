@@ -6,8 +6,9 @@ Dashboard e gerenciamento de ocorrencias para Comercial e Logistica.
 
 Criado em: 30/12/2024
 """
+import os
 from flask import (
-    Blueprint, request, jsonify, render_template
+    Blueprint, request, jsonify, render_template, send_file, redirect
 )
 from flask_login import login_required, current_user
 from app import db
@@ -17,12 +18,15 @@ from app.devolucao.models import (
     NFDevolucaoNFReferenciada,
     OcorrenciaCategoria, OcorrenciaSubcategoria,
     OcorrenciaResponsavel, OcorrenciaOrigem, OcorrenciaAutorizadoPor,
-    OcorrenciaDevolucaoCategoria, OcorrenciaDevolucaoSubcategoria
+    OcorrenciaDevolucaoCategoria, OcorrenciaDevolucaoSubcategoria,
+    PermissaoCadastroDevolucao
 )
 from app.monitoramento.models import EntregaMonitorada
+from app.carteira.models import CarteiraPrincipal
+from app.faturamento.models import FaturamentoProduto
 from app.utils.timezone import agora_utc_naive
 from sqlalchemy import or_, func
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 
 # Blueprint
 ocorrencia_bp = Blueprint('devolucao_ocorrencia', __name__, url_prefix='/ocorrencias')
@@ -227,6 +231,73 @@ def index():
 
         ocorrencias.append(oc)
 
+    # =====================================================================
+    # Enriquecer com raz_social_red (Bloco 1)
+    # =====================================================================
+    cnpjs_prefixo = set()
+    for oc in ocorrencias:
+        if oc.nf_devolucao and oc.nf_devolucao.cnpj_emitente:
+            cnpjs_prefixo.add(oc.nf_devolucao.cnpj_emitente[:8])
+
+    raz_social_map = {}
+    if cnpjs_prefixo:
+        for prefixo in cnpjs_prefixo:
+            cp = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.cnpj_cpf.like(f'{prefixo}%')
+            ).first()
+            if cp and cp.raz_social_red:
+                raz_social_map[prefixo] = cp.raz_social_red
+
+    for oc in ocorrencias:
+        prefixo = oc.nf_devolucao.cnpj_emitente[:8] if oc.nf_devolucao and oc.nf_devolucao.cnpj_emitente else None
+        oc.raz_social_red = raz_social_map.get(prefixo) if prefixo else None
+
+    # =====================================================================
+    # Enriquecer com Vendedor/Equipe (Bloco 6)
+    # =====================================================================
+    nfs_para_busca = set()
+    cnpjs_para_busca = set()
+    for oc in ocorrencias:
+        if oc.nfs_referenciadas:
+            nfs_para_busca.update(ref.numero_nf for ref in oc.nfs_referenciadas if ref.numero_nf)
+        if oc.nf_devolucao and oc.nf_devolucao.cnpj_emitente:
+            cnpjs_para_busca.add(oc.nf_devolucao.cnpj_emitente)
+
+    vendedor_por_nf = {}
+    if nfs_para_busca:
+        fat_results = db.session.query(
+            FaturamentoProduto.numero_nf,
+            FaturamentoProduto.vendedor,
+            FaturamentoProduto.equipe_vendas
+        ).filter(
+            FaturamentoProduto.numero_nf.in_(nfs_para_busca)
+        ).distinct(FaturamentoProduto.numero_nf).all()
+        for r in fat_results:
+            vendedor_por_nf[r.numero_nf] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
+
+    vendedor_por_cnpj = {}
+    if cnpjs_para_busca:
+        fat_cnpj = db.session.query(
+            FaturamentoProduto.cnpj_cliente,
+            FaturamentoProduto.vendedor,
+            FaturamentoProduto.equipe_vendas
+        ).filter(
+            FaturamentoProduto.cnpj_cliente.in_(cnpjs_para_busca)
+        ).order_by(FaturamentoProduto.data_fatura.desc()).distinct(FaturamentoProduto.cnpj_cliente).all()
+        for r in fat_cnpj:
+            vendedor_por_cnpj[r.cnpj_cliente] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
+
+    for oc in ocorrencias:
+        info = None
+        if oc.nfs_referenciadas:
+            for ref in oc.nfs_referenciadas:
+                if ref.numero_nf in vendedor_por_nf:
+                    info = vendedor_por_nf[ref.numero_nf]
+                    break
+        if not info and oc.nf_devolucao and oc.nf_devolucao.cnpj_emitente:
+            info = vendedor_por_cnpj.get(oc.nf_devolucao.cnpj_emitente)
+        oc.vendedor_info = info or {}
+
     # Estatisticas
     stats = {
         'total': OcorrenciaDevolucao.query.filter_by(ativo=True).count(),
@@ -384,6 +455,40 @@ def detalhe(ocorrencia_id):
         ativo=True
     ).order_by(AnexoOcorrencia.criado_em.desc()).all()
 
+    # =====================================================================
+    # Enriquecer com raz_social_red (Bloco 1)
+    # =====================================================================
+    raz_social_red = None
+    if nfd and nfd.cnpj_emitente:
+        prefixo = nfd.cnpj_emitente[:8]
+        cp = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.cnpj_cpf.like(f'{prefixo}%')
+        ).first()
+        if cp and cp.raz_social_red:
+            raz_social_red = cp.raz_social_red
+
+    # =====================================================================
+    # Enriquecer com Vendedor/Equipe (Bloco 7)
+    # =====================================================================
+    vendedor_info = {}
+    # Tentar por NFs referenciadas
+    if nfs_referenciadas:
+        for nf_ref in nfs_referenciadas:
+            if nf_ref.get('numero_nf'):
+                fat = FaturamentoProduto.query.filter_by(
+                    numero_nf=nf_ref['numero_nf']
+                ).first()
+                if fat and fat.vendedor:
+                    vendedor_info = {'vendedor': fat.vendedor, 'equipe': fat.equipe_vendas}
+                    break
+    # Fallback por CNPJ
+    if not vendedor_info and nfd and nfd.cnpj_emitente:
+        fat = FaturamentoProduto.query.filter_by(
+            cnpj_cliente=nfd.cnpj_emitente
+        ).order_by(FaturamentoProduto.data_fatura.desc()).first()
+        if fat and fat.vendedor:
+            vendedor_info = {'vendedor': fat.vendedor, 'equipe': fat.equipe_vendas}
+
     return render_template(
         'devolucao/ocorrencias/detalhe.html',
         ocorrencia=ocorrencia,
@@ -396,6 +501,8 @@ def detalhe(ocorrencia_id):
         fretes=fretes,
         descartes=descartes,
         anexos=anexos,
+        raz_social_red=raz_social_red,
+        vendedor_info=vendedor_info,
         opcoes_status=OcorrenciaDevolucao.STATUS_OCORRENCIA,
         opcoes_destino=OcorrenciaDevolucao.DESTINOS,
         opcoes_localizacao=OcorrenciaDevolucao.LOCALIZACOES,
@@ -617,8 +724,17 @@ def api_atualizar_comercial(ocorrencia_id):
             ocorrencia.status = data['status']
 
             # Marcar data de resolucao se mudou para RESOLVIDA
+            # Usar data_entrada da NFD (data real de entrada no Odoo) quando disponivel
             if data['status'] == 'RESOLVIDA' and status_anterior != 'RESOLVIDA':
-                ocorrencia.data_resolucao = agora_utc_naive()
+                nfd = ocorrencia.nf_devolucao
+                if nfd and nfd.data_entrada:
+                    # Converter date para datetime naive se necessario
+                    if isinstance(nfd.data_entrada, date) and not isinstance(nfd.data_entrada, datetime):
+                        ocorrencia.data_resolucao = datetime.combine(nfd.data_entrada, datetime.min.time())
+                    else:
+                        ocorrencia.data_resolucao = nfd.data_entrada
+                else:
+                    ocorrencia.data_resolucao = agora_utc_naive()  # fallback
                 ocorrencia.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
 
             # Marcar data de acao comercial se mudou para EM_ANALISE
@@ -719,90 +835,107 @@ def api_stats():
 @login_required
 def api_upload_anexo(ocorrencia_id):
     """
-    Upload de anexo para ocorrencia
+    Upload de anexo(s) para ocorrencia — suporta multiplos arquivos
 
     Form-data:
-    - arquivo: Arquivo a ser enviado
-    - tipo: EMAIL, FOTO, DOCUMENTO (opcional, default: DOCUMENTO)
+    - arquivo: Arquivo(s) a ser(em) enviado(s) (aceita multiple)
+    - tipo: EMAIL, FOTO, DOCUMENTO (opcional, auto-detectado se nao informado)
     - descricao: Descricao do anexo (opcional)
     """
     from flask import current_app
     from app.utils.file_storage import FileStorage
     from werkzeug.utils import secure_filename
 
+    # Mapa de extensao → tipo para auto-deteccao
+    EXTENSAO_TIPO_MAP = {
+        'pdf': 'DOCUMENTO', 'doc': 'DOCUMENTO', 'docx': 'DOCUMENTO', 'txt': 'DOCUMENTO',
+        'msg': 'EMAIL', 'eml': 'EMAIL',
+        'jpg': 'FOTO', 'jpeg': 'FOTO', 'png': 'FOTO', 'gif': 'FOTO', 'webp': 'FOTO', 'jfif': 'FOTO',
+        'xlsx': 'PLANILHA', 'xls': 'PLANILHA', 'csv': 'PLANILHA',
+    }
+
     try:
-        ocorrencia = db.session.get(OcorrenciaDevolucao,ocorrencia_id) if ocorrencia_id else None
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id) if ocorrencia_id else None
         if not ocorrencia:
             return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
 
-        # Verificar arquivo
-        if 'arquivo' not in request.files:
+        # Suportar multiplos arquivos via getlist
+        arquivos = request.files.getlist('arquivo')
+        if not arquivos or not arquivos[0].filename:
             return jsonify({'sucesso': False, 'erro': 'Nenhum arquivo enviado'}), 400
 
-        arquivo = request.files['arquivo']
-        if not arquivo.filename:
-            return jsonify({'sucesso': False, 'erro': 'Arquivo vazio'}), 400
-
-        # Dados do formulario
-        tipo = request.form.get('tipo', 'DOCUMENTO').upper()
         descricao = request.form.get('descricao', '').strip()
+        tipo_form = request.form.get('tipo', '').upper().strip()
 
-        # Validar tipo
+        # Validar tipo se informado
         tipos_validos = ['EMAIL', 'FOTO', 'DOCUMENTO', 'PLANILHA', 'OUTROS']
-        if tipo not in tipos_validos:
-            tipo = 'OUTROS'
 
-        # Extensoes permitidas por tipo
-        extensoes_por_tipo = {
-            'EMAIL': ['msg', 'eml'],
-            'FOTO': ['jpg', 'jpeg', 'jfif', 'png', 'gif', 'webp'],
-            'DOCUMENTO': ['pdf', 'doc', 'docx', 'txt'],
-            'PLANILHA': ['xls', 'xlsx', 'csv'],
-            'OUTROS': ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'csv', 'jpg', 'jpeg', 'jfif', 'png', 'gif', 'msg', 'eml', 'zip']
-        }
+        # Extensoes permitidas (union de todos os tipos)
+        todas_extensoes = ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'csv',
+                           'jpg', 'jpeg', 'jfif', 'png', 'gif', 'webp',
+                           'msg', 'eml', 'zip']
 
-        # Salvar arquivo
         storage = FileStorage()
         folder = f"devolucoes/ocorrencias/{ocorrencia_id}"
 
-        try:
-            caminho = storage.save_file(
-                arquivo,
-                folder,
-                allowed_extensions=extensoes_por_tipo.get(tipo, extensoes_por_tipo['OUTROS'])
-            )
-        except ValueError as e:
-            return jsonify({'sucesso': False, 'erro': str(e)}), 400
+        anexos_criados = []
+        erros = []
 
-        if not caminho:
-            return jsonify({'sucesso': False, 'erro': 'Erro ao salvar arquivo'}), 500
+        for arquivo in arquivos:
+            if not arquivo.filename:
+                continue
 
-        # Criar registro do anexo
-        nome_seguro = secure_filename(arquivo.filename)
-        anexo = AnexoOcorrencia(
-            ocorrencia_devolucao_id=ocorrencia_id,
-            tipo=tipo,
-            nome_original=arquivo.filename,
-            nome_arquivo=nome_seguro,
-            caminho_s3=caminho,
-            tamanho_bytes=arquivo.content_length or 0,
-            content_type=arquivo.content_type,
-            descricao=descricao or None,
-            criado_por=current_user.nome if hasattr(current_user, 'nome') else current_user.username
-        )
+            try:
+                # Auto-detectar tipo pela extensao
+                ext = arquivo.filename.rsplit('.', 1)[-1].lower() if '.' in arquivo.filename else ''
+                if tipo_form and tipo_form in tipos_validos:
+                    tipo = tipo_form
+                else:
+                    tipo = EXTENSAO_TIPO_MAP.get(ext, 'OUTROS')
 
-        db.session.add(anexo)
+                caminho = storage.save_file(
+                    arquivo,
+                    folder,
+                    allowed_extensions=todas_extensoes
+                )
+
+                if not caminho:
+                    erros.append(f'{arquivo.filename}: Erro ao salvar')
+                    continue
+
+                nome_seguro = secure_filename(arquivo.filename)
+                anexo = AnexoOcorrencia(
+                    ocorrencia_devolucao_id=ocorrencia_id,
+                    tipo=tipo,
+                    nome_original=arquivo.filename,
+                    nome_arquivo=nome_seguro,
+                    caminho_s3=caminho,
+                    tamanho_bytes=arquivo.content_length or 0,
+                    content_type=arquivo.content_type,
+                    descricao=descricao or None,
+                    criado_por=current_user.nome if hasattr(current_user, 'nome') else current_user.username
+                )
+                db.session.add(anexo)
+                anexos_criados.append({
+                    'nome': arquivo.filename,
+                    'tipo': tipo
+                })
+
+            except ValueError as e:
+                erros.append(f'{arquivo.filename}: {str(e)}')
+
         db.session.commit()
+
+        total = len(anexos_criados)
+        mensagem = f'{total} anexo{"s" if total != 1 else ""} enviado{"s" if total != 1 else ""} com sucesso!'
+        if erros:
+            mensagem += f' ({len(erros)} erro{"s" if len(erros) != 1 else ""})'
 
         return jsonify({
             'sucesso': True,
-            'mensagem': 'Anexo enviado com sucesso!',
-            'anexo': {
-                'id': anexo.id,
-                'nome': anexo.nome_original,
-                'tipo': anexo.tipo,
-                'tamanho_kb': anexo.tamanho_kb
-            }
+            'mensagem': mensagem,
+            'anexos': anexos_criados,
+            'erros': erros
         })
 
     except Exception as e:
@@ -855,6 +988,66 @@ def api_download_anexo(ocorrencia_id, anexo_id):
 
     except Exception as e:
         current_app.logger.error(f"Erro ao baixar anexo {anexo_id}: {str(e)}")
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+@ocorrencia_bp.route('/api/<int:ocorrencia_id>/anexos/download-all')
+@login_required
+def api_download_all_anexos(ocorrencia_id):
+    """
+    Baixa todos os anexos de uma ocorrencia como ZIP
+    """
+    from flask import current_app
+    from app.utils.file_storage import FileStorage
+    import io
+    import zipfile
+
+    try:
+        ocorrencia = db.session.get(OcorrenciaDevolucao, ocorrencia_id)
+        if not ocorrencia:
+            return jsonify({'sucesso': False, 'erro': 'Ocorrencia nao encontrada'}), 404
+
+        anexos = AnexoOcorrencia.query.filter_by(
+            ocorrencia_devolucao_id=ocorrencia_id,
+            ativo=True
+        ).all()
+
+        if not anexos:
+            return jsonify({'sucesso': False, 'erro': 'Nenhum anexo encontrado'}), 404
+
+        storage = FileStorage()
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            nomes_usados = {}
+            for anexo in anexos:
+                try:
+                    file_bytes = storage.download_file(anexo.caminho_s3)
+                    if file_bytes:
+                        # Evitar nomes duplicados
+                        nome = anexo.nome_original or anexo.nome_arquivo
+                        if nome in nomes_usados:
+                            nomes_usados[nome] += 1
+                            base, ext = os.path.splitext(nome)
+                            nome = f"{base}_{nomes_usados[nome]}{ext}"
+                        else:
+                            nomes_usados[nome] = 0
+                        zf.writestr(nome, file_bytes)
+                except Exception as e:
+                    current_app.logger.warning(f"Erro ao baixar anexo {anexo.id}: {e}")
+
+        zip_buffer.seek(0)
+        numero_oc = ocorrencia.numero_ocorrencia or f'OC_{ocorrencia_id}'
+
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'{numero_oc}_anexos.zip'
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao baixar todos os anexos: {str(e)}")
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
 

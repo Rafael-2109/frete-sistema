@@ -578,6 +578,8 @@ class ReversaoService:
         # IDs do Odoo
         nfd.odoo_nf_venda_id = nf_original.get('id')
         nfd.odoo_nota_credito_id = nc_data.get('id')
+        if nc_data.get('l10n_br_numero_nota_fiscal') and not nfd.numero_nota_credito:
+            nfd.numero_nota_credito = str(nc_data.get('l10n_br_numero_nota_fiscal'))
 
         # Numero e chave
         nfd.numero_nf_venda = nf_original.get('l10n_br_numero_nota_fiscal')
@@ -646,6 +648,7 @@ class ReversaoService:
             # IDs do Odoo
             odoo_nf_venda_id=nf_original.get('id'),
             odoo_nota_credito_id=nc_data.get('id'),
+            numero_nota_credito=str(nc_data.get('l10n_br_numero_nota_fiscal')) if nc_data.get('l10n_br_numero_nota_fiscal') else None,
 
             # Numero e chave
             numero_nfd=nf_original.get('l10n_br_numero_nota_fiscal') or 'SEM_NUMERO',

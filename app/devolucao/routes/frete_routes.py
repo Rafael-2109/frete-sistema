@@ -593,10 +593,10 @@ def upload_documento_descarte(descarte_id: int, tipo: str):
         if tipo not in ['termo', 'termo_assinado', 'comprovante']:
             return jsonify({'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}), 400
 
-        if 'file' not in request.files:
+        if 'arquivo' not in request.files:
             return jsonify({'sucesso': False, 'erro': 'Arquivo nao enviado'}), 400
 
-        file = request.files['file']
+        file = request.files['arquivo']
         if file.filename == '':
             return jsonify({'sucesso': False, 'erro': 'Nome do arquivo vazio'}), 400
 

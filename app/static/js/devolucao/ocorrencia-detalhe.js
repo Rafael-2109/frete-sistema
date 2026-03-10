@@ -27,6 +27,38 @@ document.addEventListener('DOMContentLoaded', function() {
     calcularPesoAuto();
     calcularTotalDescarte();
 
+    // Bloco 2.2: Corrigir qtd_por_caixa via regex na descricao do produto
+    document.querySelectorAll('#itens-descarte tr').forEach(row => {
+        const currentQtd = parseFloat(row.dataset.qtdPorCaixa) || 1;
+        if (currentQtd <= 1) {
+            // Tentar extrair da descricao do produto na celula
+            const descCell = row.querySelector('td:first-child');
+            if (descCell) {
+                const extracted = extrairQtdPorCaixa(descCell.textContent);
+                if (extracted > 1) {
+                    row.dataset.qtdPorCaixa = extracted;
+                }
+            }
+        }
+    });
+
+    // Auto-detectar tipo de arquivo ao selecionar
+    const fileInput = document.getElementById('arquivo-anexo');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const display = document.getElementById('tipo-anexo-display');
+            const hidden = document.getElementById('tipo-anexo');
+            if (this.files.length === 1) {
+                const tipo = detectarTipoArquivo(this.files[0].name);
+                if (display) display.value = tipo;
+                if (hidden) hidden.value = tipo;
+            } else if (this.files.length > 1) {
+                if (display) display.value = `${this.files.length} arquivos (auto)`;
+                if (hidden) hidden.value = 'AUTO';
+            }
+        });
+    }
+
     // Inicializar tooltips do Bootstrap
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
@@ -624,13 +656,36 @@ function filtrarPorCategorias() {
 }
 
 // =========================================================================
+// Funcoes Auxiliares - Descarte e Tipos
+// =========================================================================
+function extrairQtdPorCaixa(descricao) {
+    if (!descricao) return 1;
+    // Padrao: "12X500G", "6X1KG", "24X200ML"
+    const match = descricao.match(/(\d+)\s*[xX]\s*\d+/);
+    return match ? parseInt(match[1]) : 1;
+}
+
+function detectarTipoArquivo(filename) {
+    if (!filename) return 'OUTROS';
+    const ext = filename.split('.').pop().toLowerCase();
+    const mapa = {
+        'pdf': 'DOCUMENTO', 'doc': 'DOCUMENTO', 'docx': 'DOCUMENTO', 'txt': 'DOCUMENTO',
+        'msg': 'EMAIL', 'eml': 'EMAIL',
+        'jpg': 'FOTO', 'jpeg': 'FOTO', 'png': 'FOTO', 'gif': 'FOTO', 'webp': 'FOTO', 'jfif': 'FOTO',
+        'xlsx': 'PLANILHA', 'xls': 'PLANILHA', 'csv': 'PLANILHA',
+    };
+    return mapa[ext] || 'OUTROS';
+}
+
+// =========================================================================
 // Funcoes de Anexos
 // =========================================================================
-function uploadAnexo() {
+async function uploadAnexo() {
     const form = document.getElementById('form-upload-anexo');
     const fileInput = document.getElementById('arquivo-anexo');
     const spinner = document.getElementById('spinner-upload');
     const feedback = document.getElementById('feedback-anexo');
+    const descricao = form.querySelector('[name="descricao"]')?.value || '';
 
     if (!fileInput.files.length) {
         feedback.className = 'alert alert-warning';
@@ -639,41 +694,59 @@ function uploadAnexo() {
         return;
     }
 
-    const formData = new FormData(form);
-
     spinner.classList.remove('d-none');
     feedback.classList.add('d-none');
 
-    fetch(`/devolucao/ocorrencias/api/${ocorrenciaId}/anexos`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
-        },
-        body: formData
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.sucesso) {
-            feedback.className = 'alert alert-success';
-            feedback.textContent = result.mensagem || 'Anexo enviado com sucesso';
-            feedback.classList.remove('d-none');
-            form.reset();
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            feedback.className = 'alert alert-danger';
-            feedback.textContent = result.erro || 'Erro ao enviar anexo';
-            feedback.classList.remove('d-none');
+    const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+    const files = Array.from(fileInput.files);
+    let successCount = 0;
+    let errors = [];
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('arquivo', file);
+        formData.append('tipo', detectarTipoArquivo(file.name));
+        formData.append('descricao', descricao);
+
+        try {
+            const response = await fetch(`/devolucao/ocorrencias/api/${ocorrenciaId}/anexos`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                body: formData
+            });
+            const result = await response.json();
+            if (result.sucesso) {
+                successCount++;
+            } else {
+                errors.push(`${file.name}: ${result.erro || 'Erro'}`);
+            }
+        } catch (error) {
+            errors.push(`${file.name}: Erro de conexao`);
         }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        feedback.className = 'alert alert-danger';
-        feedback.textContent = 'Erro de conexao. Tente novamente.';
+    }
+
+    spinner.classList.add('d-none');
+
+    if (successCount > 0 && errors.length === 0) {
+        feedback.className = 'alert alert-success';
+        feedback.textContent = `${successCount} anexo(s) enviado(s) com sucesso`;
         feedback.classList.remove('d-none');
-    })
-    .finally(() => {
-        spinner.classList.add('d-none');
-    });
+        form.reset();
+        setTimeout(() => location.reload(), 1000);
+    } else if (successCount > 0 && errors.length > 0) {
+        feedback.className = 'alert alert-warning';
+        feedback.innerHTML = `${successCount} enviado(s), ${errors.length} erro(s):<br>${errors.join('<br>')}`;
+        feedback.classList.remove('d-none');
+        setTimeout(() => location.reload(), 2000);
+    } else {
+        feedback.className = 'alert alert-danger';
+        feedback.innerHTML = errors.join('<br>') || 'Erro ao enviar anexo(s)';
+        feedback.classList.remove('d-none');
+    }
+}
+
+function downloadAllAnexos() {
+    window.location.href = `/devolucao/ocorrencias/api/${ocorrenciaId}/anexos/download-all`;
 }
 
 function excluirAnexo(anexoId, nomeAnexo) {
@@ -1894,4 +1967,140 @@ function atualizarLinhaProdutoNaTabela(linhaId, codigo, descricao, qtdConvertida
             statusEl.innerHTML = `<span class="badge bg-success">Resolvido</span>`;
         }
     }
+}
+
+// =========================================================================
+// Funcoes de Permissoes de Cadastro (Bloco 8)
+// =========================================================================
+function abrirPermissoesCadastro() {
+    carregarPermissoes();
+    const modal = new bootstrap.Modal(document.getElementById('modal-permissoes-cadastro'));
+    modal.show();
+}
+
+function carregarPermissoes() {
+    const tbody = document.getElementById('permissoes-tbody');
+    const selectUsuario = document.getElementById('perm-usuario-id');
+    const loading = document.getElementById('permissoes-loading');
+    const conteudo = document.getElementById('permissoes-conteudo');
+    if (!tbody) return;
+
+    if (loading) loading.classList.remove('d-none');
+    if (conteudo) conteudo.classList.add('d-none');
+
+    fetch('/devolucao/cadastros/api/permissoes', {
+        headers: { 'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || '' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (loading) loading.classList.add('d-none');
+        if (conteudo) conteudo.classList.remove('d-none');
+
+        if (!data.sucesso) return;
+
+        // Popular select de usuarios
+        if (selectUsuario) {
+            selectUsuario.innerHTML = '<option value="">Selecione...</option>';
+            (data.usuarios || []).forEach(u => {
+                selectUsuario.innerHTML += `<option value="${u.id}">${u.nome} (${u.perfil})</option>`;
+            });
+        }
+
+        // Popular tabela
+        tbody.innerHTML = '';
+        if (!data.permissoes.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhuma permissao concedida</td></tr>';
+            return;
+        }
+
+        data.permissoes.forEach(p => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${p.usuario_nome || 'ID ' + p.usuario_id}</td>
+                    <td><span class="badge bg-secondary">${p.tipo_cadastro}</span></td>
+                    <td class="text-center">${p.pode_criar ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</td>
+                    <td class="text-center">${p.pode_editar ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</td>
+                    <td class="text-center">${p.pode_excluir ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</td>
+                    <td><small class="text-muted">${p.concedido_por || '-'}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="revogarPermissao(${p.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    })
+    .catch(err => {
+        if (loading) loading.classList.add('d-none');
+        if (conteudo) conteudo.classList.remove('d-none');
+        console.error('Erro ao carregar permissoes:', err);
+    });
+}
+
+function concederPermissao() {
+    const usuarioId = document.getElementById('perm-usuario-id')?.value;
+    const tipoCadastro = document.getElementById('perm-tipo-cadastro')?.value;
+    const podeCriar = document.getElementById('perm-pode-criar')?.checked || false;
+    const podeEditar = document.getElementById('perm-pode-editar')?.checked || false;
+    const podeExcluir = document.getElementById('perm-pode-excluir')?.checked || false;
+
+    if (!usuarioId || !tipoCadastro) {
+        alert('Selecione usuario e tipo de cadastro');
+        return;
+    }
+
+    fetch('/devolucao/cadastros/api/permissoes', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        },
+        body: JSON.stringify({
+            usuario_id: parseInt(usuarioId),
+            tipo_cadastro: tipoCadastro,
+            pode_criar: podeCriar,
+            pode_editar: podeEditar,
+            pode_excluir: podeExcluir
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            carregarPermissoes();
+            // Reset form
+            document.getElementById('perm-usuario-id').value = '';
+            document.getElementById('perm-pode-criar').checked = true;
+            document.getElementById('perm-pode-editar').checked = true;
+            document.getElementById('perm-pode-excluir').checked = false;
+        } else {
+            alert(data.erro || 'Erro ao conceder permissao');
+        }
+    })
+    .catch(err => {
+        console.error('Erro:', err);
+        alert('Erro de conexao');
+    });
+}
+
+function revogarPermissao(permId) {
+    if (!confirm('Revogar esta permissao?')) return;
+
+    fetch(`/devolucao/cadastros/api/permissoes/${permId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            carregarPermissoes();
+        } else {
+            alert(data.erro || 'Erro ao revogar');
+        }
+    })
+    .catch(err => {
+        console.error('Erro:', err);
+        alert('Erro de conexao');
+    });
 }

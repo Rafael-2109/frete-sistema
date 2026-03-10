@@ -172,6 +172,7 @@ class NFDevolucao(db.Model):
     # IDs do Odoo para NFs de venda revertidas
     odoo_nf_venda_id = db.Column(db.Integer, nullable=True, index=True)  # ID da NF original (account.move)
     odoo_nota_credito_id = db.Column(db.Integer, nullable=True, index=True)  # ID da NC (out_refund)
+    numero_nota_credito = db.Column(db.String(20), nullable=True)  # Numero da Nota de Credito
 
     # =========================================================================
     # AUDITORIA
@@ -1853,4 +1854,54 @@ class DescarteItem(db.Model):
             'quantidade_caixas': float(self.quantidade_caixas) if self.quantidade_caixas else 0,
             'valor_descarte': float(self.valor_descarte) if self.valor_descarte else 0,
             'produto': self.nfd_linha.descricao_produto_interno or self.nfd_linha.descricao_produto_cliente if self.nfd_linha else None,
+        }
+
+
+# =============================================================================
+# PermissaoCadastroDevolucao - Controle de Permissoes para CRUD de Cadastros
+# =============================================================================
+
+class PermissaoCadastroDevolucao(db.Model):
+    """
+    Controle granular de permissoes para CRUD de Categorias, Subcategorias,
+    Responsaveis e Origens do modulo de devolucoes.
+
+    Administradores e gerentes comerciais tem acesso total automaticamente.
+    Este modelo controla permissoes para outros perfis.
+    """
+    __tablename__ = 'permissao_cadastro_devolucao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
+    tipo_cadastro = db.Column(db.String(30), nullable=False)  # categorias, subcategorias, responsaveis, origens
+    pode_criar = db.Column(db.Boolean, default=False)
+    pode_editar = db.Column(db.Boolean, default=False)
+    pode_excluir = db.Column(db.Boolean, default=False)
+    concedido_por = db.Column(db.String(100))
+    concedido_em = db.Column(db.DateTime, default=agora_utc_naive)
+    ativo = db.Column(db.Boolean, default=True)
+
+    usuario = db.relationship('Usuario', backref='permissoes_cadastro_devolucao')
+
+    __table_args__ = (
+        db.UniqueConstraint('usuario_id', 'tipo_cadastro', name='uq_perm_cad_dev_usuario_tipo'),
+    )
+
+    def __repr__(self):
+        return f'<PermissaoCadastro {self.usuario_id} - {self.tipo_cadastro}>'
+
+    def to_dict(self):
+        """Serializa para JSON"""
+        return {
+            'id': self.id,
+            'usuario_id': self.usuario_id,
+            'usuario_nome': self.usuario.nome if self.usuario else None,
+            'usuario_perfil': self.usuario.perfil if self.usuario else None,
+            'tipo_cadastro': self.tipo_cadastro,
+            'pode_criar': self.pode_criar,
+            'pode_editar': self.pode_editar,
+            'pode_excluir': self.pode_excluir,
+            'concedido_por': self.concedido_por,
+            'concedido_em': self.concedido_em.isoformat() if self.concedido_em else None,
+            'ativo': self.ativo,
         }
