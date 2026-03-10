@@ -232,6 +232,252 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'nome': self._get_tag_text_in('xNome', dest),
         }
 
+    # ------------------------------------------------------------------
+    # Metodos adicionais para DACTE PDF
+    # ------------------------------------------------------------------
+
+    def get_serie(self) -> Optional[str]:
+        """Extrai serie do CTe de <ide>/<serie>"""
+        ide = self._find_tag('ide')
+        return self._get_tag_text_in('serie', ide) if ide else None
+
+    def get_cfop(self) -> Optional[str]:
+        """Extrai CFOP de <ide>/<CFOP>"""
+        ide = self._find_tag('ide')
+        return self._get_tag_text_in('CFOP', ide) if ide else None
+
+    def get_natureza_operacao(self) -> Optional[str]:
+        """Extrai natureza da operacao de <ide>/<natOp>"""
+        ide = self._find_tag('ide')
+        return self._get_tag_text_in('natOp', ide) if ide else None
+
+    def get_modal(self) -> Optional[str]:
+        """Extrai modal de <ide>/<modal>. 01=Rodoviario, 02=Aereo, etc."""
+        ide = self._find_tag('ide')
+        codigo = self._get_tag_text_in('modal', ide) if ide else None
+        modais = {
+            '01': 'Rodoviario',
+            '02': 'Aereo',
+            '03': 'Aquaviario',
+            '04': 'Ferroviario',
+            '05': 'Dutoviario',
+            '06': 'Multimodal',
+        }
+        return modais.get(codigo, codigo)
+
+    def get_forma_pagamento(self) -> Optional[str]:
+        """Extrai forma de pagamento de <ide>/<forPag>. 0=Pago, 1=A Pagar, 2=Outros"""
+        ide = self._find_tag('ide')
+        codigo = self._get_tag_text_in('forPag', ide) if ide else None
+        formas = {'0': 'Pago', '1': 'A Pagar', '2': 'Outros'}
+        return formas.get(codigo, codigo)
+
+    def get_protocolo_autorizacao(self) -> Dict:
+        """Extrai protocolo de autorizacao de <protCTe>"""
+        prot = self._find_tag('protCTe')
+        if prot is None:
+            return {}
+        return {
+            'numero': self._get_tag_text_in('nProt', prot),
+            'data_recebimento': self._get_tag_text_in('dhRecbto', prot),
+            'codigo_status': self._get_tag_text_in('cStat', prot),
+            'motivo': self._get_tag_text_in('xMotivo', prot),
+        }
+
+    def get_tomador(self) -> Dict:
+        """Extrai dados do tomador do servico (<ide>/<toma3> ou <toma4>)"""
+        ide = self._find_tag('ide')
+        if ide is None:
+            return {}
+
+        # toma3: tomador e um dos participantes (0=Rem, 1=Exped, 2=Receb, 3=Dest)
+        toma3 = self._find_tag('toma3', root=ide)
+        if toma3 is not None:
+            toma_code = self._get_tag_text_in('toma', toma3)
+            toma_map = {
+                '0': 'Remetente',
+                '1': 'Expedidor',
+                '2': 'Recebedor',
+                '3': 'Destinatario',
+            }
+            return {
+                'tipo': toma_map.get(toma_code, toma_code),
+                'codigo': toma_code,
+            }
+
+        # toma4: tomador e terceiro (com CNPJ/CPF proprio)
+        toma4 = self._find_tag('toma4', root=ide)
+        if toma4 is not None:
+            return {
+                'tipo': 'Outros',
+                'codigo': '4',
+                'cnpj': self._get_tag_text_in('CNPJ', toma4),
+                'cpf': self._get_tag_text_in('CPF', toma4),
+                'nome': self._get_tag_text_in('xNome', toma4),
+                'ie': self._get_tag_text_in('IE', toma4),
+            }
+
+        return {}
+
+    def _extrair_endereco(self, tag_endereco: str, tag_pai: str) -> Dict:
+        """Helper: extrai endereco completo de uma tag dentro de um pai"""
+        pai = self._find_tag(tag_pai)
+        if pai is None:
+            return {}
+
+        ender = None
+        for el in pai.iter():
+            local_name = el.tag.split('}')[-1] if '}' in el.tag else el.tag
+            if local_name == tag_endereco:
+                ender = el
+                break
+
+        if ender is None:
+            return {}
+
+        return {
+            'logradouro': self._get_tag_text_in('xLgr', ender),
+            'numero': self._get_tag_text_in('nro', ender),
+            'complemento': self._get_tag_text_in('xCpl', ender),
+            'bairro': self._get_tag_text_in('xBairro', ender),
+            'codigo_municipio': self._get_tag_text_in('cMun', ender),
+            'municipio': self._get_tag_text_in('xMun', ender),
+            'uf': self._get_tag_text_in('UF', ender),
+            'cep': self._get_tag_text_in('CEP', ender),
+            'fone': self._get_tag_text_in('fone', ender),
+        }
+
+    def get_endereco_emitente(self) -> Dict:
+        """Extrai endereco completo do emitente (<emit>/<enderEmit>)"""
+        return self._extrair_endereco('enderEmit', 'emit')
+
+    def get_endereco_remetente(self) -> Dict:
+        """Extrai endereco completo do remetente (<rem>/<enderReme>)"""
+        return self._extrair_endereco('enderReme', 'rem')
+
+    def get_endereco_destinatario(self) -> Dict:
+        """Extrai endereco completo do destinatario (<dest>/<enderDest>)"""
+        return self._extrair_endereco('enderDest', 'dest')
+
+    def get_ie_emitente(self) -> Optional[str]:
+        """Extrai IE do emitente"""
+        emit = self._find_tag('emit')
+        return self._get_tag_text_in('IE', emit) if emit else None
+
+    def get_ie_remetente(self) -> Optional[str]:
+        """Extrai IE do remetente"""
+        rem = self._find_tag('rem')
+        return self._get_tag_text_in('IE', rem) if rem else None
+
+    def get_ie_destinatario(self) -> Optional[str]:
+        """Extrai IE do destinatario"""
+        dest = self._find_tag('dest')
+        return self._get_tag_text_in('IE', dest) if dest else None
+
+    def get_componentes_prestacao(self) -> List[Dict]:
+        """Extrai componentes da prestacao (<vPrest>/<Comp>)"""
+        v_prest = self._find_tag('vPrest')
+        if v_prest is None:
+            return []
+
+        componentes = []
+        for element in v_prest.iter():
+            local_name = element.tag.split('}')[-1] if '}' in element.tag else element.tag
+            if local_name == 'Comp':
+                nome = self._get_tag_text_in('xNome', element)
+                valor = self._to_decimal(
+                    self._get_tag_text_in('vComp', element) or ''
+                )
+                if nome or valor:
+                    componentes.append({'nome': nome, 'valor': valor})
+
+        return componentes
+
+    def get_produto_predominante(self) -> Optional[str]:
+        """Extrai produto predominante de <infCarga>/<proPred>"""
+        inf_carga = self._find_tag('infCarga')
+        return self._get_tag_text_in('proPred', inf_carga) if inf_carga else None
+
+    def get_quantidades_carga(self) -> List[Dict]:
+        """Extrai todas as quantidades de carga (<infCarga>/<infQ>)"""
+        inf_carga = self._find_tag('infCarga')
+        if inf_carga is None:
+            return []
+
+        quantidades = []
+        unidades = {
+            '00': 'M3', '01': 'KG', '02': 'TON',
+            '03': 'UNID', '04': 'LITRO', '05': 'MMBTU',
+        }
+
+        for element in inf_carga.iter():
+            local_name = element.tag.split('}')[-1] if '}' in element.tag else element.tag
+            if local_name == 'infQ':
+                c_unid = self._get_tag_text_in('cUnid', element)
+                tp_med = self._get_tag_text_in('tpMed', element)
+                q_carga = self._to_decimal(
+                    self._get_tag_text_in('qCarga', element) or ''
+                )
+                quantidades.append({
+                    'codigo_unidade': c_unid,
+                    'unidade': unidades.get(c_unid, c_unid),
+                    'tipo_medida': tp_med,
+                    'quantidade': q_carga,
+                })
+
+        return quantidades
+
+    def get_observacoes(self) -> Optional[str]:
+        """Extrai observacoes complementares de <compl>/<xObs>"""
+        compl = self._find_tag('compl')
+        return self._get_tag_text_in('xObs', compl) if compl else None
+
+    def get_info_adicional_fisco(self) -> Optional[str]:
+        """Extrai informacoes adicionais de interesse do fisco de <compl>/<xCaracAd>"""
+        compl = self._find_tag('compl')
+        return self._get_tag_text_in('xCaracAd', compl) if compl else None
+
+    def get_todas_informacoes_dacte(self) -> Dict:
+        """Extrai TODAS as informacoes necessarias para gerar o DACTE PDF.
+
+        Superset de get_todas_informacoes_carvia() com campos adicionais
+        para enderecos, protocolo, componentes, quantidades e observacoes.
+        """
+        # Base: todas as informacoes CarVia
+        dados = self.get_todas_informacoes_carvia()
+
+        # Campos adicionais para DACTE
+        dados.update({
+            # Identificacao
+            'serie': self.get_serie(),
+            'cfop': self.get_cfop(),
+            'natureza_operacao': self.get_natureza_operacao(),
+            'modal': self.get_modal(),
+            'forma_pagamento': self.get_forma_pagamento(),
+            # Protocolo
+            'protocolo': self.get_protocolo_autorizacao(),
+            # Tomador
+            'tomador': self.get_tomador(),
+            # Enderecos completos
+            'endereco_emitente': self.get_endereco_emitente(),
+            'endereco_remetente': self.get_endereco_remetente(),
+            'endereco_destinatario': self.get_endereco_destinatario(),
+            # Inscricoes Estaduais
+            'ie_emitente': self.get_ie_emitente(),
+            'ie_remetente': self.get_ie_remetente(),
+            'ie_destinatario': self.get_ie_destinatario(),
+            # Prestacao
+            'componentes_prestacao': self.get_componentes_prestacao(),
+            # Carga detalhada
+            'produto_predominante': self.get_produto_predominante(),
+            'quantidades_carga': self.get_quantidades_carga(),
+            # Observacoes
+            'observacoes_complementares': self.get_observacoes(),
+            'info_adicional_fisco': self.get_info_adicional_fisco(),
+        })
+
+        return dados
+
     def get_todas_informacoes_carvia(self) -> Dict:
         """Extrai todas as informacoes relevantes para o modulo CarVia"""
         rota = self.get_dados_rota()

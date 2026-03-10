@@ -567,6 +567,78 @@ def register_api_routes(bp):
             logger.error(f"Erro ao buscar transportadoras modalidade: {e}")
             return jsonify({'erro': str(e)}), 500
 
+    # ------------------------------------------------------------------
+    # DACTE PDF — Geracao on-demand
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/operacao/<int:operacao_id>/dacte')
+    @login_required
+    def api_download_operacao_dacte(operacao_id):
+        """Gera e retorna DACTE PDF de uma CarviaOperacao."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from flask import make_response
+        from app.carvia.models import CarviaOperacao
+        from app import db
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            return jsonify({'erro': 'Operacao nao encontrada'}), 404
+
+        try:
+            from app.carvia.services.dacte_generator_service import DacteGeneratorService
+            service = DacteGeneratorService()
+            pdf_bytes = service.gerar_dacte_pdf('operacao', operacao_id)
+
+            response = make_response(pdf_bytes)
+            response.headers['Content-Type'] = 'application/pdf'
+            nome_arquivo = f'DACTE_{operacao.cte_numero or operacao_id}.pdf'
+            response.headers['Content-Disposition'] = (
+                f'inline; filename={nome_arquivo}'
+            )
+            return response
+
+        except ValueError as e:
+            return jsonify({'erro': str(e)}), 404
+        except Exception as e:
+            logger.error(f"Erro ao gerar DACTE para operacao {operacao_id}: {e}")
+            return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
+
+    @bp.route('/api/subcontrato/<int:subcontrato_id>/dacte')
+    @login_required
+    def api_download_subcontrato_dacte(subcontrato_id):
+        """Gera e retorna DACTE PDF de um CarviaSubcontrato."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from flask import make_response
+        from app.carvia.models import CarviaSubcontrato
+        from app import db
+
+        sub = db.session.get(CarviaSubcontrato, subcontrato_id)
+        if not sub:
+            return jsonify({'erro': 'Subcontrato nao encontrado'}), 404
+
+        try:
+            from app.carvia.services.dacte_generator_service import DacteGeneratorService
+            service = DacteGeneratorService()
+            pdf_bytes = service.gerar_dacte_pdf('subcontrato', subcontrato_id)
+
+            response = make_response(pdf_bytes)
+            response.headers['Content-Type'] = 'application/pdf'
+            nome_arquivo = f'DACTE_{sub.cte_numero or subcontrato_id}.pdf'
+            response.headers['Content-Disposition'] = (
+                f'inline; filename={nome_arquivo}'
+            )
+            return response
+
+        except ValueError as e:
+            return jsonify({'erro': str(e)}), 404
+        except Exception as e:
+            logger.error(f"Erro ao gerar DACTE para subcontrato {subcontrato_id}: {e}")
+            return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
+
     @bp.route('/api/atualizar-cubagem', methods=['POST'])
     @login_required
     def api_atualizar_cubagem():

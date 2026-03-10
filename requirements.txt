@@ -151,6 +151,7 @@ pillow==12.1.1           # Processamento de imagens (CVE-2026-25990 fix)
 haversine==2.9.0         # Distância entre coordenadas GPS
 # Geocoding agora usa Google Maps API (mesma do mapa_service.py)
 weasyprint==68.1         # Geração de PDFs
+python-barcode>=0.15.1   # Code128 barcode para DACTE (pure Python, SVG)
 
 # ==========================================
 # OCR / PDF PROCESSING (Comprovantes)

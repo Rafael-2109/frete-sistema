@@ -14,6 +14,13 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            {% if operacao.cte_xml_path or operacao.cte_chave_acesso %}
+            <button type="button" class="btn btn-outline-success btn-sm"
+                    onclick="window.open('/carvia/api/operacao/{{ operacao.id }}/dacte', '_blank')"
+                    title="Gerar DACTE PDF">
+                <i class="fas fa-file-pdf"></i> DACTE
+            </button>
+            {% endif %}
             {% if operacao.cte_xml_path %}
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadCteXml({{ operacao.id }})" title="Baixar CTe XML original">
                 <i class="fas fa-download"></i> CTe XML
