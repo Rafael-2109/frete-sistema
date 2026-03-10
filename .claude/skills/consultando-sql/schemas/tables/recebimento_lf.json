@@ -178,11 +178,11 @@
   ],
   "indices": [
     {
-      "name": "ix_recebimento_lf_chave_nfe",
+      "name": "ix_recebimento_lf_odoo_dfe_id",
       "columns": [
-        "chave_nfe"
+        "odoo_dfe_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_recebimento_lf_status",
@@ -192,11 +192,11 @@
       "unique": false
     },
     {
-      "name": "ix_recebimento_lf_odoo_dfe_id",
+      "name": "ix_recebimento_lf_chave_nfe",
       "columns": [
-        "odoo_dfe_id"
+        "chave_nfe"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_recebimento_lf_odoo_lf_invoice_id",

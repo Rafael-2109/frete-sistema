@@ -1,0 +1,73 @@
+{
+  "name": "permissao_cadastro_devolucao",
+  "description": "Controle granular de permissoes para CRUD de Categorias, Subcategorias,",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "usuario_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo_cadastro",
+      "type": "varchar(30)",
+      "description": "categorias, subcategorias, responsaveis, origens",
+      "nullable": false
+    },
+    {
+      "name": "pode_criar",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "pode_editar",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "pode_excluir",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "concedido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "concedido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "usuario_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "usuario_id",
+      "tipo_cadastro"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_permissao_cadastro_devolucao_usuario_id",
+      "columns": [
+        "usuario_id"
+      ],
+      "unique": false
+    }
+  ]
+}

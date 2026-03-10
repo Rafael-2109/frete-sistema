@@ -189,6 +189,11 @@
       "description": "ID da NC (out_refund)"
     },
     {
+      "name": "numero_nota_credito",
+      "type": "varchar(20)",
+      "description": "Numero da Nota de Credito"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -229,13 +234,6 @@
     }
   ],
   "indices": [
-    {
-      "name": "ix_nf_devolucao_odoo_nf_venda_id",
-      "columns": [
-        "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
     {
       "name": "ix_nf_devolucao_chave_nfd",
       "columns": [
@@ -383,6 +381,13 @@
       "columns": [
         "status_odoo",
         "status_monitoramento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "columns": [
+        "odoo_nf_venda_id"
       ],
       "unique": false
     }
