@@ -1637,17 +1637,36 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                             print(f"[SYNC] 🔄 EntregaMonitorada NF {entrega.numero_nf}: data_embarque e transportadora limpos")
 
                     else:
-                        # ✅ NÃO HÁ ENTREGAS VINCULADAS → Reset completo
-                        Separacao.query.filter_by(
-                            separacao_lote_id=item.separacao_lote_id
-                        ).update({
-                            'numero_nf': None,
-                            'data_embarque': None,
-                            'cotacao_id': None,
-                            'nf_cd': False
-                        })
-                        # transportadora ignorado conforme orientação
-                        print(f"[SYNC] 🔄 Pedido {pedido.num_pedido} resetado para 'Aberto'")
+                        # NÃO HÁ ENTREGAS VINCULADAS
+                        # Verificar se Separação tem NF faturada legítima (sincronizado_nf=True)
+                        sep_faturada = Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id,
+                            sincronizado_nf=True
+                        ).first()
+
+                        if sep_faturada:
+                            # NF faturada legítima → preservar NF, marcar nf_cd=True
+                            Separacao.query.filter_by(
+                                separacao_lote_id=item.separacao_lote_id
+                            ).update({
+                                'nf_cd': True,
+                                'data_embarque': None,
+                                'cotacao_id': None
+                            })
+                            # transportadora ignorado conforme orientação
+                            print(f"[SYNC] NF {pedido.nf} preservada, marcada nf_cd=True (cancelamento sem entrega)")
+                        else:
+                            # Separação sem NF faturada → reset completo (comportamento original)
+                            Separacao.query.filter_by(
+                                separacao_lote_id=item.separacao_lote_id
+                            ).update({
+                                'numero_nf': None,
+                                'data_embarque': None,
+                                'cotacao_id': None,
+                                'nf_cd': False
+                            })
+                            # transportadora ignorado conforme orientação
+                            print(f"[SYNC] Pedido {pedido.num_pedido} resetado para 'Aberto'")
                         
                 else:
                     # HÁ OUTROS EMBARQUES ATIVOS
@@ -1682,16 +1701,32 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                 itens_sincronizados += 1
                 
             else:
-                # ✅ ITEM SEM NF: Remover NF de Separacao se existir
+                # ITEM SEM NF: Verificar se Separação tem NF faturada legítima
                 if pedido.nf:
-                    Separacao.query.filter_by(
-                        separacao_lote_id=item.separacao_lote_id
-                    ).update({
-                        'numero_nf': None,
-                        'sincronizado_nf': False  # ✅ CORREÇÃO: Reseta flag para item voltar à carteira
-                    })
-                    print(f"[SYNC] 🗑️ NF removida do pedido {pedido.num_pedido} - sincronizado_nf=False")
-                    itens_removidos += 1
+                    sep_sincronizada = Separacao.query.filter_by(
+                        separacao_lote_id=item.separacao_lote_id,
+                        sincronizado_nf=True
+                    ).first()
+
+                    if sep_sincronizada:
+                        # NF faturada legítima → propagar para EmbarqueItem (não apagar!)
+                        item.nota_fiscal = pedido.nf
+                        # Limpar nf_cd pois a NF agora está em embarque ativo
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({'nf_cd': False})
+                        print(f"[SYNC] NF {pedido.nf} propagada para EmbarqueItem (pedido {pedido.num_pedido})")
+                        itens_sincronizados += 1
+                    else:
+                        # NF manual (sincronizado_nf=False) → limpar (comportamento original)
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({
+                            'numero_nf': None,
+                            'sincronizado_nf': False
+                        })
+                        print(f"[SYNC] NF removida do pedido {pedido.num_pedido} - sincronizado_nf=False")
+                        itens_removidos += 1
 
         # ✅ REMOVIDO: Não faz commit aqui - deixa para o chamador
         # O flush já foi feito antes, e o commit final é na rota principal
