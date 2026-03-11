@@ -128,6 +128,126 @@
         document.getElementById('resposta_logistica').value = '';
       }
       
+      function mostrarContatoAgendamentoEntrega() {
+        const cnpj = '{{ entrega.cnpj_cliente }}';
+        {% if contato_agendamento %}
+        const cadastrado = true;
+        const dados = {
+          forma: '{{ contato_agendamento.forma or "" }}',
+          contato: '{{ contato_agendamento.contato or "" }}',
+          observacao: `{{ contato_agendamento.observacao|default('', true)|e }}`,
+          naoAceitaPallet: {{ 'true' if contato_agendamento.nao_aceita_nf_pallet else 'false' }},
+          horarioDe: '{{ contato_agendamento.horario_recebimento_de.strftime("%H:%M") if contato_agendamento.horario_recebimento_de else "" }}',
+          horarioAte: '{{ contato_agendamento.horario_recebimento_ate.strftime("%H:%M") if contato_agendamento.horario_recebimento_ate else "" }}',
+          obsRecebimento: `{{ contato_agendamento.observacoes_recebimento|default('', true)|e }}`
+        };
+        {% else %}
+        const cadastrado = false;
+        const dados = { forma: '', contato: '', observacao: '', naoAceitaPallet: false, horarioDe: '', horarioAte: '', obsRecebimento: '' };
+        {% endif %}
+
+        const titulo = cadastrado ? 'Editar Agendamento' : 'Cadastrar Agendamento';
+        const modalHtml = `
+          <div class="modal fade" id="modalContatoAgendVis" tabindex="-1">
+            <div class="modal-dialog">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title"><i class="fas fa-calendar-alt"></i> ${titulo}</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="mb-2"><label class="form-label"><strong>CNPJ:</strong></label><div class="form-control-plaintext">${cnpj}</div></div>
+                  <div class="row mb-2">
+                    <div class="col-md-6">
+                      <label for="cagv-forma" class="form-label">Forma</label>
+                      <select id="cagv-forma" class="form-select">
+                        <option value="">-- Selecione --</option>
+                        <option value="PORTAL" ${dados.forma==='PORTAL'?'selected':''}>PORTAL</option>
+                        <option value="TELEFONE" ${dados.forma==='TELEFONE'?'selected':''}>TELEFONE</option>
+                        <option value="E-MAIL" ${dados.forma==='E-MAIL'?'selected':''}>E-MAIL</option>
+                        <option value="COMERCIAL" ${dados.forma==='COMERCIAL'?'selected':''}>COMERCIAL</option>
+                        <option value="SEM AGENDAMENTO" ${dados.forma==='SEM AGENDAMENTO'?'selected':''}>SEM AGENDAMENTO</option>
+                        <option value="ODOO" ${dados.forma==='ODOO'?'selected':''}>ODOO</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="cagv-contato" class="form-label">Contato</label>
+                      <input type="text" id="cagv-contato" class="form-control" value="${dados.contato}">
+                    </div>
+                  </div>
+                  <div class="mb-2">
+                    <label for="cagv-obs" class="form-label">Observação</label>
+                    <textarea id="cagv-obs" class="form-control" rows="2">${dados.observacao}</textarea>
+                  </div>
+                  <hr>
+                  <h6 class="text-muted"><i class="fas fa-truck-loading"></i> Dados de Recebimento</h6>
+                  <div class="row mb-2">
+                    <div class="col-md-4">
+                      <label for="cagv-hr-de" class="form-label">Horário De</label>
+                      <input type="time" id="cagv-hr-de" class="form-control" value="${dados.horarioDe}">
+                    </div>
+                    <div class="col-md-4">
+                      <label for="cagv-hr-ate" class="form-label">Horário Até</label>
+                      <input type="time" id="cagv-hr-ate" class="form-control" value="${dados.horarioAte}">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="cagv-pallet" ${dados.naoAceitaPallet?'checked':''}>
+                        <label class="form-check-label" for="cagv-pallet">Não aceita NF Pallet</label>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mb-2">
+                    <label for="cagv-obs-receb" class="form-label">Obs. Recebimento</label>
+                    <textarea id="cagv-obs-receb" class="form-control" rows="2">${dados.obsRecebimento}</textarea>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="button" class="btn btn-success" id="btn-salvar-cagv"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+
+        const existente = document.getElementById('modalContatoAgendVis');
+        if (existente) existente.remove();
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('modalContatoAgendVis'));
+        modal.show();
+
+        document.getElementById('btn-salvar-cagv').onclick = function() {
+          const payload = {
+            cnpj: cnpj,
+            forma: document.getElementById('cagv-forma').value,
+            contato: document.getElementById('cagv-contato').value,
+            observacao: document.getElementById('cagv-obs').value,
+            nao_aceita_nf_pallet: document.getElementById('cagv-pallet').checked,
+            horario_recebimento_de: document.getElementById('cagv-hr-de').value,
+            horario_recebimento_ate: document.getElementById('cagv-hr-ate').value,
+            observacoes_recebimento: document.getElementById('cagv-obs-receb').value,
+          };
+          const url = cadastrado ? `/cadastros-agendamento/api/atualizar/${encodeURIComponent(cnpj)}` : '/cadastros-agendamento/api/criar';
+          const method = cadastrado ? 'PUT' : 'POST';
+          this.disabled = true;
+          this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+          const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+          fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify(payload) })
+            .then(r => r.json())
+            .then(data => {
+              if (data.sucesso) {
+                modal.hide();
+                location.reload();
+              } else {
+                alert(data.error || 'Erro ao salvar');
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-save"></i> Salvar';
+              }
+            })
+            .catch(err => { alert('Erro: ' + err.message); this.disabled = false; this.innerHTML = '<i class="fas fa-save"></i> Salvar'; });
+        };
+      }
+
       function confirmarAgendamentoVisualizar(agendamentoId) {
         if (!confirm('Confirmar este agendamento?')) return;
         
@@ -243,7 +363,54 @@
       <div class="tab-pane fade" id="agenda" role="tabpanel">
         {% if feedback == 'agendamento' %}<div class="alert alert-success">✔️ Agendamento registrado com sucesso.</div>{% endif %}
 
-        <h5>Agendamentos realizados</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Agendamentos realizados</h5>
+          <button type="button" class="btn btn-sm btn-outline-primary"
+                  onclick="mostrarContatoAgendamentoEntrega()"
+                  title="Alterar cadastro de agendamento deste cliente">
+            <i class="fas fa-edit"></i> Alterar Cadastro Agendamento
+          </button>
+        </div>
+
+        {% if contato_agendamento %}
+        <div class="alert alert-light border mb-3">
+          <div class="row">
+            <div class="col-md-3">
+              <strong>Forma:</strong> {{ contato_agendamento.forma or '-' }}
+            </div>
+            <div class="col-md-3">
+              <strong>Contato:</strong> {{ contato_agendamento.contato or '-' }}
+            </div>
+            <div class="col-md-3">
+              <strong>Horário Recebimento:</strong>
+              {% if contato_agendamento.horario_recebimento_de or contato_agendamento.horario_recebimento_ate %}
+                {{ contato_agendamento.horario_recebimento_de.strftime('%H:%M') if contato_agendamento.horario_recebimento_de else '?' }}
+                -
+                {{ contato_agendamento.horario_recebimento_ate.strftime('%H:%M') if contato_agendamento.horario_recebimento_ate else '?' }}
+              {% else %}
+                -
+              {% endif %}
+            </div>
+            <div class="col-md-3">
+              {% if contato_agendamento.nao_aceita_nf_pallet %}
+                <span class="badge bg-danger">Não aceita NF Pallet</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if contato_agendamento.observacoes_recebimento %}
+          <div class="mt-2">
+            <strong>Obs. Recebimento:</strong>
+            <span class="text-danger fw-bold">{{ contato_agendamento.observacoes_recebimento }}</span>
+          </div>
+          {% endif %}
+          {% if contato_agendamento.observacao %}
+          <div class="mt-1">
+            <strong>Observação:</strong> {{ contato_agendamento.observacao }}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
         <ul class="list-group mb-3">
           {% for ag in entrega.agendamentos %}
           <li class="list-group-item">

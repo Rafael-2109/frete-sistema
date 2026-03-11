@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.cadastros_agendamento.forms import ContatoAgendamentoForm, ImportarAgendamentosForm, EditarContatoAgendamentoForm, PesquisarAgendamentoForm
-from datetime import datetime
+from datetime import time as dt_time
 from app.utils.timezone import agora_utc_naive
 
 cadastros_agendamento_bp = Blueprint('cadastros_agendamento', __name__, url_prefix='/cadastros-agendamento')
@@ -33,6 +33,10 @@ def listar_contatos():
             forma=form.forma.data,
             contato=form.contato.data,
             observacao=form.observacao.data,
+            nao_aceita_nf_pallet=form.nao_aceita_nf_pallet.data,
+            horario_recebimento_de=form.horario_recebimento_de.data,
+            horario_recebimento_ate=form.horario_recebimento_ate.data,
+            observacoes_recebimento=form.observacoes_recebimento.data,
             atualizado_em=agora_utc_naive()
         )
         db.session.add(contato)
@@ -97,6 +101,9 @@ def editar_contato(id):
         contato.contato = form.contato.data
         contato.observacao = form.observacao.data
         contato.nao_aceita_nf_pallet = form.nao_aceita_nf_pallet.data
+        contato.horario_recebimento_de = form.horario_recebimento_de.data
+        contato.horario_recebimento_ate = form.horario_recebimento_ate.data
+        contato.observacoes_recebimento = form.observacoes_recebimento.data
         contato.atualizado_em = agora_utc_naive()
 
         db.session.commit()
@@ -140,10 +147,117 @@ def buscar_cnpj():
             'cnpj': contato.cnpj,
             'forma': contato.forma,
             'contato': contato.contato,
-            'observacao': contato.observacao
+            'observacao': contato.observacao,
+            'nao_aceita_nf_pallet': contato.nao_aceita_nf_pallet,
+            'horario_recebimento_de': contato.horario_recebimento_de.strftime('%H:%M') if contato.horario_recebimento_de else None,
+            'horario_recebimento_ate': contato.horario_recebimento_ate.strftime('%H:%M') if contato.horario_recebimento_ate else None,
+            'observacoes_recebimento': contato.observacoes_recebimento,
         })
-    
+
     return jsonify(resultado)
+
+
+def _parse_time_str(val):
+    """Converte string HH:MM para datetime.time ou None."""
+    if not val:
+        return None
+    try:
+        partes = val.strip().replace('.', ':').split(':')
+        return dt_time(int(partes[0]), int(partes[1]) if len(partes) > 1 else 0)
+    except (ValueError, IndexError):
+        return None
+
+
+@cadastros_agendamento_bp.route('/api/atualizar/<path:cnpj>', methods=['PUT'])
+@login_required
+def api_atualizar_contato(cnpj):
+    """AJAX endpoint para atualizar contato de agendamento por CNPJ."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'JSON inválido'}), 400
+
+    contato = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
+    if not contato:
+        return jsonify({'error': 'Contato não encontrado para este CNPJ'}), 404
+
+    if 'forma' in data:
+        contato.forma = data['forma'] or None
+    if 'contato' in data:
+        contato.contato = data['contato'] or None
+    if 'observacao' in data:
+        contato.observacao = data['observacao'] or None
+    if 'nao_aceita_nf_pallet' in data:
+        contato.nao_aceita_nf_pallet = bool(data['nao_aceita_nf_pallet'])
+    if 'horario_recebimento_de' in data:
+        contato.horario_recebimento_de = _parse_time_str(data['horario_recebimento_de'])
+    if 'horario_recebimento_ate' in data:
+        contato.horario_recebimento_ate = _parse_time_str(data['horario_recebimento_ate'])
+    if 'observacoes_recebimento' in data:
+        contato.observacoes_recebimento = data['observacoes_recebimento'] or None
+
+    contato.atualizado_em = agora_utc_naive()
+    db.session.commit()
+
+    return jsonify({
+        'sucesso': True,
+        'mensagem': 'Contato atualizado com sucesso',
+        'contato': {
+            'cnpj': contato.cnpj,
+            'forma': contato.forma,
+            'contato': contato.contato,
+            'observacao': contato.observacao,
+            'nao_aceita_nf_pallet': contato.nao_aceita_nf_pallet,
+            'horario_recebimento_de': contato.horario_recebimento_de.strftime('%H:%M') if contato.horario_recebimento_de else None,
+            'horario_recebimento_ate': contato.horario_recebimento_ate.strftime('%H:%M') if contato.horario_recebimento_ate else None,
+            'observacoes_recebimento': contato.observacoes_recebimento,
+        }
+    })
+
+
+@cadastros_agendamento_bp.route('/api/criar', methods=['POST'])
+@login_required
+def api_criar_contato():
+    """AJAX endpoint para criar contato de agendamento."""
+    data = request.get_json()
+    if not data or not data.get('cnpj'):
+        return jsonify({'error': 'CNPJ é obrigatório'}), 400
+
+    cnpj = data['cnpj']
+
+    # Verificar se já existe
+    existente = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
+    if existente:
+        return jsonify({'error': f'Já existe contato para CNPJ {cnpj}. Use atualizar.'}), 409
+
+    contato = ContatoAgendamento(
+        cnpj=cnpj,
+        forma=data.get('forma') or None,
+        contato=data.get('contato') or None,
+        observacao=data.get('observacao') or None,
+        nao_aceita_nf_pallet=bool(data.get('nao_aceita_nf_pallet', False)),
+        horario_recebimento_de=_parse_time_str(data.get('horario_recebimento_de')),
+        horario_recebimento_ate=_parse_time_str(data.get('horario_recebimento_ate')),
+        observacoes_recebimento=data.get('observacoes_recebimento') or None,
+        atualizado_em=agora_utc_naive()
+    )
+    db.session.add(contato)
+    db.session.commit()
+
+    return jsonify({
+        'sucesso': True,
+        'mensagem': 'Contato criado com sucesso',
+        'contato': {
+            'cnpj': contato.cnpj,
+            'forma': contato.forma,
+            'contato': contato.contato,
+            'observacao': contato.observacao,
+            'nao_aceita_nf_pallet': contato.nao_aceita_nf_pallet,
+            'horario_recebimento_de': contato.horario_recebimento_de.strftime('%H:%M') if contato.horario_recebimento_de else None,
+            'horario_recebimento_ate': contato.horario_recebimento_ate.strftime('%H:%M') if contato.horario_recebimento_ate else None,
+            'observacoes_recebimento': contato.observacoes_recebimento,
+        }
+    }), 201
+
 
 @cadastros_agendamento_bp.route('/importar', methods=['GET', 'POST'])
 @login_required
@@ -174,7 +288,6 @@ def importar_contatos():
             
             # Verifica se as colunas necessárias existem
             colunas_necessarias = ['CNPJ']
-            colunas_opcionais = ['Forma', 'Contato', 'Observação']
             
             # Verifica colunas obrigatórias
             for coluna in colunas_necessarias:
@@ -182,28 +295,41 @@ def importar_contatos():
                     flash(f"Coluna obrigatória '{coluna}' não encontrada no arquivo.", "danger")
                     return redirect(request.url)
 
-            # Processa coluna "Aceita NF Pallet" se existir
+            # Processa colunas opcionais se existirem
             tem_coluna_pallet = 'Aceita NF Pallet' in df.columns
+            tem_coluna_horario_de = 'Horário De' in df.columns
+            tem_coluna_horario_ate = 'Horário Até' in df.columns
+            tem_coluna_obs_recebimento = 'Obs. Recebimento' in df.columns
 
             contador_importados = 0
             contador_erros = 0
-            
+
             # Função auxiliar para tratar valores vazios
             def tratar_valor_vazio(valor):
                 """Converte valores nan, None ou string vazia para None"""
                 if pd.isna(valor) or valor == 'nan' or valor == '' or valor is None:
                     return None
                 return str(valor).strip()
-            
+
+            def parse_horario(valor_str):
+                """Converte string HH:MM para datetime.time, ou None"""
+                if not valor_str:
+                    return None
+                try:
+                    partes = valor_str.replace('.', ':').split(':')
+                    return dt_time(int(partes[0]), int(partes[1]) if len(partes) > 1 else 0)
+                except (ValueError, IndexError):
+                    return None
+
             for index, row in df.iterrows():
                 try:
                     cnpj = tratar_valor_vazio(row.get("CNPJ", ""))
-                    
+
                     # Verifica se CNPJ não está vazio
                     if not cnpj:
                         contador_erros += 1
                         continue
-                    
+
                     # Processa outros campos
                     forma = tratar_valor_vazio(row.get("Forma", ""))
                     contato = tratar_valor_vazio(row.get("Contato", ""))
@@ -221,6 +347,17 @@ def importar_contatos():
                             elif valor_upper in ('SIM', 'S'):
                                 nao_aceita_nf_pallet = False
 
+                    # Processa campos de recebimento se existirem
+                    horario_de = None
+                    horario_ate = None
+                    obs_recebimento = None
+                    if tem_coluna_horario_de:
+                        horario_de = parse_horario(tratar_valor_vazio(row.get("Horário De", "")))
+                    if tem_coluna_horario_ate:
+                        horario_ate = parse_horario(tratar_valor_vazio(row.get("Horário Até", "")))
+                    if tem_coluna_obs_recebimento:
+                        obs_recebimento = tratar_valor_vazio(row.get("Obs. Recebimento", ""))
+
                     # Verifica se já existe um contato para este CNPJ
                     contato_existente = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
 
@@ -234,23 +371,32 @@ def importar_contatos():
                             contato_existente.observacao = observacao
                         if nao_aceita_nf_pallet is not None:
                             contato_existente.nao_aceita_nf_pallet = nao_aceita_nf_pallet
+                        if horario_de is not None:
+                            contato_existente.horario_recebimento_de = horario_de
+                        if horario_ate is not None:
+                            contato_existente.horario_recebimento_ate = horario_ate
+                        if obs_recebimento is not None:
+                            contato_existente.observacoes_recebimento = obs_recebimento
                         contato_existente.atualizado_em = agora_utc_naive()
                     else:
                         # Cria novo contato
                         novo_contato = ContatoAgendamento(
                             cnpj=cnpj,
-                            forma=forma,  # Pode ser None
-                            contato=contato,  # Pode ser None
-                            observacao=observacao,  # Pode ser None
+                            forma=forma,
+                            contato=contato,
+                            observacao=observacao,
                             nao_aceita_nf_pallet=nao_aceita_nf_pallet if nao_aceita_nf_pallet is not None else False,
+                            horario_recebimento_de=horario_de,
+                            horario_recebimento_ate=horario_ate,
+                            observacoes_recebimento=obs_recebimento,
                             atualizado_em=agora_utc_naive()
                         )
                         db.session.add(novo_contato)
-                    
+
                     contador_importados += 1
-                    
+
                 except Exception as e:
-                    print(f"Erro ao processar linha {index + 1}: {e}") # type: ignore
+                    print(f"Erro ao processar linha {index + 1}: {e}")  # type: ignore
                     contador_erros += 1
                     continue
 
@@ -311,6 +457,9 @@ def exportar_contatos():
             'Contato': contato.contato or '',
             'Aceita NF Pallet': 'NÃO' if contato.nao_aceita_nf_pallet else 'SIM',
             'Observação': contato.observacao or '',
+            'Horário De': contato.horario_recebimento_de.strftime('%H:%M') if contato.horario_recebimento_de else '',
+            'Horário Até': contato.horario_recebimento_ate.strftime('%H:%M') if contato.horario_recebimento_ate else '',
+            'Obs. Recebimento': contato.observacoes_recebimento or '',
             'Atualizado Em': contato.atualizado_em.strftime('%d/%m/%Y %H:%M')
         })
     

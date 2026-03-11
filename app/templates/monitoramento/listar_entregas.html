@@ -1720,7 +1720,21 @@ nav.navbar .navbar-brand .badge.bg-primary {
             <p><strong>NF:</strong> <span id="nf-agendamento-modal"></span></p>
             <p><strong>Cliente:</strong> <span id="cliente-agendamento-modal"></span></p>
             <p><strong>CNPJ:</strong> <span id="cnpj-agendamento-modal"></span></p>
-            
+
+            <!-- Info de contato de agendamento -->
+            <div id="info-contato-agendamento" style="display: none;" class="alert alert-light border py-2 mb-2">
+              <small>
+                <strong>Contato:</strong> <span id="contato-info-modal">-</span><br>
+                <strong>Horário Receb.:</strong> <span id="horario-info-modal">-</span><br>
+                <span id="obs-receb-info-container" style="display: none;">
+                  <strong class="text-danger">Obs. Recebimento:</strong> <span id="obs-receb-info-modal" class="text-danger fw-bold"></span><br>
+                </span>
+                <span id="obs-info-container" style="display: none;">
+                  <strong>Observação:</strong> <span id="obs-info-modal"></span>
+                </span>
+              </small>
+            </div>
+
             <!-- Botões de Portal (aparece apenas para clientes com portal) -->
             <div id="botoes-portal" style="display: none;" class="mb-3">
               <div class="alert alert-info">
@@ -2240,7 +2254,44 @@ document.addEventListener('DOMContentLoaded', function() {
         // Preencher dados do cliente
         document.getElementById('cliente-agendamento-modal').textContent = data.entrega.cliente || '';
         document.getElementById('cnpj-agendamento-modal').textContent = data.entrega.cnpj_cliente || '';
-        
+
+        // Preencher info de contato de agendamento
+        const infoDiv = document.getElementById('info-contato-agendamento');
+        if (data.contato_agendamento && data.contato_agendamento.forma) {
+          infoDiv.style.display = 'block';
+          document.getElementById('contato-info-modal').textContent = data.contato_agendamento.contato || '-';
+
+          const hrDe = data.contato_agendamento.horario_de;
+          const hrAte = data.contato_agendamento.horario_ate;
+          document.getElementById('horario-info-modal').textContent = (hrDe || hrAte) ? `${hrDe || '?'} - ${hrAte || '?'}` : '-';
+
+          if (data.contato_agendamento.obs_recebimento) {
+            document.getElementById('obs-receb-info-container').style.display = '';
+            document.getElementById('obs-receb-info-modal').textContent = data.contato_agendamento.obs_recebimento;
+          } else {
+            document.getElementById('obs-receb-info-container').style.display = 'none';
+          }
+
+          if (data.contato_agendamento.observacao) {
+            document.getElementById('obs-info-container').style.display = '';
+            document.getElementById('obs-info-modal').textContent = data.contato_agendamento.observacao;
+          } else {
+            document.getElementById('obs-info-container').style.display = 'none';
+          }
+
+          // Pre-preencher forma de agendamento
+          const formaSelect = document.getElementById('forma-agendamento');
+          const formaVal = (data.contato_agendamento.forma || '').toUpperCase();
+          // Mapear formas do cadastro para opções do select
+          const formaMap = {'PORTAL': 'Portal', 'TELEFONE': 'Telefone', 'E-MAIL': 'E-mail', 'WHATSAPP': 'WhatsApp'};
+          const formaOption = formaMap[formaVal] || '';
+          if (formaOption) {
+            formaSelect.value = formaOption;
+          }
+        } else {
+          infoDiv.style.display = 'none';
+        }
+
         // Verificar se cliente tem portal usando prefixo CNPJ
         const cnpj = data.entrega.cnpj_cliente || '';
         const cnpjLimpo = cnpj.replace(/\D/g, '');

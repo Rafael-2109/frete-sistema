@@ -231,6 +231,23 @@
         </tbody>
     </table>
 
+    {% if contato_agendamento and contato_agendamento.observacoes_recebimento %}
+    <div style="border: 2px solid #dc3545; background-color: #f8d7da; padding: 6px; margin-top: 8px;">
+        <h3 style="margin: 0 0 2px 0; font-size: 14px; color: #721c24;">OBSERVACOES NO RECEBIMENTO:</h3>
+        <div style="font-weight: bold; line-height: 1.6;">
+            {{ contato_agendamento.observacoes_recebimento }}
+        </div>
+        {% if contato_agendamento.horario_recebimento_de or contato_agendamento.horario_recebimento_ate %}
+        <div style="font-size: 12px; margin-top: 4px;">
+            <strong>Horario recebimento:</strong>
+            {{ contato_agendamento.horario_recebimento_de.strftime('%H:%M') if contato_agendamento.horario_recebimento_de else '?' }}
+            -
+            {{ contato_agendamento.horario_recebimento_ate.strftime('%H:%M') if contato_agendamento.horario_recebimento_ate else '?' }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Seção de Separação e Conferência -->
     <div style="margin-top: 10px; border: 1px solid #ddd; padding: 10px;">
         <div style="display: flex; justify-content: space-between;">

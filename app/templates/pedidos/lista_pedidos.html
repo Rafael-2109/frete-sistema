@@ -865,18 +865,30 @@
                 <!-- ✨ NOVA COLUNA: Forma de Agendamento -->
                 <td class="text-center">
                   {% if p.contato_agendamento and p.contato_agendamento.forma %}
-                    <button type="button" 
+                    <button type="button"
                             class="btn btn-sm btn-primary"
                             data-cnpj="{{ p.cnpj_cpf }}"
                             data-forma="{{ p.contato_agendamento.forma }}"
                             data-contato="{{ p.contato_agendamento.contato }}"
                             data-observacao="{{ p.contato_agendamento.observacao or '' }}"
-                            onclick="mostrarContatoAgendamento(this.dataset.cnpj, this.dataset.forma, this.dataset.contato, this.dataset.observacao)"
-                            title="Clique para ver detalhes">
+                            data-nao-aceita-pallet="{{ 'true' if p.contato_agendamento.nao_aceita_nf_pallet else 'false' }}"
+                            data-horario-de="{{ p.contato_agendamento.horario_recebimento_de.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_de else '' }}"
+                            data-horario-ate="{{ p.contato_agendamento.horario_recebimento_ate.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_ate else '' }}"
+                            data-obs-recebimento="{{ p.contato_agendamento.observacoes_recebimento or '' }}"
+                            data-cadastrado="true"
+                            onclick="mostrarContatoAgendamento(this)"
+                            title="Clique para ver/editar">
                       {{ p.contato_agendamento.forma }}
                     </button>
                   {% else %}
-                    <span class="badge bg-danger">Não cadastrado</span>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger"
+                            data-cnpj="{{ p.cnpj_cpf }}"
+                            data-cadastrado="false"
+                            onclick="mostrarContatoAgendamento(this)"
+                            title="Clique para cadastrar">
+                      Não cadastrado
+                    </button>
                   {% endif %}
                 </td>
                 
@@ -1999,62 +2011,168 @@ function confirmarDesvinculacao(loteId, numeroPedido) {
     }
 }
 
-// ✅ NOVA FUNÇÃO: Mostrar pop-up com informações de contato de agendamento
-function mostrarContatoAgendamento(cnpj, forma, contato, observacao) {
+// ✅ Modal editável de contato de agendamento
+function mostrarContatoAgendamento(btn) {
+    const cnpj = btn.dataset.cnpj;
+    const cadastrado = btn.dataset.cadastrado === 'true';
+    const forma = btn.dataset.forma || '';
+    const contato = btn.dataset.contato || '';
+    const observacao = btn.dataset.observacao || '';
+    const naoAceitaPallet = btn.dataset.naoAceitaPallet === 'true';
+    const horarioDe = btn.dataset.horarioDe || '';
+    const horarioAte = btn.dataset.horarioAte || '';
+    const obsRecebimento = btn.dataset.obsRecebimento || '';
+
+    const titulo = cadastrado ? 'Editar Agendamento' : 'Cadastrar Agendamento';
+
     const modalHtml = `
         <div class="modal fade" id="modalContatoAgendamento" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">
-                            <i class="fas fa-phone"></i> Informações de Agendamento
+                            <i class="fas fa-calendar-alt"></i> ${titulo}
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="row">
-                            <div class="col-12 mb-3">
-                                <label class="form-label"><strong>CNPJ:</strong></label>
-                                <div class="form-control-plaintext">${cnpj}</div>
+                        <div class="mb-2">
+                            <label class="form-label"><strong>CNPJ:</strong></label>
+                            <div class="form-control-plaintext">${cnpj}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-md-6">
+                                <label for="cag-forma" class="form-label">Forma de Agendamento</label>
+                                <select id="cag-forma" class="form-select">
+                                    <option value="">-- Selecione --</option>
+                                    <option value="PORTAL" ${forma === 'PORTAL' ? 'selected' : ''}>PORTAL</option>
+                                    <option value="TELEFONE" ${forma === 'TELEFONE' ? 'selected' : ''}>TELEFONE</option>
+                                    <option value="E-MAIL" ${forma === 'E-MAIL' ? 'selected' : ''}>E-MAIL</option>
+                                    <option value="COMERCIAL" ${forma === 'COMERCIAL' ? 'selected' : ''}>COMERCIAL</option>
+                                    <option value="SEM AGENDAMENTO" ${forma === 'SEM AGENDAMENTO' ? 'selected' : ''}>SEM AGENDAMENTO</option>
+                                    <option value="ODOO" ${forma === 'ODOO' ? 'selected' : ''}>ODOO</option>
+                                </select>
                             </div>
-                            <div class="col-12 mb-3">
-                                <label class="form-label"><strong>Forma de Agendamento:</strong></label>
-                                <div class="form-control-plaintext">
-                                    <span class="badge bg-primary">${forma}</span>
+                            <div class="col-md-6">
+                                <label for="cag-contato" class="form-label">Contato</label>
+                                <input type="text" id="cag-contato" class="form-control" value="${contato}">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label for="cag-observacao" class="form-label">Observação</label>
+                            <textarea id="cag-observacao" class="form-control" rows="2">${observacao}</textarea>
+                        </div>
+                        <hr>
+                        <h6 class="text-muted"><i class="fas fa-truck-loading"></i> Dados de Recebimento</h6>
+                        <div class="row mb-2">
+                            <div class="col-md-4">
+                                <label for="cag-horario-de" class="form-label">Horário De</label>
+                                <input type="time" id="cag-horario-de" class="form-control" value="${horarioDe}">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="cag-horario-ate" class="form-label">Horário Até</label>
+                                <input type="time" id="cag-horario-ate" class="form-control" value="${horarioAte}">
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="cag-pallet" ${naoAceitaPallet ? 'checked' : ''}>
+                                    <label class="form-check-label" for="cag-pallet">Não aceita NF Pallet</label>
                                 </div>
                             </div>
-                            <div class="col-12 mb-3">
-                                <label class="form-label"><strong>Contato:</strong></label>
-                                <div class="form-control-plaintext">${contato}</div>
-                            </div>
-                            ${observacao ? `
-                            <div class="col-12 mb-3">
-                                <label class="form-label"><strong>Observação:</strong></label>
-                                <div class="form-control-plaintext">${observacao}</div>
-                            </div>
-                            ` : ''}
+                        </div>
+                        <div class="mb-2">
+                            <label for="cag-obs-recebimento" class="form-label">Obs. Recebimento</label>
+                            <textarea id="cag-obs-recebimento" class="form-control" rows="2" placeholder="Ex: 1 SKU por pallet, veículo com sirene na ré...">${obsRecebimento}</textarea>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success" onclick="salvarContatoAgendamento('${cnpj}', ${cadastrado}, this)">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     `;
-    
+
     // Remove modal anterior se existir
     const modalExistente = document.getElementById('modalContatoAgendamento');
-    if (modalExistente) {
-        modalExistente.remove();
-    }
-    
-    // Adiciona o novo modal ao body
+    if (modalExistente) { modalExistente.remove(); }
+
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Mostra o modal
     const modal = new bootstrap.Modal(document.getElementById('modalContatoAgendamento'));
     modal.show();
+}
+
+function salvarContatoAgendamento(cnpj, cadastrado, btnEl) {
+    const dados = {
+        cnpj: cnpj,
+        forma: document.getElementById('cag-forma').value,
+        contato: document.getElementById('cag-contato').value,
+        observacao: document.getElementById('cag-observacao').value,
+        nao_aceita_nf_pallet: document.getElementById('cag-pallet').checked,
+        horario_recebimento_de: document.getElementById('cag-horario-de').value,
+        horario_recebimento_ate: document.getElementById('cag-horario-ate').value,
+        observacoes_recebimento: document.getElementById('cag-obs-recebimento').value,
+    };
+
+    const url = cadastrado
+        ? `/cadastros-agendamento/api/atualizar/${encodeURIComponent(cnpj)}`
+        : '/cadastros-agendamento/api/criar';
+    const method = cadastrado ? 'PUT' : 'POST';
+
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(dados)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            bootstrap.Modal.getInstance(document.getElementById('modalContatoAgendamento')).hide();
+            // Atualizar o botão na tabela para refletir o novo estado
+            const btns = document.querySelectorAll(`button[data-cnpj="${cnpj}"]`);
+            btns.forEach(b => {
+                if (b.onclick && b.onclick.toString().includes('mostrarContatoAgendamento')) return;
+                // Atualizar data attrs
+                b.dataset.forma = dados.forma;
+                b.dataset.contato = dados.contato;
+                b.dataset.observacao = dados.observacao;
+                b.dataset.naoAceitaPallet = dados.nao_aceita_nf_pallet ? 'true' : 'false';
+                b.dataset.horarioDe = dados.horario_recebimento_de || '';
+                b.dataset.horarioAte = dados.horario_recebimento_ate || '';
+                b.dataset.obsRecebimento = dados.observacoes_recebimento || '';
+                b.dataset.cadastrado = 'true';
+                if (dados.forma) {
+                    b.className = 'btn btn-sm btn-primary';
+                    b.textContent = dados.forma;
+                }
+            });
+            // Mostrar feedback sutil
+            const toast = document.createElement('div');
+            toast.className = 'alert alert-success position-fixed bottom-0 end-0 m-3';
+            toast.style.zIndex = '9999';
+            toast.innerHTML = '<i class="fas fa-check"></i> Salvo com sucesso';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        } else {
+            alert(data.error || 'Erro ao salvar');
+            btnEl.disabled = false;
+            btnEl.innerHTML = '<i class="fas fa-save"></i> Salvar';
+        }
+    })
+    .catch(err => {
+        alert('Erro de conexão: ' + err.message);
+        btnEl.disabled = false;
+        btnEl.innerHTML = '<i class="fas fa-save"></i> Salvar';
+    });
 }
 
 // ✅ NOVA FUNÇÃO: Abrir edição de pedido em pop-up

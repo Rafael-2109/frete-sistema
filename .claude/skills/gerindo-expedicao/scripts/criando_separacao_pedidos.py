@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importar modulo centralizado de resolucao de entidades
 from resolver_entidades import resolver_pedido, formatar_sugestao_pedido # type: ignore # noqa: E402
-from app.utils.timezone import agora_utc_naive # noqa: E402
+from app.utils.timezone import agora_utc_naive # type: ignore # noqa: E402
 
 
 def decimal_default(obj):
@@ -93,7 +93,7 @@ def parse_data_natural(termo: str) -> date:
 
 def criar_app_context():
     """Cria contexto Flask para acesso ao banco"""
-    from app import create_app
+    from app import create_app # type: ignore # noqa: E402
     app = create_app()
     return app.app_context()
 
@@ -109,7 +109,7 @@ def verificar_agendamento(cnpj: str) -> dict:
         - contato: str
         - observacao: str
     """
-    from app.cadastros_agendamento.models import ContatoAgendamento
+    from app.cadastros_agendamento.models import ContatoAgendamento # type: ignore # noqa: E402
 
     # Normalizar CNPJ (remover formatacao para busca)
     cnpj_limpo = ''.join(c for c in cnpj if c.isdigit())
@@ -139,6 +139,9 @@ def verificar_agendamento(cnpj: str) -> dict:
             'forma': contato.forma,
             'contato': contato.contato,
             'observacao': contato.observacao,
+            'horario_recebimento_de': str(contato.horario_recebimento_de) if contato.horario_recebimento_de else None,
+            'horario_recebimento_ate': str(contato.horario_recebimento_ate) if contato.horario_recebimento_ate else None,
+            'observacoes_recebimento': contato.observacoes_recebimento,
             'mensagem': 'Pelo cadastro, este cliente nao precisa de agendamento'
         }
 
@@ -147,13 +150,16 @@ def verificar_agendamento(cnpj: str) -> dict:
         'forma': contato.forma,
         'contato': contato.contato,
         'observacao': contato.observacao,
+        'horario_recebimento_de': str(contato.horario_recebimento_de) if contato.horario_recebimento_de else None,
+        'horario_recebimento_ate': str(contato.horario_recebimento_ate) if contato.horario_recebimento_ate else None,
+        'observacoes_recebimento': contato.observacoes_recebimento,
         'mensagem': f'Este cliente EXIGE agendamento via {contato.forma}. Preciso de: data agendamento, protocolo, confirmacao.'
     }
 
 
 def buscar_itens_carteira(num_pedido: str) -> list:
     """Busca todos os itens do pedido na carteira com saldo > 0"""
-    from app.carteira.models import CarteiraPrincipal
+    from app.carteira.models import CarteiraPrincipal # type: ignore # noqa: E402
 
     itens = CarteiraPrincipal.query.filter(
         CarteiraPrincipal.num_pedido == num_pedido,
@@ -166,7 +172,7 @@ def buscar_itens_carteira(num_pedido: str) -> list:
 
 def verificar_separacao_existente(num_pedido: str) -> dict:
     """Verifica se ja existe separacao para o pedido"""
-    from app.separacao.models import Separacao
+    from app.separacao.models import Separacao # type: ignore # noqa: E402
 
     separacao = Separacao.query.filter(
         Separacao.num_pedido == num_pedido,
@@ -199,7 +205,7 @@ def calcular_estoque_disponivel(cod_produto: str, data_expedicao: date = None) -
     Returns:
         Estoque projetado para a data especificada
     """
-    from app.estoque.services.estoque_simples import ServicoEstoqueSimples
+    from app.estoque.services.estoque_simples import ServicoEstoqueSimples # type: ignore # noqa: E402
 
     hoje = date.today()
     data_alvo = data_expedicao or hoje
@@ -228,7 +234,7 @@ def calcular_estoque_disponivel(cod_produto: str, data_expedicao: date = None) -
 
 def buscar_palletizacao(cod_produto: str) -> dict:
     """Busca dados de palletizacao do produto"""
-    from app.producao.models import CadastroPalletizacao
+    from app.producao.models import CadastroPalletizacao # type: ignore # noqa: E402
 
     pallet = CadastroPalletizacao.query.filter_by(
         cod_produto=cod_produto,
@@ -246,7 +252,7 @@ def buscar_palletizacao(cod_produto: str) -> dict:
 
 def calcular_rota_subrota(item_carteira) -> tuple:
     """Calcula rota e sub-rota baseado no item da carteira"""
-    from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+    from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade # type: ignore # noqa: E402
 
     # Verificar incoterm (RED/FOB)
     if hasattr(item_carteira, 'incoterm') and item_carteira.incoterm in ['RED', 'FOB']:
@@ -391,7 +397,7 @@ def simular_separacao(
         - info_agendamento: info sobre necessidade de agendamento
         - totais: valor, peso, pallets
     """
-    from app.utils.text_utils import truncar_observacao
+    from app.utils.text_utils import truncar_observacao # type: ignore # noqa: E402
 
     # Buscar itens da carteira
     itens_carteira = buscar_itens_carteira(num_pedido)
@@ -576,9 +582,9 @@ def executar_separacao(simulacao: dict) -> dict:
     Returns:
         dict com resultado da criacao
     """
-    from app import db
-    from app.separacao.models import Separacao
-    from app.utils.lote_utils import gerar_lote_id
+    from app import db # type: ignore # noqa: E402
+    from app.separacao.models import Separacao # type: ignore # noqa: E402
+    from app.utils.lote_utils import gerar_lote_id # type: ignore # noqa: E402
     from datetime import datetime
     from flask_login import current_user
 

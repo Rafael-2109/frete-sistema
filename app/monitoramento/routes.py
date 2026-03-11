@@ -78,7 +78,15 @@ def _get_contatos_agendamento():
         return _contatos_cache
     contatos = {}
     for c in ContatoAgendamento.query.all():
-        dados = {'forma': c.forma, 'contato': c.contato, 'observacao': c.observacao}
+        dados = {
+            'forma': c.forma,
+            'contato': c.contato,
+            'observacao': c.observacao,
+            'nao_aceita_nf_pallet': c.nao_aceita_nf_pallet,
+            'horario_recebimento_de': c.horario_recebimento_de.strftime('%H:%M') if c.horario_recebimento_de else None,
+            'horario_recebimento_ate': c.horario_recebimento_ate.strftime('%H:%M') if c.horario_recebimento_ate else None,
+            'observacoes_recebimento': c.observacoes_recebimento,
+        }
         contatos[c.cnpj] = dados
         if c.cnpj:
             cnpj_limpo = c.cnpj.replace('.', '').replace('-', '').replace('/', '')
@@ -259,7 +267,8 @@ def visualizar_entrega(id):
         form=form_comentario,
         comentarios=comentarios,
         feedback=feedback,
-        ocorrencias_devolucao=ocorrencias_devolucao
+        ocorrencias_devolucao=ocorrencias_devolucao,
+        contato_agendamento=contato_prev
     )
 
 @monitoramento_bp.route('/<int:id>/adicionar_log', methods=['POST'])
@@ -2437,6 +2446,10 @@ def api_get_entrega(entrega_id):
         if not (entrega.vendedor and vendedor_filtro.lower() in entrega.vendedor.lower()):
             return jsonify({'error': 'Acesso negado'}), 403
     
+    # Buscar contato de agendamento para enriquecer resposta
+    contatos_cache = _get_contatos_agendamento()
+    contato_dados = contatos_cache.get(entrega.cnpj_cliente, {})
+
     return jsonify({
         'entrega': {
             'id': entrega.id,
@@ -2458,7 +2471,16 @@ def api_get_entrega(entrega_id):
             'observacao_operacional': entrega.observacao_operacional,
             'pendencia_financeira': entrega.pendencia_financeira,
             'resposta_financeiro': entrega.resposta_financeiro,
-        }
+        },
+        'contato_agendamento': {
+            'forma': contato_dados.get('forma'),
+            'contato': contato_dados.get('contato'),
+            'observacao': contato_dados.get('observacao'),
+            'horario_de': contato_dados.get('horario_recebimento_de'),
+            'horario_ate': contato_dados.get('horario_recebimento_ate'),
+            'obs_recebimento': contato_dados.get('observacoes_recebimento'),
+            'nao_aceita_nf_pallet': contato_dados.get('nao_aceita_nf_pallet', False),
+        } if contato_dados else None
     })
 
 @monitoramento_bp.route('/api/entrega/<int:entrega_id>/dados')

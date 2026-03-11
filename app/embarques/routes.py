@@ -1185,12 +1185,21 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
         'qtd_total': sum(item.qtd_saldo or 0 for item in itens_separacao),
     }
     
+    # Carregar contato de agendamento para exibir obs. recebimento na impressão
+    from app.cadastros_agendamento.models import ContatoAgendamento
+    contato_agendamento = None
+    if resumo_separacao.get('cnpj_cpf'):
+        contato_agendamento = ContatoAgendamento.query.filter_by(
+            cnpj=resumo_separacao['cnpj_cpf']
+        ).first()
+
     # Renderiza template específico para impressão
     html = render_template(
         'embarques/imprimir_separacao.html',
         embarque=embarque,
         itens_separacao=itens_separacao,
         resumo_separacao=resumo_separacao,
+        contato_agendamento=contato_agendamento,
         data_impressao=agora_utc_naive(),
         current_user=current_user
     )

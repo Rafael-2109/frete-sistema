@@ -10,6 +10,9 @@ class ContatoAgendamento(db.Model):
     contato = db.Column(db.String(255))  # Usuário, telefone ou e-mail
     observacao = db.Column(db.Text)
     nao_aceita_nf_pallet = db.Column(db.Boolean, default=False, nullable=False)  # Cliente não aceita NF de pallet
+    horario_recebimento_de = db.Column(db.Time, nullable=True)    # ex: 08:00
+    horario_recebimento_ate = db.Column(db.Time, nullable=True)   # ex: 17:00
+    observacoes_recebimento = db.Column(db.Text, nullable=True)    # Restrições específicas do cliente no recebimento
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     def __repr__(self):
