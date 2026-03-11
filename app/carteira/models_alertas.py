@@ -41,7 +41,7 @@ class AlertaSeparacaoCotada(db.Model):
     nome_produto = db.Column(db.String(255), nullable=True)
     cliente = db.Column(db.String(255), nullable=True)
     embarque_numero = db.Column(db.Integer, nullable=True)
-    tipo_separacao = db.Column(db.String(30), nullable=True)  # 'TOTAL' ou 'PARCIAL'
+    tipo_separacao = db.Column(db.String(50), nullable=True)  # 'TOTAL', 'PARCIAL', 'SUBSTITUICAO_TOTAL', etc.
     
     # Observações
     observacao = db.Column(db.Text, nullable=True)
