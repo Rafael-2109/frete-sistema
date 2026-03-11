@@ -388,7 +388,9 @@ class SchemaProvider:
             if fks:
                 lines.append("Foreign Keys:")
                 for fk in fks:
-                    lines.append(f"  {fk['column']} -> {fk['references']}")
+                    col = fk.get('column') or ', '.join(fk.get('columns', fk.get('constrained_columns', ['?'])))
+                    ref = fk.get('references') or f"{fk.get('referred_table', '?')}.{', '.join(fk.get('referred_columns', ['?']))}"
+                    lines.append(f"  {col} -> {ref}")
 
             lines.append("")
 

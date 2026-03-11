@@ -179,16 +179,16 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_cnpj",
+      "name": "ix_contas_a_pagar_empresa",
       "columns": [
-        "cnpj"
+        "empresa"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "idx_conta_pagar_cnpj",
       "columns": [
-        "empresa"
+        "cnpj"
       ],
       "unique": false
     },
@@ -207,13 +207,6 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -224,6 +217,13 @@
       "name": "ix_contas_a_pagar_status_sistema",
       "columns": [
         "status_sistema"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_odoo_line",
+      "columns": [
+        "odoo_line_id"
       ],
       "unique": false
     },

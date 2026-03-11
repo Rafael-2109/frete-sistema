@@ -274,9 +274,6 @@ def create_app(config_name=None):
     if not os.path.exists(app.config["UPLOAD_FOLDER"]):
         os.makedirs(app.config["UPLOAD_FOLDER"])
 
-    # 🔧 Configurar tamanho máximo do arquivo (16MB)
-    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
-
     # 🔧 Configurar session - CORRIGIDO para evitar logout automático
     from datetime import timedelta
 
@@ -448,6 +445,17 @@ def create_app(config_name=None):
             else:
                 logger.warning(f"🔍 404 - Página não encontrada: {request.path}")
                 return "Página não encontrada", 404
+
+        @app.errorhandler(413)
+        def request_entity_too_large(error):  # pyright: ignore[reportUnusedFunction]
+            """Captura erros 413 - arquivo muito grande para upload"""
+            from flask import jsonify, flash, redirect, url_for
+            max_mb = app.config.get('MAX_CONTENT_LENGTH', 32 * 1024 * 1024) // (1024 * 1024)
+            msg = f'Arquivo muito grande. Limite máximo: {max_mb}MB'
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'erro': msg}), 413
+            flash(msg, 'danger')
+            return redirect(request.referrer or url_for('main.index')), 413
 
         @app.errorhandler(500)
         def handle_500(error): # pyright: ignore[reportUnusedFunction]

@@ -31,6 +31,8 @@ from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from collections import Counter
 
+from sqlalchemy.exc import IntegrityError
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import (
@@ -1796,13 +1798,19 @@ class ValidacaoFiscalService:
                         )
 
                         db.session.add(pendencia)
-                        db.session.commit()
-                        resultado['pendencias_criadas'] += 1
+                        try:
+                            db.session.commit()
+                            resultado['pendencias_criadas'] += 1
 
-                        logger.warning(
-                            f"Pendencia IBS/CBS criada: NF-e {numero_nf}, NCM {ncm}, fornecedor {cnpj}"
-                        )
-                        logger.warning(f"   Divergencias: {detalhes}")
+                            logger.warning(
+                                f"Pendencia IBS/CBS criada: NF-e {numero_nf}, NCM {ncm}, fornecedor {cnpj}"
+                            )
+                            logger.warning(f"   Divergencias: {detalhes}")
+                        except IntegrityError:
+                            db.session.rollback()
+                            logger.warning(
+                                f"Pendencia duplicada para NF-e {numero_nf}, NCM {ncm} — ja existe no banco"
+                            )
 
             if resultado['ncm_nao_cadastrados']:
                 resultado['detalhes'] = f"NCMs nao cadastrados para validacao: {', '.join(resultado['ncm_nao_cadastrados'])}"

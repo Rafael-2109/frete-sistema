@@ -35,7 +35,6 @@ Referencia: .claude/references/RECEBIMENTO_MATERIAIS.md
 """
 
 from app import db
-from datetime import datetime
 from app.utils.timezone import agora_utc_naive
 
 
@@ -429,6 +428,9 @@ class PendenciaFiscalIbsCbs(db.Model):
     - rejeitado: Documento devolvido ao fornecedor
     """
     __tablename__ = 'pendencia_fiscal_ibscbs'
+    __table_args__ = (
+        db.UniqueConstraint('chave_acesso', 'ncm_prefixo', name='uq_pendencia_fiscal_chave_ncm'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -437,7 +439,7 @@ class PendenciaFiscalIbsCbs(db.Model):
     tipo_documento = db.Column(db.String(10), nullable=False, index=True)
 
     # Identificacao do documento
-    chave_acesso = db.Column(db.String(44), nullable=False, unique=True, index=True)
+    chave_acesso = db.Column(db.String(44), nullable=False, index=True)
     numero_documento = db.Column(db.String(20), nullable=True)
     serie = db.Column(db.String(5), nullable=True)
     data_emissao = db.Column(db.Date, nullable=True)

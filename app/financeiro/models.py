@@ -745,6 +745,17 @@ class ContasAReceberSnapshot(db.Model):
             usuario: Usuário que realizou (ou 'Sistema Odoo')
             odoo_write_date: write_date do Odoo
         """
+        # Guard defensivo: garantir que conta.id está atribuído (fix PYTHON-FLASK-5)
+        if conta.id is None:
+            db.session.flush()
+        if conta.id is None:
+            raise ValueError(
+                f"conta.id é None após flush — conta não persistida: "
+                f"empresa={getattr(conta, 'empresa', '?')}, "
+                f"titulo_nf={getattr(conta, 'titulo_nf', '?')}, "
+                f"parcela={getattr(conta, 'parcela', '?')}"
+            )
+
         # Converter valores para JSON string se necessário
         def to_json_str(val):
             if val is None:

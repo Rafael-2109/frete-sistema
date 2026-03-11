@@ -78,13 +78,6 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_historico_alterado_por",
-      "columns": [
-        "alterado_por"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_lista_materiais_historico_cod_produto_produzido",
       "columns": [
         "cod_produto_produzido"
@@ -132,6 +125,13 @@
       "columns": [
         "operacao",
         "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_alterado_por",
+      "columns": [
+        "alterado_por"
       ],
       "unique": false
     }

@@ -59,6 +59,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, List
 from decimal import Decimal, ROUND_HALF_UP
+from sqlalchemy.exc import IntegrityError
 from app.utils.timezone import agora_utc_naive
 
 from app import db
@@ -577,7 +578,19 @@ class ValidacaoIbsCbsService:
             pendencia.cbs_valor = ibscbs.get('cbs_valor')
 
         db.session.add(pendencia)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            logger.warning(
+                f"Pendencia duplicada para CTe {cte.numero_cte} "
+                f"(chave_acesso={cte.chave_acesso}) — ja existe no banco"
+            )
+            # Retornar a pendencia existente
+            pendencia = PendenciaFiscalIbsCbs.query.filter_by(
+                chave_acesso=cte.chave_acesso
+            ).first()
+            return pendencia
 
         logger.info(f"Pendencia fiscal IBS/CBS criada para CTe {cte.numero_cte}: ID={pendencia.id}")
 

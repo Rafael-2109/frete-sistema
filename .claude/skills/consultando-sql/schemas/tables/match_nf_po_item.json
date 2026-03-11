@@ -102,16 +102,16 @@
   ],
   "indices": [
     {
-      "name": "ix_match_nf_po_item_validacao_id",
+      "name": "ix_match_nf_po_item_status_match",
       "columns": [
-        "validacao_id"
+        "status_match"
       ],
       "unique": false
     },
     {
-      "name": "ix_match_nf_po_item_status_match",
+      "name": "ix_match_nf_po_item_validacao_id",
       "columns": [
-        "status_match"
+        "validacao_id"
       ],
       "unique": false
     },

@@ -18,6 +18,8 @@ import base64
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import PendenciaFiscalIbsCbs
@@ -409,7 +411,16 @@ class ValidacaoIbsCbsJob:
                     )
 
             if pendencias_criadas > 0:
-                db.session.commit()
+                try:
+                    db.session.commit()
+                except IntegrityError as ie:
+                    db.session.rollback()
+                    logger.warning(
+                        f"IntegrityError ao salvar pendencias da NF-e DFE {dfe_id} "
+                        f"(duplicata por chave_acesso): {ie}"
+                    )
+                    # Pendencias ja existem — nao contar como criadas
+                    pendencias_criadas = 0
 
             return pendencias_criadas
 

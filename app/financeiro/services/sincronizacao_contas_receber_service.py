@@ -144,6 +144,7 @@ class SincronizacaoContasReceberService:
                     self._processar_registro(row)
                 except Exception as e:
                     db.session.rollback()
+                    db.session.expire_all()  # Limpar referências stale após rollback (fix PYTHON-FLASK-5)
                     logger.error(f"   ❌ Erro no registro {idx}: {e}")
                     self.estatisticas['erros'] += 1
                     continue
@@ -353,6 +354,7 @@ class SincronizacaoContasReceberService:
                     self._processar_registro(row, contas_por_line_id, contas_por_chave)
                 except Exception as e:
                     db.session.rollback()
+                    db.session.expire_all()  # Limpar referências stale após rollback (fix PYTHON-FLASK-5)
                     logger.error(f"   ❌ Erro no registro {idx}: {e}")
                     self.estatisticas['erros'] += 1
                     continue
@@ -539,6 +541,9 @@ class SincronizacaoContasReceberService:
             conta = self._criar_registro(row, empresa, titulo_nf, parcela, odoo_write_date,
                                          odoo_line_id=odoo_line_id)
             db.session.add(conta)
+            # Flush para forçar atribuição de conta.id antes de eventual
+            # registrar_alteracao() em iteração futura (fix PYTHON-FLASK-5)
+            db.session.flush()
             # Atualizar dicts para evitar duplicatas no mesmo batch
             if contas_por_line_id is not None and odoo_line_id:
                 contas_por_line_id[odoo_line_id] = conta

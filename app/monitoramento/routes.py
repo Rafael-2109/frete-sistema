@@ -5,6 +5,7 @@ from app.utils.timezone import agora_utc_naive
 import os
 import time
 import tempfile
+from itertools import chain
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 import logging
@@ -1153,12 +1154,14 @@ def visualizar_historico(id):
     agendamentos = AgendamentoEntrega.query.filter_by(entrega_id=id).all()
     
     historico_completo = sorted(
-        *((log.data_hora, 'Log', log.autor, f"{log.tipo}: {log.descricao}") for log in logs),
-        *((evento.criado_em, 'Evento', evento.autor, f"{evento.tipo_evento}: {evento.observacao} - Chegada: {evento.data_hora_chegada.strftime('%d/%m/%Y %H:%M') if evento.data_hora_chegada else 'Sem registro'}") for evento in eventos),
-        *((custo.criado_em, 'Custo', custo.autor, f"{custo.tipo}: R$ {custo.valor:.2f} - {custo.motivo}") for custo in custos),
-        *((ag.criado_em, 'Agendamento', ag.autor, f"Agendado por: {ag.forma_agendamento} Data: {ag.data_agendada.strftime('%d/%m/%Y')} - {ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else 'Sem horário'} - Protocolo {ag.protocolo_agendamento}- Motivo: {ag.motivo}") for ag in agendamentos),
-        *([(entrega.finalizado_em, 'Finalização', entrega.finalizado_por, f"Entrega finalizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}") if entrega.finalizado_em else []]),
-        *([(entrega.data_hora_entrega_realizada, 'Entrega', entrega.finalizado_por, f"Entrega realizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}") if entrega.data_hora_entrega_realizada else []]),
+        chain(
+            ((log.data_hora, 'Log', log.autor, f"{log.tipo}: {log.descricao}") for log in logs),
+            ((evento.criado_em, 'Evento', evento.autor, f"{evento.tipo_evento}: {evento.observacao} - Chegada: {evento.data_hora_chegada.strftime('%d/%m/%Y %H:%M') if evento.data_hora_chegada else 'Sem registro'}") for evento in eventos),
+            ((custo.criado_em, 'Custo', custo.autor, f"{custo.tipo}: R$ {custo.valor:.2f} - {custo.motivo}") for custo in custos),
+            ((ag.criado_em, 'Agendamento', ag.autor, f"Agendado por: {ag.forma_agendamento} Data: {ag.data_agendada.strftime('%d/%m/%Y')} - {ag.hora_agendada.strftime('%H:%M') if ag.hora_agendada else 'Sem horário'} - Protocolo {ag.protocolo_agendamento}- Motivo: {ag.motivo}") for ag in agendamentos),
+            [(entrega.finalizado_em, 'Finalização', entrega.finalizado_por, f"Entrega finalizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}")] if entrega.finalizado_em else [],
+            [(entrega.data_hora_entrega_realizada, 'Entrega', entrega.finalizado_por, f"Entrega realizada em: {entrega.data_hora_entrega_realizada.strftime('%d/%m/%Y-%H:%M') if entrega.data_hora_entrega_realizada else 'Data não informada'}")] if entrega.data_hora_entrega_realizada else [],
+        ),
         key=lambda x: x[0], reverse=True
     )
 

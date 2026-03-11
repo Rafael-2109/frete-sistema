@@ -283,7 +283,12 @@ def index():
             FaturamentoProduto.equipe_vendas
         ).filter(
             FaturamentoProduto.cnpj_cliente.in_(cnpjs_para_busca)
-        ).order_by(FaturamentoProduto.data_fatura.desc()).distinct(FaturamentoProduto.cnpj_cliente).all()
+        ).distinct(
+            FaturamentoProduto.cnpj_cliente
+        ).order_by(
+            FaturamentoProduto.cnpj_cliente,
+            FaturamentoProduto.data_fatura.desc()
+        ).all()
         for r in fat_cnpj:
             vendedor_por_cnpj[r.cnpj_cliente] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
 
