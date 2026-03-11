@@ -34,7 +34,7 @@ REGRAS:
 - Mantenha TODOS os fatos, preferencias, regras e correcoes — NAO perca informacao
 - Elimine apenas redundancias, reformulacoes e informacoes duplicadas
 - Organize por topico (preferencias, regras, correcoes, contexto)
-- Formato: texto corrido organizado, maximo 800 caracteres
+- Formato: texto corrido organizado, maximo 1500 caracteres
 - Linguagem: portugues brasileiro
 - NAO adicione interpretacoes ou suposicoes — apenas o que esta escrito"""
 
@@ -337,7 +337,7 @@ def _consolidate_group(
     CONSOLIDATION_MAX_TOKENS = 1200  # Tokens max para consolidação inicial
     VERIFICATION_MAX_TOKENS = 800    # Tokens max para verificação de fatos
     RETRY_MAX_TOKENS = 1200          # Tokens max para retry (mesmo que consolidação)
-    CONSOLIDATION_MAX_OUTPUT_CHARS = 1200  # Limite de caracteres do output final
+    CONSOLIDATION_MAX_OUTPUT_CHARS = 2000  # Limite de caracteres do output final
     INPUT_LIMIT = 12000  # Limite de input para ambas as chamadas Sonnet
 
     try:

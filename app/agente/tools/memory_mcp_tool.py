@@ -248,7 +248,7 @@ _CONTEXTUAL_SYSTEM_PROMPT = """\
 Voce eh um analisador de memorias de um sistema de logistica (Nacom Goya).
 Dada uma memoria sendo salva e o contexto das memorias existentes do usuario, gere:
 
-1. CONTEXTO: 1-2 frases situando esta memoria no conjunto do usuario (maximo 80 tokens)
+1. CONTEXTO: 2-3 frases situando esta memoria no conjunto do usuario (maximo 150 tokens)
 2. ENTIDADES: lista de entidades no formato tipo:nome separadas por | (ex: transportadora:RODONAVES|uf:AM|cliente:ATACADAO)
 3. RELACOES: lista de relacoes no formato origem>tipo>destino separadas por | (ex: RODONAVES>atrasa_para>AM)
 

@@ -68,14 +68,28 @@ GERE um JSON com esta estrutura:
       "contexto": "Quando aplicar. Ex: Quando usuario diz 'palmito' sem qualificar variante"
     }}
   ],
+  "user_profile": {{
+    "resumo": "Quem eh este usuario baseado nas sessoes analisadas. Ex: Opera lancamento de pedidos em massa para grandes varejistas (Atacadao 80%, Assai 15%). Tambem monitora entregas e cancela itens pontualmente.",
+    "atividades_frequentes": [
+      {{"atividade": "descricao da atividade", "frequencia": "alta|media|baixa"}}
+    ],
+    "clientes_principais": [
+      {{"nome": "cliente", "contexto": "por que aparece — lancamento, consulta, etc."}}
+    ],
+    "insights": [
+      "Insight comportamental derivado das sessoes. Ex: Nao apenas lanca pedidos — monitora entregas, sugerindo papel end-to-end."
+    ],
+    "contextualizacao_para_agente": "Instrucao direta: quando este usuario mencionar X, provavelmente quer Y."
+  }},
   "confianca": "alta|media|baixa"
 }}
 
 REGRAS CRITICAS:
-- PRESCRITIVO, nao descritivo: cada item deve ser uma INSTRUCAO que mude comportamento
+- PRESCRITIVO, nao descritivo: cada item em error_patterns/anti_patterns deve ser uma INSTRUCAO que mude comportamento
 - error_patterns: so inclua erros que ocorreram 3+ vezes (padrao confirmado)
 - anti_patterns: so inclua se o usuario CORRIGIU o agente (veja secao <correcoes> se presente)
 - entity_defaults: so inclua defaults que o usuario usa CONSISTENTEMENTE (3+ vezes)
+- user_profile: sintetize QUEM eh este usuario baseado em TODAS as sessoes. Inclua atividades com frequencia, clientes principais com contexto de uso, e insights comportamentais. Se houver acoes_usuario nos summaries, use como fonte primaria. Se nao houver evidencia suficiente, objeto vazio {{}}
 - Arrays vazios se nao houver evidencia suficiente — NUNCA invente patterns
 - "confianca" = "alta" se padroes claros com 5+ evidencias, "media" se 3-4, "baixa" se < 3
 - NAO inclua patterns genericos tipo "verificar dados antes de responder" — so patterns ESPECIFICOS
@@ -121,6 +135,27 @@ def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:
                 session_line += f"\nTópicos: {topicos}"
             if tools:
                 session_line += f"\nFerramentas: {tools}"
+
+            # Ações do usuário (novo campo M1)
+            acoes = summary.get('acoes_usuario', [])
+            if acoes:
+                session_line += f"\nAções do usuário: {'; '.join(acoes)}"
+
+            # Sinais de perfil (novo campo M1)
+            perfil = summary.get('perfil_signals', {})
+            if perfil and isinstance(perfil, dict):
+                dominio = perfil.get('dominio_provavel', '')
+                tipos = ', '.join(perfil.get('tipo_atividade', []))
+                clientes = ', '.join(perfil.get('clientes_envolvidos', []))
+                volume = perfil.get('volume', '')
+                if dominio:
+                    session_line += f"\nDomínio: {dominio}"
+                if tipos:
+                    session_line += f"\nTipo atividade: {tipos}"
+                if clientes:
+                    session_line += f"\nClientes: {clientes}"
+                if volume:
+                    session_line += f"\nVolume: {volume}"
 
             # Pedidos mencionados
             for p in summary.get('pedidos_mencionados', [])[:5]:
@@ -226,7 +261,7 @@ def analyze_patterns(
 
         response = client.messages.create(
             model=SONNET_MODEL,
-            max_tokens=2000,
+            max_tokens=3000,
             system=[{
                 "type": "text",
                 "text": PATTERN_SYSTEM_PROMPT,
@@ -443,13 +478,48 @@ def _save_patterns_to_memory(
             f'{ctx}</default>'
         )
 
+    # Formatar user_profile (novo campo M2)
+    profile_xml = ""
+    profile = patterns.get('user_profile', {})
+    if profile and isinstance(profile, dict):
+        resumo = _xml_escape(profile.get('resumo', ''))
+        contextualizacao = _xml_escape(profile.get('contextualizacao_para_agente', ''))
+
+        atividades_xml = ""
+        for a in profile.get('atividades_frequentes', []):
+            ativ = _xml_escape(a.get('atividade', ''))
+            freq = _xml_escape(a.get('frequencia', ''))
+            atividades_xml += f'\n      <atividade frequencia="{freq}">{ativ}</atividade>'
+
+        clientes_xml = ""
+        for c in profile.get('clientes_principais', []):
+            nome = _xml_escape(c.get('nome', ''))
+            ctx = _xml_escape(c.get('contexto', ''))
+            clientes_xml += f'\n      <cliente contexto="{ctx}">{nome}</cliente>'
+
+        insights_xml = ""
+        for ins in profile.get('insights', []):
+            insights_xml += f'\n      <insight>{_xml_escape(ins)}</insight>'
+
+        profile_xml = f"""
+  <user_profile>
+    <resumo>{resumo}</resumo>
+    <atividades_frequentes>{atividades_xml}
+    </atividades_frequentes>
+    <clientes_principais>{clientes_xml}
+    </clientes_principais>
+    <insights>{insights_xml}
+    </insights>
+    <contextualizacao>{contextualizacao}</contextualizacao>
+  </user_profile>"""
+
     content = f"""<operational_patterns updated_at="{timestamp}" confianca="{confianca}" sessoes="{sessions_analyzed}">
   <error_patterns>{errors_xml}
   </error_patterns>
   <anti_patterns>{anti_xml}
   </anti_patterns>
   <entity_defaults>{defaults_xml}
-  </entity_defaults>
+  </entity_defaults>{profile_xml}
 </operational_patterns>"""
 
     try:

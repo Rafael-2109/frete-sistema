@@ -41,7 +41,17 @@ CONTEXTO DO SISTEMA:
 GERE UM JSON com esta estrutura exata:
 
 {
-  "resumo_geral": "frase curta (max 100 chars) descrevendo o que foi feito na sessao",
+  "resumo_geral": "2-3 frases descrevendo o que aconteceu na sessao E o que o usuario fez (acoes concretas com verbos)",
+  "acoes_usuario": [
+    "verbo + objeto + contexto. Ex: lancou 88 pedidos do Atacadao para entrega semana que vem",
+    "cancelou 3 itens do pedido VCD2565291 por falta de estoque"
+  ],
+  "perfil_signals": {
+    "dominio_provavel": "comercial|logistica|financeiro|expedicao|outro",
+    "tipo_atividade": ["lancamento_pedido", "cancelamento", "cotacao", "monitoramento_entrega"],
+    "clientes_envolvidos": ["Atacadao", "Assai"],
+    "volume": "alto|medio|baixo|nenhum"
+  },
   "pedidos_mencionados": [
     {
       "cliente": "nome do cliente",
@@ -65,6 +75,9 @@ GERE UM JSON com esta estrutura exata:
 
 REGRAS:
 - Arrays vazios se nao houver itens: []
+- "resumo_geral": descreva O QUE ACONTECEU e O QUE O USUARIO FEZ. Verbos concretos. Sem limite de chars — seja descritivo
+- "acoes_usuario": liste TODAS as acoes que o USUARIO executou (nao o agente). Verbos concretos: lancou, cancelou, consultou, cotou, confirmou, alterou, conferiu, exportou. Se o usuario nao executou acoes (apenas perguntou), array vazio
+- "perfil_signals": sinais sobre QUEM eh este usuario baseado no que fez NESTA sessao. Se nao houver sinais claros, objeto vazio {}
 - "pedidos_mencionados" so inclui SE pedidos/clientes foram discutidos
 - "decisoes_tomadas" so decisoes CONCRETAS (nao sugestoes)
 - "tarefas_pendentes" so itens que o usuario precisa agir
@@ -153,7 +166,7 @@ def summarize_session(
 
         response = client.messages.create(
             model=SONNET_MODEL,
-            max_tokens=1500,
+            max_tokens=2500,
             system=[{
                 "type": "text",
                 "text": SUMMARY_SYSTEM_PROMPT,
@@ -360,8 +373,31 @@ def _save_summary_to_memory(
     resumo = _xml_escape(summary.get('resumo_geral', ''))
     timestamp = agora_utc_naive().isoformat()
 
+    # Ações do usuário (novo campo M1)
+    acoes_xml = "\n".join(
+        f"    <acao>{_xml_escape(a)}</acao>"
+        for a in summary.get('acoes_usuario', [])
+    )
+
+    # Perfil signals (novo campo M1)
+    perfil = summary.get('perfil_signals', {})
+    perfil_xml = ""
+    if perfil and isinstance(perfil, dict):
+        dominio = _xml_escape(perfil.get('dominio_provavel', ''))
+        tipos = ", ".join(perfil.get('tipo_atividade', []))
+        clientes = ", ".join(perfil.get('clientes_envolvidos', []))
+        volume = _xml_escape(perfil.get('volume', ''))
+        perfil_xml = f"""  <perfil_signals dominio="{dominio}" volume="{volume}">
+    <tipo_atividade>{tipos}</tipo_atividade>
+    <clientes>{clientes}</clientes>
+  </perfil_signals>"""
+
     content = f"""<session_summary session_id="{session_id}" updated_at="{timestamp}">
   <resumo>{resumo}</resumo>
+  <acoes_usuario>
+{acoes_xml}
+  </acoes_usuario>
+{perfil_xml}
   <pedidos>{pedidos_xml}
   </pedidos>
   <decisoes>
