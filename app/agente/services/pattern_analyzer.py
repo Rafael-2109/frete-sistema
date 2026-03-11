@@ -226,6 +226,7 @@ def analyze_patterns(
     sessions_data: List[Dict[str, Any]],
     user_id: int,
     corrections: Optional[List[Dict[str, Any]]] = None,
+    existing_profile: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Analisa sessões históricas e correções para gerar patterns prescritivos via Sonnet.
@@ -234,6 +235,7 @@ def analyze_patterns(
         sessions_data: Lista de sessões com messages e summaries
         user_id: ID do usuário (para logging)
         corrections: Lista de memórias com correction_count > 0 (opcional)
+        existing_profile: Conteúdo XML do user.xml existente (para evolução incremental)
 
     Returns:
         Dict com padrões identificados ou None em caso de erro
@@ -254,9 +256,22 @@ def analyze_patterns(
         if not corrections_block:
             corrections_block = '(Nenhuma correcao registrada ainda)'
 
+        # Bloco de perfil existente (para evolução incremental)
+        existing_profile_block = ''
+        if existing_profile:
+            existing_profile_block = (
+                f"\n\n<perfil_atual>\n"
+                f"Este eh o perfil existente do usuario. EVOLUA-o com novas evidencias das sessoes — "
+                f"nao reconstrua do zero. Mantenha insights validos, atualize frequencias, "
+                f"adicione novos clientes/atividades se houver evidencia.\n"
+                f"{existing_profile}\n"
+                f"</perfil_atual>"
+            )
+
         user_content = (
             f"<sessoes>\n{formatted}\n</sessoes>\n\n"
             f"{corrections_block}"
+            f"{existing_profile_block}"
         )
 
         response = client.messages.create(
@@ -405,6 +420,19 @@ def analyze_and_save(
 
             # Salvar em /memories/learned/patterns.xml
             _save_patterns_to_memory(user_id, patterns)
+
+            # Piggyback: salvar user_profile como user.xml (Tier 1)
+            # Evita Sonnet call duplicado quando patterns E profile trigam juntos
+            from ..config.feature_flags import USE_BEHAVIORAL_PROFILE
+            if USE_BEHAVIORAL_PROFILE:
+                user_profile = patterns.get('user_profile', {})
+                if user_profile and user_profile.get('resumo'):
+                    _save_profile_as_user_xml(
+                        user_id, user_profile,
+                        sessions_analyzed=len(sessions),
+                        confianca=patterns.get('confianca', 'baixa'),
+                    )
+                    logger.info(f"[PATTERNS] user.xml salvo via piggyback para usuário {user_id}")
 
             db.session.commit()
             logger.info(
@@ -607,6 +635,8 @@ def _save_profile_as_user_xml(
         if existing:
             existing.content = content
             existing.updated_at = agora_utc_naive()
+            existing.importance_score = 0.9
+            existing.category = 'permanent'
         else:
             mem = AgentMemory.create_file(user_id, path, content)
             mem.importance_score = 0.9
@@ -691,11 +721,8 @@ def generate_and_save_profile(app, user_id: int) -> bool:
     """
     Gera perfil comportamental e salva como /memories/user.xml.
 
-    Reutiliza a MESMA chamada Sonnet de analyze_patterns() — quando patterns
-    e profile trigam juntos, custo adicional é zero.
-
-    Se should_analyze_patterns() também é True, analyze_and_save() já chama
-    _save_patterns_to_memory() que inclui _save_profile_as_user_xml().
+    Quando patterns E profile trigam juntos, analyze_and_save() faz o
+    piggyback de user.xml — esta função NÃO é chamada nesse cenário.
     Esta função é para quando SÓ o profile triga (sem patterns).
 
     Args:
@@ -750,8 +777,16 @@ def generate_and_save_profile(app, user_id: int) -> bool:
             except Exception:
                 pass
 
+            # Carregar perfil existente para evolução incremental
+            existing_user_xml = AgentMemory.get_by_path(user_id, '/memories/user.xml')
+            existing_profile_text = existing_user_xml.content if existing_user_xml else None
+
             # Chamar analyze_patterns() — retorna dict com user_profile
-            patterns = analyze_patterns(sessions_data, user_id, corrections=corrections)
+            patterns = analyze_patterns(
+                sessions_data, user_id,
+                corrections=corrections,
+                existing_profile=existing_profile_text,
+            )
             if not patterns:
                 return False
 
@@ -896,7 +931,7 @@ def _format_messages_for_extraction(messages: list[dict]) -> str:
 
     # Over-budget: primeiras 2 msgs + ultimas N que caibam em TOTAL_SAFETY_CAP
     header_lines = lines[:2]
-    header_chars = sum(len(l) for l in header_lines)
+    header_chars = sum(len(line) for line in header_lines)
     remaining_budget = TOTAL_SAFETY_CAP - header_chars - 50  # 50 chars para separador
 
     tail_lines = []

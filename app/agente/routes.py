@@ -966,8 +966,8 @@ def run_post_session_processing(
 
     # =================================================================
     # Behavioral Profile (user.xml — Tier 1, SEMPRE injetado)
-    # analyze_and_save() já salva user.xml quando patterns roda — skip para
-    # evitar double Sonnet call (~$0.006 duplicado)
+    # analyze_and_save() faz piggyback de user.xml quando patterns roda —
+    # skip para evitar double Sonnet call (~$0.006 duplicado)
     # =================================================================
     if not patterns_already_ran:
         try:
@@ -1825,7 +1825,7 @@ def api_admin_generate_correction():
     Gera correcao a partir de orientacao do admin sobre uma sessao.
 
     O admin revisa uma sessao no modal de insights e escreve uma orientacao.
-    Haiku recebe a conversa + orientacao e gera uma correcao na voz do agente,
+    Sonnet recebe a conversa + orientacao e gera uma correcao na voz do agente,
     pronta para ser salva na memoria persistente.
 
     POST /agente/api/admin/generate-correction
@@ -1840,7 +1840,7 @@ def api_admin_generate_correction():
         "correction": "Quando o usuario perguntar sobre preco de frete...",
         "suggested_path": "/memories/corrections/usar-cotando-frete-para-precos.xml",
         "session_id": "abc123",
-        "model_used": "claude-haiku-4-5-20251001"
+        "model_used": "claude-sonnet-4-6"
     }
     """
     if current_user.perfil != 'administrador':
@@ -1873,11 +1873,11 @@ def api_admin_generate_correction():
         if not formatted:
             return jsonify({'success': False, 'error': 'Sessao sem mensagens'}), 400
 
-        # Chamar Haiku para gerar correcao
+        # Chamar Sonnet para gerar correcao
         import anthropic
         import re as _re
 
-        HAIKU_MODEL = 'claude-haiku-4-5-20251001'
+        SONNET_MODEL = 'claude-sonnet-4-6'
 
         prompt = (
             "Voce e um agente logistico que cometeu um erro numa conversa.\n"
@@ -1903,7 +1903,7 @@ def api_admin_generate_correction():
 
         client = anthropic.Anthropic()
         response = client.messages.create(
-            model=HAIKU_MODEL,
+            model=SONNET_MODEL,
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -1948,7 +1948,7 @@ def api_admin_generate_correction():
             'correction': correction,
             'suggested_path': suggested_path,
             'session_id': session_id,
-            'model_used': HAIKU_MODEL,
+            'model_used': SONNET_MODEL,
         })
 
     except Exception as e:
