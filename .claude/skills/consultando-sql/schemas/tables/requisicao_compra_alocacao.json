@@ -118,13 +118,6 @@
   ],
   "indices": [
     {
-      "name": "ix_requisicao_compra_alocacao_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_alocacao_requisicao_pedido",
       "columns": [
         "requisicao_compra_id",
@@ -187,6 +180,13 @@
       "name": "ix_requisicao_compra_alocacao_purchase_order_line_odoo_id",
       "columns": [
         "purchase_order_line_odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_cod_produto",
+      "columns": [
+        "cod_produto"
       ],
       "unique": false
     }

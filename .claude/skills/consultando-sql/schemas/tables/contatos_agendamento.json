@@ -34,6 +34,21 @@
       "default": false
     },
     {
+      "name": "horario_recebimento_de",
+      "type": "time",
+      "description": "ex: 08:00"
+    },
+    {
+      "name": "horario_recebimento_ate",
+      "type": "time",
+      "description": "ex: 17:00"
+    },
+    {
+      "name": "observacoes_recebimento",
+      "type": "text",
+      "description": "Restrições específicas do cliente no recebimento"
+    },
+    {
       "name": "atualizado_em",
       "type": "timestamp",
       "description": "Última atualização"

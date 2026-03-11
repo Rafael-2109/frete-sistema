@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 140,
+  "total_tabelas": 141,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -984,6 +984,15 @@
         "cnpj_empresa_compradora",
         "cod_produto",
         "cnpj_fornecedor"
+      ]
+    },
+    {
+      "name": "permissao_cadastro_devolucao",
+      "description": "Controle granular de permissoes para CRUD de Categorias, Subcategorias,",
+      "key_fields": [
+        "usuario_id",
+        "tipo_cadastro",
+        "pode_criar"
       ]
     },
     {
