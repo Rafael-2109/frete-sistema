@@ -1,6 +1,6 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que DEVEM trigar: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
+description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que DEVEM trigar: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -65,13 +65,15 @@ O que o usuario quer?
 |   |-- "usuarios com sessoes"  -> users
 |   |-- "deletar sessao"        -> delete --session-id ... --confirm
 |
-|-- Padroes (patterns, pitfalls, analise, empresa)
+|-- Padroes (patterns, pitfalls, analise, empresa, perfil)
 |   -> scripts/padrao.py
 |   |-- "padroes aprendidos"    -> patterns
 |   |-- "pitfalls do sistema"   -> pitfalls
 |   |-- "analisar padroes"      -> analyze
 |   |-- "extrair conhecimento"  -> extract --session-id ...
 |   |-- "memorias empresa"      -> empresa
+|   |-- "perfil comportamental" -> profile
+|   |-- "gerar perfil"          -> profile --generate
 |
 |-- Knowledge Graph (query, entidades, links, relacoes)
 |   -> scripts/grafo.py
@@ -116,7 +118,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 |--------|-------------|---------|
 | `memoria.py` | view, save, update, delete, list, clear, search-cold, versions, restore, resolve-pendencia, log-pitfall, stats | Memoria |
 | `sessao.py` | list, search, semantic, view, summary, users, delete | Sessoes |
-| `padrao.py` | patterns, pitfalls, analyze, extract, empresa | Padroes |
+| `padrao.py` | patterns, pitfalls, analyze, extract, empresa, profile | Padroes |
 | `grafo.py` | query, entities, links, relations, stats | Knowledge Graph |
 | `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing | Diagnosticos |
 | `manutencao.py` | consolidate, cold-move, summarize, reindex-memories, reindex-sessions, cleanup-orphans | Manutencao |
@@ -144,8 +146,10 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `AGENT_SESSION_SUMMARY` | true | Sumarizacao de sessoes |
 | `MEMORY_SEMANTIC_SEARCH` | true | Busca semantica memorias |
 | `MEMORY_KNOWLEDGE_GRAPH` | true | Knowledge graph |
-| `AGENT_SESSION_SEMANTIC_SEARCH` | false | Busca semantica sessoes |
-| `AGENT_MEMORY_SEMANTIC_SEARCH` | false | Busca semantica memorias (agente) |
+| `SESSION_SEMANTIC_SEARCH` | true | Busca semantica sessoes |
+| `MEMORY_SEMANTIC_SEARCH` | true | Busca semantica memorias |
+| `AGENT_BEHAVIORAL_PROFILE` | true | Gera user.xml (Tier 1) com perfil comportamental |
+| `AGENT_BEHAVIORAL_PROFILE_THRESHOLD` | 5 | Threshold de sessoes para geracao de perfil |
 | `USE_FRICTION_ANALYSIS` | true | Analise de friccao (5 sinais) |
 | `USE_INTERSESSION_BRIEFING` | true | Briefing entre sessoes |
 | `USE_SENTIMENT_DETECTION` | true | Deteccao de frustracao (inline) |
@@ -200,6 +204,12 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/diagno
 
 # Briefing intersessao
 source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/diagnostico.py briefing --user-id 5
+
+# Ver perfil comportamental
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/padrao.py profile --user-id 5
+
+# Gerar/atualizar perfil comportamental (chama Sonnet, ~$0.006)
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/padrao.py profile --user-id 5 --generate
 
 # Query no knowledge graph
 source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/grafo.py query --user-id 5 --prompt "transportadora para Manaus"

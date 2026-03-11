@@ -564,6 +564,7 @@ def _save_profile_as_user_xml(
 
     path = "/memories/user.xml"
     timestamp = agora_utc_naive().strftime('%d/%m/%Y')
+    confianca = _xml_escape(confianca)
 
     # Formatar atividades
     atividades_xml = ""

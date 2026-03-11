@@ -10,6 +10,7 @@ Subcomandos:
   analyze   Executar analise de padroes (Sonnet)
   extract   Extrair conhecimento de uma sessao
   empresa   Ver memorias compartilhadas (escopo empresa)
+  profile   Ver ou gerar perfil comportamental (user.xml)
 """
 
 import sys
@@ -44,6 +45,13 @@ SUBCOMMANDS = {
     'empresa': {
         'help': 'Ver memorias compartilhadas (escopo empresa)',
         'args': [],
+    },
+    'profile': {
+        'help': 'Ver ou gerar perfil comportamental (user.xml)',
+        'args': [
+            {'name': '--generate', 'action': 'store_true',
+             'help': 'Forcar geracao do perfil (chama Sonnet, ~$0.006)'},
+        ],
     },
 }
 
@@ -207,12 +215,70 @@ def handle_empresa(args):
             print()
 
 
+def handle_profile(args):
+    """Ver ou gerar perfil comportamental (user.xml)."""
+    from app.agente.models import AgentMemory
+
+    if args.generate:
+        from app.agente.services.pattern_analyzer import generate_and_save_profile
+
+        app, _ = get_app_context()
+
+        print("Gerando perfil comportamental via Sonnet (~$0.006)...")
+        try:
+            result = generate_and_save_profile(app, args.user_id)
+            if result:
+                if args.json_mode:
+                    print(format_json({'sucesso': True, 'resultado': 'perfil gerado'}))
+                else:
+                    print("Perfil gerado com sucesso.")
+                    print("Use 'profile' (sem --generate) para visualizar.")
+            else:
+                if args.json_mode:
+                    print(format_json({'sucesso': False, 'motivo': 'sem dados suficientes'}))
+                else:
+                    print("Sem dados suficientes para gerar perfil (precisa de mais sessoes).")
+        except Exception as e:
+            error_exit(f"Erro na geracao do perfil: {e}")
+        return
+
+    # View mode
+    path = '/memories/user.xml'
+    mem = AgentMemory.get_by_path(args.user_id, path)
+
+    if not mem:
+        if args.json_mode:
+            print(format_json({'exists': False, 'path': path}))
+        else:
+            print("Perfil comportamental (user.xml) nao encontrado.")
+            print("Use 'profile --generate' para criar (chama Sonnet, ~$0.006).")
+        return
+
+    if args.json_mode:
+        print(format_json({
+            'exists': True,
+            'path': path,
+            'content': mem.content,
+            'usage_count': mem.usage_count,
+            'effective_count': mem.effective_count,
+            'importance_score': round(mem.importance_score, 2) if mem.importance_score else None,
+            'category': mem.category,
+            'updated_at': format_datetime(mem.updated_at),
+        }))
+    else:
+        print(f"Perfil Comportamental (atualizado: {format_datetime(mem.updated_at)})")
+        print(f"Uso: {mem.usage_count}x injetado | {mem.effective_count}x efetivo")
+        print(f"Importancia: {round(mem.importance_score, 2) if mem.importance_score else '-'} | Categoria: {mem.category or '-'}\n")
+        print(mem.content)
+
+
 HANDLERS = {
     'patterns': handle_patterns,
     'pitfalls': handle_pitfalls,
     'analyze': handle_analyze,
     'extract': handle_extract,
     'empresa': handle_empresa,
+    'profile': handle_profile,
 }
 
 

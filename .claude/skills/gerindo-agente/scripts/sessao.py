@@ -272,6 +272,29 @@ def handle_summary(args):
         print(f"Resumo da Sessao: {session.session_id}\n")
         print(f"  Resumo: {summary.get('resumo_geral', '-')}")
 
+        acoes = summary.get('acoes_usuario', [])
+        if acoes:
+            print(f"\n  Acoes do usuario:")
+            for a in acoes:
+                print(f"    - {a}")
+
+        perfil = summary.get('perfil_signals', {})
+        if perfil and isinstance(perfil, dict):
+            dominio = perfil.get('dominio_provavel', '')
+            tipos = ', '.join(perfil.get('tipo_atividade', []))
+            clientes = ', '.join(perfil.get('clientes_envolvidos', []))
+            volume = perfil.get('volume', '')
+            if dominio or tipos:
+                print(f"\n  Perfil da sessao:")
+                if dominio:
+                    print(f"    Dominio: {dominio}")
+                if tipos:
+                    print(f"    Atividades: {tipos}")
+                if clientes:
+                    print(f"    Clientes: {clientes}")
+                if volume:
+                    print(f"    Volume: {volume}")
+
         pedidos = summary.get('pedidos_mencionados', [])
         if pedidos:
             print(f"\n  Pedidos mencionados:")
