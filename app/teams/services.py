@@ -1248,6 +1248,14 @@ def cleanup_stale_teams_tasks() -> int:
         from app.teams.models import TeamsTask
         from app import db
 
+        # Fix PYTHON-FLASK-C: rollback dirty session left over from a previous
+        # request in the same Flask thread. Without this, any DB query fails
+        # with PendingRollbackError if a prior error left the session dirty.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
         threshold = agora_utc_naive() - timedelta(minutes=5)
 
         # P2-C: Usar updated_at ao invés de created_at para evitar matar tasks legítimas.

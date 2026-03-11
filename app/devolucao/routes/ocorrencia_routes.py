@@ -271,7 +271,12 @@ def index():
             FaturamentoProduto.equipe_vendas
         ).filter(
             FaturamentoProduto.numero_nf.in_(nfs_para_busca)
-        ).distinct(FaturamentoProduto.numero_nf).all()
+        ).distinct(
+            FaturamentoProduto.numero_nf
+        ).order_by(
+            FaturamentoProduto.numero_nf,
+            FaturamentoProduto.data_fatura.desc()
+        ).all()
         for r in fat_results:
             vendedor_por_nf[r.numero_nf] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
 

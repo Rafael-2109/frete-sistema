@@ -37,6 +37,7 @@ from claude_agent_sdk import (
     CLINotFoundError,
     ProcessError,
     CLIJSONDecodeError,
+    CLIConnectionError,  # SIGTERM/process death — sibling of ProcessError
 )
 
 # SDK 0.1.46+: Task messages para observabilidade de subagentes
@@ -2470,6 +2471,65 @@ Nunca invente informações."""
                 )
             # Nota: streaming_done_event é None no path persistente (DC-5)
 
+        except CLIConnectionError as e:
+            # Fix PYTHON-FLASK-J/H: CLI subprocess killed by SIGTERM (gunicorn worker
+            # recycling). Catch explicitly to: (1) log as warning not error since it's
+            # expected during deploys, (2) evict dead client from pool, (3) emit clean
+            # error+done so Teams stream terminates immediately instead of timing out
+            # (fixes PYTHON-FLASK-G cascade).
+            elapsed_total = time.time() - state.stream_start_time
+            logger.warning(
+                f"[AGENT_SDK_PERSISTENT] CLIConnectionError {elapsed_total:.1f}s | "
+                f"msg={e} | pool_key={pool_key[:8]}... | "
+                f"Provável reciclagem de worker (SIGTERM)"
+            )
+
+            # Evict dead client from pool to force fresh connection on retry.
+            # Subprocess already dead — just remove registry entry (no disconnect needed).
+            try:
+                from .client_pool import _registry, _registry_lock
+                with _registry_lock:
+                    evicted = _registry.pop(pool_key, None)
+                if evicted:
+                    evicted.connected = False
+                    logger.info(f"[AGENT_SDK_PERSISTENT] Dead client evicted from pool: {pool_key[:8]}...")
+            except Exception as evict_err:
+                logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")
+
+            # Return partial text if any was collected before the crash
+            user_msg = state.full_text if state.full_text else (
+                "O processo do agente foi interrompido (reciclagem do servidor). "
+                "Tente novamente."
+            )
+            yield StreamEvent(
+                type='error',
+                content=user_msg if not state.full_text else (
+                    "O processo do agente foi interrompido. Resposta parcial acima."
+                ),
+                metadata={
+                    'error_type': 'cli_connection_error',
+                    'elapsed_seconds': elapsed_total,
+                    'last_tool': state.current_tool_name,
+                    'partial_text_len': len(state.full_text),
+                }
+            )
+            if not state.done_emitted:
+                state.done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={
+                        'text': state.full_text,
+                        'input_tokens': state.input_tokens,
+                        'output_tokens': state.output_tokens,
+                        'total_cost_usd': 0,
+                        'session_id': state.result_session_id,
+                        'tool_calls': len(state.tool_calls),
+                        'error_recovery': True,
+                    },
+                    metadata={'error_type': 'cli_connection_error'}
+                )
+            # Nota: streaming_done_event é None no path persistente (DC-5)
+
         except CLINotFoundError as e:
             elapsed_total = time.time() - state.stream_start_time
             logger.critical(f"[AGENT_SDK_PERSISTENT] CLI não encontrada {elapsed_total:.1f}s: {e}")
@@ -2742,6 +2802,49 @@ Nunca invente informações."""
                 )
             # FIX: Liberar prompt generator para evitar zombie de 10min.
             # Ref: CLAUDE.md R5 (streaming_done_event)
+            if state.streaming_done_event:
+                state.streaming_done_event.set()
+
+        except CLIConnectionError as e:
+            # Fix PYTHON-FLASK-J/H: CLI subprocess killed by SIGTERM (gunicorn worker
+            # recycling). Same fix as persistent path — emit error+done immediately
+            # so stream terminates cleanly instead of hanging until timeout.
+            elapsed_total = time.time() - state.stream_start_time
+            logger.warning(
+                f"[AGENT_SDK] CLIConnectionError {elapsed_total:.1f}s | "
+                f"msg={e} | Provável reciclagem de worker (SIGTERM)"
+            )
+            user_msg = state.full_text if state.full_text else (
+                "O processo do agente foi interrompido (reciclagem do servidor). "
+                "Tente novamente."
+            )
+            yield StreamEvent(
+                type='error',
+                content=user_msg if not state.full_text else (
+                    "O processo do agente foi interrompido. Resposta parcial acima."
+                ),
+                metadata={
+                    'error_type': 'cli_connection_error',
+                    'elapsed_seconds': elapsed_total,
+                    'last_tool': state.current_tool_name,
+                    'partial_text_len': len(state.full_text),
+                }
+            )
+            if not state.done_emitted:
+                state.done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={
+                        'text': state.full_text,
+                        'input_tokens': state.input_tokens,
+                        'output_tokens': state.output_tokens,
+                        'total_cost_usd': 0,
+                        'session_id': state.result_session_id,
+                        'tool_calls': len(state.tool_calls),
+                        'error_recovery': True,
+                    },
+                    metadata={'error_type': 'cli_connection_error'}
+                )
             if state.streaming_done_event:
                 state.streaming_done_event.set()
 

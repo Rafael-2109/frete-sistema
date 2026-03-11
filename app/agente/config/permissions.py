@@ -412,6 +412,15 @@ async def can_use_tool(
                                 from app.teams.models import TeamsTask
                                 from app import db
 
+                                # Fix PYTHON-FLASK-D: rollback dirty session antes de
+                                # acessar DB. Se houve erro anterior (ex: CLIConnectionError),
+                                # a session fica em PendingRollbackError e qualquer
+                                # db.session.get() falha sem rollback prévio.
+                                try:
+                                    db.session.rollback()
+                                except Exception:
+                                    pass
+
                                 task = db.session.get(TeamsTask, teams_task_id)
                                 if task and task.status == 'awaiting_user_input':
                                     task.status = 'processing'
