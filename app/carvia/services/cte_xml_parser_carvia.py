@@ -236,6 +236,140 @@ class CTeXMLParserCarvia(CTeXMLParser):
     # Metodos adicionais para DACTE PDF
     # ------------------------------------------------------------------
 
+    def get_expedidor(self) -> Dict:
+        """Extrai dados do expedidor (<exped>) — quem despacha a carga"""
+        exped = self._find_tag('exped')
+        if exped is None:
+            return {}
+        return {
+            'cnpj': self._get_tag_text_in('CNPJ', exped),
+            'nome': self._get_tag_text_in('xNome', exped),
+        }
+
+    def get_endereco_expedidor(self) -> Dict:
+        """Extrai endereco completo do expedidor (<exped>/<enderExped>)"""
+        return self._extrair_endereco('enderExped', 'exped')
+
+    def get_ie_expedidor(self) -> Optional[str]:
+        """Extrai IE do expedidor"""
+        exped = self._find_tag('exped')
+        return self._get_tag_text_in('IE', exped) if exped else None
+
+    def get_fone_expedidor(self) -> Optional[str]:
+        """Extrai telefone do expedidor"""
+        exped = self._find_tag('exped')
+        return self._get_tag_text_in('fone', exped) if exped else None
+
+    def get_recebedor(self) -> Dict:
+        """Extrai dados do recebedor (<receb>) — quem recebe a carga"""
+        receb = self._find_tag('receb')
+        if receb is None:
+            return {}
+        return {
+            'cnpj': self._get_tag_text_in('CNPJ', receb),
+            'nome': self._get_tag_text_in('xNome', receb),
+        }
+
+    def get_endereco_recebedor(self) -> Dict:
+        """Extrai endereco completo do recebedor (<receb>/<enderReceb>)"""
+        return self._extrair_endereco('enderReceb', 'receb')
+
+    def get_ie_recebedor(self) -> Optional[str]:
+        """Extrai IE do recebedor"""
+        receb = self._find_tag('receb')
+        return self._get_tag_text_in('IE', receb) if receb else None
+
+    def get_fone_recebedor(self) -> Optional[str]:
+        """Extrai telefone do recebedor"""
+        receb = self._find_tag('receb')
+        return self._get_tag_text_in('fone', receb) if receb else None
+
+    def get_rntrc(self) -> Optional[str]:
+        """Extrai RNTRC de <infModal>/<rodo>/<RNTRC>"""
+        rodo = self._find_tag('rodo')
+        return self._get_tag_text_in('RNTRC', rodo) if rodo else None
+
+    def get_tipo_servico(self) -> Optional[str]:
+        """Extrai tipo de servico de <ide>/<tpServ>.
+        0=Normal, 1=Subcontratacao, 2=Redespacho, 3=Redespacho Intermediario, 4=Multimodal"""
+        ide = self._find_tag('ide')
+        codigo = self._get_tag_text_in('tpServ', ide) if ide else None
+        tipos = {
+            '0': 'NORMAL', '1': 'SUBCONTRATACAO',
+            '2': 'REDESPACHO', '3': 'REDESPACHO INTERMEDIARIO',
+            '4': 'MULTIMODAL',
+        }
+        return tipos.get(codigo, codigo)
+
+    def get_valor_a_receber(self) -> Optional[float]:
+        """Extrai valor a receber de <vPrest>/<vRec>"""
+        v_prest = self._find_tag('vPrest')
+        if v_prest is None:
+            return None
+        vrec = self._get_tag_text_in('vRec', v_prest)
+        return self._to_decimal(vrec or '')
+
+    def get_qrcode_url(self) -> Optional[str]:
+        """Extrai URL do QR Code de <infCTeSupl>/<qrCodCTe>"""
+        supl = self._find_tag('infCTeSupl')
+        if supl is None:
+            return None
+        url = self._get_tag_text_in('qrCodCTe', supl)
+        # URL pode conter &amp; — decodificar
+        if url:
+            url = url.replace('&amp;', '&')
+        return url
+
+    def get_observacoes_contribuinte(self) -> List[Dict]:
+        """Extrai observacoes do contribuinte (<compl>/<ObsCont>) — multiplas entradas"""
+        compl = self._find_tag('compl')
+        if compl is None:
+            return []
+
+        obs_list = []
+        for element in compl.iter():
+            local_name = element.tag.split('}')[-1] if '}' in element.tag else element.tag
+            if local_name == 'ObsCont':
+                campo = element.get('xCampo', '')
+                texto = self._get_tag_text_in('xTexto', element)
+                if texto:
+                    obs_list.append({'campo': campo, 'texto': texto})
+
+        return obs_list
+
+    def get_previsao_entrega(self) -> Optional[str]:
+        """Extrai data de previsao de entrega de <compl>/<Entrega>/<comData>/<dProg>"""
+        entrega = self._find_tag('Entrega')
+        if entrega is None:
+            return None
+        com_data = self._find_tag('comData', root=entrega)
+        if com_data is None:
+            return None
+        return self._get_tag_text_in('dProg', com_data)
+
+    def get_situacao_tributaria_icms(self) -> Optional[str]:
+        """Extrai CST do ICMS de <imp>/<ICMS>/<ICMSXX>/<CST>"""
+        icms = self._find_tag('ICMS')
+        if icms is None:
+            return None
+        # Procurar primeiro filho ICMSXX (ICMS00, ICMS20, ICMS45, etc.)
+        for element in icms:
+            local_name = element.tag.split('}')[-1] if '}' in element.tag else element.tag
+            if local_name.startswith('ICMS'):
+                cst = self._get_tag_text_in('CST', element)
+                return cst
+        return None
+
+    def get_fone_remetente(self) -> Optional[str]:
+        """Extrai telefone do remetente"""
+        rem = self._find_tag('rem')
+        return self._get_tag_text_in('fone', rem) if rem else None
+
+    def get_fone_destinatario(self) -> Optional[str]:
+        """Extrai telefone do destinatario"""
+        dest = self._find_tag('dest')
+        return self._get_tag_text_in('fone', dest) if dest else None
+
     def get_serie(self) -> Optional[str]:
         """Extrai serie do CTe de <ide>/<serie>"""
         ide = self._find_tag('ide')
@@ -441,7 +575,8 @@ class CTeXMLParserCarvia(CTeXMLParser):
         """Extrai TODAS as informacoes necessarias para gerar o DACTE PDF.
 
         Superset de get_todas_informacoes_carvia() com campos adicionais
-        para enderecos, protocolo, componentes, quantidades e observacoes.
+        para enderecos, protocolo, componentes, quantidades, observacoes,
+        expedidor, recebedor, RNTRC, QR code, IBS/CBS e previsao entrega.
         """
         # Base: todas as informacoes CarVia
         dados = self.get_todas_informacoes_carvia()
@@ -462,18 +597,40 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'endereco_emitente': self.get_endereco_emitente(),
             'endereco_remetente': self.get_endereco_remetente(),
             'endereco_destinatario': self.get_endereco_destinatario(),
+            'endereco_expedidor': self.get_endereco_expedidor(),
+            'endereco_recebedor': self.get_endereco_recebedor(),
             # Inscricoes Estaduais
             'ie_emitente': self.get_ie_emitente(),
             'ie_remetente': self.get_ie_remetente(),
             'ie_destinatario': self.get_ie_destinatario(),
+            'ie_expedidor': self.get_ie_expedidor(),
+            'ie_recebedor': self.get_ie_recebedor(),
+            # Participantes extras
+            'expedidor': self.get_expedidor(),
+            'recebedor': self.get_recebedor(),
+            # Telefones
+            'fone_remetente': self.get_fone_remetente(),
+            'fone_destinatario': self.get_fone_destinatario(),
+            'fone_expedidor': self.get_fone_expedidor(),
+            'fone_recebedor': self.get_fone_recebedor(),
             # Prestacao
             'componentes_prestacao': self.get_componentes_prestacao(),
+            'valor_a_receber': self.get_valor_a_receber(),
             # Carga detalhada
             'produto_predominante': self.get_produto_predominante(),
             'quantidades_carga': self.get_quantidades_carga(),
             # Observacoes
             'observacoes_complementares': self.get_observacoes(),
+            'observacoes_contribuinte': self.get_observacoes_contribuinte(),
             'info_adicional_fisco': self.get_info_adicional_fisco(),
+            # Campos SSW adicionais
+            'rntrc': self.get_rntrc(),
+            'tipo_servico': self.get_tipo_servico(),
+            'situacao_tributaria_icms': self.get_situacao_tributaria_icms(),
+            'previsao_entrega': self.get_previsao_entrega(),
+            'qrcode_url': self.get_qrcode_url(),
+            # IBS/CBS (Reforma Tributaria)
+            'ibscbs': self.get_ibscbs(),
         })
 
         return dados

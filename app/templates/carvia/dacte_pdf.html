@@ -1,591 +1,575 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>DACTE{% if dados.cte_numero %} - {{ dados.cte_numero }}{% endif %}</title>
-    <style>
-        @page {
-            size: A4 portrait;
-            margin: 8mm;
-        }
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 8px;
-            line-height: 1.3;
-            color: #000;
-        }
-        .dacte {
-            width: 100%;
-            border: 2px solid #000;
-        }
-        /* Secoes */
-        .secao {
-            border-bottom: 1px solid #000;
-            page-break-inside: avoid;
-        }
-        .secao:last-child {
-            border-bottom: none;
-        }
-        .secao-titulo {
-            background-color: #e8e8e8;
-            font-weight: bold;
-            font-size: 7px;
-            padding: 2px 4px;
-            text-transform: uppercase;
-            border-bottom: 1px solid #000;
-        }
-        /* Grid de campos */
-        .campos {
-            display: flex;
-            flex-wrap: wrap;
-        }
-        .campo {
-            border-right: 1px solid #000;
-            border-bottom: 1px solid #000;
-            padding: 2px 4px;
-            min-height: 28px;
-        }
-        .campo:last-child {
-            border-right: none;
-        }
-        .campo-label {
-            font-size: 6px;
-            color: #333;
-            text-transform: uppercase;
-            display: block;
-            margin-bottom: 1px;
-        }
-        .campo-valor {
-            font-size: 8px;
-            font-weight: bold;
-            word-break: break-all;
-        }
-        .campo-valor-grande {
-            font-size: 10px;
-            font-weight: bold;
-        }
-        /* Larguras */
-        .w10 { width: 10%; }
-        .w12 { width: 12.5%; }
-        .w15 { width: 15%; }
-        .w20 { width: 20%; }
-        .w25 { width: 25%; }
-        .w30 { width: 30%; }
-        .w33 { width: 33.333%; }
-        .w35 { width: 35%; }
-        .w40 { width: 40%; }
-        .w50 { width: 50%; }
-        .w60 { width: 60%; }
-        .w65 { width: 65%; }
-        .w70 { width: 70%; }
-        .w75 { width: 75%; }
-        .w100 { width: 100%; }
-        /* Cabecalho especial */
-        .cabecalho {
-            display: flex;
-            border-bottom: 1px solid #000;
-        }
-        .cab-emitente {
-            width: 40%;
-            border-right: 1px solid #000;
-            padding: 4px 6px;
-        }
-        .cab-emitente-nome {
-            font-size: 11px;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        .cab-emitente-info {
-            font-size: 7px;
-            line-height: 1.4;
-        }
-        .cab-dacte {
-            width: 25%;
-            border-right: 1px solid #000;
-            text-align: center;
-            padding: 4px;
-        }
-        .cab-dacte-titulo {
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        .cab-dacte-sub {
-            font-size: 7px;
-            margin-bottom: 2px;
-        }
-        .cab-barcode {
-            width: 35%;
-            padding: 4px;
-            text-align: center;
-        }
-        .cab-barcode svg {
-            width: 100%;
-            max-height: 35px;
-        }
-        .chave-acesso {
-            font-size: 7px;
-            font-family: 'Courier New', monospace;
-            word-spacing: 2px;
-            margin-top: 2px;
-        }
-        .protocolo {
-            font-size: 7px;
-            margin-top: 2px;
-        }
-        /* Tabela NFs */
-        .tabela-nfs {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 7px;
-        }
-        .tabela-nfs th {
-            background-color: #e8e8e8;
-            font-size: 6px;
-            text-transform: uppercase;
-            padding: 2px 4px;
-            text-align: left;
-            border-bottom: 1px solid #000;
-            border-right: 1px solid #000;
-        }
-        .tabela-nfs th:last-child {
-            border-right: none;
-        }
-        .tabela-nfs td {
-            padding: 1px 4px;
-            border-bottom: 1px solid #ccc;
-            border-right: 1px solid #ccc;
-            font-family: 'Courier New', monospace;
-            font-size: 7px;
-        }
-        .tabela-nfs td:last-child {
-            border-right: none;
-        }
-        /* Tabela componentes */
-        .tabela-componentes {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 7px;
-        }
-        .tabela-componentes td {
-            padding: 1px 4px;
-            border-bottom: 1px solid #ccc;
-        }
-        .tabela-componentes td:last-child {
-            text-align: right;
-        }
-        .total-row {
-            font-weight: bold;
-            border-top: 1px solid #000;
-        }
-        /* Marca dagua para simplificado */
-        .marca-dagua {
-            position: fixed;
-            top: 40%;
-            left: 10%;
-            transform: rotate(-30deg);
-            font-size: 28px;
-            color: rgba(255, 0, 0, 0.15);
-            font-weight: bold;
-            text-align: center;
-            width: 80%;
-            z-index: 1000;
-            pointer-events: none;
-        }
-        .text-right {
-            text-align: right;
-        }
-        .observacoes-texto {
-            font-size: 7px;
-            padding: 4px;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>DACTE{% if d.numero %} - {{ d.numero }}{% endif %}</title>
+<style>
+@page {
+    size: A4 portrait;
+    margin: 3mm 4mm;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 6px;
+    line-height: 1.2;
+    color: #000;
+}
+/* === VIA (cada copia) === */
+.via {
+    width: 100%;
+    border: 1.5px solid #000;
+    height: 138mm;
+    overflow: hidden;
+    page-break-inside: avoid;
+}
+.corte {
+    text-align: center;
+    font-size: 7px;
+    padding: 1mm 0;
+    border-top: 1px dashed #666;
+    border-bottom: 1px dashed #666;
+    color: #666;
+    margin: 1mm 0;
+}
+/* === HEADER === */
+.hdr {
+    display: table;
+    width: 100%;
+    border-bottom: 1px solid #000;
+}
+.hdr-emit {
+    display: table-cell;
+    width: 35%;
+    border-right: 1px solid #000;
+    padding: 2px 3px;
+    vertical-align: top;
+}
+.hdr-emit-nome { font-size: 8px; font-weight: bold; }
+.hdr-emit-info { font-size: 5.5px; line-height: 1.3; }
+.hdr-dacte {
+    display: table-cell;
+    width: 30%;
+    border-right: 1px solid #000;
+    text-align: center;
+    padding: 1px 2px;
+    vertical-align: top;
+}
+.hdr-dacte-titulo { font-size: 13px; font-weight: bold; letter-spacing: 3px; }
+.hdr-dacte-sub { font-size: 5.5px; margin-top: 1px; }
+.hdr-dacte-grid {
+    display: table;
+    width: 100%;
+    margin-top: 2px;
+    border-top: 1px solid #000;
+}
+.hdr-dacte-grid .c {
+    display: table-cell;
+    border-right: 1px solid #000;
+    padding: 1px 2px;
+    text-align: center;
+    vertical-align: top;
+}
+.hdr-dacte-grid .c:last-child { border-right: none; }
+.hdr-auth {
+    display: table-cell;
+    width: 12%;
+    border-right: 1px solid #000;
+    padding: 1px 2px;
+    vertical-align: top;
+    text-align: center;
+}
+.hdr-qr {
+    display: table-cell;
+    width: 23%;
+    padding: 2px;
+    text-align: center;
+    vertical-align: middle;
+}
+.hdr-qr img { width: 22mm; height: 22mm; }
+/* === ROW DE CAMPOS === */
+.row {
+    display: table;
+    width: 100%;
+    border-bottom: 1px solid #000;
+}
+.row .c {
+    display: table-cell;
+    border-right: 1px solid #000;
+    padding: 1px 3px;
+    vertical-align: top;
+}
+.row .c:last-child { border-right: none; }
+/* === LABELS E VALORES === */
+.lb { font-size: 5px; color: #333; text-transform: uppercase; display: block; }
+.vl { font-size: 6.5px; font-weight: bold; display: block; }
+.vl-lg { font-size: 8px; font-weight: bold; }
+/* === CORPO 2 COLUNAS === */
+.body2 {
+    display: table;
+    width: 100%;
+}
+.col-l {
+    display: table-cell;
+    width: 55%;
+    border-right: 1px solid #000;
+    vertical-align: top;
+}
+.col-r {
+    display: table-cell;
+    width: 45%;
+    vertical-align: top;
+}
+/* === PARTICIPANTE BLOCK === */
+.part {
+    border-bottom: 1px solid #000;
+    min-height: 11mm;
+}
+.part-titulo {
+    font-size: 5px;
+    font-weight: bold;
+    padding: 0 3px;
+    text-transform: uppercase;
+}
+.part-row {
+    display: table;
+    width: 100%;
+}
+.part-row .c {
+    display: table-cell;
+    padding: 0 3px;
+    vertical-align: top;
+}
+/* === OBSERVACOES === */
+.obs-box {
+    border-bottom: 1px solid #000;
+    padding: 1px 3px;
+    max-height: 18mm;
+    overflow: hidden;
+    font-size: 5.5px;
+    line-height: 1.3;
+}
+/* === FOOTER === */
+.ftr {
+    display: table;
+    width: 100%;
+    border-bottom: 1px solid #000;
+}
+.ftr .c {
+    display: table-cell;
+    border-right: 1px solid #000;
+    padding: 1px 3px;
+    vertical-align: top;
+}
+.ftr .c:last-child { border-right: none; }
+.decl {
+    font-size: 5px;
+    padding: 1px 3px;
+    border-bottom: 1px solid #000;
+}
+.decl-fields {
+    display: table;
+    width: 100%;
+}
+.decl-fields .c {
+    display: table-cell;
+    border-right: 1px solid #000;
+    padding: 1px 3px;
+    min-height: 6mm;
+    vertical-align: top;
+}
+.decl-fields .c:last-child { border-right: none; }
+/* === COLUNA DIREITA — SECOES === */
+.rs {
+    border-bottom: 1px solid #000;
+    padding: 1px 3px;
+}
+.rs:last-child { border-bottom: none; }
+.rs-titulo {
+    font-size: 5px;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-align: center;
+}
+.rs-grid {
+    display: table;
+    width: 100%;
+}
+.rs-grid .c {
+    display: table-cell;
+    padding: 0 2px;
+    vertical-align: top;
+}
+.rs-grid .c.br { border-right: 1px solid #000; }
+/* === CHAVE === */
+.chave-box {
+    border-bottom: 1px solid #000;
+    padding: 2px 3px;
+    text-align: center;
+}
+.chave-texto {
+    font-size: 5px;
+    color: #333;
+}
+.chave-valor {
+    font-size: 6px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+}
+/* === CAR REF === */
+.car-ref {
+    font-size: 10px;
+    font-weight: bold;
+    text-align: right;
+    padding: 1px 3px;
+}
+.car-rota {
+    font-size: 14px;
+    font-weight: bold;
+    text-align: right;
+    padding: 0 3px;
+}
+.ssw-footer {
+    font-size: 5px;
+    text-align: right;
+    padding: 0 3px;
+    color: #666;
+}
+/* === WATERMARK === */
+.marca-dagua {
+    position: fixed;
+    top: 35%;
+    left: 10%;
+    transform: rotate(-30deg);
+    font-size: 24px;
+    color: rgba(255, 0, 0, 0.12);
+    font-weight: bold;
+    text-align: center;
+    width: 80%;
+    z-index: 1000;
+    pointer-events: none;
+}
+.text-r { text-align: right; }
+.text-c { text-align: center; }
+.w15 { width: 15%; }
+.w20 { width: 20%; }
+.w25 { width: 25%; }
+.w30 { width: 30%; }
+.w33 { width: 33%; }
+.w35 { width: 35%; }
+.w40 { width: 40%; }
+.w50 { width: 50%; }
+.w60 { width: 60%; }
+.w70 { width: 70%; }
+.w100 { width: 100%; }
+.nb { border-right: none !important; }
+</style>
 </head>
 <body>
-    {% if simplificado %}
-    <div class="marca-dagua">
-        REPRESENTACAO SIMPLIFICADA<br>
-        NAO E DOCUMENTO FISCAL
+
+{% if simplificado %}
+<div class="marca-dagua">
+    REPRESENTACAO SIMPLIFICADA<br>
+    NAO E DOCUMENTO FISCAL
+</div>
+{% endif %}
+
+{# ================================================================ #}
+{# MACRO: Uma via do DACTE (chamada 2x)                             #}
+{# ================================================================ #}
+{% macro dacte_via(d) %}
+<div class="via">
+
+    {# --- HEADER: Emitente | DACTE title + serie/num/modal | Auth | QR --- #}
+    <div class="hdr">
+        <div class="hdr-emit">
+            <div class="hdr-emit-nome">{{ d.emit_nome }}</div>
+            <div class="hdr-emit-info">
+                {{ d.emit_end }}<br>
+                {{ d.emit_bairro }} - FONE: {{ d.emit_fone }}<br>
+                {{ d.emit_mun }} -{{ d.emit_uf }} -CEP: {{ d.emit_cep }}
+            </div>
+        </div>
+        <div class="hdr-dacte">
+            <div class="hdr-dacte-titulo">D A C T E</div>
+            <div class="hdr-dacte-sub">Documento Auxiliar do Conhecimento de Transporte Eletr&ocirc;nico</div>
+            <div class="hdr-dacte-grid">
+                <div class="c" style="width:14%"><span class="lb">S&Eacute;RIE</span><span class="vl">{{ d.serie }}</span></div>
+                <div class="c" style="width:26%"><span class="lb">N&Uacute;MERO</span><span class="vl">{{ d.numero }}</span></div>
+                <div class="c" style="width:26%"><span class="lb">MODAL</span><span class="vl">{{ d.modal }}</span></div>
+                <div class="c" style="width:10%"><span class="lb">MODELO</span><span class="vl">{{ d.modelo }}</span></div>
+                <div class="c nb" style="width:24%"><span class="lb">N&ordm; PROTOCOLO</span><span class="vl">{{ d.protocolo_numero }}</span></div>
+            </div>
+        </div>
+        <div class="hdr-auth">
+            <span class="lb">AUTORIZA&Ccedil;&Atilde;O</span>
+            <span class="vl">{{ d.autorizacao }}</span><br>
+            <span class="lb">FL</span>
+            <span class="vl">{{ d.folha }}</span>
+        </div>
+        <div class="hdr-qr">
+            {% if d.qrcode_base64 %}
+            <img src="{{ d.qrcode_base64 }}" alt="QR">
+            {% endif %}
+        </div>
     </div>
-    {% endif %}
 
-    <div class="dacte">
-        {# ============================================================ #}
-        {# CABECALHO: Emitente + DACTE + Barcode                        #}
-        {# ============================================================ #}
-        <div class="cabecalho">
-            <div class="cab-emitente">
-                <div class="cab-emitente-nome">
-                    {{ dados.emitente.nome or '-' }}
+    {# --- CNPJ / IE / RNTRC / CONTROLE DO FISCO --- #}
+    <div class="row">
+        <div class="c w25"><span class="lb">CNPJ</span><span class="vl">{{ d.emit_cnpj }}</span></div>
+        <div class="c w25"><span class="lb">IE</span><span class="vl">{{ d.emit_ie }}</span></div>
+        <div class="c w25"><span class="lb">RNTRC</span><span class="vl">{{ d.rntrc }}</span></div>
+        <div class="c w25 nb"><span class="lb">CONTROLE DO FISCO</span><span class="vl"></span></div>
+    </div>
+
+    {# --- TIPO CTe / TIPO SERVICO / CFOP --- #}
+    <div class="row">
+        <div class="c w20"><span class="lb">TIPO DO CT-E</span><span class="vl">{{ d.tipo_cte }}</span></div>
+        <div class="c w20"><span class="lb">TIPO DO SERVI&Ccedil;O</span><span class="vl">{{ d.tipo_servico }}</span></div>
+        <div class="c w60 nb"><span class="lb">CFOP - NATUREZA DA PRESTA&Ccedil;&Atilde;O</span><span class="vl">{{ d.cfop_natureza }}</span></div>
+    </div>
+
+    {# --- ORIGEM / DESTINO / EMITIDO POR --- #}
+    <div class="row">
+        <div class="c w35"><span class="lb">ORIGEM DA PRESTA&Ccedil;&Atilde;O</span><span class="vl">{{ d.origem }}</span></div>
+        <div class="c w35"><span class="lb">DESTINO DA PRESTA&Ccedil;&Atilde;O</span><span class="vl">{{ d.destino }}</span></div>
+        <div class="c w30 nb"><span class="lb">EMITIDO POR</span><span class="vl">{{ d.emitido_por }}</span></div>
+    </div>
+
+    {# === CORPO: 2 COLUNAS === #}
+    <div class="body2">
+
+        {# ================ COLUNA ESQUERDA ================ #}
+        <div class="col-l">
+
+            {# REMETENTE #}
+            <div class="part">
+                <div class="part-row">
+                    <div class="c w50"><span class="part-titulo">REMETENTE</span> <span class="vl">{{ d.rem_nome }}</span></div>
+                    <div class="c w25"><span class="lb">CNPJ</span><span class="vl">{{ d.rem_cnpj }}</span></div>
+                    <div class="c w25 nb"><span class="lb">IE</span><span class="vl">{{ d.rem_ie }}</span></div>
                 </div>
-                <div class="cab-emitente-info">
-                    {% set ender_emit = dados.endereco_emitente or {} %}
-                    {% if ender_emit.logradouro %}
-                    {{ ender_emit.logradouro }}{% if ender_emit.numero %}, {{ ender_emit.numero }}{% endif %}
-                    {% if ender_emit.complemento %} - {{ ender_emit.complemento }}{% endif %}<br>
-                    {% if ender_emit.bairro %}{{ ender_emit.bairro }} - {% endif %}
-                    {{ ender_emit.municipio or '' }}/{{ ender_emit.uf or '' }}
-                    {% if ender_emit.cep %} - CEP: {{ ender_emit.cep }}{% endif %}<br>
-                    {% endif %}
-                    {% if dados.emitente.cnpj %}
-                    CNPJ: {{ dados.emitente.cnpj }}
-                    {% endif %}
-                    {% if dados.ie_emitente %}
-                     | IE: {{ dados.ie_emitente }}
-                    {% endif %}
-                    {% if ender_emit.fone %}
-                    <br>Fone: {{ ender_emit.fone }}
-                    {% endif %}
+                <div class="part-row">
+                    <div class="c w40"><span class="lb">END</span><span class="vl">{{ d.rem_end }}</span></div>
+                    <div class="c w25"><span class="lb">MUN</span><span class="vl">{{ d.rem_mun_uf }}</span></div>
+                    <div class="c w15"><span class="lb">CEP</span><span class="vl">{{ d.rem_cep }}</span></div>
+                    <div class="c w20 nb"><span class="lb">FONE</span><span class="vl">{{ d.rem_fone }}</span></div>
                 </div>
             </div>
 
-            <div class="cab-dacte">
-                <div class="cab-dacte-titulo">DACTE</div>
-                <div class="cab-dacte-sub">
-                    Documento Auxiliar do<br>
-                    Conhecimento de Transporte<br>
-                    Eletronico
+            {# DESTINATARIO #}
+            <div class="part">
+                <div class="part-row">
+                    <div class="c w35"><span class="part-titulo">DESTINATARIO</span> <span class="vl">{{ d.dest_nome }}</span></div>
+                    <div class="c w15"><span class="lb">SUFRAMA</span><span class="vl">{{ d.dest_suframa }}</span></div>
+                    <div class="c w25"><span class="lb">CNPJ</span><span class="vl">{{ d.dest_cnpj }}</span></div>
+                    <div class="c w25 nb"><span class="lb">IE</span><span class="vl">{{ d.dest_ie }}</span></div>
                 </div>
-                <div style="font-size: 9px; font-weight: bold; margin-top: 3px;">
-                    {% if dados.modal %}{{ dados.modal }}{% endif %}
+                <div class="part-row">
+                    <div class="c w40"><span class="lb">END</span><span class="vl">{{ d.dest_end }}</span></div>
+                    <div class="c w25"><span class="lb">MUN</span><span class="vl">{{ d.dest_mun_uf }}</span></div>
+                    <div class="c w15"><span class="lb">CEP</span><span class="vl">{{ d.dest_cep }}</span></div>
+                    <div class="c w20 nb"><span class="lb">FONE</span><span class="vl">{{ d.dest_fone }}</span></div>
                 </div>
             </div>
 
-            <div class="cab-barcode">
-                {% if barcode_svg %}
-                {{ barcode_svg|safe }}
-                {% endif %}
-                <div class="chave-acesso">
-                    {{ dados.chave_formatada or '' }}
+            {# EXPEDIDOR #}
+            <div class="part">
+                <div class="part-row">
+                    <div class="c w50"><span class="part-titulo">EXPEDIDOR</span> <span class="vl">{{ d.exp_nome }}</span></div>
+                    <div class="c w25"><span class="lb">CNPJ</span><span class="vl">{{ d.exp_cnpj }}</span></div>
+                    <div class="c w25 nb"><span class="lb">IE</span><span class="vl">{{ d.exp_ie }}</span></div>
                 </div>
-                {% set prot = dados.protocolo or {} %}
-                {% if prot.numero %}
-                <div class="protocolo">
-                    Protocolo: {{ prot.numero }}
-                    {% if prot.data_recebimento %}
-                     - {{ prot.data_recebimento[:19].replace('T', ' ') }}
-                    {% endif %}
+                <div class="part-row">
+                    <div class="c w40"><span class="lb">END</span><span class="vl">{{ d.exp_end }}</span></div>
+                    <div class="c w25"><span class="lb">MUN</span><span class="vl">{{ d.exp_mun_uf }}</span></div>
+                    <div class="c w15"><span class="lb">CEP</span><span class="vl">{{ d.exp_cep }}</span></div>
+                    <div class="c w20 nb"><span class="lb">FONE</span><span class="vl">{{ d.exp_fone }}</span></div>
                 </div>
-                {% endif %}
             </div>
-        </div>
 
-        {# ============================================================ #}
-        {# IDENTIFICACAO DO CTe                                          #}
-        {# ============================================================ #}
-        <div class="secao">
-            <div class="campos">
-                <div class="campo w15">
-                    <span class="campo-label">Modelo</span>
-                    <span class="campo-valor">57</span>
+            {# RECEBEDOR #}
+            <div class="part">
+                <div class="part-row">
+                    <div class="c w50"><span class="part-titulo">RECEBEDOR/LOC ENTREGA</span> <span class="vl">{{ d.rec_nome }}</span></div>
+                    <div class="c w25"><span class="lb">CNPJ</span><span class="vl">{{ d.rec_cnpj }}</span></div>
+                    <div class="c w25 nb"><span class="lb">IE</span><span class="vl">{{ d.rec_ie }}</span></div>
                 </div>
-                <div class="campo w10">
-                    <span class="campo-label">Serie</span>
-                    <span class="campo-valor">{{ dados.serie or '-' }}</span>
-                </div>
-                <div class="campo w15">
-                    <span class="campo-label">Numero</span>
-                    <span class="campo-valor-grande">{{ dados.cte_numero or '-' }}</span>
-                </div>
-                <div class="campo w15">
-                    <span class="campo-label">Data Emissao</span>
-                    <span class="campo-valor">
-                        {% if dados.cte_data_emissao %}
-                        {{ dados.cte_data_emissao[:10].split('-')|reverse|join('/') if dados.cte_data_emissao and '-' in dados.cte_data_emissao[:10] else dados.cte_data_emissao[:10] }}
-                        {% else %}-{% endif %}
-                    </span>
-                </div>
-                <div class="campo w10">
-                    <span class="campo-label">CFOP</span>
-                    <span class="campo-valor">{{ dados.cfop or '-' }}</span>
-                </div>
-                <div class="campo w20">
-                    <span class="campo-label">Nat. Operacao</span>
-                    <span class="campo-valor">{{ dados.natureza_operacao or '-' }}</span>
-                </div>
-                <div class="campo w15">
-                    <span class="campo-label">Forma Pagamento</span>
-                    <span class="campo-valor">{{ dados.forma_pagamento or '-' }}</span>
+                <div class="part-row">
+                    <div class="c w40"><span class="lb">END</span><span class="vl">{{ d.rec_end }}</span></div>
+                    <div class="c w25"><span class="lb">MUN</span><span class="vl">{{ d.rec_mun_uf }}</span></div>
+                    <div class="c w15"><span class="lb">CEP</span><span class="vl">{{ d.rec_cep }}</span></div>
+                    <div class="c w20 nb"><span class="lb">FONE</span><span class="vl">{{ d.rec_fone }}</span></div>
                 </div>
             </div>
-        </div>
 
-        {# ============================================================ #}
-        {# ROTA: Origem -> Destino                                       #}
-        {# ============================================================ #}
-        <div class="secao">
-            <div class="campos">
-                <div class="campo w50">
-                    <span class="campo-label">Municipio de Origem da Prestacao</span>
-                    <span class="campo-valor">{{ dados.cidade_origem or '-' }}/{{ dados.uf_origem or '-' }}</span>
+            {# TOMADOR #}
+            <div class="part">
+                <div class="part-row">
+                    <div class="c w50"><span class="part-titulo">TOMADOR</span> <span class="vl">{{ d.toma_nome or d.dest_nome if d.toma_abrev == 'DEST' else (d.rem_nome if d.toma_abrev == 'REM' else d.toma_nome) }}</span></div>
+                    <div class="c w25"><span class="lb">CNPJ</span><span class="vl">{{ d.toma_cnpj or (d.dest_cnpj if d.toma_abrev == 'DEST' else (d.rem_cnpj if d.toma_abrev == 'REM' else '')) }}</span></div>
+                    <div class="c w25 nb"><span class="lb">IE</span><span class="vl">{{ d.toma_ie or (d.dest_ie if d.toma_abrev == 'DEST' else (d.rem_ie if d.toma_abrev == 'REM' else '')) }}</span></div>
                 </div>
-                <div class="campo w50">
-                    <span class="campo-label">Municipio de Destino da Prestacao</span>
-                    <span class="campo-valor">{{ dados.cidade_destino or '-' }}/{{ dados.uf_destino or '-' }}</span>
+                <div class="part-row">
+                    <div class="c w40"><span class="lb">END</span><span class="vl">{{ d.dest_end if d.toma_abrev == 'DEST' else (d.rem_end if d.toma_abrev == 'REM' else '') }}</span></div>
+                    <div class="c w25"><span class="lb">MUN</span><span class="vl">{{ d.dest_mun_uf if d.toma_abrev == 'DEST' else (d.rem_mun_uf if d.toma_abrev == 'REM' else '') }}</span></div>
+                    <div class="c w15"><span class="lb">CEP</span><span class="vl">{{ d.dest_cep if d.toma_abrev == 'DEST' else (d.rem_cep if d.toma_abrev == 'REM' else '') }}</span></div>
+                    <div class="c w20 nb"><span class="lb">FONE</span><span class="vl">{{ d.dest_fone if d.toma_abrev == 'DEST' else (d.rem_fone if d.toma_abrev == 'REM' else '0') }}</span></div>
                 </div>
             </div>
-        </div>
 
-        {# ============================================================ #}
-        {# REMETENTE                                                     #}
-        {# ============================================================ #}
-        <div class="secao">
-            <div class="secao-titulo">Remetente</div>
-            <div class="campos">
-                <div class="campo w50">
-                    <span class="campo-label">Nome / Razao Social</span>
-                    <span class="campo-valor">{{ dados.remetente.nome or '-' }}</span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">CNPJ/CPF</span>
-                    <span class="campo-valor">{{ dados.remetente.cnpj or '-' }}</span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">Inscricao Estadual</span>
-                    <span class="campo-valor">{{ dados.ie_remetente or '-' }}</span>
-                </div>
+            {# OBSERVACOES #}
+            <div class="obs-box">
+                <span class="lb">OBSERVA&Ccedil;&Otilde;ES</span><br>
+                {{ d.observacoes }}
             </div>
-            {% set ender_rem = dados.endereco_remetente or {} %}
-            <div class="campos">
-                <div class="campo w50">
-                    <span class="campo-label">Endereco</span>
-                    <span class="campo-valor">
-                        {{ ender_rem.logradouro or '' }}{% if ender_rem.numero %}, {{ ender_rem.numero }}{% endif %}
-                        {% if ender_rem.complemento %} - {{ ender_rem.complemento }}{% endif %}
-                    </span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">Municipio</span>
-                    <span class="campo-valor">{{ ender_rem.municipio or '-' }}</span>
-                </div>
-                <div class="campo w10">
-                    <span class="campo-label">UF</span>
-                    <span class="campo-valor">{{ ender_rem.uf or '-' }}</span>
-                </div>
-                <div class="campo w15">
-                    <span class="campo-label">CEP</span>
-                    <span class="campo-valor">{{ ender_rem.cep or '-' }}</span>
-                </div>
-            </div>
-        </div>
 
-        {# ============================================================ #}
-        {# DESTINATARIO                                                  #}
-        {# ============================================================ #}
-        <div class="secao">
-            <div class="secao-titulo">Destinatario</div>
-            <div class="campos">
-                <div class="campo w50">
-                    <span class="campo-label">Nome / Razao Social</span>
-                    <span class="campo-valor">{{ dados.destinatario.nome or '-' }}</span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">CNPJ/CPF</span>
-                    <span class="campo-valor">{{ dados.destinatario.cnpj or '-' }}</span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">Inscricao Estadual</span>
-                    <span class="campo-valor">{{ dados.ie_destinatario or '-' }}</span>
-                </div>
+            {# PLACA / NR / TOMADOR SERVICO / COBRAR / PREV.ENTREGA #}
+            <div class="ftr">
+                <div class="c w30"><span class="lb">PLACA DE COLETA</span><span class="vl">{{ d.placa }}</span> <span class="lb" style="display:inline">NR</span> <span class="vl" style="display:inline">{{ d.nr_placa }}</span></div>
+                <div class="c w20"><span class="lb">TOMADOR SERVI&Ccedil;O</span><span class="vl">{{ d.toma_abrev }}</span></div>
+                <div class="c w20"><span class="lb">COBRAR</span><span class="vl" style="font-weight:900">{{ d.cobrar }}</span></div>
+                <div class="c w30 nb"><span class="lb">PREV.ENTREGA</span><span class="vl" style="font-weight:900">{{ d.prev_entrega }}</span></div>
             </div>
-            {% set ender_dest = dados.endereco_destinatario or {} %}
-            <div class="campos">
-                <div class="campo w50">
-                    <span class="campo-label">Endereco</span>
-                    <span class="campo-valor">
-                        {{ ender_dest.logradouro or '' }}{% if ender_dest.numero %}, {{ ender_dest.numero }}{% endif %}
-                        {% if ender_dest.complemento %} - {{ ender_dest.complemento }}{% endif %}
-                    </span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">Municipio</span>
-                    <span class="campo-valor">{{ ender_dest.municipio or '-' }}</span>
-                </div>
-                <div class="campo w10">
-                    <span class="campo-label">UF</span>
-                    <span class="campo-valor">{{ ender_dest.uf or '-' }}</span>
-                </div>
-                <div class="campo w15">
-                    <span class="campo-label">CEP</span>
-                    <span class="campo-valor">{{ ender_dest.cep or '-' }}</span>
-                </div>
-            </div>
-        </div>
 
-        {# ============================================================ #}
-        {# TOMADOR DO SERVICO                                            #}
-        {# ============================================================ #}
-        {% set tomador = dados.tomador or {} %}
-        {% if tomador %}
-        <div class="secao">
-            <div class="campos">
-                <div class="campo w100">
-                    <span class="campo-label">Tomador do Servico</span>
-                    <span class="campo-valor">
-                        {{ tomador.tipo or '-' }}
-                        {% if tomador.nome %} - {{ tomador.nome }}{% endif %}
-                        {% if tomador.cnpj %} (CNPJ: {{ tomador.cnpj }}){% endif %}
-                    </span>
-                </div>
+            {# DECLARACAO DE RECEBIMENTO #}
+            <div class="decl">
+                DECLARO QUE RECEBI OS VOLUMES DESTE CONHECIMENTO EM PERFEITO ESTADO PELO QUE DOU POR CUMPRIDO O PRESENTE CONTRATO DE TRANSPORTE
             </div>
-        </div>
-        {% endif %}
+            <div class="decl-fields">
+                <div class="c w25"><span class="lb">NOME / RG</span></div>
+                <div class="c w25"><span class="lb">ASSINATURA / CARIMBO</span></div>
+                <div class="c w25"><span class="lb">CHEGADA DATA/HORA</span></div>
+                <div class="c w25 nb"><span class="lb">SA&Iacute;DA DATA/HORA</span></div>
+            </div>
 
-        {# ============================================================ #}
-        {# VALOR DA PRESTACAO                                            #}
-        {# ============================================================ #}
-        <div class="secao">
-            <div class="secao-titulo">Valor da Prestacao do Servico</div>
-            <div class="campos">
-                <div class="campo w65">
-                    <span class="campo-label">Componentes do Valor da Prestacao</span>
-                    {% set componentes = dados.componentes_prestacao or [] %}
-                    {% if componentes %}
-                    <table class="tabela-componentes">
-                        {% for comp in componentes %}
-                        <tr>
-                            <td>{{ comp.nome or '-' }}</td>
-                            <td>{{ "%.2f"|format(comp.valor or 0) }}</td>
-                        </tr>
+        </div>{# /col-l #}
+
+        {# ================ COLUNA DIREITA ================ #}
+        <div class="col-r">
+
+            {# CHAVE DE ACESSO #}
+            <div class="chave-box">
+                <div class="chave-texto">Chave de acesso para consulta de autenticidade no site www.cte.fazenda.gov.br</div>
+                <div class="chave-valor">{{ d.chave_ssw }}</div>
+            </div>
+
+            {# COMPONENTES DO FRETE #}
+            <div class="rs">
+                <div class="rs-grid">
+                    <div class="c w60 br"><span class="rs-titulo">COMPONENTES DO FRETE (R$)</span></div>
+                    <div class="c w40"><span class="rs-titulo">MERCADORIA</span></div>
+                </div>
+                <div class="rs-grid">
+                    <div class="c w60 br">
+                        {% for comp in d.componentes %}
+                        <div style="display:table;width:100%"><div style="display:table-cell;width:60%">{{ comp.nome }}</div><div style="display:table-cell;text-align:right">{{ comp.valor }}</div></div>
                         {% endfor %}
-                    </table>
-                    {% else %}
-                    <span class="campo-valor">-</span>
-                    {% endif %}
+                    </div>
+                    <div class="c w40">
+                        <span class="lb">PROD PREDOMIN</span><span class="vl">{{ d.prod_predominante }}</span>
+                        <span class="lb">ESP&Eacute;CIE</span><span class="vl">{{ d.especie }}</span>
+                    </div>
                 </div>
-                <div class="campo w35">
-                    <span class="campo-label">Valor Total da Prestacao</span>
-                    <span class="campo-valor-grande">
-                        R$ {{ "%.2f"|format(dados.cte_valor or 0) }}
-                    </span>
+                <div class="rs-grid">
+                    <div class="c w60 br">
+                        <div style="display:table;width:100%;border-top:1px solid #000"><div style="display:table-cell;width:60%;font-weight:900">FRETE TOTAL (R$)</div><div style="display:table-cell;text-align:right;font-weight:900">{{ d.frete_total }}</div></div>
+                    </div>
+                    <div class="c w40">
+                        <span class="lb">VALOR MERCADORIA (R$)</span><span class="vl">{{ d.valor_mercadoria }}</span>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        {# ============================================================ #}
-        {# IMPOSTOS                                                      #}
-        {# ============================================================ #}
-        {% set impostos = dados.impostos or {} %}
-        <div class="secao">
-            <div class="secao-titulo">Informacoes Relativas ao Imposto</div>
-            <div class="campos">
-                <div class="campo w20">
-                    <span class="campo-label">Situacao Tributaria</span>
-                    <span class="campo-valor">-</span>
-                </div>
-                <div class="campo w20">
-                    <span class="campo-label">Base de Calculo</span>
-                    <span class="campo-valor">{{ "%.2f"|format(impostos.base_icms or 0) }}</span>
-                </div>
-                <div class="campo w15">
-                    <span class="campo-label">Aliq. ICMS</span>
-                    <span class="campo-valor">{{ "%.2f"|format(impostos.aliquota_icms or 0) }}%</span>
-                </div>
-                <div class="campo w20">
-                    <span class="campo-label">Valor ICMS</span>
-                    <span class="campo-valor">{{ "%.2f"|format(impostos.valor_icms or 0) }}</span>
-                </div>
-                <div class="campo w25">
-                    <span class="campo-label">Total Tributos (Lei 12.741)</span>
-                    <span class="campo-valor">{{ "%.2f"|format(impostos.total_tributos or 0) }}</span>
+                <div class="rs-grid">
+                    <div class="c w60 br"></div>
+                    <div class="c w40">
+                        <div class="rs-grid">
+                            <div class="c w50"><span class="lb">QTDE PARES/VOLUMES</span><span class="vl">{{ d.qtd_pares }}&nbsp;&nbsp;&nbsp;{{ d.qtd_volumes }}</span></div>
+                            <div class="c w50"><span class="lb">CUBAG(m3)/PESO (Kg)</span><span class="vl">{{ d.peso_cubado }}</span></div>
+                        </div>
+                        <span class="lb">PESO C&Aacute;LCULO (Kg)</span><span class="vl">{{ d.peso_calculo }}</span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        {# ============================================================ #}
-        {# INFORMACOES DA CARGA                                          #}
-        {# ============================================================ #}
-        <div class="secao">
-            <div class="secao-titulo">Informacoes da Carga</div>
-            <div class="campos">
-                <div class="campo w40">
-                    <span class="campo-label">Produto Predominante</span>
-                    <span class="campo-valor">{{ dados.produto_predominante or '-' }}</span>
+            {# ICMS #}
+            <div class="rs">
+                <span class="rs-titulo">ICMS (R$)</span>
+                <div class="rs-grid">
+                    <div class="c w25"><span class="lb">SITUA&Ccedil;&Atilde;O TRIBUT&Aacute;RIA</span><span class="vl">{{ d.icms_sit_trib }}</span></div>
+                    <div class="c w25"><span class="lb">BASE C&Aacute;LCULO(R$)</span><span class="vl text-r">{{ d.icms_base }}</span></div>
+                    <div class="c w25"><span class="lb">AL&Iacute;Q DIFAL/ICMS(%)</span><span class="vl text-r">{{ d.icms_aliq_difal }}</span></div>
+                    <div class="c w25"><span class="lb">VALOR ICMS(R$)</span><span class="vl text-r">{{ d.icms_valor }}</span></div>
                 </div>
-                <div class="campo w20">
-                    <span class="campo-label">Valor Total da Mercadoria</span>
-                    <span class="campo-valor">{{ "%.2f"|format(dados.valor_mercadoria or 0) }}</span>
+                <div class="rs-grid">
+                    <div class="c w25"></div>
+                    <div class="c w25"><span class="lb">AL&Iacute;Q ICMS(%)</span><span class="vl text-r">{{ d.icms_aliq }}</span></div>
+                    <div class="c w25"><span class="lb">DIFAL ICMS ORIG/DEST(R$)</span><span class="vl text-r">{{ d.icms_difal_orig_dest }}</span></div>
+                    <div class="c w25"><span class="lb">CRED PRES/ICMS ST(R$)</span><span class="vl text-r">{{ d.icms_cred_pres }}</span></div>
                 </div>
-                {% set qtds = dados.quantidades_carga or [] %}
-                {% if qtds %}
-                {% for q in qtds %}
-                <div class="campo w20">
-                    <span class="campo-label">{{ q.tipo_medida or q.unidade or '-' }}</span>
-                    <span class="campo-valor">{{ "%.4f"|format(q.quantidade or 0) }} {{ q.unidade or '' }}</span>
+            </div>
+
+            {# REFORMA TRIBUTARIA IBS/CBS #}
+            <div class="rs">
+                <span class="rs-titulo">REFORMA TRIBUT&Aacute;RIA</span>
+                <div class="rs-grid">
+                    <div class="c w33"><span class="lb">IBS ESTADUAL (%/R$)</span><span class="vl text-r">{{ d.ibs_uf_aliq }}&nbsp;&nbsp;{{ d.ibs_uf_valor }}</span></div>
+                    <div class="c w33"><span class="lb">IBS MUNICIPAL (%/R$)</span><span class="vl text-r">{{ d.ibs_mun_aliq }}&nbsp;&nbsp;{{ d.ibs_mun_valor }}</span></div>
+                    <div class="c w33"><span class="lb">CBS (%/R$)</span><span class="vl text-r">{{ d.cbs_aliq }}&nbsp;&nbsp;{{ d.cbs_valor }}</span></div>
+                </div>
+            </div>
+
+            {# VALOR A RECEBER #}
+            <div class="rs">
+                <div class="rs-grid">
+                    <div class="c w50 br"><span class="lb">VALOR A RECEBER (R$)</span><span class="vl-lg text-r">{{ d.valor_a_receber }}</span></div>
+                    <div class="c w50"><span class="lb">PIX</span><span class="vl"></span></div>
+                </div>
+            </div>
+
+            {# DESTAQUE TRIBUTOS LEI 12.741 #}
+            <div class="rs">
+                <span class="lb">DESTAQUE DE TRIBUTOS (Lei 12.741/2012) - Em R$</span>
+                <div class="rs-grid">
+                    <div class="c w25"><span class="lb">ICMS/ISS:</span><span class="vl">{{ d.trib_icms }}</span></div>
+                    <div class="c w25"><span class="lb">PIS:</span><span class="vl">{{ d.trib_pis }}</span></div>
+                    <div class="c w25"><span class="lb">COFINS:</span><span class="vl">{{ d.trib_cofins }}</span></div>
+                    <div class="c w25"><span class="lb">TOTAL:</span><span class="vl">{{ d.trib_total }}</span></div>
+                </div>
+            </div>
+
+            {# CHAVES NF-e/CT-e #}
+            <div class="rs">
+                <span class="rs-titulo">CHAVES NF-E/CT-E</span>
+                {% for nf in d.nfs %}
+                <div style="font-size:5.5px;font-family:'Courier New',monospace">
+                    NF-E: {{ nf.chave }}
+                    &nbsp;&nbsp;{{ nf.numero_nf }}
                 </div>
                 {% endfor %}
-                {% else %}
-                <div class="campo w20">
-                    <span class="campo-label">Peso Bruto (KG)</span>
-                    <span class="campo-valor">{{ "%.4f"|format(dados.peso_bruto or 0) }}</span>
-                </div>
-                <div class="campo w20">
-                    <span class="campo-label">Cubagem (M3)</span>
-                    <span class="campo-valor">{{ "%.4f"|format(dados.peso_cubado or 0) }}</span>
-                </div>
-                {% endif %}
             </div>
-        </div>
 
-        {# ============================================================ #}
-        {# DOCUMENTOS ORIGINARIOS                                        #}
-        {# ============================================================ #}
-        {% set nfs = dados.nfs_referenciadas or [] %}
-        {% if nfs %}
-        <div class="secao">
-            <div class="secao-titulo">Documentos Originarios</div>
-            <table class="tabela-nfs">
-                <thead>
-                    <tr>
-                        <th style="width: 65%;">Chave de Acesso</th>
-                        <th style="width: 15%;">Numero NF</th>
-                        <th style="width: 20%;">CNPJ Emitente</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for nf in nfs %}
-                    <tr>
-                        <td>{{ nf.chave or '-' }}</td>
-                        <td>{{ nf.numero_nf or '-' }}</td>
-                        <td>{{ nf.cnpj_emitente or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-
-        {# ============================================================ #}
-        {# OBSERVACOES                                                   #}
-        {# ============================================================ #}
-        {% set obs = dados.observacoes_complementares or dados.info_adicional_fisco %}
-        {% if obs %}
-        <div class="secao">
-            <div class="secao-titulo">Observacoes</div>
-            <div class="observacoes-texto">{{ obs }}</div>
-        </div>
-        {% endif %}
-
-        {# ============================================================ #}
-        {# TIPO CTe (se complementar/anulacao)                           #}
-        {# ============================================================ #}
-        {% if dados.tipo_cte_descricao and dados.tipo_cte_descricao != 'Normal' %}
-        <div class="secao">
-            <div class="campos">
-                <div class="campo w100">
-                    <span class="campo-label">Tipo de CTe</span>
-                    <span class="campo-valor" style="color: #c00;">{{ dados.tipo_cte_descricao }}</span>
-                </div>
+            {# RODAPE SSW #}
+            <div style="padding:1px 3px">
+                <div class="ssw-footer">PROCESSADO POR SSW.INF.BR</div>
             </div>
-        </div>
-        {% endif %}
-    </div>
+
+        </div>{# /col-r #}
+
+    </div>{# /body2 #}
+
+</div>{# /via #}
+{% endmacro %}
+
+{# ================================================================ #}
+{# PAGINA: Via 1 + Corte + Via 2                                    #}
+{# ================================================================ #}
+
+{{ dacte_via(d) }}
+
+<div class="corte">Corte aqui</div>
+
+{{ dacte_via(d) }}
+
 </body>
 </html>
