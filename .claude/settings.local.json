@@ -138,7 +138,10 @@
       "Bash(sed:*)",
       "WebFetch(domain:docs.pentagi.com)",
       "WebFetch(domain:pentagi.com)",
-      "WebFetch(domain:paddo.dev)"
+      "WebFetch(domain:paddo.dev)",
+      "WebFetch(domain:docs.sentry.io)",
+      "mcp__sentry__find_organizations",
+      "mcp__sentry__get_issue_details"
     ],
     "deny": []
   },

@@ -118,18 +118,9 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services opcionais (ativos, controlados por flag)
-| Service | Flag | Default | O que faz |
-|---------|------|---------|-----------|
-| `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Sonnet — gera patterns PRESCRITIVOS (error_patterns, anti_patterns, entity_defaults) em `/memories/learned/patterns.xml`. Input: sessoes + memorias com correction_count>0 |
-| `services/pattern_analyzer.py` (profile) | `USE_BEHAVIORAL_PROFILE` | `true` | Gera user.xml (Tier 1) com perfil comportamental. Reutiliza Sonnet do patterns. Threshold: 5 sessoes |
-| `services/sentiment_detector.py` | `USE_SENTIMENT_DETECTION` | `false` | Detecta frustracao via regex, injeta instrucao de tom. Zero custo API |
-| `services/memory_consolidator.py` | `USE_MEMORY_CONSOLIDATION` | `true` | Consolida memorias redundantes via Sonnet quando >15 arquivos ou >6000 chars. Custo ~$0.006. 395 LOC |
-| `services/knowledge_graph_service.py` | `MEMORY_KNOWLEDGE_GRAPH` | `true` | Extrai entidades + relacoes de memorias (3 layers: regex/Voyage/Sonnet). Query multi-hop. 806 LOC. `strip_xml_tags()` exportada para uso externo |
-| (routes.py + pattern_analyzer.py) | `USE_POST_SESSION_EXTRACTION` | `true` | Extrai conhecimento organizacional pos-sessao via Sonnet (background). Salva termos/cargos/regras como memorias empresa (user_id=0). Trigger: a cada exchange (min 3 msgs) |
-| `services/insights_service.py` | `USE_AGENT_INSIGHTS` | `true` | Metricas de memoria (utilization, decay, orphans). Endpoint `/insights/memory`. 841 LOC |
-| `services/intersession_briefing.py` | `USE_COMMIT_BRIEFING` | `true` | Injeta commits recentes (git log -5) no briefing inter-sessao. Custo zero |
-| (client.py) | `PENDENCIA_TTL_DAYS` | `7` | Pendencias de sessoes mais antigas que N dias sao auto-removidas |
+### Services (12 arquivos, 5.8K LOC)
+Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
+Todos controlados por feature flags em `config/feature_flags.py`.
 
 ### MCP Tools de memoria (memory_mcp_tool.py v1.3.0, 11 operacoes)
 | Tool | O que faz |

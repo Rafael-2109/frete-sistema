@@ -193,8 +193,9 @@ Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de de
 - `app/carvia/CLAUDE.md` — ~13.8K LOC, 26 arquivos, 32 templates
 - `app/financeiro/CLAUDE.md` — ~43.5K LOC, 75 arquivos
 - `app/odoo/CLAUDE.md` — ~17.9K LOC, 41 arquivos
-- `app/agente/CLAUDE.md` — ~20.7K LOC, 41 arquivos
+- `app/agente/CLAUDE.md` — ~20.7K LOC, 41 arquivos (+ `services/CLAUDE.md` — 5.8K LOC, 12 arquivos)
 - `app/seguranca/CLAUDE.md` — ~2K LOC, 14 arquivos, 8 templates
+- `app/teams/CLAUDE.md` — ~1.8K LOC, 4 arquivos
 
 **Planejados (ainda nao criados):**
 - `app/recebimento/CLAUDE.md` — P0 (maior modulo sem CLAUDE.md)

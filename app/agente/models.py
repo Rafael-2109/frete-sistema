@@ -658,7 +658,7 @@ class AgentMemoryVersion(db.Model):
         content: Conteúdo da versão anterior
         version: Número da versão (1, 2, 3...)
         changed_at: Timestamp da mudança
-        changed_by: Quem fez a mudança ('user', 'haiku', 'claude')
+        changed_by: Quem fez a mudança ('user', 'sonnet', 'claude')
     """
     __tablename__ = 'agent_memory_versions'
 
@@ -680,7 +680,7 @@ class AgentMemoryVersion(db.Model):
     changed_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
 
     # Quem fez a mudança
-    changed_by = db.Column(db.String(50), nullable=True)  # 'user', 'haiku', 'claude'
+    changed_by = db.Column(db.String(50), nullable=True)  # 'user', 'sonnet', 'claude'
 
     # Relacionamento com AgentMemory (cascade delete via FK)
     memory = db.relationship(
@@ -724,7 +724,7 @@ class AgentMemoryVersion(db.Model):
         Args:
             memory_id: ID da memória
             content: Conteúdo a ser versionado
-            changed_by: Quem fez a mudança ('user', 'haiku', 'claude')
+            changed_by: Quem fez a mudança ('user', 'sonnet', 'claude')
 
         Returns:
             Instância de AgentMemoryVersion criada
@@ -790,7 +790,7 @@ class AgentMemoryEntity(db.Model):
         - produto: Nome normalizado
         - cliente: Nome normalizado
         - fornecedor: Nome normalizado
-        - regra: Regra de negócio (semântico, via Haiku)
+        - regra: Regra de negócio (semântico, via Sonnet)
     """
     __tablename__ = 'agent_memory_entities'
 
@@ -876,7 +876,7 @@ class AgentMemoryEntityRelation(db.Model):
 
     relation_type:
         - 'co_occurs': entidades coocorrem na mesma memória (default)
-        - Semânticos via Haiku: 'atrasa_para', 'melhor_para', 'fornece', etc.
+        - Semânticos via Sonnet: 'atrasa_para', 'melhor_para', 'fornece', etc.
     """
     __tablename__ = 'agent_memory_entity_relations'
 

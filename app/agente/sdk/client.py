@@ -967,7 +967,7 @@ Nunca invente informações."""
         """
         D6: Self-Correction — valida coerência da resposta antes de entregar.
 
-        Usa Haiku (20x mais barato) para verificar:
+        Usa Sonnet (4.6) para verificar:
         - Números/valores coerentes entre si
         - Contradições internas na resposta
         - Informação crítica faltante (ex: perguntou X, respondeu sobre Y)
@@ -992,8 +992,8 @@ Nunca invente informações."""
             client = anthropic.Anthropic()
 
             validation = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=300,
+                model="claude-sonnet-4-6",
+                max_tokens=2000,
                 messages=[{
                     "role": "user",
                     "content": (
