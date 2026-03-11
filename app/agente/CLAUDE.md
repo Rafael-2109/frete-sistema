@@ -122,6 +122,7 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 | Service | Flag | Default | O que faz |
 |---------|------|---------|-----------|
 | `services/pattern_analyzer.py` | `USE_PATTERN_LEARNING` | `true` | Analisa sessoes via Sonnet — gera patterns PRESCRITIVOS (error_patterns, anti_patterns, entity_defaults) em `/memories/learned/patterns.xml`. Input: sessoes + memorias com correction_count>0 |
+| `services/pattern_analyzer.py` (profile) | `USE_BEHAVIORAL_PROFILE` | `true` | Gera user.xml (Tier 1) com perfil comportamental. Reutiliza Sonnet do patterns. Threshold: 5 sessoes |
 | `services/sentiment_detector.py` | `USE_SENTIMENT_DETECTION` | `false` | Detecta frustracao via regex, injeta instrucao de tom. Zero custo API |
 | `services/memory_consolidator.py` | `USE_MEMORY_CONSOLIDATION` | `true` | Consolida memorias redundantes via Sonnet quando >15 arquivos ou >6000 chars. Custo ~$0.006. 395 LOC |
 | `services/knowledge_graph_service.py` | `MEMORY_KNOWLEDGE_GRAPH` | `true` | Extrai entidades + relacoes de memorias (3 layers: regex/Voyage/Sonnet). Query multi-hop. 806 LOC. `strip_xml_tags()` exportada para uso externo |

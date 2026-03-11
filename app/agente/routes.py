@@ -963,6 +963,22 @@ def run_post_session_processing(
         logger.warning(f"[POST_SESSION] Erro na análise de padrões (ignorado): {pattern_error}")
 
     # =================================================================
+    # Behavioral Profile (user.xml — Tier 1, SEMPRE injetado)
+    # =================================================================
+    try:
+        from .config.feature_flags import USE_BEHAVIORAL_PROFILE, BEHAVIORAL_PROFILE_THRESHOLD
+        if USE_BEHAVIORAL_PROFILE:
+            from .services.pattern_analyzer import should_generate_profile, generate_and_save_profile
+            if should_generate_profile(user_id, BEHAVIORAL_PROFILE_THRESHOLD):
+                logger.info(
+                    f"[POST_SESSION] Trigger geração de perfil para usuário {user_id} "
+                    f"(threshold={BEHAVIORAL_PROFILE_THRESHOLD})"
+                )
+                generate_and_save_profile(app=app, user_id=user_id)
+    except Exception as profile_err:
+        logger.warning(f"[POST_SESSION] Erro geração perfil (ignorado): {profile_err}")
+
+    # =================================================================
     # PRD v2.1: Extração pós-sessão de conhecimento organizacional
     # =================================================================
     try:

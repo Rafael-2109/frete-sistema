@@ -93,6 +93,12 @@ USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "true").lower() == "t
 # Analisa quando total_sessions % threshold == 0
 PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "10"))
 
+# Behavioral Profile — gera user.xml (Tier 1) com perfil comportamental
+# Reutiliza mesma chamada Sonnet do patterns (zero custo adicional quando coincidem)
+# Threshold menor que patterns (5 vs 10) para perfil mais rapido
+USE_BEHAVIORAL_PROFILE = os.getenv("AGENT_BEHAVIORAL_PROFILE", "true").lower() == "true"
+BEHAVIORAL_PROFILE_THRESHOLD = int(os.getenv("AGENT_BEHAVIORAL_PROFILE_THRESHOLD", "5"))
+
 # Extracao pos-sessao de conhecimento organizacional (PRD v2.1)
 # Analisa TODAS as mensagens via Sonnet para extrair: definicoes de termos,
 # cargos, regras de negocio, correcoes factuais. Salva como memorias empresa (user_id=0).

@@ -100,6 +100,12 @@
       Use para conhecimento que beneficia TODOS, nao para preferencias individuais.
       Preferencias pessoais continuam em /memories/preferences.xml (individual).
       Se nao salvou, a extracao automatica pega — mas salvar na hora e melhor.
+
+      <user_profile_note>
+        user.xml e gerado AUTOMATICAMENTE a cada ~5 sessoes com base nas suas interacoes.
+        Voce NAO precisa criar user.xml. Se o usuario pedir ajuste, use save_memory.
+        O sistema incorpora mudancas manuais na proxima geracao automatica.
+      </user_profile_note>
     </role_awareness>
 
     <reflection_bank>

@@ -533,6 +533,255 @@ def _save_patterns_to_memory(
     except Exception as e:
         logger.warning(f"[PATTERNS] Erro ao salvar memory: {e}")
 
+    # Salvar user_profile TAMBÉM como /memories/user.xml (Tier 1 — SEMPRE injetado)
+    profile = patterns.get('user_profile', {})
+    if profile and isinstance(profile, dict) and profile.get('resumo'):
+        try:
+            _save_profile_as_user_xml(user_id, profile, sessions_analyzed, confianca)
+        except Exception as e:
+            logger.warning(f"[PATTERNS] Erro ao salvar user.xml: {e}")
+
+
+def _save_profile_as_user_xml(
+    user_id: int,
+    profile: Dict[str, Any],
+    sessions_analyzed: int,
+    confianca: str,
+) -> None:
+    """
+    Salva o user_profile como /memories/user.xml (Tier 1 — SEMPRE injetado).
+
+    Formato conciso (~600 chars) para injeção eficiente no system prompt.
+    importance_score=0.9, category='permanent' (sem decay).
+
+    Args:
+        user_id: ID do usuário
+        profile: Dict com resumo, atividades_frequentes, clientes_principais, etc.
+        sessions_analyzed: Número de sessões analisadas
+        confianca: Nível de confiança (alta/media/baixa)
+    """
+    from ..models import AgentMemory
+
+    path = "/memories/user.xml"
+    timestamp = agora_utc_naive().strftime('%d/%m/%Y')
+
+    # Formatar atividades
+    atividades_xml = ""
+    for a in profile.get('atividades_frequentes', []):
+        ativ = _xml_escape(a.get('atividade', ''))
+        freq = _xml_escape(a.get('frequencia', ''))
+        if ativ:
+            atividades_xml += f'\n    <atividade frequencia="{freq}">{ativ}</atividade>'
+
+    # Formatar clientes
+    clientes_xml = ""
+    for c in profile.get('clientes_principais', []):
+        nome = _xml_escape(c.get('nome', ''))
+        ctx = _xml_escape(c.get('contexto', ''))
+        if nome:
+            clientes_xml += f'\n    <cliente contexto="{ctx}">{nome}</cliente>'
+
+    # Formatar insights
+    insights_xml = ""
+    for ins in profile.get('insights', []):
+        if ins:
+            insights_xml += f'\n    <insight>{_xml_escape(ins)}</insight>'
+
+    resumo = _xml_escape(profile.get('resumo', ''))
+    contextualizacao = _xml_escape(profile.get('contextualizacao_para_agente', ''))
+
+    content = f"""<user_profile updated_at="{timestamp}" confidence="{confianca}" sessions="{sessions_analyzed}">
+  <resumo>{resumo}</resumo>
+  <atividades>{atividades_xml}
+  </atividades>
+  <clientes>{clientes_xml}
+  </clientes>
+  <insights>{insights_xml}
+  </insights>
+  <contextualizacao>{contextualizacao}</contextualizacao>
+</user_profile>"""
+
+    try:
+        existing = AgentMemory.get_by_path(user_id, path)
+        if existing:
+            existing.content = content
+            existing.updated_at = agora_utc_naive()
+        else:
+            mem = AgentMemory.create_file(user_id, path, content)
+            mem.importance_score = 0.9
+            mem.category = 'permanent'
+
+        logger.info(f"[PROFILE] user.xml salvo para usuário {user_id} (confiança={confianca})")
+    except Exception as e:
+        logger.warning(f"[PROFILE] Erro ao salvar user.xml: {e}")
+        return
+
+    # Embedding best-effort
+    try:
+        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+        if MEMORY_SEMANTIC_SEARCH:
+            from ..tools.memory_mcp_tool import _embed_memory_best_effort
+            _embed_memory_best_effort(user_id, path, content)
+    except Exception as e:
+        logger.debug(f"[PROFILE] Embedding user.xml falhou (ignorado): {e}")
+
+
+def should_generate_profile(user_id: int, threshold: int = 5) -> bool:
+    """
+    Verifica se é hora de gerar/atualizar o perfil comportamental (user.xml).
+
+    Threshold menor que patterns (5 vs 10) para perfil mais rápido.
+
+    Critérios:
+    1. user.xml NÃO existe E user tem >= 3 sessões → True
+    2. user.xml existe: sessões desde updated_at >= threshold → True
+    3. Fallback: total de sessões é múltiplo de threshold → True
+
+    Args:
+        user_id: ID do usuário
+        threshold: A cada N sessões, regenera perfil
+
+    Returns:
+        True se deve gerar/atualizar perfil
+    """
+    try:
+        from ..models import AgentSession, AgentMemory
+
+        total_sessions = AgentSession.query.filter_by(user_id=user_id).count()
+        if total_sessions < 3:
+            return False
+
+        user_xml = AgentMemory.get_by_path(user_id, "/memories/user.xml")
+
+        # Se user.xml não existe e tem sessões suficientes → gerar
+        if not user_xml:
+            logger.info(
+                f"[PROFILE] Usuário {user_id}: user.xml não existe, "
+                f"{total_sessions} sessões → trigger"
+            )
+            return True
+
+        # Se existe: contar sessões desde a última atualização
+        if user_xml.updated_at:
+            sessions_since = AgentSession.query.filter(
+                AgentSession.user_id == user_id,
+                AgentSession.updated_at > user_xml.updated_at,
+            ).count()
+
+            if sessions_since >= threshold:
+                logger.info(
+                    f"[PROFILE] Usuário {user_id}: {sessions_since} sessões "
+                    f"desde última atualização → trigger"
+                )
+                return True
+
+        # Fallback: múltiplo de threshold
+        if total_sessions % threshold == 0:
+            return True
+
+        return False
+
+    except Exception as e:
+        logger.warning(f"[PROFILE] Erro ao verificar threshold: {e}")
+        return False
+
+
+def generate_and_save_profile(app, user_id: int) -> bool:
+    """
+    Gera perfil comportamental e salva como /memories/user.xml.
+
+    Reutiliza a MESMA chamada Sonnet de analyze_patterns() — quando patterns
+    e profile trigam juntos, custo adicional é zero.
+
+    Se should_analyze_patterns() também é True, analyze_and_save() já chama
+    _save_patterns_to_memory() que inclui _save_profile_as_user_xml().
+    Esta função é para quando SÓ o profile triga (sem patterns).
+
+    Args:
+        app: Flask app
+        user_id: ID do usuário
+
+    Returns:
+        True se perfil foi salvo, False caso contrário
+    """
+    try:
+        from ..models import AgentSession, AgentMemory
+        from app import db
+
+        with app.app_context():
+            # Carregar sessões (mesma query de analyze_and_save)
+            sessions = AgentSession.query.filter_by(
+                user_id=user_id
+            ).order_by(
+                AgentSession.updated_at.desc()
+            ).limit(MAX_SESSIONS_TO_ANALYZE).all()
+
+            if len(sessions) < 3:
+                return False
+
+            sessions_data = []
+            for sess in sessions:
+                sessions_data.append({
+                    'session_id': sess.session_id,
+                    'created_at': sess.created_at.strftime('%d/%m/%Y') if sess.created_at else '',
+                    'messages': sess.get_messages(),
+                    'summary': sess.get_summary(),
+                    'message_count': sess.message_count,
+                })
+
+            # Carregar correções
+            corrections = []
+            try:
+                correction_memories = AgentMemory.query.filter(
+                    AgentMemory.user_id == user_id,
+                    AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.correction_count > 0,
+                ).order_by(
+                    AgentMemory.correction_count.desc()
+                ).limit(10).all()
+
+                for mem in correction_memories:
+                    corrections.append({
+                        'path': mem.path,
+                        'content': mem.content or '',
+                        'correction_count': mem.correction_count,
+                    })
+            except Exception:
+                pass
+
+            # Chamar analyze_patterns() — retorna dict com user_profile
+            patterns = analyze_patterns(sessions_data, user_id, corrections=corrections)
+            if not patterns:
+                return False
+
+            # Extrair user_profile e salvar como user.xml
+            profile = patterns.get('user_profile', {})
+            if not profile or not profile.get('resumo'):
+                logger.debug(f"[PROFILE] Sonnet não gerou user_profile para usuário {user_id}")
+                return False
+
+            sessions_analyzed = len(sessions_data)
+            confianca = patterns.get('confianca', 'baixa')
+
+            _save_profile_as_user_xml(user_id, profile, sessions_analyzed, confianca)
+
+            db.session.commit()
+            logger.info(
+                f"[PROFILE] Perfil gerado para usuário {user_id} "
+                f"({sessions_analyzed} sessões analisadas)"
+            )
+            return True
+
+    except Exception as e:
+        logger.warning(f"[PROFILE] Erro ao gerar perfil: {e}")
+        try:
+            with app.app_context():
+                from app import db
+                db.session.rollback()
+        except Exception:
+            pass
+        return False
+
 
 def _xml_escape(text: str) -> str:
     """Escapa caracteres especiais para XML."""
