@@ -278,7 +278,7 @@ def listar_permissoes():
     # Listar usuarios disponiveis (excluindo admin/gerente)
     from app.auth.models import Usuario
     usuarios = Usuario.query.filter(
-        Usuario.ativo == True,
+        Usuario.status == 'ativo',
         ~Usuario.perfil.in_(['administrador', 'gerente_comercial'])
     ).order_by(Usuario.nome).all()
 
