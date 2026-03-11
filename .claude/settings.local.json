@@ -149,7 +149,9 @@
       "mcp__sentry__find_projects",
       "mcp__sentry__get_doc",
       "Bash(/home/rafaelnascimento/.local/bin/sentry-cli --version)",
-      "Bash(/home/rafaelnascimento/.local/bin/sentry-cli projects:*)"
+      "Bash(/home/rafaelnascimento/.local/bin/sentry-cli projects:*)",
+      "Bash(find /home/rafaelnascimento/projetos/frete_sistema -name \"*.py\" -type f -exec grep -l \"app_context\\(\\)\" {} \\\\; | head -20)",
+      "mcp__sentry__update_issue"
     ],
     "deny": []
   },

@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover - allow running without Flask-Session
 
 
 import os # noqa: E402
-from flask import Flask, request, g # noqa: E402
+from flask import Flask, has_request_context, request, g # noqa: E402
 from flask_sqlalchemy import SQLAlchemy # noqa: E402
 from flask_login import LoginManager # noqa: E402
 from flask_wtf.csrf import CSRFProtect # noqa: E402
@@ -911,6 +911,17 @@ def create_app(config_name=None):
     @app.context_processor
     def inject_permission_helpers():
         """Injeta helpers de permissão nos templates Jinja2"""
+        if not has_request_context():
+            return {
+                "is_vendedor": False,
+                "is_comercial_only": False,
+                "is_admin_comercial": False,
+                "user_perfil": None,
+                "count_pendentes_motochefe": 0,
+                "carvia_vencidos": 0,
+                "carvia_vencimento_dia": 0,
+            }
+
         from flask_login import current_user
 
         try:

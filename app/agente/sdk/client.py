@@ -2471,6 +2471,27 @@ Nunca invente informações."""
                 )
             # Nota: streaming_done_event é None no path persistente (DC-5)
 
+        except CLINotFoundError as e:
+            # CLINotFoundError é subclasse de CLIConnectionError — DEVE vir antes
+            elapsed_total = time.time() - state.stream_start_time
+            logger.critical(f"[AGENT_SDK_PERSISTENT] CLI não encontrada {elapsed_total:.1f}s: {e}")
+            yield StreamEvent(
+                type='error',
+                content="Erro crítico: CLI do agente não encontrada.",
+                metadata={'error_type': 'cli_not_found', 'elapsed_seconds': elapsed_total}
+            )
+            if not state.done_emitted:
+                state.done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={'text': state.full_text, 'input_tokens': state.input_tokens,
+                             'output_tokens': state.output_tokens, 'total_cost_usd': 0,
+                             'session_id': state.result_session_id,
+                             'error_recovery': True},
+                    metadata={'error_type': 'cli_not_found'}
+                )
+            # Nota: streaming_done_event é None no path persistente (DC-5)
+
         except CLIConnectionError as e:
             # Fix PYTHON-FLASK-J/H: CLI subprocess killed by SIGTERM (gunicorn worker
             # recycling). Catch explicitly to: (1) log as warning not error since it's
@@ -2529,25 +2550,6 @@ Nunca invente informações."""
                     metadata={'error_type': 'cli_connection_error'}
                 )
             # Nota: streaming_done_event é None no path persistente (DC-5)
-
-        except CLINotFoundError as e:
-            elapsed_total = time.time() - state.stream_start_time
-            logger.critical(f"[AGENT_SDK_PERSISTENT] CLI não encontrada {elapsed_total:.1f}s: {e}")
-            yield StreamEvent(
-                type='error',
-                content="Erro crítico: CLI do agente não encontrada.",
-                metadata={'error_type': 'cli_not_found', 'elapsed_seconds': elapsed_total}
-            )
-            if not state.done_emitted:
-                state.done_emitted = True
-                yield StreamEvent(
-                    type='done',
-                    content={'text': state.full_text, 'input_tokens': state.input_tokens,
-                             'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
-                             'error_recovery': True},
-                    metadata={'error_type': 'cli_not_found'}
-                )
 
         except CLIJSONDecodeError as e:
             elapsed_total = time.time() - state.stream_start_time
@@ -2805,6 +2807,28 @@ Nunca invente informações."""
             if state.streaming_done_event:
                 state.streaming_done_event.set()
 
+        except CLINotFoundError as e:
+            # CLINotFoundError é subclasse de CLIConnectionError — DEVE vir antes
+            elapsed_total = time.time() - state.stream_start_time
+            logger.critical(f"[AGENT_SDK] CLI não encontrada {elapsed_total:.1f}s: {e}")
+            yield StreamEvent(
+                type='error',
+                content="Erro crítico: CLI do agente não encontrada.",
+                metadata={'error_type': 'cli_not_found', 'elapsed_seconds': elapsed_total}
+            )
+            if not state.done_emitted:
+                state.done_emitted = True
+                yield StreamEvent(
+                    type='done',
+                    content={'text': state.full_text, 'input_tokens': state.input_tokens,
+                             'output_tokens': state.output_tokens, 'total_cost_usd': 0,
+                             'session_id': state.result_session_id,
+                             'error_recovery': True},
+                    metadata={'error_type': 'cli_not_found'}
+                )
+            if state.streaming_done_event:
+                state.streaming_done_event.set()
+
         except CLIConnectionError as e:
             # Fix PYTHON-FLASK-J/H: CLI subprocess killed by SIGTERM (gunicorn worker
             # recycling). Same fix as persistent path — emit error+done immediately
@@ -2844,27 +2868,6 @@ Nunca invente informações."""
                         'error_recovery': True,
                     },
                     metadata={'error_type': 'cli_connection_error'}
-                )
-            if state.streaming_done_event:
-                state.streaming_done_event.set()
-
-        except CLINotFoundError as e:
-            elapsed_total = time.time() - state.stream_start_time
-            logger.critical(f"[AGENT_SDK] CLI não encontrada {elapsed_total:.1f}s: {e}")
-            yield StreamEvent(
-                type='error',
-                content="Erro crítico: CLI do agente não encontrada.",
-                metadata={'error_type': 'cli_not_found', 'elapsed_seconds': elapsed_total}
-            )
-            if not state.done_emitted:
-                state.done_emitted = True
-                yield StreamEvent(
-                    type='done',
-                    content={'text': state.full_text, 'input_tokens': state.input_tokens,
-                             'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
-                             'error_recovery': True},
-                    metadata={'error_type': 'cli_not_found'}
                 )
             if state.streaming_done_event:
                 state.streaming_done_event.set()

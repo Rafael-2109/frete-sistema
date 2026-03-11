@@ -477,7 +477,7 @@ def simular_separacao(
                 'estoque_disponivel': estoque_disp,
                 'rota': rota,
                 'sub_rota': sub_rota,
-                'observacoes': truncar_observacao(item.observ_ped_1),
+                'observ_ped_1': truncar_observacao(item.observ_ped_1),
                 # Dados do cliente (do primeiro item)
                 'cnpj_cpf': item.cnpj_cpf,
                 'raz_social_red': item.raz_social_red,
@@ -620,7 +620,7 @@ def executar_separacao(simulacao: dict) -> dict:
                 pallet=item['pallets'],
                 rota=item['rota'],
                 sub_rota=item['sub_rota'],
-                observ_ped_1=item.get('observacoes'),
+                observ_ped_1=item.get('observ_ped_1'),
                 roteirizacao=None,
                 expedicao=data_expedicao,
                 agendamento=data_agendamento,

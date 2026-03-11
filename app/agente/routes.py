@@ -71,14 +71,11 @@ HEARTBEAT_INTERVAL_SECONDS = 10  # Envia heartbeat a cada 10s (reduzido de 20s)
 _health_cache = {'result': None, 'timestamp': 0}
 _HEALTH_CACHE_TTL = 300  # segundos (5 min — models.retrieve não gasta tokens)
 
-# Timeout global do stream (9 minutos - deixa 1 min de margem antes do timeout do Render)
+# Deadline com renewal: teto absoluto + inatividade renovável
+# MAX_STREAM_DURATION_SECONDS: teto absoluto (540s = 9 min, margem de 1 min antes do Render 600s)
+# INACTIVITY_TIMEOUT_SECONDS: deadline renovável — cada evento real renova. Heartbeats NÃO renovam.
 MAX_STREAM_DURATION_SECONDS = 540
-
-# FIX: Timeout de inatividade do SDK - se não receber eventos em X segundos, considera travado
-# Este é o timeout CURTO para detectar quando o SDK para de emitir eventos
-# Aumentado para 240s (4 min) — skills complexas (SQL analítico, API Odoo, cotação de frete)
-# podem demorar vários minutos sem emitir eventos enquanto processam
-SDK_INACTIVITY_TIMEOUT_SECONDS = 240
+INACTIVITY_TIMEOUT_SECONDS = 240  # 4 min sem evento real = timeout (mantém valor original)
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -756,25 +753,45 @@ def _stream_chat_response(
         thread = Thread(target=run_async_stream, daemon=True)
         thread.start()
 
-        # FEAT-030: Loop com heartbeats + timeout global + detecção de thread morta
-        last_heartbeat = time.time()
-        last_event_time = time.time()  # Rastrear último evento recebido
-        stream_start_time = time.time()
+        # Deadline com renewal: inatividade renovável + teto absoluto.
+        # Eventos reais renovam o deadline de inatividade. Heartbeats NÃO renovam.
+        now = time.time()
+        last_heartbeat = now
+        inactivity_deadline = now + INACTIVITY_TIMEOUT_SECONDS
+        absolute_deadline = now + MAX_STREAM_DURATION_SECONDS
         event_count = 0
         consecutive_empty = 0  # Contador de timeouts consecutivos sem eventos
 
         while True:
-            # SEGURANÇA: Timeout global para evitar travamento indefinido
-            elapsed = time.time() - stream_start_time
-            if elapsed > MAX_STREAM_DURATION_SECONDS:
-                logger.warning(f"[AGENTE] Stream timeout após {elapsed:.1f}s")
-                yield _sse_event('error', {'message': 'Tempo limite excedido (9 min)'})
+            # Deadline check: menor entre inatividade e teto absoluto
+            now = time.time()
+            effective_deadline = min(inactivity_deadline, absolute_deadline)
+            if now > effective_deadline:
+                if now > absolute_deadline:
+                    logger.warning(
+                        f"[AGENTE] Absolute deadline exceeded "
+                        f"({MAX_STREAM_DURATION_SECONDS}s)"
+                    )
+                    yield _sse_event('error', {
+                        'message': 'Tempo limite excedido (9 min)'
+                    })
+                else:
+                    inact_elapsed = INACTIVITY_TIMEOUT_SECONDS
+                    logger.warning(
+                        f"[AGENTE] Inactivity deadline exceeded "
+                        f"({inact_elapsed}s sem eventos reais)"
+                    )
+                    yield _sse_event('error', {
+                        'message': 'O processamento parece ter travado. Tente novamente.',
+                        'sdk_stalled': True,
+                        'inactivity_seconds': inact_elapsed
+                    })
                 break
 
             try:
-                # Timeout para permitir heartbeats (usa o menor entre heartbeat e tempo restante)
-                remaining_time = MAX_STREAM_DURATION_SECONDS - elapsed
-                queue_timeout = min(HEARTBEAT_INTERVAL_SECONDS, remaining_time, 30)  # Max 30s
+                # Timeout para permitir heartbeats e deadline checks
+                remaining = effective_deadline - now
+                queue_timeout = min(HEARTBEAT_INTERVAL_SECONDS, remaining, 30)  # Max 30s
                 event = event_queue.get(timeout=queue_timeout)
 
                 if event is None:  # Fim do stream
@@ -782,8 +799,11 @@ def _stream_chat_response(
                     break
 
                 event_count += 1
-                last_event_time = time.time()
                 consecutive_empty = 0  # Reset contador
+
+                # RENEWAL: evento real renova deadline de inatividade
+                inactivity_deadline = time.time() + INACTIVITY_TIMEOUT_SECONDS
+
                 yield event
 
                 # FIX-7: Fechar SSE após evento 'done' — não esperar None indefinidamente.
@@ -791,9 +811,9 @@ def _stream_chat_response(
                 if isinstance(event, str) and 'event: done\n' in event:
                     # Best-effort: espera até 3s por evento de suggestions
                     try:
-                        remaining = event_queue.get(timeout=3)
-                        if remaining is not None:
-                            yield remaining
+                        remaining_evt = event_queue.get(timeout=3)
+                        if remaining_evt is not None:
+                            yield remaining_evt
                             event_count += 1
                     except Empty:
                         pass
@@ -817,25 +837,8 @@ def _stream_chat_response(
                     })
                     break
 
-                # =================================================================
-                # DETECÇÃO DE SDK TRAVADO (INATIVIDADE)
-                # =================================================================
-                # Se ficou muito tempo sem eventos REAIS da fila, o SDK está
-                # travado. Nota: heartbeats NÃO atualizam last_event_time porque
-                # são gerados aqui no except Empty, não vêm da fila.
-                # =================================================================
-                time_since_last_event = time.time() - last_event_time
-                if time_since_last_event > SDK_INACTIVITY_TIMEOUT_SECONDS:
-                    logger.warning(
-                        f"[AGENTE] SDK inativo há {time_since_last_event:.0f}s - "
-                        f"forçando timeout (thread viva mas sem progresso)"
-                    )
-                    yield _sse_event('error', {
-                        'message': 'O processamento parece ter travado. Tente novamente.',
-                        'sdk_stalled': True,
-                        'inactivity_seconds': int(time_since_last_event)
-                    })
-                    break
+                # Inatividade e deadline absoluto são checados no topo do loop.
+                # Heartbeats NÃO renovam o deadline — apenas eventos reais renovam.
 
                 # FEAT-030: Envia heartbeat para manter conexão viva
                 current_time = time.time()

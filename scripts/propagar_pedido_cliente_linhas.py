@@ -56,7 +56,7 @@ def main():
 
         # Busca dados dos pedidos
         orders = conn.execute_kw('sale.order', 'read', [order_ids], {
-            'fields': ['name', 'l10n_br_pedido_compra', 'order_line']
+            'fields': ['name', 'l10n_br_pedido_compra', 'order_line', 'locked']
         })
 
         total_linhas_atualizadas = 0
@@ -84,6 +84,11 @@ def main():
             ])
 
             if not linhas_sem:
+                continue
+
+            # Verificar se o pedido está locked (confirmado) — não tentar write
+            if order.get('locked'):
+                print(f"\n⚠️  {order_name} - LOCKED (pedido confirmado), pulando {len(linhas_sem)} linhas")
                 continue
 
             pedidos_afetados += 1

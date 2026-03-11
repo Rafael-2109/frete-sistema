@@ -844,7 +844,9 @@ def _obter_resposta_agente_streaming(
     # Pool key para path persistente (ClaudeSDKClient por sessão)
     our_session_id = session.session_id if session else None
 
-    MAX_TEAMS_RESPONSE_SECONDS = 240
+    # Deadline com renewal: timeout de inatividade renovável + teto absoluto
+    INACTIVITY_TIMEOUT = 240   # 4 min sem atividade = timeout (mantém valor original)
+    MAX_ABSOLUTE = 600         # 10 min teto absoluto (safety net)
 
     try:
         async def _stream_with_flush():
@@ -852,6 +854,8 @@ def _obter_resposta_agente_streaming(
             result_session_id = sdk_session_id
             errors = []
             last_flush_time = time.monotonic()
+            last_activity = time.monotonic()  # Renewal: atualizado a cada chunk
+            stream_start = time.monotonic()   # Absolute: fixo
 
             # Helper: flush com app_context para daemon thread.
             # No daemon thread, não há Flask app_context — wrapping necessário.
@@ -874,7 +878,10 @@ def _obter_resposta_agente_streaming(
                         "[TEAMS-STREAM] Flush ignorado: sem app_context disponível"
                     )
 
-            async for event in client.stream_response(
+            # Deadline com renewal: aguarda cada chunk com timeout de inatividade.
+            # Se nenhum chunk chegar em INACTIVITY_TIMEOUT, dispara TimeoutError.
+            # Se ultrapassar MAX_ABSOLUTE total, dispara TimeoutError independente.
+            stream_iter = client.stream_response(
                 prompt=prompt_completo,
                 user_name=usuario,
                 model=TEAMS_DEFAULT_MODEL,
@@ -882,7 +889,50 @@ def _obter_resposta_agente_streaming(
                 can_use_tool=can_use_tool,
                 user_id=user_id,
                 our_session_id=our_session_id,
-            ):
+            ).__aiter__()
+
+            while True:
+                # Calcular timeout para este chunk: menor entre
+                # inatividade restante e teto absoluto restante
+                now_mono = time.monotonic()
+                abs_remaining = MAX_ABSOLUTE - (now_mono - stream_start)
+                inact_remaining = INACTIVITY_TIMEOUT - (now_mono - last_activity)
+                chunk_timeout = min(abs_remaining, inact_remaining)
+
+                if chunk_timeout <= 0:
+                    reason = (
+                        "absolute" if abs_remaining <= 0
+                        else "inactivity"
+                    )
+                    logger.warning(
+                        f"[TEAMS-STREAM] Deadline expired ({reason}) "
+                        f"- abs_remaining={abs_remaining:.0f}s "
+                        f"inact_remaining={inact_remaining:.0f}s"
+                    )
+                    raise asyncio.TimeoutError(
+                        f"Deadline expired ({reason})"
+                    )
+
+                try:
+                    event = await asyncio.wait_for(
+                        stream_iter.__anext__(),
+                        timeout=chunk_timeout,
+                    )
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError:
+                    elapsed = time.monotonic() - stream_start
+                    inact = time.monotonic() - last_activity
+                    logger.warning(
+                        f"[TEAMS-STREAM] Chunk timeout "
+                        f"(elapsed={elapsed:.0f}s, "
+                        f"inactivity={inact:.0f}s)"
+                    )
+                    raise
+
+                # Renewal: cada chunk recebido renova deadline de inatividade
+                last_activity = time.monotonic()
+
                 if event.type == 'init':
                     result_session_id = event.content.get('session_id')
 
@@ -935,11 +985,10 @@ def _obter_resposta_agente_streaming(
 
             return full_text, result_session_id
 
+        # Deadline renewal integrado em _stream_with_flush (per-chunk timeout).
+        # Wrapper direto sem asyncio.wait_for externo.
         async def _stream_with_timeout():
-            return await asyncio.wait_for(
-                _stream_with_flush(),
-                timeout=MAX_TEAMS_RESPONSE_SECONDS,
-            )
+            return await _stream_with_flush()
 
         # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
         from app.agente.config.feature_flags import USE_PERSISTENT_SDK_CLIENT
@@ -950,7 +999,7 @@ def _obter_resposta_agente_streaming(
             from app.agente.sdk.client_pool import submit_coroutine
             future = submit_coroutine(_stream_with_timeout())
             resposta_texto, new_sdk_session_id = future.result(
-                timeout=MAX_TEAMS_RESPONSE_SECONDS + 10
+                timeout=MAX_ABSOLUTE + 10
             )
         else:
             # Path v2: event loop efêmero (cria + destrói por chamada)

@@ -45,15 +45,15 @@ substituir por `loop.call_soon_threadsafe(pq.async_event.set)`.
 | Camada | Timeout | Funcao |
 |--------|---------|--------|
 | Heartbeat SSE | 10s | Evita proxy/Render matar conexao idle |
-| SDK inactivity | 240s | Timeout se CLI para de emitir |
-| Stream max | 540s | Teto absoluto do streaming |
+| Inatividade (renewal) | 240s | Renovavel a cada evento/chunk — timeout se parar de emitir |
+| Stream max | 540s (web) / 600s (teams) | Teto absoluto do streaming |
 | None sentinel | finally | Garante que SSE generator termina |
 
 NUNCA remover o `yield None` no `finally` do generator — frontend trava esperando eventos.
 
 **`streaming_done_event`** (`client.py:2627`): `asyncio.Event()` que controla o prompt generator. Se NAO chamar `.set()` em QUALQUER error path, o generator fica preso em `done_event.wait(timeout=600)` → processo zombie por 10min. Chamado em 6 locais nos except handlers + 1 bloco `finally` como rede de seguranca.
 
-**DC-8 (CancelledError bypass)**: `asyncio.CancelledError` e `BaseException` (NAO `Exception`) desde Python 3.9. Teams usa `asyncio.wait_for(timeout=240)` que cancela via `CancelledError` — bypassa TODOS os 5 except handlers. O bloco `finally` em `_stream_response()` garante que `streaming_done_event.set()` SEMPRE e chamado, mesmo para `CancelledError`, `KeyboardInterrupt` e `SystemExit`. **O path persistente (`_stream_response_persistent`) e IMUNE porque `streaming_done_event = None`.**
+**DC-8 (CancelledError bypass)**: `asyncio.CancelledError` e `BaseException` (NAO `Exception`) desde Python 3.9. Teams usa `asyncio.wait_for(timeout=chunk_timeout)` per-chunk que cancela via `CancelledError` — bypassa TODOS os 5 except handlers. O bloco `finally` em `_stream_response()` garante que `streaming_done_event.set()` SEMPRE e chamado, mesmo para `CancelledError`, `KeyboardInterrupt` e `SystemExit`. **O path persistente (`_stream_response_persistent`) e IMUNE porque `streaming_done_event = None`.**
 
 **REGRA**: Ao adicionar NOVO error handler em `_stream_response()`, o `finally` block e a rede de seguranca definitiva — NAO precisa chamar `.set()` no novo handler (mas e boa pratica como defense-in-depth).
 
@@ -82,16 +82,21 @@ Manter o padrao existente em `models.py`: SEMPRE `flag_modified(session, 'data')
 
 ## Hierarquia de Timeouts
 
-Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de falhas:
+Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou causam cascata de falhas:
 
 | Timeout | Valor | Fonte | Funcao |
 |---------|-------|-------|--------|
 | Heartbeat SSE | 10s | `routes.py:68` | Keep-alive para proxy |
 | AskUser web | 55s | `pending_questions.py:30` | Espera resposta do usuario |
 | AskUser Teams | 120s | `feature_flags.py` | Idem, via Adaptive Card |
+| **Web inatividade** | 240s | `routes.py:78` | Renovavel a cada evento real (heartbeats NAO renovam) |
+| **Teams inatividade** | 240s | `services.py:848` | Renovavel a cada chunk recebido |
 | SDK stream_close | 240s | `client.py:547` | Timeout CLI hooks/MCP |
-| Stream max | 540s | `routes.py:75` | Teto absoluto SSE |
+| Web teto absoluto | 540s | `routes.py:77` | Teto absoluto SSE (Render 600s limit) |
+| Teams teto absoluto | 600s | `services.py:849` | Teto absoluto Teams |
 | Render hard limit | 600s | infra | Request timeout do servidor |
+
+**Deadline renewal**: operacoes longas com progresso continuo NAO sao mais mortas pelo timeout fixo. A cada chunk/evento recebido, o deadline de inatividade (120s) e renovado. Apenas inatividade real (2 min sem progresso) ou teto absoluto disparam timeout.
 
 **REGRA**: `USER_RESPONSE_TIMEOUT` (55s) DEVE ser < timeout do SDK (240s). Se >= SDK, o CLI mata o stream antes do usuario responder.
 

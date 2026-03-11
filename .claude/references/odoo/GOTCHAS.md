@@ -438,3 +438,34 @@ else:
     # Produto sem validade - usar lot_name normalmente
     odoo.write('stock.move.line', [line_id], {'lot_name': nome_lote, 'quantity': qtd})
 ```
+
+---
+
+## Campos e Imports Incorretos (Sentry)
+
+Gotchas descobertos via analise de issues do Sentry (Marco/2026):
+
+### Campo `observacoes` inexistente em Separacao
+
+- **ERRADO**: `Separacao.observacoes`
+- **CORRETO**: `observ_ped_1` (observacao do pedido) ou `obs_separacao` (observacao da separacao)
+- **Local**: Model Python / scripts de separacao
+- SEMPRE verificar campo real no schema JSON antes de usar
+
+### Campo `qtd_palletizacao` inexistente em carteira_principal
+
+- **ERRADO**: `qtd_palletizacao`
+- **Tabela**: `carteira_principal` — esse campo NAO EXISTE
+- SEMPRE verificar schema em `.claude/skills/consultando-sql/schemas/tables/carteira_principal.json`
+
+### Campo `validacao_dfe_id` inexistente em match_nf_po_item
+
+- **ERRADO**: `validacao_dfe_id`
+- **CORRETO**: `validacao_id`
+- **Local**: tabela `match_nf_po_item`
+
+### Import path errado para Odoo client
+
+- **ERRADO**: `from app.odoo.utils.odoo_client import ...`
+- **CORRETO**: `from app.odoo.utils.connection import ...`
+- O modulo se chama `connection`, NAO `odoo_client`

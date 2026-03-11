@@ -404,7 +404,6 @@ def detalhe(ocorrencia_id):
     # Esses produtos já são NOSSOS códigos, não precisam de resolução
     produtos_faturamento = []
     if nfd and nfd.tipo_documento == 'NF' and nfd.numero_nf_venda:
-        from app.faturamento.models import FaturamentoProduto
         produtos_faturamento = FaturamentoProduto.query.filter_by(
             numero_nf=str(nfd.numero_nf_venda)
         ).all()

@@ -25,6 +25,11 @@ import anthropic
 logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
+CONSOLIDATION_MAX_TOKENS = 1200  # Tokens max para consolidação inicial
+VERIFICATION_MAX_TOKENS = 800    # Tokens max para verificação de fatos
+RETRY_MAX_TOKENS = 1200          # Tokens max para retry (mesmo que consolidação)
+CONSOLIDATION_MAX_OUTPUT_CHARS = 2000  # Limite de caracteres do output final
+INPUT_LIMIT = 12000  # Limite de input para ambas as chamadas Sonnet
 
 # System prompt estático para consolidação — prompt caching (cache_control ephemeral)
 CONSOLIDATION_SYSTEM_PROMPT = """Voce eh um consolidador de memorias de um sistema de logistica (Nacom Goya).
@@ -333,12 +338,6 @@ def _consolidate_group(
     memories_text = "\n\n---\n\n".join(memory_texts)
 
     # Chamar Sonnet para consolidar
-    # Constantes para limits de output (tokens)
-    CONSOLIDATION_MAX_TOKENS = 1200  # Tokens max para consolidação inicial
-    VERIFICATION_MAX_TOKENS = 800    # Tokens max para verificação de fatos
-    RETRY_MAX_TOKENS = 1200          # Tokens max para retry (mesmo que consolidação)
-    CONSOLIDATION_MAX_OUTPUT_CHARS = 2000  # Limite de caracteres do output final
-    INPUT_LIMIT = 12000  # Limite de input para ambas as chamadas Sonnet
 
     try:
         client = anthropic.Anthropic()

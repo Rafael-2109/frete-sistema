@@ -1430,8 +1430,11 @@ try:
             if actual_user_id != 0:
                 try:
                     from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
-                    maybe_consolidate(actual_user_id)
-                    maybe_move_to_cold(actual_user_id)
+                    _consolidate_user_id = actual_user_id
+                    def _consolidate_and_cold():
+                        maybe_consolidate(_consolidate_user_id)
+                        maybe_move_to_cold(_consolidate_user_id)
+                    _execute_with_context(_consolidate_and_cold)
                 except Exception as consolidation_err:
                     logger.debug(
                         f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"

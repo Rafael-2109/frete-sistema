@@ -48,7 +48,8 @@ Usar `created_at` marca como timeout task esperando resposta do usuario.
 
 ### R7: CancelledError e BaseException
 `asyncio.CancelledError` e `BaseException` desde Python 3.9. `except Exception` NAO captura.
-`asyncio.wait_for(timeout=240)` cancela via CancelledError → bypassa TODOS os except handlers.
+`asyncio.wait_for(timeout=chunk_timeout)` per-chunk cancela via CancelledError → bypassa TODOS os except handlers.
+Deadline renewal: INACTIVITY_TIMEOUT=120s (renovavel) + MAX_ABSOLUTE=600s (teto).
 Usar `finally` para garantias (Event.set, cleanup).
 — FONTE: `services.py:981,992` (DC-8)
 
