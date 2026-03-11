@@ -215,6 +215,21 @@ def processar_mensagem_bot(
     else:
         from app.agente.config.permissions import can_use_tool as agent_can_use_tool
 
+    # C4: Configurar user_id nos ContextVars de MCP tools (Memory + Session)
+    # Sem isso, tools falham com RuntimeError("user_id não definido") se
+    # _build_options() não for chamado (ex: path persistente re-ativado).
+    if teams_user_id:
+        try:
+            from app.agente.tools.memory_mcp_tool import set_current_user_id as set_memory_user_id
+            set_memory_user_id(teams_user_id)
+        except ImportError:
+            pass
+        try:
+            from app.agente.tools.session_search_tool import set_current_user_id as set_session_user_id
+            set_session_user_id(teams_user_id)
+        except ImportError:
+            pass
+
     try:
         # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
         resposta_texto, new_sdk_session_id = _obter_resposta_agente(
@@ -260,6 +275,51 @@ def processar_mensagem_bot(
             except Exception as e:
                 logger.error(f"[TEAMS-BOT] Erro ao salvar sessao: {e}", exc_info=True)
                 # Nao bloqueia resposta se falhar ao salvar
+
+            # C2: Post-session processing (summarization, patterns, extraction, embedding)
+            # Roda em daemon thread para não bloquear resposta do Teams.
+            try:
+                from flask import current_app
+                _app = current_app._get_current_object()
+
+                from threading import Thread
+                from app.agente.routes import run_post_session_processing
+
+                def _teams_post_session():
+                    try:
+                        with _app.app_context():
+                            # Re-fetch session para evitar detached instance
+                            from app.agente.models import AgentSession
+                            fresh_session = AgentSession.query.filter_by(
+                                session_id=teams_session_id
+                            ).first()
+                            if fresh_session:
+                                run_post_session_processing(
+                                    app=_app,
+                                    session=fresh_session,
+                                    session_id=teams_session_id,
+                                    user_id=teams_user_id,
+                                    user_message=mensagem,
+                                    assistant_message=resposta_texto,
+                                )
+                    except Exception as ps_err:
+                        logger.warning(f"[TEAMS-BOT] Post-session processing falhou (ignorado): {ps_err}")
+                    finally:
+                        try:
+                            with _app.app_context():
+                                from app import db
+                                db.session.remove()
+                        except Exception:
+                            pass
+
+                Thread(
+                    target=_teams_post_session,
+                    daemon=True,
+                    name=f"teams-post-session-{teams_user_id}",
+                ).start()
+                logger.info(f"[TEAMS-BOT] Post-session processing disparado em background")
+            except Exception as ps_setup_err:
+                logger.warning(f"[TEAMS-BOT] Erro ao disparar post-session (ignorado): {ps_setup_err}")
 
         if not resposta_texto:
             raise RuntimeError("O agente nao retornou uma resposta")

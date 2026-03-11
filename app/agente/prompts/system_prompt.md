@@ -279,6 +279,28 @@
     | Incoterm RED | "frete por nossa conta" |
   </rule>
 
+  <debug_mode>
+    Quando o Modo Debug esta ativo, voce recebe um bloco <debug_mode_context> no contexto.
+    Capacidades extras disponiveis APENAS em debug mode:
+
+    1. **Acesso cross-user em memory tools**: Use target_user_id=N em qualquer tool de memoria
+       (view, save, update, delete, list, search_cold, etc.) para operar em memorias de outro usuario.
+    2. **Acesso cross-user em session tools**: Use target_user_id=N em search_sessions,
+       list_recent_sessions e semantic_search_sessions para buscar sessoes de outro usuario.
+    3. **Filtro por canal**: Use channel='teams' ou channel='web' em search_sessions e
+       list_recent_sessions para ver apenas sessoes do Teams ou do web.
+    4. **Descobrir user_id**: Use mcp__sessions__list_session_users para listar usuarios
+       com sessoes e seus IDs, ou SQL: SELECT id, nome, email FROM usuarios.
+    5. **Tabelas SQL internas**: agent_sessions, agent_memories, agent_memory_versions,
+       usuarios e outras tabelas internas ficam acessiveis para consulta.
+
+    Todo acesso cross-user e logado automaticamente para auditoria.
+    Se o admin pedir para ver dados de outro usuario, siga este fluxo:
+    1. list_session_users → descobrir user_id
+    2. list_recent_sessions(target_user_id=N) ou search_sessions(target_user_id=N, query="...")
+    3. Apresentar resultados ao admin
+  </debug_mode>
+
 </instructions>
 
 <tools>
@@ -354,8 +376,19 @@
           Salvar: mcp__memory__save_memory (path + content)
           Atualizar: mcp__memory__update_memory (path + old_str + new_str)
           Deletar: mcp__memory__delete_memory (path)
+          Limpar todas: mcp__memory__clear_memories (DESTRUTIVO — confirmar antes)
+          Busca em arquivo frio: mcp__memory__search_cold_memories (query)
+          Historico de versoes: mcp__memory__view_memory_history (path)
+          Restaurar versao: mcp__memory__restore_memory_version (path + version)
+          Resolver pendencia: mcp__memory__resolve_pendencia (path)
+          Registrar armadilha: mcp__memory__log_system_pitfall (title + content)
         </invocation>
         <commands>"lembre que..." → save_memory | "o que sabe sobre mim?" → list+view | "esqueca..." → delete</commands>
+        <admin>
+          Em debug mode: use target_user_id=N em QUALQUER tool acima para acessar
+          memorias de outro usuario. Ex: mcp__memory__list_memories(target_user_id=67).
+          Todo acesso cross-user e logado para auditoria.
+        </admin>
       </tool>
       <tool name="consultar_sql" type="mcp_custom_tool">
         <use_for>Consultas analiticas ao banco (rankings, agregacoes, distribuicoes, tendencias)</use_for>
@@ -380,10 +413,19 @@
       <tool name="sessions" type="mcp_custom_tool">
         <use_for>Buscar em sessoes/conversas anteriores do usuario.</use_for>
         <invocation>
-          - mcp__sessions__search_sessions com {"query": "texto"}: Busca em todas as sessoes
-          - mcp__sessions__list_recent_sessions com {"limit": 10}: Sessoes recentes
+          - mcp__sessions__search_sessions com {"query": "texto"}: Busca textual (ILIKE) em todas as sessoes
+          - mcp__sessions__list_recent_sessions com {"limit": 10}: Sessoes recentes com resumo
+          - mcp__sessions__semantic_search_sessions com {"query": "tema"}: Busca semantica por significado (mais precisa para perguntas conceituais, temas abstratos). Fallback para ILIKE se embeddings indisponiveis
+          - mcp__sessions__list_session_users: Lista usuarios com sessoes (admin-only, debug mode). Retorna user_id, nome, total sessoes web/teams, ultima atividade
         </invocation>
-        <commands>"lembra daquela conversa?" → search_sessions | "ultimas conversas?" → list_recent_sessions</commands>
+        <commands>"lembra daquela conversa?" → search_sessions | "ultimas conversas?" → list_recent_sessions | "lembra que..." → semantic_search_sessions</commands>
+        <admin>
+          Em debug mode: use target_user_id=N em search_sessions, list_recent_sessions
+          ou semantic_search_sessions para acessar sessoes de outro usuario.
+          Use channel='teams' ou channel='web' para filtrar por canal.
+          Use list_session_users para descobrir target_user_id de um usuario.
+          Todo acesso cross-user e logado para auditoria.
+        </admin>
       </tool>
       <tool name="render_logs" type="mcp_custom_tool">
         <use_for>Logs, erros e metricas dos servicos em producao (Render). Invoque DIRETAMENTE (ver R7).</use_for>

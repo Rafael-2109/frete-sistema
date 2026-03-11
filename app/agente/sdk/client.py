@@ -1949,8 +1949,34 @@ Nunca invente informações."""
                                 f"prompt_preview={prompt[:60]}"
                             )
 
-                    if additional_context or correction_hint:
-                        additional_context = (additional_context or "") + correction_hint
+                    # ============================================================
+                    # Debug Mode Context Injection (Camada 2)
+                    # ============================================================
+                    debug_context = ""
+                    try:
+                        from ..config.permissions import get_debug_mode
+                        if get_debug_mode():
+                            debug_context = (
+                                "\n<debug_mode_context>"
+                                "MODO DEBUG ATIVO. Capacidades extras disponiveis:\n"
+                                "- Memory tools: use target_user_id=N para acessar memorias de outro usuario\n"
+                                "- Session tools: use target_user_id=N para buscar sessoes de outro usuario\n"
+                                "- Session tools: use channel='teams' ou channel='web' para filtrar por canal\n"
+                                "- SQL tool: tabelas internas desbloqueadas (agent_sessions, agent_memories, usuarios, etc.)\n"
+                                "- list_session_users: mcp__sessions__list_session_users — lista usuarios com sessoes (para descobrir target_user_id)\n"
+                                "- Para encontrar user_id de alguem: use list_session_users ou SQL 'SELECT id, nome FROM usuarios'\n"
+                                "- Todo acesso cross-user e logado para auditoria."
+                                "</debug_mode_context>"
+                            )
+                            logger.info(
+                                f"[HOOK:UserPromptSubmit] Debug mode context injected "
+                                f"for user_id={user_id}"
+                            )
+                    except Exception as debug_err:
+                        logger.debug(f"[HOOK:UserPromptSubmit] Debug mode check failed: {debug_err}")
+
+                    if additional_context or correction_hint or debug_context:
+                        additional_context = (additional_context or "") + correction_hint + debug_context
                         # B2: Log de context budget por categoria
                         memory_tokens_est = len(additional_context) // 4
                         logger.info(
@@ -2069,13 +2095,18 @@ Nunca invente informações."""
                     "mcp__memory__delete_memory",
                     "mcp__memory__list_memories",
                     "mcp__memory__clear_memories",
+                    "mcp__memory__search_cold_memories",
+                    "mcp__memory__view_memory_history",
+                    "mcp__memory__restore_memory_version",
+                    "mcp__memory__resolve_pendencia",
+                    "mcp__memory__log_system_pitfall",
                 ]
                 for tool_name in memory_tool_names:
                     if tool_name not in allowed:
                         allowed.append(tool_name)
                 options_dict["allowed_tools"] = allowed
 
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'memory' registrada (6 operações)")
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'memory' registrada (11 operações)")
             else:
                 logger.debug("[AGENT_CLIENT] memory_server é None — claude_agent_sdk não disponível")
         except ImportError:
@@ -2133,13 +2164,14 @@ Nunca invente informações."""
                     "mcp__sessions__search_sessions",
                     "mcp__sessions__list_recent_sessions",
                     "mcp__sessions__semantic_search_sessions",
+                    "mcp__sessions__list_session_users",
                 ]
                 for tool_name in sessions_tool_names:
                     if tool_name not in allowed:
                         allowed.append(tool_name)
                 options_dict["allowed_tools"] = allowed
 
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'sessions' registrada (3 operações)")
+                logger.info("[AGENT_CLIENT] Custom Tool MCP 'sessions' registrada (4 operações)")
             else:
                 logger.debug("[AGENT_CLIENT] sessions_server é None — claude_agent_sdk não disponível")
         except ImportError:

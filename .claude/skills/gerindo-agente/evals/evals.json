@@ -1,0 +1,142 @@
+[
+  {
+    "id": 0,
+    "domain": "memoria",
+    "scenario": "Salvar preferencia",
+    "input": "Salve uma memoria de preferencia para o usuario 5: ele prefere formato tabular para dados",
+    "expected_script": "memoria.py",
+    "expected_subcommand": "save",
+    "expected_args": "--user-id 5 --path /memories/preferences.xml --content",
+    "validation": "Script executa sem erro, retorna 'Criado' ou 'Atualizado'"
+  },
+  {
+    "id": 1,
+    "domain": "memoria",
+    "scenario": "Listar versoes",
+    "input": "Quais sao as versoes da memoria /memories/preferences.xml do usuario 5?",
+    "expected_script": "memoria.py",
+    "expected_subcommand": "versions",
+    "expected_args": "--user-id 5 --path /memories/preferences.xml",
+    "validation": "Lista versoes ou 'Nenhuma versao anterior'"
+  },
+  {
+    "id": 2,
+    "domain": "memoria",
+    "scenario": "Restaurar versao",
+    "input": "Restaure a versao 1 da memoria /memories/preferences.xml do usuario 5",
+    "expected_script": "memoria.py",
+    "expected_subcommand": "restore",
+    "expected_args": "--user-id 5 --path /memories/preferences.xml --version 1",
+    "validation": "Restaura versao ou erro se nao existir"
+  },
+  {
+    "id": 3,
+    "domain": "sessao",
+    "scenario": "Listar sessoes recentes",
+    "input": "Mostre as sessoes recentes do usuario 5",
+    "expected_script": "sessao.py",
+    "expected_subcommand": "list",
+    "expected_args": "--user-id 5",
+    "validation": "Lista sessoes ou 'Nenhuma sessao encontrada'"
+  },
+  {
+    "id": 4,
+    "domain": "sessao",
+    "scenario": "Busca semantica",
+    "input": "Busque nas sessoes do usuario 5 sobre problemas com frete",
+    "expected_script": "sessao.py",
+    "expected_subcommand": "semantic",
+    "expected_args": "--user-id 5 --query \"problemas com frete\"",
+    "validation": "Retorna resultados ou fallback para textual"
+  },
+  {
+    "id": 5,
+    "domain": "padrao",
+    "scenario": "Ver padroes aprendidos",
+    "input": "Quais padroes o agente aprendeu para o usuario 5?",
+    "expected_script": "padrao.py",
+    "expected_subcommand": "patterns",
+    "expected_args": "--user-id 5",
+    "validation": "Mostra patterns.xml ou 'Nenhum padrao aprendido'"
+  },
+  {
+    "id": 6,
+    "domain": "padrao",
+    "scenario": "Ver memorias empresa",
+    "input": "Quais memorias compartilhadas existem na empresa?",
+    "expected_script": "padrao.py",
+    "expected_subcommand": "empresa",
+    "expected_args": "--user-id 5",
+    "validation": "Lista memorias com user_id=0 ou 'Nenhuma'"
+  },
+  {
+    "id": 7,
+    "domain": "grafo",
+    "scenario": "Listar entidades",
+    "input": "Mostre as entidades do knowledge graph do usuario 5",
+    "expected_script": "grafo.py",
+    "expected_subcommand": "entities",
+    "expected_args": "--user-id 5",
+    "validation": "Lista entidades ou 'Nenhuma entidade encontrada'"
+  },
+  {
+    "id": 8,
+    "domain": "grafo",
+    "scenario": "Query multi-hop",
+    "input": "Busque no grafo do usuario 5: transportadoras que atrasam para Amazonas",
+    "expected_script": "grafo.py",
+    "expected_subcommand": "query",
+    "expected_args": "--user-id 5 --prompt \"transportadoras que atrasam para Amazonas\"",
+    "validation": "Retorna resultados de 2-hop traversal ou vazio"
+  },
+  {
+    "id": 9,
+    "domain": "diagnostico",
+    "scenario": "Saude do agente",
+    "input": "Como esta a saude do agente nos ultimos 30 dias?",
+    "expected_script": "diagnostico.py",
+    "expected_subcommand": "health",
+    "expected_args": "--user-id 5 --days 30",
+    "validation": "Retorna health score 0-100 com classificacao"
+  },
+  {
+    "id": 10,
+    "domain": "diagnostico",
+    "scenario": "Memorias nao efetivas",
+    "input": "Quais memorias do usuario 5 nao estao sendo efetivas?",
+    "expected_script": "diagnostico.py",
+    "expected_subcommand": "cold-candidates",
+    "expected_args": "--user-id 5",
+    "validation": "Lista candidatas a cold ou 'Nenhuma'"
+  },
+  {
+    "id": 11,
+    "domain": "manutencao",
+    "scenario": "Consolidar memorias",
+    "input": "Consolide as memorias redundantes do usuario 5",
+    "expected_script": "manutencao.py",
+    "expected_subcommand": "consolidate",
+    "expected_args": "--user-id 5",
+    "validation": "Consolida ou 'Nenhuma consolidacao necessaria'"
+  },
+  {
+    "id": 12,
+    "domain": "diagnostico",
+    "scenario": "Analise de friccao",
+    "input": "Qual a friccao do agente nos ultimos 7 dias?",
+    "expected_script": "diagnostico.py",
+    "expected_subcommand": "friction",
+    "expected_args": "--user-id 5 --days 7",
+    "validation": "Retorna friction_score + 5 sinais ou dados insuficientes"
+  },
+  {
+    "id": 13,
+    "domain": "diagnostico",
+    "scenario": "Ver briefing",
+    "input": "Mostre o briefing entre sessoes do usuario 5",
+    "expected_script": "diagnostico.py",
+    "expected_subcommand": "briefing",
+    "expected_args": "--user-id 5",
+    "validation": "Retorna XML do briefing ou 'Nenhum briefing disponivel'"
+  }
+]

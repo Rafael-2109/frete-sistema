@@ -145,6 +145,29 @@ Seis timeouts em 4 arquivos. **DEVEM respeitar esta ordem** ou causam cascata de
 | `resolve_pendencia` | Marca pendencia como resolvida (desaparece do briefing) |
 | `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
 
+**Admin (debug mode)**: TODAS as 11 tools aceitam `target_user_id=N` para acesso cross-user.
+Validacao: `_resolve_user_id(args)` — requer `get_debug_mode() == True`. Todo acesso logado.
+
+### MCP Tools de sessao (session_search_tool.py v3.0.0, 4 operacoes)
+| Tool | O que faz |
+|------|-----------|
+| `search_sessions` | Busca textual (ILIKE) em sessoes anteriores |
+| `list_recent_sessions` | Lista sessoes recentes com titulo, data, resumo |
+| `semantic_search_sessions` | Busca semantica via embeddings (fallback ILIKE) |
+| `list_session_users` | Lista usuarios com sessoes — **admin-only, debug mode** |
+
+**Admin (debug mode)**: `search_sessions`, `list_recent_sessions` e `semantic_search_sessions`
+aceitam `target_user_id=N` para busca cross-user. `channel='teams'|'web'` filtra por canal.
+Pattern: `_resolve_user_id(args)` espelha `memory_mcp_tool.py`.
+
+### Debug Mode — Injecao de Contexto (client.py)
+
+O hook `_user_prompt_submit_hook` injeta `<debug_mode_context>` quando debug mode esta ativo.
+Isso permite ao Agent SABER que pode usar `target_user_id`, `channel`, e `list_session_users`.
+
+Sem essa injecao, o Agent opera com debug mode nos bastidores mas NAO sabe que pode usar
+as capacidades extras — resultado: falha em investigacao cross-user.
+
 ---
 
 ## Memoria Compartilhada (PRD v2.1)

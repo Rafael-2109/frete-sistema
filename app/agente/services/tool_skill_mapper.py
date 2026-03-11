@@ -124,7 +124,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     # ── Sistema ──
     'buscando-rotas': 'Busca de Rotas',
     'frontend-design': 'Design Frontend',
-    'memoria-usuario': 'Memoria do Agente',
+    'gerindo-agente': 'Memoria do Agente',
     'skill-creator': 'Criacao de Skills',
     'ralph-wiggum': 'Dev Autonomo',
     'prd-generator': 'Geracao de PRD',

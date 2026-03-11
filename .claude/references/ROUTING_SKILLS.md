@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 07/03/2026
+**Ultima Atualizacao**: 10/03/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -77,6 +77,7 @@ Se a resposta esta no reference -> NAO usar skill.
 | conciliando vs validacao-nf-po | Fase 3 (split/consolidar) -> conciliando. Fase 2 (match) -> validacao |
 | integracao vs descobrindo | CRIAR novo service -> integracao. EXPLORAR modelo -> descobrindo |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
+| Teams tasks vs diagnostico agente | **TeamsTask** (status task, stale cleanup) → `consultando-sql` direto. **Sessoes/memorias Teams** (filtro `--channel teams`, flags) → `gerindo-agente`. **Teams SSO** (config, webhook) → dev manual |
 | cotando-frete vs acessando-ssw | **Nacom** (industria, contrata frete) -> cotando-frete. **CarVia** (transportadora, vende frete) -> acessando-ssw. Sinal: "no SSW", "opcao NNN", "CarVia" -> SSW. Sem qualificador -> Nacom. Sinais adicionais CarVia: "parametros de frete" (opcao 062), "resultado CTRC" (opcao 101), "formacao de preco" (opcao 062/004) |
 | cotando-frete vs gerindo-carvia | **Nacom** (cotacao outbound, tabela de frete da Nacom) -> cotando-frete. **CarVia** (cotacao subcontrato inbound, operacao + transportadora) -> gerindo-carvia. Sinal: "subcontrato", "operacao CarVia", "frete subcontratado" -> gerindo-carvia. "frete para Manaus", "pedido VCD" -> cotando-frete |
 | gerindo-carvia vs gerindo-expedicao | **CarVia** (frete subcontratado, operacao inbound) -> gerindo-carvia. **Nacom** (separacao, embarque outbound) -> gerindo-expedicao. Sinal: "subcontrato", "fatura CarVia" -> gerindo-carvia. "separacao", "pedido VCD" -> gerindo-expedicao |
@@ -88,7 +89,11 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (27 total)
+| AGENTE (memorias, sessoes, diagnosticos) | "memorias do usuario", "sessoes anteriores", "health score agente", "knowledge graph", "consolidar memorias", "padroes aprendidos" | -> `gerindo-agente` |
+
+---
+
+## Skills — Inventario Completo (28 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
@@ -113,7 +118,10 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 ### Skills CarVia (Claude Code)
 `gerindo-carvia`
 
+### Agente (gestao do sistema de agente)
+`gerindo-agente` (substitui `memoria-usuario` — deprecated)
+
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
-`visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`, `memoria-usuario`,
+`visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`,
 `diagnosticando-banco`, `buscando-rotas`

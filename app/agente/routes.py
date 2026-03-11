@@ -900,6 +900,136 @@ def _sse_event(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def run_post_session_processing(
+    app,
+    session,
+    session_id: str,
+    user_id: int,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    """
+    Post-session processing: summarization, pattern learning, extraction, embedding.
+
+    Best-effort: cada etapa falha silenciosamente sem afetar as demais.
+    DEVE ser chamado com app_context ativo (caller garante).
+
+    Reutilizado por web (routes.py) e Teams (teams/services.py).
+
+    Args:
+        app: Flask app
+        session: AgentSession (já carregada, com mensagens)
+        session_id: Nosso session_id (UUID)
+        user_id: ID do usuário
+        user_message: Mensagem do usuário (pode ser None)
+        assistant_message: Resposta do assistente (pode ser None)
+    """
+    # =================================================================
+    # P0-2: Sumarização Estruturada
+    # =================================================================
+    try:
+        from .config.feature_flags import USE_SESSION_SUMMARY, SESSION_SUMMARY_THRESHOLD
+
+        if USE_SESSION_SUMMARY and session.needs_summarization(SESSION_SUMMARY_THRESHOLD):
+            logger.info(
+                f"[POST_SESSION] Trigger sumarização para sessão {session_id[:8]}... "
+                f"(msgs={session.message_count}, threshold={SESSION_SUMMARY_THRESHOLD})"
+            )
+            from .services.session_summarizer import summarize_and_save
+            summarize_and_save(
+                app=app,
+                session_id=session_id,
+                user_id=user_id,
+            )
+    except Exception as summary_error:
+        logger.warning(f"[POST_SESSION] Erro na sumarização (ignorado): {summary_error}")
+
+    # =================================================================
+    # P1-3: Aprendizado de Padrões
+    # =================================================================
+    try:
+        from .config.feature_flags import USE_PATTERN_LEARNING, PATTERN_LEARNING_THRESHOLD
+
+        if USE_PATTERN_LEARNING:
+            from .services.pattern_analyzer import should_analyze_patterns, analyze_and_save as analyze_patterns_and_save
+
+            if should_analyze_patterns(user_id, PATTERN_LEARNING_THRESHOLD):
+                logger.info(
+                    f"[POST_SESSION] Trigger análise de padrões para usuário {user_id} "
+                    f"(threshold={PATTERN_LEARNING_THRESHOLD})"
+                )
+                analyze_patterns_and_save(app=app, user_id=user_id)
+    except Exception as pattern_error:
+        logger.warning(f"[POST_SESSION] Erro na análise de padrões (ignorado): {pattern_error}")
+
+    # =================================================================
+    # PRD v2.1: Extração pós-sessão de conhecimento organizacional
+    # =================================================================
+    try:
+        from .config.feature_flags import (
+            USE_POST_SESSION_EXTRACTION,
+            POST_SESSION_EXTRACTION_MIN_MESSAGES,
+        )
+
+        if USE_POST_SESSION_EXTRACTION and user_message and assistant_message:
+            msg_count = session.message_count or 0
+            if msg_count >= POST_SESSION_EXTRACTION_MIN_MESSAGES:
+                from threading import Thread
+                from .services.pattern_analyzer import extrair_conhecimento_sessao
+
+                # Copia mensagens para evitar race condition com a sessão
+                messages_for_extraction = list(session.get_messages())
+
+                def _run_extraction_background():
+                    nonlocal messages_for_extraction
+                    try:
+                        with app.app_context():
+                            extrair_conhecimento_sessao(
+                                app=app,
+                                user_id=user_id,
+                                session_messages=messages_for_extraction,
+                            )
+                    except Exception as bg_err:
+                        logger.warning(
+                            f"[KNOWLEDGE_EXTRACTION] Background error: {bg_err}"
+                        )
+                    finally:
+                        # Liberar referência da closure
+                        messages_for_extraction = None
+                        # Liberar session do pool em thread manual
+                        try:
+                            with app.app_context():
+                                db.session.remove()
+                        except Exception:
+                            pass
+
+                thread = Thread(
+                    target=_run_extraction_background,
+                    daemon=True,
+                    name=f"knowledge-extraction-{user_id}",
+                )
+                thread.start()
+                logger.info(
+                    f"[POST_SESSION] Trigger extração pós-sessão em background "
+                    f"para usuário {user_id} (message_count={msg_count})"
+                )
+    except Exception as extraction_error:
+        logger.warning(f"[POST_SESSION] Erro na extração pós-sessão (ignorado): {extraction_error}")
+
+    # =================================================================
+    # Fase 4: Embedding de turn para busca semântica (best-effort)
+    # =================================================================
+    try:
+        from .config.feature_flags import USE_SESSION_SEMANTIC_SEARCH
+        if USE_SESSION_SEMANTIC_SEARCH and user_message and assistant_message:
+            _embed_session_turn_best_effort(
+                app, session_id, user_id,
+                user_message, assistant_message, session
+            )
+    except Exception as emb_err:
+        logger.debug(f"[POST_SESSION] Embedding turn falhou (ignorado): {emb_err}")
+
+
 def _save_messages_to_db(
     app,
     our_session_id: str,
@@ -1007,120 +1137,16 @@ def _save_messages_to_db(
             logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")
 
             # =============================================================
-            # P0-2: Sumarização Estruturada (best-effort, após commit)
-            # Roda APÓS mensagens salvas — falha não afeta salvamento
+            # Post-session processing (reutilizável por web e Teams)
             # =============================================================
-            try:
-                from .config.feature_flags import USE_SESSION_SUMMARY, SESSION_SUMMARY_THRESHOLD
-
-                if USE_SESSION_SUMMARY and session.needs_summarization(SESSION_SUMMARY_THRESHOLD):
-                    logger.info(
-                        f"[AGENTE] Trigger sumarização para sessão {our_session_id[:8]}... "
-                        f"(msgs={session.message_count}, threshold={SESSION_SUMMARY_THRESHOLD})"
-                    )
-                    from .services.session_summarizer import summarize_and_save
-                    summarize_and_save(
-                        app=app,
-                        session_id=our_session_id,
-                        user_id=user_id,
-                    )
-            except Exception as summary_error:
-                # SILENCIOSO: sumarização falha não deve afetar nada
-                logger.warning(f"[AGENTE] Erro na sumarização (ignorado): {summary_error}")
-
-            # =============================================================
-            # P1-3: Aprendizado de Padrões (best-effort, após commit)
-            # Analisa sessões históricas a cada N sessões do usuário
-            # =============================================================
-            try:
-                from .config.feature_flags import USE_PATTERN_LEARNING, PATTERN_LEARNING_THRESHOLD
-
-                if USE_PATTERN_LEARNING:
-                    from .services.pattern_analyzer import should_analyze_patterns, analyze_and_save as analyze_patterns_and_save
-
-                    if should_analyze_patterns(user_id, PATTERN_LEARNING_THRESHOLD):
-                        logger.info(
-                            f"[AGENTE] Trigger análise de padrões para usuário {user_id} "
-                            f"(threshold={PATTERN_LEARNING_THRESHOLD})"
-                        )
-                        analyze_patterns_and_save(app=app, user_id=user_id)
-            except Exception as pattern_error:
-                # SILENCIOSO: análise de padrões falha não deve afetar nada
-                logger.warning(f"[AGENTE] Erro na análise de padrões (ignorado): {pattern_error}")
-
-            # =============================================================
-            # PRD v2.1: Extração pós-sessão de conhecimento organizacional
-            # Analisa TODAS as mensagens via Sonnet para extrair termos,
-            # cargos, regras e correções. Salva como memórias empresa.
-            # Roda em daemon thread (background) — não bloqueia o retorno.
-            # A cada exchange (min 3 msgs), a última extração contém toda
-            # a conversa = efetivamente extração de "fim de sessão".
-            # =============================================================
-            try:
-                from .config.feature_flags import (
-                    USE_POST_SESSION_EXTRACTION,
-                    POST_SESSION_EXTRACTION_MIN_MESSAGES,
-                )
-
-                if USE_POST_SESSION_EXTRACTION and user_message and assistant_message:
-                    msg_count = session.message_count or 0
-                    if msg_count >= POST_SESSION_EXTRACTION_MIN_MESSAGES:
-                        from threading import Thread
-                        from .services.pattern_analyzer import extrair_conhecimento_sessao
-
-                        # Copia mensagens para evitar race condition com a sessão
-                        messages_for_extraction = list(session.get_messages())
-
-                        def _run_extraction_background():
-                            nonlocal messages_for_extraction
-                            try:
-                                with app.app_context():
-                                    extrair_conhecimento_sessao(
-                                        app=app,
-                                        user_id=user_id,
-                                        session_messages=messages_for_extraction,
-                                    )
-                            except Exception as bg_err:
-                                logger.warning(
-                                    f"[KNOWLEDGE_EXTRACTION] Background error: {bg_err}"
-                                )
-                            finally:
-                                # Liberar referência da closure
-                                messages_for_extraction = None
-                                # Liberar session do pool em thread manual
-                                try:
-                                    with app.app_context():
-                                        db.session.remove()
-                                except Exception:
-                                    pass
-
-                        thread = Thread(
-                            target=_run_extraction_background,
-                            daemon=True,
-                            name=f"knowledge-extraction-{user_id}",
-                        )
-                        thread.start()
-                        logger.info(
-                            f"[AGENTE] Trigger extração pós-sessão em background "
-                            f"para usuário {user_id} (message_count={msg_count})"
-                        )
-            except Exception as extraction_error:
-                # SILENCIOSO: extração falha não deve afetar nada
-                logger.warning(f"[AGENTE] Erro na extração pós-sessão (ignorado): {extraction_error}")
-
-            # =============================================================
-            # Fase 4: Embedding de turn para busca semântica (best-effort)
-            # Roda APÓS padrões — falha não afeta nada anterior
-            # =============================================================
-            try:
-                from .config.feature_flags import USE_SESSION_SEMANTIC_SEARCH
-                if USE_SESSION_SEMANTIC_SEARCH and user_message and assistant_message:
-                    _embed_session_turn_best_effort(
-                        app, our_session_id, user_id,
-                        user_message, assistant_message, session
-                    )
-            except Exception as emb_err:
-                logger.debug(f"[AGENTE] Embedding turn falhou (ignorado): {emb_err}")
+            run_post_session_processing(
+                app=app,
+                session=session,
+                session_id=our_session_id,
+                user_id=user_id,
+                user_message=user_message,
+                assistant_message=assistant_message,
+            )
 
             # =============================================================
             # Memory v2: Feedback Loop — rastrear efetividade de memórias

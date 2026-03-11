@@ -2172,7 +2172,7 @@ try:
             }
 
         try:
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _resolve():
                 import json
@@ -2219,6 +2219,8 @@ try:
                 }]
             }
 
+        except PermissionError as e:
+            return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
         except Exception as e:
             error_msg = f"Erro ao resolver pendência: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
@@ -2271,7 +2273,7 @@ try:
             }
 
         try:
-            user_id = get_current_user_id()
+            user_id = _resolve_user_id(args)
 
             def _log_pitfall():
                 import json
@@ -2344,6 +2346,8 @@ try:
                 }]
             }
 
+        except PermissionError as e:
+            return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
         except Exception as e:
             error_msg = f"Erro ao registrar pitfall: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
