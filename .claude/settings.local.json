@@ -141,7 +141,15 @@
       "WebFetch(domain:paddo.dev)",
       "WebFetch(domain:docs.sentry.io)",
       "mcp__sentry__find_organizations",
-      "mcp__sentry__get_issue_details"
+      "mcp__sentry__get_issue_details",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if ''''mcp'''' in k.lower\\(\\) or ''''sentry'''' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "mcp__sentry__whoami",
+      "mcp__sentry__search_docs",
+      "mcp__sentry__search_issues",
+      "mcp__sentry__find_projects",
+      "mcp__sentry__get_doc",
+      "Bash(/home/rafaelnascimento/.local/bin/sentry-cli --version)",
+      "Bash(/home/rafaelnascimento/.local/bin/sentry-cli projects:*)"
     ],
     "deny": []
   },

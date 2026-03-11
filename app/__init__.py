@@ -58,14 +58,29 @@ if _sentry_dsn:
                 return None
             return event
 
+        # Montar lista de integracoes
+        _sentry_integrations = [
+            FlaskIntegration(
+                transaction_style="endpoint",
+                http_methods_to_capture=("GET", "POST", "PUT", "DELETE", "PATCH"),
+            ),
+        ]
+
+        # AI Monitoring: AnthropicIntegration captura messages.create() automaticamente
+        # (token usage, modelo, latencia, prompts). Controlado por SENTRY_AI_MONITORING.
+        if os.getenv("SENTRY_AI_MONITORING", "false").lower() in ("true", "1", "yes"):
+            try:
+                from sentry_sdk.integrations.anthropic import AnthropicIntegration
+                _sentry_integrations.append(
+                    AnthropicIntegration(include_prompts=True)
+                )
+                print("  📊 Sentry AI Monitoring ativo (AnthropicIntegration)")
+            except ImportError:
+                print("  ⚠️ AnthropicIntegration indisponivel (sentry-sdk ou anthropic desatualizado)")
+
         sentry_sdk.init(
             dsn=_sentry_dsn,
-            integrations=[
-                FlaskIntegration(
-                    transaction_style="endpoint",
-                    http_methods_to_capture=("GET", "POST", "PUT", "DELETE", "PATCH"),
-                ),
-            ],
+            integrations=_sentry_integrations,
             # Performance: amostra 10% das transacoes (ajustar conforme volume)
             traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
             # Profiling: amostra 10% das transacoes amostradas

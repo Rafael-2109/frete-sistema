@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 10/03/2026
+**Ultima Atualizacao**: 11/03/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -22,7 +22,9 @@
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
 | PORTAL ATACADAO (automacao web Hodie Booking) | "portal Atacadao", "site do Atacadao", "Hodie Booking", "entrar no portal", "imprimir protocolo no site", "agendar no portal" + OBRIGATORIO mencionar portal/site/Hodie | -> `operando-portal-atacadao` |
 | CARVIA (frete subcontratado) | "operacoes CarVia", "subcontratos pendentes", "cotar subcontrato", "faturas CarVia", "conferencia transportadora" | -> `gerindo-carvia` |
+| SENTRY (erros, issues, monitoring) | "issues do Sentry", "erros em producao", "bugs no Sentry", "resolver issue", "root cause analysis", "500 errors", "Seer" | -> `consultando-sentry` |
 | LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `buscando-rotas` |
+| PROBLEMA COMPLEXO (investigacao, root cause) | "resolver problema complexo em...", "investigar bug em...", "por que X esta...", "analisar modulo completo", "mapear dependencias", "root cause analysis" | -> `resolvendo-problemas` |
 
 ---
 
@@ -86,6 +88,11 @@ Se a resposta esta no reference -> NAO usar skill.
 | monitorando-entregas vs acessando-ssw | Entrega rastreada no **sistema local** -> monitorando-entregas. Baixa/ocorrencia no **SSW** -> acessando-ssw |
 | operando-portal-atacadao vs gerindo-expedicao | **Portal web** do Atacadao (imprimir, agendar, consultar saldo no site) -> operando-portal-atacadao. **Dados locais** do Atacadao (pedidos, separacao, estoque) -> gerindo-expedicao. Sinal: "portal", "site", "Hodie", "navegar" -> operando-portal-atacadao. Sem mencao ao portal -> gerindo-expedicao |
 | operando-portal-atacadao vs monitorando-entregas | **Portal web** (verificar agendamento no site) -> operando-portal-atacadao. **Sistema local** (status entrega, NF, canhoto) -> monitorando-entregas. Sinal: "no portal", "no site" -> operando-portal-atacadao. Sem mencao -> monitorando-entregas |
+| resolvendo-problemas vs ralph-wiggum | Problema **DESCONHECIDO** (investigar, root cause) -> resolvendo-problemas. Problema **CONHECIDO** + spec clara -> ralph-wiggum. Sinal: "por que X?", "investigar", "root cause" -> resolvendo-problemas. "implementar feature Y" -> ralph-wiggum |
+| resolvendo-problemas vs diagnosticando-banco | **Saude** do banco (indices, vacuum, cache) -> diagnosticando-banco. **Bug** envolvendo banco (query errada, dados inconsistentes) -> resolvendo-problemas |
+| resolvendo-problemas vs prd-generator | Problema que precisa **solucao** -> resolvendo-problemas. Feature que precisa **spec** antes de implementar -> prd-generator |
+| consultando-sentry vs diagnosticando-banco | **Erros de aplicacao** (exceptions, 500, issues) -> consultando-sentry. **Saude do banco** (indices, vacuum, cache) -> diagnosticando-banco. Sinal: "issues", "Sentry", "bugs" -> sentry. "queries lentas", "indices" -> banco |
+| consultando-sentry vs resolvendo-problemas | **Diagnostico rapido** (ver issue, stacktrace) -> consultando-sentry. **Investigacao profunda** (multi-arquivo, root cause complexo) -> resolvendo-problemas. Combinavel: sentry para dados + resolvendo-problemas para fix |
 
 ---
 
@@ -93,7 +100,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (28 total)
+## Skills — Inventario Completo (30 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
@@ -107,7 +114,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 `integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`
 
 ### Skills Dev (Claude Code)
-`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`
+`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`
 
 ### Skills SSW (Claude Code)
 `acessando-ssw`, `operando-ssw`
@@ -120,6 +127,9 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
 ### Agente (gestao do sistema de agente)
 `gerindo-agente` (substitui `memoria-usuario` — deprecated)
+
+### Sentry (monitoramento de erros)
+`consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,

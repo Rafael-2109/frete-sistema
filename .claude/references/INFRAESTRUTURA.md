@@ -1,6 +1,6 @@
 # Infraestrutura — Render & Servicos
 
-**Ultima Atualizacao**: 07/03/2026
+**Ultima Atualizacao**: 11/03/2026
 
 ---
 
@@ -76,9 +76,12 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 | Recurso | Valor |
 |---------|-------|
 | SDK | `sentry-sdk[flask]==2.54.0` |
-| Integracao | `app/__init__.py` (condicional via `SENTRY_DSN`) |
-| MCP Server | `@sentry/mcp-server@latest` (env: `SENTRY_AUTH_TOKEN`) |
-| Escopo | Erros da aplicacao Flask (complementa `diagnosticando-banco` que cobre saude do PostgreSQL) |
+| Integracao | `app/__init__.py` (FlaskIntegration + AnthropicIntegration condicional) |
+| MCP Server | `https://mcp.sentry.dev/mcp` (OAuth Bearer, 20 tools) |
+| CLI | `sentry-cli` 3.3.2 (AI: explain, plan) |
+| Org / Projeto | `nacom` / `python-flask` |
+| Region URL | `https://us.sentry.io` |
+| Escopo | Erros Flask + AI Monitoring agente web |
 
 ### Env Vars (Render)
 
@@ -87,6 +90,28 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 | `SENTRY_DSN` | — | DSN do projeto Sentry (sem = Sentry desabilitado) |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | % de transacoes HTTP amostradas para performance |
 | `SENTRY_PROFILES_SAMPLE_RATE` | `0.1` | % de profiles coletados |
+| `SENTRY_AI_MONITORING` | `false` | Ativa AnthropicIntegration (token usage, latencia, prompts) |
+
+### Acesso (por ordem de preferencia)
+
+1. **MCP Server** — Claude Code usa diretamente (20 tools, Seer integrado)
+2. **Sentry CLI** — Terminal: `sentry-cli issues list`, AI: `explain`, `plan`
+3. **Skill `consultando-sentry`** — Trigger automatico quando mencionar Sentry/erros
+4. **Dashboard Web** — https://nacom.sentry.io/
+
+### Tools MCP Disponiveis (20 total)
+
+| Tool | Funcao |
+|------|--------|
+| `search_issues` | Buscar issues (linguagem natural) |
+| `search_events` | Eventos + contagens/agregacoes |
+| `get_issue_details` | Detalhes completos de issue (stacktrace, tags) |
+| `analyze_issue_with_seer` | Root cause analysis AI (Seer) |
+| `update_issue` | Resolver/ignorar/atribuir |
+| `find_releases` | Listar releases |
+| `get_trace_details` | Detalhes de trace |
+| `search_docs` / `get_doc` | Documentacao Sentry |
+| + 12 outras | whoami, find_orgs/projects/teams/dsns, create_*, update_project, tag_values, etc. |
 
 ---
 

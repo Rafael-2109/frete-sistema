@@ -555,7 +555,7 @@ REGRAS OBRIGATORIAS:
 5. NUNCA use tabelas bloqueadas
 6. Sempre adicione LIMIT 500 se nao houver LIMIT explicito
 7. Use aliases claros (ex: cp para carteira_principal, s para separacao, car para contas_a_receber)
-8. Formate numeros monetarios com 2 decimais (ROUND(..., 2))
+8. Formate numeros monetarios com 2 decimais (ROUND(coluna::numeric, 2)) — SEMPRE usar ::numeric no ROUND
 9. Para "pedidos pendentes": filtrar qtd_saldo_produto_pedido > 0 AND ativo = True (tabela carteira_principal)
 10. Para "separacoes pendentes": filtrar sincronizado_nf = False (tabela separacao)
 11. Para "estoque atual": SUM(qtd_movimentacao) WHERE ativo = True (tabela movimentacao_estoque)
