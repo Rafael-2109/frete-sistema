@@ -5,6 +5,8 @@ API para Alertas de Separações Cotadas Alteradas
 Endpoints para gerenciar alertas e reimpressões de separações.
 """
 
+import os
+
 from flask import Blueprint, jsonify, request, url_for
 from flask_login import login_required, current_user
 from app.carteira.models_alertas import AlertaSeparacaoCotada
@@ -99,6 +101,9 @@ def get_card_alertas_html():
     """
     Retorna HTML do card de alertas para inserir no topo da página
     """
+    if os.environ.get("ALERTA_SEPARACAO_COTADA_ENABLED", "false").lower() not in ("true", "1", "yes"):
+        return '', 204  # Desativado via env var
+
     try:
         alertas = AlertaSeparacaoCotada.buscar_alertas_pendentes()
         total_alertas = AlertaSeparacaoCotada.contar_alertas_pendentes()

@@ -6,6 +6,7 @@ import os
 import traceback
 import logging
 from app import db
+from sqlalchemy.orm import joinedload
 # 🔒 Importar decoradores de permissão
 from app.utils.auth_decorators import require_portaria
 from app.portaria.models import Motorista, ControlePortaria
@@ -56,7 +57,10 @@ def dashboard():
     veiculos_hoje = ControlePortaria.veiculos_do_dia()
     
     # Busca embarques pendentes (sem data de embarque)
-    embarques_pendentes = Embarque.query.filter(
+    # joinedload evita N+1 ao acessar embarque.transportadora no template
+    embarques_pendentes = Embarque.query.options(
+        joinedload(Embarque.transportadora)
+    ).filter(
         Embarque.status == 'ativo',
         Embarque.data_embarque.is_(None)
     ).order_by(Embarque.numero.desc()).all()
