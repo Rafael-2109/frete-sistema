@@ -4,7 +4,7 @@ Knowledge Graph Service — T3-3: Extração, linking e query de entidades em me
 3 Layers de extração:
   Layer 1: Regex (~2ms) — UF, pedido, CNPJ, valor
   Layer 2: Voyage Semantic Search (~300ms) — transportadora, produto, cliente, fornecedor
-  Layer 3: Haiku (0ms extra) — relações semânticas (piggyback no contextual retrieval)
+  Layer 3: Sonnet (0ms extra) — relações semânticas (piggyback no contextual retrieval)
 
 Uso (WRITE PATH — chamado por memory_mcp_tool.py):
     from app.agente.services.knowledge_graph_service import (
@@ -230,12 +230,12 @@ def _extract_entities_voyage(content: str) -> List[Tuple[str, str, Optional[str]
 
 
 # =====================================================================
-# LAYER 3: PARSE DA RESPOSTA HAIKU (piggyback no contextual retrieval)
+# LAYER 3: PARSE DA RESPOSTA LLM (piggyback no contextual retrieval)
 # =====================================================================
 
 def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str, str]], List[Tuple[str, str, str]]]:
     """
-    Parse resposta Haiku no formato estruturado (T3-3).
+    Parse resposta do contextual retrieval (Sonnet) no formato estruturado (T3-3).
 
     Formato esperado:
         CONTEXTO: 1-2 frases de contexto
@@ -245,7 +245,7 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
     Fallback: se parse falhar, tudo vira contexto (compatibilidade T3-1).
 
     Args:
-        text: Resposta do Haiku
+        text: Resposta do LLM
 
     Returns:
         Tupla (contexto, entidades, relações)
@@ -423,15 +423,15 @@ def extract_and_link_entities(
     Pipeline:
     1. Layer 1: regex → entidades estruturais
     2. Layer 2: Voyage → entidades semânticas
-    3. Layer 3: merge com haiku_entities (passadas do _generate_memory_context)
+    3. Layer 3: merge com haiku_entities (nomes históricos; extraídos por Sonnet via _generate_memory_context)
     4. Upsert entidades + links + relações
 
     Args:
         user_id: ID do usuário
         memory_id: ID da memória no banco
         content: Conteúdo da memória
-        haiku_entities: Entidades extraídas pelo Haiku [(tipo, nome), ...]
-        haiku_relations: Relações extraídas pelo Haiku [(origem, tipo, destino), ...]
+        haiku_entities: Entidades extraídas pelo LLM [(tipo, nome), ...] (nome histórico; atualmente Sonnet)
+        haiku_relations: Relações extraídas pelo LLM [(origem, tipo, destino), ...] (nome histórico; atualmente Sonnet)
 
     Returns:
         Dict com estatísticas {entities_count, links_count, relations_count}
@@ -455,7 +455,7 @@ def extract_and_link_entities(
         except Exception as e:
             logger.debug(f"[KG] Layer 2 Voyage falhou (ignorado): {e}")
 
-        # === Layer 3: Merge com Haiku ===
+        # === Layer 3: Merge com LLM output (parâmetros haiku_* são nomes históricos) ===
         # Converter haiku_entities para formato unificado (tipo, nome, key=None)
         haiku_converted: List[Tuple[str, str, Optional[str]]] = []
         if haiku_entities:
@@ -493,7 +493,7 @@ def extract_and_link_entities(
                 _link_entity_to_memory(conn, eid, memory_id, 'mentions')
                 stats['links_count'] += 1
 
-            # Relações do Haiku
+            # Relações do LLM (parâmetros haiku_* são nomes históricos)
             if haiku_relations:
                 for source_name, rel_type, target_name in haiku_relations:
                     source_norm = _normalize_name(source_name)

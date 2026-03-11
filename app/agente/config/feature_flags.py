@@ -56,8 +56,8 @@ USE_SELF_CORRECTION = False
 USE_STRUCTURED_COMPACTION = os.getenv("AGENT_STRUCTURED_COMPACTION", "true").lower() == "true"
 
 # Session Summary — gera resumo estruturado ao final de cada interacao
-# Usa Haiku para extrair pedidos, decisoes, tarefas e alertas da conversa
-# Custo: ~$0.001 por resumo (Haiku: $0.25/1M input + $1.25/1M output)
+# Usa Sonnet para extrair pedidos, decisoes, tarefas e alertas da conversa
+# Custo: ~$0.003 por resumo (Sonnet: $3/1M input + $15/1M output)
 # ATIVO por default: migration ja aplicada, implementacao estavel
 USE_SESSION_SUMMARY = os.getenv("AGENT_SESSION_SUMMARY", "true").lower() == "true"
 
@@ -70,9 +70,9 @@ SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "5"
 # ====================================================================
 
 # Prompt Suggestions — gera 2-3 sugestoes contextuais apos cada resposta
-# Usa Haiku para sugestoes relevantes ao dominio logistico
-# Custo: ~$0.001 por chamada (~500 tokens input, ~200 output)
-# Default false: ativar apos verificar que Haiku esta respondendo rapido (<1s)
+# Usa Sonnet para sugestoes relevantes ao dominio logistico
+# Custo: ~$0.003 por chamada (~500 tokens input, ~200 output)
+# Default false: ativar apos verificar que Sonnet esta respondendo rapido (<2s)
 USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "false").lower() == "true"
 
 # Sentiment Detection — detecta frustração do operador e ajusta tom da resposta
@@ -82,9 +82,9 @@ USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "false").lower() 
 USE_SENTIMENT_DETECTION = os.getenv("AGENT_SENTIMENT_DETECTION", "true").lower() == "true"
 
 # Pattern Learning — analisa sessoes historicas e identifica padroes recorrentes
-# Usa Haiku para detectar: clientes frequentes, queries repetidas, preferencias
+# Usa Sonnet para detectar: clientes frequentes, queries repetidas, preferencias
 # Salva padroes em /memories/learned/patterns.xml para uso proativo
-# Custo: ~$0.002 por analise (~4K tokens input, ~800 output Haiku)
+# Custo: ~$0.006 por analise (~4K tokens input, ~800 output Sonnet)
 # Trigger: a cada N sessoes do usuario (default 10)
 # Default false: requer historico suficiente de sessoes para ser util
 USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "true").lower() == "true"
@@ -150,9 +150,9 @@ USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").low
 # Ajustar em producao sem deploy: AGENT_MEMORY_MIN_SIMILARITY=0.50
 MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY", "0.45"))
 
-# Consolidacao periodica de memorias via Haiku
+# Consolidacao periodica de memorias via Sonnet
 # Quando usuario excede thresholds, consolida memorias redundantes em resumos compactos
-# Custo: ~$0.002 por consolidacao (~4K input + ~800 output Haiku)
+# Custo: ~$0.006 por consolidacao (~4K input + ~800 output Sonnet)
 # Frequencia: ~1x por semana por usuario ativo
 # ATIVO por default: mantem memorias compactas sem intervencao manual
 USE_MEMORY_CONSOLIDATION = os.getenv("AGENT_MEMORY_CONSOLIDATION", "true").lower() == "true"

@@ -5,7 +5,7 @@ Gerenciamento de memória persistente do usuário via MCP in-process.
 O modelo principal (Sonnet/Opus) chama estas tools autonomamente via tool_use
 para salvar/recuperar preferências, fatos, correções e contexto.
 
-Substitui o padrão anterior de subagente Haiku (PRE/POST-HOOK).
+Substitui o padrão anterior de subagente Sonnet (PRE/POST-HOOK).
 
 Referência SDK:
   https://platform.claude.com/docs/pt-BR/agent-sdk/custom-tools
@@ -237,10 +237,10 @@ def _execute_with_context(func):
 # HELPER: Contextual Retrieval — contexto semântico para embedding (T3-1)
 # =====================================================================
 # Referência: https://www.anthropic.com/news/contextual-retrieval
-# Ao embedar uma memória, gera contexto breve (1-2 frases) via Haiku que
+# Ao embedar uma memória, gera contexto breve (1-2 frases) via Sonnet que
 # situa a memória no conjunto geral do usuário. Embeda `contexto + memória`
 # em vez de só `memória`, melhorando precision do retrieval em até 49-67%.
-# Custo: ~$0.0003 por save_memory (1 chamada Haiku).
+# Custo: ~$0.0012 por save_memory (1 chamada Sonnet).
 
 _SONNET_MODEL = "claude-sonnet-4-6"
 
@@ -276,7 +276,7 @@ def _generate_memory_context(
     user_id: int, path: str, content: str,
 ) -> tuple[Optional[str], list[tuple[str, str]], list[tuple[str, str, str]]]:
     """
-    Gera contexto semântico breve via Haiku para enriquecer embedding de memória.
+    Gera contexto semântico breve via Sonnet para enriquecer embedding de memória.
 
     T3-1: Anthropic Contextual Retrieval (2024).
     T3-3: Prompt ampliado para extrair entidades e relações (Knowledge Graph).
@@ -294,7 +294,7 @@ def _generate_memory_context(
     Returns:
         Tupla (context, entities, relations):
         - context: String com contexto (50-100 tokens) ou None se falhar
-        - entities: [(tipo, nome), ...] — entidades extraídas pelo Haiku
+        - entities: [(tipo, nome), ...] — entidades extraídas pelo Sonnet
         - relations: [(origem, tipo_relacao, destino), ...] — relações semânticas
     """
     try:
@@ -362,7 +362,7 @@ def _generate_memory_context(
         # Validar contexto: pelo menos 10 chars e no máximo 500
         if not context or len(context) < 10:
             logger.debug(
-                f"[MEMORY_MCP] Contextual: Haiku retornou contexto insuficiente "
+                f"[MEMORY_MCP] Contextual: Sonnet retornou contexto insuficiente "
                 f"({len(context or '')} chars) para {path}"
             )
             return None, entities, relations
@@ -394,7 +394,7 @@ def _embed_memory_best_effort(
     Best-effort: falhas são silenciosas e não afetam o fluxo principal.
 
     Pipeline (T3-1 Contextual Retrieval + T3-3 Knowledge Graph):
-    1. Se MEMORY_CONTEXTUAL_EMBEDDING ativo: gerar contexto + entidades + relações via Haiku (~300ms)
+    1. Se MEMORY_CONTEXTUAL_EMBEDDING ativo: gerar contexto + entidades + relações via Sonnet (~300ms)
     2. Construir texto_embedado: contexto + [path]: conteúdo
     3. Gerar embedding via Voyage AI (~100ms)
     4. Upsert em agent_memory_embeddings
@@ -425,7 +425,7 @@ def _embed_memory_best_effort(
 
         from app.embeddings.service import EmbeddingService
 
-        # T3-1 + T3-3: Contextual Retrieval — gerar contexto + entidades + relações via Haiku
+        # T3-1 + T3-3: Contextual Retrieval — gerar contexto + entidades + relações via Sonnet
         context_prefix = None
         if MEMORY_CONTEXTUAL_EMBEDDING:
             context_prefix, haiku_entities, haiku_relations = _generate_memory_context(
