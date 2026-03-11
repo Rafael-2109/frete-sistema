@@ -19,8 +19,8 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from app import create_app
-from app.agente.services.knowledge_graph_service import strip_xml_tags
+from app import create_app # type: ignore # noqa: E402
+from app.agente.services.knowledge_graph_service import strip_xml_tags # type: ignore # noqa: E402
 
 
 # ── Cenários de teste ──────────────────────────────────────────────
@@ -82,11 +82,11 @@ def run_diagnostico():
     app = create_app()
 
     with app.app_context():
-        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
-        from app.embeddings.service import EmbeddingService
-        from app import db
+        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED # type: ignore # noqa: E402
+        from app.embeddings.service import EmbeddingService # type: ignore # noqa: E402
+        from app import db # type: ignore # noqa: E402
         from sqlalchemy import text
-        from app.agente.tools.memory_mcp_tool import (
+        from app.agente.tools.memory_mcp_tool import ( #type: ignore # noqa: E402
             _text_overlap_check,
             _normalize_words_for_dedup,
         )
