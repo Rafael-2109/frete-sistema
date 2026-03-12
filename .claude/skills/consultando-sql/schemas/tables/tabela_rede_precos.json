@@ -74,9 +74,9 @@
   ],
   "indices": [
     {
-      "name": "ix_tabela_rede_precos_regiao",
+      "name": "ix_tabela_rede_precos_rede",
       "columns": [
-        "regiao"
+        "rede"
       ],
       "unique": false
     },
@@ -89,9 +89,9 @@
       "unique": false
     },
     {
-      "name": "ix_tabela_rede_precos_rede",
+      "name": "ix_tabela_rede_precos_cod_produto",
       "columns": [
-        "rede"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -104,9 +104,9 @@
       "unique": false
     },
     {
-      "name": "ix_tabela_rede_precos_cod_produto",
+      "name": "ix_tabela_rede_precos_regiao",
       "columns": [
-        "cod_produto"
+        "regiao"
       ],
       "unique": false
     }

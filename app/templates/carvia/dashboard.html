@@ -179,63 +179,49 @@
         </div>
     </div>
 
-    <!-- Ultimos CTes CarVia -->
+    <!-- Acesso Rapido -->
     <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="fas fa-clock"></i> Ultimos CTes CarVia</h5>
-            <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-sm btn-outline-secondary">
-                Ver todos
-            </a>
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-th-large"></i> Acesso Rapido</h5>
         </div>
-        <div class="card-body p-0">
-            {% if stats.ultimas_operacoes %}
-            <div class="table-responsive">
-                <table class="table table-hover mb-0 carvia-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>CTe</th>
-                            <th>Cliente</th>
-                            <th>Destino</th>
-                            <th>Status</th>
-                            <th>Tipo</th>
-                            <th>Criado em</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for op in stats.ultimas_operacoes %}
-                        <tr>
-                            <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}">
-                                    {{ op.id }}
-                                </a>
-                            </td>
-                            <td>{{ op.cte_numero or '-' }}</td>
-                            <td>
-                                <span title="{{ op.cnpj_cliente }}">{{ op.nome_cliente or op.cnpj_cliente }}</span>
-                            </td>
-                            <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
-                            <td>
-                                <span class="badge carvia-badge-{{ op.status|lower }}">
-                                    {{ op.status }}
-                                </span>
-                            </td>
-                            <td><small class="text-muted">{{ op.tipo_entrada }}</small></td>
-                            <td>{{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.fluxo_caixa') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-chart-line"></i> Fluxo de Caixa
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.extrato_conta') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-list-alt"></i> Extrato da Conta
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-exchange-alt"></i> Conciliacao
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.extrato_bancario') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-file-invoice-dollar"></i> Extrato Bancario
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.listar_sessoes_cotacao') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-calculator"></i> Cotacoes
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.listar_modelos_moto') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-motorcycle"></i> Modelos Moto
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('carvia.listar_empresas_cubagem') }}" class="btn btn-outline-secondary w-100 text-start">
+                        <i class="fas fa-cube"></i> Empresas Cubagem
+                    </a>
+                </div>
             </div>
-            {% else %}
-            <div class="text-center py-5 text-muted">
-                <i class="fas fa-inbox fa-3x mb-3 d-block opacity-50"></i>
-                <p>Nenhum CTe CarVia ainda. Comece importando documentos.</p>
-                <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary btn-sm">
-                    <i class="fas fa-upload"></i> Importar Arquivos
-                </a>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>

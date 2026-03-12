@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 141,
+  "total_tabelas": 143,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -252,6 +252,15 @@
       ]
     },
     {
+      "name": "carvia_empresas_cubagem",
+      "description": "Tabela carvia_empresas_cubagem",
+      "key_fields": [
+        "cnpj_empresa",
+        "nome_empresa",
+        "considerar_cubagem"
+      ]
+    },
+    {
       "name": "carvia_extrato_linhas",
       "description": "Tabela carvia_extrato_linhas",
       "key_fields": [
@@ -294,6 +303,15 @@
         "transportadora_id",
         "numero_fatura",
         "data_emissao"
+      ]
+    },
+    {
+      "name": "carvia_modelos_moto",
+      "description": "Tabela carvia_modelos_moto",
+      "key_fields": [
+        "nome",
+        "regex_pattern",
+        "comprimento"
       ]
     },
     {
