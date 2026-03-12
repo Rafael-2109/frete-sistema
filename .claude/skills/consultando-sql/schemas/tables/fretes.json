@@ -300,16 +300,16 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_frete_cte_id",
+      "name": "ix_fretes_cnpj_cliente",
       "columns": [
-        "frete_cte_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_fretes_numero_cte",
+      "name": "ix_fretes_frete_cte_id",
       "columns": [
-        "numero_cte"
+        "frete_cte_id"
       ],
       "unique": false
     },
@@ -321,9 +321,9 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_cnpj_cliente",
+      "name": "ix_fretes_numero_cte",
       "columns": [
-        "cnpj_cliente"
+        "numero_cte"
       ],
       "unique": false
     }
