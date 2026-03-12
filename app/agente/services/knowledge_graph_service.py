@@ -86,6 +86,9 @@ def strip_xml_tags(content: str) -> str:
     - Regex extraction (KG Layer 1): evitar que tags poluam patterns
     - Fragment matching (effective_count): comparar texto puro vs resposta
 
+    NOTA: Entidades XML (&amp;, &gt;, etc.) NÃO são decodificadas.
+    Para comparação/dedup, usar clean_for_comparison() que inclui html.unescape().
+
     >>> strip_xml_tags('<memoria type="correcao"><content>SP bom</content></memoria>')
     'SP bom'
     >>> strip_xml_tags('texto sem tags')
@@ -98,6 +101,29 @@ def strip_xml_tags(content: str) -> str:
     # Normaliza espacos multiplos
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned.strip()
+
+
+def clean_for_comparison(content: str) -> str:
+    """
+    Strip XML tags e decodifica entidades → texto puro para comparação.
+
+    Combina strip_xml_tags() + html.unescape() para garantir que entidades
+    XML (&amp;, &gt;, &lt;, &quot;, &apos;) não poluam embeddings nem
+    comparações textuais.
+
+    Usar em TODOS os pontos de comparação/dedup. strip_xml_tags() sozinha
+    mantém entidades — causa assimetria cross-pipeline (extração com
+    _xml_escape vs MCP tool sem escape).
+
+    >>> clean_for_comparison('<tag>saldo &gt; 0 &amp; ativo</tag>')
+    'saldo > 0 & ativo'
+    >>> clean_for_comparison('texto sem tags')
+    'texto sem tags'
+    >>> clean_for_comparison('<x>&apos;teste&apos;</x>')
+    "'teste'"
+    """
+    import html
+    return html.unescape(strip_xml_tags(content))
 
 
 def _extract_entities_regex(content: str) -> List[Tuple[str, str, Optional[str]]]:

@@ -439,9 +439,8 @@ def _embed_memory_best_effort(
             texto_embedado = f"[{path}]: {content}"
 
         # Build texto limpo — para DEDUP
-        # CAPDo v3.0: Normalizacao semantica via ontologia ANTES do embedding.
-        # Entidades do dominio sao resolvidas para slugs canonicos,
-        # melhorando similaridade entre representacoes diferentes do mesmo conhecimento.
+        # Strip XML tags + decode entities → texto puro para embedding de dedup.
+        # Voyage AI embeddings capturam similaridade semantica sem normalizacao adicional.
         dedup_texto = _canonicalize_for_dedup(content)
 
         # Hash baseado no conteúdo original (não no texto_embedado).
@@ -546,7 +545,7 @@ def _save_dedup_embedding_only(user_id: int, path: str, content: str) -> None:
 
     from ..models import AgentMemory
     from app.embeddings.service import EmbeddingService
-    from ..services.knowledge_graph_service import strip_xml_tags
+    from ..services.knowledge_graph_service import clean_for_comparison
     from app import db
     from sqlalchemy import text
     from app.utils.timezone import agora_utc_naive
@@ -556,7 +555,7 @@ def _save_dedup_embedding_only(user_id: int, path: str, content: str) -> None:
     if not mem:
         return
 
-    dedup_texto = strip_xml_tags(content)
+    dedup_texto = clean_for_comparison(content)
     if not dedup_texto.strip():
         return
 
@@ -843,9 +842,9 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
     Returns:
         Path da memoria duplicata ou None se nao houver duplicata
     """
-    from ..services.knowledge_graph_service import strip_xml_tags
+    from ..services.knowledge_graph_service import clean_for_comparison
 
-    clean_content = strip_xml_tags(content)
+    clean_content = clean_for_comparison(content)
 
     # ── Layer 0: Text overlap (fast, free) ──
     try:
@@ -877,7 +876,7 @@ def _dedup_embedding_search(
     """
     Layer 1: Busca contra dedup_embedding (texto limpo, mesma representação).
 
-    Query e embedding armazenado estão na mesma representação (strip_xml_tags),
+    Query e embedding armazenado estão na mesma representação (clean_for_comparison),
     eliminando a lacuna que causava falsos negativos (sim 0.66-0.78 no embedding
     contextualizado quando o threshold era 0.85).
 
@@ -976,12 +975,11 @@ def _canonicalize_for_dedup(content: str) -> str:
     """
     Normaliza conteudo para forma canonica ANTES do embedding de dedup.
 
-    Strip XML tags e retorna texto limpo. Voyage AI embeddings capturam
-    similaridade semantica — normalizacao via dicionario de sinonimos
-    piora o resultado quando os sinonimos sao errados ou ambiguos.
+    Strip XML tags + decodifica entidades → texto puro. Voyage AI embeddings
+    capturam similaridade semantica sem normalizacao adicional.
     """
-    from ..services.knowledge_graph_service import strip_xml_tags
-    return strip_xml_tags(content)
+    from ..services.knowledge_graph_service import clean_for_comparison
+    return clean_for_comparison(content)
 
 
 def _normalize_words_for_dedup(text: str) -> set:
@@ -1018,7 +1016,7 @@ def _text_overlap_check(
     - "Dry-run lote Odoo" vs "Dry-run obrigatório Odoo": ~0.83
     """
     from ..models import AgentMemory
-    from ..services.knowledge_graph_service import strip_xml_tags
+    from ..services.knowledge_graph_service import clean_for_comparison
 
     words_new = _normalize_words_for_dedup(clean_content)
     if len(words_new) < 3:
@@ -1034,7 +1032,7 @@ def _text_overlap_check(
         ).with_entities(AgentMemory.path, AgentMemory.content).all()
 
         for mem_path, mem_content in memories:
-            mem_clean = strip_xml_tags(mem_content or '')
+            mem_clean = clean_for_comparison(mem_content or '')
             words_existing = _normalize_words_for_dedup(mem_clean)
 
             if len(words_existing) < 3:
@@ -1092,10 +1090,11 @@ def _track_correction_feedback(user_id: int, correction_path: str, correction_co
             return
 
         # Incrementar correction_count apenas nas que têm conteúdo relacionado
-        correction_lower = correction_content.lower()
+        from ..services.knowledge_graph_service import clean_for_comparison
+        correction_lower = clean_for_comparison(correction_content).lower()
         related_ids = []
         for mem in recent:
-            mem_content = (mem.content or "").lower()
+            mem_content = clean_for_comparison(mem.content or '').lower()
             # Checar overlap: pelo menos 2 termos significativos em comum
             # (palavras >4 chars, excluindo genéricas que matcham quase tudo)
             _generic = {'pedido', 'campo', 'valor', 'odoo', 'tabela', 'dados',

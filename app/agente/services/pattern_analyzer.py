@@ -1338,9 +1338,9 @@ def _try_enrich_existing(
 
         # Enriquecer: manter conteudo existente e adicionar novo contexto
         # Nao substituir — agregar informacao
-        from .knowledge_graph_service import strip_xml_tags
-        words_old = set(strip_xml_tags(existing.content).lower().split())
-        words_new = set(strip_xml_tags(new_content).lower().split())
+        from .knowledge_graph_service import clean_for_comparison
+        words_old = set(clean_for_comparison(existing.content).lower().split())
+        words_new = set(clean_for_comparison(new_content).lower().split())
         min_size = min(len(words_old), len(words_new))
         overlap = len(words_old & words_new) / min_size if min_size > 0 else 0
 

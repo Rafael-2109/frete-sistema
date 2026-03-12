@@ -1228,7 +1228,7 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             return
 
         from .models import AgentMemory
-        from .services.knowledge_graph_service import strip_xml_tags
+        from .services.knowledge_graph_service import clean_for_comparison
         from sqlalchemy import text as sql_text
 
         # Buscar memórias pelos IDs exatos injetados neste turno
@@ -1239,13 +1239,13 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
         if not injected_memories:
             return
 
-        # Preparar conteúdos limpos (strip XML tags)
+        # Preparar conteúdos limpos (strip XML tags + decode entities)
         memory_contents = {}  # {mem.id: clean_content}
         for mem in injected_memories:
             content = (mem.content or "").strip()
             if not content or len(content) < 15:
                 continue
-            clean_content = strip_xml_tags(content)
+            clean_content = clean_for_comparison(content)
             if clean_content and len(clean_content) >= 15:
                 memory_contents[mem.id] = clean_content
 
