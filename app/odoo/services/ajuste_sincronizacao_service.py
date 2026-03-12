@@ -10,6 +10,7 @@ Segue fielmente a ESPECIFICACAO_SINCRONIZACAO_ODOO.md
 
 import logging
 from typing import Dict, List, Any
+from sqlalchemy import func, case
 from app import db
 from app.carteira.models_alertas import AlertaSeparacaoCotada
 from app.separacao.models import Separacao
@@ -78,12 +79,33 @@ class AjusteSincronizacaoService:
 
                 logger.info(f"Processando lote {lote_id} (status: {status_lote})")
 
-                # Detectar se é TOTAL ou PARCIAL baseado no tipo_envio
-                primeira_sep = Separacao.query.filter_by(
-                    separacao_lote_id=lote_id, num_pedido=num_pedido, sincronizado_nf=False
-                ).first()
+                # Detectar se é TOTAL ou PARCIAL comparando com CarteiraPrincipal local
+                # CarteiraPrincipal ainda tem os valores PRÉ-SYNC (P5: faturamento primeiro, carteira depois)
+                # Se a separação cobre 100% do saldo de TODOS os itens da carteira → TOTAL
+                # Imune a tipo_envio stale (SQL direto, remoção de produto, etc.)
+                from app.carteira.models import CarteiraPrincipal
 
-                tipo_separacao = "TOTAL" if primeira_sep and primeira_sep.tipo_envio == "total" else "PARCIAL"
+                carteira_items = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.num_pedido == num_pedido,
+                    CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                ).all()
+                carteira_por_produto = {
+                    c.cod_produto: float(c.qtd_saldo_produto_pedido)
+                    for c in carteira_items
+                }
+
+                seps_lote = Separacao.query.filter_by(
+                    separacao_lote_id=lote_id, num_pedido=num_pedido, sincronizado_nf=False
+                ).all()
+                sep_por_produto = {
+                    s.cod_produto: float(s.qtd_saldo or 0) for s in seps_lote
+                }
+
+                is_total = bool(carteira_por_produto) and all(
+                    abs(carteira_por_produto[cp] - sep_por_produto.get(cp, 0)) < 0.01
+                    for cp in carteira_por_produto
+                )
+                tipo_separacao = "TOTAL" if is_total else "PARCIAL"
 
                 if tipo_separacao == "TOTAL":
                     # Caso 1: Separação TOTAL - Substituir completamente
@@ -156,29 +178,43 @@ class AjusteSincronizacaoService:
 
         lotes = []
 
-        # Buscar separações não sincronizadas e com status alterável
+        # Buscar separações não sincronizadas, agrupadas por lote_id real
+        # Usa status hierárquico: se um lote tem itens ABERTO + COTADO, retorna COTADO
+        _status_rank = case(
+            (Separacao.status == 'COTADO', 3),
+            (Separacao.status == 'ABERTO', 2),
+            (Separacao.status == 'PREVISAO', 1),
+            else_=0
+        )
         seps = (
-            db.session.query(Separacao.separacao_lote_id, Separacao.status, Separacao.numero_nf)
+            db.session.query(
+                Separacao.separacao_lote_id,
+                func.max(_status_rank).label('status_rank'),
+            )
             .filter(
                 Separacao.num_pedido == num_pedido,
                 Separacao.separacao_lote_id.isnot(None),
                 Separacao.sincronizado_nf == False,  # CRÍTICO: Não alterar NFs processadas
             )
-            .distinct()
+            .group_by(Separacao.separacao_lote_id)
             .all()
         )
 
-        # 🔴 PROTEÇÃO CRÍTICA: Se pedido tem múltiplos lotes, IGNORAR completamente
+        # Mapear rank → status
+        _rank_to_status = {3: 'COTADO', 2: 'ABERTO', 1: 'PREVISAO'}
+
+        # 🔴 PROTEÇÃO CRÍTICA: Se pedido tem múltiplos lotes REAIS, IGNORAR completamente
         # Pedidos divididos manualmente não devem ser alterados automaticamente
         if len(seps) > 1:
-            lotes_ids = [lote_id for lote_id, _, _ in seps]
+            lotes_ids = [lote_id for lote_id, _ in seps]
             logger.warning(
                 f"🛡️ PROTEÇÃO: Pedido {num_pedido} possui {len(seps)} separacao_lote_id diferentes "
                 f"({', '.join(lotes_ids)}) - Alteração automática BLOQUEADA para evitar corrupção de dados"
             )
             return []  # Retorna vazio para não processar
 
-        for lote_id, status, numero_nf in seps:
+        for lote_id, status_rank in seps:
+            status = _rank_to_status.get(status_rank, 'ABERTO')
             lotes.append({"lote_id": lote_id, "tipo": "SEPARACAO", "status": status})
             logger.info(f"Encontrada Separacao com lote {lote_id} (status: {status}, sincronizado_nf: False)")
 
@@ -276,6 +312,17 @@ class AjusteSincronizacaoService:
                 cod_produto = item_odoo["cod_produto"]
                 produtos_processados.add(cod_produto)
                 qtd_saldo = float(item_odoo["qtd_saldo_produto_pedido"])
+
+                # 🔧 CORREÇÃO Bug #1: Ignorar itens com qtd=0
+                # Se qtd_saldo <= 0, tratar como remoção (não criar/atualizar)
+                if qtd_saldo <= 0:
+                    if cod_produto in separacoes_por_produto:
+                        # Produto existente com saldo zerado: remover
+                        db.session.delete(separacoes_por_produto[cod_produto])
+                        logger.info(f"🗑️ Removido produto {cod_produto} (saldo zerou: {qtd_saldo})")
+                    else:
+                        logger.debug(f"⏭️ Ignorando produto {cod_produto} com saldo {qtd_saldo} (não existe na separação)")
+                    continue
 
                 # Calcular peso e pallet
                 palletizacao = palletizacoes.get(cod_produto)
@@ -582,8 +629,10 @@ class AjusteSincronizacaoService:
             if qtd_restante <= 0:
                 break
 
-            # Buscar separações deste status
+            # Buscar separações deste status DENTRO do lote específico
+            # (sem filtro de lote_id, poderia afetar outro lote do mesmo pedido)
             separacoes = Separacao.query.filter_by(
+                separacao_lote_id=lote_id,
                 num_pedido=num_pedido, cod_produto=cod_produto, status=status, sincronizado_nf=False
             ).all()
 
@@ -629,12 +678,12 @@ class AjusteSincronizacaoService:
         cod_produto = aumento["cod_produto"]
         qtd_aumentar = aumento["qtd_aumentar"]
 
-        # Verificar se já existe separação ABERTO para este produto
+        # 🔧 CORREÇÃO Bug #2: Buscar separação existente do produto (qualquer status alterável)
+        # em vez de filtrar apenas por status="ABERTO"
         sep_existente = Separacao.query.filter_by(
             separacao_lote_id=lote_id,
             num_pedido=num_pedido,
             cod_produto=cod_produto,
-            status="ABERTO",
             sincronizado_nf=False,
         ).first()
 
@@ -676,6 +725,10 @@ class AjusteSincronizacaoService:
             else:
                 peso_calculado = qtd_aumentar
 
+            # 🔧 CORREÇÃO Bug #2: Usar status da separação existente (não hardcoded "ABERTO")
+            status_lote = sep_exemplo.status if sep_exemplo else "ABERTO"
+            tipo_envio_lote = sep_exemplo.tipo_envio if sep_exemplo else "parcial"
+
             if sep_exemplo:
                 # Copiar dados do lote
                 nova_sep = Separacao(
@@ -700,9 +753,9 @@ class AjusteSincronizacaoService:
                     rota=sep_exemplo.rota,
                     sub_rota=sep_exemplo.sub_rota,
                     roteirizacao=sep_exemplo.roteirizacao,
-                    status="ABERTO",
+                    status=status_lote,
                     sincronizado_nf=False,
-                    tipo_envio="parcial",
+                    tipo_envio=tipo_envio_lote,
                 )
             else:
                 # Fallback mínimo se não há exemplo
@@ -736,6 +789,11 @@ class AjusteSincronizacaoService:
         cod_produto = novo_item["cod_produto"]
         quantidade = novo_item["quantidade"]
 
+        # 🔧 CORREÇÃO Bug #1: Não adicionar item com qtd <= 0
+        if float(quantidade) <= 0:
+            logger.debug(f"⏭️ Ignorando novo item {cod_produto} com quantidade {quantidade}")
+            return
+
         # Buscar uma separação existente do mesmo lote para copiar dados
         sep_exemplo = Separacao.query.filter_by(
             separacao_lote_id=lote_id,
@@ -758,6 +816,11 @@ class AjusteSincronizacaoService:
                 pallet_calculado = float(quantidade) / float(palletizacao.palletizacao)
         else:
             peso_calculado = float(quantidade)  # Assumir peso 1:1
+
+        # 🔧 CORREÇÃO Bug #2: Usar status da separação existente (não hardcoded "ABERTO")
+        # Se a separação é COTADO, novo item deve ser COTADO também
+        status_lote = sep_exemplo.status if sep_exemplo else "ABERTO"
+        tipo_envio_lote = sep_exemplo.tipo_envio if sep_exemplo else "parcial"
 
         # Preservar dados do lote se existir separação exemplo
         if sep_exemplo:
@@ -783,9 +846,9 @@ class AjusteSincronizacaoService:
                 rota=sep_exemplo.rota,
                 sub_rota=sep_exemplo.sub_rota,
                 roteirizacao=sep_exemplo.roteirizacao,
-                status="ABERTO",
+                status=status_lote,
                 sincronizado_nf=False,
-                tipo_envio="parcial",
+                tipo_envio=tipo_envio_lote,
             )
         else:
             # Fallback se não houver exemplo
