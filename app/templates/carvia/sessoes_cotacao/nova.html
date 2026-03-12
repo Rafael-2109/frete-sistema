@@ -94,7 +94,8 @@
                     <div class="col-md-4">
                         <label class="form-label">Cidade <span class="text-danger">*</span></label>
                         <div class="carvia-autocomplete-wrapper">
-                            <input type="text" name="origem_cidade" id="origemCidade" class="form-control"
+                            <input type="hidden" name="origem_cidade" id="origemCidadeHidden">
+                            <input type="text" id="origemCidade" class="form-control"
                                    placeholder="Cidade" required autocomplete="off">
                             <div class="carvia-autocomplete-results" id="origemCidadeResults"></div>
                         </div>
@@ -121,7 +122,8 @@
                     <div class="col-md-4">
                         <label class="form-label">Cidade <span class="text-danger">*</span></label>
                         <div class="carvia-autocomplete-wrapper">
-                            <input type="text" name="destino_cidade" id="destinoCidade" class="form-control"
+                            <input type="hidden" name="destino_cidade" id="destinoCidadeHidden">
+                            <input type="text" id="destinoCidade" class="form-control"
                                    placeholder="Cidade" required autocomplete="off">
                             <div class="carvia-autocomplete-results" id="destinoCidadeResults"></div>
                         </div>
@@ -191,16 +193,23 @@
     const cidadeCache = {};
     let debounceTimer = null;
 
-    function setupCidadeAutocomplete(ufSelectId, cidadeInputId, resultsId) {
+    function normalizeText(str) {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+
+    function setupCidadeAutocomplete(ufSelectId, cidadeInputId, resultsId, hiddenInputId) {
         const ufSelect = document.getElementById(ufSelectId);
         const cidadeInput = document.getElementById(cidadeInputId);
         const resultsDiv = document.getElementById(resultsId);
+        const hiddenInput = hiddenInputId ? document.getElementById(hiddenInputId) : null;
 
         if (!ufSelect || !cidadeInput || !resultsDiv) return;
 
         // Ao trocar UF, limpar cidade e carregar lista
         ufSelect.addEventListener('change', function() {
             cidadeInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+            cidadeInput.classList.remove('is-invalid');
             resultsDiv.classList.remove('show');
             const uf = this.value;
             if (uf) carregarCidades(uf);
@@ -208,6 +217,10 @@
 
         // Autocomplete no input de cidade
         cidadeInput.addEventListener('input', function() {
+            if (hiddenInput) {
+                hiddenInput.value = '';
+                cidadeInput.classList.add('is-invalid');
+            }
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(function() {
                 const uf = ufSelect.value;
@@ -216,7 +229,7 @@
                     resultsDiv.classList.remove('show');
                     return;
                 }
-                filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+                filtrarCidades(uf, termo, resultsDiv, cidadeInput, hiddenInput);
             }, 200);
         });
 
@@ -241,22 +254,21 @@
             .catch(function(err) { console.warn('Erro ao carregar cidades:', err); });
     }
 
-    function filtrarCidades(uf, termo, resultsDiv, cidadeInput) {
+    function filtrarCidades(uf, termo, resultsDiv, cidadeInput, hiddenInput) {
         const cidades = cidadeCache[uf];
         if (!cidades) {
-            // Carregar e tentar novamente
             fetch('/localidades/ajax/cidades_por_uf/' + uf)
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     cidadeCache[uf] = data;
-                    filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+                    filtrarCidades(uf, termo, resultsDiv, cidadeInput, hiddenInput);
                 });
             return;
         }
 
-        const termoUpper = termo.toUpperCase();
+        const termoNorm = normalizeText(termo);
         const filtradas = cidades.filter(function(c) {
-            return c.toUpperCase().indexOf(termoUpper) !== -1;
+            return normalizeText(c).indexOf(termoNorm) !== -1;
         }).slice(0, 15);
 
         if (filtradas.length === 0) {
@@ -272,6 +284,10 @@
             item.textContent = cidade;
             item.addEventListener('click', function() {
                 cidadeInput.value = cidade;
+                if (hiddenInput) {
+                    hiddenInput.value = cidade;
+                    cidadeInput.classList.remove('is-invalid');
+                }
                 resultsDiv.classList.remove('show');
             });
             resultsDiv.appendChild(item);
@@ -279,9 +295,33 @@
         resultsDiv.classList.add('show');
     }
 
-    // Inicializar autocomplete para origem e destino
-    setupCidadeAutocomplete('origemUf', 'origemCidade', 'origemCidadeResults');
-    setupCidadeAutocomplete('destinoUf', 'destinoCidade', 'destinoCidadeResults');
+    // Inicializar autocomplete para origem e destino (com hidden input)
+    setupCidadeAutocomplete('origemUf', 'origemCidade', 'origemCidadeResults', 'origemCidadeHidden');
+    setupCidadeAutocomplete('destinoUf', 'destinoCidade', 'destinoCidadeResults', 'destinoCidadeHidden');
+
+    // Validacao no submit: impedir envio se hidden input vazio
+    var formCotacao = document.querySelector('form[action*="sessoes-cotacao/nova"]');
+    if (formCotacao) {
+        formCotacao.addEventListener('submit', function(e) {
+            var origemHidden = document.getElementById('origemCidadeHidden');
+            var destinoHidden = document.getElementById('destinoCidadeHidden');
+            var valido = true;
+
+            if (origemHidden && !origemHidden.value) {
+                document.getElementById('origemCidade').classList.add('is-invalid');
+                valido = false;
+            }
+            if (destinoHidden && !destinoHidden.value) {
+                document.getElementById('destinoCidade').classList.add('is-invalid');
+                valido = false;
+            }
+
+            if (!valido) {
+                e.preventDefault();
+                alert('Selecione uma cidade valida da lista de sugestoes.');
+            }
+        });
+    }
 })();
 </script>
 {% endblock %}

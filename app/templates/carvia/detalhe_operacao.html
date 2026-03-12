@@ -305,12 +305,10 @@
                                 </form>
                                 {% endif %}
 
-                                <form method="POST" action="{{ url_for('carvia.recotar_subcontrato', operacao_id=operacao.id, sub_id=sub.id) }}" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-info">
-                                        <i class="fas fa-calculator"></i> Recotar
-                                    </button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-info"
+                                        onclick="simularRecotacao({{ operacao.id }}, {{ sub.id }})">
+                                    <i class="fas fa-calculator"></i> Recotar
+                                </button>
 
                                 <button type="button" class="btn btn-sm btn-outline-primary"
                                         data-bs-toggle="modal" data-bs-target="#modalValor{{ sub.id }}">
@@ -504,6 +502,59 @@
 </div>
 {% endblock %}
 
+<!-- Modal Recotar com Descritivo -->
+<div class="modal fade" id="modalRecotar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formRecotar" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-calculator"></i> Simular Recotacao</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="recotarLoading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Calculando...</p>
+                    </div>
+                    <div id="recotarConteudo" style="display:none;">
+                        <div id="recotarErro" class="alert alert-warning" style="display:none;"></div>
+                        <div id="recotarDescritivo">
+                            <table class="table table-sm carvia-breakdown-table mb-3">
+                                <thead>
+                                    <tr>
+                                        <th>Componente</th>
+                                        <th>Fator</th>
+                                        <th>Base</th>
+                                        <th class="text-end">Valor (R$)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recotarBody"></tbody>
+                            </table>
+                        </div>
+                        <hr>
+                        <div class="row align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Valor para Recotacao (R$)</label>
+                                <input type="text" class="form-control" name="valor_override"
+                                       id="recotarValorOverride" inputmode="decimal"
+                                       placeholder="Edite para usar valor diferente">
+                                <small class="text-muted">Deixe o valor calculado ou edite manualmente</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnConfirmarRecotacao" disabled>
+                        <i class="fas fa-check"></i> Confirmar Recotacao
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% block scripts %}
 <script>
 function downloadCteXml(operacaoId) {
@@ -517,6 +568,75 @@ function downloadCteXml(operacaoId) {
             }
         })
         .catch(() => alert('Erro de conexao ao baixar arquivo'));
+}
+
+function formatBRL(valor) {
+    return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor);
+}
+
+function simularRecotacao(operacaoId, subId) {
+    var modal = new bootstrap.Modal(document.getElementById('modalRecotar'));
+    var loading = document.getElementById('recotarLoading');
+    var conteudo = document.getElementById('recotarConteudo');
+    var erro = document.getElementById('recotarErro');
+    var body = document.getElementById('recotarBody');
+    var valorInput = document.getElementById('recotarValorOverride');
+    var btnConfirmar = document.getElementById('btnConfirmarRecotacao');
+    var form = document.getElementById('formRecotar');
+
+    loading.style.display = 'block';
+    conteudo.style.display = 'none';
+    erro.style.display = 'none';
+    btnConfirmar.disabled = true;
+    form.action = '/carvia/operacoes/' + operacaoId + '/subcontrato/' + subId + '/recotar';
+
+    modal.show();
+
+    fetch('/carvia/api/operacao/' + operacaoId + '/subcontrato/' + subId + '/simular-recotacao')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            conteudo.style.display = 'block';
+
+            if (!data.sucesso) {
+                erro.style.display = 'block';
+                erro.textContent = data.erro || 'Erro ao calcular';
+                return;
+            }
+
+            btnConfirmar.disabled = false;
+            valorInput.value = data.valor_cotado ? data.valor_cotado.toFixed(2).replace('.', ',') : '';
+
+            // Montar tabela de descritivo
+            body.innerHTML = '';
+            if (data.descritivo && data.descritivo.length > 0) {
+                data.descritivo.forEach(function(linha) {
+                    var tr = document.createElement('tr');
+                    var cls = '';
+                    if (linha.is_total) cls = 'carvia-breakdown-total';
+                    else if (linha.is_subtotal) cls = 'fw-bold';
+                    tr.className = cls;
+                    tr.innerHTML =
+                        '<td>' + linha.componente + '</td>' +
+                        '<td>' + (linha.fator || '') + '</td>' +
+                        '<td>' + (linha.base || '') + '</td>' +
+                        '<td class="text-end valor-col">' + formatBRL(linha.resultado) + '</td>';
+                    body.appendChild(tr);
+                });
+            } else {
+                // Fallback: mostrar valor simples
+                var tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="3">Valor Calculado</td>' +
+                    '<td class="text-end valor-col fw-bold">' + formatBRL(data.valor_cotado) + '</td>';
+                body.appendChild(tr);
+            }
+        })
+        .catch(function(err) {
+            loading.style.display = 'none';
+            conteudo.style.display = 'block';
+            erro.style.display = 'block';
+            erro.textContent = 'Erro de conexao: ' + err.message;
+        });
 }
 </script>
 {% endblock %}

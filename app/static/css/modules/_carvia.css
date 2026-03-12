@@ -588,3 +588,63 @@
 .carvia-csv-sem-match {
     opacity: 0.6;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Breakdown Table (descritivo de calculo)
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-breakdown-table {
+    font-size: 0.82rem;
+    border: 1px solid var(--border, #dee2e6);
+}
+
+.carvia-breakdown-table th,
+.carvia-breakdown-table td {
+    padding: 0.25rem 0.5rem;
+}
+
+.carvia-breakdown-total {
+    background-color: var(--bg-light, #f8f9fa);
+    font-weight: 600;
+}
+
+[data-bs-theme="dark"] .carvia-breakdown-total {
+    background-color: var(--bg-dark, #2b3035);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Cotacao Manual Section (dentro do modal)
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-cotacao-manual-section {
+    border-style: dashed !important;
+    border-color: var(--border, #dee2e6) !important;
+    background-color: var(--bg-light, #f8f9fa);
+}
+
+[data-bs-theme="dark"] .carvia-cotacao-manual-section {
+    background-color: var(--bg-dark, #2b3035);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Config CRUD Tables (modelos moto, empresas cubagem)
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-config-crud .table td,
+.carvia-config-crud .table th {
+    vertical-align: middle;
+}
+
+.carvia-config-crud .form-control-sm,
+.carvia-config-crud .form-select-sm {
+    font-size: 0.82rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Autocomplete obrigatorio — validacao visual
+   ═══════════════════════════════════════════════════════════════ */
+
+.carvia-autocomplete-wrapper input.is-invalid {
+    border-color: var(--bs-danger, #dc3545);
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.15);
+}

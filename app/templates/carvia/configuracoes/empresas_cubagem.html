@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-building"></i> Empresas — Cubagem</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaEmpresa">
+            <i class="fas fa-plus"></i> Nova Empresa
+        </button>
+    </div>
+
+    {% set carvia_active = 'configuracoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="carvia-config-crud">
+        <div class="card">
+            <div class="card-body p-0">
+                {% if empresas %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th>CNPJ</th>
+                                <th>Nome Empresa</th>
+                                <th class="text-center">Considerar Cubagem</th>
+                                <th class="text-center">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for empresa in empresas %}
+                            <tr>
+                                <td>{{ empresa.cnpj_empresa }}</td>
+                                <td>{{ empresa.nome_empresa }}</td>
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               id="toggle_{{ empresa.id }}"
+                                               {{ 'checked' if empresa.considerar_cubagem }}
+                                               onchange="toggleCubagem({{ empresa.id }}, this.checked)">
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#modalEditarEmpresa{{ empresa.id }}"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            onclick="excluirEmpresa({{ empresa.id }}, '{{ empresa.nome_empresa }}')"
+                                            title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-building fa-3x mb-3"></i>
+                    <p>Nenhuma empresa cadastrada.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Empresa -->
+<div class="modal fade" id="modalNovaEmpresa" tabindex="-1" aria-labelledby="modalNovaEmpresaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formNovaEmpresa" onsubmit="criarEmpresa(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovaEmpresaLabel">
+                        <i class="fas fa-plus"></i> Nova Empresa
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="novo_cnpj" class="form-label">CNPJ *</label>
+                            <input type="text" class="form-control" id="novo_cnpj" name="cnpj_empresa" required
+                                   placeholder="00.000.000/0000-00" maxlength="18">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_nome_empresa" class="form-label">Nome Empresa *</label>
+                            <input type="text" class="form-control" id="novo_nome_empresa" name="nome_empresa" required
+                                   placeholder="Razao social">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="considerar_cubagem"
+                                       id="novo_considerar_cubagem" checked>
+                                <label class="form-check-label" for="novo_considerar_cubagem">
+                                    Considerar cubagem para esta empresa
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modais Editar Empresa -->
+{% for empresa in empresas %}
+<div class="modal fade" id="modalEditarEmpresa{{ empresa.id }}" tabindex="-1"
+     aria-labelledby="modalEditarEmpresa{{ empresa.id }}Label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form onsubmit="editarEmpresa(event, {{ empresa.id }})">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarEmpresa{{ empresa.id }}Label">
+                        <i class="fas fa-edit"></i> Editar Empresa: {{ empresa.nome_empresa }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">CNPJ *</label>
+                            <input type="text" class="form-control" name="cnpj_empresa" required
+                                   value="{{ empresa.cnpj_empresa }}" maxlength="18">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nome Empresa *</label>
+                            <input type="text" class="form-control" name="nome_empresa" required
+                                   value="{{ empresa.nome_empresa }}">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="considerar_cubagem"
+                                       id="editar_considerar_cubagem_{{ empresa.id }}"
+                                       {{ 'checked' if empresa.considerar_cubagem }}>
+                                <label class="form-check-label" for="editar_considerar_cubagem_{{ empresa.id }}">
+                                    Considerar cubagem para esta empresa
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function csrfHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+    };
+}
+
+function getEmpresaFormData(form) {
+    return {
+        cnpj_empresa: form.querySelector('[name="cnpj_empresa"]').value,
+        nome_empresa: form.querySelector('[name="nome_empresa"]').value,
+        considerar_cubagem: form.querySelector('[name="considerar_cubagem"]').checked
+    };
+}
+
+function criarEmpresa(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = getEmpresaFormData(form);
+
+    fetch('/carvia/api/empresas-cubagem', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(resp => {
+        if (!resp.ok) return resp.json().then(e => { throw new Error(e.error || 'Erro ao criar empresa'); });
+        location.reload();
+    })
+    .catch(err => alert(err.message));
+}
+
+function editarEmpresa(event, id) {
+    event.preventDefault();
+    const form = event.target;
+    const data = getEmpresaFormData(form);
+
+    fetch(`/carvia/api/empresas-cubagem/${id}`, {
+        method: 'PUT',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(resp => {
+        if (!resp.ok) return resp.json().then(e => { throw new Error(e.error || 'Erro ao editar empresa'); });
+        location.reload();
+    })
+    .catch(err => alert(err.message));
+}
+
+function excluirEmpresa(id, nome) {
+    if (!confirm(`Deseja excluir a empresa "${nome}"?`)) return;
+
+    fetch(`/carvia/api/empresas-cubagem/${id}`, {
+        method: 'DELETE',
+        headers: csrfHeaders()
+    })
+    .then(resp => {
+        if (!resp.ok) return resp.json().then(e => { throw new Error(e.error || 'Erro ao excluir empresa'); });
+        location.reload();
+    })
+    .catch(err => alert(err.message));
+}
+
+function toggleCubagem(id, checked) {
+    fetch(`/carvia/api/empresas-cubagem/${id}`, {
+        method: 'PUT',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ considerar_cubagem: checked })
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            return resp.json().then(e => { throw new Error(e.error || 'Erro ao atualizar'); });
+        }
+    })
+    .catch(err => {
+        alert(err.message);
+        // Reverte o toggle em caso de erro
+        document.getElementById(`toggle_${id}`).checked = !checked;
+    });
+}
+</script>
+{% endblock %}

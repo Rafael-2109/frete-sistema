@@ -335,6 +335,27 @@ def register_operacao_routes(bp):
                 )
                 db.session.add(junction)
 
+            # Auto-cubagem para motos (se empresa configurada)
+            try:
+                from app.carvia.services.moto_recognition_service import (
+                    MotoRecognitionService,
+                )
+                moto_svc = MotoRecognitionService()
+                if cnpj_cliente and moto_svc.empresa_usa_cubagem(cnpj_cliente):
+                    resultado_cubagem = moto_svc.calcular_peso_cubado_operacao(
+                        operacao.id
+                    )
+                    if (
+                        resultado_cubagem
+                        and resultado_cubagem['peso_cubado_total'] > 0
+                    ):
+                        operacao.peso_cubado = resultado_cubagem[
+                            'peso_cubado_total'
+                        ]
+                        operacao.calcular_peso_utilizado()  # R3
+            except Exception as e_cub:
+                logger.warning(f"Erro auto-cubagem op={operacao.id}: {e_cub}")
+
             db.session.commit()
 
             flash(f'Operacao #{operacao.id} criada com {len(nfs_encontradas)} NF(s).', 'success')
@@ -837,10 +858,37 @@ def register_operacao_routes(bp):
 
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
+    @bp.route('/api/operacao/<int:operacao_id>/subcontrato/<int:sub_id>/simular-recotacao')
+    @login_required
+    def simular_recotacao(operacao_id, sub_id):
+        """Retorna descritivo enriquecido da recotacao (AJAX GET)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            from flask import jsonify
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub or sub.operacao_id != operacao_id:
+            from flask import jsonify
+            return jsonify({'erro': 'Subcontrato nao encontrado'}), 404
+
+        try:
+            from flask import jsonify
+            from app.carvia.services.cotacao_service import CotacaoService
+            resultado = CotacaoService().cotar_subcontrato_com_descritivo(
+                operacao_id=operacao_id,
+                transportadora_id=sub.transportadora_id,
+            )
+            return jsonify(resultado)
+
+        except Exception as e:
+            from flask import jsonify
+            logger.error(f"Erro ao simular recotacao: {e}")
+            return jsonify({'erro': str(e)}), 500
+
     @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/recotar', methods=['POST'])
     @login_required
     def recotar_subcontrato(operacao_id, sub_id):
-        """Recalcula cotacao de um subcontrato"""
+        """Recalcula cotacao de um subcontrato. Aceita valor_override opcional."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -851,6 +899,17 @@ def register_operacao_routes(bp):
             return redirect(url_for('carvia.listar_operacoes'))
 
         try:
+            # Verificar se usuario enviou valor manual (campo editavel do modal)
+            valor_override_raw = request.form.get('valor_override', '').strip()
+            valor_override = None
+            if valor_override_raw:
+                try:
+                    valor_override = float(
+                        valor_override_raw.replace('.', '').replace(',', '.')
+                    )
+                except (ValueError, TypeError):
+                    pass
+
             from app.carvia.services.cotacao_service import CotacaoService
             cotacao = CotacaoService().cotar_subcontrato(
                 operacao_id=operacao_id,
@@ -858,12 +917,21 @@ def register_operacao_routes(bp):
             )
 
             if cotacao.get('sucesso'):
-                sub.valor_cotado = cotacao['valor_cotado']
+                # Se tem valor_override valido, usar em vez do calculado
+                if valor_override and valor_override > 0:
+                    sub.valor_cotado = valor_override
+                    logger.info(
+                        f"Recotacao sub #{sub_id}: valor override "
+                        f"R$ {valor_override:.2f} (calculado: R$ {cotacao['valor_cotado']:.2f})"
+                    )
+                else:
+                    sub.valor_cotado = cotacao['valor_cotado']
+
                 sub.tabela_frete_id = cotacao.get('tabela_frete_id')
                 if sub.status == 'PENDENTE':
                     sub.status = 'COTADO'
                 db.session.commit()
-                flash(f'Recotacao: R$ {cotacao["valor_cotado"]:.2f}', 'success')
+                flash(f'Recotacao: R$ {float(sub.valor_cotado):.2f}', 'success')
             else:
                 flash(f'Erro na recotacao: {cotacao.get("erro")}', 'warning')
 

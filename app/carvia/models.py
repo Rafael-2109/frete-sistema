@@ -855,6 +855,10 @@ class CarviaSessaoDemanda(db.Model):
     valor_frete_calculado = db.Column(db.Numeric(15, 2), nullable=True)
     detalhes_calculo = db.Column(db.JSON, nullable=True)
 
+    # Valores por demanda (proposta comercial)
+    valor_proposto = db.Column(db.Numeric(15, 2), nullable=True)
+    valor_contra_proposta = db.Column(db.Numeric(15, 2), nullable=True)
+
     observacoes = db.Column(db.Text, nullable=True)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 
@@ -993,3 +997,38 @@ class CarviaConciliacao(db.Model):
             f'<CarviaConciliacao linha={self.extrato_linha_id} '
             f'{self.tipo_documento}:{self.documento_id} {self.valor_alocado}>'
         )
+
+
+class CarviaModeloMoto(db.Model):
+    """Modelos de moto para calculo automatico de peso cubado"""
+    __tablename__ = 'carvia_modelos_moto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    regex_pattern = db.Column(db.String(200), nullable=True)
+    comprimento = db.Column(db.Numeric(10, 4), nullable=False)
+    largura = db.Column(db.Numeric(10, 4), nullable=False)
+    altura = db.Column(db.Numeric(10, 4), nullable=False)
+    peso_medio = db.Column(db.Numeric(10, 3), nullable=True)
+    cubagem_minima = db.Column(db.Numeric(10, 2), nullable=False, default=300)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    def __repr__(self):
+        return f'<CarviaModeloMoto {self.nome} ({self.comprimento}x{self.largura}x{self.altura})>'
+
+
+class CarviaEmpresaCubagem(db.Model):
+    """Empresas que utilizam cubagem para calculo de peso"""
+    __tablename__ = 'carvia_empresas_cubagem'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cnpj_empresa = db.Column(db.String(20), nullable=False, unique=True)
+    nome_empresa = db.Column(db.String(255), nullable=False)
+    considerar_cubagem = db.Column(db.Boolean, nullable=False, default=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    def __repr__(self):
+        return f'<CarviaEmpresaCubagem {self.cnpj_empresa} cubagem={self.considerar_cubagem}>'

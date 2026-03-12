@@ -167,6 +167,8 @@
                             <th>Entrega</th>
                             <th>Agendamento</th>
                             <th>Frete Selecionado</th>
+                            <th class="text-end">V. Proposto</th>
+                            <th class="text-end">Contra Prop.</th>
                             <th>Acoes</th>
                         </tr>
                     </thead>
@@ -196,6 +198,28 @@
                                 {% else %}
                                 <span class="text-muted">Nao cotado</span>
                                 {% endif %}
+                            </td>
+                            <td class="text-end" id="proposto-cell-{{ d.id }}">
+                                {% if sessao.status == 'RASCUNHO' and d.valor_frete_calculado %}
+                                <input type="text" class="form-control form-control-sm text-end" style="width:100px"
+                                       inputmode="decimal"
+                                       value="{{ d.valor_proposto|numero_br(2) if d.valor_proposto else '' }}"
+                                       placeholder="0,00"
+                                       onchange="salvarValorDemanda({{ sessao.id }}, {{ d.id }}, 'valor_proposto', this.value)">
+                                {% elif d.valor_proposto %}
+                                {{ d.valor_proposto|valor_br }}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-end" id="contra-cell-{{ d.id }}">
+                                {% if sessao.status in ('RASCUNHO', 'ENVIADO') %}
+                                <input type="text" class="form-control form-control-sm text-end" style="width:100px"
+                                       inputmode="decimal"
+                                       value="{{ d.valor_contra_proposta|numero_br(2) if d.valor_contra_proposta else '' }}"
+                                       placeholder="0,00"
+                                       onchange="salvarValorDemanda({{ sessao.id }}, {{ d.id }}, 'valor_contra_proposta', this.value)">
+                                {% elif d.valor_contra_proposta %}
+                                {{ d.valor_contra_proposta|valor_br }}
+                                {% else %}-{% endif %}
                             </td>
                             <td>
                                 <div class="d-flex gap-1">
@@ -248,7 +272,8 @@
                     </div>
                     <div class="col-md-2">
                         <div class="carvia-autocomplete-wrapper">
-                            <input type="text" name="origem_cidade" id="addOrigemCidade"
+                            <input type="hidden" name="origem_cidade" id="addOrigemCidadeHidden">
+                            <input type="text" id="addOrigemCidade"
                                    class="form-control form-control-sm"
                                    placeholder="Cidade origem *" required autocomplete="off">
                             <div class="carvia-autocomplete-results" id="addOrigemCidadeResults"></div>
@@ -268,7 +293,8 @@
                     </div>
                     <div class="col-md-2">
                         <div class="carvia-autocomplete-wrapper">
-                            <input type="text" name="destino_cidade" id="addDestinoCidade"
+                            <input type="hidden" name="destino_cidade" id="addDestinoCidadeHidden">
+                            <input type="text" id="addDestinoCidade"
                                    class="form-control form-control-sm"
                                    placeholder="Cidade destino *" required autocomplete="off">
                             <div class="carvia-autocomplete-results" id="addDestinoCidadeResults"></div>
@@ -359,6 +385,33 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                {# --- Cotacao Manual --- #}
+                <div class="card mb-3 border-dashed carvia-cotacao-manual-section">
+                    <div class="card-body py-2">
+                        <h6 class="mb-2"><i class="fas fa-pen"></i> Cotacao Manual</h6>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label form-label-sm mb-0">Transportadora</label>
+                                <select id="manualTransportadora" class="form-select form-select-sm">
+                                    <option value="">Carregando...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label form-label-sm mb-0">Valor Frete (R$)</label>
+                                <input type="text" id="manualValorFrete" class="form-control form-control-sm"
+                                       placeholder="0,00" inputmode="decimal">
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-sm btn-outline-success w-100"
+                                        onclick="usarCotacaoManual()">
+                                    <i class="fas fa-check"></i> Usar Cotacao Manual
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="my-2">
+
                 <div id="opcoesLoading" class="text-center py-4">
                     <div class="spinner-border text-primary" role="status"></div>
                     <p class="mt-2 text-muted">Calculando opcoes...</p>
@@ -579,66 +632,88 @@ function toggleDetalhes(detailId) {
 }
 
 // =====================================================================
-// Build breakdown HTML a partir dos detalhes da CalculadoraFrete
+// Build breakdown HTML — tabela com formulas (componente x base = resultado)
 // =====================================================================
 function buildBreakdownHTML(detalhes) {
     if (!detalhes || typeof detalhes !== 'object') {
         return '<em class="text-muted">Sem detalhes disponiveis</em>';
     }
 
-    var items = [
-        {label: 'Frete Base (kg)', key: 'frete_peso'},
-        {label: 'Ad Valorem (% valor)', key: 'advalorem'},
-        {label: 'GRIS', key: 'gris'},
+    // Se tem descritivo enriquecido (cotar_subcontrato_com_descritivo)
+    if (detalhes.descritivo && Array.isArray(detalhes.descritivo)) {
+        return buildDescritvoTable(detalhes.descritivo);
+    }
+
+    // Fonte de dados: detalhes aninhados ou top-level
+    var d = detalhes.detalhes || detalhes;
+
+    var componentes = [
+        {label: 'Frete Peso', key: 'frete_peso', fator_key: 'valor_kg', base_label: 'Peso'},
+        {label: 'Ad Valorem', key: 'advalorem', fator_key: 'percentual_advalorem', base_label: '% Merc.'},
+        {label: 'GRIS', key: 'gris', fator_key: 'percentual_gris', base_label: '% Merc.'},
         {label: 'Pedagio', key: 'pedagio'},
         {label: 'TAS', key: 'tas'},
         {label: 'ADV', key: 'adv'},
         {label: 'RCA', key: 'rca'},
         {label: 'Despacho', key: 'despacho'},
         {label: 'CTe', key: 'cte'},
-        {label: 'Valor Bruto', key: 'valor_bruto'},
-        {label: 'ICMS Aplicado', key: 'icms_aplicado'},
-        {label: 'Valor com ICMS', key: 'valor_com_icms'},
     ];
 
-    var html = '<div class="row g-2 px-3 py-2">';
-    items.forEach(function(item) {
-        var val = detalhes[item.key];
+    var html = '<table class="table table-sm mb-0 carvia-breakdown-table">';
+    html += '<thead><tr><th>Componente</th><th class="text-end">Valor</th></tr></thead><tbody>';
+
+    var temLinha = false;
+    componentes.forEach(function(comp) {
+        var val = d[comp.key] || detalhes[comp.key];
         if (val != null && val !== 0 && val !== undefined) {
-            var formatted = typeof val === 'number' ? formatBRL(val) : val;
-            var isBold = item.key === 'valor_com_icms' || item.key === 'valor_bruto';
-            html += '<div class="col-auto">' +
-                '<small class="text-muted">' + item.label + '</small><br>' +
-                (isBold ? '<strong>' : '') + formatted + (isBold ? '</strong>' : '') +
-                '</div>';
+            html += '<tr><td>' + comp.label + '</td>';
+            html += '<td class="text-end">' + formatBRL(val) + '</td></tr>';
+            temLinha = true;
         }
     });
 
-    // Adicionar detalhes extras se existirem (detalhes aninhados)
-    if (detalhes.detalhes && typeof detalhes.detalhes === 'object') {
-        var d = detalhes.detalhes;
-        var extraItems = [
-            {label: 'Frete Peso', key: 'frete_peso'},
-            {label: 'GRIS', key: 'gris'},
-            {label: 'Pedagio', key: 'pedagio'},
-            {label: 'TAS', key: 'tas'},
-            {label: 'ADV', key: 'adv'},
-            {label: 'RCA', key: 'rca'},
-            {label: 'Despacho', key: 'despacho'},
-            {label: 'CTe', key: 'cte'},
-        ];
-        extraItems.forEach(function(item) {
-            var val = d[item.key];
-            if (val != null && val !== 0 && val !== undefined && !detalhes[item.key]) {
-                html += '<div class="col-auto">' +
-                    '<small class="text-muted">' + item.label + '</small><br>' +
-                    formatBRL(val) +
-                    '</div>';
-            }
-        });
+    if (!temLinha) {
+        return '<em class="text-muted">Sem detalhes disponiveis</em>';
     }
 
-    html += '</div>';
+    // Valor bruto (subtotal sem ICMS)
+    var bruto = detalhes.valor_bruto || d.valor_bruto;
+    if (bruto) {
+        html += '<tr class="carvia-breakdown-total"><td><strong>Subtotal (sem ICMS)</strong></td>';
+        html += '<td class="text-end"><strong>' + formatBRL(bruto) + '</strong></td></tr>';
+    }
+
+    // ICMS
+    var icms = detalhes.icms_aplicado || d.icms_aplicado;
+    if (icms != null && icms !== 0) {
+        html += '<tr><td>ICMS</td><td class="text-end">' + formatBRL(icms) + '</td></tr>';
+    }
+
+    // Total final
+    var total = detalhes.valor_com_icms || d.valor_com_icms || detalhes.valor_frete;
+    if (total) {
+        html += '<tr class="carvia-breakdown-total table-primary"><td><strong>TOTAL</strong></td>';
+        html += '<td class="text-end"><strong>' + formatBRL(total) + '</strong></td></tr>';
+    }
+
+    html += '</tbody></table>';
+    return html;
+}
+
+function buildDescritvoTable(descritivo) {
+    var html = '<table class="table table-sm mb-0 carvia-breakdown-table">';
+    html += '<thead><tr><th>Componente</th><th>Fator</th><th>Base</th><th class="text-end">Resultado</th></tr></thead><tbody>';
+    descritivo.forEach(function(item) {
+        var isTotal = item.componente && item.componente.toLowerCase().indexOf('total') !== -1;
+        var cls = isTotal ? ' class="carvia-breakdown-total"' : '';
+        html += '<tr' + cls + '>';
+        html += '<td>' + (isTotal ? '<strong>' : '') + (item.componente || '') + (isTotal ? '</strong>' : '') + '</td>';
+        html += '<td>' + (item.fator || '') + '</td>';
+        html += '<td>' + (item.base || '') + '</td>';
+        html += '<td class="text-end">' + (isTotal ? '<strong>' : '') + formatBRL(item.resultado || 0) + (isTotal ? '</strong>' : '') + '</td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
     return html;
 }
 
@@ -656,9 +731,10 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             transportadora_id: opcao.transportadora_id,
-            tabela_frete_id: opcao.tabela_frete_id,
+            tabela_frete_id: opcao.tabela_frete_id || null,
             valor_frete: opcao.valor_frete,
             detalhes: opcao.detalhes || {},
+            manual: opcao.manual || false,
         }),
     })
     .then(function(r) { return r.json(); })
@@ -688,26 +764,132 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
 }
 
 // =====================================================================
+// Salvar valor proposto / contra proposta por demanda (AJAX)
+// =====================================================================
+function salvarValorDemanda(sessaoId, demandaId, campo, valor) {
+    // Parse valor BR (1.234,56 -> 1234.56)
+    var valorNum = null;
+    if (valor && valor.trim()) {
+        valorNum = parseFloat(valor.replace(/\./g, '').replace(',', '.'));
+        if (isNaN(valorNum)) valorNum = null;
+    }
+
+    var payload = {};
+    payload[campo] = valorNum;
+
+    fetch('/carvia/api/sessao-cotacao/' + sessaoId + '/demanda/' + demandaId + '/valores', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.sucesso) {
+            alert('Erro ao salvar: ' + (data.erro || 'desconhecido'));
+        }
+    })
+    .catch(function(err) {
+        alert('Erro ao salvar: ' + err.message);
+    });
+}
+
+// =====================================================================
+// Cotacao Manual — carregar transportadoras e usar
+// =====================================================================
+function carregarTransportadoras() {
+    fetch('/carvia/api/transportadoras-ativas')
+        .then(function(r) { return r.json(); })
+        .then(function(lista) {
+            var sel = document.getElementById('manualTransportadora');
+            sel.innerHTML = '<option value="">-- Selecione --</option>';
+            lista.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.nome + (t.cnpj ? ' (' + t.cnpj + ')' : '');
+                opt.dataset.nome = t.nome;
+                sel.appendChild(opt);
+            });
+        })
+        .catch(function(err) {
+            console.warn('Erro ao carregar transportadoras:', err);
+        });
+}
+
+function usarCotacaoManual() {
+    var sel = document.getElementById('manualTransportadora');
+    var inputValor = document.getElementById('manualValorFrete');
+    var transportadoraId = sel.value;
+    var transportadoraNome = sel.options[sel.selectedIndex]
+        ? sel.options[sel.selectedIndex].dataset.nome : '';
+
+    if (!transportadoraId) {
+        alert('Selecione uma transportadora.');
+        return;
+    }
+
+    var valorStr = (inputValor.value || '').replace(/\./g, '').replace(',', '.');
+    var valorFrete = parseFloat(valorStr);
+    if (isNaN(valorFrete) || valorFrete <= 0) {
+        alert('Informe um valor de frete valido.');
+        return;
+    }
+
+    selecionarOpcao(currentSessaoId, currentDemandaId, {
+        transportadora_id: parseInt(transportadoraId),
+        tabela_frete_id: null,
+        valor_frete: valorFrete,
+        detalhes: {tipo: 'MANUAL', observacao: 'Cotacao manual'},
+        manual: true,
+    });
+}
+
+// Carregar transportadoras ao abrir o modal
+document.getElementById('modalOpcoesFrete').addEventListener('show.bs.modal', function() {
+    var sel = document.getElementById('manualTransportadora');
+    if (sel && sel.options.length <= 1) {
+        carregarTransportadoras();
+    }
+});
+
+// =====================================================================
 // Autocomplete de cidade (form Adicionar Demanda)
+// =====================================================================
+// =====================================================================
+// Normalizacao de acentos para busca
+// =====================================================================
+function normalizeText(str) {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// =====================================================================
+// Autocomplete obrigatorio com hidden input
 // =====================================================================
 (function() {
     var debounceTimer = null;
 
-    function setupCidadeAutocomplete(ufSelectId, cidadeInputId, resultsId) {
+    function setupCidadeAutocomplete(ufSelectId, cidadeInputId, resultsId, hiddenInputId) {
         var ufSelect = document.getElementById(ufSelectId);
         var cidadeInput = document.getElementById(cidadeInputId);
         var resultsDiv = document.getElementById(resultsId);
+        var hiddenInput = hiddenInputId ? document.getElementById(hiddenInputId) : null;
 
         if (!ufSelect || !cidadeInput || !resultsDiv) return;
 
         ufSelect.addEventListener('change', function() {
             cidadeInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+            cidadeInput.classList.remove('is-invalid');
             resultsDiv.classList.remove('show');
             var uf = this.value;
             if (uf) carregarCidades(uf);
         });
 
         cidadeInput.addEventListener('input', function() {
+            // Limpar hidden ao digitar manualmente (forcara selecao)
+            if (hiddenInput) {
+                hiddenInput.value = '';
+                cidadeInput.classList.add('is-invalid');
+            }
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(function() {
                 var uf = ufSelect.value;
@@ -716,7 +898,7 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
                     resultsDiv.classList.remove('show');
                     return;
                 }
-                filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+                filtrarCidades(uf, termo, resultsDiv, cidadeInput, hiddenInput);
             }, 200);
         });
 
@@ -739,21 +921,21 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
             .catch(function(err) { console.warn('Erro ao carregar cidades:', err); });
     }
 
-    function filtrarCidades(uf, termo, resultsDiv, cidadeInput) {
+    function filtrarCidades(uf, termo, resultsDiv, cidadeInput, hiddenInput) {
         var cidades = cidadeCache[uf];
         if (!cidades) {
             fetch('/localidades/ajax/cidades_por_uf/' + uf)
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     cidadeCache[uf] = data;
-                    filtrarCidades(uf, termo, resultsDiv, cidadeInput);
+                    filtrarCidades(uf, termo, resultsDiv, cidadeInput, hiddenInput);
                 });
             return;
         }
 
-        var termoUpper = termo.toUpperCase();
+        var termoNorm = normalizeText(termo);
         var filtradas = cidades.filter(function(c) {
-            return c.toUpperCase().indexOf(termoUpper) !== -1;
+            return normalizeText(c).indexOf(termoNorm) !== -1;
         }).slice(0, 15);
 
         if (filtradas.length === 0) {
@@ -769,6 +951,10 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
             item.textContent = cidade;
             item.addEventListener('click', function() {
                 cidadeInput.value = cidade;
+                if (hiddenInput) {
+                    hiddenInput.value = cidade;
+                    cidadeInput.classList.remove('is-invalid');
+                }
                 resultsDiv.classList.remove('show');
             });
             resultsDiv.appendChild(item);
@@ -776,9 +962,33 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
         resultsDiv.classList.add('show');
     }
 
-    // Inicializar autocomplete para o form de adicionar demanda
-    setupCidadeAutocomplete('addOrigemUf', 'addOrigemCidade', 'addOrigemCidadeResults');
-    setupCidadeAutocomplete('addDestinoUf', 'addDestinoCidade', 'addDestinoCidadeResults');
+    // Inicializar autocomplete para o form de adicionar demanda (com hidden input)
+    setupCidadeAutocomplete('addOrigemUf', 'addOrigemCidade', 'addOrigemCidadeResults', 'addOrigemCidadeHidden');
+    setupCidadeAutocomplete('addDestinoUf', 'addDestinoCidade', 'addDestinoCidadeResults', 'addDestinoCidadeHidden');
+
+    // Validacao no submit: impedir envio se hidden input vazio
+    var formDemanda = document.querySelector('form[action*="adicionar-demanda"]');
+    if (formDemanda) {
+        formDemanda.addEventListener('submit', function(e) {
+            var origemHidden = document.getElementById('addOrigemCidadeHidden');
+            var destinoHidden = document.getElementById('addDestinoCidadeHidden');
+            var valido = true;
+
+            if (origemHidden && !origemHidden.value) {
+                document.getElementById('addOrigemCidade').classList.add('is-invalid');
+                valido = false;
+            }
+            if (destinoHidden && !destinoHidden.value) {
+                document.getElementById('addDestinoCidade').classList.add('is-invalid');
+                valido = false;
+            }
+
+            if (!valido) {
+                e.preventDefault();
+                alert('Selecione uma cidade valida da lista de sugestoes.');
+            }
+        });
+    }
 })();
 </script>
 {% endblock %}

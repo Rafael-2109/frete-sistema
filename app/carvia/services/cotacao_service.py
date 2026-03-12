@@ -189,7 +189,8 @@ class CotacaoService:
                               valor_mercadoria: float,
                               uf_destino: str,
                               cidade_destino: str,
-                              cidade_icms: float = None) -> Optional[Dict]:
+                              cidade_icms: float = None,
+                              para_subcontrato: bool = True) -> Optional[Dict]:
         """Calcula frete usando uma tabela especifica.
 
         Args:
@@ -199,6 +200,9 @@ class CotacaoService:
             uf_destino: UF destino
             cidade_destino: Nome da cidade destino (para log)
             cidade_icms: ICMS da cidade destino (se resolvido)
+            para_subcontrato: Se True (default CarVia), NAO passa ICMS da
+                cidade. CalculadoraFrete usara apenas icms_proprio da tabela
+                (se existir). Sem icms_proprio, ICMS = 0.
         """
         try:
             from app.utils.calculadora_frete import CalculadoraFrete
@@ -209,9 +213,10 @@ class CotacaoService:
             # Usar TabelaFreteManager para preparar dados no formato correto
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(tabela)
 
-            # Preparar parametro cidade com ICMS se disponivel
+            # Para subcontrato: NAO usar ICMS da cidade (apenas icms_proprio)
+            # Para cotacao comercial: usar ICMS da cidade normalmente
             cidade_param = None
-            if cidade_icms is not None:
+            if not para_subcontrato and cidade_icms is not None:
                 cidade_param = {'icms': cidade_icms}
 
             resultado = calc.calcular_frete_unificado(
@@ -231,6 +236,176 @@ class CotacaoService:
         except Exception as e:
             logger.warning(f"Erro ao calcular frete: {e}")
             return None
+
+    def cotar_subcontrato_com_descritivo(self, operacao_id: int,
+                                          transportadora_id: int) -> Dict:
+        """
+        Cota subcontrato e retorna descritivo enriquecido do calculo.
+
+        Fluxo: cotar_subcontrato() + carregar tabela + montar descritivo.
+
+        Returns:
+            Dict com resultado original + 'descritivo' (componentes detalhados)
+            + 'tabela_dados' (dados brutos da tabela usada)
+        """
+        resultado = self.cotar_subcontrato(operacao_id, transportadora_id)
+
+        if not resultado.get('sucesso'):
+            return resultado
+
+        # Carregar tabela usada para montar descritivo
+        try:
+            from app.tabelas.models import TabelaFrete
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+            from app.carvia.models import CarviaOperacao
+
+            tabela_id = resultado.get('tabela_frete_id')
+            if not tabela_id:
+                return resultado
+
+            tabela = db.session.get(TabelaFrete, tabela_id)
+            if not tabela:
+                return resultado
+
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(tabela)
+            operacao = db.session.get(CarviaOperacao, operacao_id)
+
+            peso = float(operacao.peso_utilizado or operacao.peso_bruto or 0)
+            valor_mercadoria = float(operacao.valor_mercadoria or 0)
+
+            # Montar descritivo legivel
+            detalhes = resultado.get('detalhes', {})
+            descritivo = self._montar_descritivo(
+                tabela_dados, detalhes, peso, valor_mercadoria
+            )
+
+            resultado['descritivo'] = descritivo
+            resultado['tabela_dados'] = tabela_dados
+
+        except Exception as e:
+            logger.warning("Erro ao montar descritivo: %s", e)
+
+        return resultado
+
+    def _montar_descritivo(self, tabela_dados: Dict, detalhes: Dict,
+                           peso: float, valor_mercadoria: float) -> List[Dict]:
+        """
+        Monta descritivo legivel com componente, fator da tabela,
+        valor do pedido e resultado.
+
+        Returns:
+            Lista de dicts: [{'componente', 'fator', 'base', 'resultado'}]
+        """
+        linhas = []
+
+        # Frete por peso
+        valor_kg = tabela_dados.get('valor_kg') or tabela_dados.get('valor_por_kg')
+        if valor_kg:
+            frete_peso = detalhes.get('frete_peso', 0)
+            linhas.append({
+                'componente': 'Frete Peso',
+                'fator': f'R$ {float(valor_kg):.4f}/kg',
+                'base': f'{peso:.1f} kg',
+                'resultado': float(frete_peso or 0),
+            })
+
+        # Ad Valorem
+        perc_adv = tabela_dados.get('percentual_ad_valorem')
+        if perc_adv:
+            adv = detalhes.get('advalorem', 0)
+            linhas.append({
+                'componente': 'Ad Valorem',
+                'fator': f'{float(perc_adv):.2f}%',
+                'base': f'R$ {valor_mercadoria:,.2f}',
+                'resultado': float(adv or 0),
+            })
+
+        # GRIS
+        perc_gris = tabela_dados.get('percentual_gris')
+        if perc_gris:
+            gris = detalhes.get('gris', 0)
+            linhas.append({
+                'componente': 'GRIS',
+                'fator': f'{float(perc_gris):.2f}%',
+                'base': f'R$ {valor_mercadoria:,.2f}',
+                'resultado': float(gris or 0),
+            })
+
+        # Pedagio
+        pedagio = detalhes.get('pedagio', 0)
+        if pedagio:
+            linhas.append({
+                'componente': 'Pedagio',
+                'fator': 'fixo',
+                'base': '-',
+                'resultado': float(pedagio),
+            })
+
+        # TAS
+        tas = detalhes.get('tas', 0)
+        if tas:
+            linhas.append({
+                'componente': 'TAS',
+                'fator': 'fixo',
+                'base': '-',
+                'resultado': float(tas),
+            })
+
+        # Despacho
+        despacho = detalhes.get('despacho', 0)
+        if despacho:
+            linhas.append({
+                'componente': 'Despacho',
+                'fator': 'fixo',
+                'base': '-',
+                'resultado': float(despacho),
+            })
+
+        # ADV / RCA / CTe
+        for comp in ['adv', 'rca', 'cte']:
+            val = detalhes.get(comp, 0)
+            if val:
+                linhas.append({
+                    'componente': comp.upper(),
+                    'fator': 'fixo',
+                    'base': '-',
+                    'resultado': float(val),
+                })
+
+        # Subtotal (valor bruto)
+        valor_bruto = detalhes.get('valor_bruto', 0)
+        linhas.append({
+            'componente': 'Subtotal (sem ICMS)',
+            'fator': '',
+            'base': '',
+            'resultado': float(valor_bruto or 0),
+            'is_subtotal': True,
+        })
+
+        # ICMS
+        icms = detalhes.get('icms_aplicado', 0)
+        if icms:
+            linhas.append({
+                'componente': 'ICMS Proprio',
+                'fator': f'{float(icms):.2f}%',
+                'base': '-',
+                'resultado': float(
+                    detalhes.get('valor_com_icms', 0)
+                ) - float(valor_bruto or 0),
+                'is_icms': True,
+            })
+
+        # Total final
+        valor_final = detalhes.get('valor_com_icms', 0)
+        linhas.append({
+            'componente': 'VALOR FINAL',
+            'fator': '',
+            'base': '',
+            'resultado': float(valor_final or 0),
+            'is_total': True,
+        })
+
+        return linhas
 
     def cotar_todas_opcoes(self, peso: float, valor_mercadoria: float,
                            uf_destino: str, cidade_destino: str = None,
@@ -326,6 +501,7 @@ class CotacaoService:
                                     tabela, peso, valor_mercadoria,
                                     uf_destino, cidade_destino,
                                     cidade_icms=cidade_obj.icms,
+                                    para_subcontrato=False,
                                 )
                                 if resultado:
                                     # Buscar transportadora real da tabela
@@ -388,6 +564,7 @@ class CotacaoService:
                             tabela, peso, valor_mercadoria,
                             uf_destino, cidade_destino,
                             cidade_icms=cidade_obj.icms if cidade_obj else None,
+                            para_subcontrato=False,
                         )
                         if resultado:
                             transportadora = tabela.transportadora

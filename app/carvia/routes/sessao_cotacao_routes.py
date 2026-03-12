@@ -616,15 +616,29 @@ def register_sessao_cotacao_routes(bp):
         tabela_frete_id = data.get('tabela_frete_id')
         valor_frete = data.get('valor_frete')
         detalhes = data.get('detalhes', {})
+        manual = data.get('manual', False)
+        valor_proposto = data.get('valor_proposto')
 
-        if not all([transportadora_id, tabela_frete_id, valor_frete]):
+        # Cotacao manual: tabela_frete_id pode ser None
+        if not transportadora_id or not valor_frete:
+            return jsonify({'erro': 'Dados incompletos'}), 400
+
+        if not manual and not tabela_frete_id:
             return jsonify({'erro': 'Dados incompletos'}), 400
 
         try:
             demanda.transportadora_id = int(transportadora_id)
-            demanda.tabela_frete_id = int(tabela_frete_id)
+            demanda.tabela_frete_id = int(tabela_frete_id) if tabela_frete_id else None
             demanda.valor_frete_calculado = float(valor_frete)
-            demanda.detalhes_calculo = detalhes
+            demanda.detalhes_calculo = (
+                {'tipo': 'MANUAL', 'observacao': data.get('observacao', '')}
+                if manual else detalhes
+            )
+
+            # Gravar valor proposto se informado
+            if valor_proposto is not None:
+                demanda.valor_proposto = float(valor_proposto)
+
             sessao.atualizado_em = agora_utc_naive()
             db.session.commit()
 
@@ -642,4 +656,48 @@ def register_sessao_cotacao_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error("Erro ao selecionar opcao: %s", e)
+            return jsonify({'erro': str(e)}), 500
+
+    # =====================================================================
+    # API: ATUALIZAR VALOR PROPOSTO / CONTRA PROPOSTA POR DEMANDA (AJAX)
+    # =====================================================================
+    @bp.route('/api/sessao-cotacao/<int:id>/demanda/<int:did>/valores', methods=['POST'])
+    @login_required
+    def api_atualizar_valores_demanda(id, did):
+        """Grava valor_proposto e/ou valor_contra_proposta por demanda"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        sessao = db.session.get(CarviaSessaoCotacao, id)
+        if not sessao:
+            return jsonify({'erro': 'Sessao nao encontrada'}), 404
+
+        demanda = db.session.get(CarviaSessaoDemanda, did)
+        if not demanda or demanda.sessao_id != sessao.id:
+            return jsonify({'erro': 'Demanda nao encontrada'}), 404
+
+        data = request.get_json(silent=True) or {}
+
+        try:
+            if 'valor_proposto' in data:
+                val = data['valor_proposto']
+                demanda.valor_proposto = float(val) if val else None
+
+            if 'valor_contra_proposta' in data:
+                val = data['valor_contra_proposta']
+                demanda.valor_contra_proposta = float(val) if val else None
+
+            sessao.atualizado_em = agora_utc_naive()
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'demanda_id': demanda.id,
+                'valor_proposto': float(demanda.valor_proposto) if demanda.valor_proposto else None,
+                'valor_contra_proposta': float(demanda.valor_contra_proposta) if demanda.valor_contra_proposta else None,
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao atualizar valores demanda: %s", e)
             return jsonify({'erro': str(e)}), 500

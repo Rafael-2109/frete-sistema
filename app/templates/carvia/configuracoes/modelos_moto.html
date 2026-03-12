@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-motorcycle"></i> Modelos de Moto</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoModelo">
+            <i class="fas fa-plus"></i> Novo Modelo
+        </button>
+    </div>
+
+    {% set carvia_active = 'configuracoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="carvia-config-crud">
+        <div class="card">
+            <div class="card-body p-0">
+                {% if modelos %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th class="text-end">Comprimento (m)</th>
+                                <th class="text-end">Largura (m)</th>
+                                <th class="text-end">Altura (m)</th>
+                                <th class="text-end">Peso Medio (kg)</th>
+                                <th class="text-end">Cubagem Min (kg/m3)</th>
+                                <th>Regex</th>
+                                <th class="text-center">Ativo</th>
+                                <th class="text-center">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for modelo in modelos %}
+                            <tr>
+                                <td>{{ modelo.nome }}</td>
+                                <td class="text-end">{{ modelo.comprimento|numero_br(2) }}</td>
+                                <td class="text-end">{{ modelo.largura|numero_br(2) }}</td>
+                                <td class="text-end">{{ modelo.altura|numero_br(2) }}</td>
+                                <td class="text-end">{{ modelo.peso_medio|numero_br(1) if modelo.peso_medio else '-' }}</td>
+                                <td class="text-end">{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '-' }}</td>
+                                <td><code>{{ modelo.regex_pattern or '-' }}</code></td>
+                                <td class="text-center">
+                                    {% if modelo.ativo %}
+                                    <span class="badge bg-success">Sim</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Nao</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#modalEditarModelo{{ modelo.id }}"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            onclick="excluirModelo({{ modelo.id }}, '{{ modelo.nome }}')"
+                                            title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-motorcycle fa-3x mb-3"></i>
+                    <p>Nenhum modelo de moto cadastrado.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Modelo -->
+<div class="modal fade" id="modalNovoModelo" tabindex="-1" aria-labelledby="modalNovoModeloLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formNovoModelo" onsubmit="criarModelo(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovoModeloLabel">
+                        <i class="fas fa-plus"></i> Novo Modelo de Moto
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="novo_nome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="novo_nome" name="nome" required
+                                   placeholder="Ex: CG 160, Biz 125">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="novo_comprimento" class="form-label">Comprimento (m) *</label>
+                            <input type="text" class="form-control" id="novo_comprimento" name="comprimento"
+                                   inputmode="decimal" required placeholder="0,00">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="novo_largura" class="form-label">Largura (m) *</label>
+                            <input type="text" class="form-control" id="novo_largura" name="largura"
+                                   inputmode="decimal" required placeholder="0,00">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="novo_altura" class="form-label">Altura (m) *</label>
+                            <input type="text" class="form-control" id="novo_altura" name="altura"
+                                   inputmode="decimal" required placeholder="0,00">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_peso_medio" class="form-label">Peso Medio (kg)</label>
+                            <input type="text" class="form-control" id="novo_peso_medio" name="peso_medio"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_cubagem_minima" class="form-label">Cubagem Min (kg/m3)</label>
+                            <input type="text" class="form-control" id="novo_cubagem_minima" name="cubagem_minima"
+                                   inputmode="decimal" placeholder="300" value="300">
+                        </div>
+                        <div class="col-12">
+                            <label for="novo_regex_pattern" class="form-label">Regex Pattern</label>
+                            <input type="text" class="form-control" id="novo_regex_pattern" name="regex_pattern"
+                                   placeholder="Ex: (?i)cg\s*160">
+                            <small class="text-muted">Expressao regular para identificar este modelo automaticamente.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modais Editar Modelo -->
+{% for modelo in modelos %}
+<div class="modal fade" id="modalEditarModelo{{ modelo.id }}" tabindex="-1"
+     aria-labelledby="modalEditarModelo{{ modelo.id }}Label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form onsubmit="editarModelo(event, {{ modelo.id }})">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarModelo{{ modelo.id }}Label">
+                        <i class="fas fa-edit"></i> Editar Modelo: {{ modelo.nome }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">Nome *</label>
+                            <input type="text" class="form-control" name="nome" required
+                                   value="{{ modelo.nome }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Comprimento (m) *</label>
+                            <input type="text" class="form-control" name="comprimento"
+                                   inputmode="decimal" required
+                                   value="{{ modelo.comprimento|numero_br(2) }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Largura (m) *</label>
+                            <input type="text" class="form-control" name="largura"
+                                   inputmode="decimal" required
+                                   value="{{ modelo.largura|numero_br(2) }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Altura (m) *</label>
+                            <input type="text" class="form-control" name="altura"
+                                   inputmode="decimal" required
+                                   value="{{ modelo.altura|numero_br(2) }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Peso Medio (kg)</label>
+                            <input type="text" class="form-control" name="peso_medio"
+                                   inputmode="decimal"
+                                   value="{{ modelo.peso_medio|numero_br(1) if modelo.peso_medio else '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cubagem Min (kg/m3)</label>
+                            <input type="text" class="form-control" name="cubagem_minima"
+                                   inputmode="decimal"
+                                   value="{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '' }}">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Regex Pattern</label>
+                            <input type="text" class="form-control" name="regex_pattern"
+                                   value="{{ modelo.regex_pattern or '' }}">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="ativo" id="ativo_{{ modelo.id }}"
+                                       {{ 'checked' if modelo.ativo }}>
+                                <label class="form-check-label" for="ativo_{{ modelo.id }}">Ativo</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function parseBR(value) {
+    if (!value) return null;
+    return parseFloat(String(value).replace(/\./g, '').replace(',', '.'));
+}
+
+function getFormData(form) {
+    const data = {};
+    const fields = ['nome', 'comprimento', 'largura', 'altura', 'peso_medio', 'cubagem_minima', 'regex_pattern'];
+    const numericFields = ['comprimento', 'largura', 'altura', 'peso_medio', 'cubagem_minima'];
+
+    fields.forEach(field => {
+        const input = form.querySelector(`[name="${field}"]`);
+        if (!input) return;
+        if (numericFields.includes(field)) {
+            data[field] = parseBR(input.value);
+        } else {
+            data[field] = input.value || null;
+        }
+    });
+
+    const ativoCheck = form.querySelector('[name="ativo"]');
+    if (ativoCheck) {
+        data.ativo = ativoCheck.checked;
+    }
+
+    return data;
+}
+
+function csrfHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+    };
+}
+
+function criarModelo(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = getFormData(form);
+
+    fetch('/carvia/api/modelos-moto', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(resp => {
+        if (!resp.ok) return resp.json().then(e => { throw new Error(e.error || 'Erro ao criar modelo'); });
+        location.reload();
+    })
+    .catch(err => alert(err.message));
+}
+
+function editarModelo(event, id) {
+    event.preventDefault();
+    const form = event.target;
+    const data = getFormData(form);
+
+    fetch(`/carvia/api/modelos-moto/${id}`, {
+        method: 'PUT',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(resp => {
+        if (!resp.ok) return resp.json().then(e => { throw new Error(e.error || 'Erro ao editar modelo'); });
+        location.reload();
+    })
+    .catch(err => alert(err.message));
+}
+
+function excluirModelo(id, nome) {
+    if (!confirm(`Deseja excluir o modelo "${nome}"?`)) return;
+
+    fetch(`/carvia/api/modelos-moto/${id}`, {
+        method: 'DELETE',
+        headers: csrfHeaders()
+    })
+    .then(resp => {
+        if (!resp.ok) return resp.json().then(e => { throw new Error(e.error || 'Erro ao excluir modelo'); });
+        location.reload();
+    })
+    .catch(err => alert(err.message));
+}
+</script>
+{% endblock %}

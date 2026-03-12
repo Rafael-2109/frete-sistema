@@ -544,6 +544,34 @@ class ImportacaoService:
                             f"Erro no re-linking CTe→Fatura op={operacao.id}: {e_link}"
                         )
 
+                    # Auto-cubagem para motos (se empresa configurada)
+                    try:
+                        from app.carvia.services.moto_recognition_service import (
+                            MotoRecognitionService,
+                        )
+                        moto_svc = MotoRecognitionService()
+                        cnpj_cliente = operacao.cnpj_cliente or ''
+                        if cnpj_cliente and moto_svc.empresa_usa_cubagem(cnpj_cliente):
+                            resultado_cubagem = moto_svc.calcular_peso_cubado_operacao(
+                                operacao.id
+                            )
+                            if (
+                                resultado_cubagem
+                                and resultado_cubagem['peso_cubado_total'] > 0
+                            ):
+                                operacao.peso_cubado = resultado_cubagem[
+                                    'peso_cubado_total'
+                                ]
+                                operacao.calcular_peso_utilizado()  # R3
+                                logger.info(
+                                    f"Auto-cubagem op={operacao.id}: "
+                                    f"peso_cubado={operacao.peso_cubado}"
+                                )
+                    except Exception as e_cub:
+                        logger.warning(
+                            f"Erro auto-cubagem op={operacao.id}: {e_cub}"
+                        )
+
                     operacoes_criadas.append(operacao)
                 except Exception as e:
                     logger.error(f"Erro ao criar operacao: {e}")
