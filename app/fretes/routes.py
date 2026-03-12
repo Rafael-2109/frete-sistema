@@ -2082,17 +2082,17 @@ def conferir_fatura(fatura_id):
     # Verifica se todos os documentos estão aprovados/lançados
     todos_aprovados = todos_aprovados_calc
 
-    # Verifica tolerância de R$ 1,00 entre valor da fatura e valor CTe
-    diferenca_fatura_cte = abs(fatura.valor_total_fatura - valor_total_cte)
-    fatura_dentro_tolerancia = diferenca_fatura_cte <= 1.00
+    # Verifica tolerância de R$ 1,00 entre valor da fatura e valor considerado
+    diferenca_fatura_considerado = abs(fatura.valor_total_fatura - valor_total_considerado)
+    fatura_dentro_tolerancia = diferenca_fatura_considerado <= 1.00
 
     # ✅ DEBUG: Validação final
     print(
         f"DEBUG FINAL - Pode aprovar: todos_aprovados={todos_aprovados} AND fatura_dentro_tolerancia={fatura_dentro_tolerancia}"
     )
     print(f"  - Valor fatura: R$ {fatura.valor_total_fatura:.2f}")
-    print(f"  - Valor CTe total: R$ {valor_total_cte:.2f}")
-    print(f"  - Diferença: R$ {diferenca_fatura_cte:.2f}")
+    print(f"  - Valor considerado total: R$ {valor_total_considerado:.2f}")
+    print(f"  - Diferença: R$ {diferenca_fatura_considerado:.2f}")
     print(f"  - Pode aprovar: {todos_aprovados and fatura_dentro_tolerancia}")
 
     # Análise de valores
@@ -2102,7 +2102,7 @@ def conferir_fatura(fatura_id):
         "valor_total_cte": valor_total_cte,
         "valor_total_considerado": valor_total_considerado,
         "valor_total_pago": valor_total_pago,
-        "diferenca_fatura_cte": diferenca_fatura_cte,
+        "diferenca_fatura_considerado": diferenca_fatura_considerado,
         "fatura_dentro_tolerancia": fatura_dentro_tolerancia,
         "diferenca_considerado_pago": abs(valor_total_considerado - valor_total_pago),
     }

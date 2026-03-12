@@ -286,8 +286,8 @@ class FaturaFrete(db.Model):
         return len(self.fretes)
 
     def valor_total_fretes(self):
-        """Retorna o valor total dos fretes desta fatura"""
-        return sum(f.valor_cte or 0 for f in self.fretes)
+        """Retorna o valor total dos fretes desta fatura (baseado em valor_considerado)"""
+        return sum(f.valor_considerado or 0 for f in self.fretes)
     
     def total_despesas_extras(self):
         """Retorna o total de despesas extras vinculadas a esta fatura via FK"""
