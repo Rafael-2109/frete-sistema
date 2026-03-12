@@ -61,10 +61,14 @@ Output DEVE ser PRESCRITIVO ("Quando cliente X pedir Y, faca Z") — NAO descrit
 Descritivo = padrao inutil que nao muda comportamento do agente. ERRAR AQUI corrompe aprendizado.
 — FONTE: `pattern_analyzer.py:4,40,88`
 
-### pattern_analyzer: extracao pos-sessao salva como user_id=0
-`extrair_conhecimento_sessao()` salva memorias empresa (user_id=0) — termos, cargos, regras, correcoes.
+### pattern_analyzer: extracao pos-sessao (CAPDo v3.0)
+`extrair_conhecimento_sessao()` salva memorias empresa (user_id=0) com 6 dimensoes.
+CAPDo v3.0: novo prompt extrai `conhecimentos` com campos obrigatorios `problema_que_resolve` + `prescricao`.
+Itens sem ambos campos sao FILTRADOS (nao salvos). Backward-compatible com formato legado.
+Paths hierarquicos: `/memories/empresa/{tipo}/{dominio}/{slug}.xml`
+Taxonomia inline no prompt de extracao (5 tipos, 5 problemas, 5 dominios). `domain_ontology.py` eliminado.
 Roda em daemon thread. NUNCA bloquear o response path com extracao.
-— FONTE: `pattern_analyzer.py:858-1102`
+— FONTE: `pattern_analyzer.py:835-1280`
 
 ### memory_consolidator: arquivos protegidos
 `user.xml` e `preferences.xml` sao IMUNES a consolidacao. Memorias `category='permanent'` e `importance >= 0.7` tambem.

@@ -623,7 +623,8 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     tier2b_chars += mem_len
 
             # ── Montar resultado final ──
-            selected_parts = [tier0_text, header] if tier0_text else [header]
+            # Memórias estáveis primeiro (maior atenção), operacional ao final
+            selected_parts = [header]
             injected_mems = []
 
             for mem, mem_text in tier1_texts:
@@ -635,6 +636,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 injected_mems.append(mem)
 
             selected_parts.append(footer)
+            # Contexto operacional (tier0) APÓS memórias estáveis — menor prioridade de atenção
+            if tier0_text:
+                selected_parts.append(tier0_text)
             result = "".join(selected_parts)
 
             total_chars = len(result)

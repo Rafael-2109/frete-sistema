@@ -851,6 +851,9 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
                 'top_entities': [],
             }
 
+        # ── CAPDo v3.0: Metricas de qualidade de conhecimento ──
+        capdo_metrics = _compute_capdo_quality_metrics(base_filter, total_memories, days)
+
         return {
             'total_memories': total_memories,
             'utilization_rate': utilization_rate,
@@ -867,6 +870,7 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
             'orphan_embeddings': orphan_count,
             'categories': categories,
             'knowledge_graph': graph_stats,
+            'capdo_quality': capdo_metrics,
             'period_days': days,
         }
 
@@ -876,4 +880,132 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
             'total_memories': 0,
             'utilization_rate': 0,
             'error': str(e),
+        }
+
+
+def _compute_capdo_quality_metrics(
+    base_filter: list,
+    total_memories: int,
+    days: int,
+) -> dict:
+    """
+    Metricas CAPDo v3.0 de qualidade do sistema de memorias.
+
+    Ref: Estudo CAPDo 12/03/2026 — Secao 6, Fase 6.
+
+    Metricas:
+    1. effective_use_rate: effective_count / usage_count (meta > 50%)
+    2. noise_rate: memorias com usage_count=0 apos 30 dias (meta < 20%)
+    3. prescricao_coverage: memorias com campo prescricao (meta > 80%)
+    4. domain_diversity: distribuicao por dominio (meta: nenhum > 40%)
+    5. knowledge_type_distribution: distribuicao por tipo de conhecimento
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+        from sqlalchemy import func
+
+        now = agora_utc_naive()
+
+        # ── 1. Effective use rate ──
+        # usage_count = quantas vezes a memoria foi injetada no contexto
+        # effective_count = quantas vezes foi efetivamente usada na resposta
+        usage_data = db.session.query(
+            func.sum(AgentMemory.usage_count),
+            func.sum(AgentMemory.effective_count),
+        ).filter(*base_filter).first()
+
+        total_usage = int(usage_data[0] or 0) if usage_data else 0
+        total_effective = int(usage_data[1] or 0) if usage_data else 0
+        effective_use_rate = round(
+            (total_effective / total_usage * 100), 1
+        ) if total_usage > 0 else 0.0
+
+        # ── 2. Noise rate: memorias nunca usadas apos 30 dias ──
+        thirty_days_ago = now - timedelta(days=30)
+        never_used_count = AgentMemory.query.filter(
+            *base_filter,
+            AgentMemory.usage_count == 0,
+            AgentMemory.created_at <= thirty_days_ago,
+        ).count()
+        noise_rate = round(
+            (never_used_count / total_memories * 100), 1
+        ) if total_memories > 0 else 0.0
+
+        # ── 3. Prescricao coverage (CAPDo v3.0 XML format) ──
+        # Conta memorias que tem tag <prescricao> no conteudo
+        prescricao_count = AgentMemory.query.filter(
+            *base_filter,
+            AgentMemory.content.ilike('%<prescricao>%'),
+        ).count()
+        prescricao_coverage = round(
+            (prescricao_count / total_memories * 100), 1
+        ) if total_memories > 0 else 0.0
+
+        # ── 4. Domain diversity (baseado em paths) ──
+        # Paths CAPDo: /memories/empresa/{tipo}/{dominio}/{slug}.xml
+        domain_counts: dict[str, int] = {}
+        empresa_mems = AgentMemory.query.filter(
+            *base_filter,
+            AgentMemory.path.like('/memories/empresa/%'),
+        ).with_entities(AgentMemory.path).all()
+
+        for (mem_path,) in empresa_mems:
+            parts = mem_path.split('/')
+            # /memories/empresa/{tipo}/{dominio}/{slug}.xml
+            if len(parts) >= 5:
+                domain = parts[4]  # dominio
+                domain_counts[domain] = domain_counts.get(domain, 0) + 1
+            elif len(parts) >= 4:
+                domain = parts[3]  # tipo (formato legado)
+                domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+        total_empresa = sum(domain_counts.values()) or 1
+        max_domain_pct = max(
+            (count / total_empresa * 100 for count in domain_counts.values()),
+            default=0.0,
+        )
+
+        # ── 5. Knowledge type distribution (baseado em paths CAPDo) ──
+        # 5 tipos epistemologicos fixos (CAPDo v3.0)
+        _KNOWLEDGE_SUBDIRS = {
+            "procedimental": "procedimentos",
+            "conceitual": "conceitos",
+            "condicional": "regras",
+            "causal": "causas",
+            "relacional": "perfis",
+        }
+        type_counts: dict[str, int] = {}
+        for kt_key, subdir in _KNOWLEDGE_SUBDIRS.items():
+            count = AgentMemory.query.filter(
+                *base_filter,
+                AgentMemory.path.like(f'/memories/empresa/{subdir}/%'),
+            ).count()
+            if count > 0:
+                type_counts[kt_key] = count
+
+        return {
+            'effective_use_rate': effective_use_rate,
+            'total_usage': total_usage,
+            'total_effective': total_effective,
+            'noise_rate': noise_rate,
+            'never_used_after_30d': never_used_count,
+            'prescricao_coverage': prescricao_coverage,
+            'prescricao_count': prescricao_count,
+            'domain_diversity': {
+                'distribution': domain_counts,
+                'max_domain_pct': round(max_domain_pct, 1),
+                'balanced': max_domain_pct <= 40.0,
+            },
+            'knowledge_type_distribution': type_counts,
+        }
+
+    except Exception as e:
+        logger.debug(f"[INSIGHTS] CAPDo metrics falhou: {e}")
+        return {
+            'effective_use_rate': 0,
+            'noise_rate': 0,
+            'prescricao_coverage': 0,
+            'domain_diversity': {},
+            'knowledge_type_distribution': {},
         }

@@ -439,10 +439,10 @@ def _embed_memory_best_effort(
             texto_embedado = f"[{path}]: {content}"
 
         # Build texto limpo — para DEDUP
-        # Mesma representação que _check_memory_duplicate usa na query,
-        # eliminando a lacuna de representação que causava falsos negativos.
-        from ..services.knowledge_graph_service import strip_xml_tags
-        dedup_texto = strip_xml_tags(content)
+        # CAPDo v3.0: Normalizacao semantica via ontologia ANTES do embedding.
+        # Entidades do dominio sao resolvidas para slugs canonicos,
+        # melhorando similaridade entre representacoes diferentes do mesmo conhecimento.
+        dedup_texto = _canonicalize_for_dedup(content)
 
         # Hash baseado no conteúdo original (não no texto_embedado).
         # Motivo: se só o contexto mudar (outras memórias adicionadas),
@@ -970,6 +970,18 @@ _DEDUP_STOPWORDS = frozenset({
     'todas', 'todos', 'algumas', 'alguns', 'estas', 'estes',
     'com', 'que', 'dos', 'das', 'nos', 'nas', 'uma',
 })
+
+
+def _canonicalize_for_dedup(content: str) -> str:
+    """
+    Normaliza conteudo para forma canonica ANTES do embedding de dedup.
+
+    Strip XML tags e retorna texto limpo. Voyage AI embeddings capturam
+    similaridade semantica — normalizacao via dicionario de sinonimos
+    piora o resultado quando os sinonimos sao errados ou ambiguos.
+    """
+    from ..services.knowledge_graph_service import strip_xml_tags
+    return strip_xml_tags(content)
 
 
 def _normalize_words_for_dedup(text: str) -> set:

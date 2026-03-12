@@ -833,71 +833,117 @@ def _xml_escape(text: str) -> str:
 
 
 # =====================================================================
-# PRD v2.1: EXTRACAO POS-SESSAO DE CONHECIMENTO ORGANIZACIONAL
+# PRD v2.1 + CAPDo v3.0: EXTRACAO POS-SESSAO DE CONHECIMENTO ORGANIZACIONAL
 # =====================================================================
 #
-# Analisa TODAS as mensagens de uma sessao via Sonnet e extrai:
-# - term_definitions: "integracao de NF = vinculacao DFe x PO"
-# - role_identifications: "sou de compras"
-# - business_rules: "Atacadao sempre pede completo"
-# - corrections: "na verdade, o correto e..."
+# Reforma CAPDo (12/03/2026):
+# - 5 tipos de conhecimento (procedimental, conceitual, condicional, causal, relacional)
+# - Campo obrigatorio "problema_que_resolve" — se vazio, NAO salvar
+# - Campo obrigatorio "prescricao" — instrucao acionavel para o agente
+# - Nomeacao hierarquica: /memories/empresa/{tipo}/{dominio}/{slug}.xml
+# - Paths hierarquicos: /memories/empresa/{tipo}/{dominio}/{slug}.xml
+#
+# Principio: frequencia NAO eh criterio de valor.
+# O valor esta no PROBLEMA que o conhecimento resolve.
 #
 # Salva como memorias empresa (user_id=0, escopo='empresa').
 # Rede de seguranca: captura o que o agente NAO salvou via save_memory.
 # Roda em daemon thread (background) a cada exchange, sem bloquear UX.
 # =====================================================================
 
-# System prompt estático para extração de conhecimento — prompt caching
-KNOWLEDGE_EXTRACTION_SYSTEM_PROMPT = """Voce eh um extrator de conhecimento organizacional para a Nacom Goya (industria de alimentos).
-Analise a conversa e extraia SOMENTE informacoes factuais e uteis para TODA a organizacao.
+def _build_extraction_prompt() -> str:
+    """Constroi o prompt de extracao com taxonomia inline.
 
-Retorne JSON VALIDO com esta estrutura (arrays vazios se nao encontrar nada):
+    Taxonomia embutida no prompt — o LLM (Sonnet) ja entende dominios e entidades
+    sem lookup table Python. domain_ontology.py eliminado.
+    Resultado eh constante durante o lifecycle da aplicacao (cache via module-level).
+    """
+    return """Voce eh um extrator de CONHECIMENTO ORGANIZACIONAL para a Nacom Goya (industria de alimentos).
+
+IMPORTANTE: Voce extrai CONHECIMENTO, nao FATOS.
+- FATO: "gerou relatorio com 234 linhas" (instancia, expira, sem valor futuro)
+- CONHECIMENTO: "quando divergencia financeira, verificar extratos como passo 1" (prescritivo, acumula)
+
+Analise a conversa e extraia conhecimento que resolve PROBLEMAS reais da organizacao.
+
+TESTE DE VALOR — para cada item, pergunte:
+1. "Que problema alguem teria se NAO soubesse isso?" → Se nao consegue responder, NAO extraia.
+2. "Em que situacao futura isso modifica o comportamento do agente?" → Se nao muda nada, NAO extraia.
+
+Retorne JSON VALIDO com esta estrutura (array vazio se nao encontrar nada):
 
 {{
-  "term_definitions": [
+  "conhecimentos": [
     {{
-      "termo": "nome do termo",
-      "definicao": "o que significa no contexto da empresa",
+      "tipo_conhecimento": "procedimental|conceitual|condicional|causal|relacional",
+      "entidade_principal": "slug da entidade (ex: pedido, embarque, nf, extrato, odoo)",
+      "dominio": "comercial|logistica|financeiro|producao|sistema",
+      "problema_que_resolve": "Que problema alguem teria sem esse conhecimento? (OBRIGATORIO)",
+      "descricao": "Descricao clara do conhecimento",
+      "prescricao": "Quando [situacao], o agente deve [acao] porque [razao] (OBRIGATORIO)",
       "confianca": "alta|media"
-    }}
-  ],
-  "role_identifications": [
-    {{
-      "nome_usuario": "nome mencionado",
-      "cargo_ou_setor": "compras, expedicao, financeiro, etc."
-    }}
-  ],
-  "business_rules": [
-    {{
-      "regra": "descricao da regra de negocio",
-      "contexto": "quando se aplica"
-    }}
-  ],
-  "corrections": [
-    {{
-      "errado": "o que estava errado",
-      "correto": "o que eh correto",
-      "contexto": "em que situacao"
     }}
   ]
 }}
 
+TIPOS DE CONHECIMENTO (campo tipo_conhecimento):
+  - "procedimental": COMO fazer algo? Ex: Para reativar embarque cancelado: UPDATE embarque SET status='ativo'...
+  - "conceitual": O QUE algo significa ou como funciona? Ex: VCD eh o codigo de pedido do cliente, diferente do num_pedido interno
+  - "condicional": QUANDO algo se aplica? Ex: Atacadao sempre pede pedido completo — nao aceita parcial
+  - "causal": POR QUE algo acontece? Ex: purchase_order_id pode estar vazio porque Odoo nao popula automaticamente
+  - "relacional": QUEM faz o que, com quem, para quem? Ex: Elaine usa Teams para solicitar separacoes — tem user_id diferente do web
+
+TIPOS DE PROBLEMA (campo tipo_problema):
+  - "inconsistencia": Dado divergente entre Odoo, Sistema de Fretes, SSW ou Linx
+  - "dado_faltante": Campo vazio, endereco errado, NF divergente, dado nao populado
+  - "procedimento_especifico": Workaround, sequencia obrigatoria, pre-condicao nao documentada
+  - "regra_nao_obvia": Cliente com restricao, processo com pre-condicao, excecao a regra geral
+  - "ambiguidade": Mesmo nome, significados diferentes entre contextos ou sistemas
+
+ENTIDADES DO DOMINIO (campo entidade_principal — texto livre aceito):
+  - comercial: cliente, pedido, nf, produto, faturamento
+  - logistica: embarque, separacao, transportadora, cte, agendamento, pallet, devolucao
+  - financeiro: titulo, extrato, comprovante, purchase_order, fatura_transportadora, reconciliacao
+  - producao: ordem_producao, insumo, estoque
+  - sistema: integracao, odoo, ssw, linx
+
+DOMINIOS (campo dominio):
+  - "comercial": Comercial
+  - "logistica": Logistica
+  - "financeiro": Financeiro
+  - "producao": Producao
+  - "sistema": Sistema/Integracao
+
 REGRAS CRITICAS:
 - Extraia APENAS o que aparece EXPLICITAMENTE na conversa — NUNCA invente
 - Ignore preferencias pessoais (estilo, formato) — essas sao individuais
-- Foco em: vocabulario operacional, regras de negocio, correcoes factuais
+- CAMPO "problema_que_resolve" eh OBRIGATORIO — se nao existe problema, NAO extraia
+- CAMPO "prescricao" eh OBRIGATORIO — deve ser instrucao acionavel formato "Quando X, faca Y porque Z"
+- Se nao conseguir preencher AMBOS os campos, o item NAO eh conhecimento util — omita
+- NAO extraia resultados pontuais ("gerou relatorio", "rodou script", "consultou X linhas")
+- NAO extraia status temporarios ("processando 71%", "aguardando resposta")
+- NAO extraia informacao disponivel no sistema (campos de tabela, configuracoes)
 - IGNORE COMPLETAMENTE discussoes sobre o proprio sistema de IA, incluindo:
   termos como "memoria", "embedding", "hook", "PRD", "escopo empresa/pessoal",
   "knowledge graph", "effective_count", "prompt", "agente", "Claude", "SDK",
   "Sonnet", "Haiku", "user_id", "daemon thread", "RAG", "KG", "dedup"
 - IGNORE meta-discussoes: conversas SOBRE como o sistema funciona internamente
-- Se a conversa eh sobre desenvolvimento/debugging do proprio sistema, retorne arrays vazios
-- Se o operador esclareceu o significado de um termo, isso eh term_definition
-- Se o operador disse seu cargo ou setor, isso eh role_identification
-- Se o operador mencionou regra de cliente/processo, isso eh business_rule
-- Se o operador corrigiu o agente factualmente, isso eh correction
+- Se a conversa eh INTEIRAMENTE sobre desenvolvimento/debugging do proprio sistema, retorne array vazio
 - "confianca" = "alta" se o operador afirmou com certeza, "media" se foi implicito
+- Prefira POUCOS itens de ALTA qualidade a muitos itens de baixa qualidade
 - RESPONDA APENAS JSON VALIDO, sem markdown"""
+
+
+# System prompt estatico — inicializado na primeira chamada e cacheado
+_KNOWLEDGE_EXTRACTION_PROMPT_CACHE: str | None = None
+
+
+def _get_extraction_prompt() -> str:
+    """Retorna o prompt de extracao (lazy-init + cache)."""
+    global _KNOWLEDGE_EXTRACTION_PROMPT_CACHE
+    if _KNOWLEDGE_EXTRACTION_PROMPT_CACHE is None:
+        _KNOWLEDGE_EXTRACTION_PROMPT_CACHE = _build_extraction_prompt()
+    return _KNOWLEDGE_EXTRACTION_PROMPT_CACHE
 
 
 def _format_messages_for_extraction(messages: list[dict]) -> str:
@@ -947,7 +993,7 @@ def _format_messages_for_extraction(messages: list[dict]) -> str:
     )
 
 
-def _slugify(text: str) -> str:
+def _slugify(text: str, max_len: int = 60) -> str:
     """Converte texto para slug seguro para path de memoria."""
     import unicodedata
     # Remove acentos
@@ -955,7 +1001,40 @@ def _slugify(text: str) -> str:
     ascii_text = ''.join(c for c in nfkd if not unicodedata.combining(c))
     # Converte para lowercase e substitui nao-alfanumericos por hifen
     slug = re.sub(r'[^a-z0-9]+', '-', ascii_text.lower()).strip('-')
-    return slug[:60]  # Limitar tamanho
+    return slug[:max_len]
+
+
+def _build_knowledge_path(
+    tipo_conhecimento: str,
+    dominio: str,
+    descricao: str,
+) -> str:
+    """Constroi path hierarquico para memoria.
+
+    Formato: /memories/empresa/{tipo_subdir}/{dominio}/{slug-descritivo}.xml
+
+    Exemplos:
+        - /memories/empresa/procedimentos/financeiro/verificacao-extratos-bancarios.xml
+        - /memories/empresa/regras/comercial/atacadao-pede-pedido-completo.xml
+        - /memories/empresa/causas/sistema/purchase-order-id-nao-populado.xml
+    """
+    # 5 tipos epistemologicos fixos (CAPDo v3.0) — nao mudam
+    _TIPO_TO_SUBDIR = {
+        "procedimental": "procedimentos",
+        "conceitual": "conceitos",
+        "condicional": "regras",
+        "causal": "causas",
+        "relacional": "perfis",
+    }
+    subdir = _TIPO_TO_SUBDIR.get(tipo_conhecimento, "geral")
+    if dominio:
+        subdir = f"{subdir}/{dominio}"
+    slug = _slugify(descricao[:50])
+    if not slug:
+        slug = _slugify(descricao[:80])
+    if not slug:
+        return ""
+    return f"/memories/empresa/{subdir}/{slug}.xml"
 
 
 def _save_empresa_memory(
@@ -1046,101 +1125,255 @@ def _save_extracted_knowledge(
     """
     Salva conhecimento extraido como memorias empresa (user_id=0).
 
+    CAPDo v3.0: Novo formato com 6 dimensoes + filtro de valor.
+    Compativel com formato legado (term_definitions, business_rules, etc.)
+    para backward-compatibility durante transicao.
+
     Args:
-        knowledge: Dict com term_definitions, role_identifications, etc.
+        knowledge: Dict com "conhecimentos" (novo) ou campos legados
         created_by: ID do usuario que originou o conhecimento
 
     Returns:
-        Dict com contadores {terms, roles, rules, corrections}
+        Dict com contadores {saved, filtered, enriched}
     """
-    counts = {'terms': 0, 'roles': 0, 'rules': 0, 'corrections': 0}
+    counts = {'saved': 0, 'filtered': 0, 'enriched': 0}
 
-    # Term definitions → /memories/empresa/termos/{slug}.xml
+    # ── Novo formato CAPDo v3.0 ──
+    conhecimentos = knowledge.get('conhecimentos', [])
+    if conhecimentos:
+        return _save_conhecimentos_v3(conhecimentos, created_by, counts)
+
+    # ── Fallback: formato legado (backward-compatible) ──
+    return _save_conhecimentos_legado(knowledge, created_by, counts)
+
+
+def _save_conhecimentos_v3(
+    conhecimentos: list[dict],
+    created_by: int,
+    counts: dict,
+) -> dict:
+    """Salva conhecimentos no formato CAPDo v3.0 com 6 dimensoes.
+
+    Filtro de valor:
+    - "problema_que_resolve" vazio → NAO salvar
+    - "prescricao" vazia → NAO salvar
+    """
+    for item in conhecimentos:
+        tipo = item.get('tipo_conhecimento', '').strip()
+        entidade = item.get('entidade_principal', '').strip()
+        dominio = item.get('dominio', '').strip()
+        problema = item.get('problema_que_resolve', '').strip()
+        descricao = item.get('descricao', '').strip()
+        prescricao = item.get('prescricao', '').strip()
+        confianca = item.get('confianca', 'media')
+
+        # ── Filtro de valor: campos obrigatorios ──
+        if not descricao:
+            counts['filtered'] += 1
+            continue
+
+        if not problema or len(problema) < 10:
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Filtrado (sem problema): {descricao[:60]}"
+            )
+            counts['filtered'] += 1
+            continue
+
+        if not prescricao or len(prescricao) < 10:
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Filtrado (sem prescricao): {descricao[:60]}"
+            )
+            counts['filtered'] += 1
+            continue
+
+        # Entidade e dominio usados conforme retornados pelo LLM.
+        # O prompt de extracao ja lista valores validos — nao precisa de lookup table.
+        if not dominio:
+            dominio = "geral"
+
+        # ── Construir path hierarquico ──
+        path = _build_knowledge_path(tipo, dominio, descricao)
+        if not path:
+            counts['filtered'] += 1
+            continue
+
+        # ── Construir XML enriquecido ──
+        content = (
+            f'<conhecimento tipo="{_xml_escape(tipo)}" '
+            f'entidade="{_xml_escape(entidade)}" '
+            f'confianca="{confianca}">'
+            f'\n  <descricao>{_xml_escape(descricao)}</descricao>'
+            f'\n  <problema_que_resolve>{_xml_escape(problema)}</problema_que_resolve>'
+            f'\n  <prescricao>{_xml_escape(prescricao)}</prescricao>'
+            f'\n</conhecimento>'
+        )
+
+        # ── Tentar enriquecer memoria existente antes de criar nova ──
+        enriched = _try_enrich_existing(path, content, created_by, descricao)
+        if enriched:
+            counts['enriched'] += 1
+        elif _save_empresa_memory(path, content, created_by):
+            counts['saved'] += 1
+        # Se dedup bloqueou, nenhum contador incrementa (esperado)
+
+    return counts
+
+
+def _save_conhecimentos_legado(
+    knowledge: dict,
+    created_by: int,
+    counts: dict,
+) -> dict:
+    """Fallback: converte formato legado para CAPDo v3.0 e salva.
+
+    Mantido para backward-compatibility durante transicao.
+    Cada categoria legada eh mapeada para um tipo de conhecimento:
+    - term_definitions → conceitual
+    - role_identifications → relacional
+    - business_rules → condicional
+    - corrections → causal
+    """
+    conhecimentos_convertidos = []
+
     for item in knowledge.get('term_definitions', []):
         termo = item.get('termo', '').strip()
         definicao = item.get('definicao', '').strip()
-        confianca = item.get('confianca', 'media')
         if not termo or not definicao:
             continue
+        conhecimentos_convertidos.append({
+            'tipo_conhecimento': 'conceitual',
+            'entidade_principal': '',
+            'dominio': '',
+            'problema_que_resolve': f'Ambiguidade ou desconhecimento do termo "{termo}" pode causar '
+                                    f'mal-entendido na comunicacao da equipe',
+            'descricao': f'{termo}: {definicao}',
+            'prescricao': f'Quando alguem mencionar "{termo}", interpretar como: {definicao}',
+            'confianca': item.get('confianca', 'media'),
+        })
 
-        slug = _slugify(termo)
-        if not slug:
-            continue
-
-        path = f"/memories/empresa/termos/{slug}.xml"
-        content = (
-            f'<termo nome="{_xml_escape(termo)}" confianca="{confianca}">'
-            f'\n  <definicao>{_xml_escape(definicao)}</definicao>'
-            f'\n</termo>'
-        )
-        if _save_empresa_memory(path, content, created_by):
-            counts['terms'] += 1
-
-    # Role identifications → /memories/empresa/usuarios/{slug}.xml
     for item in knowledge.get('role_identifications', []):
         nome = item.get('nome_usuario', '').strip()
         cargo = item.get('cargo_ou_setor', '').strip()
         if not nome or not cargo:
             continue
+        conhecimentos_convertidos.append({
+            'tipo_conhecimento': 'relacional',
+            'entidade_principal': '',
+            'dominio': '',
+            'problema_que_resolve': f'Sem saber o cargo de {nome}, o agente nao pode direcionar '
+                                    f'respostas adequadamente ao contexto de {cargo}',
+            'descricao': f'{nome} trabalha em {cargo}',
+            'prescricao': f'Quando {nome} fizer solicitacoes, considerar que atua em {cargo} '
+                          f'e adaptar nivel de detalhe e vocabulario',
+            'confianca': 'alta',
+        })
 
-        slug = _slugify(nome)
-        if not slug:
-            continue
-
-        path = f"/memories/empresa/usuarios/{slug}.xml"
-        content = (
-            f'<usuario nome="{_xml_escape(nome)}">'
-            f'\n  <cargo>{_xml_escape(cargo)}</cargo>'
-            f'\n</usuario>'
-        )
-        if _save_empresa_memory(path, content, created_by):
-            counts['roles'] += 1
-
-    # Business rules → /memories/empresa/regras/{slug}.xml
     for item in knowledge.get('business_rules', []):
         regra = item.get('regra', '').strip()
         contexto = item.get('contexto', '').strip()
         if not regra:
             continue
+        conhecimentos_convertidos.append({
+            'tipo_conhecimento': 'condicional',
+            'entidade_principal': '',
+            'dominio': '',
+            'problema_que_resolve': f'Sem conhecer esta regra, o agente pode sugerir acoes '
+                                    f'que violam o processo: {regra[:80]}',
+            'descricao': regra,
+            'prescricao': f'Quando a situacao envolver: {contexto or "contexto geral"}, '
+                          f'aplicar a regra: {regra}',
+            'confianca': 'media',
+        })
 
-        slug = _slugify(regra[:40])
-        if not slug:
-            continue
-
-        path = f"/memories/empresa/regras/{slug}.xml"
-        content = (
-            f'<regra>'
-            f'\n  <descricao>{_xml_escape(regra)}</descricao>'
-            f'\n  <contexto>{_xml_escape(contexto)}</contexto>'
-            f'\n</regra>'
-        )
-        if _save_empresa_memory(path, content, created_by):
-            counts['rules'] += 1
-
-    # Corrections → /memories/empresa/correcoes/{slug}.xml
     for item in knowledge.get('corrections', []):
         errado = item.get('errado', '').strip()
         correto = item.get('correto', '').strip()
         contexto = item.get('contexto', '').strip()
         if not errado or not correto:
             continue
+        conhecimentos_convertidos.append({
+            'tipo_conhecimento': 'causal',
+            'entidade_principal': '',
+            'dominio': '',
+            'problema_que_resolve': f'Sem esta correcao, o agente repetira o erro: {errado[:80]}',
+            'descricao': f'Errado: {errado}. Correto: {correto}',
+            'prescricao': f'Quando a situacao envolver {contexto or "este tema"}, '
+                          f'NUNCA usar "{errado[:40]}" — o correto eh "{correto[:40]}"',
+            'confianca': 'alta',
+        })
 
-        slug = _slugify(correto[:40])
-        if not slug:
-            continue
-
-        path = f"/memories/empresa/correcoes/{slug}.xml"
-        content = (
-            f'<correcao>'
-            f'\n  <errado>{_xml_escape(errado)}</errado>'
-            f'\n  <correto>{_xml_escape(correto)}</correto>'
-            f'\n  <contexto>{_xml_escape(contexto)}</contexto>'
-            f'\n</correcao>'
-        )
-        if _save_empresa_memory(path, content, created_by):
-            counts['corrections'] += 1
+    if conhecimentos_convertidos:
+        return _save_conhecimentos_v3(conhecimentos_convertidos, created_by, counts)
 
     return counts
+
+
+def _try_enrich_existing(
+    path: str,
+    new_content: str,
+    created_by: int,
+    descricao: str,
+) -> bool:
+    """Tenta enriquecer memoria existente em vez de criar duplicata.
+
+    Fase 4 (CAPDo): Ao salvar novo conhecimento, buscar e ENRIQUECER
+    conhecimento existente sobre o mesmo PROBLEMA — nao contar ocorrencias,
+    mas APROFUNDAR entendimento.
+
+    Returns:
+        True se enriqueceu memoria existente, False se nao encontrou similar.
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+
+        # Verificar se existe memoria no mesmo path (mesmo assunto = mesmo path)
+        existing = AgentMemory.get_by_path(0, path)
+        if not existing:
+            return False
+
+        # Se conteudo identico, nao precisa fazer nada
+        if existing.content == new_content:
+            return True
+
+        # Enriquecer: manter conteudo existente e adicionar novo contexto
+        # Nao substituir — agregar informacao
+        from .knowledge_graph_service import strip_xml_tags
+        words_old = set(strip_xml_tags(existing.content).lower().split())
+        words_new = set(strip_xml_tags(new_content).lower().split())
+        min_size = min(len(words_old), len(words_new))
+        overlap = len(words_old & words_new) / min_size if min_size > 0 else 0
+
+        if overlap > 0.80:
+            # Conteudo muito similar — nao vale enriquecer
+            return True
+
+        # Enriquecer com novo contexto (append, nao replace)
+        enriched = (
+            f"{existing.content}\n"
+            f"<!-- Enriquecido em {agora_utc_naive().strftime('%Y-%m-%d')} -->\n"
+            f"{new_content}"
+        )
+
+        # Limite de tamanho para nao crescer indefinidamente
+        if len(enriched) > 4000:
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Memoria {path} ja muito longa, "
+                f"nao enriquecendo ({len(enriched)} chars)"
+            )
+            return False
+
+        existing.content = enriched
+        existing.updated_at = agora_utc_naive()
+        existing.created_by = created_by
+        db.session.commit()
+
+        logger.info(f"[KNOWLEDGE_EXTRACTION] Enriquecido: {path}")
+        return True
+
+    except Exception as e:
+        logger.debug(f"[KNOWLEDGE_EXTRACTION] Enriquecimento falhou: {e}")
+        return False
 
 
 def extrair_conhecimento_sessao(
@@ -1168,13 +1401,14 @@ def extrair_conhecimento_sessao(
     try:
         client = _get_anthropic_client()
         formatted = _format_messages_for_extraction(session_messages)
+        extraction_prompt = _get_extraction_prompt()
 
         response = client.messages.create(
             model=SONNET_MODEL,
-            max_tokens=1500,
+            max_tokens=2000,
             system=[{
                 "type": "text",
-                "text": KNOWLEDGE_EXTRACTION_SYSTEM_PROMPT,
+                "text": extraction_prompt,
                 "cache_control": {"type": "ephemeral"},
             }],
             messages=[{
@@ -1189,11 +1423,15 @@ def extrair_conhecimento_sessao(
         if not knowledge:
             return False
 
-        # Verificar se tem algo para salvar
-        total_items = sum(
-            len(knowledge.get(k, []))
-            for k in ('term_definitions', 'role_identifications', 'business_rules', 'corrections')
-        )
+        # CAPDo v3.0: verificar novo formato (conhecimentos) ou legado
+        total_items = len(knowledge.get('conhecimentos', []))
+        if total_items == 0:
+            # Fallback: verificar formato legado
+            total_items = sum(
+                len(knowledge.get(k, []))
+                for k in ('term_definitions', 'role_identifications',
+                           'business_rules', 'corrections')
+            )
 
         if total_items == 0:
             logger.debug(
@@ -1211,10 +1449,10 @@ def extrair_conhecimento_sessao(
 
         logger.info(
             f"[KNOWLEDGE_EXTRACTION] Usuario {user_id}: "
-            f"extraidos {counts} "
+            f"{counts} "
             f"({response.usage.input_tokens}+{response.usage.output_tokens} tokens)"
         )
-        return True
+        return counts.get('saved', 0) + counts.get('enriched', 0) > 0
 
     except Exception as e:
         logger.warning(f"[KNOWLEDGE_EXTRACTION] Erro para usuario {user_id}: {e}")
