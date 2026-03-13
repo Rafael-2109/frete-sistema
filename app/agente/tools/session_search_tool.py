@@ -428,7 +428,7 @@ try:
                 fallback_args = {"query": query}
                 if args.get('target_user_id') is not None:
                     fallback_args['target_user_id'] = args['target_user_id']
-                fallback_result = await search_sessions(fallback_args)
+                fallback_result = await search_sessions.handler(fallback_args)
                 # Adicionar nota de fallback
                 if not fallback_result.get("is_error"):
                     text_content = fallback_result["content"][0]["text"]

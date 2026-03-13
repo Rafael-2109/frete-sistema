@@ -62,7 +62,7 @@ def get_current_user_id() -> int:
 
 
 # =====================================================================
-# SANITIZAÇÃO ANTI-INJECTION (reutilizada de memory_agent.py)
+# SANITIZAÇÃO ANTI-INJECTION
 # =====================================================================
 _DANGEROUS_PATTERNS = [
     re.compile(r'(?i)ignore\s+(all\s+)?previous\s+instructions'),
@@ -1548,7 +1548,7 @@ try:
             MCP tool response com confirmação
         """
         path = args.get("path", "").strip()
-        old_str = args.get("old_str", "")
+        old_str = args.get("old_str", "").strip()
         new_str = args.get("new_str", "")
 
         if not path or not old_str:
@@ -1577,7 +1577,12 @@ try:
                 count = content.count(old_str)
 
                 if count == 0:
-                    raise ValueError(f"Texto não encontrado em {path}")
+                    preview = content[:3000] if len(content) > 3000 else content
+                    truncated = " (truncado, conteúdo total tem {} chars)".format(len(content)) if len(content) > 3000 else ""
+                    raise ValueError(
+                        f"Texto não encontrado em {path}. "
+                        f"Conteúdo atual{truncated}:\n\n{preview}"
+                    )
                 if count > 1:
                     raise ValueError(f"Texto aparece {count} vezes. Deve ser único.")
 
