@@ -880,6 +880,17 @@
                             title="Clique para ver/editar">
                       {{ p.contato_agendamento.forma }}
                     </button>
+                    {% if p.contato_agendamento.horario_recebimento_de or p.contato_agendamento.horario_recebimento_ate %}
+                      <br><small class="text-muted">
+                        <i class="fas fa-clock"></i>
+                        {{ p.contato_agendamento.horario_recebimento_de.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_de else '' }}
+                        {%- if p.contato_agendamento.horario_recebimento_de and p.contato_agendamento.horario_recebimento_ate %} - {% endif -%}
+                        {{ p.contato_agendamento.horario_recebimento_ate.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_ate else '' }}
+                      </small>
+                    {% endif %}
+                    {% if p.contato_agendamento.observacoes_recebimento %}
+                      <br><small class="text-info"><i class="fas fa-info-circle"></i> C/ Obs Recebimento</small>
+                    {% endif %}
                   {% else %}
                     <button type="button"
                             class="btn btn-sm btn-outline-danger"
@@ -2125,11 +2136,13 @@ function salvarContatoAgendamento(cnpj, cadastrado, btnEl) {
     btnEl.disabled = true;
     btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
+    const csrfTokenValue = document.querySelector('input[name="csrf_token"]').value;
+
     fetch(url, {
         method: method,
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
+            'X-CSRFToken': csrfTokenValue
         },
         body: JSON.stringify(dados)
     })
