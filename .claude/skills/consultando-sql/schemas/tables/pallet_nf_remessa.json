@@ -182,9 +182,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
+      "name": "ix_pallet_nf_remessa_numero_nf",
       "columns": [
-        "cnpj_destinatario"
+        "numero_nf"
       ],
       "unique": false
     },
@@ -197,17 +197,17 @@
       "unique": false
     },
     {
-      "name": "idx_nf_remessa_destinatario_tipo",
+      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
       "columns": [
-        "cnpj_destinatario",
-        "tipo_destinatario"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_numero_nf",
+      "name": "idx_nf_remessa_destinatario_tipo",
       "columns": [
-        "numero_nf"
+        "cnpj_destinatario",
+        "tipo_destinatario"
       ],
       "unique": false
     }

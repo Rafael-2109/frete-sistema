@@ -310,17 +310,12 @@
 <business_rules>
   <!-- Fonte de verdade completa: .claude/references/negocio/REGRAS_P1_P7.md -->
   <priorities id="P1-P7">
-    <!-- Proposito: ordem de DECISAO de embarque -->
-    Para regras completas com tabelas e excecoes: ler .claude/references/negocio/REGRAS_P1_P7.md
-    Ordem de embarque: P1(data entrega) > P2(FOB=completo) > P3(carga direta) > P4(Atacadao) > P5(Assai) > P6(demais) > P7(Atacadao 183=ultimo).
-    Expedicao P1: SP/RED=D-1, SC/PR>2t=D-2, outros=lead_time.
+    Regras completas: .claude/references/negocio/REGRAS_P1_P7.md
+    Ordem: P1(data entrega) > P2(FOB) > P3(carga direta) > P4(Atacadao) > P5(Assai) > P6(demais) > P7(Atacadao 183).
   </priorities>
   <partial_shipping>
-    <!-- Proposito: regras de envio PARCIAL vs aguardar -->
-    Para regras completas de envio parcial: ler .claude/references/negocio/REGRAS_P1_P7.md
-    Falta <=10% e demora >3d = PARCIAL auto. 10-20% = consultar comercial. >20% e >R$10K = consultar.
-    FOB = SEMPRE COMPLETO. Abaixo de R$15K + falta >=10% = AGUARDAR. >=30 pallets ou >=25t = PARCIAL obrigatorio.
-    Percentual de falta calculado por VALOR, nao por linhas.
+    Regras completas: .claude/references/negocio/REGRAS_P1_P7.md
+    Falta <=10% e demora >3d = PARCIAL auto. FOB = SEMPRE COMPLETO. Falta por VALOR, nao linhas.
   </partial_shipping>
 </business_rules>
 

@@ -229,6 +229,36 @@
   ],
   "indices": [
     {
+      "name": "idx_sep_expedicao",
+      "columns": [
+        "expedicao",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_lote_status",
+      "columns": [
+        "separacao_lote_id",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_cotacao",
+      "columns": [
+        "cotacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_num_pedido",
       "columns": [
         "num_pedido"
@@ -261,16 +291,16 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "ix_separacao_status",
       "columns": [
-        "separacao_lote_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_separacao_status",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "status"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -334,36 +364,6 @@
       "columns": [
         "falta_item",
         "sincronizado_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_expedicao",
-      "columns": [
-        "expedicao",
-        "sincronizado_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_lote_status",
-      "columns": [
-        "separacao_lote_id",
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_cotacao",
-      "columns": [
-        "cotacao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
       ],
       "unique": false
     }

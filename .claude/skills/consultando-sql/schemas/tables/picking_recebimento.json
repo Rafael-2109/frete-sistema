@@ -89,6 +89,27 @@
   ],
   "indices": [
     {
+      "name": "idx_picking_rec_partner_cnpj",
+      "columns": [
+        "odoo_partner_cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_picking_rec_origin",
+      "columns": [
+        "origin"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_picking_rec_po",
+      "columns": [
+        "odoo_purchase_order_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_picking_rec_write",
       "columns": [
         "write_date"
@@ -114,27 +135,6 @@
       "name": "idx_picking_rec_partner",
       "columns": [
         "odoo_partner_name"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_partner_cnpj",
-      "columns": [
-        "odoo_partner_cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_origin",
-      "columns": [
-        "origin"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_po",
-      "columns": [
-        "odoo_purchase_order_id"
       ],
       "unique": false
     }

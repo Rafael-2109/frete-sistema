@@ -217,9 +217,9 @@
   ],
   "indices": [
     {
-      "name": "ix_baixa_titulo_item_lote_id",
+      "name": "idx_baixa_item_status",
       "columns": [
-        "lote_id"
+        "status"
       ],
       "unique": false
     },
@@ -245,9 +245,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_item_status",
+      "name": "ix_baixa_titulo_item_lote_id",
       "columns": [
-        "status"
+        "lote_id"
       ],
       "unique": false
     }
