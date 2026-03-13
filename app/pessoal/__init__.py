@@ -16,7 +16,11 @@ from flask import Blueprint
 # =====================================================================
 # LISTA UNICA de usuarios autorizados — TODA verificacao usa esta lista
 # =====================================================================
-USUARIOS_PESSOAL = [1, 62]
+USUARIOS_PESSOAL = [1, 55, 62]
+
+# SQL Admin: acesso total ao SQL do agente (bypass keywords, tabelas, read-only)
+# Conceito separado de PESSOAL (financas pessoais ≠ poder SQL total)
+USUARIOS_SQL_ADMIN = {1, 55, 62}
 
 
 def pode_acessar_pessoal(user) -> bool:

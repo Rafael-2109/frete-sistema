@@ -954,10 +954,11 @@ Nunca invente informações."""
         else:
             prompt = prompt.replace("{user_id}", "NAO_DISPONIVEL")
 
-        # Módulo Pessoal: restrição condicional por user_id
-        # Usuários autorizados (1, 62) podem acessar; demais são bloqueados
-        from app.pessoal import USUARIOS_PESSOAL
-        if user_id and user_id in USUARIOS_PESSOAL:
+        # Módulo Pessoal + SQL Admin: restrição condicional por user_id
+        from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
+        if user_id and user_id in USUARIOS_SQL_ADMIN:
+            prompt = prompt.replace("{restricao_pessoal}", "")
+        elif user_id and user_id in USUARIOS_PESSOAL:
             prompt = prompt.replace("{restricao_pessoal}", "")
         else:
             prompt = prompt.replace(
@@ -1965,12 +1966,12 @@ Nunca invente informações."""
                                 "\n<debug_mode_context>"
                                 "MODO DEBUG ATIVO. Capacidades extras disponiveis:\n"
                                 "- Memory tools: use target_user_id=N para acessar memorias de outro usuario\n"
-                                "- Session tools: use target_user_id=N para buscar sessoes de outro usuario\n"
-                                "- Session tools: use channel='teams' ou channel='web' para filtrar por canal\n"
-                                "- SQL tool: tabelas internas desbloqueadas (agent_sessions, agent_memories, usuarios, etc.)\n"
-                                "- list_session_users: mcp__sessions__list_session_users — lista usuarios com sessoes (para descobrir target_user_id)\n"
-                                "- Para encontrar user_id de alguem: use list_session_users ou SQL 'SELECT id, nome FROM usuarios'\n"
-                                "- Todo acesso cross-user e logado para auditoria."
+                                "- Session tools: use target_user_id=N + channel='teams'|'web' para buscar sessoes de outro usuario\n"
+                                "- list_session_users: lista usuarios com sessoes (para descobrir target_user_id)\n"
+                                "- SQL tool: tabelas internas desbloqueadas (agent_sessions, agent_memories, usuarios)\n"
+                                "- Para encontrar user_id: list_session_users ou SQL 'SELECT id, nome, email FROM usuarios'\n"
+                                "- Todo acesso cross-user e logado para auditoria.\n"
+                                "Fluxo recomendado: list_session_users → search_sessions(target_user_id=N) → apresentar."
                                 "</debug_mode_context>"
                             )
                             logger.info(
@@ -1980,8 +1981,31 @@ Nunca invente informações."""
                     except Exception as debug_err:
                         logger.debug(f"[HOOK:UserPromptSubmit] Debug mode check failed: {debug_err}")
 
-                    if additional_context or correction_hint or debug_context:
-                        additional_context = (additional_context or "") + correction_hint + debug_context
+                    # ============================================================
+                    # SQL Admin Context Injection (Camada 3)
+                    # ============================================================
+                    sql_admin_context = ""
+                    try:
+                        from app.pessoal import USUARIOS_SQL_ADMIN as _SQL_ADMIN
+                        if user_id and user_id in _SQL_ADMIN:
+                            sql_admin_context = (
+                                "\n<sql_admin_context>"
+                                "MODO SQL ADMIN: voce tem acesso TOTAL ao banco via mcp__sql__consultar_sql.\n"
+                                "- Todas as tabelas desbloqueadas (incluindo agent_sessions, pessoal_*, bi_*)\n"
+                                "- INSERT, UPDATE, DELETE permitidos\n"
+                                "- CUIDADO: operacoes de escrita afetam producao. Confirme com o usuario ANTES de executar.\n"
+                                "- Para escrita, gere o SQL e mostre ao usuario antes de executar."
+                                "</sql_admin_context>"
+                            )
+                            logger.info(
+                                f"[HOOK:UserPromptSubmit] SQL admin context injected "
+                                f"for user_id={user_id}"
+                            )
+                    except Exception as admin_err:
+                        logger.debug(f"[HOOK:UserPromptSubmit] SQL admin check failed: {admin_err}")
+
+                    if additional_context or correction_hint or debug_context or sql_admin_context:
+                        additional_context = (additional_context or "") + correction_hint + debug_context + sql_admin_context
                         # B2: Log de context budget por categoria
                         memory_tokens_est = len(additional_context) // 4
                         logger.info(

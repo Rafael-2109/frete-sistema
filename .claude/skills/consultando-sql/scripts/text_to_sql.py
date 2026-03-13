@@ -445,13 +445,20 @@ class SQLSafetyValidator:
     def __init__(self, blocked_tables: set = None):
         self.blocked_tables = blocked_tables or set()
 
-    def validate(self, sql: str) -> tuple:
+    def validate(self, sql: str, bypass_safety: bool = False) -> tuple:
         """
         Valida SQL para seguranca.
+
+        Args:
+            sql: Query SQL a validar
+            bypass_safety: Se True, pula todas as validacoes (admin mode)
 
         Returns:
             (is_safe: bool, concerns: list[str])
         """
+        if bypass_safety:
+            return True, []
+
         concerns = []
         sql_upper = sql.upper().strip()
         sql_lower = sql.lower().strip()
@@ -708,12 +715,14 @@ class SQLExecutor:
         self.timeout_seconds = timeout_seconds
         self.max_rows = max_rows
 
-    def execute(self, sql: str) -> tuple:
+    def execute(self, sql: str, read_write: bool = False) -> tuple:
         """
-        Executa SQL read-only.
+        Executa SQL com seguranca.
 
         Args:
             sql: Query SQL validada
+            read_write: Se True, permite escrita (admin mode).
+                        Se False, SET TRANSACTION READ ONLY.
 
         Returns:
             (dados: list[dict], colunas: list[str])
@@ -721,16 +730,17 @@ class SQLExecutor:
         from app import create_app, db
         from sqlalchemy import text
 
-        # Garantir LIMIT
+        # Garantir LIMIT (apenas para SELECTs)
         sql_upper = sql.upper().strip()
-        if 'LIMIT' not in sql_upper:
+        if 'LIMIT' not in sql_upper and (sql_upper.startswith('SELECT') or sql_upper.startswith('WITH')):
             sql = f"{sql.rstrip(';')} LIMIT {self.max_rows}"
 
         app = create_app()
         with app.app_context():
             try:
-                # Transacao read-only com timeout
-                db.session.execute(text("SET TRANSACTION READ ONLY"))
+                # Transacao com timeout
+                if not read_write:
+                    db.session.execute(text("SET TRANSACTION READ ONLY"))
                 db.session.execute(
                     text(f"SET LOCAL statement_timeout = '{self.timeout_seconds * 1000}'")
                 )
@@ -753,7 +763,10 @@ class SQLExecutor:
                         row_dict[col] = val
                     rows.append(row_dict)
 
-                db.session.rollback()
+                if read_write:
+                    db.session.commit()
+                else:
+                    db.session.rollback()
 
                 return rows, columns
 
@@ -811,6 +824,7 @@ class TextToSQLPipeline:
         extra_blocked_tables: set = None,
         debug_unblock_tables: set = None,
         debug_schemas: dict = None,
+        admin_mode: bool = False,
     ) -> dict:
         """
         Executa pipeline completo.
@@ -821,6 +835,7 @@ class TextToSQLPipeline:
                 Usado para bloqueio condicional (ex: pessoal_* para usuários não autorizados).
             debug_unblock_tables: Tabelas a desbloquear (debug mode admin).
             debug_schemas: Schemas das tabelas debug (dict nome -> schema JSON).
+            admin_mode: Se True, bypass safety validator e permite escrita.
 
         Returns:
             Dict com resultado ou erro
@@ -1010,23 +1025,28 @@ class TextToSQLPipeline:
             # =====================================================
             # ETAPA 3: SAFETY — Validacao de seguranca
             # =====================================================
-            # Se extra_blocked_tables fornecido, criar validator temporário
-            # com tabelas mescladas (thread-safe, não altera o singleton)
-            if extra_blocked_tables or debug_unblock_tables:
-                if extra_blocked_tables:
-                    merged_blocked = self.schema_provider.blocked_tables | extra_blocked_tables
-                else:
-                    merged_blocked = set(self.schema_provider.blocked_tables)
-
-                # Debug mode: subtrair tabelas desbloqueadas
-                if debug_unblock_tables:
-                    merged_blocked = merged_blocked - debug_unblock_tables
-
-                validator = SQLSafetyValidator(blocked_tables=merged_blocked)
+            if admin_mode:
+                # Admin mode: bypass completo do safety validator
+                is_safe, concerns = True, []
+                result["etapas"]["safety"] = {"safe": True, "concerns": ["ADMIN_MODE: bypass"]}
             else:
-                validator = self.safety_validator
-            is_safe, concerns = validator.validate(sql)
-            result["etapas"]["safety"] = {"safe": is_safe, "concerns": concerns}
+                # Se extra_blocked_tables fornecido, criar validator temporário
+                # com tabelas mescladas (thread-safe, não altera o singleton)
+                if extra_blocked_tables or debug_unblock_tables:
+                    if extra_blocked_tables:
+                        merged_blocked = self.schema_provider.blocked_tables | extra_blocked_tables
+                    else:
+                        merged_blocked = set(self.schema_provider.blocked_tables)
+
+                    # Debug mode: subtrair tabelas desbloqueadas
+                    if debug_unblock_tables:
+                        merged_blocked = merged_blocked - debug_unblock_tables
+
+                    validator = SQLSafetyValidator(blocked_tables=merged_blocked)
+                else:
+                    validator = self.safety_validator
+                is_safe, concerns = validator.validate(sql)
+                result["etapas"]["safety"] = {"safe": is_safe, "concerns": concerns}
 
             if not is_safe:
                 result["aviso"] = f"Query bloqueada por seguranca: {'; '.join(concerns)}"
@@ -1035,10 +1055,10 @@ class TextToSQLPipeline:
                 return result
 
             # =====================================================
-            # ETAPA 4: EXECUTOR — Executar SQL read-only
+            # ETAPA 4: EXECUTOR — Executar SQL
             # =====================================================
             t4 = time.time()
-            dados, colunas = self.executor.execute(sql)
+            dados, colunas = self.executor.execute(sql, read_write=admin_mode)
             result["etapas"]["executor_ms"] = int((time.time() - t4) * 1000)
 
             result["sucesso"] = True

@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 _current_user_id: ContextVar[int] = ContextVar('_sql_tool_user_id', default=0)
 
-# Usuários com acesso ao módulo Pessoal (finanças pessoais)
-USUARIOS_PESSOAL = {1, 62}
+# Importar listas de acesso da fonte unica de verdade
+from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
 
 # Tabelas do módulo Pessoal — bloqueadas para usuários NÃO autorizados
 TABELAS_PESSOAL = {
@@ -130,6 +130,7 @@ def _execute_in_app_context(
     extra_blocked_tables: set = None,
     debug_unblock_tables: set = None,
     debug_schemas: dict = None,
+    admin_mode: bool = False,
 ) -> dict:
     """
     Executa pipeline garantindo Flask app context.
@@ -144,11 +145,13 @@ def _execute_in_app_context(
         extra_blocked_tables: Tabelas bloqueadas adicionais (per-request)
         debug_unblock_tables: Tabelas a desbloquear (debug mode admin)
         debug_schemas: Schemas das tabelas debug (dict nome -> schema JSON)
+        admin_mode: Bypass seguranca SQL (keywords, tabelas, read-only)
     """
     kwargs = {
         'extra_blocked_tables': extra_blocked_tables,
         'debug_unblock_tables': debug_unblock_tables,
         'debug_schemas': debug_schemas,
+        'admin_mode': admin_mode,
     }
     try:
         from flask import current_app
@@ -404,10 +407,21 @@ try:
             # Obter pipeline (singleton lazy)
             pipeline = _get_pipeline()
 
-            # Bloqueio condicional: tabelas pessoal_* bloqueadas para
-            # usuários NÃO autorizados (defesa em profundidade)
+            # Bloqueio condicional por nível de acesso do usuário
             user_id = _current_user_id.get()
-            extra_blocked = TABELAS_PESSOAL if user_id not in USUARIOS_PESSOAL else None
+            is_sql_admin = user_id in USUARIOS_SQL_ADMIN
+
+            # SQL Admin: bypass total (tabelas + keywords + read-only)
+            if is_sql_admin:
+                extra_blocked = None
+                admin_mode = True
+                logger.warning(f"[SQL_TOOL] SQL ADMIN MODE: user_id={user_id}")
+            elif user_id in USUARIOS_PESSOAL:
+                extra_blocked = None  # pessoal_* liberado
+                admin_mode = False
+            else:
+                extra_blocked = TABELAS_PESSOAL
+                admin_mode = False
 
             # Debug Mode: desbloquear tabelas internas (admin only)
             from ..config.permissions import get_debug_mode
@@ -427,6 +441,7 @@ try:
                 extra_blocked_tables=extra_blocked,
                 debug_unblock_tables=debug_unblock,
                 debug_schemas=debug_schemas,
+                admin_mode=admin_mode or debug_active,
             )
 
             # Formatar resultado legível (TextContent — backward compat)
