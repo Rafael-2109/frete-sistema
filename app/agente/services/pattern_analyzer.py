@@ -833,93 +833,157 @@ def _xml_escape(text: str) -> str:
 
 
 # =====================================================================
-# PRD v2.1 + CAPDo v3.0: EXTRACAO POS-SESSAO DE CONHECIMENTO ORGANIZACIONAL
+# EXTRACAO POS-SESSAO DE CONHECIMENTO ORGANIZACIONAL
 # =====================================================================
 #
-# Reforma CAPDo (12/03/2026):
-# - 5 tipos de conhecimento (procedimental, conceitual, condicional, causal, relacional)
-# - Campo obrigatorio "problema_que_resolve" — se vazio, NAO salvar
-# - Campo obrigatorio "prescricao" — instrucao acionavel para o agente
-# - Nomeacao hierarquica: /memories/empresa/{tipo}/{dominio}/{slug}.xml
-# - Paths hierarquicos: /memories/empresa/{tipo}/{dominio}/{slug}.xml
+# Taxonomia de 5 niveis + 4 criterios formais (12/03/2026):
+# - 3 tipos operacionais: protocolo, armadilha, heuristica
+# - Niveis 1-2 (lookup/composicao) = NAO memorizar
+# - Niveis 3-5 (diagnostico/armadilha/heuristica) = memorizar
+# - 4 criterios: bifurca? perdeu tempo? implicito? transferivel?
+# - Briefing da empresa injetado via empresa_briefing.md
+# - Titulos existentes injetados para reutilizacao/enriquecimento
+# - Busca semantica pre-save via _find_similar_empresa_memory()
 #
-# Principio: frequencia NAO eh criterio de valor.
-# O valor esta no PROBLEMA que o conhecimento resolve.
-#
+# Paths hierarquicos: /memories/empresa/{tipo}/{dominio}/{slug-do-titulo}.xml
 # Salva como memorias empresa (user_id=0, escopo='empresa').
 # Rede de seguranca: captura o que o agente NAO salvou via save_memory.
 # Roda em daemon thread (background) a cada exchange, sem bloquear UX.
 # =====================================================================
 
-def _build_extraction_prompt() -> str:
-    """Constroi o prompt de extracao com taxonomia inline.
+_EMPRESA_BRIEFING_CACHE: str | None = None
 
-    Taxonomia embutida no prompt — o LLM (Sonnet) ja entende dominios e entidades
-    sem lookup table Python. domain_ontology.py eliminado.
+
+def _load_empresa_briefing() -> str:
+    """Carrega briefing da empresa de empresa_briefing.md (cache module-level)."""
+    global _EMPRESA_BRIEFING_CACHE
+    if _EMPRESA_BRIEFING_CACHE is not None:
+        return _EMPRESA_BRIEFING_CACHE
+
+    briefing_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'config', 'empresa_briefing.md',
+    )
+    try:
+        with open(briefing_path, 'r', encoding='utf-8') as f:
+            _EMPRESA_BRIEFING_CACHE = f.read()
+    except FileNotFoundError:
+        logger.warning("[KNOWLEDGE_EXTRACTION] empresa_briefing.md nao encontrado")
+        _EMPRESA_BRIEFING_CACHE = ""
+    return _EMPRESA_BRIEFING_CACHE
+
+
+def _build_extraction_prompt() -> str:
+    """Constroi o prompt de extracao com briefing + taxonomia de 5 niveis + 4 criterios.
+
+    Briefing carregado de empresa_briefing.md (cache module-level).
+    Taxonomia embutida no prompt — Sonnet decide o que memorizar com criterios formais.
     Resultado eh constante durante o lifecycle da aplicacao (cache via module-level).
     """
-    return """Voce eh um extrator de CONHECIMENTO ORGANIZACIONAL para a Nacom Goya (industria de alimentos).
+    briefing = _load_empresa_briefing()
 
-IMPORTANTE: Voce extrai CONHECIMENTO, nao FATOS.
-- FATO: "gerou relatorio com 234 linhas" (instancia, expira, sem valor futuro)
-- CONHECIMENTO: "quando divergencia financeira, verificar extratos como passo 1" (prescritivo, acumula)
+    parts = [
+        "Voce eh um extrator de CONHECIMENTO ORGANIZACIONAL para a Nacom Goya.\n",
+    ]
 
-Analise a conversa e extraia conhecimento que resolve PROBLEMAS reais da organizacao.
+    if briefing:
+        parts.append(f"\nCONTEXTO DA EMPRESA:\n{briefing}\n\n---\n")
 
-TESTE DE VALOR — para cada item, pergunte:
-1. "Que problema alguem teria se NAO soubesse isso?" → Se nao consegue responder, NAO extraia.
-2. "Em que situacao futura isso modifica o comportamento do agente?" → Se nao muda nada, NAO extraia.
+    parts.append("""
+IMPORTANTE: Voce extrai CONHECIMENTO TACITO, nao FATOS ou LOOKUPS.
+- LOOKUP: "qual embarque da NF X?" (deterministico, skill resolve)
+- CONHECIMENTO: "quando NF nao aparece no Odoo, investigar nesta ordem: DFe, match, CNPJ, empresa" (protocolo)
+
+TAXONOMIA DE PROBLEMAS — O que memorizar e o que NAO memorizar:
+
+Nivel 1 — Lookup (NUNCA memorizar)
+  Caminho deterministico: input -> query -> output. Sempre igual.
+  "Qual embarque da NF X?" -> JOIN faturamento/embarque. Fim.
+  Skills e codigo ja resolvem. Memorizar seria duplicar codigo em prosa.
+
+Nivel 2 — Composicao (NUNCA memorizar)
+  Combina 2-3 lookups em sequencia previsivel.
+  "Pedidos do Atacadao com falta" = resolver entidade + verificar disponibilidade.
+  O routing de skills ja cobre. A sequencia eh fixa.
+
+  --- LINHA DE CORTE: abaixo = infraestrutura, acima = conhecimento tacito ---
+
+Nivel 3 — Diagnostico diferencial (MEMORIZAR a arvore de investigacao)
+  Multiplas causas possiveis, caminho varia conforme o que encontra.
+  "NF nao apareceu no Odoo" -> pode ser: DFe nao importado, match falhou por CNPJ,
+  empresa errada, fornecedor sem de-para, timeout do job.
+  Memorizar: NAO o caso ("NF 12345 era CNPJ errado"), mas a ARVORE — quais causas
+  verificar, em que ordem, como distinguir uma da outra.
+
+Nivel 4 — Resolucao com armadilhas (MEMORIZAR caminho + dead ends)
+  Requer acoes que podem dar errado. A sequencia importa.
+  "Reativar embarque cancelado" -> verificar NF emitida, separacao existente, reverter status.
+  "UPDATE no valor de frete" -> NAO dispara recalculo de margem — precisa chamar o service.
+  Memorizar: sequencia correta, o que NAO funciona e por que, pre-condicoes.
+
+Nivel 5 — Heuristica emergente (MEMORIZAR como regra)
+  Problema que parece unico mas revela padrao recorrente.
+  "3 NFs do mesmo fornecedor falharam no match" -> fornecedor tem CNPJ secundario.
+  Memorizar: a HEURISTICA — "se fornecedor X falha no match repetidamente,
+  verificar CNPJ secundario". Transforma caso em regra.
+
+RESUMO: Memorize PROTOCOLOS DE INVESTIGACAO e ARMADILHAS CONHECIDAS.
+NAO memorize solucoes pontuais ("NF 12345 estava na empresa 3") — morrem no primeiro uso.
+
+CRITERIO FORMAL — pelo menos 2 devem ser verdadeiros para memorizar:
+
+1. O caminho bifurca? Existe mais de uma causa possivel, e a investigacao muda?
+   -> Memorizar a arvore de decisao
+2. Alguem ja perdeu tempo com isso? O caminho errado custou tempo real?
+   -> Memorizar o que NAO funciona
+3. O conhecimento eh implicito? A solucao depende de algo que nao esta no codigo nem nos schemas?
+   -> Memorizar o conhecimento tacito
+4. Eh transferivel? A solucao deste caso se aplica a casos futuros do mesmo tipo?
+   -> Memorizar como heuristica
+
+Se nenhum for verdadeiro -> eh Nivel 1-2 -> skills e codigo ja resolvem. NAO extraia.
 
 Retorne JSON VALIDO com esta estrutura (array vazio se nao encontrar nada):
 
-{{
+{
   "conhecimentos": [
-    {{
-      "tipo_conhecimento": "procedimental|conceitual|condicional|causal|relacional",
-      "entidade_principal": "slug da entidade (ex: pedido, embarque, nf, extrato, odoo)",
-      "dominio": "comercial|logistica|financeiro|producao|sistema",
-      "problema_que_resolve": "Que problema alguem teria sem esse conhecimento? (OBRIGATORIO)",
+    {
+      "titulo": "4-10 palavras, manchete do conhecimento",
+      "tipo": "protocolo|armadilha|heuristica",
+      "nivel": 3,
+      "dominio": "texto livre (ex: recebimento, financeiro, comercial, logistica, carvia, producao, integracao)",
+      "criterios_atendidos": [1, 3],
       "descricao": "Descricao clara do conhecimento",
-      "prescricao": "Quando [situacao], o agente deve [acao] porque [razao] (OBRIGATORIO)",
-      "confianca": "alta|media"
-    }}
+      "prescricao": "Quando [situacao], o agente deve [acao] porque [razao]"
+    }
   ]
-}}
+}
 
-TIPOS DE CONHECIMENTO (campo tipo_conhecimento):
-  - "procedimental": COMO fazer algo? Ex: Para reativar embarque cancelado: UPDATE embarque SET status='ativo'...
-  - "conceitual": O QUE algo significa ou como funciona? Ex: VCD eh o codigo de pedido do cliente, diferente do num_pedido interno
-  - "condicional": QUANDO algo se aplica? Ex: Atacadao sempre pede pedido completo — nao aceita parcial
-  - "causal": POR QUE algo acontece? Ex: purchase_order_id pode estar vazio porque Odoo nao popula automaticamente
-  - "relacional": QUEM faz o que, com quem, para quem? Ex: Elaine usa Teams para solicitar separacoes — tem user_id diferente do web
+TITULO (campo titulo):
+O titulo eh o nome do conhecimento — como uma manchete de jornal.
+- 4 a 10 palavras que capturam o conceito central
+- Substantivo-frase, nao sentenca completa
+- Especifico o suficiente para distinguir de outros conhecimentos
+- Se na lista de titulos existentes (enviada na mensagem) houver um titulo EQUIVALENTE,
+  REUTILIZE exatamente esse titulo (o sistema enriquecera a memoria existente)
 
-TIPOS DE PROBLEMA (campo tipo_problema):
-  - "inconsistencia": Dado divergente entre Odoo, Sistema de Fretes, SSW ou Linx
-  - "dado_faltante": Campo vazio, endereco errado, NF divergente, dado nao populado
-  - "procedimento_especifico": Workaround, sequencia obrigatoria, pre-condicao nao documentada
-  - "regra_nao_obvia": Cliente com restricao, processo com pre-condicao, excecao a regra geral
-  - "ambiguidade": Mesmo nome, significados diferentes entre contextos ou sistemas
+Exemplos:
+  OK "Diagnostico de NF ausente no Odoo"
+  OK "Atacadao nao aceita pedido parcial"
+  OK "UPDATE frete nao recalcula margem"
+  RUIM "Verificacao" (generico)
+  RUIM "Procedimento completo para realizar a verificacao..." (sentenca, nao titulo)
 
-ENTIDADES DO DOMINIO (campo entidade_principal — texto livre aceito):
-  - comercial: cliente, pedido, nf, produto, faturamento
-  - logistica: embarque, separacao, transportadora, cte, agendamento, pallet, devolucao
-  - financeiro: titulo, extrato, comprovante, purchase_order, fatura_transportadora, reconciliacao
-  - producao: ordem_producao, insumo, estoque
-  - sistema: integracao, odoo, ssw, linx
-
-DOMINIOS (campo dominio):
-  - "comercial": Comercial
-  - "logistica": Logistica
-  - "financeiro": Financeiro
-  - "producao": Producao
-  - "sistema": Sistema/Integracao
+TIPOS (campo tipo):
+  - "protocolo": Arvore de investigacao com multiplas causas possiveis (Nivel 3+)
+  - "armadilha": Caminho que parece correto mas falha, com dead ends documentados (Nivel 4+)
+  - "heuristica": Padrao recorrente que transforma caso em regra generalizavel (Nivel 5)
 
 REGRAS CRITICAS:
 - Extraia APENAS o que aparece EXPLICITAMENTE na conversa — NUNCA invente
 - Ignore preferencias pessoais (estilo, formato) — essas sao individuais
-- CAMPO "problema_que_resolve" eh OBRIGATORIO — se nao existe problema, NAO extraia
-- CAMPO "prescricao" eh OBRIGATORIO — deve ser instrucao acionavel formato "Quando X, faca Y porque Z"
-- Se nao conseguir preencher AMBOS os campos, o item NAO eh conhecimento util — omita
+- Campo "prescricao" eh OBRIGATORIO — deve ser instrucao acionavel formato "Quando X, faca Y porque Z"
+- Se nao conseguir preencher titulo + tipo + prescricao, o item NAO eh conhecimento util — omita
 - NAO extraia resultados pontuais ("gerou relatorio", "rodou script", "consultou X linhas")
 - NAO extraia status temporarios ("processando 71%", "aguardando resposta")
 - NAO extraia informacao disponivel no sistema (campos de tabela, configuracoes)
@@ -929,9 +993,10 @@ REGRAS CRITICAS:
   "Sonnet", "Haiku", "user_id", "daemon thread", "RAG", "KG", "dedup"
 - IGNORE meta-discussoes: conversas SOBRE como o sistema funciona internamente
 - Se a conversa eh INTEIRAMENTE sobre desenvolvimento/debugging do proprio sistema, retorne array vazio
-- "confianca" = "alta" se o operador afirmou com certeza, "media" se foi implicito
 - Prefira POUCOS itens de ALTA qualidade a muitos itens de baixa qualidade
-- RESPONDA APENAS JSON VALIDO, sem markdown"""
+- RESPONDA APENAS JSON VALIDO, sem markdown""")
+
+    return "".join(parts)
 
 
 # System prompt estatico — inicializado na primeira chamada e cacheado
@@ -994,42 +1059,63 @@ def _format_messages_for_extraction(messages: list[dict]) -> str:
 
 
 def _slugify(text: str, max_len: int = 60) -> str:
-    """Converte texto para slug seguro para path de memoria."""
+    """Converte texto para slug seguro para path de memoria.
+
+    Trunca em word boundary (ultimo hifen) em vez de cortar no meio da palavra.
+    """
     import unicodedata
     # Remove acentos
     nfkd = unicodedata.normalize('NFKD', text)
     ascii_text = ''.join(c for c in nfkd if not unicodedata.combining(c))
     # Converte para lowercase e substitui nao-alfanumericos por hifen
     slug = re.sub(r'[^a-z0-9]+', '-', ascii_text.lower()).strip('-')
-    return slug[:max_len]
+    if len(slug) <= max_len:
+        return slug
+    # Truncar em word boundary
+    truncated = slug[:max_len]
+    last_sep = truncated.rfind('-')
+    if last_sep > max_len // 2:
+        return truncated[:last_sep]
+    return truncated
 
 
 def _build_knowledge_path(
-    tipo_conhecimento: str,
+    tipo: str,
     dominio: str,
-    descricao: str,
+    titulo: str = '',
+    descricao: str = '',
 ) -> str:
     """Constroi path hierarquico para memoria.
 
-    Formato: /memories/empresa/{tipo_subdir}/{dominio}/{slug-descritivo}.xml
+    Formato: /memories/empresa/{tipo_subdir}/{dominio}/{slug-do-titulo}.xml
+
+    Usa titulo (gerado pelo Sonnet) como fonte primaria do slug.
+    Fallback para descricao se titulo estiver vazio.
 
     Exemplos:
-        - /memories/empresa/procedimentos/financeiro/verificacao-extratos-bancarios.xml
-        - /memories/empresa/regras/comercial/atacadao-pede-pedido-completo.xml
-        - /memories/empresa/causas/sistema/purchase-order-id-nao-populado.xml
+        - /memories/empresa/protocolos/recebimento/diagnostico-nf-ausente-odoo.xml
+        - /memories/empresa/armadilhas/financeiro/update-frete-nao-recalcula-margem.xml
+        - /memories/empresa/heuristicas/recebimento/fornecedor-cnpj-secundario-match.xml
     """
-    # 5 tipos epistemologicos fixos (CAPDo v3.0) — nao mudam
+    # 3 tipos operacionais (substitui 5 epistemologicos)
     _TIPO_TO_SUBDIR = {
-        "procedimental": "procedimentos",
-        "conceitual": "conceitos",
-        "condicional": "regras",
-        "causal": "causas",
-        "relacional": "perfis",
+        "protocolo": "protocolos",
+        "armadilha": "armadilhas",
+        "heuristica": "heuristicas",
+        # Backward-compat: tipos legados mapeados
+        "procedimental": "protocolos",
+        "conceitual": "heuristicas",
+        "condicional": "armadilhas",
+        "causal": "armadilhas",
+        "relacional": "heuristicas",
     }
-    subdir = _TIPO_TO_SUBDIR.get(tipo_conhecimento, "geral")
+    subdir = _TIPO_TO_SUBDIR.get(tipo, "protocolos")
     if dominio:
         subdir = f"{subdir}/{dominio}"
-    slug = _slugify(descricao[:50])
+
+    # Titulo eh fonte primaria do slug (gerado pelo Sonnet com 4-10 palavras)
+    slug_source = titulo.strip() if titulo else descricao[:80]
+    slug = _slugify(slug_source)
     if not slug:
         slug = _slugify(descricao[:80])
     if not slug:
@@ -1152,30 +1238,30 @@ def _save_conhecimentos_v3(
     created_by: int,
     counts: dict,
 ) -> dict:
-    """Salva conhecimentos no formato CAPDo v3.0 com 6 dimensoes.
+    """Salva conhecimentos no novo formato com titulo + tipo + nivel + criterios.
 
     Filtro de valor:
-    - "problema_que_resolve" vazio → NAO salvar
     - "prescricao" vazia → NAO salvar
+    - tipo invalido → NAO salvar
+    - nivel < 3 → NAO salvar (Niveis 1-2 sao lookups)
     """
+    _TIPOS_VALIDOS = {'protocolo', 'armadilha', 'heuristica'}
+
     for item in conhecimentos:
-        tipo = item.get('tipo_conhecimento', '').strip()
-        entidade = item.get('entidade_principal', '').strip()
+        titulo = item.get('titulo', '').strip()
+        tipo = item.get('tipo', '').strip()
+        nivel = item.get('nivel', 0)
         dominio = item.get('dominio', '').strip()
-        problema = item.get('problema_que_resolve', '').strip()
+        criterios = item.get('criterios_atendidos', [])
         descricao = item.get('descricao', '').strip()
         prescricao = item.get('prescricao', '').strip()
-        confianca = item.get('confianca', 'media')
 
-        # ── Filtro de valor: campos obrigatorios ──
+        # ── Backward-compat: aceitar campo legado tipo_conhecimento ──
+        if not tipo and item.get('tipo_conhecimento'):
+            tipo = item['tipo_conhecimento'].strip()
+
+        # ── Filtro de valor ──
         if not descricao:
-            counts['filtered'] += 1
-            continue
-
-        if not problema or len(problema) < 10:
-            logger.debug(
-                f"[KNOWLEDGE_EXTRACTION] Filtrado (sem problema): {descricao[:60]}"
-            )
             counts['filtered'] += 1
             continue
 
@@ -1186,25 +1272,44 @@ def _save_conhecimentos_v3(
             counts['filtered'] += 1
             continue
 
-        # Entidade e dominio usados conforme retornados pelo LLM.
-        # O prompt de extracao ja lista valores validos — nao precisa de lookup table.
+        if tipo not in _TIPOS_VALIDOS:
+            # Tentar mapear tipos legados
+            _LEGACY_MAP = {
+                'procedimental': 'protocolo',
+                'conceitual': 'heuristica',
+                'condicional': 'armadilha',
+                'causal': 'armadilha',
+                'relacional': 'heuristica',
+            }
+            tipo = _LEGACY_MAP.get(tipo, 'protocolo')
+
+        if isinstance(nivel, (int, float)) and nivel < 3 and nivel > 0:
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Filtrado (nivel {nivel} < 3): {descricao[:60]}"
+            )
+            counts['filtered'] += 1
+            continue
+
         if not dominio:
             dominio = "geral"
 
-        # ── Construir path hierarquico ──
-        path = _build_knowledge_path(tipo, dominio, descricao)
+        # ── Construir path hierarquico (titulo como fonte primaria do slug) ──
+        path = _build_knowledge_path(tipo, dominio, titulo=titulo, descricao=descricao)
         if not path:
             counts['filtered'] += 1
             continue
 
-        # ── Construir XML enriquecido ──
+        # ── Construir XML enriquecido (novo formato) ──
+        nivel_str = str(int(nivel)) if isinstance(nivel, (int, float)) and nivel >= 3 else "3"
+        criterios_str = ",".join(str(c) for c in criterios) if criterios else ""
         content = (
             f'<conhecimento tipo="{_xml_escape(tipo)}" '
-            f'entidade="{_xml_escape(entidade)}" '
-            f'confianca="{confianca}">'
+            f'nivel="{nivel_str}" '
+            f'dominio="{_xml_escape(dominio)}">'
+            f'\n  <titulo>{_xml_escape(titulo)}</titulo>'
             f'\n  <descricao>{_xml_escape(descricao)}</descricao>'
-            f'\n  <problema_que_resolve>{_xml_escape(problema)}</problema_que_resolve>'
             f'\n  <prescricao>{_xml_escape(prescricao)}</prescricao>'
+            f'\n  <criterios>{criterios_str}</criterios>'
             f'\n</conhecimento>'
         )
 
@@ -1224,14 +1329,14 @@ def _save_conhecimentos_legado(
     created_by: int,
     counts: dict,
 ) -> dict:
-    """Fallback: converte formato legado para CAPDo v3.0 e salva.
+    """Fallback: converte formato legado para novo formato e salva.
 
     Mantido para backward-compatibility durante transicao.
-    Cada categoria legada eh mapeada para um tipo de conhecimento:
-    - term_definitions → conceitual
-    - role_identifications → relacional
-    - business_rules → condicional
-    - corrections → causal
+    Mapeamento:
+    - term_definitions → heuristica, nivel 3
+    - role_identifications → descartado (Nivel 1 — lookup de pessoa)
+    - business_rules → armadilha, nivel 4
+    - corrections → armadilha, nivel 4
     """
     conhecimentos_convertidos = []
 
@@ -1241,32 +1346,17 @@ def _save_conhecimentos_legado(
         if not termo or not definicao:
             continue
         conhecimentos_convertidos.append({
-            'tipo_conhecimento': 'conceitual',
-            'entidade_principal': '',
+            'titulo': f'Definicao de {termo}',
+            'tipo': 'heuristica',
+            'nivel': 3,
             'dominio': '',
-            'problema_que_resolve': f'Ambiguidade ou desconhecimento do termo "{termo}" pode causar '
-                                    f'mal-entendido na comunicacao da equipe',
+            'criterios_atendidos': [3, 4],
             'descricao': f'{termo}: {definicao}',
             'prescricao': f'Quando alguem mencionar "{termo}", interpretar como: {definicao}',
-            'confianca': item.get('confianca', 'media'),
         })
 
-    for item in knowledge.get('role_identifications', []):
-        nome = item.get('nome_usuario', '').strip()
-        cargo = item.get('cargo_ou_setor', '').strip()
-        if not nome or not cargo:
-            continue
-        conhecimentos_convertidos.append({
-            'tipo_conhecimento': 'relacional',
-            'entidade_principal': '',
-            'dominio': '',
-            'problema_que_resolve': f'Sem saber o cargo de {nome}, o agente nao pode direcionar '
-                                    f'respostas adequadamente ao contexto de {cargo}',
-            'descricao': f'{nome} trabalha em {cargo}',
-            'prescricao': f'Quando {nome} fizer solicitacoes, considerar que atua em {cargo} '
-                          f'e adaptar nivel de detalhe e vocabulario',
-            'confianca': 'alta',
-        })
+    # role_identifications descartado — Nivel 1 (lookup de pessoa)
+    # Nao gera conhecimento tacito util.
 
     for item in knowledge.get('business_rules', []):
         regra = item.get('regra', '').strip()
@@ -1274,15 +1364,14 @@ def _save_conhecimentos_legado(
         if not regra:
             continue
         conhecimentos_convertidos.append({
-            'tipo_conhecimento': 'condicional',
-            'entidade_principal': '',
+            'titulo': regra[:60],
+            'tipo': 'armadilha',
+            'nivel': 4,
             'dominio': '',
-            'problema_que_resolve': f'Sem conhecer esta regra, o agente pode sugerir acoes '
-                                    f'que violam o processo: {regra[:80]}',
+            'criterios_atendidos': [2, 3],
             'descricao': regra,
             'prescricao': f'Quando a situacao envolver: {contexto or "contexto geral"}, '
                           f'aplicar a regra: {regra}',
-            'confianca': 'media',
         })
 
     for item in knowledge.get('corrections', []):
@@ -1292,20 +1381,78 @@ def _save_conhecimentos_legado(
         if not errado or not correto:
             continue
         conhecimentos_convertidos.append({
-            'tipo_conhecimento': 'causal',
-            'entidade_principal': '',
+            'titulo': f'Correcao: {correto[:50]}',
+            'tipo': 'armadilha',
+            'nivel': 4,
             'dominio': '',
-            'problema_que_resolve': f'Sem esta correcao, o agente repetira o erro: {errado[:80]}',
+            'criterios_atendidos': [2, 4],
             'descricao': f'Errado: {errado}. Correto: {correto}',
             'prescricao': f'Quando a situacao envolver {contexto or "este tema"}, '
                           f'NUNCA usar "{errado[:40]}" — o correto eh "{correto[:40]}"',
-            'confianca': 'alta',
         })
 
     if conhecimentos_convertidos:
         return _save_conhecimentos_v3(conhecimentos_convertidos, created_by, counts)
 
     return counts
+
+
+def _find_similar_empresa_memory(descricao: str, current_path: str):
+    """Busca memoria empresa semanticamente similar via dedup_embedding (threshold 0.80).
+
+    Returns:
+        AgentMemory ou None se nao encontrou similar.
+    """
+    try:
+        from app.embeddings.config import MEMORY_SEMANTIC_SEARCH, EMBEDDINGS_ENABLED
+        if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
+            return None
+
+        from app.embeddings.service import EmbeddingService
+        from app import db
+        from sqlalchemy import text as sql_text
+        from ..models import AgentMemory
+        from .knowledge_graph_service import clean_for_comparison
+
+        svc = EmbeddingService()
+        clean_content = clean_for_comparison(descricao)
+        if len(clean_content) < 10:
+            return None
+
+        query_embedding = svc.embed_texts([clean_content], input_type="document")[0]
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        svc._enable_iterative_scan()
+
+        result = db.session.execute(sql_text("""
+            SELECT
+                ame.path,
+                1 - (ame.dedup_embedding <=> CAST(:query AS vector)) AS similarity
+            FROM agent_memory_embeddings ame
+            JOIN agent_memories am ON am.user_id = ame.user_id AND am.path = ame.path
+            WHERE ame.user_id = 0
+              AND ame.dedup_embedding IS NOT NULL
+              AND ame.path != :current_path
+              AND am.is_directory = false
+            ORDER BY ame.dedup_embedding <=> CAST(:query AS vector)
+            LIMIT 1
+        """), {
+            "query": embedding_str,
+            "current_path": current_path or '',
+        })
+
+        row = result.fetchone()
+        if row and float(row.similarity) >= 0.80:
+            logger.info(
+                f"[KNOWLEDGE_EXTRACTION] Similar encontrado: "
+                f"{row.path} (sim={float(row.similarity):.3f})"
+            )
+            return AgentMemory.get_by_path(0, row.path)
+
+        return None
+    except Exception as e:
+        logger.debug(f"[KNOWLEDGE_EXTRACTION] Busca similar falhou: {e}")
+        return None
 
 
 def _try_enrich_existing(
@@ -1316,9 +1463,10 @@ def _try_enrich_existing(
 ) -> bool:
     """Tenta enriquecer memoria existente em vez de criar duplicata.
 
-    Fase 4 (CAPDo): Ao salvar novo conhecimento, buscar e ENRIQUECER
-    conhecimento existente sobre o mesmo PROBLEMA — nao contar ocorrencias,
-    mas APROFUNDAR entendimento.
+    2 camadas de busca:
+    1. Path exato (mesmo slug = mesmo assunto)
+    2. Embedding semantico (threshold 0.80) — encontra memorias sobre
+       o mesmo tema mesmo com titulo/path diferente
 
     Returns:
         True se enriqueceu memoria existente, False se nao encontrou similar.
@@ -1327,8 +1475,13 @@ def _try_enrich_existing(
         from ..models import AgentMemory
         from app import db
 
-        # Verificar se existe memoria no mesmo path (mesmo assunto = mesmo path)
+        # Camada 1: path exato
         existing = AgentMemory.get_by_path(0, path)
+
+        # Camada 2: busca semantica (se path exato nao encontrou)
+        if not existing:
+            existing = _find_similar_empresa_memory(descricao, path)
+
         if not existing:
             return False
 
@@ -1368,12 +1521,56 @@ def _try_enrich_existing(
         existing.created_by = created_by
         db.session.commit()
 
-        logger.info(f"[KNOWLEDGE_EXTRACTION] Enriquecido: {path}")
+        logger.info(f"[KNOWLEDGE_EXTRACTION] Enriquecido: {existing.path}")
         return True
 
     except Exception as e:
         logger.debug(f"[KNOWLEDGE_EXTRACTION] Enriquecimento falhou: {e}")
         return False
+
+
+def _get_existing_titles() -> str:
+    """Consulta titulos de memorias empresa existentes, agrupados por tipo/dominio.
+
+    Retorna string formatada para injecao no prompt de extracao.
+    Best-effort: retorna string vazia se falhar.
+    """
+    try:
+        from ..models import AgentMemory
+
+        paths = AgentMemory.query.filter(
+            AgentMemory.user_id == 0,
+            AgentMemory.is_directory == False,  # noqa: E712
+        ).with_entities(AgentMemory.path).all()
+
+        # Agrupar por tipo/dominio, extrair slugs como titulos legiveis
+        grouped: dict[str, list[str]] = {}
+        for (path,) in paths:
+            if not path or '/memories/empresa/' not in path:
+                continue
+            # /memories/empresa/{tipo}/{dominio}/{slug}.xml
+            relative = path.replace('/memories/empresa/', '')
+            parts = relative.rsplit('/', 1)
+            if len(parts) == 2:
+                prefix, filename = parts
+                slug = filename.replace('.xml', '')
+                title = slug.replace('-', ' ')
+                grouped.setdefault(prefix, []).append(f'"{title}"')
+
+        if not grouped:
+            return ""
+
+        lines = [
+            "TITULOS EXISTENTES (reutilize se seu conhecimento for sobre o mesmo tema):"
+        ]
+        for prefix in sorted(grouped.keys()):
+            titles = ", ".join(sorted(grouped[prefix]))
+            lines.append(f"  {prefix}: {titles}")
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.debug(f"[KNOWLEDGE_EXTRACTION] Erro ao buscar titulos: {e}")
+        return ""
 
 
 def extrair_conhecimento_sessao(
@@ -1386,6 +1583,12 @@ def extrair_conhecimento_sessao(
 
     Funcao principal chamada por routes.py em daemon thread apos cada exchange.
     Rede de seguranca: captura o que o agente NAO salvou via save_memory.
+
+    Fluxo:
+    1. Formata mensagens da sessao
+    2. Consulta titulos de memorias empresa existentes (para reutilizacao)
+    3. Envia ao Sonnet com prompt contextualizado (briefing + taxonomia + criterios)
+    4. Salva conhecimento extraido como memorias empresa
 
     Args:
         app: Flask app
@@ -1403,6 +1606,21 @@ def extrair_conhecimento_sessao(
         formatted = _format_messages_for_extraction(session_messages)
         extraction_prompt = _get_extraction_prompt()
 
+        # Injetar titulos existentes para reutilizacao (dynamic, nao cacheado)
+        existing_titles = ""
+        try:
+            with app.app_context():
+                existing_titles = _get_existing_titles()
+        except Exception:
+            pass  # Best-effort
+
+        # Construir mensagem do usuario com titulos + conversa
+        user_parts = []
+        if existing_titles:
+            user_parts.append(f"<titulos_existentes>\n{existing_titles}\n</titulos_existentes>\n\n")
+        user_parts.append(f"<conversa>\n{formatted}\n</conversa>")
+        user_content = "".join(user_parts)
+
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=2000,
@@ -1413,7 +1631,7 @@ def extrair_conhecimento_sessao(
             }],
             messages=[{
                 "role": "user",
-                "content": f"<conversa>\n{formatted}\n</conversa>",
+                "content": user_content,
             }],
         )
 
@@ -1423,7 +1641,7 @@ def extrair_conhecimento_sessao(
         if not knowledge:
             return False
 
-        # CAPDo v3.0: verificar novo formato (conhecimentos) ou legado
+        # Verificar novo formato (conhecimentos) ou legado
         total_items = len(knowledge.get('conhecimentos', []))
         if total_items == 0:
             # Fallback: verificar formato legado

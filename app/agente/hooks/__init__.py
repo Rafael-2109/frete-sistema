@@ -1,24 +1,11 @@
 """
-DEPRECATED: Sistema de Hooks para o Agent SDK.
+Sistema de Hooks para o Agent SDK.
 
-A funcionalidade de memória agora é provida pela MCP Memory Tool
-em app/agente/tools/memory_mcp_tool.py.
+Historico: Este pacote continha o MemoryAgent (subagente Haiku)
+para deteccao automatica de memorias (auto_haiku). Deprecado e
+removido em 2026-03-12.
 
-O modelo principal gerencia suas próprias memórias via tool_use
-autônomo (mcp__memory__*), sem necessidade de subagente Haiku.
-
-Mantido temporariamente para rollback de segurança.
-Os exports são preservados para evitar ImportError em código legado.
+A funcionalidade de memoria agora eh provida pela MCP Memory Tool
+em app/agente/tools/memory_mcp_tool.py. O modelo principal gerencia
+suas proprias memorias via tool_use autonomo (mcp__memory__*).
 """
-
-from .memory_agent import (
-    MemoryAgent,
-    get_memory_agent,
-    reset_memory_agent,
-)
-
-__all__ = [
-    'MemoryAgent',
-    'get_memory_agent',
-    'reset_memory_agent',
-]

@@ -35,7 +35,7 @@ Com base na ultima mensagem do usuario e resposta do assistente, gere 2-3 sugest
 
 CONTEXTO DO SISTEMA:
 - Gestao de pedidos de venda, estoque, separacoes e fretes
-- Clientes: Atacadao, Assai, Carrefour, Sam's Club, outros
+- Clientes: Atacadao, Assai, outros
 - Produtos: palmito, azeitona, conservas, molhos
 - Operacoes: roteirizacao, expedicao, faturamento, NF-e, embarques
 

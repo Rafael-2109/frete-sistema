@@ -1196,6 +1196,40 @@ def process_teams_task_async(
                 )
                 db.session.rollback()
 
+            # =================================================================
+            # Extração pós-sessão (CAPDo v3.0) — espelho de routes.py:998-1028
+            # Roda inline (já estamos em thread non-daemon, não criar thread extra)
+            # =================================================================
+            try:
+                from app.agente.config.feature_flags import (
+                    USE_POST_SESSION_EXTRACTION,
+                    POST_SESSION_EXTRACTION_MIN_MESSAGES,
+                )
+
+                if (
+                    USE_POST_SESSION_EXTRACTION
+                    and session
+                    and mensagem
+                    and resposta_texto
+                    and (session.message_count or 0) >= POST_SESSION_EXTRACTION_MIN_MESSAGES
+                ):
+                    from app.agente.services.pattern_analyzer import extrair_conhecimento_sessao
+
+                    messages_for_extraction = list(session.get_messages())
+                    extrair_conhecimento_sessao(
+                        app=app,
+                        user_id=teams_user_id,
+                        session_messages=messages_for_extraction,
+                    )
+                    logger.info(
+                        f"[TEAMS-ASYNC] Extração pós-sessão concluída "
+                        f"(user={teams_user_id}, msgs={session.message_count})"
+                    )
+            except Exception as ext_err:
+                logger.warning(
+                    f"[TEAMS-ASYNC] Extração pós-sessão falhou (ignorado): {ext_err}"
+                )
+
             # Atualizar TeamsTask com resultado (retry para SSL dropped)
             # no_autoflush previne flush automático de dirty objects ao fazer get()
             with db.session.no_autoflush:

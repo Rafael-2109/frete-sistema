@@ -61,14 +61,18 @@ Output DEVE ser PRESCRITIVO ("Quando cliente X pedir Y, faca Z") — NAO descrit
 Descritivo = padrao inutil que nao muda comportamento do agente. ERRAR AQUI corrompe aprendizado.
 — FONTE: `pattern_analyzer.py:4,40,88`
 
-### pattern_analyzer: extracao pos-sessao (CAPDo v3.0)
-`extrair_conhecimento_sessao()` salva memorias empresa (user_id=0) com 6 dimensoes.
-CAPDo v3.0: novo prompt extrai `conhecimentos` com campos obrigatorios `problema_que_resolve` + `prescricao`.
-Itens sem ambos campos sao FILTRADOS (nao salvos). Backward-compatible com formato legado.
-Paths hierarquicos: `/memories/empresa/{tipo}/{dominio}/{slug}.xml`
-Taxonomia inline no prompt de extracao (5 tipos, 5 problemas, 5 dominios). `domain_ontology.py` eliminado.
+### pattern_analyzer: extracao pos-sessao (Taxonomia 5 niveis)
+`extrair_conhecimento_sessao()` salva memorias empresa (user_id=0) com 3 tipos operacionais.
+Taxonomia de 5 niveis: 1-2 (lookup/composicao) = NAO memorizar, 3-5 (diagnostico/armadilha/heuristica) = memorizar.
+4 criterios formais: bifurca? perdeu tempo? implicito? transferivel? (min 2 verdadeiros).
+Briefing da empresa injetado via `config/empresa_briefing.md` (cache module-level).
+Titulos existentes injetados no user message para reutilizacao/enriquecimento.
+Busca semantica pre-save via `_find_similar_empresa_memory()` (dedup_embedding, threshold 0.80).
+JSON: `titulo`, `tipo` (protocolo|armadilha|heuristica), `nivel` (3-5), `criterios_atendidos`, `descricao`, `prescricao`.
+Paths: `/memories/empresa/{protocolos|armadilhas|heuristicas}/{dominio}/{slug-do-titulo}.xml`
+Backward-compatible com formato legado (term_definitions, business_rules, corrections).
 Roda em daemon thread. NUNCA bloquear o response path com extracao.
-— FONTE: `pattern_analyzer.py:835-1280`
+— FONTE: `pattern_analyzer.py:835-1550`
 
 ### memory_consolidator: arquivos protegidos
 `user.xml` e `preferences.xml` sao IMUNES a consolidacao. Memorias `category='permanent'` e `importance >= 0.7` tambem.
