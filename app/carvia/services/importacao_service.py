@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from app import db
+from sqlalchemy.exc import IntegrityError
 from app.carvia.models import (
     CarviaNf, CarviaNfItem, CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
     CarviaFaturaCliente, CarviaFaturaClienteItem, CarviaFaturaTransportadora
@@ -417,24 +418,25 @@ class ImportacaoService:
                             nf = nf_existente
                     else:
                         nf = self._criar_nf(nf_data, criado_por)
-                        db.session.add(nf)
-                        db.session.flush()  # Obter ID
+                        with db.session.begin_nested():
+                            db.session.add(nf)
+                            db.session.flush()  # Obter ID
 
-                        # Gravar itens de produto
-                        itens_pendentes = getattr(nf, '_itens_pendentes', [])
-                        for item_data in itens_pendentes:
-                            item = CarviaNfItem(
-                                nf_id=nf.id,
-                                codigo_produto=item_data.get('codigo_produto'),
-                                descricao=item_data.get('descricao'),
-                                ncm=item_data.get('ncm'),
-                                cfop=item_data.get('cfop'),
-                                unidade=item_data.get('unidade'),
-                                quantidade=item_data.get('quantidade'),
-                                valor_unitario=item_data.get('valor_unitario'),
-                                valor_total_item=item_data.get('valor_total_item'),
-                            )
-                            db.session.add(item)
+                            # Gravar itens de produto
+                            itens_pendentes = getattr(nf, '_itens_pendentes', [])
+                            for item_data in itens_pendentes:
+                                item = CarviaNfItem(
+                                    nf_id=nf.id,
+                                    codigo_produto=item_data.get('codigo_produto'),
+                                    descricao=item_data.get('descricao'),
+                                    ncm=item_data.get('ncm'),
+                                    cfop=item_data.get('cfop'),
+                                    unidade=item_data.get('unidade'),
+                                    quantidade=item_data.get('quantidade'),
+                                    valor_unitario=item_data.get('valor_unitario'),
+                                    valor_total_item=item_data.get('valor_total_item'),
+                                )
+                                db.session.add(item)
 
                         nfs_criadas.append(nf)
 
@@ -469,6 +471,14 @@ class ImportacaoService:
                     if numero and cnpj:
                         nf_map[(cnpj, numero)] = nf
 
+                except IntegrityError as e:
+                    logger.warning(
+                        f"NF duplicada ignorada (IntegrityError): "
+                        f"{nf_data.get('numero_nf')} chave={chave}"
+                    )
+                    erros.append(
+                        f"NF {nf_data.get('numero_nf')} ignorada (duplicata)"
+                    )
                 except Exception as e:
                     db.session.rollback()
                     logger.error(f"Erro ao salvar NF: {e}")
@@ -521,8 +531,9 @@ class ImportacaoService:
                             continue
 
                     operacao = self._criar_operacao_de_cte(cte_data, nf_map, criado_por)
-                    db.session.add(operacao)
-                    db.session.flush()
+                    with db.session.begin_nested():
+                        db.session.add(operacao)
+                        db.session.flush()
 
                     # Vincular NFs
                     nfs_ref = cte_data.get('nfs_referenciadas', [])
@@ -573,6 +584,14 @@ class ImportacaoService:
                         )
 
                     operacoes_criadas.append(operacao)
+                except IntegrityError as e:
+                    logger.warning(
+                        f"CTe duplicado ignorado (IntegrityError): "
+                        f"{cte_data.get('cte_numero')} — {e}"
+                    )
+                    erros.append(
+                        f"CTe {cte_data.get('cte_numero')} ignorado (duplicata)"
+                    )
                 except Exception as e:
                     logger.error(f"Erro ao criar operacao: {e}")
                     erros.append(
@@ -619,86 +638,95 @@ class ImportacaoService:
                 try:
                     fatura = self._criar_fatura_de_pdf(fat_data, criado_por)
                     if fatura:
-                        db.session.add(fatura)
-                        db.session.flush()  # Obter ID
+                        with db.session.begin_nested():
+                            db.session.add(fatura)
+                            db.session.flush()  # Obter ID
 
-                        # Gravar itens de detalhe CTe (apenas para CarviaFaturaCliente)
-                        if isinstance(fatura, CarviaFaturaCliente):
-                            from app.carvia.services.linking_service import LinkingService
-                            linker = LinkingService()
+                            # Gravar itens de detalhe CTe (apenas para CarviaFaturaCliente)
+                            if isinstance(fatura, CarviaFaturaCliente):
+                                from app.carvia.services.linking_service import LinkingService
+                                linker = LinkingService()
 
-                            itens_detalhe = fat_data.get('itens_detalhe', [])
-                            for item_data in itens_detalhe:
-                                # Resolver FKs via linking
-                                operacao_id = None
-                                nf_id = None
-                                cte_num = item_data.get('cte_numero')
-                                nf_num = item_data.get('nf_numero')
-                                cnpj_contraparte = item_data.get('contraparte_cnpj')
+                                itens_detalhe = fat_data.get('itens_detalhe', [])
+                                for item_data in itens_detalhe:
+                                    # Resolver FKs via linking
+                                    operacao_id = None
+                                    nf_id = None
+                                    cte_num = item_data.get('cte_numero')
+                                    nf_num = item_data.get('nf_numero')
+                                    cnpj_contraparte = item_data.get('contraparte_cnpj')
 
-                                if cte_num:
-                                    op = linker.resolver_operacao_por_cte(cte_num)
-                                    if op:
-                                        operacao_id = op.id
-                                if nf_num:
-                                    nf_obj = linker.resolver_nf_por_numero(
-                                        nf_num, cnpj_contraparte
+                                    if cte_num:
+                                        op = linker.resolver_operacao_por_cte(cte_num)
+                                        if op:
+                                            operacao_id = op.id
+                                    if nf_num:
+                                        nf_obj = linker.resolver_nf_por_numero(
+                                            nf_num, cnpj_contraparte
+                                        )
+                                        if nf_obj:
+                                            nf_id = nf_obj.id
+
+                                    item = CarviaFaturaClienteItem(
+                                        fatura_cliente_id=fatura.id,
+                                        cte_numero=cte_num,
+                                        cte_data_emissao=self._parsear_data_fatura(
+                                            item_data.get('cte_data_emissao')
+                                        ),
+                                        contraparte_cnpj=cnpj_contraparte,
+                                        contraparte_nome=item_data.get('contraparte_nome'),
+                                        nf_numero=nf_num,
+                                        operacao_id=operacao_id,
+                                        nf_id=nf_id,
+                                        valor_mercadoria=item_data.get('valor_mercadoria'),
+                                        peso_kg=item_data.get('peso_kg'),
+                                        base_calculo=item_data.get('base_calculo'),
+                                        icms=item_data.get('icms'),
+                                        iss=item_data.get('iss'),
+                                        st=item_data.get('st'),
+                                        frete=item_data.get('frete'),
                                     )
-                                    if nf_obj:
-                                        nf_id = nf_obj.id
+                                    db.session.add(item)
 
-                                item = CarviaFaturaClienteItem(
-                                    fatura_cliente_id=fatura.id,
-                                    cte_numero=cte_num,
-                                    cte_data_emissao=self._parsear_data_fatura(
-                                        item_data.get('cte_data_emissao')
-                                    ),
-                                    contraparte_cnpj=cnpj_contraparte,
-                                    contraparte_nome=item_data.get('contraparte_nome'),
-                                    nf_numero=nf_num,
-                                    operacao_id=operacao_id,
-                                    nf_id=nf_id,
-                                    valor_mercadoria=item_data.get('valor_mercadoria'),
-                                    peso_kg=item_data.get('peso_kg'),
-                                    base_calculo=item_data.get('base_calculo'),
-                                    icms=item_data.get('icms'),
-                                    iss=item_data.get('iss'),
-                                    st=item_data.get('st'),
-                                    frete=item_data.get('frete'),
+                                # Flush para que os itens recem-adicionados estejam
+                                # visiveis na query do vincular_itens_fatura_cliente
+                                db.session.flush()
+
+                                # Fallback: resolver NFs pendentes com auto-criacao
+                                # Itens criados acima podem ter nf_id=NULL se NF nunca
+                                # foi importada. vincular_itens_fatura_cliente com
+                                # auto_criar_nf=True cria CarviaNf stub (FATURA_REFERENCIA).
+                                link_stats = linker.vincular_itens_fatura_cliente(
+                                    fatura.id, auto_criar_nf=True
                                 )
-                                db.session.add(item)
+                                if link_stats.get('nfs_criadas_referencia', 0) > 0:
+                                    logger.info(
+                                        f"Fatura {fatura.id}: {link_stats['nfs_criadas_referencia']} "
+                                        f"NFs referencia criadas automaticamente"
+                                    )
 
-                            # Flush para que os itens recem-adicionados estejam
-                            # visiveis na query do vincular_itens_fatura_cliente
-                            db.session.flush()
-
-                            # Fallback: resolver NFs pendentes com auto-criacao
-                            # Itens criados acima podem ter nf_id=NULL se NF nunca
-                            # foi importada. vincular_itens_fatura_cliente com
-                            # auto_criar_nf=True cria CarviaNf stub (FATURA_REFERENCIA).
-                            link_stats = linker.vincular_itens_fatura_cliente(
-                                fatura.id, auto_criar_nf=True
-                            )
-                            if link_stats.get('nfs_criadas_referencia', 0) > 0:
-                                logger.info(
-                                    f"Fatura {fatura.id}: {link_stats['nfs_criadas_referencia']} "
-                                    f"NFs referencia criadas automaticamente"
+                                # Backward binding: setar fatura_cliente_id e status
+                                # nas operacoes que ja foram resolvidas nos itens.
+                                # Fatura PDF e evidencia de faturamento consumado.
+                                bind_stats = linker.vincular_operacoes_da_fatura(
+                                    fatura.id
                                 )
-
-                            # Backward binding: setar fatura_cliente_id e status
-                            # nas operacoes que ja foram resolvidas nos itens.
-                            # Fatura PDF e evidencia de faturamento consumado.
-                            bind_stats = linker.vincular_operacoes_da_fatura(
-                                fatura.id
-                            )
-                            if bind_stats['operacoes_vinculadas'] > 0:
-                                logger.info(
-                                    f"Fatura {fatura.id}: "
-                                    f"{bind_stats['operacoes_vinculadas']} operacao(oes) "
-                                    f"vinculada(s) com status FATURADO"
-                                )
+                                if bind_stats['operacoes_vinculadas'] > 0:
+                                    logger.info(
+                                        f"Fatura {fatura.id}: "
+                                        f"{bind_stats['operacoes_vinculadas']} operacao(oes) "
+                                        f"vinculada(s) com status FATURADO"
+                                    )
 
                         faturas_criadas.append(fatura)
+                except IntegrityError as e:
+                    logger.warning(
+                        f"Fatura duplicada ignorada (IntegrityError): "
+                        f"{fat_data.get('numero_fatura', '?')} — {e}"
+                    )
+                    erros.append(
+                        f"Fatura {fat_data.get('numero_fatura', '?')} ignorada (duplicata)"
+                    )
                 except Exception as e:
                     logger.error(f"Erro ao salvar fatura: {e}")
                     erros.append(

@@ -213,16 +213,36 @@ class OdooConnection:
                 raise Exception(f"Timeout de {timeout_efetivo}s excedido em {model}.{method}")
 
             except Exception as e:
-                error_str = str(e)
+                error_str = str(e).lower()
 
                 # Erro conhecido: métodos Odoo que retornam None (reconcile, button_validate, etc.)
                 # O servidor Odoo não tem allow_none=True, então Fault é gerado na serialização
                 # Mas a operação FOI executada com sucesso antes do retorno
-                if "cannot marshal None" in error_str:
+                if "cannot marshal none" in error_str:
                     logger.debug(
                         f"✓ {model}.{method} executado com sucesso (retorno None é esperado)"
                     )
                     return None  # Retorna None normalmente, operação foi bem-sucedida
+
+                # SSL transiente: retry 1x com reconexão. Fixes PYTHON-FLASK-20/21/22/23.
+                if any(kw in error_str for kw in ('eof occurred', 'violation of protocol')):
+                    logger.warning(
+                        f"⚠️ SSL transiente em {model}.{method}: {e} — retentando 1x"
+                    )
+                    self._models = None  # Forçar reconexão
+                    try:
+                        models_retry = self._get_models()
+                        result = models_retry.execute_kw(
+                            self.database, self._uid, self.api_key,
+                            model, method, args, kwargs_resolved,
+                        )
+                        logger.info(f"✅ Retry SSL bem-sucedido: {model}.{method}")
+                        return result
+                    except Exception as e_retry:
+                        logger.error(
+                            f"❌ Retry SSL falhou em {model}.{method}: {e_retry}"
+                        )
+                        raise
 
                 # Erro real - logar e propagar para Circuit Breaker detectar
                 logger.error(f"❌ Erro na execução de {model}.{method}: {e}")

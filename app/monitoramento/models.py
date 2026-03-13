@@ -34,7 +34,7 @@ class EntregaMonitorada(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
     nf_cd = db.Column(db.Boolean, default=False)  # Indica se está no CD
-    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de separação
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)
 
     finalizado_por = db.Column(db.String(100))
     finalizado_em = db.Column(db.DateTime)

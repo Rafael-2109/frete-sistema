@@ -192,7 +192,23 @@ def _handle_sync_message(mensagem: str, usuario: str, conversation_id: str):
     """
     Fluxo sincrono legado: processa e retorna na mesma request.
     """
-    from app.teams.services import processar_mensagem_bot
+    from app.teams.services import processar_mensagem_bot, _get_or_create_teams_user
+
+    # Configurar user_id nos ContextVars de MCP tools (Memory + Session)
+    # Espelha o path async (services.py:218-231) — sem isso, tools falham
+    # com RuntimeError("user_id não definido"). Fixes PYTHON-FLASK-24.
+    teams_user_id = _get_or_create_teams_user(usuario)
+    if teams_user_id:
+        try:
+            from app.agente.tools.memory_mcp_tool import set_current_user_id as set_memory_user_id
+            set_memory_user_id(teams_user_id)
+        except ImportError:
+            pass
+        try:
+            from app.agente.tools.session_search_tool import set_current_user_id as set_session_user_id
+            set_session_user_id(teams_user_id)
+        except ImportError:
+            pass
 
     resposta = processar_mensagem_bot(
         mensagem=mensagem,

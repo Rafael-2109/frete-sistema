@@ -262,7 +262,7 @@ class EmbarqueItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     embarque_id = db.Column(db.Integer, db.ForeignKey('embarques.id'), nullable=False)
-    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de separação
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)
     cnpj_cliente = db.Column(db.String(20), nullable=True)
     cliente = db.Column(db.String(120), nullable=False)
     pedido = db.Column(db.String(50), nullable=False)

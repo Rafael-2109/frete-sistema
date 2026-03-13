@@ -654,11 +654,11 @@ class ValidacaoNfPoDfe(db.Model):
 
     # Fornecedor
     cnpj_fornecedor = db.Column(db.String(20), nullable=True, index=True)
-    razao_fornecedor = db.Column(db.String(255), nullable=True)
+    razao_fornecedor = db.Column(db.String(255), nullable=True)  # Nome do fornecedor (NAO usar 'fornecedor_nome')
 
     # Empresa Compradora (destinatário da NF)
     cnpj_empresa_compradora = db.Column(db.String(20), nullable=True, index=True)
-    razao_empresa_compradora = db.Column(db.String(255), nullable=True)
+    razao_empresa_compradora = db.Column(db.String(255), nullable=True)  # Nome da empresa compradora (NAO usar 'empresa_nome')
 
     # Dados da NF
     data_nf = db.Column(db.Date, nullable=True)

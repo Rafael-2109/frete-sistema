@@ -158,11 +158,14 @@ class OdooCircuitBreaker:
             self._last_failure_time = agora_utc_naive()
             self._total_failures += 1
 
-            # Verifica se é um erro grave (timeout ou conexão recusada)
+            # Verifica se é um erro grave (timeout, conexão recusada ou SSL transiente)
             error_str = str(error).lower()
             is_serious_error = any(
                 keyword in error_str
-                for keyword in ['timeout', 'timed out', 'connection refused', 'connection reset']
+                for keyword in [
+                    'timeout', 'timed out', 'connection refused', 'connection reset',
+                    'eof occurred', 'violation of protocol',  # SSL transiente
+                ]
             )
 
             if not is_serious_error:

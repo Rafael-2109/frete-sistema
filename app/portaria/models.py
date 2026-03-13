@@ -139,9 +139,14 @@ class ControlePortaria(db.Model):
         hoje = agora_utc_naive().date()
         
         # Veículos que chegaram hoje
-        registros = ControlePortaria.query.filter(
+        from sqlalchemy.orm import joinedload
+        registros = ControlePortaria.query.options(
+            joinedload(ControlePortaria.motorista_obj),
+            joinedload(ControlePortaria.embarque),
+            joinedload(ControlePortaria.tipo_veiculo),
+        ).filter(
             ControlePortaria.data_chegada == hoje
-        ).join(Motorista).all()
+        ).all()
         
         # Separa em três grupos por prioridade
         dentro = []       # Status DENTRO (entrada registrada, sem saída) - Prioridade 1
@@ -177,7 +182,12 @@ class ControlePortaria(db.Model):
                  tipo_carga=None, tipo_veiculo_id=None, status=None):
         """Retorna histórico de registros com filtros opcionais"""
         
-        query = ControlePortaria.query.join(Motorista)
+        from sqlalchemy.orm import joinedload
+        query = ControlePortaria.query.options(
+            joinedload(ControlePortaria.motorista_obj),
+            joinedload(ControlePortaria.embarque),
+            joinedload(ControlePortaria.tipo_veiculo),
+        ).join(Motorista)
         
         # Filtros de data
         if data_inicio:

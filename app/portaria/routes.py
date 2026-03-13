@@ -247,7 +247,9 @@ def registrar_movimento():
                 flash('Registro não encontrado!', 'danger')
                 return redirect(url_for('portaria.dashboard'))
             
-            registro = ControlePortaria.query.get_or_404(registro_id)
+            registro = ControlePortaria.query.options(
+                joinedload(ControlePortaria.embarque)
+            ).filter_by(id=registro_id).first_or_404()
             print(f"[DEBUG] Registro encontrado: {registro.id}")
             
             if acao == 'entrada':

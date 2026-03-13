@@ -9,7 +9,7 @@ class Separacao(db.Model):
     __tablename__ = 'separacao'
 
     id = db.Column(db.Integer, primary_key=True)
-    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de separação
+    separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)
     num_pedido = db.Column(db.String(50), nullable=True)
     data_pedido = db.Column(db.Date, nullable=True)  # agora pode ser nulo
     cnpj_cpf = db.Column(db.String(20), nullable=True)
