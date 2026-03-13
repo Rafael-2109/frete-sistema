@@ -228,9 +228,25 @@ def register_sessao_cotacao_routes(bp):
                 flash(f'Erro ao criar sessao: {e}', 'danger')
                 return redirect(url_for('carvia.nova_sessao_cotacao'))
 
+        # Prefill via query params (vindo do botao Cotar em NF/CTe)
+        prefill = {}
+        if request.args.get('prefill'):
+            prefill = {
+                'peso': request.args.get('peso', ''),
+                'valor_mercadoria': request.args.get('valor_mercadoria', ''),
+                'uf_destino': request.args.get('uf_destino', ''),
+                'cidade_destino': request.args.get('cidade_destino', ''),
+                'uf_origem': request.args.get('uf_origem', ''),
+                'cliente_nome': request.args.get('cliente_nome', ''),
+                'transportadora_id': request.args.get('transportadora_id', ''),
+                'transportadora_nome': request.args.get('transportadora_nome', ''),
+                'valor_frete': request.args.get('valor_frete', ''),
+            }
+
         return render_template(
             'carvia/sessoes_cotacao/nova.html',
             ufs=UFS_BRASIL,
+            prefill=prefill,
         )
 
     # =====================================================================

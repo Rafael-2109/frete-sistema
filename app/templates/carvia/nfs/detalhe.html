@@ -27,6 +27,17 @@
             </button>
             {% endif %}
             {% if nf.status != 'CANCELADA' %}
+            <button type="button" class="btn btn-outline-info btn-sm" title="Cotar frete"
+                    onclick="cotarStandalone({
+                        peso: {{ nf.peso_bruto or 0 }},
+                        valor_mercadoria: {{ nf.valor_total or 0 }},
+                        uf_destino: '{{ nf.uf_destinatario or '' }}',
+                        cidade_destino: '{{ nf.cidade_destinatario or '' }}',
+                        uf_origem: '{{ nf.uf_emitente or '' }}',
+                        cliente_nome: '{{ (nf.nome_emitente or '')|e }}'
+                    })">
+                <i class="fas fa-calculator"></i> Cotar
+            </button>
             <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal"
                     data-bs-target="#modalCriarCte" title="Criar CTe CarVia a partir desta NF">
                 <i class="fas fa-plus"></i> Criar CTe CarVia
@@ -389,6 +400,8 @@
     </div>
 </div>
 {% endif %}
+
+{% include 'carvia/_cotacao_modal_partial.html' %}
 {% endblock %}
 
 {% block scripts %}

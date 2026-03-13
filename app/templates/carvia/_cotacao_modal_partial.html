@@ -1,0 +1,222 @@
+{# Partial: Modal de cotacao standalone (reutilizado em NF e CTe) #}
+<div class="modal fade" id="modalCotarStandalone" tabindex="-1" aria-labelledby="modalCotarStandaloneLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalCotarStandaloneLabel">
+                    <i class="fas fa-calculator text-info"></i> Cotacao de Frete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                {# Loading #}
+                <div id="cotarStandaloneLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Calculando opcoes de frete...</p>
+                </div>
+
+                {# Conteudo #}
+                <div id="cotarStandaloneConteudo" style="display:none;">
+                    <div id="cotarStandaloneVazio" class="text-center py-4" style="display:none;">
+                        <i class="fas fa-inbox fa-2x mb-2 text-muted"></i>
+                        <p class="text-muted">Nenhuma opcao de frete encontrada para este destino.</p>
+                    </div>
+
+                    <div id="cotarStandaloneTabela" style="display:none;">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0 carvia-table">
+                                <thead>
+                                    <tr>
+                                        <th>Transportadora</th>
+                                        <th>Tabela</th>
+                                        <th>Modalidade</th>
+                                        <th class="text-center">Lead Time</th>
+                                        <th class="text-end">Valor Frete</th>
+                                        <th class="text-center">Acoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cotarStandaloneBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// =====================================================================
+// Funcoes compartilhadas de cotacao standalone
+// =====================================================================
+function _csFormatBRL(valor) {
+    return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor);
+}
+
+function _csBuildDescritvoTable(descritivo) {
+    var html = '<table class="table table-sm mb-0 carvia-breakdown-table">';
+    html += '<thead><tr><th>Componente</th><th>Fator</th><th>Base</th><th class="text-end">Resultado</th></tr></thead><tbody>';
+    descritivo.forEach(function(item) {
+        var isTotal = item.is_total || (item.componente && item.componente.toLowerCase().indexOf('total') !== -1);
+        var isSubtotal = item.is_subtotal;
+        var cls = isTotal ? ' class="carvia-breakdown-total"' : (isSubtotal ? ' class="fw-bold"' : '');
+        html += '<tr' + cls + '>';
+        html += '<td>' + (isTotal ? '<strong>' : '') + (item.componente || '') + (isTotal ? '</strong>' : '') + '</td>';
+        html += '<td>' + (item.fator || '') + '</td>';
+        html += '<td>' + (item.base || '') + '</td>';
+        html += '<td class="text-end">' + (isTotal ? '<strong>' : '') + _csFormatBRL(item.resultado || 0) + (isTotal ? '</strong>' : '') + '</td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function _csBuildBreakdownHTML(op) {
+    if (op.descritivo && Array.isArray(op.descritivo)) {
+        return _csBuildDescritvoTable(op.descritivo);
+    }
+    // Fallback simples
+    var d = (op.detalhes && op.detalhes.detalhes) || op.detalhes || {};
+    var componentes = [
+        {label: 'Frete Base', key: 'frete_base'},
+        {label: 'GRIS', key: 'gris'},
+        {label: 'Ad Valorem', key: 'adv'},
+        {label: 'RCA', key: 'rca'},
+        {label: 'Pedagio', key: 'pedagio'},
+        {label: 'TAS', key: 'valor_tas'},
+        {label: 'Despacho', key: 'valor_despacho'},
+        {label: 'CTe', key: 'valor_cte'},
+    ];
+    var html = '<table class="table table-sm mb-0"><thead><tr><th>Componente</th><th class="text-end">Valor</th></tr></thead><tbody>';
+    var temLinha = false;
+    componentes.forEach(function(c) {
+        var val = d[c.key];
+        if (val && val !== 0) {
+            html += '<tr><td>' + c.label + '</td><td class="text-end">' + _csFormatBRL(val) + '</td></tr>';
+            temLinha = true;
+        }
+    });
+    if (!temLinha) return '<em class="text-muted">Sem detalhes</em>';
+    html += '<tr class="fw-bold"><td>Total</td><td class="text-end">' + _csFormatBRL(op.valor_frete) + '</td></tr>';
+    html += '</tbody></table>';
+    return html;
+}
+
+function _csToggleDetalhes(detailId) {
+    var row = document.getElementById(detailId);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+// Parametros armazenados para redirecionar para nova sessao
+var _csParamsAtual = {};
+
+function cotarStandalone(params) {
+    _csParamsAtual = params || {};
+    var modal = new bootstrap.Modal(document.getElementById('modalCotarStandalone'));
+    var loading = document.getElementById('cotarStandaloneLoading');
+    var conteudo = document.getElementById('cotarStandaloneConteudo');
+    var vazio = document.getElementById('cotarStandaloneVazio');
+    var tabela = document.getElementById('cotarStandaloneTabela');
+    var body = document.getElementById('cotarStandaloneBody');
+
+    loading.style.display = 'block';
+    conteudo.style.display = 'none';
+    modal.show();
+
+    var csrfToken = document.querySelector('meta[name="csrf-token"]');
+    var headers = {'Content-Type': 'application/json'};
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+
+    fetch('/carvia/api/cotar-standalone', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            peso: params.peso || 0,
+            valor_mercadoria: params.valor_mercadoria || 0,
+            uf_destino: params.uf_destino || '',
+            cidade_destino: params.cidade_destino || '',
+            uf_origem: params.uf_origem || '',
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        conteudo.style.display = 'block';
+
+        if (!data.sucesso || !data.opcoes || data.opcoes.length === 0) {
+            vazio.style.display = 'block';
+            tabela.style.display = 'none';
+            if (data.erro) {
+                vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-warning"></i>' +
+                    '<p class="text-muted">' + data.erro + '</p>';
+            }
+            return;
+        }
+
+        vazio.style.display = 'none';
+        tabela.style.display = 'block';
+        body.innerHTML = '';
+
+        data.opcoes.forEach(function(op, idx) {
+            var leadTime = op.lead_time ? op.lead_time + ' dias' : '-';
+            var detailId = 'cs-detail-' + idx;
+
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><strong>' + op.transportadora_nome + '</strong><br><small class="text-muted cnpj-col">' + (op.transportadora_cnpj || '') + '</small></td>' +
+                '<td>' + (op.tabela_nome || '-') + '</td>' +
+                '<td>' + (op.modalidade || '-') + '</td>' +
+                '<td class="text-center">' + leadTime + '</td>' +
+                '<td class="text-end valor-col fw-bold">' + _csFormatBRL(op.valor_frete) + '</td>' +
+                '<td class="text-center text-nowrap">' +
+                    '<button class="btn btn-xs btn-outline-info me-1" onclick="_csToggleDetalhes(\'' + detailId + '\')" title="Detalhes">' +
+                        '<i class="fas fa-info-circle"></i>' +
+                    '</button>' +
+                    '<button class="btn btn-xs btn-success" onclick="_csCriarSessao(' + idx + ')" title="Criar Sessao de Cotacao">' +
+                        '<i class="fas fa-external-link-alt"></i> Sessao' +
+                    '</button>' +
+                '</td>';
+            body.appendChild(tr);
+
+            var detailTr = document.createElement('tr');
+            detailTr.id = detailId;
+            detailTr.style.display = 'none';
+            detailTr.className = 'table-light';
+            detailTr.innerHTML = '<td colspan="6">' + _csBuildBreakdownHTML(op) + '</td>';
+            body.appendChild(detailTr);
+        });
+
+        // Armazenar opcoes
+        window._csOpcoes = data.opcoes;
+    })
+    .catch(function(err) {
+        loading.style.display = 'none';
+        conteudo.style.display = 'block';
+        vazio.style.display = 'block';
+        tabela.style.display = 'none';
+        vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i>' +
+            '<p>Erro: ' + err.message + '</p>';
+    });
+}
+
+function _csCriarSessao(idx) {
+    var op = window._csOpcoes[idx];
+    var p = _csParamsAtual;
+    var params = new URLSearchParams({
+        prefill: '1',
+        peso: p.peso || '',
+        valor_mercadoria: p.valor_mercadoria || '',
+        uf_destino: p.uf_destino || '',
+        cidade_destino: p.cidade_destino || '',
+        uf_origem: p.uf_origem || '',
+        cliente_nome: p.cliente_nome || '',
+        transportadora_id: op.transportadora_id || '',
+        valor_frete: op.valor_frete || '',
+        transportadora_nome: op.transportadora_nome || '',
+    });
+    window.location.href = '/carvia/sessoes-cotacao/nova?' + params.toString();
+}
+</script>

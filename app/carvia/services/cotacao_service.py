@@ -157,7 +157,6 @@ class CotacaoService:
                     resultado = self._calcular_com_tabela(
                         tabela, peso, valor_mercadoria,
                         uf_destino, cidade_destino,
-                        cidade_icms=cidade_obj.icms if cidade_obj else None,
                     )
                     if resultado and (melhor is None or resultado['valor'] < melhor['valor']):
                         melhor = resultado
@@ -188,10 +187,12 @@ class CotacaoService:
     def _calcular_com_tabela(self, tabela, peso: float,
                               valor_mercadoria: float,
                               uf_destino: str,
-                              cidade_destino: str,
-                              cidade_icms: float = None,
-                              para_subcontrato: bool = True) -> Optional[Dict]:
+                              cidade_destino: str) -> Optional[Dict]:
         """Calcula frete usando uma tabela especifica.
+
+        CarVia: NUNCA passa ICMS da cidade. CalculadoraFrete usara
+        apenas icms_proprio da tabela (se existir). Sem icms_proprio,
+        ICMS = 0.
 
         Args:
             tabela: TabelaFrete ORM object
@@ -199,10 +200,6 @@ class CotacaoService:
             valor_mercadoria: Valor da mercadoria R$
             uf_destino: UF destino
             cidade_destino: Nome da cidade destino (para log)
-            cidade_icms: ICMS da cidade destino (se resolvido)
-            para_subcontrato: Se True (default CarVia), NAO passa ICMS da
-                cidade. CalculadoraFrete usara apenas icms_proprio da tabela
-                (se existir). Sem icms_proprio, ICMS = 0.
         """
         try:
             from app.utils.calculadora_frete import CalculadoraFrete
@@ -213,23 +210,18 @@ class CotacaoService:
             # Usar TabelaFreteManager para preparar dados no formato correto
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(tabela)
 
-            # Para subcontrato: NAO usar ICMS da cidade (apenas icms_proprio)
-            # Para cotacao comercial: usar ICMS da cidade normalmente
-            cidade_param = None
-            if not para_subcontrato and cidade_icms is not None:
-                cidade_param = {'icms': cidade_icms}
-
             resultado = calc.calcular_frete_unificado(
                 peso=peso,
                 valor_mercadoria=valor_mercadoria,
                 tabela_dados=tabela_dados,
-                cidade=cidade_param,
+                cidade=None,  # CarVia: apenas icms_proprio da tabela
             )
 
             if resultado and 'valor_com_icms' in resultado:
                 return {
                     'valor': resultado['valor_com_icms'],
                     'detalhes': resultado,
+                    'tabela_dados': tabela_dados,
                 }
 
             return None
@@ -293,115 +285,149 @@ class CotacaoService:
         Monta descritivo legivel com componente, fator da tabela,
         valor do pedido e resultado.
 
+        Chaves de `detalhes` vem da CalculadoraFrete (linhas 174-181):
+        frete_base, gris, adv, rca, pedagio, valor_tas, valor_despacho, valor_cte
+
         Returns:
             Lista de dicts: [{'componente', 'fator', 'base', 'resultado'}]
         """
         linhas = []
+        # detalhes pode vir aninhado (resultado inteiro) ou ja ser o dict interno
+        d = detalhes.get('detalhes', detalhes) if isinstance(detalhes, dict) else {}
+        peso_calculo = d.get('peso_para_calculo', peso)
 
-        # Frete por peso
-        valor_kg = tabela_dados.get('valor_kg') or tabela_dados.get('valor_por_kg')
+        # --- Frete por peso ---
+        valor_kg = tabela_dados.get('valor_kg', 0) or 0
         if valor_kg:
-            frete_peso = detalhes.get('frete_peso', 0)
+            frete_peso_val = peso_calculo * float(valor_kg)
             linhas.append({
                 'componente': 'Frete Peso',
                 'fator': f'R$ {float(valor_kg):.4f}/kg',
-                'base': f'{peso:.1f} kg',
-                'resultado': float(frete_peso or 0),
+                'base': f'{peso_calculo:,.1f} kg',
+                'resultado': round(frete_peso_val, 2),
             })
 
-        # Ad Valorem
-        perc_adv = tabela_dados.get('percentual_ad_valorem')
-        if perc_adv:
-            adv = detalhes.get('advalorem', 0)
+        # --- Frete % Valor ---
+        perc_valor = tabela_dados.get('percentual_valor', 0) or 0
+        if perc_valor:
+            frete_valor_val = valor_mercadoria * (float(perc_valor) / 100)
             linhas.append({
-                'componente': 'Ad Valorem',
-                'fator': f'{float(perc_adv):.2f}%',
+                'componente': 'Frete % Valor',
+                'fator': f'{float(perc_valor):.4f}%',
                 'base': f'R$ {valor_mercadoria:,.2f}',
-                'resultado': float(adv or 0),
+                'resultado': round(frete_valor_val, 2),
             })
 
-        # GRIS
-        perc_gris = tabela_dados.get('percentual_gris')
-        if perc_gris:
-            gris = detalhes.get('gris', 0)
+        # --- GRIS ---
+        perc_gris = tabela_dados.get('percentual_gris', 0) or 0
+        gris_minimo = tabela_dados.get('gris_minimo', 0) or 0
+        gris_val = float(d.get('gris', 0) or 0)
+        if perc_gris or gris_val:
+            fator_str = f'{float(perc_gris):.2f}%'
+            if gris_minimo:
+                fator_str += f' (min R$ {gris_minimo:,.2f})'
             linhas.append({
                 'componente': 'GRIS',
-                'fator': f'{float(perc_gris):.2f}%',
+                'fator': fator_str,
                 'base': f'R$ {valor_mercadoria:,.2f}',
-                'resultado': float(gris or 0),
+                'resultado': gris_val,
             })
 
-        # Pedagio
-        pedagio = detalhes.get('pedagio', 0)
-        if pedagio:
+        # --- Ad Valorem ---
+        perc_adv = tabela_dados.get('percentual_adv', 0) or 0
+        adv_minimo = tabela_dados.get('adv_minimo', 0) or 0
+        adv_val = float(d.get('adv', 0) or 0)
+        if perc_adv or adv_val:
+            fator_str = f'{float(perc_adv):.2f}%'
+            if adv_minimo:
+                fator_str += f' (min R$ {adv_minimo:,.2f})'
+            linhas.append({
+                'componente': 'Ad Valorem',
+                'fator': fator_str,
+                'base': f'R$ {valor_mercadoria:,.2f}',
+                'resultado': adv_val,
+            })
+
+        # --- RCA ---
+        perc_rca = tabela_dados.get('percentual_rca', 0) or 0
+        rca_val = float(d.get('rca', 0) or 0)
+        if perc_rca or rca_val:
+            linhas.append({
+                'componente': 'RCA',
+                'fator': f'{float(perc_rca):.2f}%',
+                'base': f'R$ {valor_mercadoria:,.2f}',
+                'resultado': rca_val,
+            })
+
+        # --- Pedagio ---
+        pedagio_val = float(d.get('pedagio', 0) or 0)
+        pedagio_100kg = tabela_dados.get('pedagio_por_100kg', 0) or 0
+        if pedagio_val or pedagio_100kg:
             linhas.append({
                 'componente': 'Pedagio',
-                'fator': 'fixo',
-                'base': '-',
-                'resultado': float(pedagio),
+                'fator': f'R$ {float(pedagio_100kg):,.2f}/100kg' if pedagio_100kg else 'fixo',
+                'base': f'{peso_calculo:,.1f} kg' if pedagio_100kg else '-',
+                'resultado': pedagio_val,
             })
 
-        # TAS
-        tas = detalhes.get('tas', 0)
-        if tas:
+        # --- TAS ---
+        tas_val = float(d.get('valor_tas', 0) or 0)
+        if tas_val:
             linhas.append({
                 'componente': 'TAS',
                 'fator': 'fixo',
-                'base': '-',
-                'resultado': float(tas),
+                'base': f'R$ {tas_val:,.2f}',
+                'resultado': tas_val,
             })
 
-        # Despacho
-        despacho = detalhes.get('despacho', 0)
-        if despacho:
+        # --- Despacho ---
+        despacho_val = float(d.get('valor_despacho', 0) or 0)
+        if despacho_val:
             linhas.append({
                 'componente': 'Despacho',
                 'fator': 'fixo',
-                'base': '-',
-                'resultado': float(despacho),
+                'base': f'R$ {despacho_val:,.2f}',
+                'resultado': despacho_val,
             })
 
-        # ADV / RCA / CTe
-        for comp in ['adv', 'rca', 'cte']:
-            val = detalhes.get(comp, 0)
-            if val:
-                linhas.append({
-                    'componente': comp.upper(),
-                    'fator': 'fixo',
-                    'base': '-',
-                    'resultado': float(val),
-                })
+        # --- CTe ---
+        cte_val = float(d.get('valor_cte', 0) or 0)
+        if cte_val:
+            linhas.append({
+                'componente': 'CTe',
+                'fator': 'fixo',
+                'base': f'R$ {cte_val:,.2f}',
+                'resultado': cte_val,
+            })
 
-        # Subtotal (valor bruto)
-        valor_bruto = detalhes.get('valor_bruto', 0)
+        # --- Subtotal (valor bruto) ---
+        valor_bruto = float(detalhes.get('valor_bruto', 0) or 0)
         linhas.append({
             'componente': 'Subtotal (sem ICMS)',
             'fator': '',
             'base': '',
-            'resultado': float(valor_bruto or 0),
+            'resultado': valor_bruto,
             'is_subtotal': True,
         })
 
-        # ICMS
-        icms = detalhes.get('icms_aplicado', 0)
-        if icms:
+        # --- ICMS Proprio (so aparece quando icms_proprio > 0 na tabela) ---
+        icms_aplicado = float(detalhes.get('icms_aplicado', 0) or 0)
+        valor_com_icms = float(detalhes.get('valor_com_icms', 0) or 0)
+        if icms_aplicado and icms_aplicado > 0:
             linhas.append({
                 'componente': 'ICMS Proprio',
-                'fator': f'{float(icms):.2f}%',
-                'base': '-',
-                'resultado': float(
-                    detalhes.get('valor_com_icms', 0)
-                ) - float(valor_bruto or 0),
+                'fator': f'{icms_aplicado:.2f}%',
+                'base': f'R$ {valor_bruto:,.2f}',
+                'resultado': round(valor_com_icms - valor_bruto, 2),
                 'is_icms': True,
             })
 
-        # Total final
-        valor_final = detalhes.get('valor_com_icms', 0)
+        # --- Total final ---
         linhas.append({
             'componente': 'VALOR FINAL',
             'fator': '',
             'base': '',
-            'resultado': float(valor_final or 0),
+            'resultado': valor_com_icms if valor_com_icms else valor_bruto,
             'is_total': True,
         })
 
@@ -500,13 +526,16 @@ class CotacaoService:
                                 resultado = self._calcular_com_tabela(
                                     tabela, peso, valor_mercadoria,
                                     uf_destino, cidade_destino,
-                                    cidade_icms=cidade_obj.icms,
-                                    para_subcontrato=False,
                                 )
                                 if resultado:
                                     # Buscar transportadora real da tabela
                                     transp_tabela = db.session.get(
                                         Transportadora, tabela.transportadora_id
+                                    )
+                                    tabela_dados = resultado.get('tabela_dados', {})
+                                    detalhes = resultado.get('detalhes', {})
+                                    descritivo = self._montar_descritivo(
+                                        tabela_dados, detalhes, peso, valor_mercadoria
                                     )
                                     opcoes.append({
                                         'transportadora_id': tabela.transportadora_id,
@@ -523,7 +552,8 @@ class CotacaoService:
                                         'tipo_carga': tabela.tipo_carga,
                                         'modalidade': tabela.modalidade,
                                         'valor_frete': round(resultado['valor'], 2),
-                                        'detalhes': resultado.get('detalhes', {}),
+                                        'detalhes': detalhes,
+                                        'descritivo': descritivo,
                                         'lead_time': vinculo.lead_time,
                                         'icms_destino': cidade_obj.icms,
                                     })
@@ -563,11 +593,14 @@ class CotacaoService:
                         resultado = self._calcular_com_tabela(
                             tabela, peso, valor_mercadoria,
                             uf_destino, cidade_destino,
-                            cidade_icms=cidade_obj.icms if cidade_obj else None,
-                            para_subcontrato=False,
                         )
                         if resultado:
                             transportadora = tabela.transportadora
+                            tabela_dados = resultado.get('tabela_dados', {})
+                            detalhes = resultado.get('detalhes', {})
+                            descritivo = self._montar_descritivo(
+                                tabela_dados, detalhes, peso, valor_mercadoria
+                            )
                             opcoes.append({
                                 'transportadora_id': transportadora.id,
                                 'transportadora_nome': transportadora.razao_social,
@@ -577,7 +610,8 @@ class CotacaoService:
                                 'tipo_carga': tabela.tipo_carga,
                                 'modalidade': tabela.modalidade,
                                 'valor_frete': round(resultado['valor'], 2),
-                                'detalhes': resultado.get('detalhes', {}),
+                                'detalhes': detalhes,
+                                'descritivo': descritivo,
                                 'lead_time': None,
                                 'icms_destino': (
                                     cidade_obj.icms if cidade_obj else None

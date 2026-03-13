@@ -3,12 +3,30 @@ Rotas de Configuracoes CarVia — CRUD modelos moto + empresas cubagem
 """
 
 import logging
+import re
 from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from app import db
 
 logger = logging.getLogger(__name__)
+
+
+def _auto_gerar_regex(nome: str) -> str:
+    """Gera regex a partir do nome do modelo.
+
+    Exemplos:
+        "CG 160"  -> "(?i)cg\\s*160"
+        "BOB"     -> "(?i)bob"
+        "X12-10"  -> "(?i)x12[\\s\\-]*10"
+    """
+    if not nome or not nome.strip():
+        return ''
+    nome = nome.strip()
+    # Escapar caracteres regex especiais (exceto espacos e hifens)
+    partes = re.split(r'[\s\-]+', nome)
+    regex_parts = [re.escape(p) for p in partes if p]
+    return '(?i)' + r'[\s\-]*'.join(regex_parts)
 
 
 def register_config_routes(bp):
@@ -57,6 +75,10 @@ def register_config_routes(bp):
             return jsonify({'erro': f'Modelo "{nome}" ja existe.'}), 409
 
         try:
+            regex_pattern = (data.get('regex_pattern') or '').strip()
+            if not regex_pattern:
+                regex_pattern = _auto_gerar_regex(nome)
+
             modelo = CarviaModeloMoto(
                 nome=nome,
                 comprimento=data.get('comprimento', 0),
@@ -64,7 +86,7 @@ def register_config_routes(bp):
                 altura=data.get('altura', 0),
                 peso_medio=data.get('peso_medio'),
                 cubagem_minima=data.get('cubagem_minima', 300),
-                regex_pattern=data.get('regex_pattern'),
+                regex_pattern=regex_pattern or None,
                 criado_em=agora_utc_naive(),
                 criado_por=current_user.email,
             )
@@ -125,7 +147,11 @@ def register_config_routes(bp):
             if 'cubagem_minima' in data:
                 modelo.cubagem_minima = data['cubagem_minima']
             if 'regex_pattern' in data:
-                modelo.regex_pattern = data['regex_pattern']
+                regex_val = (data['regex_pattern'] or '').strip()
+                if not regex_val:
+                    # Auto-gerar do nome atual (ou novo nome se editado)
+                    regex_val = _auto_gerar_regex(modelo.nome)
+                modelo.regex_pattern = regex_val or None
             if 'ativo' in data:
                 modelo.ativo = data['ativo']
 
@@ -169,6 +195,58 @@ def register_config_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao desativar modelo moto #{modelo_id}: {e}")
             return jsonify({'erro': f'Erro ao desativar modelo: {e}'}), 500
+
+    @bp.route('/api/modelos-moto/testar-regex', methods=['POST'])
+    @login_required
+    def api_testar_regex_moto():
+        """Testa regex e/ou match por nome contra texto de produto."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        pattern = (data.get('regex', '') or '').strip()
+        texto = (data.get('texto', '') or '').strip()
+        nome = (data.get('nome', '') or '').strip()
+
+        if not texto:
+            return jsonify({'erro': 'Texto para teste e obrigatorio.'}), 400
+
+        # 1. Testar regex
+        if pattern:
+            try:
+                if re.search(pattern, texto):
+                    return jsonify({
+                        'sucesso': True,
+                        'match': True,
+                        'metodo': 'regex',
+                        'mensagem': f'Match por regex: "{pattern}"',
+                    })
+            except re.error as e:
+                return jsonify({
+                    'sucesso': True,
+                    'match': False,
+                    'metodo': 'nenhum',
+                    'mensagem': f'Regex invalido: {e}',
+                })
+
+        # 2. Testar match por nome (fallback do moto_recognition_service)
+        if nome and nome.upper() in texto.upper():
+            return jsonify({
+                'sucesso': True,
+                'match': True,
+                'metodo': 'nome',
+                'mensagem': f'Match por nome: "{nome}"',
+            })
+
+        return jsonify({
+            'sucesso': True,
+            'match': False,
+            'metodo': 'nenhum',
+            'mensagem': 'Nenhum match encontrado.',
+        })
 
     # ==================== EMPRESAS CUBAGEM ====================
 

@@ -14,6 +14,17 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-info btn-sm" title="Cotar frete"
+                    onclick="cotarStandalone({
+                        peso: {{ operacao.peso_utilizado or 0 }},
+                        valor_mercadoria: {{ operacao.valor_mercadoria or 0 }},
+                        uf_destino: '{{ operacao.uf_destino or '' }}',
+                        cidade_destino: '{{ operacao.cidade_destino or '' }}',
+                        uf_origem: '{{ operacao.uf_origem or '' }}',
+                        cliente_nome: '{{ (operacao.nome_cliente or '')|e }}'
+                    })">
+                <i class="fas fa-calculator"></i> Cotar
+            </button>
             {% if operacao.cte_xml_path or operacao.cte_chave_acesso %}
             <button type="button" class="btn btn-outline-success btn-sm"
                     onclick="window.open('/carvia/api/operacao/{{ operacao.id }}/dacte', '_blank')"
@@ -370,6 +381,8 @@
             {% endif %}
         </div>
     </div>
+
+    {% include 'carvia/_cotacao_modal_partial.html' %}
 
     {# GAP-23: Modal de confirmacao para desvincular fatura #}
     {% if operacao.status == 'FATURADO' and operacao.fatura_cliente_id %}

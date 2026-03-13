@@ -26,7 +26,8 @@
                     <div class="col-md-8">
                         <label class="form-label">Nome da Sessao <span class="text-danger">*</span></label>
                         <input type="text" name="nome_sessao" class="form-control"
-                               placeholder="Ex: Cotacao Abril - Atacadao" required>
+                               placeholder="Ex: Cotacao Abril - Atacadao" required
+                               value="{{ prefill.get('cliente_nome', '') if prefill else '' }}">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Observacoes</label>
@@ -47,7 +48,8 @@
                     <div class="col-md-4">
                         <label class="form-label">Nome / Razao Social</label>
                         <input type="text" name="cliente_nome" class="form-control"
-                               placeholder="Ex: Atacadao S.A.">
+                               placeholder="Ex: Atacadao S.A."
+                               value="{{ prefill.get('cliente_nome', '') if prefill else '' }}">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Responsavel</label>
@@ -141,12 +143,14 @@
                     <div class="col-md-2">
                         <label class="form-label">Peso (kg) <span class="text-danger">*</span></label>
                         <input type="text" name="peso" class="form-control"
-                               placeholder="0,00" required>
+                               placeholder="0,00" required
+                               value="{{ prefill.get('peso', '') if prefill else '' }}">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Valor Mercadoria (R$) <span class="text-danger">*</span></label>
                         <input type="text" name="valor_mercadoria" class="form-control"
-                               placeholder="0,00" required>
+                               placeholder="0,00" required
+                               value="{{ prefill.get('valor_mercadoria', '') if prefill else '' }}">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Volumes</label>
@@ -298,6 +302,32 @@
     // Inicializar autocomplete para origem e destino (com hidden input)
     setupCidadeAutocomplete('origemUf', 'origemCidade', 'origemCidadeResults', 'origemCidadeHidden');
     setupCidadeAutocomplete('destinoUf', 'destinoCidade', 'destinoCidadeResults', 'destinoCidadeHidden');
+
+    // Prefill de UF e cidade quando vindo de cotacao standalone
+    {% if prefill %}
+    (function() {
+        var pf = {{ prefill|tojson }};
+        if (pf.uf_destino) {
+            var ufDest = document.getElementById('destinoUf');
+            ufDest.value = pf.uf_destino;
+            ufDest.dispatchEvent(new Event('change'));
+            if (pf.cidade_destino) {
+                setTimeout(function() {
+                    var cidDest = document.getElementById('destinoCidade');
+                    var hidDest = document.getElementById('destinoCidadeHidden');
+                    cidDest.value = pf.cidade_destino;
+                    hidDest.value = pf.cidade_destino;
+                    cidDest.classList.remove('is-invalid');
+                }, 300);
+            }
+        }
+        if (pf.uf_origem) {
+            var ufOrig = document.getElementById('origemUf');
+            ufOrig.value = pf.uf_origem;
+            ufOrig.dispatchEvent(new Event('change'));
+        }
+    })();
+    {% endif %}
 
     // Validacao no submit: impedir envio se hidden input vazio
     var formCotacao = document.querySelector('form[action*="sessoes-cotacao/nova"]');

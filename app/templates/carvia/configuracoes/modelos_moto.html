@@ -40,7 +40,13 @@
                                 <td class="text-end">{{ modelo.altura|numero_br(2) }}</td>
                                 <td class="text-end">{{ modelo.peso_medio|numero_br(1) if modelo.peso_medio else '-' }}</td>
                                 <td class="text-end">{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '-' }}</td>
-                                <td><code>{{ modelo.regex_pattern or '-' }}</code></td>
+                                <td>
+                                    {% if modelo.regex_pattern %}
+                                    <code class="small">{{ modelo.regex_pattern }}</code>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Auto</span>
+                                    {% endif %}
+                                </td>
                                 <td class="text-center">
                                     {% if modelo.ativo %}
                                     <span class="badge bg-success">Sim</span>
@@ -121,10 +127,39 @@
                                    inputmode="decimal" placeholder="300" value="300">
                         </div>
                         <div class="col-12">
-                            <label for="novo_regex_pattern" class="form-label">Regex Pattern</label>
-                            <input type="text" class="form-control" id="novo_regex_pattern" name="regex_pattern"
-                                   placeholder="Ex: (?i)cg\s*160">
-                            <small class="text-muted">Expressao regular para identificar este modelo automaticamente.</small>
+                            <div class="accordion" id="accordionNovoAvancado">
+                                <div class="accordion-item border-0">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed p-0 bg-transparent shadow-none" type="button"
+                                                data-bs-toggle="collapse" data-bs-target="#collapseNovoRegex">
+                                            <small class="text-muted"><i class="fas fa-cog"></i> Avancado (Regex)</small>
+                                        </button>
+                                    </h2>
+                                    <div id="collapseNovoRegex" class="accordion-collapse collapse"
+                                         data-bs-parent="#accordionNovoAvancado">
+                                        <div class="pt-2">
+                                            <div class="alert alert-info py-2 small mb-2">
+                                                <i class="fas fa-info-circle"></i>
+                                                O nome do modelo ja e usado automaticamente para identificacao.
+                                                O padrao regex e gerado automaticamente ao salvar (se vazio).
+                                            </div>
+                                            <label for="novo_regex_pattern" class="form-label">Regex Pattern</label>
+                                            <input type="text" class="form-control" id="novo_regex_pattern" name="regex_pattern"
+                                                   placeholder="Auto-gerado se vazio">
+                                            <div class="mt-2">
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control" name="regex_test_input"
+                                                           placeholder="Cole descricao de produto para testar...">
+                                                    <button type="button" class="btn btn-outline-info" onclick="testarRegex(this)">
+                                                        <i class="fas fa-flask"></i> Testar
+                                                    </button>
+                                                </div>
+                                                <div class="regex-test-result mt-1 small"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -191,9 +226,39 @@
                                    value="{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '' }}">
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Regex Pattern</label>
-                            <input type="text" class="form-control" name="regex_pattern"
-                                   value="{{ modelo.regex_pattern or '' }}">
+                            <div class="accordion" id="accordionEditarAvancado{{ modelo.id }}">
+                                <div class="accordion-item border-0">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed p-0 bg-transparent shadow-none" type="button"
+                                                data-bs-toggle="collapse" data-bs-target="#collapseEditRegex{{ modelo.id }}">
+                                            <small class="text-muted"><i class="fas fa-cog"></i> Avancado (Regex)</small>
+                                        </button>
+                                    </h2>
+                                    <div id="collapseEditRegex{{ modelo.id }}" class="accordion-collapse collapse"
+                                         data-bs-parent="#accordionEditarAvancado{{ modelo.id }}">
+                                        <div class="pt-2">
+                                            <div class="alert alert-info py-2 small mb-2">
+                                                <i class="fas fa-info-circle"></i>
+                                                O nome do modelo ja e usado automaticamente para identificacao.
+                                                Limpe o campo para re-gerar automaticamente ao salvar.
+                                            </div>
+                                            <label class="form-label">Regex Pattern</label>
+                                            <input type="text" class="form-control" name="regex_pattern"
+                                                   value="{{ modelo.regex_pattern or '' }}">
+                                            <div class="mt-2">
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control" name="regex_test_input"
+                                                           placeholder="Cole descricao de produto para testar...">
+                                                    <button type="button" class="btn btn-outline-info" onclick="testarRegex(this)">
+                                                        <i class="fas fa-flask"></i> Testar
+                                                    </button>
+                                                </div>
+                                                <div class="regex-test-result mt-1 small"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <div class="form-check">
@@ -300,6 +365,39 @@ function excluirModelo(id, nome) {
         location.reload();
     })
     .catch(err => alert(err.message));
+}
+
+function testarRegex(btn) {
+    const container = btn.closest('.accordion-collapse') || btn.closest('.modal-content');
+    const regex = container.querySelector('[name="regex_pattern"]').value;
+    const nome = container.closest('form').querySelector('[name="nome"]').value;
+    const texto = container.querySelector('[name="regex_test_input"]').value;
+    const resultDiv = container.querySelector('.regex-test-result');
+
+    if (!texto.trim()) {
+        resultDiv.innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Digite um texto para testar.</span>';
+        return;
+    }
+
+    resultDiv.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Testando...</span>';
+
+    fetch('/carvia/api/modelos-moto/testar-regex', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({regex: regex, nome: nome, texto: texto})
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.match) {
+            const icon = data.metodo === 'regex' ? 'fa-check-circle' : 'fa-check';
+            resultDiv.innerHTML = '<span class="text-success"><i class="fas ' + icon + '"></i> ' + data.mensagem + '</span>';
+        } else {
+            resultDiv.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle"></i> ' + data.mensagem + '</span>';
+        }
+    })
+    .catch(err => {
+        resultDiv.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle"></i> Erro: ' + err.message + '</span>';
+    });
 }
 </script>
 {% endblock %}

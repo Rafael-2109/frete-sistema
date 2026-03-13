@@ -604,7 +604,7 @@ function cotarDemanda(sessaoId, demandaId) {
             detailTr.id = detailId;
             detailTr.style.display = 'none';
             detailTr.className = 'table-light';
-            detailTr.innerHTML = '<td colspan="8">' + buildBreakdownHTML(op.detalhes) + '</td>';
+            detailTr.innerHTML = '<td colspan="8">' + buildBreakdownHTML(op) + '</td>';
             body.appendChild(detailTr);
         });
 
@@ -634,29 +634,29 @@ function toggleDetalhes(detailId) {
 // =====================================================================
 // Build breakdown HTML — tabela com formulas (componente x base = resultado)
 // =====================================================================
-function buildBreakdownHTML(detalhes) {
-    if (!detalhes || typeof detalhes !== 'object') {
+function buildBreakdownHTML(detalhesOrOpcao) {
+    if (!detalhesOrOpcao || typeof detalhesOrOpcao !== 'object') {
         return '<em class="text-muted">Sem detalhes disponiveis</em>';
     }
 
-    // Se tem descritivo enriquecido (cotar_subcontrato_com_descritivo)
-    if (detalhes.descritivo && Array.isArray(detalhes.descritivo)) {
-        return buildDescritvoTable(detalhes.descritivo);
+    // Path A: descritivo enriquecido (top-level ou dentro de detalhes)
+    var descritivo = detalhesOrOpcao.descritivo || (detalhesOrOpcao.detalhes && detalhesOrOpcao.detalhes.descritivo);
+    if (descritivo && Array.isArray(descritivo)) {
+        return buildDescritvoTable(descritivo);
     }
 
-    // Fonte de dados: detalhes aninhados ou top-level
-    var d = detalhes.detalhes || detalhes;
+    // Path B: fallback — tabela 2 colunas com chaves corretas da CalculadoraFrete
+    var d = detalhesOrOpcao.detalhes || detalhesOrOpcao;
 
     var componentes = [
-        {label: 'Frete Peso', key: 'frete_peso', fator_key: 'valor_kg', base_label: 'Peso'},
-        {label: 'Ad Valorem', key: 'advalorem', fator_key: 'percentual_advalorem', base_label: '% Merc.'},
-        {label: 'GRIS', key: 'gris', fator_key: 'percentual_gris', base_label: '% Merc.'},
-        {label: 'Pedagio', key: 'pedagio'},
-        {label: 'TAS', key: 'tas'},
-        {label: 'ADV', key: 'adv'},
+        {label: 'Frete Base', key: 'frete_base'},
+        {label: 'GRIS', key: 'gris'},
+        {label: 'Ad Valorem', key: 'adv'},
         {label: 'RCA', key: 'rca'},
-        {label: 'Despacho', key: 'despacho'},
-        {label: 'CTe', key: 'cte'},
+        {label: 'Pedagio', key: 'pedagio'},
+        {label: 'TAS', key: 'valor_tas'},
+        {label: 'Despacho', key: 'valor_despacho'},
+        {label: 'CTe', key: 'valor_cte'},
     ];
 
     var html = '<table class="table table-sm mb-0 carvia-breakdown-table">';
@@ -664,7 +664,7 @@ function buildBreakdownHTML(detalhes) {
 
     var temLinha = false;
     componentes.forEach(function(comp) {
-        var val = d[comp.key] || detalhes[comp.key];
+        var val = d[comp.key];
         if (val != null && val !== 0 && val !== undefined) {
             html += '<tr><td>' + comp.label + '</td>';
             html += '<td class="text-end">' + formatBRL(val) + '</td></tr>';
@@ -677,20 +677,21 @@ function buildBreakdownHTML(detalhes) {
     }
 
     // Valor bruto (subtotal sem ICMS)
-    var bruto = detalhes.valor_bruto || d.valor_bruto;
+    var bruto = detalhesOrOpcao.valor_bruto || d.valor_bruto;
     if (bruto) {
         html += '<tr class="carvia-breakdown-total"><td><strong>Subtotal (sem ICMS)</strong></td>';
         html += '<td class="text-end"><strong>' + formatBRL(bruto) + '</strong></td></tr>';
     }
 
     // ICMS
-    var icms = detalhes.icms_aplicado || d.icms_aplicado;
+    var icms = detalhesOrOpcao.icms_aplicado || d.icms_aplicado;
     if (icms != null && icms !== 0) {
-        html += '<tr><td>ICMS</td><td class="text-end">' + formatBRL(icms) + '</td></tr>';
+        html += '<tr><td>ICMS (' + icms + '%)</td><td class="text-end">' +
+            formatBRL((detalhesOrOpcao.valor_com_icms || d.valor_com_icms || 0) - (bruto || 0)) + '</td></tr>';
     }
 
     // Total final
-    var total = detalhes.valor_com_icms || d.valor_com_icms || detalhes.valor_frete;
+    var total = detalhesOrOpcao.valor_com_icms || d.valor_com_icms || detalhesOrOpcao.valor_frete;
     if (total) {
         html += '<tr class="carvia-breakdown-total table-primary"><td><strong>TOTAL</strong></td>';
         html += '<td class="text-end"><strong>' + formatBRL(total) + '</strong></td></tr>';

@@ -126,6 +126,43 @@ def register_api_routes(bp):
         except (ValueError, TypeError) as e:
             return jsonify({'erro': f'Valores invalidos: {e}'}), 400
 
+    @bp.route('/api/cotar-standalone', methods=['POST'])
+    @login_required
+    def api_cotar_standalone():
+        """Cota todas opcoes de frete standalone (NF ou CTe)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        try:
+            peso = float(data.get('peso', 0))
+            valor = float(data.get('valor_mercadoria', 0))
+        except (ValueError, TypeError):
+            return jsonify({'erro': 'Peso e valor devem ser numericos'}), 400
+
+        uf_destino = (data.get('uf_destino') or '').strip().upper()
+        cidade_destino = (data.get('cidade_destino') or '').strip() or None
+        uf_origem = (data.get('uf_origem') or '').strip().upper() or None
+
+        if peso <= 0:
+            return jsonify({'erro': 'Peso deve ser maior que zero'}), 400
+        if not uf_destino:
+            return jsonify({'erro': 'UF destino e obrigatoria'}), 400
+
+        try:
+            from app.carvia.services.cotacao_service import CotacaoService
+            service = CotacaoService()
+            opcoes = service.cotar_todas_opcoes(
+                peso, valor, uf_destino, cidade_destino, uf_origem
+            )
+            return jsonify({'sucesso': True, 'opcoes': opcoes})
+        except Exception as e:
+            logger.error(f"Erro na cotacao standalone: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
     @bp.route('/api/calcular-cotacao', methods=['POST'])
     @login_required
     def api_calcular_cotacao():
