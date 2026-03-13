@@ -860,6 +860,8 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
             'accessed_in_period': accessed_count,
             'corrections_count': corrections_count,
             'avg_importance_score': avg_importance,
+            'effective_use_rate': capdo_metrics.get('effective_use_rate', 0),
+            'noise_rate': capdo_metrics.get('noise_rate', 0),
             'correction_count_stats': {
                 'memories_with_corrections': corrected_memories_count,
                 'total_corrections': total_correction_count,

@@ -484,6 +484,9 @@ class AgentMemory(db.Model):
         nullable=True,
     )
 
+    # Ciclo de revisao (v5): ultima vez que conteudo foi validado
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
     updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())

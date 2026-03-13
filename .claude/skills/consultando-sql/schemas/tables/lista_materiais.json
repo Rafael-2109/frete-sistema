@@ -81,13 +81,6 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_cod_produto_componente",
-      "columns": [
-        "cod_produto_componente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_lista_materiais_cod_produto_produzido",
       "columns": [
         "cod_produto_produzido"
@@ -106,6 +99,13 @@
       "name": "ix_lista_materiais_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_cod_produto_componente",
+      "columns": [
+        "cod_produto_componente"
       ],
       "unique": false
     }

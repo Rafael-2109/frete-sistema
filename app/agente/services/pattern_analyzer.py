@@ -883,16 +883,14 @@ def _build_extraction_prompt() -> str:
     briefing = _load_empresa_briefing()
 
     parts = [
-        "Voce eh um extrator de CONHECIMENTO ORGANIZACIONAL para a Nacom Goya.\n",
+        "Voce eh um extrator de CONHECIMENTO ORGANIZACIONAL para a Nacom Goya.\n"
+        "Extraia CONHECIMENTO TACITO (protocolos, armadilhas, heuristicas), NAO FATOS ou LOOKUPS.\n",
     ]
 
     if briefing:
         parts.append(f"\nCONTEXTO DA EMPRESA:\n{briefing}\n\n---\n")
 
     parts.append("""
-IMPORTANTE: Voce extrai CONHECIMENTO TACITO, nao FATOS ou LOOKUPS.
-- LOOKUP: "qual embarque da NF X?" (deterministico, skill resolve)
-- CONHECIMENTO: "quando NF nao aparece no Odoo, investigar nesta ordem: DFe, match, CNPJ, empresa" (protocolo)
 
 TAXONOMIA DE PROBLEMAS — O que memorizar e o que NAO memorizar:
 
@@ -930,18 +928,12 @@ Nivel 5 — Heuristica emergente (MEMORIZAR como regra)
 RESUMO: Memorize PROTOCOLOS DE INVESTIGACAO e ARMADILHAS CONHECIDAS.
 NAO memorize solucoes pontuais ("NF 12345 estava na empresa 3") — morrem no primeiro uso.
 
-CRITERIO FORMAL — pelo menos 2 devem ser verdadeiros para memorizar:
-
-1. O caminho bifurca? Existe mais de uma causa possivel, e a investigacao muda?
-   -> Memorizar a arvore de decisao
-2. Alguem ja perdeu tempo com isso? O caminho errado custou tempo real?
-   -> Memorizar o que NAO funciona
-3. O conhecimento eh implicito? A solucao depende de algo que nao esta no codigo nem nos schemas?
-   -> Memorizar o conhecimento tacito
-4. Eh transferivel? A solucao deste caso se aplica a casos futuros do mesmo tipo?
-   -> Memorizar como heuristica
-
-Se nenhum for verdadeiro -> eh Nivel 1-2 -> skills e codigo ja resolvem. NAO extraia.
+CRITERIO FORMAL — pelo menos 2 devem ser verdadeiros:
+1. Bifurca? Multiplas causas, investigacao muda.
+2. Perdeu tempo? Caminho errado custou tempo real.
+3. Implicito? Nao esta no codigo nem nos schemas.
+4. Transferivel? Aplica-se a casos futuros.
+Se nenhum → Nivel 1-2 → NAO extraia.
 
 Retorne JSON VALIDO com esta estrutura (array vazio se nao encontrar nada):
 
@@ -979,22 +971,10 @@ TIPOS (campo tipo):
   - "armadilha": Caminho que parece correto mas falha, com dead ends documentados (Nivel 4+)
   - "heuristica": Padrao recorrente que transforma caso em regra generalizavel (Nivel 5)
 
-REGRAS CRITICAS:
-- Extraia APENAS o que aparece EXPLICITAMENTE na conversa — NUNCA invente
-- Ignore preferencias pessoais (estilo, formato) — essas sao individuais
-- Campo "prescricao" eh OBRIGATORIO — deve ser instrucao acionavel formato "Quando X, faca Y porque Z"
-- Se nao conseguir preencher titulo + tipo + prescricao, o item NAO eh conhecimento util — omita
-- NAO extraia resultados pontuais ("gerou relatorio", "rodou script", "consultou X linhas")
-- NAO extraia status temporarios ("processando 71%", "aguardando resposta")
-- NAO extraia informacao disponivel no sistema (campos de tabela, configuracoes)
-- IGNORE COMPLETAMENTE discussoes sobre o proprio sistema de IA, incluindo:
-  termos como "memoria", "embedding", "hook", "PRD", "escopo empresa/pessoal",
-  "knowledge graph", "effective_count", "prompt", "agente", "Claude", "SDK",
-  "Sonnet", "Haiku", "user_id", "daemon thread", "RAG", "KG", "dedup"
-- IGNORE meta-discussoes: conversas SOBRE como o sistema funciona internamente
-- Se a conversa eh INTEIRAMENTE sobre desenvolvimento/debugging do proprio sistema, retorne array vazio
-- Prefira POUCOS itens de ALTA qualidade a muitos itens de baixa qualidade
-- RESPONDA APENAS JSON VALIDO, sem markdown""")
+IGNORE: meta-AI (memoria, embedding, SDK, prompt, agente, Claude, Sonnet, Haiku, KG, RAG, dedup, PRD, daemon thread), resultados pontuais, status temporarios, dados do sistema.
+Se conversa INTEIRAMENTE sobre dev/debug do proprio sistema → array vazio.
+Prefira POUCOS itens de ALTA qualidade a muitos de baixa qualidade.
+RESPONDA APENAS JSON VALIDO, sem markdown.""")
 
     return "".join(parts)
 

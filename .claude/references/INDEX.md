@@ -24,6 +24,7 @@
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
 | **Manual para CLAUDE.md de modulo** | [MANUAL_CLAUDE_MD.md](MANUAL_CLAUDE_MD.md) |
 | **Capacidades MCP (versoes, features, gaps)** | [MCP_CAPABILITIES_2026.md](MCP_CAPABILITIES_2026.md) |
+| **Protocolo de memoria do agente** | [MEMORY_PROTOCOL.md](MEMORY_PROTOCOL.md) |
 | **Evolucao do sistema de memoria do agente** | `memory/memory_evolution.md` (auto-memory) |
 | **Gestao do Agente (memorias, sessoes, KG, diagnosticos)** | `.claude/skills/gerindo-agente/SKILL.md` |
 | **Agente Teams (bot async, sessoes, diferencas)** | `app/agente/CLAUDE.md` secao "Export critico: Teams" |

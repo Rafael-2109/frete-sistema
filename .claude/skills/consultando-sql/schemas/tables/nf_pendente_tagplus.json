@@ -129,14 +129,6 @@
       "unique": false
     },
     {
-      "name": "idx_nf_pendente_resolvido",
-      "columns": [
-        "resolvido",
-        "importado"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_pendente_tagplus_importado",
       "columns": [
         "importado"
@@ -154,6 +146,14 @@
       "name": "ix_nf_pendente_tagplus_numero_nf",
       "columns": [
         "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_pendente_resolvido",
+      "columns": [
+        "resolvido",
+        "importado"
       ],
       "unique": false
     },

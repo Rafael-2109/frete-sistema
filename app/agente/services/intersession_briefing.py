@@ -69,6 +69,11 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
             if recent_commits:
                 parts.append(recent_commits)
 
+        # 6. Memórias empresa sem revisão há 60+ dias
+        stale_alert = _check_stale_empresa_memories()
+        if stale_alert:
+            parts.append(stale_alert)
+
         if not parts:
             return None
 
@@ -356,6 +361,35 @@ def _check_recent_commits(since) -> Optional[str]:
 
     except Exception as e:
         logger.debug(f"[BRIEFING] Git commits check falhou (ignorado): {e}")
+        return None
+
+
+def _check_stale_empresa_memories() -> Optional[str]:
+    """
+    Verifica memorias empresa sem revisao ha 60+ dias.
+
+    Memorias com reviewed_at=NULL e criadas ha mais de 60 dias
+    sao candidatas a revisao. Retorna alerta se count > 5.
+    """
+    try:
+        from ..models import AgentMemory
+        from datetime import timedelta
+
+        now = agora_utc_naive()
+        cutoff = now - timedelta(days=60)
+
+        stale = AgentMemory.query.filter(
+            AgentMemory.user_id == 0,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.reviewed_at.is_(None),
+            AgentMemory.created_at < cutoff,
+        ).count()
+
+        if stale > 5:
+            return f'<stale_empresa count="{stale}">Memorias empresa sem revisao ha 60+ dias.</stale_empresa>'
+        return None
+    except Exception as e:
+        logger.debug(f"[BRIEFING] Stale empresa check falhou (ignorado): {e}")
         return None
 
 

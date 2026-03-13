@@ -83,51 +83,86 @@ def _build_operational_context(user_id: int) -> Optional[str]:
 
         parts = [f'<operational_context date="{now.strftime("%d/%m/%Y")}" dia="{dia_semana}">']
 
-        # Pedidos vencendo D+2 (carteira_principal)
+        # Pedidos vencendo D+2 (inclui atrasados — sao os MAIS urgentes)
         try:
             d2 = now + timedelta(days=2)
-            r = db.session.execute(sql_text("""
+            r_count = db.session.execute(sql_text("""
                 SELECT count(*)
                 FROM carteira_principal
                 WHERE qtd_saldo_produto_pedido > 0
                   AND data_entrega_pedido <= :d2
-                  AND data_entrega_pedido >= :now
-            """), {"d2": d2.date(), "now": now.date()})
-            count_urgentes = r.scalar() or 0
+            """), {"d2": d2.date()})
+            count_urgentes = r_count.scalar() or 0
+
             if count_urgentes > 0:
-                parts.append(f'<pedidos_urgentes_d2>{count_urgentes}</pedidos_urgentes_d2>')
+                # Top 3 por valor pendente
+                r_top = db.session.execute(sql_text("""
+                    SELECT raz_social_red, num_pedido,
+                           SUM(qtd_saldo_produto_pedido * preco_produto_pedido) as valor_pendente
+                    FROM carteira_principal
+                    WHERE qtd_saldo_produto_pedido > 0
+                      AND data_entrega_pedido <= :d2
+                    GROUP BY raz_social_red, num_pedido
+                    ORDER BY valor_pendente DESC
+                    LIMIT 3
+                """), {"d2": d2.date()})
+                top_rows = r_top.fetchall()
+
+                top_str = ""
+                if top_rows:
+                    items = []
+                    for row in top_rows:
+                        nome = (row[0] or "?")[:20]
+                        pedido = row[1] or "?"
+                        valor = row[2] or 0
+                        if valor >= 1000:
+                            items.append(f"{nome} R${valor / 1000:.0f}K {pedido}")
+                        else:
+                            items.append(f"{nome} R${valor:.0f} {pedido}")
+                    top_str = f' top="{", ".join(items)}"'
+
+                parts.append(f'<pedidos_urgentes_d2 count="{count_urgentes}"{top_str}/>')
         except Exception:
             pass
 
-        # Separações pendentes
+        # Separações pendentes com data mais antiga
         try:
             r = db.session.execute(sql_text("""
-                SELECT count(*)
+                SELECT count(*), MIN(criado_em)::date as oldest
                 FROM separacao
                 WHERE sincronizado_nf = FALSE
                   AND qtd_saldo > 0
             """))
-            count_sep = r.scalar() or 0
+            row = r.fetchone()
+            count_sep = row[0] or 0 if row else 0
+            oldest = row[1] if row else None
             if count_sep > 0:
-                parts.append(f'<separacoes_pendentes>{count_sep}</separacoes_pendentes>')
+                oldest_attr = f' oldest="{oldest}"' if oldest else ''
+                parts.append(f'<separacoes_pendentes count="{count_sep}"{oldest_attr}/>')
         except Exception:
             pass
 
-        # Memórias com conflito pendente — listar paths para ação do agente
+        # Memórias com conflito pendente — mostrar título (primeiros 40 chars)
         try:
             from ..models import AgentMemory
             conflict_memories = AgentMemory.query.filter_by(
                 user_id=user_id,
                 has_potential_conflict=True,
                 is_directory=False,
-            ).with_entities(AgentMemory.path).limit(10).all()
+            ).with_entities(
+                AgentMemory.path, AgentMemory.content
+            ).limit(5).all()
             if conflict_memories:
-                paths = ', '.join(m.path for m in conflict_memories)
+                titles = []
+                for m in conflict_memories:
+                    if m.content:
+                        title = m.content.strip()[:40].replace('"', "'")
+                        titles.append(title)
+                    else:
+                        titles.append(m.path.split('/')[-1])
                 parts.append(
-                    f'<memorias_com_conflito count="{len(conflict_memories)}">'
-                    f'Existem {len(conflict_memories)} memorias com possivel contradicao. '
-                    f'Considere revisar: {paths}'
-                    f'</memorias_com_conflito>'
+                    f'<memorias_com_conflito count="{len(conflict_memories)}" '
+                    f'items="{"; ".join(titles)}"/>'
                 )
         except Exception:
             pass
@@ -666,6 +701,8 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
             # ── v2: Log detalhado de injeção com per-tier chars ──
             penalized_count = sum(1 for m in injected_mems if (m.correction_count or 0) > 0)  # S2
+            budget_pct = round(total_chars / budget * 100) if budget > 0 else 0
+            skipped_budget = len(tier2_candidates) - len(selected_tier2)
             logger.info(
                 f"[MEMORY_INJECT] "
                 f"user_id={user_id} | "
@@ -677,6 +714,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"penalized={penalized_count} | "
                 f"total_chars={total_chars} | "
                 f"budget={budget} | "
+                f"budget_pct={budget_pct}% | "
+                f"skipped_budget={skipped_budget} | "
+                f"candidates_total={len(tier2_candidates)} | "
                 f"model={_model or 'unknown'} | "
                 f"avg_similarity={avg_similarity:.2f} | "
                 f"avg_composite={avg_composite:.2f} | "
