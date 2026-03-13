@@ -7,11 +7,11 @@ Tornando preencher_planilha.py universal
 from typing import Dict, Any, List
 from decimal import Decimal
 from datetime import date
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, exists
 import logging
 
 from app import db
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.portal.sendas.utils_protocolo import gerar_protocolo_sendas
 from app.producao.models import CadastroPalletizacao
@@ -289,13 +289,22 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
         logger.info("  📋 Buscando saldo em CarteiraPrincipal...")
 
         # Buscar todos os itens com saldo
+        # Subquery: pedidos em standby ativo (excluir da criação de separações)
+        standby_ativo = exists().where(
+            and_(
+                SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            )
+        )
+
         itens_carteira = db.session.query(
             CarteiraPrincipal
         ).filter(
             and_(
                 CarteiraPrincipal.cnpj_cpf == cnpj,
                 CarteiraPrincipal.ativo == True,
-                CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+                CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+                ~standby_ativo  # M1: Excluir pedidos em standby
             )
         ).all()
 
@@ -402,19 +411,22 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
                 logger.debug(f"      Criada Separação para {chave_item}: {saldo_liquido} unidades (tipo: {tipo_envio})")
 
         # 3. ATUALIZAR SEPARAÇÕES EXISTENTES COM PROTOCOLO, EXPEDIÇÃO E AGENDAMENTO
-        # ✅ Apenas separações sem protocolo ou com o mesmo protocolo (preserva outros agendamentos)
+        # M2: Sobrescrever protocolo em TODAS separações não-faturadas do CNPJ
+        # Re-agendamento DEVE atualizar separações com protocolo anterior
+        # M3: Excluir pedidos em standby do update de protocolo
+        standby_sep = exists().where(
+            and_(
+                SaldoStandby.num_pedido == Separacao.num_pedido,
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            )
+        )
 
-        # Separações não faturadas — apenas sem protocolo OU com o mesmo protocolo
-        # ✅ CORREÇÃO: Não reassocia separações de outros protocolos/agendamentos
-        logger.info("  📝 Atualizando Separações não faturadas (sem protocolo ou mesmo protocolo)...")
+        logger.info("  📝 Atualizando TODAS Separações não faturadas do CNPJ (exceto standby)...")
         resultado_nao_fat = Separacao.query.filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
                 Separacao.sincronizado_nf == False,
-                db.or_(
-                    Separacao.protocolo == None,
-                    Separacao.protocolo == protocolo
-                )
+                ~standby_sep  # M3: Excluir pedidos em standby
             )
         ).update({
             'protocolo': protocolo,
@@ -424,17 +436,12 @@ def criar_separacoes_do_saldo(cnpj: str, data_agendamento: date, data_expedicao:
         }, synchronize_session=False)
         contador_atualizadas += resultado_nao_fat
 
-        # NFs no CD — apenas sem protocolo OU com o mesmo protocolo
-        # ✅ CORREÇÃO: Não reassocia NFs de outros protocolos/agendamentos
-        logger.info("  📄 Atualizando NFs no CD (sem protocolo ou mesmo protocolo)...")
+        logger.info("  📄 Atualizando TODAS NFs no CD do CNPJ (exceto standby)...")
         resultado_nf_cd = Separacao.query.filter(
             and_(
                 Separacao.cnpj_cpf == cnpj,
                 Separacao.nf_cd == True,
-                db.or_(
-                    Separacao.protocolo == None,
-                    Separacao.protocolo == protocolo
-                )
+                ~standby_sep  # M3: Excluir pedidos em standby
             )
         ).update({
             'protocolo': protocolo,

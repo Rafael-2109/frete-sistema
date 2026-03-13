@@ -4,14 +4,14 @@ Rotas para programação em lote de Redes SP (Atacadão e Sendas)
 
 from flask import render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
-from sqlalchemy import func, and_, distinct
+from sqlalchemy import func, and_, distinct, exists
 from decimal import Decimal
 from datetime import date, timedelta, datetime
 import logging
 import traceback
 
 from app import db
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.faturamento.models import FaturamentoProduto
 from app.producao.models import CadastroPalletizacao
@@ -114,6 +114,14 @@ def _buscar_dados_por_rede(portal):
     dados_por_cnpj = {}
     
     # 1. Buscar CNPJs na CarteiraPrincipal (pedidos pendentes) com cod_uf='SP' e qtd_saldo > 0
+    # M4: Subquery para excluir pedidos em standby ativo
+    standby_listagem = exists().where(
+        and_(
+            SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
+            SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+        )
+    )
+
     pedidos_carteira = db.session.query(
         CarteiraPrincipal.cnpj_cpf,
         CarteiraPrincipal.raz_social_red,
@@ -126,7 +134,8 @@ def _buscar_dados_por_rede(portal):
         and_(
             CarteiraPrincipal.cod_uf == 'SP',
             CarteiraPrincipal.ativo == True,  # Filtrar apenas pedidos ativos
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ FILTRAR APENAS COM SALDO > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,  # ✅ FILTRAR APENAS COM SALDO > 0
+            ~standby_listagem  # M4: Excluir pedidos em standby
         )
     ).group_by(
         CarteiraPrincipal.cnpj_cpf,
@@ -559,6 +568,14 @@ def _adicionar_pedidos_cnpj(dados_cnpj, cnpj):
     """
     Adiciona informações detalhadas dos pedidos de um CNPJ
     """
+    # M5: Subquery para excluir pedidos em standby ativo
+    standby_detalhe = exists().where(
+        and_(
+            SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
+            SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+        )
+    )
+
     # Buscar pedidos na CarteiraPrincipal - APENAS COM SALDO > 0
     pedidos = db.session.query(
         CarteiraPrincipal.num_pedido,
@@ -571,7 +588,8 @@ def _adicionar_pedidos_cnpj(dados_cnpj, cnpj):
         and_(
             CarteiraPrincipal.cnpj_cpf == cnpj,
             CarteiraPrincipal.ativo == True,  # Filtrar apenas pedidos ativos
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ FILTRAR APENAS COM SALDO > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,  # ✅ FILTRAR APENAS COM SALDO > 0
+            ~standby_detalhe  # M5: Excluir pedidos em standby
         )
     ).group_by(
         CarteiraPrincipal.num_pedido,
@@ -621,6 +639,14 @@ def _calcular_pendencias_pedido(pedido_info, num_pedido):
     Calcula valores pendentes de um pedido (CarteiraPrincipal - Separacao não sincronizada)
     E também calcula os valores totais originais
     """
+    # M6: Subquery para excluir pedidos em standby ativo
+    standby_pend = exists().where(
+        and_(
+            SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
+            SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+        )
+    )
+
     # Buscar itens da carteira - APENAS COM SALDO > 0
     itens_carteira = db.session.query(
         CarteiraPrincipal.cod_produto,
@@ -630,7 +656,8 @@ def _calcular_pendencias_pedido(pedido_info, num_pedido):
         and_(
             CarteiraPrincipal.num_pedido == num_pedido,
             CarteiraPrincipal.ativo == True,  # Filtrar apenas itens ativos
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0  # ✅ APENAS ITENS COM SALDO > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,  # ✅ APENAS ITENS COM SALDO > 0
+            ~standby_pend  # M6: Excluir pedidos em standby
         )
     ).all()
     
@@ -1986,6 +2013,13 @@ def processar_agendamento_sendas_async():
                 # Dados da planilha modelo já estão em item_comp['encontrado']
                 encontrado = item_comp.get('encontrado', {})
                 solicitado = item_comp.get('solicitado', {})
+
+                # M7: Ignorar itens sem código produto Sendas ou quantidade zero
+                cod_prod = encontrado.get('codigo_produto_sendas')
+                qtd = solicitado.get('quantidade', 0)
+                if not cod_prod or not qtd:
+                    logger.debug(f"  Ignorando item sem produto ou qtd=0: {solicitado.get('cod_produto')}")
+                    continue
 
                 itens_para_fila.append({
                     'cnpj': cnpj,
