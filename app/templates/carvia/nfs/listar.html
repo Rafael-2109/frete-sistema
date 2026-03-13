@@ -76,22 +76,25 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            {{ th_sort('numero_nf', 'Numero NF', sort, direction) }}
+                            {{ th_sort('numero_nf', 'NF', sort, direction) }}
                             {{ th_sort('emitente', 'Emitente', sort, direction) }}
                             <th>Destinatario</th>
-                            {{ th_sort('valor_total', 'Valor', sort, direction, 'text-end') }}
-                            {{ th_sort('peso_bruto', 'Peso (kg)', sort, direction, 'text-end') }}
-                            <th>Fonte</th>
+                            {{ th_sort('valor_total', 'Valor / Peso', sort, direction, 'text-end') }}
                             <th>Status</th>
                             <th>CTe</th>
-                            {{ th_sort('data_emissao', 'Data Emissao', sort, direction) }}
+                            <th>Fatura</th>
+                            <th>CTe Sub</th>
+                            <th>Fat. Sub</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for nf, qtd_ctes in nfs %}
                         <tr{% if nf.status == 'CANCELADA' %} class="carvia-nf-cancelada"{% endif %}>
-                            <td><strong>{{ nf.numero_nf }}</strong>{% if nf.serie_nf %} <small class="text-muted">S{{ nf.serie_nf }}</small>{% endif %}</td>
+                            <td>
+                                <strong>{{ nf.numero_nf }}</strong>
+                                <small class="text-muted d-block">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</small>
+                            </td>
                             <td>
                                 <span title="{{ nf.cnpj_emitente }}" class="cnpj-col">
                                     {{ nf.nome_emitente or nf.cnpj_emitente }}
@@ -108,20 +111,62 @@
                                 <small class="text-muted d-block">{{ nf.cidade_destinatario or '' }}{% if nf.cidade_destinatario and nf.uf_destinatario %}/{% endif %}{{ nf.uf_destinatario or '' }}</small>
                                 {% endif %}
                             </td>
-                            <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
-                            <td class="valor-col" {% if nf.quantidade_volumes %}title="Volumes: {{ nf.quantidade_volumes }}"{% endif %}>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }}</td>
-                            <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
+                            <td class="valor-col">
+                                {{ nf.valor_total|valor_br if nf.valor_total else '-' }}
+                                {% if nf.peso_bruto %}
+                                <small class="text-muted d-block" {% if nf.quantidade_volumes %}title="Volumes: {{ nf.quantidade_volumes }}"{% endif %}>{{ nf.peso_bruto|numero_br(1) }} kg</small>
+                                {% endif %}
+                            </td>
                             <td>
                                 <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>
                             </td>
                             <td>
                                 {% if qtd_ctes %}
-                                <span class="badge bg-success">{{ qtd_ctes }} CTe{{ 's' if qtd_ctes > 1 }}</span>
+                                    {% if qtd_ctes == 1 %}
+                                    {# Link direto para a operacao unica #}
+                                    {% set ops = nf.operacoes.all() %}
+                                    {% if ops %}
+                                    <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ops[0].id) }}" class="badge bg-success text-decoration-none">1 CTe</a>
+                                    {% else %}
+                                    <span class="badge bg-success">1 CTe</span>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="badge bg-success">{{ qtd_ctes }} CTes</span>
+                                    {% endif %}
                                 {% else %}
-                                <span class="badge bg-secondary">Sem CTe</span>
+                                <span class="badge bg-secondary">-</span>
                                 {% endif %}
                             </td>
-                            <td><small>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</small></td>
+                            <td>
+                                {% set faturas = faturas_por_nf.get(nf.id, []) %}
+                                {% if faturas %}
+                                    {% for f in faturas %}
+                                    <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}" class="badge bg-info text-decoration-none d-block mb-1">{{ f.numero_fatura }}</a>
+                                    {% endfor %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set subs = subcontratos_por_nf.get(nf.id, []) %}
+                                {% if subs %}
+                                    {% for s in subs %}
+                                    <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=s.id) }}" class="badge bg-warning text-dark text-decoration-none d-block mb-1">{{ s.cte_numero or ('Sub #' ~ s.id) }}</a>
+                                    {% endfor %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set fats_transp = faturas_transp_por_nf.get(nf.id, []) %}
+                                {% if fats_transp %}
+                                    {% for ft in fats_transp %}
+                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=ft.id) }}" class="badge bg-secondary text-decoration-none d-block mb-1">{{ ft.numero_fatura }}</a>
+                                    {% endfor %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="Detalhes">

@@ -3,12 +3,18 @@ Rotas de NF Venda CarVia — Listagem, detalhe e cancelamento de NFs importadas
 """
 
 import logging
+from collections import defaultdict
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
 from app import db
-from app.carvia.models import CarviaNf, CarviaOperacao, CarviaOperacaoNf
+from app.carvia.models import (
+    CarviaNf, CarviaOperacao, CarviaOperacaoNf,
+    CarviaFaturaCliente, CarviaFaturaClienteItem,
+    CarviaSubcontrato,
+    CarviaFaturaTransportadora, CarviaFaturaTransportadoraItem,
+)
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
@@ -82,8 +88,6 @@ def register_nf_routes(bp):
             'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),
             'emitente': CarviaNf.nome_emitente,
             'valor_total': CarviaNf.valor_total,
-            'peso_bruto': CarviaNf.peso_bruto,
-            'data_emissao': CarviaNf.data_emissao,
             'criado_em': CarviaNf.criado_em,
         }
         sort_col = sortable_columns.get(sort, CarviaNf.criado_em)
@@ -93,6 +97,65 @@ def register_nf_routes(bp):
             query = query.order_by(sort_col.desc().nullslast())
 
         paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        # Batch queries para colunas vinculadas (evita N+1)
+        nf_ids = [nf.id for nf, _ in paginacao.items]
+
+        faturas_por_nf = defaultdict(list)
+        subcontratos_por_nf = defaultdict(list)
+        faturas_transp_por_nf = defaultdict(list)
+
+        if nf_ids:
+            # Query 1: Faturas cliente via itens
+            rows_fat = db.session.query(
+                CarviaFaturaClienteItem.nf_id,
+                CarviaFaturaCliente
+            ).join(
+                CarviaFaturaCliente,
+                CarviaFaturaClienteItem.fatura_cliente_id == CarviaFaturaCliente.id
+            ).filter(
+                CarviaFaturaClienteItem.nf_id.in_(nf_ids)
+            ).all()
+            seen_fat = set()
+            for nf_id, fatura in rows_fat:
+                key = (nf_id, fatura.id)
+                if key not in seen_fat:
+                    seen_fat.add(key)
+                    faturas_por_nf[nf_id].append(fatura)
+
+            # Query 2: Subcontratos via junction -> operacao -> subcontrato
+            rows_sub = db.session.query(
+                CarviaOperacaoNf.nf_id,
+                CarviaSubcontrato
+            ).join(
+                CarviaSubcontrato,
+                CarviaOperacaoNf.operacao_id == CarviaSubcontrato.operacao_id
+            ).filter(
+                CarviaOperacaoNf.nf_id.in_(nf_ids)
+            ).all()
+            seen_sub = set()
+            for nf_id, sub in rows_sub:
+                key = (nf_id, sub.id)
+                if key not in seen_sub:
+                    seen_sub.add(key)
+                    subcontratos_por_nf[nf_id].append(sub)
+
+            # Query 3: Faturas transportadora via itens
+            rows_fat_transp = db.session.query(
+                CarviaFaturaTransportadoraItem.nf_id,
+                CarviaFaturaTransportadora
+            ).join(
+                CarviaFaturaTransportadora,
+                CarviaFaturaTransportadoraItem.fatura_transportadora_id == CarviaFaturaTransportadora.id
+            ).filter(
+                CarviaFaturaTransportadoraItem.nf_id.in_(nf_ids)
+            ).all()
+            seen_fat_transp = set()
+            for nf_id, fat_transp in rows_fat_transp:
+                key = (nf_id, fat_transp.id)
+                if key not in seen_fat_transp:
+                    seen_fat_transp.add(key)
+                    faturas_transp_por_nf[nf_id].append(fat_transp)
 
         return render_template(
             'carvia/nfs/listar.html',
@@ -104,6 +167,9 @@ def register_nf_routes(bp):
             cte_filtro=cte_filtro,
             sort=sort,
             direction=direction,
+            faturas_por_nf=faturas_por_nf,
+            subcontratos_por_nf=subcontratos_por_nf,
+            faturas_transp_por_nf=faturas_transp_por_nf,
         )
 
     @bp.route('/nfs/<int:nf_id>')
