@@ -538,12 +538,13 @@ $(document).ready(function() {
 
         $('#summaryArea').html(summaryHtml);
 
-        // Cria cards por filial
+        // Cria cards por filial usando dados_filiais (estrutura com itens e validação integrada)
         const cardsContainer = $('#cardsFiliais');
         cardsContainer.empty();
 
-        if (summary.por_filial && summary.por_filial.length > 0) {
-            summary.por_filial.forEach(function(filial, index) {
+        const dadosFiliais = response.dados_filiais || [];
+        if (dadosFiliais.length > 0) {
+            dadosFiliais.forEach(function(filial, index) {
                 const cardHtml = createFilialCard(filial, index, response.validacao_precos);
                 cardsContainer.append(cardHtml);
             });
@@ -567,25 +568,20 @@ $(document).ready(function() {
     }
 
     function createFilialCard(filial, index, validacao_precos) {
+        // filial agora vem de dados_filiais: tem .itens[] com validação integrada
         if (!filial) return '';
 
         const colors = ['primary', 'success', 'info', 'warning', 'secondary'];
         const color = colors[index % colors.length];
-        const cnpjSafe = filial.cnpj.replace(/[^0-9]/g, ''); // Remove pontuacao para usar como ID
+        const cnpjSafe = (filial.cnpj || '').replace(/[^0-9]/g, '');
 
-        // Verifica divergencia da filial
-        let temDivergenciaFilial = false;
-        let validacoesFilial = [];
-        if (validacao_precos && validacao_precos.por_filial) {
-            const valFilial = validacao_precos.por_filial.find(v => v.cnpj === filial.cnpj);
-            if (valFilial) {
-                temDivergenciaFilial = valFilial.tem_divergencia;
-                validacoesFilial = valFilial.validacoes || [];
-            }
-        }
+        // dados_filiais já tem tem_divergencia calculado
+        const temDivergenciaFilial = filial.tem_divergencia || false;
 
-        // Verifica se pode inserir esta filial
-        const temSemDepara = (filial.sem_depara || 0) > 0;
+        // Conta itens sem De-Para a partir dos itens
+        const itensFilial = filial.itens || [];
+        const semDeparaCount = itensFilial.filter(i => !i.nosso_codigo).length;
+        const temSemDepara = semDeparaCount > 0;
         const podeInserir = !temSemDepara;
 
         let headerClass = `bg-${color}`;
@@ -608,14 +604,14 @@ $(document).ready(function() {
                             </h5>
                             <small>
                                 CNPJ: ${filial.cnpj} |
-                                ${filial.municipio || 'Cidade nao identificada'} - ${filial.estado || 'UF'}
+                                ${filial.municipio || 'Cidade nao identificada'} - ${filial.uf || 'UF'}
                                 ${filial.numero_pedido_cliente ? `| <strong>Pedido: ${filial.numero_pedido_cliente}</strong>` : ''}
                             </small>
                         </div>
                         <div class="col-md-3 text-end">
                             <div>
-                                <strong>${filial.itens || 0}</strong> itens<br>
-                                <strong>R$ ${formatMoney(filial.valor || 0)}</strong>
+                                <strong>${itensFilial.length}</strong> itens<br>
+                                <strong>R$ ${formatMoney(filial.valor_total || 0)}</strong>
                             </div>
                         </div>
                         <div class="col-md-3 text-end">
@@ -632,7 +628,7 @@ $(document).ready(function() {
                 </div>
                 <div class="card-body">
                     <p class="text-muted mb-2">
-                        <i class="fas fa-map-marker-alt"></i> Local de Entrega: <strong>${filial.local || 'Nao especificado'}</strong>
+                        <i class="fas fa-map-marker-alt"></i> Local de Entrega: <strong>${filial.local_entrega || 'Nao especificado'}</strong>
                     </p>
         `;
 
@@ -668,21 +664,20 @@ $(document).ready(function() {
                             <tbody>
         `;
 
-        if (filial.produtos && filial.produtos.length > 0) {
-            filial.produtos.forEach(function(produto) {
-                // Busca validacao do produto
-                const validacao = validacoesFilial.find(v => v.codigo === produto.nosso_codigo);
-                const divergente = validacao?.divergente || false;
-                const precoTabela = validacao?.preco_tabela;
-                const difPercentual = validacao?.diferenca_percentual || 0;
+        // itens vem de dados_filiais — já tem validação integrada (preco_tabela, divergente, etc.)
+        if (itensFilial.length > 0) {
+            itensFilial.forEach(function(item) {
+                const divergente = item.divergente || false;
+                const precoTabela = item.preco_tabela;
+                const difPercentual = item.diferenca_percentual || 0;
 
-                const nossoCodigoClass = produto.nosso_codigo ? '' : 'text-danger';
-                const nossoCodigoText = produto.nosso_codigo || '<i class="fas fa-exclamation-triangle"></i> Sem De-Para';
+                const nossoCodigoClass = item.nosso_codigo ? '' : 'text-danger';
+                const nossoCodigoText = item.nosso_codigo || '<i class="fas fa-exclamation-triangle"></i> Sem De-Para';
 
                 // Usa nossa descrição quando disponível, senão usa descrição do PDF
-                const descricaoExibir = produto.nossa_descricao || produto.descricao || '';
+                const descricaoExibir = item.nossa_descricao || item.descricao || '';
 
-                const rowClass = divergente ? 'table-danger' : (produto.nosso_codigo ? '' : 'table-warning');
+                const rowClass = divergente ? 'table-danger' : (item.nosso_codigo ? '' : 'table-warning');
 
                 // Campo de preço final - editável para divergentes, texto para os demais
                 let vlrFinalHtml;
@@ -692,22 +687,22 @@ $(document).ready(function() {
                             class="form-control form-control-sm preco-editavel-filial text-end"
                             style="width: 90px;"
                             data-cnpj="${filial.cnpj}"
-                            data-codigo="${produto.codigo}"
-                            data-preco-original="${produto.valor_unitario}"
-                            value="${produto.valor_unitario || 0}"
+                            data-codigo="${item.codigo_rede}"
+                            data-preco-original="${item.preco_documento}"
+                            value="${item.preco_final || item.preco_documento || 0}"
                             onchange="atualizarPrecoFilial(this)">
                     `;
                 } else {
-                    vlrFinalHtml = `R$ ${formatMoney(produto.valor_unitario || 0)}`;
+                    vlrFinalHtml = `R$ ${formatMoney(item.preco_final || item.preco_documento || 0)}`;
                 }
 
                 cardHtml += `
                     <tr class="${rowClass}">
-                        <td><span class="badge bg-secondary">${produto.codigo || ''}</span></td>
+                        <td><span class="badge bg-secondary">${item.codigo_rede || ''}</span></td>
                         <td class="${nossoCodigoClass}"><strong>${nossoCodigoText}</strong></td>
                         <td>${descricaoExibir}</td>
-                        <td class="text-end">${produto.quantidade || 0}</td>
-                        <td class="text-end">R$ ${formatMoney(produto.valor_unitario || 0)}</td>
+                        <td class="text-end">${item.quantidade || 0}</td>
+                        <td class="text-end">R$ ${formatMoney(item.preco_documento || 0)}</td>
                         <td class="text-end">${precoTabela !== null && precoTabela !== undefined ? 'R$ ' + formatMoney(precoTabela) : '-'}</td>
                         <td class="text-end">${vlrFinalHtml}</td>
                         <td class="text-end ${divergente ? 'text-danger fw-bold' : ''}">${precoTabela !== null && precoTabela !== undefined ? (difPercentual > 0 ? '+' : '') + difPercentual.toFixed(2) + '%' : '-'}</td>
@@ -721,8 +716,8 @@ $(document).ready(function() {
                             <tfoot class="table-light">
                                 <tr>
                                     <th colspan="3">Total</th>
-                                    <th class="text-end">${filial.quantidade || 0}</th>
-                                    <th class="text-end" colspan="4">R$ ${formatMoney(filial.valor || 0)}</th>
+                                    <th class="text-end">${filial.quantidade_total || 0}</th>
+                                    <th class="text-end" colspan="4">R$ ${formatMoney(filial.valor_total || 0)}</th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -1194,6 +1189,7 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     currentResponse.summary = response.summary;
+                    currentResponse.dados_filiais = response.dados_filiais;
                     currentResponse.itens_sem_depara = response.itens_sem_depara;
                     currentResponse.pode_inserir = response.pode_inserir;
 
@@ -1306,10 +1302,14 @@ $(document).ready(function() {
     // Inserir TODOS no Odoo (com progresso)
     $('#btnInserirTodosOdoo').on('click', function() {
         if (!currentSessionKey) return;
-        if (!currentResponse || !currentResponse.summary || !currentResponse.summary.por_filial) return;
+        if (!currentResponse || !currentResponse.dados_filiais) return;
 
-        const filiais = currentResponse.summary.por_filial;
-        const filiaisParaInserir = filiais.filter(f => (f.sem_depara || 0) === 0);
+        const filiais = currentResponse.dados_filiais;
+        // Filtra filiais onde todos os itens têm nosso_codigo (De-Para completo)
+        const filiaisParaInserir = filiais.filter(f => {
+            const itens = f.itens || [];
+            return itens.every(i => !!i.nosso_codigo);
+        });
 
         if (filiaisParaInserir.length === 0) {
             if (typeof toastr !== 'undefined') {

@@ -111,17 +111,26 @@ class PDFExtractor(ABC):
         return None
     
     def extract_text_with_pdfplumber(self, pdf_path: str) -> str:
-        """Extrai texto usando pdfplumber (melhor para tabelas)"""
-        text = ""
+        """Extrai texto usando pdfplumber (melhor para tabelas)
+
+        Processa página a página com flush_cache() para liberar memória
+        de cada página após extração, evitando pico de RAM em PDFs grandes.
+        """
+        chunks = []
         try:
             with pdfplumber.open(pdf_path) as pdf:
-                for page in pdf.pages:
+                for i, page in enumerate(pdf.pages):
                     page_text = page.extract_text()
                     if page_text:
-                        text += page_text + "\n"
+                        chunks.append(page_text)
+                    page.flush_cache()
+                    # GC periódico a cada 20 páginas para PDFs grandes
+                    if i > 0 and i % 20 == 0:
+                        import gc
+                        gc.collect()
         except Exception as e:
             self.errors.append(f"Erro ao extrair com pdfplumber: {e}")
-        return text
+        return "\n".join(chunks)
     
     def extract_text_with_pypdf2(self, pdf_path: str) -> str:
         """Extrai texto usando pypdf (backup)"""

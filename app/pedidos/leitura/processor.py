@@ -173,105 +173,102 @@ class PedidoProcessor:
 
     def _generate_summary(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Gera resumo dos dados processados agrupados por CNPJ
+        Gera resumo dos dados processados agrupados por CNPJ.
+
+        NAO inclui lista de produtos por filial (eliminado para reduzir RAM).
+        Calcula apenas stats agregados (itens, sem_depara, quantidade, valor).
+        dados_filiais em criar_do_upload() constroi itens diretamente de data.
         """
         try:
             if not data:
                 return {}
 
-            import pandas as pd
-            df = pd.DataFrame(data)
+            from collections import defaultdict
+
+            # Agrupa itens por cnpj_filial
+            itens_por_cnpj = defaultdict(list)
+            codigos_unicos = set()
+            quantidade_total = 0
+            valor_total = 0.0
+            sem_depara_total = 0
+
+            for item in data:
+                cnpj = item.get('cnpj_filial')
+                itens_por_cnpj[cnpj].append(item)
+
+                codigo = item.get('codigo')
+                if codigo:
+                    codigos_unicos.add(codigo)
+
+                qtd = item.get('quantidade', 0) or 0
+                quantidade_total += int(qtd)
+
+                vt = item.get('valor_total', 0) or 0
+                valor_total += float(vt)
+
+                if not item.get('nosso_codigo'):
+                    sem_depara_total += 1
 
             summary = {
                 'total_itens': len(data),
-                'total_filiais': df['cnpj_filial'].nunique() if 'cnpj_filial' in df else 0,
-                'total_produtos': df['codigo'].nunique() if 'codigo' in df else 0,
-                'quantidade_total': int(df['quantidade'].sum()) if 'quantidade' in df else 0,
-                'valor_total': float(df['valor_total'].sum()) if 'valor_total' in df else 0.0
+                'total_filiais': len(itens_por_cnpj),
+                'total_produtos': len(codigos_unicos),
+                'quantidade_total': quantidade_total,
+                'valor_total': valor_total,
+                'sem_depara': sem_depara_total,
+                'com_depara': len(data) - sem_depara_total,
             }
 
-            # Conta itens sem De-Para
-            if 'nosso_codigo' in df.columns:
-                sem_depara = df['nosso_codigo'].isna().sum()
-                summary['sem_depara'] = int(sem_depara)
-                summary['com_depara'] = len(df) - int(sem_depara)
+            # Resumo por filial — apenas stats, SEM lista de produtos
+            rede = self.identificacao.rede.upper() if self.identificacao else ''
+            summary['por_filial'] = []
 
-            # Resumo por filial com dados completos do cliente
-            if 'cnpj_filial' in df:
-                summary['por_filial'] = []
-                for cnpj in df['cnpj_filial'].unique():
-                    # Sanitiza CNPJ - se for NaN, converte para None
-                    if pd.isna(cnpj):
-                        cnpj = None
-                        # Filtra itens sem CNPJ
-                        filial_df = df[df['cnpj_filial'].isna()]
-                    else:
-                        filial_df = df[df['cnpj_filial'] == cnpj]
+            for cnpj, itens_filial in itens_por_cnpj.items():
+                primeiro_item = itens_filial[0] if itens_filial else {}
 
-                    # Pega os dados do primeiro item
-                    if not filial_df.empty:
-                        primeiro_item = filial_df.iloc[0].to_dict()
-                        # Sanitiza valores NaN no primeiro_item também
-                        primeiro_item = {k: (None if pd.isna(v) else v) for k, v in primeiro_item.items()}
-                    else:
-                        primeiro_item = {}
+                # Conta sem De-Para nesta filial
+                sem_depara_filial = sum(1 for item in itens_filial if not item.get('nosso_codigo'))
 
-                    # Converte produtos para garantir que Decimals sejam float
-                    produtos_list = []
-                    for produto in filial_df.to_dict('records'):
-                        produto_clean = {}
-                        for k, v in produto.items():
-                            if hasattr(v, 'quantize'):  # É Decimal
-                                produto_clean[k] = float(v)
-                            elif pd.isna(v):  # É NaN/None
-                                produto_clean[k] = None
-                            else:
-                                produto_clean[k] = v
-                        produtos_list.append(produto_clean)
+                # Calcula totais da filial
+                qtd_filial = sum(int(item.get('quantidade', 0) or 0) for item in itens_filial)
+                valor_filial = sum(
+                    float(item.get('valor_total', 0) or 0)
+                    for item in itens_filial
+                )
 
-                    # Conta itens sem De-Para nesta filial
-                    sem_depara_filial = filial_df['nosso_codigo'].isna().sum() if 'nosso_codigo' in filial_df.columns else 0
+                # Busca número do pedido (Atacadão: por filial, Assaí: mesmo para todas)
+                if rede == 'ATACADAO':
+                    numero_pedido = (
+                        primeiro_item.get('numero_comprador') or
+                        primeiro_item.get('pedido_edi') or
+                        primeiro_item.get('numero_pedido') or
+                        primeiro_item.get('proposta') or
+                        ''
+                    )
+                else:
+                    numero_pedido = (
+                        primeiro_item.get('numero_pedido') or
+                        primeiro_item.get('pedido_edi') or
+                        primeiro_item.get('proposta') or
+                        primeiro_item.get('numero_comprador') or
+                        ''
+                    )
 
-                    # Busca número do pedido (Atacadão: por filial, Assaí: mesmo para todas)
-                    # IMPORTANTE: Para Atacadão, o campo "Numero:" (numero_comprador) é o
-                    # número do pedido do cliente, diferente por filial.
-                    # Para Assaí, o campo "Pedido:" (numero_pedido) é o mesmo para todas as filiais.
-                    rede = self.identificacao.rede.upper() if self.identificacao else ''
-
-                    if rede == 'ATACADAO':
-                        # Atacadão: prioriza "Numero:" (numero_comprador) - único por filial
-                        numero_pedido = (
-                            primeiro_item.get('numero_comprador') or   # Campo "Numero: 322506"
-                            primeiro_item.get('pedido_edi') or         # Fallback: Pedido EDI
-                            primeiro_item.get('numero_pedido') or      # Fallback
-                            primeiro_item.get('proposta') or           # Atacadão Proposta
-                            ''
-                        )
-                    else:
-                        # Assaí/Sendas: usa "Pedido:" (numero_pedido) - mesmo para todas
-                        numero_pedido = (
-                            primeiro_item.get('numero_pedido') or      # Campo "Pedido: 21046597"
-                            primeiro_item.get('pedido_edi') or         # Fallback
-                            primeiro_item.get('proposta') or           # Fallback
-                            primeiro_item.get('numero_comprador') or   # Fallback
-                            ''
-                        )
-
-                    filial_info = {
-                        'cnpj': cnpj,
-                        'numero_loja': primeiro_item.get('numero_loja', ''),  # Número da filial (ex: "007")
-                        'numero_pedido_cliente': numero_pedido,  # Número do pedido/proposta
-                        'nome_cliente': primeiro_item.get('nome_cliente', ''),
-                        'local': primeiro_item.get('local_entrega', ''),
-                        'municipio': primeiro_item.get('municipio', '') or primeiro_item.get('cidade', ''),
-                        'estado': primeiro_item.get('estado', '') or primeiro_item.get('uf', ''),
-                        'itens': len(filial_df),
-                        'sem_depara': int(sem_depara_filial),
-                        'quantidade': int(filial_df['quantidade'].sum()) if 'quantidade' in filial_df else 0,
-                        'valor': float(filial_df['valor_total'].sum()) if 'valor_total' in filial_df else 0.0,
-                        'produtos': produtos_list
-                    }
-                    summary['por_filial'].append(filial_info)
+                filial_info = {
+                    'cnpj': cnpj,
+                    'numero_loja': primeiro_item.get('numero_loja', ''),
+                    'numero_pedido_cliente': numero_pedido,
+                    'nome_cliente': primeiro_item.get('nome_cliente', ''),
+                    'local': primeiro_item.get('local_entrega', ''),
+                    'municipio': primeiro_item.get('municipio', '') or primeiro_item.get('cidade', ''),
+                    'estado': primeiro_item.get('estado', '') or primeiro_item.get('uf', ''),
+                    'itens': len(itens_filial),
+                    'sem_depara': sem_depara_filial,
+                    'quantidade': qtd_filial,
+                    'valor': valor_filial,
+                    # 'produtos' REMOVIDO — dados ficam apenas em dados_filiais
+                }
+                summary['por_filial'].append(filial_info)
 
             return summary
         except Exception as e:

@@ -285,12 +285,14 @@ class PedidoImportacaoTemp(db.Model):
         import math
 
         def sanitize_value(val):
-            """Remove NaN/Infinito de valores para JSON válido"""
+            """Remove NaN/Infinito/Decimal de valores para JSON válido"""
             if val is None:
                 return None
             if isinstance(val, float):
                 if math.isnan(val) or math.isinf(val):
                     return None
+            if hasattr(val, 'quantize'):  # Decimal
+                return float(val)
             # Trata numpy/pandas NaN
             try:
                 import pandas as pd
@@ -322,18 +324,15 @@ class PedidoImportacaoTemp(db.Model):
         summary = dados.get('summary', {})
         validacao_precos = dados.get('validacao_precos', {})
 
-        # Extrai numero_pedido_cliente dos dados brutos
-        # - Atacadão: cada filial tem seu próprio "Numero:" (N pedidos por PDF)
-        # - Assaí: 1 "Pedido:" para todo o PDF (N filiais compartilham)
+        # Extrai dados brutos
         dados_brutos = dados.get('data', [])
         rede = identificacao.get('rede', '').upper()
 
-        # Para o registro geral, pega do primeiro item
+        # Para o registro geral, pega numero_pedido_cliente do primeiro item
         numero_pedido_cliente = None
         if dados_brutos and len(dados_brutos) > 0:
             primeiro_item = dados_brutos[0]
             if rede == 'ATACADAO':
-                # Atacadão: prioriza "Numero:" (numero_comprador) - único por filial
                 numero_pedido_cliente = (
                     primeiro_item.get('numero_comprador') or
                     primeiro_item.get('pedido_edi') or
@@ -341,7 +340,6 @@ class PedidoImportacaoTemp(db.Model):
                     primeiro_item.get('proposta')
                 )
             else:
-                # Assaí/Sendas: prioriza "Pedido:" (numero_pedido) - mesmo para todas
                 numero_pedido_cliente = (
                     primeiro_item.get('numero_pedido') or
                     primeiro_item.get('pedido_edi') or
@@ -349,69 +347,77 @@ class PedidoImportacaoTemp(db.Model):
                     primeiro_item.get('numero_comprador')
                 )
 
-        # Prepara dados_filiais com estrutura para edição
+        # Agrupa dados_brutos por cnpj_filial para construir dados_filiais
+        # direto dos dados raw (sem depender de summary.produtos — eliminado)
+        from collections import defaultdict
+        itens_por_cnpj = defaultdict(list)
+        for item in dados_brutos:
+            cnpj_item = item.get('cnpj_filial')
+            itens_por_cnpj[cnpj_item].append(item)
+
+        # Indexa validações por (cnpj, codigo) para lookup O(1)
+        validacoes_index = {}
+        if validacao_precos and validacao_precos.get('por_filial'):
+            for val_filial in validacao_precos['por_filial']:
+                cnpj_val = val_filial.get('cnpj')
+                for v in val_filial.get('validacoes', []):
+                    validacoes_index[(cnpj_val, v.get('codigo'))] = v
+
+        # Indexa tem_divergencia por cnpj
+        divergencia_por_cnpj = {}
+        if validacao_precos and validacao_precos.get('por_filial'):
+            for val_filial in validacao_precos['por_filial']:
+                divergencia_por_cnpj[val_filial.get('cnpj')] = val_filial.get('tem_divergencia', False)
+
+        # Prepara dados_filiais direto de data, usando summary apenas para stats
         dados_filiais = []
         if summary.get('por_filial'):
             for filial in summary['por_filial']:
                 cnpj = filial.get('cnpj')
-
-                # Busca validação desta filial
-                tem_divergencia_filial = False
-                validacoes_filial = []
-                if validacao_precos and validacao_precos.get('por_filial'):
-                    for val in validacao_precos['por_filial']:
-                        if val.get('cnpj') == cnpj:
-                            tem_divergencia_filial = val.get('tem_divergencia', False)
-                            validacoes_filial = val.get('validacoes', [])
-                            break
+                tem_divergencia_filial = divergencia_por_cnpj.get(cnpj, False)
 
                 # Busca numero_pedido_cliente específico desta filial
-                # - Atacadão: cada filial tem SEU próprio "Numero:" (N pedidos por PDF)
-                # - Assaí: todas as filiais compartilham o mesmo "Pedido:" (1 pedido por PDF)
                 numero_pedido_filial = None
-                for item in dados_brutos:
-                    # Tenta diferentes campos de CNPJ que podem existir nos dados
-                    cnpj_item = item.get('cnpj_filial') or item.get('cnpj') or item.get('cnpj_cpf')
-                    if cnpj_item == cnpj:
-                        # Prioridade baseada na rede
-                        if rede == 'ATACADAO':
-                            # Atacadão: prioriza "Numero:" (numero_comprador) - único por filial
-                            numero_pedido_filial = (
-                                item.get('numero_comprador') or   # Campo "Numero: 322506"
-                                item.get('pedido_edi') or
-                                item.get('numero_pedido') or
-                                item.get('proposta')
-                            )
-                        else:
-                            # Assaí/Sendas: prioriza "Pedido:" (numero_pedido)
-                            numero_pedido_filial = (
-                                item.get('numero_pedido') or
-                                item.get('pedido_edi') or
-                                item.get('proposta') or
-                                item.get('numero_comprador')
-                            )
-                        if numero_pedido_filial:
-                            break
+                produtos_filial = itens_por_cnpj.get(cnpj, [])
+                for item in produtos_filial:
+                    if rede == 'ATACADAO':
+                        numero_pedido_filial = (
+                            item.get('numero_comprador') or
+                            item.get('pedido_edi') or
+                            item.get('numero_pedido') or
+                            item.get('proposta')
+                        )
+                    else:
+                        numero_pedido_filial = (
+                            item.get('numero_pedido') or
+                            item.get('pedido_edi') or
+                            item.get('proposta') or
+                            item.get('numero_comprador')
+                        )
+                    if numero_pedido_filial:
+                        break
 
-                # Prepara itens com preço editável
+                # Prepara itens com preço editável — direto dos dados raw
                 itens = []
-                for produto in filial.get('produtos', []):
-                    # Busca validação do produto
-                    validacao_prod = None
-                    for v in validacoes_filial:
-                        if v.get('codigo') == produto.get('nosso_codigo'):
-                            validacao_prod = v
-                            break
+                for produto in produtos_filial:
+                    nosso_codigo = produto.get('nosso_codigo')
+                    valor_unitario = produto.get('valor_unitario', 0)
+                    # Converte Decimal para float
+                    if hasattr(valor_unitario, 'quantize'):
+                        valor_unitario = float(valor_unitario)
+
+                    # Busca validação via índice O(1)
+                    validacao_prod = validacoes_index.get((cnpj, nosso_codigo))
 
                     itens.append({
                         'codigo_rede': produto.get('codigo'),
-                        'nosso_codigo': produto.get('nosso_codigo'),
+                        'nosso_codigo': nosso_codigo,
                         'descricao': produto.get('descricao'),
                         'nossa_descricao': produto.get('nossa_descricao'),
                         'quantidade': produto.get('quantidade', 0),
-                        'preco_documento': produto.get('valor_unitario', 0),
+                        'preco_documento': valor_unitario,
                         'preco_tabela': validacao_prod.get('preco_tabela') if validacao_prod else None,
-                        'preco_final': produto.get('valor_unitario', 0),  # Inicialmente = documento
+                        'preco_final': valor_unitario,  # Inicialmente = documento
                         'divergente': validacao_prod.get('divergente', False) if validacao_prod else False,
                         'diferenca_percentual': validacao_prod.get('diferenca_percentual', 0) if validacao_prod else 0
                     })
@@ -430,7 +436,8 @@ class PedidoImportacaoTemp(db.Model):
                     'quantidade_total': filial.get('quantidade', 0)
                 })
 
-        # Sanitiza todos os campos JSON para remover NaN/Infinito
+        # Sanitiza campos JSON menores. dados_brutos e dados_filiais
+        # já foram construídos com valores limpos acima.
         registro = cls(
             chave_importacao=chave,
             status='PROCESSADO',
@@ -443,7 +450,7 @@ class PedidoImportacaoTemp(db.Model):
             dados_brutos=sanitize_dict(dados_brutos),
             identificacao=sanitize_dict(identificacao),
             summary=sanitize_dict(summary),
-            validacao_precos=sanitize_dict(validacao_precos),
+            validacao_precos=sanitize_dict(validacao_precos) if validacao_precos else None,
             itens_sem_depara=sanitize_dict(dados.get('itens_sem_depara', [])),
             dados_filiais=sanitize_dict(dados_filiais),
             tem_divergencia=dados.get('tem_divergencia', False),

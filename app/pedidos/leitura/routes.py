@@ -170,30 +170,38 @@ def upload():
             # de idle_in_transaction_session_timeout (30s).
 
             # Valida preços contra TabelaRede
+            # Usa data (resultado raw) direto, agrupado por (cnpj, uf)
             validacao_precos = None
             tem_divergencia = False
 
-            if summary.get('por_filial'):
+            if data_serializable:
+                from collections import defaultdict as _defaultdict
                 validador = ValidadorPrecos(tolerancia_percentual=0.0)
 
-                # Batch preload: coleta UFs e códigos para carregar preços em 2 queries
+                # Agrupa itens por (cnpj, uf) para validação
+                itens_por_filial = _defaultdict(lambda: {'uf': '', 'itens': []})
                 ufs_unicas = set()
                 codigos_unicos = set()
-                for filial in summary['por_filial']:
-                    uf = filial.get('estado', '')
-                    if uf:
-                        ufs_unicas.add(uf.upper())
-                    for produto in filial.get('produtos', []):
-                        nosso_codigo = produto.get('nosso_codigo')
-                        if nosso_codigo:
-                            codigos_unicos.add(nosso_codigo)
+
+                for item in data_serializable:
+                    cnpj_item = item.get('cnpj_filial')
+                    uf_item = (item.get('estado') or item.get('uf', '')).upper()
+                    if uf_item:
+                        ufs_unicas.add(uf_item)
+                    nosso_codigo = item.get('nosso_codigo')
+                    if nosso_codigo:
+                        codigos_unicos.add(nosso_codigo)
+                    itens_por_filial[cnpj_item]['uf'] = uf_item
+                    itens_por_filial[cnpj_item]['itens'].append(item)
+
+                # Batch preload de preços
                 validador.precarregar_precos(rede, list(ufs_unicas), list(codigos_unicos))
 
                 validacoes_filiais = []
 
-                for filial in summary['por_filial']:
-                    uf = filial.get('estado', '')
-                    produtos = filial.get('produtos', [])
+                for cnpj_val, grupo in itens_por_filial.items():
+                    uf = grupo['uf']
+                    produtos = grupo['itens']
 
                     if uf and produtos:
                         resultado_val = validador.validar(
@@ -206,7 +214,7 @@ def upload():
                             tem_divergencia = True
 
                         validacoes_filiais.append({
-                            'cnpj': filial.get('cnpj'),
+                            'cnpj': cnpj_val,
                             'uf': uf,
                             'regiao': resultado_val.regiao,
                             'itens_validados': resultado_val.itens_validados,
@@ -234,18 +242,17 @@ def upload():
                     'por_filial': validacoes_filiais
                 }
 
-            # Identifica itens sem De-Para (produtos)
+            # Identifica itens sem De-Para (produtos) — direto de data
             itens_sem_depara = []
-            for filial in summary.get('por_filial', []):
-                for produto in filial.get('produtos', []):
-                    if not produto.get('nosso_codigo'):
-                        itens_sem_depara.append({
-                            'cnpj_filial': filial.get('cnpj'),
-                            'codigo_rede': produto.get('codigo'),
-                            'descricao': produto.get('descricao'),
-                            'quantidade': produto.get('quantidade'),
-                            'valor_unitario': produto.get('valor_unitario')
-                        })
+            for item in data_serializable:
+                if not item.get('nosso_codigo'):
+                    itens_sem_depara.append({
+                        'cnpj_filial': item.get('cnpj_filial'),
+                        'codigo_rede': item.get('codigo'),
+                        'descricao': item.get('descricao'),
+                        'quantidade': item.get('quantidade'),
+                        'valor_unitario': item.get('valor_unitario')
+                    })
 
             # Identifica filiais sem De-Para (lojas sem CNPJ cadastrado)
             # Isso acontece quando a loja não tem De-Para no FilialDeParaSendas
@@ -257,11 +264,13 @@ def upload():
 
                 # Se CNPJ é None/vazio, a filial não tem De-Para cadastrado
                 if not cnpj:
-                    # Busca o primeiro produto para pegar mais informações
-                    produtos = filial.get('produtos', [])
+                    # Busca nome_loja_pdf dos dados raw para esta filial
                     nome_loja_pdf = ''
-                    if produtos:
-                        nome_loja_pdf = produtos[0].get('nome_loja_pdf', '')
+                    for item in data_serializable:
+                        if not item.get('cnpj_filial'):
+                            nome_loja_pdf = item.get('nome_loja_pdf', '')
+                            if nome_loja_pdf:
+                                break
 
                     filiais_sem_depara.append({
                         'numero_loja': numero_loja,
@@ -302,7 +311,7 @@ def upload():
                 'session_key': session_key,
                 'identificacao': identificacao,
                 'summary': summary,
-                'data': data_serializable,
+                # 'data' REMOVIDO — megabytes de dados raw redundantes com dados_filiais
                 'validacao_precos': validacao_precos,
                 'tem_divergencia': tem_divergencia,
                 'itens_sem_depara': itens_sem_depara,
@@ -885,6 +894,7 @@ def reprocessar():
         return jsonify({
             'success': True,
             'summary': registro_temp.summary,
+            'dados_filiais': registro_temp.dados_filiais,
             'itens_sem_depara': itens_sem_depara,
             'pode_inserir': registro_temp.pode_inserir
         })
