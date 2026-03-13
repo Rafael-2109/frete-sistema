@@ -1,157 +1,151 @@
-# 🚚 Sistema de Gestão de Fretes - NACOM GOYA
+# Sistema de Gestao de Fretes — NACOM GOYA
 
-Sistema completo para gestão de fretes, pedidos, embarques e monitoramento logístico.
+Plataforma enterprise para gestao logistica completa: carteira de pedidos, separacao, embarques, faturamento, frete, financeiro, integracoes ERP e automacao de portais. Operando em producao desde 2025 com 145+ tabelas, 30+ modulos e 147 arquivos de rotas.
 
-## 🏢 Empresa: NACOM GOYA
-**Desenvolvido para:** Gestão completa da operação logística
+## Stack Tecnologica
 
-## ⚡ Funcionalidades Principais
+| Camada | Tecnologia |
+|--------|------------|
+| Framework | Flask 3.1, SQLAlchemy 2.0, PostgreSQL |
+| Frontend | Jinja2, Bootstrap 5, design tokens (light/dark mode) |
+| AI | Claude Agent SDK, Anthropic API 0.84, Voyage AI (embeddings semanticos) |
+| Automacao | Playwright 1.58 (SSW, Atacadao Portal, NF-e Odoo) |
+| Background | Redis 7.2 + RQ 2.6, APScheduler |
+| Monitoramento | Sentry SDK 2.54 (APM + AI Monitoring) |
+| Deploy | Render.com, Gunicorn 25.1 |
+| Busca Semantica | pgvector (produto, entidades financeiras, sessoes agente) |
 
-### 🎯 OPERACIONAL
-- **Pedidos**: Controle completo de pedidos e status
-- **Separação**: Gestão da separação de produtos
-- **Embarques**: Controle de embarques e documentação
-- **Monitoramento**: Acompanhamento em tempo real
+## Modulos
 
-### 💰 FINANCEIRO  
-- **Fretes**: Cálculo e gestão de fretes
-- **Controle Financeiro**: Acompanhamento de custos e receitas
+| Modulo | Descricao |
+|--------|-----------|
+| **Carteira** | Gestao de pedidos com priorizacao P1-P7, saldos e agendamento |
+| **Separacao** | Controle de separacao de produtos, expedicao e protocolos |
+| **Embarques** | Gestao de embarques, documentacao e controle de carga |
+| **Faturamento** | Notas fiscais, faturamento por produto e acompanhamento |
+| **Fretes** | Calculo de frete real vs teorico, tabelas de preco e margem |
+| **Financeiro** | Contas a pagar/receber, reconciliacao, comprovantes, extratos |
+| **CarVia** | Frete subcontratado: operacoes, cotacao, faturas cliente/transportadora |
+| **Recebimento** | Validacao NF x PO, consolidacao, recebimento fisico (4 fases) |
+| **Devolucao** | Controle de devolucoes e reversa logistica |
+| **Pallet** | Cadastro de palletizacao, EAN e controle de pallets |
+| **Estoque** | Consulta e gestao de estoque por produto |
+| **Producao** | Programacao e acompanhamento de producao (manufatura) |
+| **Cotacao** | Cotacao automatizada de frete por rota e transportadora |
+| **Portaria** | Controle de entrada/saida de veiculos |
+| **Monitoramento** | Acompanhamento em tempo real de operacoes |
+| **Rastreamento** | Tracking de entregas e canhotos |
+| **BI** | Dashboards e indicadores operacionais |
+| **Seguranca** | Varredura de vulnerabilidades (email breaches, senhas, DNS) |
+| **Agente Web** | Agente conversacional AI para usuarios finais (Claude Agent SDK) |
+| **Embeddings** | Busca semantica para produtos, entidades financeiras e sessoes |
+| **Teams** | Bot assincrono MS Teams via Azure Function bridge |
+| **Portal** | Portal do cliente com acesso restrito |
+| **Custeio** | Calculo de margem e custeio de frete |
+| **Odoo** | Integracao completa ERP: fiscal, financeiro, NF-e, reconciliacao |
 
-### 📊 CADASTROS
-- **Cadastros Gerais**: Clientes, fornecedores, produtos
-- **Tabelas de Frete**: Configuração de preços e rotas
+## Integracoes Externas
 
-### 🔍 CONSULTAS
-- **Relatórios**: Diversos relatórios operacionais
-- **Importações**: Importação de dados em lote
+| Sistema | Funcao | Protocolo |
+|---------|--------|-----------|
+| **Odoo** | ERP — fiscal, financeiro, NF-e, pagamentos | XML-RPC |
+| **SSW Sistemas** | TMS — faturamento, CT-e, romaneio, comissoes | Playwright + scraping |
+| **Atacadao Portal** | Booking — agendamento, saldo, impressao pedidos | Playwright (Hodie Booking) |
+| **MS Teams** | Notificacoes e bot conversacional | Azure Bot Framework |
+| **Sentry** | Monitoramento de erros e performance (APM) | SDK + MCP Server |
+| **Voyage AI** | Embeddings semanticos (produto, entidades, sessoes) | REST API |
+| **Google Maps** | Geocodificacao e distancias | REST API |
+| **HIBP** | Verificacao de breaches de email (k-anonymity) | REST API |
+| **Linx Microvix** | Integracao com sistema Linx (WS) | SOAP/REST |
 
-### 👥 USUÁRIOS
-- **Gestão de Usuários**: 5 níveis de permissão
-- **Controle de Acesso**: Permissões granulares por módulo
+## Banco de Dados
 
-## 🛡️ Níveis de Usuário
+- **145+ tabelas** PostgreSQL com schemas auto-documentados
+- **pgvector** para busca semantica (3 dominos: produto, financeiro, agente)
+- Schemas de referencia em `.claude/skills/consultando-sql/schemas/tables/`
 
-| Nível | Descrição | Acesso |
-|-------|-----------|--------|
-| **Portaria** | Acesso apenas aos embarques | Limitado |
-| **Vendedor** | Monitoramento próprio + comentários | Restrito |
-| **Gerente Comercial** | Aprovar vendedores + acesso geral | Amplo |
-| **Financeiro/Logística** | Acesso e edição geral | Completo |
-| **Administrador** | Acesso irrestrito | Total |
-
-## 🚀 Deploy e Produção
-
-### Status Atual: ✅ PRONTO PARA PRODUÇÃO
-
-- ✅ Sistema completo implementado
-- ✅ Controle de usuários funcional
-- ✅ Dados de teste removidos
-- ✅ Arquivos de produção configurados
-- ✅ Guia de deploy criado
-
-### Plataforma: Render.com
-- **Frontend**: Flask + Bootstrap
-- **Backend**: Python + SQLAlchemy  
-- **Banco**: PostgreSQL (produção) / SQLite (desenvolvimento)
-- **Deploy**: Automático via Git
-
-## 📋 Pré-requisitos
-
-- Python 3.11+
-- PostgreSQL (produção)
-- SQLite (desenvolvimento)
-
-## 🔧 Instalação Local
+## Instalacao Local
 
 ```bash
-# Clonar repositório
-git clone https://github.com/SEU_USUARIO/sistema-fretes.git
-cd sistema-fretes
+# Clonar repositorio
+git clone <URL_DO_REPOSITORIO>
+cd frete_sistema
 
-# Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate     # Windows
+# Criar e ativar ambiente virtual
+python -m venv .venv
+source .venv/bin/activate
 
-# Instalar dependências
+# Instalar dependencias
 pip install -r requirements.txt
 
-# Configurar banco
-flask db upgrade
+# Configurar variaveis de ambiente
+cp .env.example .env
+# Editar .env com suas credenciais (ver secao abaixo)
 
 # Executar
 python run.py
 ```
 
-## 🌐 Acesso
+## Variaveis de Ambiente
 
-### Desenvolvimento
-- **URL**: http://localhost:5000
-- **Usuário**: rafael@nacomgoya.com.br
-- **Senha**: Rafa2109
+Configurar no arquivo `.env` (nunca comitar):
 
-### Produção
-- **URL**: [Configurar após deploy]
-- **Usuário**: rafael@nacomgoya.com.br
-- **Senha**: Rafa2109
+| Categoria | Variaveis |
+|-----------|-----------|
+| **Banco** | `DATABASE_URL`, `SQLALCHEMY_DATABASE_URI` |
+| **Redis** | `REDIS_URL` |
+| **Autenticacao** | `SECRET_KEY`, `SESSION_SECRET` |
+| **Odoo** | `ODOO_URL`, `ODOO_DB`, `ODOO_USER`, `ODOO_PASSWORD`, `ODOO_API_KEY` |
+| **SSW** | `SSW_URL`, `SSW_DOMINIO`, `SSW_CPF`, `SSW_LOGIN`, `SSW_SENHA` |
+| **Atacadao** | `ATACADAO_URL`, `ATACADAO_USER`, `ATACADAO_PASSWORD` |
+| **AI** | `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY` |
+| **Sentry** | `SENTRY_DSN`, `SENTRY_AI_MONITORING` |
+| **Teams** | `TEAMS_APP_ID`, `TEAMS_APP_PASSWORD` |
+| **Seguranca** | `SEGURANCA_SCAN_ENABLED`, `SEGURANCA_SCAN_HOUR` |
+| **Feature Flags** | `PRODUCT_SEMANTIC_SEARCH`, `FINANCIAL_SEMANTIC_SEARCH` |
 
-## 📁 Estrutura do Projeto
+## Niveis de Acesso
+
+| Nivel | Descricao | Acesso |
+|-------|-----------|--------|
+| **Portaria** | Acesso apenas aos embarques | Limitado |
+| **Vendedor** | Monitoramento proprio + comentarios | Restrito |
+| **Gerente Comercial** | Aprovar vendedores + acesso geral | Amplo |
+| **Financeiro/Logistica** | Acesso e edicao geral | Completo |
+| **Administrador** | Acesso irrestrito + seguranca | Total |
+
+## Estrutura do Projeto
 
 ```
-sistema-fretes/
-├── app/                    # Aplicação principal
-│   ├── auth/              # Autenticação e usuários
-│   ├── pedidos/           # Módulo de pedidos
-│   ├── embarques/         # Módulo de embarques
-│   ├── fretes/            # Módulo de fretes
-│   ├── monitoramento/     # Monitoramento
-│   ├── templates/         # Templates HTML
-│   └── static/            # CSS, JS, uploads
-├── migrations/            # Migrações do banco
-├── config.py             # Configurações
-├── run.py                # Ponto de entrada
-├── requirements.txt      # Dependências
-├── Procfile              # Deploy Render
-└── render.yaml           # Configuração Render
+frete_sistema/
+├── app/                        # Aplicacao principal
+│   ├── agente/                 # Agente AI conversacional (Claude Agent SDK)
+│   ├── auth/                   # Autenticacao e sessoes
+│   ├── carteira/               # Carteira de pedidos (routes/, services/, utils/)
+│   ├── carvia/                 # Frete subcontratado
+│   ├── embarques/              # Gestao de embarques
+│   ├── embeddings/             # Busca semantica (Voyage AI + pgvector)
+│   ├── faturamento/            # Notas fiscais e faturamento
+│   ├── financeiro/             # Modulo financeiro (routes/, services/, workers/)
+│   ├── fretes/                 # Calculo e controle de frete
+│   ├── odoo/                   # Integracao ERP (services/, utils/, jobs/)
+│   ├── recebimento/            # Recebimento fisico (routes/, services/, workers/)
+│   ├── seguranca/              # Varredura de vulnerabilidades
+│   ├── teams/                  # Bot MS Teams
+│   ├── templates/              # Templates Jinja2
+│   ├── static/                 # CSS (design tokens), JS, uploads
+│   └── ...                     # +15 modulos adicionais
+├── scripts/
+│   ├── migrations/             # DDL (Python + SQL) e data fixes
+│   └── ...                     # Scripts operacionais
+├── .claude/                    # Configuracao Claude Code (skills, references, schemas)
+├── config.py                   # Configuracoes Flask
+├── requirements.txt            # 171 dependencias
+├── Procfile                    # Deploy Render (Gunicorn)
+└── render.yaml                 # Configuracao Render
 ```
 
-## 🔍 Módulos Implementados
+## Licenca
 
-### ✅ Completos e Funcionais:
-- **Autenticação** - Sistema completo de usuários
-- **Pedidos** - Controle de pedidos e status
-- **Embarques** - Gestão de embarques
-- **Fretes** - Cálculo e controle
-- **Monitoramento** - Acompanhamento
-- **Separação** - Controle de separação
-- **Cadastros** - Gestão de cadastros
-- **Financeiro** - Controle financeiro
-- **Tabelas** - Configurações
-- **Portaria** - Controle de portaria
-
-## 📈 Próximos Passos
-
-1. **Deploy no Render** (seguir GUIA_DEPLOY_RENDER.md)
-2. **Importação de dados reais**
-3. **Treinamento de usuários**
-4. **Monitoramento em produção**
-5. **Melhorias contínuas**
-
-## 📞 Suporte Técnico
-
-**Desenvolvedor**: Claude Sonnet (Anthropic)  
-**Empresa**: NACOM GOYA  
-**Contato**: rafael@nacomgoya.com.br
-
-## 📄 Licença
-
-Sistema proprietário desenvolvido exclusivamente para NACOM GOYA.
-
----
-
-**🎉 Sistema de Fretes - Versão Produção**  
-*Desenvolvido com ❤️ para otimizar sua operação logística*
-
-**Última atualização**: Sistema de adicionar/remover pedidos em embarques implementado  
-**Auto-deploy**: Ativado para deploy contínuo 
+Sistema proprietario desenvolvido exclusivamente para NACOM GOYA.
+Todos os direitos reservados.
