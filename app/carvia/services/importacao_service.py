@@ -705,6 +705,17 @@ class ImportacaoService:
                                         f"NFs referencia criadas automaticamente"
                                     )
 
+                                # Expandir: criar itens para NFs do CTe não presentes no PDF
+                                # PDF SSW mostra 1 NF por linha, mas CTe pode ter N NFs
+                                expand_stats = linker.expandir_itens_com_nfs_do_cte(
+                                    fatura.id
+                                )
+                                if expand_stats.get('itens_criados', 0) > 0:
+                                    logger.info(
+                                        f"Fatura {fatura.id}: {expand_stats['itens_criados']} "
+                                        f"itens suplementares criados (NFs do CTe)"
+                                    )
+
                                 # Backward binding: setar fatura_cliente_id e status
                                 # nas operacoes que ja foram resolvidas nos itens.
                                 # Fatura PDF e evidencia de faturamento consumado.

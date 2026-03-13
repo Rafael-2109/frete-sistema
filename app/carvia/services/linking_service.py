@@ -11,6 +11,7 @@ Metodos:
 - vincular_operacoes_da_fatura: backward binding operacao -> fatura via itens
 - criar_itens_fatura_transportadora: gera itens a partir de subcontratos vinculados
 - criar_itens_fatura_cliente_from_operacoes: gera itens a partir de operacoes (UI manual)
+- expandir_itens_com_nfs_do_cte: cria itens suplementares para NFs do CTe ausentes
 - resolver_operacao_por_cte: helper de matching cte_numero -> operacao_id
 - resolver_nf_por_numero: helper de matching nf_numero -> nf_id
 - backfill_todas_faturas: one-time para dados existentes
@@ -923,6 +924,129 @@ class LinkingService:
 
         db.session.flush()
         return count
+
+    # ------------------------------------------------------------------
+    # expandir_itens_com_nfs_do_cte: criar itens para NFs ausentes
+    # ------------------------------------------------------------------
+
+    def expandir_itens_com_nfs_do_cte(self, fatura_id):
+        """Expande itens de fatura cliente: cria itens suplementares para NFs do CTe ausentes.
+
+        Problema: PDF SSW mostra 1 NF por linha de CTe, mesmo quando o CTe
+        referencia múltiplas NFs. O parser cria 1 item por linha.
+        Resultado: NFs extras do CTe ficam sem item na fatura.
+
+        Para cada item com operacao_id resolvido, busca TODAS as NFs da operação
+        via junction carvia_operacao_nfs. Para cada NF não representada nos itens
+        existentes, cria CarviaFaturaClienteItem suplementar.
+
+        Itens suplementares:
+        - Copiam do original: cte_numero, cte_data_emissao, contraparte_cnpj,
+          contraparte_nome, fatura_cliente_id, operacao_id
+        - Do registro NF: nf_id, nf_numero, valor_mercadoria (valor_total),
+          peso_kg (peso_bruto)
+        - Valores financeiros = NULL: frete, icms, iss, st, base_calculo
+          (evita dupla contagem — totais ficam no item original)
+
+        Args:
+            fatura_id: ID da CarviaFaturaCliente
+
+        Returns:
+            dict com: itens_criados, operacoes_verificadas, total_itens
+        """
+        from app.carvia.models import (
+            CarviaFaturaClienteItem, CarviaOperacaoNf, CarviaNf
+        )
+
+        stats = {
+            'itens_criados': 0,
+            'operacoes_verificadas': 0,
+            'total_itens': 0,
+        }
+
+        # Buscar itens da fatura que já têm operacao_id resolvido
+        itens = CarviaFaturaClienteItem.query.filter(
+            CarviaFaturaClienteItem.fatura_cliente_id == fatura_id,
+            CarviaFaturaClienteItem.operacao_id.isnot(None),
+        ).all()
+
+        stats['total_itens'] = len(itens)
+
+        if not itens:
+            return stats
+
+        # Agrupar itens por operacao_id para detectar NFs já representadas
+        # e pegar o item original (para copiar campos)
+        itens_por_operacao = {}
+        for item in itens:
+            if item.operacao_id not in itens_por_operacao:
+                itens_por_operacao[item.operacao_id] = []
+            itens_por_operacao[item.operacao_id].append(item)
+
+        for operacao_id, itens_op in itens_por_operacao.items():
+            stats['operacoes_verificadas'] += 1
+
+            # NF IDs já representadas nos itens existentes
+            nf_ids_existentes = {
+                item.nf_id for item in itens_op if item.nf_id is not None
+            }
+
+            # Buscar TODAS as NFs da operação via junction
+            junctions = CarviaOperacaoNf.query.filter_by(
+                operacao_id=operacao_id
+            ).all()
+
+            nf_ids_junction = {j.nf_id for j in junctions}
+
+            # NFs ausentes = na junction mas não nos itens
+            nf_ids_faltando = nf_ids_junction - nf_ids_existentes
+
+            if not nf_ids_faltando:
+                continue
+
+            # Pegar item original como template (primeiro da lista)
+            item_original = itens_op[0]
+
+            # Criar itens suplementares para cada NF ausente
+            for nf_id in nf_ids_faltando:
+                nf = db.session.get(CarviaNf, nf_id)
+                if not nf:
+                    continue
+
+                novo_item = CarviaFaturaClienteItem(
+                    fatura_cliente_id=fatura_id,
+                    operacao_id=operacao_id,
+                    nf_id=nf.id,
+                    cte_numero=item_original.cte_numero,
+                    cte_data_emissao=item_original.cte_data_emissao,
+                    contraparte_cnpj=item_original.contraparte_cnpj,
+                    contraparte_nome=item_original.contraparte_nome,
+                    nf_numero=nf.numero_nf,
+                    valor_mercadoria=nf.valor_total,
+                    peso_kg=float(nf.peso_bruto) if nf.peso_bruto else None,
+                    # Valores financeiros NULL — evitar dupla contagem
+                    frete=None,
+                    icms=None,
+                    iss=None,
+                    st=None,
+                    base_calculo=None,
+                )
+                db.session.add(novo_item)
+                stats['itens_criados'] += 1
+
+                logger.info(
+                    f"Expandir NF: fatura={fatura_id} op={operacao_id} "
+                    f"nf={nf.id} (NF {nf.numero_nf}) — item suplementar criado"
+                )
+
+        if stats['itens_criados'] > 0:
+            db.session.flush()
+            logger.info(
+                f"Fatura {fatura_id}: {stats['itens_criados']} itens suplementares "
+                f"criados para NFs do CTe"
+            )
+
+        return stats
 
     # ------------------------------------------------------------------
     # backfill_todas_faturas: one-time para dados existentes

@@ -266,6 +266,7 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 | `criar_itens_fatura_transportadora(fatura_id)` | Gera itens a partir de subcontratos vinculados (usado na importacao) |
 | `criar_itens_fatura_transportadora_incremental(fatura_id, sub_ids)` | Gera itens apenas para subcontratos especificos (usado ao anexar) |
 | `criar_itens_fatura_cliente_from_operacoes(fatura_id)` | Gera itens a partir de operacoes (faturas manuais) |
+| `expandir_itens_com_nfs_do_cte(fatura_id)` | Cria itens suplementares para NFs do CTe ausentes (PDF SSW mostra 1 NF/linha, CTe pode ter N NFs). Valores financeiros NULL para evitar dupla contagem |
 | `backfill_todas_faturas()` | One-time para dados existentes |
 
 **Matching de CTe**: `ltrim(cte_numero, '0')` normaliza "00000001" == "1".

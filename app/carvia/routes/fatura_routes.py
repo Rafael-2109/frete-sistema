@@ -173,7 +173,10 @@ def register_fatura_routes(bp):
 
                 # Gerar itens de detalhe a partir das operacoes
                 from app.carvia.services.linking_service import LinkingService
-                LinkingService().criar_itens_fatura_cliente_from_operacoes(fatura.id)
+                linker = LinkingService()
+                linker.criar_itens_fatura_cliente_from_operacoes(fatura.id)
+                # Expandir: criar itens para NFs do CTe não presentes
+                linker.expandir_itens_com_nfs_do_cte(fatura.id)
 
                 db.session.commit()
 
@@ -500,7 +503,10 @@ def register_fatura_routes(bp):
 
             # Gerar itens de detalhe
             from app.carvia.services.linking_service import LinkingService
-            LinkingService().criar_itens_fatura_cliente_from_operacoes(fatura.id)
+            linker = LinkingService()
+            linker.criar_itens_fatura_cliente_from_operacoes(fatura.id)
+            # Expandir: criar itens para NFs do CTe não presentes
+            linker.expandir_itens_com_nfs_do_cte(fatura.id)
 
             db.session.commit()
 
