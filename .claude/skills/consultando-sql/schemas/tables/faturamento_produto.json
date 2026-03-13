@@ -142,6 +142,13 @@
   ],
   "indices": [
     {
+      "name": "ix_faturamento_produto_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_faturamento_produto_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
@@ -196,13 +203,6 @@
       "name": "ix_faturamento_produto_origem",
       "columns": [
         "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_faturamento_produto_cod_produto",
-      "columns": [
-        "cod_produto"
       ],
       "unique": false
     }

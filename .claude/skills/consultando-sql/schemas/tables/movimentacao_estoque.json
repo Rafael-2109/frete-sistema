@@ -246,6 +246,13 @@
   ],
   "indices": [
     {
+      "name": "ix_movimentacao_estoque_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_movimentacao_estoque_ativo",
       "columns": [
         "ativo"
@@ -300,13 +307,6 @@
       "name": "ix_movimentacao_estoque_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_cod_produto",
-      "columns": [
-        "cod_produto"
       ],
       "unique": false
     },

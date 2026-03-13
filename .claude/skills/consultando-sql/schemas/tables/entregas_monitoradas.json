@@ -110,7 +110,7 @@
     {
       "name": "separacao_lote_id",
       "type": "varchar(50)",
-      "description": "ID do lote de separação"
+      "description": "VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)"
     },
     {
       "name": "finalizado_por",

@@ -30,7 +30,8 @@
     },
     {
       "name": "razao_fornecedor",
-      "type": "varchar(255)"
+      "type": "varchar(255)",
+      "description": "Nome do fornecedor (NAO usar 'fornecedor_nome')"
     },
     {
       "name": "cnpj_empresa_compradora",
@@ -38,7 +39,8 @@
     },
     {
       "name": "razao_empresa_compradora",
-      "type": "varchar(255)"
+      "type": "varchar(255)",
+      "description": "Nome da empresa compradora (NAO usar 'empresa_nome')"
     },
     {
       "name": "data_nf",

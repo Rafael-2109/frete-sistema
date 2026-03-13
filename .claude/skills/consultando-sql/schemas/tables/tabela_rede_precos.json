@@ -97,16 +97,16 @@
       "unique": false
     },
     {
-      "name": "ix_tabela_rede_precos_rede",
+      "name": "ix_tabela_rede_precos_cod_produto",
       "columns": [
-        "rede"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_tabela_rede_precos_cod_produto",
+      "name": "ix_tabela_rede_precos_rede",
       "columns": [
-        "cod_produto"
+        "rede"
       ],
       "unique": false
     }

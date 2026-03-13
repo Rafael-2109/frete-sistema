@@ -121,17 +121,17 @@
       "unique": false
     },
     {
-      "name": "idx_historico_operacao_data",
+      "name": "ix_lista_materiais_historico_alterado_por",
       "columns": [
-        "operacao",
-        "alterado_em"
+        "alterado_por"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_por",
+      "name": "idx_historico_operacao_data",
       "columns": [
-        "alterado_por"
+        "operacao",
+        "alterado_em"
       ],
       "unique": false
     }

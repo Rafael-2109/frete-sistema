@@ -110,8 +110,7 @@ IRRELEVANT_TABLES = {
     'historico_pedidos', 'historico_data_prevista',
     'faturamento_parcial_justificativa', 'inconsistencia_faturamento',
     'relatorio_faturamento_importado',
-    # Fretes — tabelas auxiliares (cotações, histórico)
-    'cotacao_itens', 'cotacoes',
+    # Fretes — tabelas auxiliares (histórico)
     'historico_tabelas_frete',
     # Financeiro — lotes/headers (itens mantidos), logs, pendências
     'baixa_pagamento_lote', 'baixa_titulo_lote',

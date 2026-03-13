@@ -138,16 +138,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_sessao_demanda_destino_uf",
+      "name": "ix_carvia_sessao_demandas_sessao_id",
       "columns": [
-        "destino_uf"
+        "sessao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_sessao_demandas_sessao_id",
+      "name": "ix_carvia_sessao_demanda_destino_uf",
       "columns": [
-        "sessao_id"
+        "destino_uf"
       ],
       "unique": false
     }

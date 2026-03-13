@@ -255,6 +255,27 @@
   ],
   "indices": [
     {
+      "name": "ix_conhecimento_transporte_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_complementa_chave",
+      "columns": [
+        "cte_complementa_chave"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_conhecimento_transporte_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
@@ -272,6 +293,13 @@
       "name": "ix_conhecimento_transporte_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_data_emissao",
+      "columns": [
+        "data_emissao"
       ],
       "unique": false
     },
@@ -318,11 +346,11 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_chave_acesso",
+      "name": "idx_cte_tipo",
       "columns": [
-        "chave_acesso"
+        "tipo_cte"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_conhecimento_transporte_tipo_cte",
@@ -330,6 +358,13 @@
         "tipo_cte"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_chave_acesso",
+      "columns": [
+        "chave_acesso"
+      ],
+      "unique": true
     },
     {
       "name": "idx_cte_numero_serie",
@@ -343,13 +378,6 @@
       "name": "idx_cte_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_numero_cte",
-      "columns": [
-        "numero_cte"
       ],
       "unique": false
     },
@@ -368,6 +396,13 @@
       "unique": false
     },
     {
+      "name": "ix_conhecimento_transporte_numero_cte",
+      "columns": [
+        "numero_cte"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cte_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
@@ -382,13 +417,6 @@
       "unique": false
     },
     {
-      "name": "idx_cte_data_emissao",
-      "columns": [
-        "data_emissao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_cte_frete",
       "columns": [
         "frete_id"
@@ -399,34 +427,6 @@
       "name": "idx_cte_status",
       "columns": [
         "odoo_status_codigo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_data_emissao",
-      "columns": [
-        "data_emissao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_tipo",
-      "columns": [
-        "tipo_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_complementa_chave",
-      "columns": [
-        "cte_complementa_chave"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_complementa_id",
-      "columns": [
-        "cte_complementa_id"
       ],
       "unique": false
     }

@@ -259,9 +259,16 @@
   ],
   "indices": [
     {
-      "name": "ix_extrato_item_statement_line_id",
+      "name": "idx_extrato_item_lote",
       "columns": [
-        "statement_line_id"
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_lote_id",
+      "columns": [
+        "lote_id"
       ],
       "unique": false
     },
@@ -294,13 +301,6 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_item_favorecido_cnpj",
-      "columns": [
-        "favorecido_cnpj"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_extrato_item_status_match",
       "columns": [
         "status_match"
@@ -308,9 +308,16 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_lote_id",
+      "name": "idx_extrato_item_favorecido_cnpj",
       "columns": [
-        "lote_id"
+        "favorecido_cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
       ],
       "unique": false
     },
@@ -322,13 +329,6 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_item_odoo_partner",
-      "columns": [
-        "odoo_partner_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_extrato_item_status",
       "columns": [
         "status"
@@ -336,9 +336,9 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_item_lote",
+      "name": "idx_extrato_item_odoo_partner",
       "columns": [
-        "lote_id"
+        "odoo_partner_id"
       ],
       "unique": false
     }
