@@ -967,13 +967,11 @@ def _compute_capdo_quality_metrics(
         )
 
         # ── 5. Knowledge type distribution (baseado em paths CAPDo) ──
-        # 5 tipos epistemologicos fixos (CAPDo v3.0)
+        # 3 tipos operacionais (CAPDo v3.0 — protocolos/armadilhas/heuristicas)
         _KNOWLEDGE_SUBDIRS = {
-            "procedimental": "procedimentos",
-            "conceitual": "conceitos",
-            "condicional": "regras",
-            "causal": "causas",
-            "relacional": "perfis",
+            "protocolo": "protocolos",
+            "armadilha": "armadilhas",
+            "heuristica": "heuristicas",
         }
         type_counts: dict[str, int] = {}
         for kt_key, subdir in _KNOWLEDGE_SUBDIRS.items():
