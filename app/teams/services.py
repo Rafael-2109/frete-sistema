@@ -16,7 +16,7 @@ import uuid
 from datetime import timedelta
 
 from app.utils.timezone import agora_utc_naive
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +232,7 @@ def processar_mensagem_bot(
 
     try:
         # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
-        resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+        resposta_texto, new_sdk_session_id, _, _, _, _ = _obter_resposta_agente(
             mensagem=mensagem,
             usuario=usuario,
             sdk_session_id=sdk_session_id,
@@ -436,7 +436,7 @@ def _obter_resposta_agente(
     user_id: int = None,
     can_use_tool=None,
     session=None,
-) -> Tuple[Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], int, int, List[str], float]:
     """
     Obtem resposta do Agente Claude SDK.
 
@@ -449,14 +449,14 @@ def _obter_resposta_agente(
         session: AgentSession para backup/restore de transcript (Bug Teams #1)
 
     Returns:
-        Tuple[resposta_texto, new_sdk_session_id]
+        Tuple[resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd]
     """
     try:
         from app.agente.sdk import get_client
         client = get_client()
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter client: {e}")
-        return None, None
+        return None, None, 0, 0, [], 0.0
 
     # Bug Teams #1: Restaurar transcript do DB se arquivo JSONL nao existe no disco
     if sdk_session_id and session:
@@ -521,6 +521,13 @@ def _obter_resposta_agente(
         resposta_texto = _extrair_texto_resposta(response)
         new_sdk_session_id = getattr(response, 'session_id', None)
 
+        # GAP 1/2: Extrair tokens e custo do response (non-streaming)
+        ns_input_tokens = getattr(response, 'input_tokens', 0) or 0
+        ns_output_tokens = getattr(response, 'output_tokens', 0) or 0
+        ns_cost_usd = getattr(response, 'total_cost_usd', 0) or 0.0
+        # Non-streaming não tem granularidade de tool_call events
+        ns_tools_used: List[str] = []
+
         # Bug Teams #1: Backup transcript JSONL do disco para o DB
         if new_sdk_session_id and session:
             try:
@@ -535,15 +542,15 @@ def _obter_resposta_agente(
             except Exception as e:
                 logger.warning(f"[TEAMS-BOT] Erro ao salvar transcript: {e}")
 
-        return resposta_texto, new_sdk_session_id
+        return resposta_texto, new_sdk_session_id, ns_input_tokens, ns_output_tokens, ns_tools_used, ns_cost_usd
 
     except asyncio.TimeoutError:
         logger.error("[TEAMS-BOT] Timeout ao aguardar resposta do agente")
-        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.", None
+        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.", None, 0, 0, [], 0.0
 
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter resposta do agente: {e}", exc_info=True)
-        return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", None
+        return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", None, 0, 0, [], 0.0
 
 
 def _extrair_texto_resposta(response) -> Optional[str]:
@@ -789,7 +796,7 @@ def _obter_resposta_agente_streaming(
     can_use_tool=None,
     session=None,
     app=None,
-) -> Tuple[Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], int, int, List[str], float]:
     """
     Obtem resposta do Agente Claude SDK com flush parcial progressivo ao DB.
 
@@ -808,7 +815,7 @@ def _obter_resposta_agente_streaming(
         session: AgentSession para backup/restore de transcript (Bug Teams #1)
 
     Returns:
-        Tuple[resposta_texto, new_sdk_session_id]
+        Tuple[resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd]
     """
     from app.agente.config.feature_flags import (
         TEAMS_DEFAULT_MODEL,
@@ -820,7 +827,7 @@ def _obter_resposta_agente_streaming(
         client = get_client()
     except Exception as e:
         logger.error(f"[TEAMS-STREAM] Erro ao obter client: {e}")
-        return None, None
+        return None, None, 0, 0, [], 0.0
 
     # Bug Teams #1: Restaurar transcript do DB se arquivo JSONL nao existe no disco
     if sdk_session_id and session:
@@ -853,6 +860,10 @@ def _obter_resposta_agente_streaming(
             full_text = ""
             result_session_id = sdk_session_id
             errors = []
+            tools_used = []
+            input_tokens = 0
+            output_tokens = 0
+            cost_usd = 0.0
             last_flush_time = time.monotonic()
             last_activity = time.monotonic()  # Renewal: atualizado a cada chunk
             stream_start = time.monotonic()   # Absolute: fixo
@@ -950,6 +961,11 @@ def _obter_resposta_agente_streaming(
                         )
 
                 elif event.type == 'tool_call':
+                    # GAP 1: Rastrear tools usadas
+                    tool_name = event.content if isinstance(event.content, str) else str(event.content)
+                    if tool_name and tool_name not in tools_used:
+                        tools_used.append(tool_name)
+
                     # Flush imediato antes de tool_call — texto fica visivel
                     # enquanto tool executa (pode levar 5-30s)
                     if full_text:
@@ -971,6 +987,10 @@ def _obter_resposta_agente_streaming(
                     done_session_id = event.content.get('session_id')
                     if done_session_id:
                         result_session_id = done_session_id
+                    # GAP 1/2: Extrair tokens e custo do done event
+                    input_tokens = event.content.get('input_tokens', 0) or 0
+                    output_tokens = event.content.get('output_tokens', 0) or 0
+                    cost_usd = event.content.get('total_cost_usd', 0.0) or 0.0
 
             # Se full_text vazio mas houve errors, montar texto sintetico
             if not full_text and errors:
@@ -983,7 +1003,7 @@ def _obter_resposta_agente_streaming(
                     f"Errors: {'; '.join(errors[:3])}"
                 )
 
-            return full_text, result_session_id
+            return full_text, result_session_id, input_tokens, output_tokens, tools_used, cost_usd
 
         # Deadline renewal integrado em _stream_with_flush (per-chunk timeout).
         # Wrapper direto sem asyncio.wait_for externo.
@@ -998,12 +1018,12 @@ def _obter_resposta_agente_streaming(
             # O client DEVE rodar no MESMO event loop em que foi conectado.
             from app.agente.sdk.client_pool import submit_coroutine
             future = submit_coroutine(_stream_with_timeout())
-            resposta_texto, new_sdk_session_id = future.result(
+            resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = future.result(
                 timeout=MAX_ABSOLUTE + 10
             )
         else:
             # Path v2: event loop efêmero (cria + destrói por chamada)
-            resposta_texto, new_sdk_session_id = asyncio.run(_stream_with_timeout())
+            resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = asyncio.run(_stream_with_timeout())
 
         # Extrair e sanitizar resposta
         if resposta_texto:
@@ -1023,7 +1043,7 @@ def _obter_resposta_agente_streaming(
             except Exception as e:
                 logger.warning(f"[TEAMS-STREAM] Erro ao salvar transcript: {e}")
 
-        return resposta_texto, new_sdk_session_id
+        return resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd
 
     except asyncio.TimeoutError:
         logger.error("[TEAMS-STREAM] Timeout ao aguardar resposta do agente")
@@ -1031,7 +1051,7 @@ def _obter_resposta_agente_streaming(
         return (
             "Desculpe, a consulta demorou muito. "
             "Tente novamente com uma pergunta mais especifica."
-        ), None
+        ), None, 0, 0, [], 0.0
 
     except Exception as e:
         logger.error(
@@ -1042,7 +1062,7 @@ def _obter_resposta_agente_streaming(
         return (
             "Desculpe, ocorreu um erro ao processar sua mensagem. "
             "Tente novamente."
-        ), None
+        ), None, 0, 0, [], 0.0
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1127,10 +1147,16 @@ def process_teams_task_async(
 
             from app.agente.config.feature_flags import TEAMS_PROGRESSIVE_STREAMING
 
+            # GAP 1: Variáveis para captura de tokens/tools/cost
+            input_tokens = 0
+            output_tokens = 0
+            tools_used: List[str] = []
+            cost_usd = 0.0
+
             for attempt in range(max_retries):
                 try:
                     if TEAMS_PROGRESSIVE_STREAMING:
-                        resposta_texto, new_sdk_session_id = _obter_resposta_agente_streaming(
+                        resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd = _obter_resposta_agente_streaming(
                             mensagem=mensagem,
                             usuario=usuario,
                             task_id=task_id,
@@ -1141,7 +1167,7 @@ def process_teams_task_async(
                             app=app,
                         )
                     else:
-                        resposta_texto, new_sdk_session_id = _obter_resposta_agente(
+                        resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd = _obter_resposta_agente(
                             mensagem=mensagem,
                             usuario=usuario,
                             sdk_session_id=sdk_session_id,
@@ -1172,14 +1198,37 @@ def process_teams_task_async(
                             "Tente novamente."
                         )
 
-            # Salvar mensagens e sdk_session_id na sessão
+            # GAP 1/2/6: Salvar mensagens com tokens/tools/cost + model
             if session:
                 try:
                     session.add_user_message(mensagem)
                     if resposta_texto:
-                        session.add_assistant_message(resposta_texto)
+                        session.add_assistant_message(
+                            content=resposta_texto,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            tools_used=tools_used if tools_used else None,
+                        )
                     if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
                         session.set_sdk_session_id(new_sdk_session_id)
+
+                    # GAP 2: Custo — SDK prioritário, fallback cálculo local
+                    from app.agente.routes import _calculate_cost
+                    from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
+                    sdk_cost = cost_usd
+                    calc_cost = _calculate_cost(TEAMS_DEFAULT_MODEL, input_tokens, output_tokens)
+                    final_cost = sdk_cost if sdk_cost and sdk_cost > 0 else calc_cost
+                    session.total_cost_usd = float(session.total_cost_usd or 0) + final_cost
+
+                    # GAP 6: Model
+                    session.model = TEAMS_DEFAULT_MODEL
+
+                    logger.info(
+                        f"[TEAMS-ASYNC] Custo sessão {teams_session_id[:8]}: "
+                        f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
+                        f"final={final_cost:.6f}, tokens=({input_tokens},{output_tokens}), "
+                        f"tools={tools_used}"
+                    )
                 except Exception as sess_err:
                     logger.warning(
                         f"[TEAMS-ASYNC] Erro ao salvar sessão (ignorado): {sess_err}"
@@ -1197,38 +1246,44 @@ def process_teams_task_async(
                 db.session.rollback()
 
             # =================================================================
-            # Extração pós-sessão (CAPDo v3.0) — espelho de routes.py:998-1028
-            # Roda inline (já estamos em thread non-daemon, não criar thread extra)
+            # GAP 3: Post-session processing COMPLETO (unificado com Web)
+            # Substitui CAPDo inline por run_post_session_processing() que
+            # executa: sumarização, pattern learning, behavioral profile,
+            # knowledge extraction (CAPDo) e embedding generation.
             # =================================================================
-            try:
-                from app.agente.config.feature_flags import (
-                    USE_POST_SESSION_EXTRACTION,
-                    POST_SESSION_EXTRACTION_MIN_MESSAGES,
-                )
-
-                if (
-                    USE_POST_SESSION_EXTRACTION
-                    and session
-                    and mensagem
-                    and resposta_texto
-                    and (session.message_count or 0) >= POST_SESSION_EXTRACTION_MIN_MESSAGES
-                ):
-                    from app.agente.services.pattern_analyzer import extrair_conhecimento_sessao
-
-                    messages_for_extraction = list(session.get_messages())
-                    extrair_conhecimento_sessao(
+            if session and resposta_texto:
+                try:
+                    from app.agente.routes import run_post_session_processing
+                    run_post_session_processing(
                         app=app,
+                        session=session,
+                        session_id=teams_session_id,
                         user_id=teams_user_id,
-                        session_messages=messages_for_extraction,
+                        user_message=mensagem,
+                        assistant_message=resposta_texto,
                     )
                     logger.info(
-                        f"[TEAMS-ASYNC] Extração pós-sessão concluída "
-                        f"(user={teams_user_id}, msgs={session.message_count})"
+                        f"[TEAMS-ASYNC] Post-session processing concluído "
+                        f"(user={teams_user_id}, session={teams_session_id[:8]})"
                     )
-            except Exception as ext_err:
-                logger.warning(
-                    f"[TEAMS-ASYNC] Extração pós-sessão falhou (ignorado): {ext_err}"
-                )
+                except Exception as post_err:
+                    logger.warning(
+                        f"[TEAMS-ASYNC] Post-session processing falhou (ignorado): {post_err}"
+                    )
+
+            # =================================================================
+            # GAP 4: Memory effectiveness tracking (espelho de routes.py:1181-1191)
+            # =================================================================
+            try:
+                if resposta_texto and teams_user_id:
+                    from app.agente.sdk import get_client as _get_client
+                    from app.agente.routes import _track_memory_effectiveness
+                    _client = _get_client()
+                    injected_ids = getattr(_client, '_last_injected_memory_ids', [])
+                    _track_memory_effectiveness(teams_user_id, resposta_texto, injected_ids)
+                    _client._last_injected_memory_ids = []
+            except Exception as eff_err:
+                logger.warning(f"[TEAMS-ASYNC] Memory effectiveness tracking falhou: {eff_err}")
 
             # Atualizar TeamsTask com resultado (retry para SSL dropped)
             # no_autoflush previne flush automático de dirty objects ao fazer get()

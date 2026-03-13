@@ -151,7 +151,8 @@
       "Bash(/home/rafaelnascimento/.local/bin/sentry-cli --version)",
       "Bash(/home/rafaelnascimento/.local/bin/sentry-cli projects:*)",
       "Bash(find /home/rafaelnascimento/projetos/frete_sistema -name \"*.py\" -type f -exec grep -l \"app_context\\(\\)\" {} \\\\; | head -20)",
-      "mcp__sentry__update_issue"
+      "mcp__sentry__update_issue",
+      "WebFetch(domain:01.me)"
     ],
     "deny": []
   },
