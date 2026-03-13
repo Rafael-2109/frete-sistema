@@ -9,39 +9,87 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                {# Loading #}
-                <div id="cotarStandaloneLoading" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-muted">Calculando opcoes de frete...</p>
+
+                {# ===== STEP 1: Formulario editavel ===== #}
+                <div id="cotarStep1">
+                    <p class="text-muted small mb-3">
+                        Confira ou ajuste os parametros antes de calcular a cotacao.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Peso (kg)</label>
+                            <input type="text" id="csFormPeso" class="form-control"
+                                   placeholder="0,00" inputmode="decimal">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Valor Mercadoria (R$)</label>
+                            <input type="text" id="csFormValorMercadoria" class="form-control"
+                                   placeholder="0,00" inputmode="decimal">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">UF Origem</label>
+                            <input type="text" id="csFormUfOrigem" class="form-control"
+                                   placeholder="SP" maxlength="2" style="text-transform:uppercase">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">UF Destino</label>
+                            <input type="text" id="csFormUfDestino" class="form-control"
+                                   placeholder="RJ" maxlength="2" style="text-transform:uppercase">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Cidade Destino</label>
+                            <input type="text" id="csFormCidadeDestino" class="form-control"
+                                   placeholder="Nome da cidade">
+                        </div>
+                    </div>
+                    <div class="mt-3 text-end">
+                        <button type="button" class="btn btn-primary" onclick="_csExecutarCotacao()">
+                            <i class="fas fa-calculator"></i> Calcular Cotacao
+                        </button>
+                    </div>
                 </div>
 
-                {# Conteudo #}
-                <div id="cotarStandaloneConteudo" style="display:none;">
-                    <div id="cotarStandaloneVazio" class="text-center py-4" style="display:none;">
-                        <i class="fas fa-inbox fa-2x mb-2 text-muted"></i>
-                        <p class="text-muted">Nenhuma opcao de frete encontrada para este destino.</p>
+                {# ===== STEP 2: Resultados ===== #}
+                <div id="cotarStep2" style="display:none;">
+                    {# Loading #}
+                    <div id="cotarStandaloneLoading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Calculando opcoes de frete...</p>
                     </div>
 
-                    <div id="cotarStandaloneTabela" style="display:none;">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0 carvia-table">
-                                <thead>
-                                    <tr>
-                                        <th>Transportadora</th>
-                                        <th>Tabela</th>
-                                        <th>Modalidade</th>
-                                        <th class="text-center">Lead Time</th>
-                                        <th class="text-end">Valor Frete</th>
-                                        <th class="text-center">Acoes</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cotarStandaloneBody"></tbody>
-                            </table>
+                    {# Conteudo #}
+                    <div id="cotarStandaloneConteudo" style="display:none;">
+                        <div id="cotarStandaloneVazio" class="text-center py-4" style="display:none;">
+                            <i class="fas fa-inbox fa-2x mb-2 text-muted"></i>
+                            <p class="text-muted">Nenhuma opcao de frete encontrada para este destino.</p>
+                        </div>
+
+                        <div id="cotarStandaloneTabela" style="display:none;">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0 carvia-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Transportadora</th>
+                                            <th>Tabela</th>
+                                            <th>Modalidade</th>
+                                            <th class="text-center">Lead Time</th>
+                                            <th class="text-end">Valor Frete</th>
+                                            <th class="text-center">Acoes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cotarStandaloneBody"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
+
             </div>
             <div class="modal-footer">
+                <button type="button" id="csVoltarBtn" class="btn btn-outline-secondary" style="display:none;"
+                        onclick="_csVoltarFormulario()">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
@@ -54,6 +102,10 @@
 // =====================================================================
 function _csFormatBRL(valor) {
     return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor);
+}
+
+function _csFormatNum(valor) {
+    return new Intl.NumberFormat('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(valor);
 }
 
 function _csBuildDescritvoTable(descritivo) {
@@ -113,9 +165,63 @@ function _csToggleDetalhes(detailId) {
 // Parametros armazenados para redirecionar para nova sessao
 var _csParamsAtual = {};
 
+/**
+ * Abre modal no Step 1 (formulario editavel) com campos pre-preenchidos.
+ */
 function cotarStandalone(params) {
     _csParamsAtual = params || {};
+
+    // Pre-preencher formulario
+    document.getElementById('csFormPeso').value = _csFormatNum(params.peso || 0);
+    document.getElementById('csFormValorMercadoria').value = _csFormatNum(params.valor_mercadoria || 0);
+    document.getElementById('csFormUfOrigem').value = (params.uf_origem || '').toUpperCase();
+    document.getElementById('csFormUfDestino').value = (params.uf_destino || '').toUpperCase();
+    document.getElementById('csFormCidadeDestino').value = params.cidade_destino || '';
+
+    // Mostrar Step 1, esconder Step 2
+    document.getElementById('cotarStep1').style.display = 'block';
+    document.getElementById('cotarStep2').style.display = 'none';
+    document.getElementById('csVoltarBtn').style.display = 'none';
+
     var modal = new bootstrap.Modal(document.getElementById('modalCotarStandalone'));
+    modal.show();
+}
+
+/**
+ * Parse valor BR (1.234,56) para float.
+ */
+function _csParseValorBR(str) {
+    if (!str) return 0;
+    return parseFloat(String(str).replace(/\./g, '').replace(',', '.')) || 0;
+}
+
+/**
+ * Executa cotacao com valores do formulario (Step 1 -> Step 2).
+ */
+function _csExecutarCotacao() {
+    // Ler valores editados do formulario
+    var peso = _csParseValorBR(document.getElementById('csFormPeso').value);
+    var valorMerc = _csParseValorBR(document.getElementById('csFormValorMercadoria').value);
+    var ufOrigem = document.getElementById('csFormUfOrigem').value.trim().toUpperCase();
+    var ufDestino = document.getElementById('csFormUfDestino').value.trim().toUpperCase();
+    var cidadeDestino = document.getElementById('csFormCidadeDestino').value.trim();
+
+    // Validacao basica
+    if (peso <= 0) { alert('Peso deve ser maior que zero.'); return; }
+    if (!ufDestino) { alert('UF Destino e obrigatoria.'); return; }
+
+    // Atualizar params com valores editados
+    _csParamsAtual.peso = peso;
+    _csParamsAtual.valor_mercadoria = valorMerc;
+    _csParamsAtual.uf_origem = ufOrigem;
+    _csParamsAtual.uf_destino = ufDestino;
+    _csParamsAtual.cidade_destino = cidadeDestino;
+
+    // Trocar para Step 2
+    document.getElementById('cotarStep1').style.display = 'none';
+    document.getElementById('cotarStep2').style.display = 'block';
+    document.getElementById('csVoltarBtn').style.display = 'inline-block';
+
     var loading = document.getElementById('cotarStandaloneLoading');
     var conteudo = document.getElementById('cotarStandaloneConteudo');
     var vazio = document.getElementById('cotarStandaloneVazio');
@@ -124,7 +230,6 @@ function cotarStandalone(params) {
 
     loading.style.display = 'block';
     conteudo.style.display = 'none';
-    modal.show();
 
     var csrfToken = document.querySelector('meta[name="csrf-token"]');
     var headers = {'Content-Type': 'application/json'};
@@ -134,11 +239,11 @@ function cotarStandalone(params) {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
-            peso: params.peso || 0,
-            valor_mercadoria: params.valor_mercadoria || 0,
-            uf_destino: params.uf_destino || '',
-            cidade_destino: params.cidade_destino || '',
-            uf_origem: params.uf_origem || '',
+            peso: peso,
+            valor_mercadoria: valorMerc,
+            uf_destino: ufDestino,
+            cidade_destino: cidadeDestino,
+            uf_origem: ufOrigem,
         })
     })
     .then(function(r) { return r.json(); })
@@ -152,6 +257,9 @@ function cotarStandalone(params) {
             if (data.erro) {
                 vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-warning"></i>' +
                     '<p class="text-muted">' + data.erro + '</p>';
+            } else {
+                vazio.innerHTML = '<i class="fas fa-inbox fa-2x mb-2 text-muted"></i>' +
+                    '<p class="text-muted">Nenhuma opcao de frete encontrada para este destino.</p>';
             }
             return;
         }
@@ -200,6 +308,15 @@ function cotarStandalone(params) {
         vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i>' +
             '<p>Erro: ' + err.message + '</p>';
     });
+}
+
+/**
+ * Volta do Step 2 para Step 1 (formulario).
+ */
+function _csVoltarFormulario() {
+    document.getElementById('cotarStep1').style.display = 'block';
+    document.getElementById('cotarStep2').style.display = 'none';
+    document.getElementById('csVoltarBtn').style.display = 'none';
 }
 
 function _csCriarSessao(idx) {
