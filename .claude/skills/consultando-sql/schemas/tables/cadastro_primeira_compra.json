@@ -197,16 +197,16 @@
   ],
   "indices": [
     {
-      "name": "ix_cadastro_primeira_compra_cnpj_empresa_compradora",
+      "name": "ix_cadastro_primeira_compra_status",
       "columns": [
-        "cnpj_empresa_compradora"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_cadastro_primeira_compra_status",
+      "name": "ix_cadastro_primeira_compra_cnpj_empresa_compradora",
       "columns": [
-        "status"
+        "cnpj_empresa_compradora"
       ],
       "unique": false
     },

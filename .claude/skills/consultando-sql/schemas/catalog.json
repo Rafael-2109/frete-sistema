@@ -34,8 +34,6 @@
     "contas_a_receber_abatimento",
     "contas_a_receber_tipos",
     "controle_cruzado_separacao",
-    "cotacao_itens",
-    "cotacoes",
     "cross_docking",
     "custo_mensal",
     "custos_extra_entrega",
@@ -105,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 143,
+  "total_tabelas": 145,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -509,6 +507,24 @@
         "odoo_move_id",
         "nome_documento",
         "numero_nf"
+      ]
+    },
+    {
+      "name": "cotacao_itens",
+      "description": "Itens de cotação de frete.",
+      "key_fields": [
+        "cotacao_id",
+        "separacao_lote_id",
+        "pedido_id_old"
+      ]
+    },
+    {
+      "name": "cotacoes",
+      "description": "Cotações de frete para embarques.",
+      "key_fields": [
+        "usuario_id",
+        "transportadora_id",
+        "status"
       ]
     },
     {

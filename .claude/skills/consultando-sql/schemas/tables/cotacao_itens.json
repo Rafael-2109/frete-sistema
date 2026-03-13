@@ -1,0 +1,144 @@
+{
+  "name": "cotacao_itens",
+  "description": "Itens de cotação de frete.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cotacao_id",
+      "type": "integer",
+      "description": "FK → cotacoes.id",
+      "nullable": false
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)",
+      "description": "principal"
+    },
+    {
+      "name": "pedido_id_old",
+      "type": "integer",
+      "description": "Antigo pedido_id mantido como backup"
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "cliente",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "peso",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_tabela",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "valor_kg",
+      "type": "float"
+    },
+    {
+      "name": "percentual_valor",
+      "type": "float"
+    },
+    {
+      "name": "frete_minimo_valor",
+      "type": "float"
+    },
+    {
+      "name": "frete_minimo_peso",
+      "type": "float"
+    },
+    {
+      "name": "icms",
+      "type": "float"
+    },
+    {
+      "name": "percentual_gris",
+      "type": "float"
+    },
+    {
+      "name": "pedagio_por_100kg",
+      "type": "float"
+    },
+    {
+      "name": "valor_tas",
+      "type": "float"
+    },
+    {
+      "name": "percentual_adv",
+      "type": "float"
+    },
+    {
+      "name": "percentual_rca",
+      "type": "float"
+    },
+    {
+      "name": "valor_despacho",
+      "type": "float"
+    },
+    {
+      "name": "valor_cte",
+      "type": "float"
+    },
+    {
+      "name": "icms_incluso",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "icms_destino",
+      "type": "float"
+    },
+    {
+      "name": "gris_minimo",
+      "type": "float",
+      "description": "Valor mínimo de GRIS",
+      "default": 0
+    },
+    {
+      "name": "adv_minimo",
+      "type": "float",
+      "description": "Valor mínimo de ADV",
+      "default": 0
+    },
+    {
+      "name": "icms_proprio",
+      "type": "float",
+      "description": "ICMS próprio da tabela"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cotacao_id",
+      "references": "cotacoes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_cotacao_itens_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    }
+  ]
+}
