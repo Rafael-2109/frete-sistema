@@ -1351,24 +1351,102 @@ $(document).ready(function() {
         // Mostra progresso
         const btn = $(this);
         const originalHtml = btn.html();
-        btn.html('<i class="fas fa-spinner fa-spin"></i> Inserindo...').prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Enfileirando...').prop('disabled', true);
 
         $('#progressArea').show();
         $('#progressBar').css('width', '0%');
         $('#progressPercent').text('0%');
-        $('#progressText').text('Iniciando insercao...');
+        $('#progressText').text('Enfileirando insercao em background...');
 
-        // Insere filiais uma a uma para mostrar progresso
-        inserirFiliaisSequencialmente(filiaisParaInserir, justificativasPorFilial, 0, [], function(resultados) {
-            btn.html(originalHtml).prop('disabled', false);
-            $('#progressArea').hide();
-            showResultadoOdoo({
-                success: resultados.some(r => r.sucesso),
-                todos_sucesso: resultados.every(r => r.sucesso),
-                resultados: resultados
-            });
+        // Enfileira lote em background (1 job RQ, filiais sequenciais)
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.inserir_lote") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_key: currentSessionKey,
+                justificativas_por_filial: justificativasPorFilial
+            }),
+            success: function(response) {
+                if (response.success) {
+                    btn.html('<i class="fas fa-spinner fa-spin"></i> Processando...').prop('disabled', true);
+                    $('#progressText').text(`${response.total_filiais} filial(is) enfileirada(s). Processando...`);
+                    // Inicia polling de progresso
+                    pollarProgressoInsercao(currentSessionKey, btn, originalHtml);
+                } else {
+                    btn.html(originalHtml).prop('disabled', false);
+                    $('#progressArea').hide();
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(response.error || 'Erro ao enfileirar');
+                    } else {
+                        alert(response.error || 'Erro ao enfileirar');
+                    }
+                }
+            },
+            error: function(xhr) {
+                btn.html(originalHtml).prop('disabled', false);
+                $('#progressArea').hide();
+                const resp = xhr.responseJSON || {};
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(resp.error || 'Erro ao conectar');
+                } else {
+                    alert(resp.error || 'Erro ao conectar');
+                }
+            }
         });
     });
+
+    // Polling de progresso da insercao em lote
+    function pollarProgressoInsercao(sessionKey, btn, originalHtml) {
+        const pollInterval = setInterval(function() {
+            $.ajax({
+                url: `{{ url_for("leitura_pedidos.progresso_insercao_lote", session_key="__SK__") }}`.replace('__SK__', sessionKey),
+                type: 'GET',
+                success: function(prog) {
+                    if (!prog) return;
+
+                    const pct = prog.percentual || 0;
+                    $('#progressBar').css('width', pct + '%');
+                    $('#progressPercent').text(pct + '%');
+                    $('#progressText').text(prog.mensagem || 'Processando...');
+
+                    if (prog.cnpj_atual) {
+                        $('#progressDetail').text(prog.cnpj_atual);
+                    }
+
+                    // Atualiza cards conforme resultados parciais chegam
+                    if (prog.resultados && prog.resultados.length > 0) {
+                        prog.resultados.forEach(function(r) {
+                            const cnpjSafe = (r.cnpj || '').replace(/[^0-9]/g, '');
+                            const btnFilial = $(`.btn-inserir-filial[data-cnpj="${r.cnpj}"]`);
+                            if (r.sucesso) {
+                                btnFilial.html('<i class="fas fa-check"></i>').removeClass('btn-light').addClass('btn-success');
+                                $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-success">${r.order_name}</span>`).show();
+                            } else {
+                                btnFilial.html('<i class="fas fa-times"></i>').removeClass('btn-light').addClass('btn-danger');
+                                $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
+                            }
+                        });
+                    }
+
+                    // Finalizado?
+                    if (prog.status === 'concluido' || prog.status === 'erro') {
+                        clearInterval(pollInterval);
+                        btn.html(originalHtml).prop('disabled', false);
+                        $('#progressArea').hide();
+                        showResultadoOdoo({
+                            success: (prog.resultados || []).some(r => r.sucesso),
+                            todos_sucesso: (prog.resultados || []).every(r => r.sucesso),
+                            resultados: prog.resultados || []
+                        });
+                    }
+                },
+                error: function() {
+                    // Erro no polling — continua tentando
+                }
+            });
+        }, 3000); // Poll a cada 3 segundos
+    }
 
     function inserirFiliaisSequencialmente(filiais, justificativas, index, resultados, callback) {
         if (index >= filiais.length) {

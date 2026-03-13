@@ -603,6 +603,24 @@ def inserir_odoo():
                 payment_provider_id=30  # 🔧 NOVO: Transferência Bancária CD
             )
 
+            # Enfileira cálculo de impostos em RQ (seguro para inserção individual
+            # pois o frontend espera resposta antes de disparar a próxima)
+            if resultado.sucesso and resultado.order_id:
+                try:
+                    from app.portal.workers import enqueue_job
+                    from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+
+                    enqueue_job(
+                        calcular_impostos_odoo,
+                        resultado.order_id,
+                        resultado.order_name,
+                        queue_name='impostos',
+                        timeout='15m'
+                    )
+                except Exception as e:
+                    import logging as _log
+                    _log.getLogger(__name__).warning(f"Erro ao enfileirar impostos: {e}")
+
             resultados.append({
                 'cnpj': cnpj,
                 'nome_cliente': nome_cliente,
@@ -641,6 +659,219 @@ def inserir_odoo():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+
+# ============================================================================
+# Inserção em lote (background) — 1 job RQ processa filiais sequencialmente
+# ============================================================================
+
+@bp.route('/inserir-lote', methods=['POST'])
+@login_required
+def inserir_lote():
+    """
+    Enfileira inserção de TODAS as filiais como 1 job RQ.
+
+    O job processa sequencialmente: criar pedido → calcular impostos → próxima.
+    Garante que nunca há >1 cálculo de impostos rodando no Odoo ao mesmo tempo.
+    Frontend polla progresso via /inserir-lote/progresso/<session_key>.
+
+    Body JSON:
+    - session_key: Chave da importação
+    - justificativa: Justificativa global (opcional)
+    - justificativas_por_filial: Dict {cnpj: justificativa}
+    """
+    try:
+        data = request.get_json()
+        session_key = data.get('session_key')
+        justificativa_global = data.get('justificativa', '')
+        justificativas_por_filial = data.get('justificativas_por_filial', {})
+
+        if not session_key:
+            return jsonify({'success': False, 'error': 'Chave de importação não fornecida'}), 400
+
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada ou expirada'}), 404
+
+        # Extrai dados antes de operação longa (P1)
+        rede = registro_temp.rede
+        tipo_doc = registro_temp.tipo_documento
+        numero_doc = registro_temp.numero_documento
+        s3_path = registro_temp.arquivo_pdf_s3
+        usuario = registro_temp.usuario
+        dados_filiais = registro_temp.dados_filiais or []
+        itens_sem_depara = registro_temp.itens_sem_depara or []
+
+        if itens_sem_depara:
+            return jsonify({
+                'success': False,
+                'error': 'Existem itens sem De-Para. Complete o cadastro antes de inserir.'
+            }), 400
+
+        # Prepara dados das filiais para o job
+        filiais_dados = []
+        falta_justificativa = False
+
+        for filial in dados_filiais:
+            cnpj = filial.get('cnpj')
+            itens = filial.get('itens', [])
+            uf = filial.get('uf', '')
+            nome_cliente = filial.get('nome_cliente', '')
+            tem_divergencia_filial = filial.get('tem_divergencia', False)
+            numero_pedido_cliente = filial.get('numero_pedido_cliente')
+
+            # Verifica se todos os itens têm De-Para
+            if any(not item.get('nosso_codigo') for item in itens):
+                continue  # Pula filiais sem De-Para completo
+
+            justificativa = (
+                justificativas_por_filial.get(cnpj) or
+                filial.get('justificativa') or
+                justificativa_global
+            )
+
+            if tem_divergencia_filial and not justificativa:
+                falta_justificativa = True
+                continue
+
+            # Prepara divergências
+            divergencias = None
+            if tem_divergencia_filial:
+                divergencias = [
+                    {
+                        'codigo': item.get('nosso_codigo'),
+                        'preco_doc': item.get('preco_documento'),
+                        'preco_tabela': item.get('preco_tabela'),
+                        'preco_final': item.get('preco_final'),
+                        'diferenca': item.get('diferenca_percentual')
+                    }
+                    for item in itens if item.get('divergente')
+                ]
+
+            # Prepara itens para Odoo
+            itens_odoo = []
+            for item in itens:
+                if item.get('nosso_codigo'):
+                    itens_odoo.append({
+                        'nosso_codigo': item.get('nosso_codigo'),
+                        'quantidade': item.get('quantidade', 0),
+                        'preco': item.get('preco_final', item.get('preco_documento', 0)),
+                        'uf': uf,
+                        'nome_cliente': nome_cliente
+                    })
+
+            if itens_odoo:
+                filiais_dados.append({
+                    'cnpj': cnpj,
+                    'nome_cliente': nome_cliente,
+                    'uf': uf,
+                    'itens_odoo': itens_odoo,
+                    'tem_divergencia': tem_divergencia_filial,
+                    'divergencias': divergencias,
+                    'justificativa': justificativa if tem_divergencia_filial else None,
+                    'numero_pedido_cliente': numero_pedido_cliente,
+                })
+
+        if falta_justificativa:
+            return jsonify({
+                'success': False,
+                'error': 'Preencha todas as justificativas para filiais com divergência'
+            }), 400
+
+        if not filiais_dados:
+            return jsonify({
+                'success': False,
+                'error': 'Nenhuma filial válida para inserir'
+            }), 400
+
+        # Marca como em lançamento
+        registro_temp.marcar_lancando()
+        db.session.commit()
+
+        # Enfileira job único que processa tudo sequencialmente
+        from app.portal.workers import enqueue_job
+        from app.pedidos.workers.inserir_pedidos_job import inserir_pedidos_lote_job
+
+        job = enqueue_job(
+            inserir_pedidos_lote_job,
+            session_key,
+            filiais_dados,
+            rede,
+            tipo_doc,
+            numero_doc,
+            s3_path,
+            usuario,
+            queue_name='impostos',  # Fila dedicada para não competir com outros jobs
+            timeout='60m'  # 60 min — suficiente para ~100 filiais
+        )
+
+        return jsonify({
+            'success': True,
+            'job_id': job.id,
+            'session_key': session_key,
+            'total_filiais': len(filiais_dados),
+            'message': f'{len(filiais_dados)} filial(is) enfileirada(s) para inserção'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@bp.route('/inserir-lote/progresso/<session_key>')
+@login_required
+def progresso_insercao_lote(session_key):
+    """
+    API: Consultar progresso da inserção em lote via Redis.
+
+    Retorna status, percentual, mensagem e resultados parciais.
+    Frontend polla a cada 3 segundos.
+    """
+    try:
+        import json as _json
+        from redis import Redis
+
+        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+        redis_conn = Redis.from_url(redis_url)
+
+        chave = f'pedido_insercao_progresso:{session_key}'
+        dados = redis_conn.get(chave)
+
+        if dados:
+            return jsonify(_json.loads(dados))
+
+        # Sem dados no Redis — verifica no banco
+        registro = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro:
+            return jsonify({'status': 'nao_encontrado'}), 404
+
+        if registro.status == 'LANCADO':
+            return jsonify({
+                'status': 'concluido',
+                'percentual': 100,
+                'resultados': registro.resultados_lancamento or []
+            })
+        elif registro.status == 'ERRO':
+            return jsonify({
+                'status': 'erro',
+                'resultados': registro.resultados_lancamento or []
+            })
+        elif registro.status == 'LANCANDO':
+            return jsonify({
+                'status': 'processando',
+                'mensagem': 'Processando...',
+                'percentual': 0
+            })
+        else:
+            return jsonify({'status': registro.status})
+
+    except Exception as e:
+        return jsonify({'status': 'erro', 'error': str(e)}), 500
 
 
 # ============================================================================

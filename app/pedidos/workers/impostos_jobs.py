@@ -8,50 +8,49 @@ Fluxo:
 3. Worker processa: chama onchange_l10n_br_calcular_imposto
 4. CFOP e impostos preenchidos automaticamente
 
-Timeout: 300 segundos (5 minutos) por pedido
-- Se der timeout, verifica se impostos foram calculados no Odoo
-- Se l10n_br_total_tributos > 0, considera sucesso
+Resiliência (Fire-and-Poll):
+- Dispara onchange com timeout curto (90s)
+- Se timeout → Odoo continua processando server-side
+- Polla a cada 15s verificando l10n_br_total_tributos > 0
+- Máximo 10 minutos de polling (suficiente para picos de demanda)
 """
 
 import logging
 import socket
 import ssl
+import time
 import xmlrpc.client
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Timeout para conexão XML-RPC com Odoo (5 minutos)
-# Aumentado de 180s para 300s devido a lentidão no cálculo de impostos
-TIMEOUT_CALCULO_IMPOSTOS = 300
+# Fire-and-Poll — parâmetros para cálculo de impostos
+FIRE_TIMEOUT = 90       # Timeout para disparar onchange (90s)
+POLL_INTERVAL = 15      # Intervalo entre polls (15s)
+MAX_POLL_TIME = 600     # Tempo máximo de polling (10 min)
+POLL_TIMEOUT = 30       # Timeout para cada poll individual (30s)
 
 
 def calcular_impostos_odoo(order_id: int, order_name: str = None):
     """
-    Job para calcular impostos de um pedido no Odoo
+    Job para calcular impostos de um pedido no Odoo.
 
-    Usa conexão XML-RPC direta com timeout de 300 segundos (5 minutos).
-    Este job é processado pela fila 'impostos' do Redis Queue.
+    Usa Fire-and-Poll: dispara onchange com timeout curto,
+    polla resultado se demorar mais que FIRE_TIMEOUT.
 
     Args:
         order_id: ID do pedido no Odoo (sale.order)
         order_name: Nome do pedido para logs (ex: VCD2565531)
 
     Returns:
-        dict: Resultado do processamento
-            - success: bool
-            - order_id: int
-            - order_name: str
-            - message: str
-            - error: str (se houver erro)
+        dict com success, order_id, order_name, message
     """
     inicio = datetime.now()
     pedido_ref = order_name or f"ID:{order_id}"
 
-    logger.info(f"🔄 [Job Impostos] Iniciando cálculo para {pedido_ref}")
+    logger.info(f"[Job Impostos] Iniciando calculo para {pedido_ref}")
 
     try:
-        # Importar configurações do Odoo
         from app.odoo.config.odoo_config import ODOO_CONFIG
 
         url = ODOO_CONFIG['url']
@@ -59,16 +58,12 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
         username = ODOO_CONFIG['username']
         api_key = ODOO_CONFIG['api_key']
 
-        # Configurar timeout para 300 segundos (5 minutos)
-        socket.setdefaulttimeout(TIMEOUT_CALCULO_IMPOSTOS)
-
-        # SSL context
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
 
-        # Conexão para autenticação
-        logger.info(f"📡 [Job Impostos] Conectando ao Odoo...")
+        # Autenticação
+        socket.setdefaulttimeout(POLL_TIMEOUT)
         common = xmlrpc.client.ServerProxy(
             f'{url}/xmlrpc/2/common',
             context=ssl_context,
@@ -77,8 +72,8 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
         uid = common.authenticate(database, username, api_key, {})
 
         if not uid:
-            error_msg = f"Falha na autenticação com Odoo para {pedido_ref}"
-            logger.error(f"❌ [Job Impostos] {error_msg}")
+            error_msg = f"Falha na autenticacao com Odoo para {pedido_ref}"
+            logger.error(f"[Job Impostos] {error_msg}")
             return {
                 'success': False,
                 'order_id': order_id,
@@ -87,77 +82,109 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
                 'error': 'AUTH_FAILED'
             }
 
-        # Conexão para models
-        models = xmlrpc.client.ServerProxy(
-            f'{url}/xmlrpc/2/object',
-            context=ssl_context,
-            allow_none=True
-        )
+        # 1. FIRE — dispara onchange com timeout curto
+        logger.info(f"[Job Impostos] Disparando onchange_l10n_br_calcular_imposto para {pedido_ref}...")
+        needs_polling = False
 
-        # Chamar método de cálculo de impostos
-        logger.info(f"📊 [Job Impostos] Executando onchange_l10n_br_calcular_imposto para {pedido_ref}...")
+        try:
+            socket.setdefaulttimeout(FIRE_TIMEOUT)
+            models = xmlrpc.client.ServerProxy(
+                f'{url}/xmlrpc/2/object',
+                context=ssl_context,
+                allow_none=True
+            )
+            models.execute_kw(
+                database, uid, api_key,
+                'sale.order',
+                'onchange_l10n_br_calcular_imposto',
+                [[order_id]]
+            )
+            # Completou dentro do timeout
+            tempo_total = (datetime.now() - inicio).total_seconds()
+            logger.info(f"[Job Impostos] {pedido_ref} calculado em {tempo_total:.1f}s")
+            return _resultado_sucesso(order_id, order_name, tempo_total)
 
-        models.execute_kw(
-            database, uid, api_key,
-            'sale.order',
-            'onchange_l10n_br_calcular_imposto',
-            [[order_id]]
-        )
+        except Exception as e:
+            error_str = str(e)
+            if 'cannot marshal None' in error_str:
+                # Retorno None é esperado — onchange funcionou
+                tempo_total = (datetime.now() - inicio).total_seconds()
+                logger.info(f"[Job Impostos] {pedido_ref} calculado (marshal None) em {tempo_total:.1f}s")
+                return _resultado_sucesso(order_id, order_name, tempo_total)
 
-        # Sucesso
-        tempo_total = (datetime.now() - inicio).total_seconds()
-        logger.info(f"✅ [Job Impostos] {pedido_ref} calculado em {tempo_total:.1f}s")
+            if 'timed out' in error_str.lower() or 'timeout' in error_str.lower():
+                logger.info(
+                    f"[Job Impostos] Timeout ao disparar ({FIRE_TIMEOUT}s) para {pedido_ref} — "
+                    f"esperado, iniciando polling..."
+                )
+                needs_polling = True
+            else:
+                raise
 
-        return {
-            'success': True,
-            'order_id': order_id,
-            'order_name': order_name,
-            'message': f'Impostos calculados com sucesso em {tempo_total:.1f}s',
-            'tempo_segundos': tempo_total
-        }
+        # 2. POLL — verifica periodicamente se impostos foram calculados
+        if needs_polling:
+            elapsed = 0
+            poll_count = 0
 
-    except Exception as e:
-        error_str = str(e)
-        tempo_total = (datetime.now() - inicio).total_seconds()
+            while elapsed < MAX_POLL_TIME:
+                time.sleep(POLL_INTERVAL)
+                elapsed += POLL_INTERVAL
+                poll_count += 1
 
-        # O erro "cannot marshal None" é esperado - o método funciona mesmo assim
-        if "cannot marshal None" in error_str:
-            logger.info(f"✅ [Job Impostos] {pedido_ref} calculado (marshal None) em {tempo_total:.1f}s")
+                impostos_ok = _verificar_impostos_calculados(
+                    order_id, url, database, username, api_key, ssl_context
+                )
+
+                if impostos_ok:
+                    tempo_total = (datetime.now() - inicio).total_seconds()
+                    logger.info(
+                        f"[Job Impostos] {pedido_ref} — Poll #{poll_count} ({elapsed}s): "
+                        f"impostos calculados! Total: {tempo_total:.1f}s"
+                    )
+                    return _resultado_sucesso(order_id, order_name, tempo_total,
+                                              f" (verificado apos {elapsed}s de polling)")
+
+                logger.debug(
+                    f"[Job Impostos] {pedido_ref} — Poll #{poll_count} ({elapsed}s): aguardando..."
+                )
+
+            # Polling expirou
+            tempo_total = (datetime.now() - inicio).total_seconds()
+            logger.error(
+                f"[Job Impostos] {pedido_ref} — Polling expirou apos {MAX_POLL_TIME}s "
+                f"({poll_count} tentativas)"
+            )
             return {
-                'success': True,
+                'success': False,
                 'order_id': order_id,
                 'order_name': order_name,
-                'message': f'Impostos calculados com sucesso em {tempo_total:.1f}s',
+                'message': f'Timeout: impostos nao calculados apos {MAX_POLL_TIME}s de polling',
+                'error': 'POLL_TIMEOUT',
                 'tempo_segundos': tempo_total
             }
 
-        # Timeout ou erro - verificar se impostos foram calculados mesmo assim
-        is_timeout = 'timed out' in error_str.lower() or 'timeout' in error_str.lower()
-        if is_timeout:
-            logger.warning(f"⏱️ [Job Impostos] Timeout ao calcular {pedido_ref}, verificando se impostos foram calculados...")
-
-            # Verificar se impostos foram calculados no Odoo
-            impostos_ok = _verificar_impostos_calculados(order_id, url, database, username, api_key, ssl_context)
-            if impostos_ok:
-                logger.info(f"✅ [Job Impostos] {pedido_ref} - Impostos calculados (verificado após timeout) em {tempo_total:.1f}s")
-                return {
-                    'success': True,
-                    'order_id': order_id,
-                    'order_name': order_name,
-                    'message': f'Impostos calculados com sucesso em {tempo_total:.1f}s (verificado após timeout)',
-                    'tempo_segundos': tempo_total
-                }
-
-        # Erro real
-        logger.error(f"❌ [Job Impostos] Erro ao calcular {pedido_ref}: {e}")
+    except Exception as e:
+        tempo_total = (datetime.now() - inicio).total_seconds()
+        logger.error(f"[Job Impostos] Erro ao calcular {pedido_ref}: {e}")
         return {
             'success': False,
             'order_id': order_id,
             'order_name': order_name,
             'message': f'Erro ao calcular impostos',
-            'error': error_str,
+            'error': str(e),
             'tempo_segundos': tempo_total
         }
+
+
+def _resultado_sucesso(order_id, order_name, tempo_total, sufixo=''):
+    """Helper para montar resultado de sucesso."""
+    return {
+        'success': True,
+        'order_id': order_id,
+        'order_name': order_name,
+        'message': f'Impostos calculados com sucesso em {tempo_total:.1f}s{sufixo}',
+        'tempo_segundos': tempo_total
+    }
 
 
 def _verificar_impostos_calculados(order_id: int, url: str, database: str,
@@ -165,16 +192,11 @@ def _verificar_impostos_calculados(order_id: int, url: str, database: str,
     """
     Verifica se os impostos foram calculados no Odoo.
 
-    Usado após timeout para confirmar se o cálculo foi concluído.
-    Se l10n_br_total_tributos > 0 e l10n_br_cfop_id está preenchido,
-    considera que os impostos foram calculados com sucesso.
-
-    Returns:
-        bool: True se impostos foram calculados, False caso contrário
+    Usa timeout curto (30s) para não bloquear o polling.
+    Considera calculado se l10n_br_total_tributos > 0 E l10n_br_cfop_id preenchido.
     """
     try:
-        # Nova conexão com timeout curto (30s) apenas para verificação
-        socket.setdefaulttimeout(30)
+        socket.setdefaulttimeout(POLL_TIMEOUT)
 
         common = xmlrpc.client.ServerProxy(
             f'{url}/xmlrpc/2/common',
@@ -192,7 +214,6 @@ def _verificar_impostos_calculados(order_id: int, url: str, database: str,
             allow_none=True
         )
 
-        # Buscar campos de impostos do pedido
         order_data = models.execute_kw(
             database, uid, api_key,
             'sale.order', 'read',
@@ -210,9 +231,8 @@ def _verificar_impostos_calculados(order_id: int, url: str, database: str,
         total_tributos = order.get('l10n_br_total_tributos', 0) or 0
         cfop = order.get('l10n_br_cfop_id')
 
-        # Considera calculado se tem tributos > 0 E CFOP preenchido
         return bool(total_tributos > 0 and cfop)
 
     except Exception as e:
-        logger.warning(f"⚠️ [Job Impostos] Erro ao verificar impostos: {e}")
+        logger.warning(f"[Job Impostos] Erro ao verificar impostos (poll): {e}")
         return False
