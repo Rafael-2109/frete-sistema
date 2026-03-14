@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-edit"></i> Editar Custo {{ custo.numero_custo }}</h2>
+        <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Info da operacao (read-only) -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-link"></i> Operacao Vinculada</h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Operacao</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=custo.operacao_id) }}" class="text-decoration-none">
+                            #{{ custo.operacao_id }}
+                        </a>
+                    </strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe</small>
+                    <strong>{{ custo.operacao.cte_numero or '-' }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Cliente</small>
+                    <strong>{{ custo.operacao.nome_cliente or custo.operacao.cnpj_cliente }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor CTe</small>
+                    <strong>{{ custo.operacao.cte_valor|valor_br if custo.operacao.cte_valor else '-' }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('carvia.editar_custo_entrega', custo_id=custo.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="cte_complementar_id" class="form-label">CTe Complementar</label>
+                                <select class="form-select" id="cte_complementar_id" name="cte_complementar_id">
+                                    <option value="">Nenhum (opcional)</option>
+                                    {% for comp in ctes_complementares %}
+                                    <option value="{{ comp.id }}"
+                                            {{ 'selected' if custo.cte_complementar_id == comp.id }}>
+                                        {{ comp.numero_comp }} ({{ comp.cte_valor|valor_br }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tipo_custo" class="form-label">Tipo de Custo *</label>
+                                <select class="form-select" id="tipo_custo" name="tipo_custo" required>
+                                    <option value="">Selecione...</option>
+                                    {% for tipo in tipos_custo %}
+                                    <option value="{{ tipo }}" {{ 'selected' if custo.tipo_custo == tipo }}>{{ tipo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="valor" class="form-label">Valor (R$) *</label>
+                                <input type="text" class="form-control" id="valor" name="valor"
+                                       inputmode="decimal" required
+                                       value="{{ custo.valor }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="descricao" class="form-label">Descricao</label>
+                                <input type="text" class="form-control" id="descricao" name="descricao"
+                                       maxlength="500" value="{{ custo.descricao or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_custo" class="form-label">Data do Custo *</label>
+                                <input type="date" class="form-control" id="data_custo" name="data_custo"
+                                       required value="{{ custo.data_custo.strftime('%Y-%m-%d') if custo.data_custo else '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_vencimento" class="form-label">Data de Vencimento</label>
+                                <input type="date" class="form-control" id="data_vencimento" name="data_vencimento"
+                                       value="{{ custo.data_vencimento.strftime('%Y-%m-%d') if custo.data_vencimento else '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="fornecedor_nome" class="form-label">Fornecedor (Nome)</label>
+                                <input type="text" class="form-control" id="fornecedor_nome" name="fornecedor_nome"
+                                       maxlength="255" value="{{ custo.fornecedor_nome or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="fornecedor_cnpj" class="form-label">Fornecedor (CNPJ)</label>
+                                <input type="text" class="form-control" id="fornecedor_cnpj" name="fornecedor_cnpj"
+                                       maxlength="20" value="{{ custo.fornecedor_cnpj or '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="observacoes" class="form-label">Observacoes</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes"
+                                          rows="3">{{ custo.observacoes or '' }}</textarea>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <span class="badge carvia-badge-{{ custo.status|lower }} align-self-center">
+                                {{ custo.status }}
+                            </span>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}" class="btn btn-secondary">Cancelar</a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Salvar Alteracoes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -52,6 +52,7 @@ class FluxoCaixaService:
             CarviaFaturaCliente,
             CarviaFaturaTransportadora,
             CarviaDespesa,
+            CarviaCustoEntrega,
         )
 
         # Coletar lancamentos de cada fonte
@@ -64,6 +65,9 @@ class FluxoCaixaService:
         lancamentos_pagar_desp = self._buscar_despesas(
             CarviaDespesa, data_inicio, data_fim, filtro_status
         )
+        lancamentos_pagar_custos = self._buscar_custos_entrega(
+            CarviaCustoEntrega, data_inicio, data_fim, filtro_status
+        )
 
         # Agrupar por data de vencimento
         dias_receber = defaultdict(list)
@@ -72,7 +76,7 @@ class FluxoCaixaService:
         for lanc in lancamentos_receber:
             dias_receber[lanc['vencimento']].append(lanc)
 
-        for lanc in lancamentos_pagar_transp + lancamentos_pagar_desp:
+        for lanc in lancamentos_pagar_transp + lancamentos_pagar_desp + lancamentos_pagar_custos:
             dias_pagar[lanc['vencimento']].append(lanc)
 
         # Coletar todas as datas com lancamentos
@@ -223,6 +227,39 @@ class FluxoCaixaService:
 
         return resultado
 
+    def _buscar_custos_entrega(self, model, data_inicio, data_fim, filtro_status):
+        """Busca custos de entrega (a pagar) no periodo."""
+        query = db.session.query(model).filter(
+            model.data_vencimento >= data_inicio,
+            model.data_vencimento <= data_fim,
+            model.status != 'CANCELADO',
+        )
+
+        if filtro_status == 'pago':
+            query = query.filter(model.status == 'PAGO')
+        elif filtro_status == 'pendente':
+            query = query.filter(model.status == 'PENDENTE')
+
+        custos = query.order_by(model.data_vencimento, model.id).all()
+
+        resultado = []
+        for c in custos:
+            resultado.append({
+                'tipo_doc': 'custo_entrega',
+                'tipo_label': c.tipo_custo or 'Custo Entrega',
+                'id': c.id,
+                'vencimento': c.data_vencimento,
+                'emissao': c.data_custo,
+                'fornecedor': c.fornecedor_nome or c.descricao or '-',
+                'documento': c.numero_custo,
+                'valor': float(c.valor or 0),
+                'pago': c.status == 'PAGO',
+                'status': c.status,
+                'url_detalhe': f'/carvia/custos-entrega/{c.id}',
+            })
+
+        return resultado
+
     def obter_lista_corrida(self, data_inicio, data_fim, filtro_status='total', filtro_direcao='todos'):
         """
         Retorna lista plana de lancamentos ordenados por vencimento.
@@ -240,6 +277,7 @@ class FluxoCaixaService:
             CarviaFaturaCliente,
             CarviaFaturaTransportadora,
             CarviaDespesa,
+            CarviaCustoEntrega,
         )
 
         lancamentos = []
@@ -264,7 +302,10 @@ class FluxoCaixaService:
             pagar_desp = self._buscar_despesas(
                 CarviaDespesa, data_inicio, data_fim, filtro_status
             )
-            for l in pagar_transp + pagar_desp:
+            pagar_custos = self._buscar_custos_entrega(
+                CarviaCustoEntrega, data_inicio, data_fim, filtro_status
+            )
+            for l in pagar_transp + pagar_desp + pagar_custos:
                 l['direcao'] = 'A Pagar'
                 lancamentos.append(l)
                 total_pagar += l['valor']

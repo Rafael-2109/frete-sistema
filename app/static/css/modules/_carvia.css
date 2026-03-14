@@ -79,6 +79,11 @@
     --_badge-color: hsl(0 0% 100%);
 }
 
+.carvia-badge-emitido {
+    --_badge-bg: var(--semantic-info);
+    --_badge-color: hsl(0 0% 100%);
+}
+
 .carvia-badge-paga {
     --_badge-bg: var(--semantic-success);
     --_badge-color: hsl(0 0% 100%);
@@ -137,6 +142,11 @@
 
 [data-bs-theme="light"] .carvia-badge-enviado,
 [data-theme="light"] .carvia-badge-enviado {
+    --_badge-bg: hsl(210 80% 45%);
+}
+
+[data-bs-theme="light"] .carvia-badge-emitido,
+[data-theme="light"] .carvia-badge-emitido {
     --_badge-bg: hsl(210 80% 45%);
 }
 
@@ -467,6 +477,14 @@
     font-size: 0.78rem;
     padding: 0.15rem 0.6rem;
     border-radius: var(--radius-pill, 50rem);
+}
+
+.carvia-quick-nav-sep {
+    width: 1px;
+    background: var(--border, #dee2e6);
+    margin: 0.15rem 0.15rem;
+    align-self: stretch;
+    opacity: 0.5;
 }
 
 /* ═══════════════════════════════════════════════════════════════

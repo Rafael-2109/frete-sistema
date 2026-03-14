@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-plus-circle"></i> Novo Custo de Entrega</h2>
+        <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('carvia.criar_custo_entrega') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="operacao_id" class="form-label">Operacao *</label>
+                                <select class="form-select" id="operacao_id" name="operacao_id" required>
+                                    <option value="">Selecione...</option>
+                                    {% for op in operacoes %}
+                                    <option value="{{ op.id }}"
+                                            {{ 'selected' if request.args.get('operacao_id', type=int) == op.id }}>
+                                        #{{ op.id }} - {{ op.nome_cliente or op.cnpj_cliente }} ({{ op.cte_numero or 'Sem CTe' }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_complementar_id" class="form-label">CTe Complementar</label>
+                                <select class="form-select" id="cte_complementar_id" name="cte_complementar_id">
+                                    <option value="">Nenhum (opcional)</option>
+                                    {% for comp in ctes_complementares %}
+                                    <option value="{{ comp.id }}"
+                                            {{ 'selected' if request.args.get('cte_comp_id', type=int) == comp.id }}>
+                                        {{ comp.numero_comp }} - Op #{{ comp.operacao_id }} ({{ comp.cte_valor|valor_br }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tipo_custo" class="form-label">Tipo de Custo *</label>
+                                <select class="form-select" id="tipo_custo" name="tipo_custo" required>
+                                    <option value="">Selecione...</option>
+                                    {% for tipo in tipos_custo %}
+                                    <option value="{{ tipo }}">{{ tipo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="valor" class="form-label">Valor (R$) *</label>
+                                <input type="text" class="form-control" id="valor" name="valor"
+                                       inputmode="decimal" required placeholder="0,00">
+                            </div>
+                            <div class="col-12">
+                                <label for="descricao" class="form-label">Descricao</label>
+                                <input type="text" class="form-control" id="descricao" name="descricao"
+                                       maxlength="500" placeholder="Descricao do custo">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_custo" class="form-label">Data do Custo *</label>
+                                <input type="date" class="form-control" id="data_custo" name="data_custo" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="data_vencimento" class="form-label">Data de Vencimento</label>
+                                <input type="date" class="form-control" id="data_vencimento" name="data_vencimento">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="fornecedor_nome" class="form-label">Fornecedor (Nome)</label>
+                                <input type="text" class="form-control" id="fornecedor_nome" name="fornecedor_nome"
+                                       maxlength="255" placeholder="Nome do fornecedor">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="fornecedor_cnpj" class="form-label">Fornecedor (CNPJ)</label>
+                                <input type="text" class="form-control" id="fornecedor_cnpj" name="fornecedor_cnpj"
+                                       maxlength="20" placeholder="CNPJ do fornecedor">
+                            </div>
+                            <div class="col-12">
+                                <label for="observacoes" class="form-label">Observacoes</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes"
+                                          rows="3" placeholder="Observacoes adicionais..."></textarea>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Criar Custo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -15,6 +15,7 @@ from app.carvia.models import (
     CarviaFaturaCliente, CarviaFaturaTransportadora,
     CarviaFaturaTransportadoraItem,
     CarviaOperacao, CarviaSubcontrato,
+    CarviaCteComplementar,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,13 +114,14 @@ def register_fatura_routes(bp):
             vencimento_str = request.form.get('vencimento', '')
             observacoes = request.form.get('observacoes', '')
             operacao_ids = request.form.getlist('operacao_ids', type=int)
+            cte_comp_ids = request.form.getlist('cte_comp_ids', type=int)
 
             if not cnpj_cliente or not data_emissao_str:
                 flash('CNPJ e data de emissao sao obrigatorios.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_cliente'))
 
-            if not operacao_ids:
-                flash('Selecione ao menos uma operacao.', 'warning')
+            if not operacao_ids and not cte_comp_ids:
+                flash('Selecione ao menos uma operacao ou CTe complementar.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_cliente'))
 
             try:
@@ -128,20 +130,34 @@ def register_fatura_routes(bp):
 
                 # Buscar operacoes selecionadas
                 # GAP-29: FOR UPDATE para evitar faturamento duplo concorrente
-                operacoes = db.session.query(CarviaOperacao).filter(
-                    CarviaOperacao.id.in_(operacao_ids),
-                    CarviaOperacao.cnpj_cliente == cnpj_cliente,
-                    CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
-                    CarviaOperacao.fatura_cliente_id.is_(None),
-                ).with_for_update().all()
+                operacoes = []
+                if operacao_ids:
+                    operacoes = db.session.query(CarviaOperacao).filter(
+                        CarviaOperacao.id.in_(operacao_ids),
+                        CarviaOperacao.cnpj_cliente == cnpj_cliente,
+                        CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                        CarviaOperacao.fatura_cliente_id.is_(None),
+                    ).with_for_update().all()
 
-                if not operacoes:
-                    flash('Nenhuma operacao valida selecionada.', 'warning')
+                # Buscar CTe Complementares selecionados
+                ctes_comp = []
+                if cte_comp_ids:
+                    ctes_comp = db.session.query(CarviaCteComplementar).filter(
+                        CarviaCteComplementar.id.in_(cte_comp_ids),
+                        CarviaCteComplementar.cnpj_cliente == cnpj_cliente,
+                        CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
+                        CarviaCteComplementar.fatura_cliente_id.is_(None),
+                    ).with_for_update().all()
+
+                if not operacoes and not ctes_comp:
+                    flash('Nenhuma operacao ou CTe complementar valido selecionado.', 'warning')
                     return redirect(url_for('carvia.nova_fatura_cliente'))
 
-                # Calcular valor total
+                # Calcular valor total (operacoes + CTe complementares)
                 valor_total = sum(
                     float(op.cte_valor or 0) for op in operacoes
+                ) + sum(
+                    float(comp.cte_valor or 0) for comp in ctes_comp
                 )
 
                 # GAP-24: Validar valor_total > 0
@@ -171,18 +187,29 @@ def register_fatura_routes(bp):
                     op.fatura_cliente_id = fatura.id
                     op.status = 'FATURADO'
 
+                # Vincular CTe Complementares
+                for comp in ctes_comp:
+                    comp.fatura_cliente_id = fatura.id
+                    comp.status = 'FATURADO'
+
                 # Gerar itens de detalhe a partir das operacoes
-                from app.carvia.services.linking_service import LinkingService
-                linker = LinkingService()
-                linker.criar_itens_fatura_cliente_from_operacoes(fatura.id)
-                # Expandir: criar itens para NFs do CTe não presentes
-                linker.expandir_itens_com_nfs_do_cte(fatura.id)
+                if operacoes:
+                    from app.carvia.services.linking_service import LinkingService
+                    linker = LinkingService()
+                    linker.criar_itens_fatura_cliente_from_operacoes(fatura.id)
+                    # Expandir: criar itens para NFs do CTe não presentes
+                    linker.expandir_itens_com_nfs_do_cte(fatura.id)
 
                 db.session.commit()
 
+                partes_msg = []
+                if operacoes:
+                    partes_msg.append(f'{len(operacoes)} operacoes')
+                if ctes_comp:
+                    partes_msg.append(f'{len(ctes_comp)} CTe complementares')
                 flash(
                     f'Fatura {numero_fatura} criada. '
-                    f'{len(operacoes)} operacoes vinculadas. '
+                    f'{" + ".join(partes_msg)} vinculados. '
                     f'Valor total: R$ {valor_total:.2f}',
                     'success'
                 )
@@ -194,7 +221,7 @@ def register_fatura_routes(bp):
                 flash(f'Erro: {e}', 'danger')
 
         # GET — listar clientes com operacoes confirmadas disponiveis
-        clientes = db.session.query(
+        clientes_ops = db.session.query(
             CarviaOperacao.cnpj_cliente,
             CarviaOperacao.nome_cliente,
             db.func.count(CarviaOperacao.id).label('qtd_operacoes'),
@@ -207,9 +234,51 @@ def register_fatura_routes(bp):
             CarviaOperacao.nome_cliente,
         ).all()
 
-        # Se cnpj selecionado, buscar operacoes
+        # CTe Complementares disponiveis agrupados por cliente
+        clientes_comp = db.session.query(
+            CarviaCteComplementar.cnpj_cliente,
+            CarviaCteComplementar.nome_cliente,
+            db.func.count(CarviaCteComplementar.id).label('qtd_ctes_comp'),
+            db.func.sum(CarviaCteComplementar.cte_valor).label('valor_total_comp'),
+        ).filter(
+            CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
+            CarviaCteComplementar.fatura_cliente_id.is_(None),
+        ).group_by(
+            CarviaCteComplementar.cnpj_cliente,
+            CarviaCteComplementar.nome_cliente,
+        ).all()
+
+        # Merge: combinar operacoes + CTe complementares por CNPJ
+        clientes_dict = {}
+        for c in clientes_ops:
+            clientes_dict[c.cnpj_cliente] = {
+                'cnpj_cliente': c.cnpj_cliente,
+                'nome_cliente': c.nome_cliente,
+                'qtd_operacoes': c.qtd_operacoes,
+                'qtd_ctes_comp': 0,
+                'valor_total': float(c.valor_total or 0),
+            }
+        for c in clientes_comp:
+            if c.cnpj_cliente in clientes_dict:
+                clientes_dict[c.cnpj_cliente]['qtd_ctes_comp'] = c.qtd_ctes_comp
+                clientes_dict[c.cnpj_cliente]['valor_total'] += float(c.valor_total_comp or 0)
+            else:
+                clientes_dict[c.cnpj_cliente] = {
+                    'cnpj_cliente': c.cnpj_cliente,
+                    'nome_cliente': c.nome_cliente,
+                    'qtd_operacoes': 0,
+                    'qtd_ctes_comp': c.qtd_ctes_comp,
+                    'valor_total': float(c.valor_total_comp or 0),
+                }
+
+        # Converter para lista de objetos simples (SimpleNamespace para compatibilidade com template)
+        from types import SimpleNamespace
+        clientes = [SimpleNamespace(**v) for v in clientes_dict.values()]
+
+        # Se cnpj selecionado, buscar operacoes e CTe complementares
         cnpj_selecionado = request.args.get('cnpj', '')
         operacoes_disponiveis = []
+        ctes_comp_disponiveis = []
         if cnpj_selecionado:
             operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
                 CarviaOperacao.cnpj_cliente == cnpj_selecionado,
@@ -217,11 +286,18 @@ def register_fatura_routes(bp):
                 CarviaOperacao.fatura_cliente_id.is_(None),
             ).order_by(CarviaOperacao.criado_em.desc()).all()
 
+            ctes_comp_disponiveis = db.session.query(CarviaCteComplementar).filter(
+                CarviaCteComplementar.cnpj_cliente == cnpj_selecionado,
+                CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
+                CarviaCteComplementar.fatura_cliente_id.is_(None),
+            ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+
         return render_template(
             'carvia/faturas_cliente/nova.html',
             clientes=clientes,
             cnpj_selecionado=cnpj_selecionado,
             operacoes_disponiveis=operacoes_disponiveis,
+            ctes_comp_disponiveis=ctes_comp_disponiveis,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>')
@@ -276,6 +352,11 @@ def register_fatura_routes(bp):
                 CarviaFaturaTransportadora.id.in_(fat_transp_ids)
             ).all()
 
+        # CTe Complementares vinculados a esta fatura
+        ctes_complementares = CarviaCteComplementar.query.filter_by(
+            fatura_cliente_id=fatura_id
+        ).all()
+
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
             fatura=fatura,
@@ -284,6 +365,7 @@ def register_fatura_routes(bp):
             nfs=nfs,
             subcontratos=subcontratos,
             faturas_transportadora=faturas_transportadora,
+            ctes_complementares=ctes_complementares,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST'])

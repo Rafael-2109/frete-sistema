@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-plus-circle"></i> Novo CTe Complementar</h2>
+        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'ctes_complementares' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Info da operacao (read-only) -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-link"></i> Operacao Vinculada</h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Operacao</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="text-decoration-none">
+                            #{{ operacao.id }}
+                        </a>
+                    </strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe</small>
+                    <strong>{{ operacao.cte_numero or '-' }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Cliente</small>
+                    <strong>{{ operacao.nome_cliente or operacao.cnpj_cliente }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor CTe</small>
+                    <strong>{{ operacao.cte_valor|valor_br if operacao.cte_valor else '-' }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('carvia.criar_cte_complementar', operacao_id=operacao.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="cte_numero" class="form-label">Numero CTe</label>
+                                <input type="text" class="form-control" id="cte_numero" name="cte_numero"
+                                       maxlength="20" placeholder="Numero do CTe complementar">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_valor" class="form-label">Valor (R$) *</label>
+                                <input type="text" class="form-control" id="cte_valor" name="cte_valor"
+                                       inputmode="decimal" required placeholder="0,00">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_data_emissao" class="form-label">Data Emissao</label>
+                                <input type="date" class="form-control" id="cte_data_emissao" name="cte_data_emissao">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_chave_acesso" class="form-label">Chave de Acesso</label>
+                                <input type="text" class="form-control" id="cte_chave_acesso" name="cte_chave_acesso"
+                                       maxlength="44" placeholder="44 digitos">
+                            </div>
+                            <div class="col-12">
+                                <label for="observacoes" class="form-label">Observacoes</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes"
+                                          rows="3" placeholder="Observacoes adicionais..."></textarea>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Criar CTe Complementar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**26 arquivos** | **~13.8K LOC** | **32 templates** | **Atualizado**: 08/03/2026
+**34 arquivos** | **~19.8K LOC** | **51 templates** | **Atualizado**: 14/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -10,38 +10,48 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 
 ---
 
-## Estrutura de Telas (5 documentos + 1 importacao + 1 fluxo caixa + 1 cotacao)
+## Estrutura de Telas (7 documentos + 1 importacao + 1 fluxo caixa + 1 cotacao + 1 config)
 
 | # | Documento | Entidade | URL | Tela |
 |---|-----------|----------|-----|------|
 | 1 | **NF Venda** | `CarviaNf` | `/carvia/nfs` | Lista + Detalhe (com itens de produto) |
 | 2 | **CTe CarVia** | `CarviaOperacao` | `/carvia/operacoes` | Lista (com colunas Transp. Subcontratada + CTe Subcontrato) + Detalhe + Criar/Editar |
 | 3 | **CTe Subcontrato** | `CarviaSubcontrato` | `/carvia/subcontratos` | Lista + Detalhe |
-| 4 | **Fatura CarVia** | `CarviaFaturaCliente` | `/carvia/faturas-cliente` | Lista + Nova + Detalhe |
-| 5 | **Fatura Subcontrato** | `CarviaFaturaTransportadora` | `/carvia/faturas-transportadora` | Lista + Nova + Detalhe |
-| 6 | **Importacao** | `ImportacaoService` | `/carvia/importar` | Upload + Review + Confirmar |
-| 7 | **Fluxo de Caixa** | `FluxoCaixaService` | `/carvia/fluxo-de-caixa` | Accordions por dia + Pagar/Desfazer + Card Saldo |
-| 8 | **Extrato da Conta** | `FluxoCaixaService` | `/carvia/extrato-conta` | Movimentacoes com saldo acumulado + Saldo inicial |
-| 9 | **Sessao Cotacao** | `CarviaSessaoCotacao` | `/carvia/sessoes-cotacao` | Lista + Nova + Detalhe (cotar AJAX + selecionar opcao + enviar + resposta) |
+| 4 | **CTe Complementar** | `CarviaCteComplementar` | `/carvia/ctes-complementares` | Lista + Criar (via operacao) + Detalhe + Editar |
+| 5 | **Custo Entrega** | `CarviaCustoEntrega` | `/carvia/custos-entrega` | Lista + Criar + Detalhe (com anexos AJAX) + Editar |
+| 6 | **Fatura CarVia** | `CarviaFaturaCliente` | `/carvia/faturas-cliente` | Lista + Nova (operacoes + CTe Comp.) + Detalhe |
+| 7 | **Fatura Subcontrato** | `CarviaFaturaTransportadora` | `/carvia/faturas-transportadora` | Lista + Nova + Detalhe |
+| 8 | **Despesas** | `CarviaDespesa` | `/carvia/despesas` | Lista + Criar + Detalhe + Editar |
+| 9 | **Importacao** | `ImportacaoService` | `/carvia/importar` | Upload + Review + Confirmar |
+| 10 | **Fluxo de Caixa** | `FluxoCaixaService` | `/carvia/fluxo-de-caixa` | Accordions por dia + Pagar/Desfazer + Card Saldo |
+| 11 | **Extrato da Conta** | `FluxoCaixaService` | `/carvia/extrato-conta` | Movimentacoes com saldo acumulado + Saldo inicial |
+| 12 | **Sessao Cotacao** | `CarviaSessaoCotacao` | `/carvia/sessoes-cotacao` | Lista + Nova + Detalhe (cotar AJAX + selecionar opcao + enviar + resposta) |
+| 13 | **Conciliacao** | `CarviaConciliacaoService` | `/carvia/conciliacao` | Painel duplo extrato/documentos + Match |
+| 14 | **Extrato Bancario** | `CarviaExtratoLinha` | `/carvia/extrato-bancario` | Importar OFX + CSV + Lista linhas |
+| 15 | **Configuracoes** | `CarviaModeloMoto` / `CarviaEmpresaCubagem` | `/carvia/configuracoes/modelos-moto` | CRUD inline modelos moto + empresas cubagem |
 
 ### Cross-links entre documentos (navegacao completa)
 
-A partir de QUALQUER documento, e possivel navegar para os outros 4.
-
 ```
-NF Venda ──── N:M ──── CTe CarVia ──── FK ──── Fatura CarVia
-│  (junction)              │                        │
-│                          │ 1:N                    │ itens (FK→operacao, FK→nf)
-│ (via fat_cli_item.nf_id) │                        │
-│                     CTe Subcontrato ── FK ── Fatura Subcontrato
-│ (via fat_transp         │                        │
-│  _item.nf_id)           │ (via operacao)         │ itens (FK→sub, FK→op, FK→nf)
-│                         │                        │
-└─────────────────────────┴────────────────────────┘
-      Todos os 5 documentos interligados por FK
+CarviaFaturaCliente (Fatura CarVia)
+    |
+    |-- 1:N --> CarviaOperacao (CTe CarVia)                [via operacao.fatura_cliente_id]
+    |-- 1:N --> CarviaCteComplementar (CTe Complementar)   [via cte_comp.fatura_cliente_id]
+
+CarviaOperacao (CTe CarVia)
+    |-- N:M --> CarviaNf (NF Venda)                        [via junction carvia_operacao_nfs]
+    |-- 1:N --> CarviaSubcontrato                          [via sub.operacao_id]
+    |-- 1:N --> CarviaCteComplementar                      [via cte_comp.operacao_id]
+    |-- 1:N --> CarviaCustoEntrega                         [via custo.operacao_id]
+
+CarviaCteComplementar (CTe Complementar)
+    |-- 1:N --> CarviaCustoEntrega                         [via custo.cte_complementar_id]
+
+CarviaCustoEntrega (Custo de Entrega)
+    |-- 1:N --> CarviaCustoEntregaAnexo                    [via anexo.custo_entrega_id, CASCADE]
 ```
 
-**Itens de detalhe** sao o elo principal:
+**Itens de detalhe** sao o elo principal para faturas:
 - `CarviaFaturaClienteItem` → FK `operacao_id`, `nf_id`
 - `CarviaFaturaTransportadoraItem` → FK `subcontrato_id`, `operacao_id`, `nf_id`
 
@@ -51,19 +61,29 @@ NF Venda ──── N:M ──── CTe CarVia ──── FK ──── F
 
 ```
 app/carvia/
-  ├── routes/          # 8 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api, fluxo_caixa)
-  ├── services/        # 10 services (parsers incl. dacte_pdf_parser, matching, importacao, cotacao, fatura_pdf_parser, linking, fluxo_caixa)
-  ├── models.py        # 13 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem, Despesa, ContaMovimentacao, SessaoCotacao, SessaoDemanda)
+  ├── routes/          # 14 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
+  │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar, custo_entrega)
+  ├── services/        # 11 services (parsers, matching, importacao, cotacao, fatura_pdf_parser, linking,
+  │                    #   fluxo_caixa, carvia_conciliacao, dacte_pdf_parser)
+  ├── models.py        # 20 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
+  │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao, SessaoCotacao,
+  │                    #   SessaoDemanda, CteComplementar, CustoEntrega, CustoEntregaAnexo,
+  │                    #   ModeloMoto, EmpresaCubagem)
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/
   ├── dashboard.html
   ├── importar.html, importar_resultado.html
-  ├── nfs/             # listar.html, detalhe.html
+  ├── nfs/                     # listar.html, detalhe.html
   ├── listar_operacoes.html, detalhe_operacao.html, criar_manual.html, etc.
-  ├── subcontratos/    # listar.html, detalhe.html
-  ├── faturas_cliente/  # listar.html, nova.html, detalhe.html
-  └── faturas_transportadora/  # listar.html, nova.html, detalhe.html
+  ├── subcontratos/            # listar.html, detalhe.html
+  ├── ctes_complementares/     # listar.html, criar.html, detalhe.html, editar.html
+  ├── custos_entrega/          # listar.html, criar.html, detalhe.html (com anexos AJAX), editar.html
+  ├── faturas_cliente/         # listar.html, nova.html, detalhe.html
+  ├── faturas_transportadora/  # listar.html, nova.html, detalhe.html
+  ├── despesas/                # listar.html, criar.html, detalhe.html, editar.html
+  ├── sessoes_cotacao/         # listar.html, nova.html, detalhe.html
+  └── configuracoes/           # modelos_moto.html, empresas_cubagem.html
 ```
 
 ---
@@ -90,13 +110,17 @@ Cotacao usa `peso_utilizado` — valor stale = cotacao errada.
 
 ### R4: Fluxo de Status e Irreversivel (exceto cancelamento)
 ```
-CTe CarVia: RASCUNHO → COTADO → CONFIRMADO → FATURADO    [CANCELADO de qualquer estado exceto FATURADO]
-CTe Subcontrato: PENDENTE → COTADO → CONFIRMADO → FATURADO → CONFERIDO  [CANCELADO exceto FATURADO]
+CTe CarVia:         RASCUNHO → COTADO → CONFIRMADO → FATURADO    [CANCELADO exceto FATURADO]
+CTe Subcontrato:    PENDENTE → COTADO → CONFIRMADO → FATURADO → CONFERIDO  [CANCELADO exceto FATURADO]
+CTe Complementar:   RASCUNHO → EMITIDO → FATURADO                [CANCELADO exceto FATURADO]
+Custo Entrega:      PENDENTE → PAGO                              [CANCELADO exceto PAGO via fluxo caixa]
 ```
 NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
 ### R5: Fatura vincula por status elegivel + fatura_id IS NULL
 Faturas CarVia selecionam operacoes `status IN (RASCUNHO, COTADO, CONFIRMADO), fatura_cliente_id IS NULL`.
+**CTe Complementares** tambem elegiveis: `status IN (RASCUNHO, EMITIDO), fatura_cliente_id IS NULL`.
+Fatura pode conter operacoes + CTe Comp. (ou so um tipo). `valor_total = sum(ops.cte_valor) + sum(ctes_comp.cte_valor)`.
 Subcontratos disponiveis para fatura transportadora: `status IN (COTADO, CONFIRMADO), fatura_transportadora_id IS NULL`.
 Faturas Subcontrato: criacao desacoplada de subcontratos. Subcontratos sao anexados/desanexados
 na tela de detalhe via AJAX (nao na criacao). Ao anexar: `status=FATURADO`, `fatura_transportadora_id=fatura.id`.
@@ -138,9 +162,16 @@ Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 | CarviaFaturaClienteItem | `carvia_fatura_cliente_itens` | Itens CTe de detalhe por fatura. FK `fatura_cliente_id` CASCADE. **FK `operacao_id` e `nf_id`** (nullable, resolvidos por LinkingService). Campos: cte_numero, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, frete, icms, iss, st, base_calculo |
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
-| CarviaContaMovimentacao | `carvia_conta_movimentacoes` | Movimentacoes financeiras da conta. `tipo_doc`: fatura_cliente/fatura_transportadora/despesa/saldo_inicial/ajuste. `doc_id`=0 para saldo_inicial. **UNIQUE(tipo_doc, doc_id)** impede duplicata. `tipo_movimento`: CREDITO/DEBITO. `valor` sempre positivo. Saldo calculado por SUM (nao armazenado) |
+| CarviaCteComplementar | `carvia_cte_complementares` | CTe complementar emitido ao cliente para cobrar custos extras. `numero_comp` COMP-### (`gerar_numero_comp()`). FK `operacao_id` NOT NULL (CTe pai). FK `fatura_cliente_id` nullable (fatura que inclui). `cte_valor` NOT NULL. Status: RASCUNHO→EMITIDO→FATURADO, CANCELADO exceto FATURADO. **SEM integracao financeira propria** — financeiro e da CarviaFaturaCliente. `cnpj_cliente`/`nome_cliente` herdados da operacao |
+| CarviaCustoEntrega | `carvia_custos_entrega` | Custos que CarVia pagou/incorreu (DEBITO). `numero_custo` CE-### (`gerar_numero_custo()`). `TIPOS_CUSTO`: DIARIA, REENTREGA, ARMAZENAGEM, DEVOLUCAO, AVARIA, PEDAGIO_EXTRA, TAXA_DESCARGA, OUTROS. FK `operacao_id` NOT NULL, FK `cte_complementar_id` nullable. `fornecedor_nome`/`fornecedor_cnpj` opcionais. **COM integracao financeira**: FluxoCaixa (por `data_vencimento`), Conciliacao (`tipo_doc='custo_entrega'`, DEBITO), ContaMovimentacao (automatico). Campos `pago_por`/`pago_em`/`total_conciliado`/`conciliado` identicos a CarviaDespesa |
+| CarviaCustoEntregaAnexo | `carvia_custo_entrega_anexos` | Comprovantes S3 (1:N por custo). Segue padrao `AnexoOcorrencia` de devolucao. `ativo` Boolean para soft-delete. Upload AJAX (PDF/JPG/PNG/DOC/XLS/MSG, max 10MB). Download via presigned URL S3. `FileStorage` de `app/utils/file_storage.py` |
+| CarviaContaMovimentacao | `carvia_conta_movimentacoes` | Movimentacoes financeiras da conta. `tipo_doc`: fatura_cliente/fatura_transportadora/despesa/custo_entrega/saldo_inicial/ajuste. `doc_id`=0 para saldo_inicial. **UNIQUE(tipo_doc, doc_id)** impede duplicata. `tipo_movimento`: CREDITO/DEBITO. `valor` sempre positivo. Saldo calculado por SUM (nao armazenado) |
 | CarviaSessaoCotacao | `carvia_sessoes_cotacao` | Sessao de cotacao comercial. `numero_sessao` COTACAO-### (prefixo atualizado de SC-###, backfill aplicado). Status: RASCUNHO→ENVIADO→APROVADO/CONTRA_PROPOSTA, CANCELADO (exceto de APROVADO). `valor_contra_proposta` obrigatorio quando CONTRA_PROPOSTA. **Campos contato cliente**: `cliente_nome`, `cliente_email`, `cliente_telefone`, `cliente_responsavel` (todos opcionais). Properties: `valor_total_frete`, `qtd_demandas`, `todas_demandas_com_frete`. `gerar_numero_sessao()`: static method (busca max de ambos prefixos SC e COTACAO) |
 | CarviaSessaoDemanda | `carvia_sessao_demandas` | Demanda de rota dentro de sessao. UNIQUE(sessao_id, ordem). FK `transportadora_id` e `tabela_frete_id` (preenchidos ao selecionar opcao). `detalhes_calculo` JSON com breakdown da CalculadoraFrete. `limpar_frete_selecionado()` zera campos ao editar |
+| CarviaExtratoLinha | `carvia_extrato_linhas` | Linhas importadas do extrato bancario OFX. `fitid` UNIQUE. `tipo`: CREDITO/DEBITO. `status_conciliacao`: PENDENTE/CONCILIADO/PARCIAL. `total_conciliado` + `saldo_a_conciliar` (@property). Campos enriquecimento CSV: `razao_social`, `observacao` |
+| CarviaConciliacao | `carvia_conciliacoes` | Junction N:N extrato↔documento. UNIQUE(extrato_linha_id, tipo_documento, documento_id). `tipo_documento`: fatura_cliente/fatura_transportadora/despesa/custo_entrega. `valor_alocado` sempre positivo |
+| CarviaModeloMoto | `carvia_modelos_moto` | Modelos de moto para calculo automatico de peso cubado. `nome` UNIQUE. `regex_pattern` para match automatico. Dimensoes (comprimento, largura, altura) + `cubagem_minima`. CRUD inline em `/carvia/configuracoes/modelos-moto` |
+| CarviaEmpresaCubagem | `carvia_empresas_cubagem` | Empresas que utilizam cubagem. `cnpj_empresa` UNIQUE. `considerar_cubagem` Boolean. CRUD inline em `/carvia/configuracoes/empresas-cubagem` |
 
 ---
 
@@ -341,6 +372,7 @@ CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
 | `app/utils/grupo_empresarial.py` | `GrupoEmpresarialService` | Grupo empresarial (filiais mesma transportadora) |
 | `app/utils/tabela_frete_manager.py` | `TabelaFreteManager` | Prepara dict para CalculadoraFrete |
 | `app/utils/timezone.py` | `agora_utc_naive` | Todos os models |
+| `app/utils/file_storage.py` | `get_file_storage()` | Upload/download de anexos CustoEntrega (S3/local) |
 
 | Exporta para | O que | Cuidado |
 |-------------|-------|---------|
@@ -378,6 +410,7 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/criar_tabelas_sessao_cotacao_carvia.py` + `.sql` — 2 tabelas (`carvia_sessoes_cotacao` + `carvia_sessao_demandas`), 5 indices, 2 constraints
 - `scripts/migrations/adicionar_contato_sessao_cotacao_carvia.py` + `.sql` — 4 campos contato cliente (cliente_nome, cliente_email, cliente_telefone, cliente_responsavel)
 - `scripts/migrations/backfill_prefixo_cotacao_carvia.py` + `.sql` — DML: renomeia SC-### → COTACAO-### em numero_sessao
+- `scripts/migrations/criar_tabelas_custo_entrega_cte_complementar.py` + `.sql` — 3 tabelas (`carvia_cte_complementares`, `carvia_custos_entrega`, `carvia_custo_entrega_anexos`), 13 indices
 
 ---
 

@@ -132,7 +132,9 @@ def register_operacao_routes(bp):
         subcontratos = operacao.subcontratos.all()
 
         # Cross-links: faturas transportadora via subcontratos
-        from app.carvia.models import CarviaFaturaTransportadora
+        from app.carvia.models import (
+            CarviaFaturaTransportadora, CarviaCteComplementar, CarviaCustoEntrega
+        )
         fat_transp_ids = {
             s.fatura_transportadora_id for s in subcontratos
             if s.fatura_transportadora_id
@@ -143,12 +145,24 @@ def register_operacao_routes(bp):
                 CarviaFaturaTransportadora.id.in_(fat_transp_ids)
             ).all()
 
+        # CTe Complementares vinculados a esta operacao
+        ctes_complementares = db.session.query(CarviaCteComplementar).filter(
+            CarviaCteComplementar.operacao_id == operacao_id
+        ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+
+        # Custos de entrega vinculados a esta operacao
+        custos_entrega = db.session.query(CarviaCustoEntrega).filter(
+            CarviaCustoEntrega.operacao_id == operacao_id
+        ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+
         return render_template(
             'carvia/detalhe_operacao.html',
             operacao=operacao,
             nfs=nfs,
             subcontratos=subcontratos,
             faturas_transportadora=faturas_transportadora,
+            ctes_complementares=ctes_complementares,
+            custos_entrega=custos_entrega,
         )
 
     # ==================== CRIAR OPERACAO MANUAL ====================

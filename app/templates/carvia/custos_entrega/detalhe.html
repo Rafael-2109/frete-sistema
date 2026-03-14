@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-money-bill-wave"></i> Custo {{ custo.numero_custo }}
+                <span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                Criado em {{ custo.criado_em|formatar_data_hora_brasil if custo.criado_em else '-' }}
+                por {{ custo.criado_por or '-' }}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if custo.status != 'CANCELADO' %}
+            <a href="{{ url_for('carvia.editar_custo_entrega', custo_id=custo.id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            {% endif %}
+            <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row g-4">
+        <!-- Dados do Custo -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados do Custo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Numero</small>
+                            <strong>{{ custo.numero_custo }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Operacao</small>
+                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=custo.operacao_id) }}"
+                               class="text-decoration-none">
+                                <strong>#{{ custo.operacao_id }}</strong>
+                            </a>
+                        </div>
+                        {% if custo.cte_complementar %}
+                        <div class="col-6">
+                            <small class="text-muted d-block">CTe Complementar</small>
+                            <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=custo.cte_complementar.id) }}"
+                               class="text-decoration-none">
+                                <strong>{{ custo.cte_complementar.numero_comp }}</strong>
+                            </a>
+                        </div>
+                        {% endif %}
+                        <div class="col-6">
+                            <small class="text-muted d-block">Tipo</small>
+                            <span class="badge bg-secondary">{{ custo.tipo_custo }}</span>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted d-block">Descricao</small>
+                            <strong>{{ custo.descricao or '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor</small>
+                            <h4 class="mb-0">{{ custo.valor|valor_br }}</h4>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data do Custo</small>
+                            <strong>{{ custo.data_custo.strftime('%d/%m/%Y') if custo.data_custo else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Vencimento</small>
+                            <strong>{{ custo.data_vencimento.strftime('%d/%m/%Y') if custo.data_vencimento else '-' }}</strong>
+                        </div>
+                        {% if custo.fornecedor_nome or custo.fornecedor_cnpj %}
+                        <div class="col-6">
+                            <small class="text-muted d-block">Fornecedor</small>
+                            <strong>{{ custo.fornecedor_nome or '-' }}</strong>
+                            {% if custo.fornecedor_cnpj %}
+                            <div class="cnpj-col small text-muted">{{ custo.fornecedor_cnpj }}</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if custo.conciliado %}
+                    <hr>
+                    <span class="badge bg-info">
+                        <i class="fas fa-check-double"></i> Conciliado ({{ custo.total_conciliado|valor_br }})
+                    </span>
+                    {% endif %}
+                    {% if custo.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ custo.observacoes }}</p>
+                    {% endif %}
+                    {% if custo.atualizado_em and custo.atualizado_em != custo.criado_em %}
+                    <hr>
+                    <small class="text-muted">
+                        Ultima atualizacao: {{ custo.atualizado_em|formatar_data_hora_brasil }}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Acoes de Status -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tasks"></i> Status e Acoes</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Alterar Status:</h6>
+                    <div class="d-flex gap-2 flex-wrap">
+                        {% for status in ['PENDENTE', 'PAGO', 'CANCELADO'] %}
+                        {% if status != custo.status %}
+                            {% if status == 'PAGO' %}
+                            {# PAGO abre modal para informar data de pagamento #}
+                            <button type="button" class="btn btn-sm btn-success"
+                                    data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
+                                <i class="fas fa-check"></i> PAGO
+                            </button>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_custo_entrega', custo_id=custo.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <button type="submit" class="btn btn-sm
+                                    {% if status == 'CANCELADO' %}btn-danger
+                                    {% else %}btn-warning{% endif %}"
+                                    {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar este custo?')"{% endif %}>
+                                    <i class="fas
+                                        {% if status == 'CANCELADO' %}fa-times
+                                        {% else %}fa-clock{% endif %}"></i>
+                                    {{ status }}
+                                </button>
+                            </form>
+                            {% endif %}
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anexos -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-paperclip"></i> Anexos ({{ anexos|length }})</h5>
+        </div>
+        <div class="card-body">
+            {% if anexos %}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Tamanho</th>
+                            <th>Tipo</th>
+                            <th>Criado em</th>
+                            <th>Criado por</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for anexo in anexos %}
+                        <tr>
+                            <td><strong>{{ anexo.nome_original }}</strong></td>
+                            <td>
+                                {% if anexo.tamanho_bytes %}
+                                    {% if anexo.tamanho_bytes >= 1048576 %}
+                                        {{ '%.1f'|format(anexo.tamanho_bytes / 1048576) }} MB
+                                    {% elif anexo.tamanho_bytes >= 1024 %}
+                                        {{ '%.1f'|format(anexo.tamanho_bytes / 1024) }} KB
+                                    {% else %}
+                                        {{ anexo.tamanho_bytes }} B
+                                    {% endif %}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td><small>{{ anexo.content_type or '-' }}</small></td>
+                            <td>{{ anexo.criado_em.strftime('%d/%m/%Y %H:%M') if anexo.criado_em else '-' }}</td>
+                            <td>{{ anexo.criado_por or '-' }}</td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <a href="{{ url_for('carvia.download_anexo_custo_entrega', anexo_id=anexo.id) }}"
+                                       class="btn btn-sm btn-outline-primary" title="Download" target="_blank">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Excluir"
+                                            onclick="excluirAnexo({{ anexo.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted text-center mb-3">Nenhum anexo.</p>
+            {% endif %}
+
+            <!-- Upload -->
+            <hr>
+            <form id="formUploadAnexo" enctype="multipart/form-data">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label for="arquivo" class="form-label">Adicionar Anexo</label>
+                        <input type="file" class="form-control form-control-sm" id="arquivo" name="arquivo" required>
+                        <small class="text-muted">Extensoes permitidas: pdf, jpg, jpeg, png, doc, docx, xls, xlsx, msg (max 10MB)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="descricao_anexo" class="form-label">Descricao</label>
+                        <input type="text" class="form-control form-control-sm" id="descricao_anexo" name="descricao"
+                               placeholder="Opcional">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                            <i class="fas fa-upload"></i> Enviar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Modal de data de pagamento (modo Form POST) #}
+{% with form_action=url_for('carvia.atualizar_status_custo_entrega', custo_id=custo.id), form_status='PAGO' %}
+    {% include 'carvia/_modal_data_pagamento.html' %}
+{% endwith %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+    // Setar data de hoje como default ao abrir o modal
+    var modalEl = document.getElementById('modalDataPagamento');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function() {
+            var input = document.getElementById('dataPagamentoInput');
+            if (input && !input.value) {
+                input.value = new Date().toISOString().slice(0, 10);
+            }
+        });
+    }
+
+    // Upload de anexo via AJAX
+    document.getElementById('formUploadAnexo')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var formData = new FormData(this);
+        fetch('{{ url_for("carvia.upload_anexo_custo_entrega", custo_id=custo.id) }}', {
+            method: 'POST',
+            body: formData,
+            headers: {'X-CSRFToken': '{{ csrf_token() }}'}
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.sucesso) { location.reload(); }
+            else { alert(data.erro || 'Erro ao enviar'); }
+        })
+        .catch(function() { alert('Erro de conexao'); });
+    });
+})();
+
+function excluirAnexo(anexoId) {
+    if (!confirm('Excluir este anexo?')) return;
+    fetch('/carvia/api/custo-entrega/anexo/' + anexoId + '/excluir', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'}
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.sucesso) { location.reload(); }
+        else { alert(data.erro || 'Erro'); }
+    });
+}
+</script>
+{% endblock %}

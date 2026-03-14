@@ -26,6 +26,7 @@ TIPO_MOVIMENTO_MAP = {
     'fatura_cliente': 'CREDITO',
     'fatura_transportadora': 'DEBITO',
     'despesa': 'DEBITO',
+    'custo_entrega': 'DEBITO',
 }
 
 
@@ -95,6 +96,9 @@ def _gerar_descricao(tipo_doc, doc):
         tipo = doc.tipo_despesa or 'Despesa'
         desc = doc.descricao or ''
         return f"{tipo} #{doc.id} - {desc}".strip(' -')
+    elif tipo_doc == 'custo_entrega':
+        desc = doc.descricao or doc.tipo_custo
+        return f"Custo Entrega #{doc.numero_custo} - {desc}".strip(' -')
     return ''
 
 
@@ -200,6 +204,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaCliente,
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
+                CarviaCustoEntrega,
             )
 
             usuario = current_user.email
@@ -241,6 +246,21 @@ def register_fluxo_caixa_routes(bp):
                 # GAP-14: Verificar se ja esta PAGO
                 if doc.status == 'PAGO':
                     return jsonify({'erro': 'Despesa ja esta paga'}), 409
+                doc.status = 'PAGO'
+                doc.pago_por = usuario
+                doc.pago_em = pago_em_dt
+                novo_status = 'PAGO'
+                valor_mov = float(doc.valor or 0)
+
+            elif tipo_doc == 'custo_entrega':
+                doc = db.session.get(CarviaCustoEntrega, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
+                if doc.status == 'CANCELADO':
+                    return jsonify({'erro': 'Custo cancelado nao pode ser pago'}), 400
+                # GAP-14: Verificar se ja esta PAGO
+                if doc.status == 'PAGO':
+                    return jsonify({'erro': 'Custo de entrega ja esta pago'}), 409
                 doc.status = 'PAGO'
                 doc.pago_por = usuario
                 doc.pago_em = pago_em_dt
@@ -300,6 +320,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaCliente,
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
+                CarviaCustoEntrega,
             )
 
             if tipo_doc == 'fatura_cliente':
@@ -324,6 +345,15 @@ def register_fluxo_caixa_routes(bp):
                 doc = db.session.get(CarviaDespesa, int(doc_id))
                 if not doc:
                     return jsonify({'erro': 'Despesa nao encontrada'}), 404
+                doc.status = 'PENDENTE'
+                doc.pago_por = None
+                doc.pago_em = None
+                novo_status = 'PENDENTE'
+
+            elif tipo_doc == 'custo_entrega':
+                doc = db.session.get(CarviaCustoEntrega, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
                 doc.status = 'PENDENTE'
                 doc.pago_por = None
                 doc.pago_em = None
@@ -390,6 +420,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaCliente,
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
+                CarviaCustoEntrega,
             )
 
             if tipo_doc == 'fatura_cliente':
@@ -414,6 +445,14 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Despesa nao encontrada'}), 404
                 if doc.status in ('PAGO', 'CANCELADO'):
                     return jsonify({'erro': f'Despesa com status {doc.status} nao pode ter vencimento alterado'}), 400
+                doc.data_vencimento = novo_vencimento
+
+            elif tipo_doc == 'custo_entrega':
+                doc = db.session.get(CarviaCustoEntrega, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
+                if doc.status in ('PAGO', 'CANCELADO'):
+                    return jsonify({'erro': f'Custo com status {doc.status} nao pode ter vencimento alterado'}), 400
                 doc.data_vencimento = novo_vencimento
 
             else:

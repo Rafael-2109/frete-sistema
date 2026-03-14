@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-edit"></i> Editar CTe Comp. {{ cte_comp.numero_comp }}</h2>
+        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'ctes_complementares' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Info da operacao (read-only) -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-link"></i> Operacao Vinculada</h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Operacao</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=cte_comp.operacao_id) }}" class="text-decoration-none">
+                            #{{ cte_comp.operacao_id }}
+                        </a>
+                    </strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe</small>
+                    <strong>{{ cte_comp.operacao.cte_numero or '-' }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Cliente</small>
+                    <strong>{{ cte_comp.operacao.nome_cliente or cte_comp.operacao.cnpj_cliente }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor CTe</small>
+                    <strong>{{ cte_comp.operacao.cte_valor|valor_br if cte_comp.operacao.cte_valor else '-' }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('carvia.editar_cte_complementar', cte_comp_id=cte_comp.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="cte_numero" class="form-label">Numero CTe</label>
+                                <input type="text" class="form-control" id="cte_numero" name="cte_numero"
+                                       maxlength="20" value="{{ cte_comp.cte_numero or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_valor" class="form-label">Valor (R$) *</label>
+                                <input type="text" class="form-control" id="cte_valor" name="cte_valor"
+                                       inputmode="decimal" required
+                                       value="{{ cte_comp.cte_valor }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_data_emissao" class="form-label">Data Emissao</label>
+                                <input type="date" class="form-control" id="cte_data_emissao" name="cte_data_emissao"
+                                       value="{{ cte_comp.cte_data_emissao.strftime('%Y-%m-%d') if cte_comp.cte_data_emissao else '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cte_chave_acesso" class="form-label">Chave de Acesso</label>
+                                <input type="text" class="form-control" id="cte_chave_acesso" name="cte_chave_acesso"
+                                       maxlength="44" value="{{ cte_comp.cte_chave_acesso or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cnpj_cliente" class="form-label">CNPJ Cliente</label>
+                                <input type="text" class="form-control" id="cnpj_cliente" name="cnpj_cliente"
+                                       value="{{ cte_comp.cnpj_cliente or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="nome_cliente" class="form-label">Nome Cliente</label>
+                                <input type="text" class="form-control" id="nome_cliente" name="nome_cliente"
+                                       value="{{ cte_comp.nome_cliente or '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label for="observacoes" class="form-label">Observacoes</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes"
+                                          rows="3">{{ cte_comp.observacoes or '' }}</textarea>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <span class="badge carvia-badge-{{ cte_comp.status|lower }} align-self-center">
+                                {{ cte_comp.status }}
+                            </span>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp.id) }}" class="btn btn-secondary">Cancelar</a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Salvar Alteracoes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

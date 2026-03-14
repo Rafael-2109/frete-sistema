@@ -382,6 +382,79 @@
         </div>
     </div>
 
+    <!-- CTe Complementares -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTe Complementares ({{ ctes_complementares|length }})</h5>
+            {% if operacao.status not in ('CANCELADO',) %}
+            <a href="{{ url_for('carvia.criar_cte_complementar', operacao_id=operacao.id) }}" class="btn btn-sm btn-success">
+                <i class="fas fa-plus"></i> Novo CTe Comp.
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if ctes_complementares %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead><tr><th>Numero</th><th>CTe</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        {% for comp in ctes_complementares %}
+                        <tr>
+                            <td><strong>{{ comp.numero_comp }}</strong></td>
+                            <td>{{ comp.cte_numero or '-' }}</td>
+                            <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
+                            <td><span class="badge carvia-badge-{{ comp.status|lower }}">{{ comp.status }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=comp.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted text-center mb-0">Nenhum CTe Complementar.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Custos de Entrega -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Custos de Entrega ({{ custos_entrega|length }})</h5>
+            {% if operacao.status not in ('CANCELADO',) %}
+            <a href="{{ url_for('carvia.criar_custo_entrega', operacao_id=operacao.id) }}" class="btn btn-sm btn-success">
+                <i class="fas fa-plus"></i> Novo Custo
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if custos_entrega %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead><tr><th>Numero</th><th>Tipo</th><th>Descricao</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        {% for custo in custos_entrega %}
+                        <tr>
+                            <td><strong>{{ custo.numero_custo }}</strong></td>
+                            <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
+                            <td>{{ custo.descricao or '-' }}</td>
+                            <td class="valor-col">{{ custo.valor|valor_br }}</td>
+                            <td><span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted text-center mb-0">Nenhum custo de entrega.</p>
+            {% endif %}
+        </div>
+    </div>
+
     {% include 'carvia/_cotacao_modal_partial.html' %}
 
     {# GAP-23: Modal de confirmacao para desvincular fatura #}

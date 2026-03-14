@@ -29,8 +29,9 @@
                         <tr>
                             <th>Cliente</th>
                             <th>CNPJ</th>
-                            <th>Operacoes Disponiveis</th>
-                            <th>Valor Total CTes</th>
+                            <th>Operacoes</th>
+                            <th>CTe Comp.</th>
+                            <th>Valor Total</th>
                             <th>Acao</th>
                         </tr>
                     </thead>
@@ -40,6 +41,11 @@
                             <td><strong>{{ c.nome_cliente or '-' }}</strong></td>
                             <td class="cnpj-col">{{ c.cnpj_cliente }}</td>
                             <td><span class="badge bg-primary">{{ c.qtd_operacoes }}</span></td>
+                            <td>
+                                {% if c.qtd_ctes_comp %}
+                                <span class="badge bg-info">{{ c.qtd_ctes_comp }}</span>
+                                {% else %}-{% endif %}
+                            </td>
                             <td>{{ c.valor_total|valor_br if c.valor_total else '-' }}</td>
                             <td>
                                 <a href="{{ url_for('carvia.nova_fatura_cliente', cnpj=c.cnpj_cliente) }}"
@@ -150,6 +156,46 @@
             </div>
         </div>
 
+        {# Only show if there are eligible CTe Complementares #}
+        {% if ctes_comp_disponiveis %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTe Complementares</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-select-all-comp">
+                    Selecionar Todas
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th width="30"><input type="checkbox" id="check-all-comp"></th>
+                                <th>Numero</th>
+                                <th>CTe</th>
+                                <th>Operacao</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for comp in ctes_comp_disponiveis %}
+                            <tr>
+                                <td><input type="checkbox" name="cte_comp_ids" value="{{ comp.id }}" class="comp-check"></td>
+                                <td><strong>{{ comp.numero_comp }}</strong></td>
+                                <td>{{ comp.cte_numero or '-' }}</td>
+                                <td>#{{ comp.operacao_id }}</td>
+                                <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
+                                <td><span class="badge carvia-badge-{{ comp.status|lower }}">{{ comp.status }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="d-flex gap-2">
             <button type="submit" class="btn btn-success btn-lg">
                 <i class="fas fa-check"></i> Criar Fatura
@@ -172,6 +218,14 @@ document.getElementById('btn-select-all')?.addEventListener('click', function() 
     const checkAll = document.getElementById('check-all');
     checkAll.checked = true;
     document.querySelectorAll('.op-check').forEach(cb => cb.checked = true);
+});
+document.getElementById('check-all-comp')?.addEventListener('change', function() {
+    document.querySelectorAll('.comp-check').forEach(cb => cb.checked = this.checked);
+});
+document.getElementById('btn-select-all-comp')?.addEventListener('click', function() {
+    const checkAll = document.getElementById('check-all-comp');
+    checkAll.checked = true;
+    document.querySelectorAll('.comp-check').forEach(cb => cb.checked = true);
 });
 </script>
 {% endblock %}
