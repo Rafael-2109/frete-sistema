@@ -299,7 +299,7 @@ class ImportacaoService:
 
         # Pre-check: verificar transportadoras para faturas (beneficiario)
         for fat in faturas_parseadas:
-            cnpj_emissor = fat.get('cnpj_emissor', '')
+            cnpj_emissor = fat.get('cnpj_emissor') or ''
             cnpj_digitos = re.sub(r'\D', '', cnpj_emissor)
             if len(cnpj_digitos) < 14:
                 continue

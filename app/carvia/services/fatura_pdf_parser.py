@@ -55,6 +55,9 @@ class FaturaPDFParser:
     # cnpj_pagador substitui cnpj_emissor (beneficiario = sempre CarVia)
     CAMPOS_OBRIGATORIOS = {'numero_fatura', 'cnpj_pagador', 'data_emissao', 'valor_total'}
 
+    # Campos nao-obrigatorios mas importantes para downstream (matching, linking, UI)
+    CAMPOS_DESEJAVEIS = {'cnpj_emissor', 'nome_emissor', 'nome_pagador', 'vencimento', 'ctes_referenciados'}
+
     def __init__(self, pdf_bytes: bytes):
         """
         Args:
@@ -203,7 +206,7 @@ class FaturaPDFParser:
             resultado['confianca'] = round(self.confianca, 2)
             resultado['metodo_extracao'] = 'REGEX'
             resultado['pagina'] = pagina_num
-            return resultado
+            return self._finalizar_resultado(resultado, texto, pagina_num)
 
         # Camada 2: Haiku para campos faltantes
         resultado_llm = self._extract_by_llm(self.HAIKU_MODEL, campos_faltantes, texto)
@@ -215,7 +218,7 @@ class FaturaPDFParser:
                 resultado['confianca'] = round(self.confianca, 2)
                 resultado['metodo_extracao'] = 'HAIKU'
                 resultado['pagina'] = pagina_num
-                return resultado
+                return self._finalizar_resultado(resultado, texto, pagina_num)
 
         # Camada 3: Sonnet para reextracao completa (campos ainda faltantes)
         campos_faltantes_final = self._campos_faltantes(resultado)
@@ -229,7 +232,7 @@ class FaturaPDFParser:
         resultado['confianca'] = round(self.confianca, 2)
         resultado['metodo_extracao'] = 'SONNET'
         resultado['pagina'] = pagina_num
-        return resultado
+        return self._finalizar_resultado(resultado, texto, pagina_num)
 
     # ------------------------------------------------------------------
     # Camada 1: Regex
@@ -430,24 +433,50 @@ class FaturaPDFParser:
         return None
 
     def _regex_cnpj_emissor(self, texto: str) -> Optional[str]:
-        """Extrai CNPJ do emissor/beneficiario (CarVia).
+        """Extrai CNPJ do emissor/beneficiario.
 
-        No formato SSW boleto, o layout e:
-          "Pagador CNPJ: XX.XXX.XXX/XXXX-XX" ← PAGADOR (1o CNPJ no texto)
-          ...
-          "CNPJ/CPF: 62.312.605/0001-75"      ← BENEFICIARIO/CarVia
+        Dois formatos principais:
 
-        Portanto NAO usar 1o CNPJ — usar label "CNPJ/CPF:" que identifica CarVia.
+        1) SSW boleto (CarVia como beneficiario):
+           "Pagador CNPJ: XX.XXX.XXX/XXXX-XX" ← pagador
+           "CNPJ/CPF: 62.312.605/0001-75"      ← beneficiario/CarVia
+
+        2) Fatura transportadora (Uni-Brasil, etc.):
+           "CNPJ: 35.079.316/0001-03"          ← emissor (header, primeiras linhas)
+           "Sacado: CARVIA ..."
+           "CNPJ/CPF: 62.312.605/0001-75"      ← sacado/pagador (NAO o emissor!)
+
+        Deteccao: presenca de "Sacado:" indica formato nao-SSW.
         """
-        # SSW: "CNPJ/CPF: XX.XXX.XXX/XXXX-XX" (beneficiario = CarVia)
-        match_cnpj_cpf = re.search(
-            r'CNPJ/CPF\s*:\s*(\d{2}[.\d]+/\d{4}-?\d{2})',
-            texto,
-        )
-        if match_cnpj_cpf:
-            cnpj = re.sub(r'\D', '', match_cnpj_cpf.group(1))
-            if len(cnpj) == 14:
-                return cnpj
+        linhas = texto.split('\n')
+        tem_sacado = any(re.search(r'Sacado\s*:', l, re.IGNORECASE) for l in linhas)
+
+        if tem_sacado:
+            # Formato nao-SSW: emissor no header (CNPJ: sem /CPF)
+            # "CNPJ/CPF:" neste formato esta na secao Sacado = pagador, NAO emissor
+            for linha in linhas[:10]:
+                match = re.search(
+                    r'\bCNPJ\s*:\s*(\d{2}\.?\d{3}\.?\d{3}/\d{4}-?\d{2})',
+                    linha,
+                )
+                if match:
+                    # Garantir que NAO e "CNPJ/CPF:" (sacado)
+                    pos = match.start()
+                    antes = linha[max(0, pos - 1):pos]
+                    if antes != '/':
+                        cnpj = re.sub(r'\D', '', match.group(1))
+                        if len(cnpj) == 14:
+                            return cnpj
+        else:
+            # SSW: "CNPJ/CPF: XX.XXX.XXX/XXXX-XX" (beneficiario = CarVia)
+            match_cnpj_cpf = re.search(
+                r'CNPJ/CPF\s*:\s*(\d{2}[.\d]+/\d{4}-?\d{2})',
+                texto,
+            )
+            if match_cnpj_cpf:
+                cnpj = re.sub(r'\D', '', match_cnpj_cpf.group(1))
+                if len(cnpj) == 14:
+                    return cnpj
 
         # Fallback: "Razao Social" ou "Empresa" seguido de CNPJ
         match_rs = re.search(
@@ -717,7 +746,47 @@ class FaturaPDFParser:
                     break
 
         # ---------------------------------------------------------------
-        # Estrategia 3: "Pagador" sozinho + nome na proxima linha (rodape)
+        # Estrategia 3: "Sacado: NOME" (formato nao-SSW, ex: Uni-Brasil)
+        #   Sacado: CARVIA LOGISTICA E TRANSPORTE LTDA
+        #   Endereco: ...
+        #   CNPJ/CPF: 62.312.605/0001-75
+        # ---------------------------------------------------------------
+        if not result.get('cnpj'):
+            for i, linha in enumerate(linhas):
+                match_sacado = re.match(
+                    r'Sacado\s*:\s*(.+)',
+                    linha,
+                    re.IGNORECASE,
+                )
+                if match_sacado:
+                    nome_raw = match_sacado.group(1).strip()
+                    if nome_raw and len(nome_raw) >= 3:
+                        result['nome'] = nome_raw
+
+                    # CNPJ/CPF pode estar varias linhas abaixo (buscar nas proximas 8)
+                    for j in range(i + 1, min(i + 9, len(linhas))):
+                        cnpj_match = re.search(
+                            r'CNPJ(?:/CPF)?\s*:\s*(\d{2}\.?\d{3}\.?\d{3}/\d{4}-?\d{2})',
+                            linhas[j],
+                        )
+                        if cnpj_match:
+                            cnpj = re.sub(r'\D', '', cnpj_match.group(1))
+                            if len(cnpj) == 14:
+                                result['cnpj'] = cnpj
+                            break
+                        cpf_match = re.search(
+                            r'(?:CNPJ/)?CPF\s*:\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})',
+                            linhas[j],
+                        )
+                        if cpf_match:
+                            cpf = re.sub(r'\D', '', cpf_match.group(1))
+                            if len(cpf) == 11:
+                                result['cnpj'] = cpf
+                            break
+                    break
+
+        # ---------------------------------------------------------------
+        # Estrategia 4: "Pagador" sozinho + nome na proxima linha (rodape)
         # ---------------------------------------------------------------
         if not result.get('nome'):
             for i in range(len(linhas) - 1, -1, -1):
@@ -1245,6 +1314,45 @@ class FaturaPDFParser:
             if valor is None or (isinstance(valor, str) and not valor.strip()):
                 faltantes.append(campo)
         return faltantes
+
+    def _campos_desejaveis_faltantes(self, resultado: Dict) -> List[str]:
+        """Retorna lista de campos desejaveis ainda faltantes (nao-obrigatorios mas uteis)"""
+        faltantes = []
+        for campo in self.CAMPOS_DESEJAVEIS:
+            valor = resultado.get(campo)
+            if valor is None or (isinstance(valor, str) and not valor.strip()):
+                # ctes_referenciados: lista vazia = faltante
+                if isinstance(valor, list) and not valor:
+                    faltantes.append(campo)
+                elif not isinstance(valor, list):
+                    faltantes.append(campo)
+        return faltantes
+
+    def _finalizar_resultado(self, resultado: Dict, texto: str, pagina_num: int) -> Dict:
+        """Enriquece resultado com campos desejaveis via LLM e normaliza None.
+
+        Chamado em TODOS os caminhos de retorno de _parsear_pagina() para garantir
+        consistencia independente do metodo de extracao principal.
+        """
+        # Chamada extra Haiku para campos desejaveis faltantes
+        campos_desej = self._campos_desejaveis_faltantes(resultado)
+        if campos_desej:
+            logger.info(
+                f"Fatura pag {pagina_num} — {len(campos_desej)} campos desejaveis "
+                f"faltantes apos extracao principal: {campos_desej}"
+            )
+            resultado_desej = self._extract_by_llm(
+                self.HAIKU_MODEL, campos_desej, texto
+            )
+            if resultado_desej:
+                resultado = self._merge_results(resultado, resultado_desej)
+
+        # Normalizar None para '' em campos string (evitar TypeError downstream)
+        for campo in ('cnpj_emissor', 'nome_emissor', 'cnpj_pagador', 'nome_pagador', 'vencimento'):
+            if resultado.get(campo) is None:
+                resultado[campo] = ''
+
+        return resultado
 
     def _validar_formato(self, resultado_llm: Dict) -> bool:
         """Valida formato dos campos extraidos por LLM"""
