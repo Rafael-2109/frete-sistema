@@ -6,6 +6,10 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-money-bill-wave"></i> Custos de Entrega</h2>
         <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_custos_entrega', tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}"
+               class="btn btn-outline-success btn-sm" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
             <a href="{{ url_for('carvia.criar_custo_entrega') }}" class="btn btn-success btn-sm">
                 <i class="fas fa-plus"></i> Novo Custo
             </a>

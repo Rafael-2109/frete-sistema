@@ -6,6 +6,10 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-file-invoice"></i> Faturas Subcontrato</h2>
         <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_faturas_transportadora', status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}"
+               class="btn btn-outline-success btn-sm" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
             <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-success btn-sm">
                 <i class="fas fa-plus"></i> Nova Fatura
             </a>

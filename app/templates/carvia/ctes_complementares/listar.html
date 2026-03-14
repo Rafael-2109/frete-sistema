@@ -6,6 +6,10 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-file-invoice"></i> CTe Complementares</h2>
         <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_ctes_complementares', status=status_filtro, busca=busca, sort=sort, direction=direction) }}"
+               class="btn btn-outline-success btn-sm" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
             <button class="btn btn-success btn-sm" disabled title="Crie a partir do detalhe da operacao">
                 <i class="fas fa-plus"></i> Novo CTe Comp.
             </button>
