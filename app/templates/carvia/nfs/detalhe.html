@@ -28,14 +28,7 @@
             {% endif %}
             {% if nf.status != 'CANCELADA' %}
             <button type="button" class="btn btn-outline-info btn-sm" title="Cotar frete"
-                    onclick="cotarStandalone({
-                        peso: {{ nf.peso_bruto or 0 }},
-                        valor_mercadoria: {{ nf.valor_total or 0 }},
-                        uf_destino: '{{ nf.uf_destinatario or '' }}',
-                        cidade_destino: '{{ nf.cidade_destinatario or '' }}',
-                        uf_origem: '{{ nf.uf_emitente or '' }}',
-                        cliente_nome: '{{ (nf.nome_emitente or '')|e }}'
-                    })">
+                    id="btnCotarNf">
                 <i class="fas fa-calculator"></i> Cotar
             </button>
             <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal"
@@ -116,15 +109,23 @@
                     </div>
                     <hr>
                     <div class="row g-3">
-                        <div class="col-4">
+                        <div class="col-3">
                             <small class="text-muted d-block">Valor Total</small>
                             <strong class="text-success">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</strong>
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
                             <small class="text-muted d-block">Peso Bruto</small>
                             <strong>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg</strong>
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
+                            <small class="text-muted d-block">Peso Cubado</small>
+                            {% if peso_cubado %}
+                            <strong class="text-info">{{ peso_cubado|numero_br(1) }} kg</strong>
+                            {% else %}
+                            <strong class="text-muted">-</strong>
+                            {% endif %}
+                        </div>
+                        <div class="col-3">
                             <small class="text-muted d-block">Volumes</small>
                             <strong>{{ nf.quantidade_volumes or '-' }}</strong>
                         </div>
@@ -417,6 +418,21 @@ function downloadArquivoNf(nfId, tipo) {
             }
         })
         .catch(() => alert('Erro de conexao ao baixar arquivo'));
+}
+
+// Botao Cotar — usa tojson dentro de <script> (seguro para aspas/acentos)
+var btnCotarNf = document.getElementById('btnCotarNf');
+if (btnCotarNf) {
+    btnCotarNf.addEventListener('click', function() {
+        cotarStandalone({
+            peso: {{ peso_para_cotacao|default(0) }},
+            valor_mercadoria: {{ nf.valor_total|float if nf.valor_total else 0 }},
+            uf_destino: {{ (nf.uf_destinatario or '')|tojson }},
+            cidade_destino: {{ (nf.cidade_destinatario or '')|tojson }},
+            uf_origem: {{ (nf.uf_emitente or '')|tojson }},
+            cliente_nome: {{ (nf.nome_emitente or '')|tojson }}
+        });
+    });
 }
 
 // Habilitar botao de cancelamento apenas quando motivo preenchido

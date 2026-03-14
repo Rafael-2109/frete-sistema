@@ -120,6 +120,10 @@
                                 {% if nf.peso_bruto %}
                                 <small class="text-muted d-block" {% if nf.quantidade_volumes %}title="Volumes: {{ nf.quantidade_volumes }}"{% endif %}>{{ nf.peso_bruto|numero_br(1) }} kg</small>
                                 {% endif %}
+                                {% set pc = peso_cubado_por_nf.get(nf.id) %}
+                                {% if pc %}
+                                <small class="text-info d-block" title="Peso cubado (modelos moto)">Cub: {{ pc|numero_br(1) }} kg</small>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>

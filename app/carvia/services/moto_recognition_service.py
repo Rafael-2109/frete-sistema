@@ -7,12 +7,18 @@ calcula peso cubado automatico usando tabela CarviaModeloMoto.
 
 Fluxo:
 1. Para cada item de NF da operacao, tenta match de modelo via regex
-2. Se match: calcula volume unitario * cubagem_minima * quantidade
+2. Se match: usa peso_medio (se disponivel) ou calcula volume * cubagem_minima
 3. Soma peso cubado de todos os itens matcheados
+
+IMPORTANTE — Dimensoes em CENTIMETROS:
+As colunas comprimento/largura/altura de CarviaModeloMoto armazenam valores
+em centimetros (ex: 137 = 137cm = 1.37m). O calculo converte cm -> m antes
+de multiplicar pela cubagem_minima (kg/m3).
 """
 
 import logging
 import re
+from collections import defaultdict
 from typing import Dict, List, Optional
 
 from app import db
@@ -34,6 +40,61 @@ DEFAULT_MOTO_PATTERN = re.compile(
 class MotoRecognitionService:
     """Servico de reconhecimento de motos em itens de NF"""
 
+    @staticmethod
+    def _calcular_peso_modelo(modelo, qtd: float) -> float:
+        """Calcula peso cubado de um modelo * quantidade.
+
+        Usa peso_medio se disponivel (ja pre-calculado em kg).
+        Fallback: converte dimensoes cm -> m, calcula volume * cubagem_minima.
+        """
+        if modelo.peso_medio:
+            return float(modelo.peso_medio) * qtd
+
+        # Dimensoes em centimetros — converter para metros
+        comp_m = float(modelo.comprimento) / 100.0
+        larg_m = float(modelo.largura) / 100.0
+        alt_m = float(modelo.altura) / 100.0
+        cubagem = float(modelo.cubagem_minima)
+        volume_m3 = comp_m * larg_m * alt_m
+        return volume_m3 * cubagem * qtd
+
+    @staticmethod
+    def _match_descricao(texto: str, modelos: list) -> Optional[str]:
+        """Match descricao contra lista de modelos pre-carregada (sem query DB).
+
+        Args:
+            texto: Descricao do produto
+            modelos: Lista de CarviaModeloMoto (ja carregados)
+
+        Returns:
+            Nome do modelo matcheado ou None
+        """
+        if not texto:
+            return None
+
+        texto_upper = texto.upper().strip()
+
+        # 1. Patterns customizados
+        for modelo in modelos:
+            if modelo.regex_pattern:
+                try:
+                    if re.search(modelo.regex_pattern, texto_upper, re.IGNORECASE):
+                        return modelo.nome
+                except re.error:
+                    pass
+            # Match por nome exato
+            if modelo.nome.upper() in texto_upper:
+                return modelo.nome
+
+        # 2. Fallback: pattern padrao
+        match = DEFAULT_MOTO_PATTERN.search(texto_upper)
+        if match:
+            marca = match.group(1).upper()
+            cilindrada = match.group(2)
+            return f'{marca} {cilindrada}'
+
+        return None
+
     def extrair_modelo(self, texto: str) -> Optional[str]:
         """
         Extrai modelo de moto do texto da descricao.
@@ -47,37 +108,9 @@ class MotoRecognitionService:
         Returns:
             Nome normalizado do modelo (ex: 'CG 160') ou None
         """
-        if not texto:
-            return None
-
-        texto_upper = texto.upper().strip()
-
-        # 1. Tentar patterns customizados dos modelos cadastrados
         from app.carvia.models import CarviaModeloMoto
         modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
-        for modelo in modelos:
-            if modelo.regex_pattern:
-                try:
-                    if re.search(modelo.regex_pattern, texto_upper, re.IGNORECASE):
-                        return modelo.nome
-                except re.error:
-                    logger.warning(
-                        "Regex invalido no modelo %s: %s",
-                        modelo.nome, modelo.regex_pattern
-                    )
-
-            # Match por nome exato (case insensitive)
-            if modelo.nome.upper() in texto_upper:
-                return modelo.nome
-
-        # 2. Fallback: pattern padrao
-        match = DEFAULT_MOTO_PATTERN.search(texto_upper)
-        if match:
-            marca = match.group(1).upper()
-            cilindrada = match.group(2)
-            return f'{marca} {cilindrada}'
-
-        return None
+        return self._match_descricao(texto, modelos)
 
     def identificar_motos_operacao(self, operacao_id: int) -> List[Dict]:
         """
@@ -133,9 +166,8 @@ class MotoRecognitionService:
         Calcula peso cubado total da operacao baseado em motos identificadas.
 
         Para cada item matcheado com modelo cadastrado:
-            volume_unitario = comprimento * largura * altura (m3)
-            peso_cubado_unitario = volume_unitario * cubagem_minima (default 300 kg/m3)
-            peso_cubado_item = peso_cubado_unitario * quantidade
+            Se peso_medio disponivel: peso_cubado = peso_medio * quantidade
+            Senao: volume (cm->m) * cubagem_minima * quantidade
 
         Args:
             operacao_id: ID da CarviaOperacao
@@ -163,21 +195,22 @@ class MotoRecognitionService:
             if not modelo:
                 continue
 
-            comp = float(modelo.comprimento)
-            larg = float(modelo.largura)
-            alt = float(modelo.altura)
-            cubagem = float(modelo.cubagem_minima)
             qtd = item['quantidade']
+            peso_cubado_item = self._calcular_peso_modelo(modelo, qtd)
 
-            volume_unitario = comp * larg * alt  # m3
-            peso_cubado_unitario = volume_unitario * cubagem
-            peso_cubado_item = peso_cubado_unitario * qtd
+            # Detalhes para exibicao
+            comp_m = float(modelo.comprimento) / 100.0
+            larg_m = float(modelo.largura) / 100.0
+            alt_m = float(modelo.altura) / 100.0
+            cubagem = float(modelo.cubagem_minima)
+            volume_m3 = comp_m * larg_m * alt_m
+            peso_cubado_unitario = self._calcular_peso_modelo(modelo, 1)
 
             itens_calculados.append({
                 'item_id': item['item_id'],
                 'modelo': modelo.nome,
-                'dimensoes': f'{comp}x{larg}x{alt}m',
-                'volume_m3': round(volume_unitario, 4),
+                'dimensoes': f'{comp_m:.2f}x{larg_m:.2f}x{alt_m:.2f}m',
+                'volume_m3': round(volume_m3, 4),
                 'cubagem_minima': cubagem,
                 'peso_cubado_unitario': round(peso_cubado_unitario, 2),
                 'quantidade': qtd,
@@ -187,8 +220,8 @@ class MotoRecognitionService:
             peso_cubado_total += peso_cubado_item
 
             detalhes_parts.append(
-                f'{modelo.nome}: {comp}x{larg}x{alt}m = '
-                f'{volume_unitario:.4f}m3 x {cubagem}kg/m3 = '
+                f'{modelo.nome}: {comp_m:.2f}x{larg_m:.2f}x{alt_m:.2f}m = '
+                f'{volume_m3:.4f}m3 x {cubagem}kg/m3 = '
                 f'{peso_cubado_unitario:.2f}kg x {int(qtd)} = '
                 f'{peso_cubado_item:.2f}kg'
             )
@@ -201,6 +234,101 @@ class MotoRecognitionService:
             'itens': itens_calculados,
             'detalhes_calculo': '\n'.join(detalhes_parts),
         }
+
+    def calcular_peso_cubado_nf(self, nf_id: int) -> Optional[Dict]:
+        """
+        Calcula peso cubado total de uma NF baseado em motos nos itens.
+
+        Args:
+            nf_id: ID da CarviaNf
+
+        Returns:
+            Dict com resultado ou None se nenhum match:
+            {'peso_cubado_total': float, 'itens': [...]}
+        """
+        from app.carvia.models import CarviaNfItem, CarviaModeloMoto
+
+        itens = CarviaNfItem.query.filter_by(nf_id=nf_id).all()
+        if not itens:
+            return None
+
+        modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
+        modelos_by_nome = {m.nome: m for m in modelos}
+
+        itens_calculados = []
+        peso_cubado_total = 0
+
+        for item in itens:
+            modelo_nome = self._match_descricao(item.descricao, modelos)
+            if not modelo_nome or modelo_nome not in modelos_by_nome:
+                continue
+
+            modelo = modelos_by_nome[modelo_nome]
+            qtd = float(item.quantidade or 1)
+            peso_item = self._calcular_peso_modelo(modelo, qtd)
+
+            itens_calculados.append({
+                'item_id': item.id,
+                'modelo': modelo.nome,
+                'quantidade': qtd,
+                'peso_cubado_item': round(peso_item, 2),
+            })
+            peso_cubado_total += peso_item
+
+        if not itens_calculados:
+            return None
+
+        return {
+            'peso_cubado_total': round(peso_cubado_total, 2),
+            'itens': itens_calculados,
+        }
+
+    def calcular_peso_cubado_batch(self, nf_ids: List[int]) -> Dict[int, float]:
+        """
+        Calcula peso cubado para multiplas NFs em batch (2 queries).
+
+        Args:
+            nf_ids: Lista de IDs de CarviaNf
+
+        Returns:
+            Dict mapeando nf_id -> peso_cubado_total (somente NFs com match)
+        """
+        if not nf_ids:
+            return {}
+
+        from app.carvia.models import CarviaNfItem, CarviaModeloMoto
+
+        modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
+        if not modelos:
+            return {}
+
+        modelos_by_nome = {m.nome: m for m in modelos}
+
+        itens = CarviaNfItem.query.filter(
+            CarviaNfItem.nf_id.in_(nf_ids)
+        ).all()
+        if not itens:
+            return {}
+
+        itens_por_nf = defaultdict(list)
+        for item in itens:
+            itens_por_nf[item.nf_id].append(item)
+
+        resultado = {}
+        for nf_id in nf_ids:
+            peso_cubado = 0.0
+            for item in itens_por_nf.get(nf_id, []):
+                modelo_nome = self._match_descricao(item.descricao, modelos)
+                if not modelo_nome or modelo_nome not in modelos_by_nome:
+                    continue
+                modelo = modelos_by_nome[modelo_nome]
+                qtd = float(item.quantidade or 1)
+                peso_cubado += self._calcular_peso_modelo(modelo, qtd)
+
+            if peso_cubado > 0:
+                resultado[nf_id] = round(peso_cubado, 2)
+
+        return resultado
 
     def empresa_usa_cubagem(self, cnpj: str) -> bool:
         """

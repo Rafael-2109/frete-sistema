@@ -157,6 +157,11 @@ def register_nf_routes(bp):
                     seen_fat_transp.add(key)
                     faturas_transp_por_nf[nf_id].append(fat_transp)
 
+        # Batch: peso cubado por NF (2 queries)
+        from app.carvia.services.moto_recognition_service import MotoRecognitionService
+        moto_svc = MotoRecognitionService()
+        peso_cubado_por_nf = moto_svc.calcular_peso_cubado_batch(nf_ids) if nf_ids else {}
+
         return render_template(
             'carvia/nfs/listar.html',
             nfs=paginacao.items,
@@ -170,6 +175,7 @@ def register_nf_routes(bp):
             faturas_por_nf=faturas_por_nf,
             subcontratos_por_nf=subcontratos_por_nf,
             faturas_transp_por_nf=faturas_transp_por_nf,
+            peso_cubado_por_nf=peso_cubado_por_nf,
         )
 
     @bp.route('/nfs/<int:nf_id>')
@@ -202,6 +208,20 @@ def register_nf_routes(bp):
         faturas_cliente = nf.get_faturas_cliente()
         faturas_transportadora = nf.get_faturas_transportadora()
 
+        # Calcular peso cubado a partir dos itens + modelos moto
+        from app.carvia.services.moto_recognition_service import MotoRecognitionService
+        moto_svc = MotoRecognitionService()
+        resultado_cubagem = moto_svc.calcular_peso_cubado_nf(nf.id)
+        peso_cubado = (
+            resultado_cubagem['peso_cubado_total']
+            if resultado_cubagem else None
+        )
+        # Peso para cotacao: max(bruto, cubado)
+        peso_para_cotacao = max(
+            float(nf.peso_bruto or 0),
+            float(peso_cubado or 0),
+        )
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -210,6 +230,8 @@ def register_nf_routes(bp):
             subcontratos=subcontratos,
             faturas_cliente=faturas_cliente,
             faturas_transportadora=faturas_transportadora,
+            peso_cubado=peso_cubado,
+            peso_para_cotacao=peso_para_cotacao,
         )
 
     # ==================== CRIAR CTE VIA NF ====================
