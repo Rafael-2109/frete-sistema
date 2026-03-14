@@ -25,6 +25,28 @@ score de risco e varreduras automaticas.
 
 ---
 
+## Estrutura de Arquivos
+
+```
+app/seguranca/
+  ├── __init__.py            # init_app + blueprint
+  ├── models.py              # 4 models (Varredura, Vulnerabilidade, Score, Config)
+  ├── routes/
+  │   ├── dashboard_routes.py
+  │   ├── vulnerabilidade_routes.py
+  │   ├── scan_routes.py
+  │   ├── config_routes.py
+  │   └── api_routes.py
+  └── services/
+      ├── hibp_service.py           # HIBP v3 (email + senha k-anonymity)
+      ├── password_health_service.py # zxcvbn + lista BR
+      ├── domain_service.py          # DNS (SPF/DMARC/MX)
+      ├── score_service.py           # Score 0-100 ponderado
+      └── scan_orchestrator.py       # Coordena varredura completa
+```
+
+---
+
 ## Regras Criticas
 
 ### R1: Senhas NUNCA armazenadas ou logadas
@@ -44,6 +66,10 @@ Free tier: 1.6s entre requests. Timeout 10s com retry exponencial (max 3).
 
 ### R5: Unique constraint previne duplicatas
 `(user_id, categoria, titulo)` — varreduras subsequentes NAO criam duplicatas.
+
+### Setup HIBP (opcional)
+Config via UI: `SegurancaConfig.get_valor('hibp_api_key')` (`/seguranca/configuracao`).
+Com key: ativa verificacao de email breaches. Sem key: apenas senha via k-anonymity (gratis).
 
 ---
 

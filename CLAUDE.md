@@ -4,6 +4,25 @@
 
 ---
 
+## Quick Start
+
+```bash
+# Setup
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Dev server (porta 5000, debug mode)
+python run.py
+
+# Workers RQ (terminal separado, requer Redis local)
+python worker_atacadao.py --queues atacadao,high,default
+
+# Testes
+pytest
+```
+
+---
+
 ## DADOS:
 
 ### OBRIGATÓRIO

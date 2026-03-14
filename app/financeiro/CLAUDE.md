@@ -22,6 +22,16 @@ app/financeiro/
   └── parcela_utils.py  # parcela_to_int/str/odoo (VARCHAR↔INTEGER)
 ```
 
+### Workers locais
+
+```bash
+# Requer Redis rodando localmente
+rq worker default --with-scheduler
+```
+
+Queue: `default` (todos os 8 workers usam `queue_name='default'`).
+Jobs enfileirados via `enqueue_job()` de `app.portal.workers`.
+
 ---
 
 ## Armadilhas que CAUSAM BUGS

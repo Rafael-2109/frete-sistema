@@ -6,6 +6,66 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
 ---
 
+## Estrutura
+
+```
+app/agente/                          # Root — 5 arquivos
+├── __init__.py                      # Blueprint registration
+├── CLAUDE.md                        # Este arquivo (guia dev)
+├── historia.md                      # Referencia historica (legado, 76K)
+├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
+├── routes.py                        # Flask routes + SSE streaming
+├── config/                          # Configuracao e controle de acesso — 6 arquivos
+│   ├── __init__.py
+│   ├── agent_loader.py              # Carregamento dinamico do agente
+│   ├── empresa_briefing.md          # Briefing institucional injetado no prompt
+│   ├── feature_flags.py             # Feature flags e timeouts configuraveis
+│   ├── permissions.py               # ContextVar session_id, event_queue, thread-safety
+│   └── settings.py                  # Constantes e configuracoes do SDK
+├── hooks/                           # Hooks do Agent SDK — 2 arquivos
+│   ├── __init__.py
+│   └── README.md
+├── prompts/                         # Prompts do agente web — 2 arquivos
+│   ├── __init__.py
+│   └── system_prompt.md             # System prompt do agente (usuarios finais)
+├── sdk/                             # Integracao com Claude Agent SDK — 6 arquivos
+│   ├── __init__.py
+│   ├── client.py                    # Client principal (streaming, hooks, prompt injection)
+│   ├── client_pool.py               # Pool de clients reutilizaveis
+│   ├── cost_tracker.py              # Rastreamento de custos por sessao
+│   ├── pending_questions.py         # AskUserQuestion (dual event: sync + async)
+│   └── session_persistence.py       # Persistencia JSONL de sessoes SDK
+├── services/                        # Servicos de inteligencia — 13 arquivos (ver services/CLAUDE.md)
+│   ├── __init__.py
+│   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
+│   ├── friction_analyzer.py         # Analise de friccao de uso
+│   ├── insights_service.py          # Gerador de insights pos-sessao
+│   ├── intersession_briefing.py     # Briefing entre sessoes
+│   ├── knowledge_graph_service.py   # Grafo de conhecimento (memorias)
+│   ├── memory_consolidator.py       # Consolidacao de memorias redundantes
+│   ├── pattern_analyzer.py          # Extracao de padroes e conhecimento
+│   ├── recommendations_engine.py    # Motor de recomendacoes
+│   ├── sentiment_detector.py        # Deteccao de sentimento
+│   ├── session_summarizer.py        # Resumo automatico de sessoes
+│   ├── suggestion_generator.py      # Gerador de sugestoes proativas
+│   └── tool_skill_mapper.py         # Mapeamento tool → skill
+├── templates/agente/                # Templates Jinja2 — 2 arquivos
+│   ├── chat.html                    # Interface de chat web
+│   └── insights.html                # Dashboard de insights
+└── tools/                           # MCP tools (NAO callables) — 9 arquivos
+    ├── __init__.py
+    ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
+    ├── memory_mcp_tool.py           # 11 operacoes de memoria
+    ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
+    ├── render_logs_tool.py          # Consulta logs Render
+    ├── routes_search_tool.py        # Busca em rotas Flask
+    ├── schema_mcp_tool.py           # Consulta schemas de tabelas
+    ├── session_search_tool.py       # 4 operacoes de busca em sessoes
+    └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
+```
+
+---
+
 ## Regras Criticas
 
 ### R1: Dois IDs de sessao — NUNCA confundir
@@ -17,7 +77,7 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 - `sdk_session_transcript` e TEXT separado (ate 1GB), NAO JSONB — decisao de performance
 - **GOTCHA restore**: `session_persistence.py:136` — se JSONL existe no disco, NAO re-restaura do banco. JSONL corrompido (crash, escrita parcial) → resume falha silenciosamente, SDK cria sessao nova, contexto perdido sem erro visivel
 
-### R3: Thread-safety — 3 mecanismos distintos
+### R2: Thread-safety — 3 mecanismos distintos
 | Mecanismo | Para que | Onde |
 |-----------|----------|------|
 | `ContextVar` (`_current_session_id`) | `session_id` (isolamento por thread E coroutine) | `permissions.py:46` |
@@ -41,7 +101,7 @@ NUNCA substituir ContextVar por variavel global — causa race condition entre t
 No CPython o GIL protege, mas nao e oficialmente thread-safe. Se houver race condition,
 substituir por `loop.call_soon_threadsafe(pq.async_event.set)`.
 
-### R5: Stream safety — None sentinel + done_event
+### R3: Stream safety — None sentinel + done_event
 | Camada | Timeout | Funcao |
 |--------|---------|--------|
 | Heartbeat SSE | 10s | Evita proxy/Render matar conexao idle |
@@ -57,7 +117,7 @@ NUNCA remover o `yield None` no `finally` do generator — frontend trava espera
 
 **REGRA**: Ao adicionar NOVO error handler em `_stream_response()`, o `finally` block e a rede de seguranca definitiva — NAO precisa chamar `.set()` no novo handler (mas e boa pratica como defense-in-depth).
 
-### AskUserQuestion: blocking cross-arquivo
+### R4: AskUserQuestion — blocking cross-arquivo
 Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes.py`
 - Web: event_queue SSE → frontend responde → POST `/api/user-answer` → Event.set()
 - Teams: TeamsTask.status='awaiting_user_input' → Adaptive Card → POST resposta → Event.set()
@@ -65,17 +125,17 @@ Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes.
 
 Alterar um arquivo sem verificar os outros 2 quebra o fluxo silenciosamente.
 
-### MCP tools: NAO callable
+### R5: MCP tools — NAO callable
 Tools em `tools/` sao registros MCP (ToolAnnotations). O agente usa `mcp__X__Y` diretamente.
 NUNCA importar e chamar como funcao Python — nao sao callables, gera erro silencioso.
 
-### MCP Enhanced Wrapper
+### R6: MCP Enhanced Wrapper
 `tools/_mcp_enhanced.py` adiciona `outputSchema` + `structuredContent` (MCP spec 2025-06-18).
 - Usar `@enhanced_tool` + `create_enhanced_mcp_server` para tools que precisam de structured output
 - SQL tool ja migrada (v2.0.0). Demais tools usam `@tool` + `create_sdk_mcp_server` (standard)
 - Ref completa: `.claude/references/MCP_CAPABILITIES_2026.md`
 
-### JSONB: flag_modified
+### R7: JSONB — flag_modified
 Manter o padrao existente em `models.py`: SEMPRE `flag_modified(session, 'data')` apos modificar JSONB.
 
 ---
