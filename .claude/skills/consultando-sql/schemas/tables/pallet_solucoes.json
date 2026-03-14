@@ -177,16 +177,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_credito_id",
+      "name": "ix_pallet_solucoes_credito_destino_id",
       "columns": [
-        "credito_id"
+        "credito_destino_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_credito_destino_id",
+      "name": "ix_pallet_solucoes_credito_id",
       "columns": [
-        "credito_destino_id"
+        "credito_id"
       ],
       "unique": false
     },

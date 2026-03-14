@@ -1,0 +1,84 @@
+{
+  "name": "carvia_custo_entrega_anexos",
+  "description": "Tabela carvia_custo_entrega_anexos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "custo_entrega_id",
+      "type": "integer",
+      "description": "FK → carvia_custos_entrega.id",
+      "nullable": false
+    },
+    {
+      "name": "nome_original",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "nome_arquivo",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "caminho_s3",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "tamanho_bytes",
+      "type": "integer"
+    },
+    {
+      "name": "content_type",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "custo_entrega_id",
+      "references": "carvia_custos_entrega.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_custo_entrega_anexos_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custo_entrega_anexos_custo_entrega_id",
+      "columns": [
+        "custo_entrega_id"
+      ],
+      "unique": false
+    }
+  ]
+}

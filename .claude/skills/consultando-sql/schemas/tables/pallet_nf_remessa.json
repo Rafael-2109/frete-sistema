@@ -167,16 +167,23 @@
       "unique": false
     },
     {
-      "name": "idx_nf_remessa_empresa_status",
+      "name": "ix_pallet_nf_remessa_odoo_account_move_id",
       "columns": [
-        "empresa",
-        "status"
+        "odoo_account_move_id"
       ],
       "unique": false
     },
     {
       "name": "ix_pallet_nf_remessa_status",
       "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_remessa_empresa_status",
+      "columns": [
+        "empresa",
         "status"
       ],
       "unique": false
@@ -201,13 +208,6 @@
       "columns": [
         "data_emissao",
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_remessa_odoo_account_move_id",
-      "columns": [
-        "odoo_account_move_id"
       ],
       "unique": false
     }

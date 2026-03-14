@@ -246,6 +246,13 @@
   ],
   "indices": [
     {
+      "name": "ix_movimentacao_estoque_producao_pai_id",
+      "columns": [
+        "producao_pai_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_movimentacao_estoque_odoo_picking_id",
       "columns": [
         "odoo_picking_id"
@@ -475,13 +482,6 @@
       "name": "ix_movimentacao_estoque_ativo",
       "columns": [
         "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_producao_pai_id",
-      "columns": [
-        "producao_pai_id"
       ],
       "unique": false
     }

@@ -1,0 +1,150 @@
+{
+  "name": "carvia_custos_entrega",
+  "description": "Tabela carvia_custos_entrega",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_custo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "operacao_id",
+      "type": "integer",
+      "description": "FK → carvia_operacoes.id",
+      "nullable": false
+    },
+    {
+      "name": "cte_complementar_id",
+      "type": "integer",
+      "description": "FK → carvia_cte_complementares.id"
+    },
+    {
+      "name": "tipo_custo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "data_custo",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "data_vencimento",
+      "type": "date"
+    },
+    {
+      "name": "fornecedor_nome",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "fornecedor_cnpj",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "pago_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "pago_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "total_conciliado",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "conciliado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "operacao_id",
+      "references": "carvia_operacoes.id"
+    },
+    {
+      "column": "cte_complementar_id",
+      "references": "carvia_cte_complementares.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "columns": [
+        "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_numero_custo",
+      "columns": [
+        "numero_custo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_operacao_id",
+      "columns": [
+        "operacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "columns": [
+        "tipo_custo"
+      ],
+      "unique": false
+    }
+  ]
+}
