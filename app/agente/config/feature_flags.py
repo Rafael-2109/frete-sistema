@@ -12,9 +12,9 @@ import os
 # ====================================================================
 
 # Extended context window (1M tokens)
-# Suportado por: Sonnet 4/4.5 e Opus 4.6+
-# Opus 4.5 e anteriores NAO suportam
-# Requer organizacao no tier 4 ou custom rate limits
+# Opus 4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
+# Sonnet 4.5/4.0: precisam de beta header "context-1m-2025-08-07"
+# Flag mantida apenas para documentação — modelos atuais usam 1M automaticamente
 # Acima de 200K tokens: input 2x, output 1.5x mais caro
 USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
 
@@ -40,11 +40,11 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
 # Architecture + Seguranca
 # ====================================================================
 
-# Self-correction — DESATIVADO permanentemente
-# Haiku gerava falsos positivos frequentes na "Observacao de validacao"
-# que contradiziam a resposta correta e confundiam o operador.
-# Para reativar: melhorar o prompt de validacao em client.py._self_correct_response() primeiro.
-USE_SELF_CORRECTION = False
+# Self-correction — reescrito para Sonnet 4.6 (prompt específico para tabelas numéricas)
+# Histórico: Haiku gerava falsos positivos com escopo amplo. Prompt agora valida APENAS
+# inconsistências aritméticas em respostas com tabelas numéricas (threshold 500 chars).
+# Ativar: AGENT_SELF_CORRECTION=true (monitorar taxa de falsos positivos por 2 semanas)
+USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
 
 # ====================================================================
 # Melhorias de Contexto e Memoria (P0)

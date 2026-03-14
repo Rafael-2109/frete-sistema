@@ -61,6 +61,10 @@ logger = logging.getLogger('sistema_fretes')
 # HELPER: Auto-injeção de memórias do usuário
 # =====================================================================
 
+_op_context_cache: Dict[int, tuple] = {}  # user_id -> (context_str, timestamp)
+_OP_CONTEXT_TTL = 180  # 3 minutos — dados urgentes mudam na escala de horas
+
+
 def _build_operational_context(user_id: int) -> Optional[str]:
     """
     Memory v2 — Tier 0: Contexto operacional do dia.
@@ -71,8 +75,17 @@ def _build_operational_context(user_id: int) -> Optional[str]:
     - Separações pendentes
     - Conflitos de memória pendentes
 
+    Cache com TTL de 3 min — durante uma conversa típica (5-15 min),
+    pedidos urgentes e separações pendentes são estáveis.
+
     Retorna XML compacto (~300 chars) ou None.
     """
+    # Cache hit — evita 2 queries SQL por mensagem (~100ms de latência)
+    cached = _op_context_cache.get(user_id)
+    if cached and (time.time() - cached[1]) < _OP_CONTEXT_TTL:
+        logger.debug(f"[MEMORY_INJECT] Contexto operacional: cache hit (user_id={user_id})")
+        return cached[0]
+
     try:
         from app import db
         from sqlalchemy import text as sql_text
@@ -171,7 +184,11 @@ def _build_operational_context(user_id: int) -> Optional[str]:
 
         # Só retorna se tiver conteúdo útil (mais que date/dia)
         if len(parts) > 2:  # header + footer = sem conteúdo
-            return '\n'.join(parts)
+            result = '\n'.join(parts)
+            _op_context_cache[user_id] = (result, time.time())
+            return result
+
+        _op_context_cache[user_id] = (None, time.time())
         return None
 
     except Exception as e:
@@ -1011,27 +1028,34 @@ Nunca invente informações."""
     @staticmethod
     async def _self_correct_response(full_text: str) -> Optional[str]:
         """
-        D6: Self-Correction — valida coerência da resposta antes de entregar.
+        D6: Self-Correction — valida coerência aritmética em respostas tabulares.
 
-        Usa Sonnet (4.6) para verificar:
-        - Números/valores coerentes entre si
-        - Contradições internas na resposta
-        - Informação crítica faltante (ex: perguntou X, respondeu sobre Y)
+        Reescrito para Sonnet 4.6 com escopo reduzido (vs Haiku que gerava falsos positivos):
+        - Valida APENAS respostas com tabelas contendo dados numéricos
+        - Critérios: inconsistências aritméticas (soma não bate, % diverge de absolutos)
+        - Threshold: 500 chars (ignora respostas curtas/conversacionais)
 
         Args:
             full_text: Texto completo da resposta do agente
 
         Returns:
-            None se a resposta está OK
-            String com observação de correção se detectar problema
+            None se a resposta está OK ou não precisa de validação
+            String com observação de correção se detectar problema aritmético
         """
         from ..config.feature_flags import USE_SELF_CORRECTION
 
         if not USE_SELF_CORRECTION:
             return None
 
-        # Só validar respostas com conteúdo substancial (>100 chars)
-        if not full_text or len(full_text.strip()) < 100:
+        # Threshold alto — só validar respostas substanciais
+        if not full_text or len(full_text.strip()) < 500:
+            return None
+
+        # Só validar respostas que contenham tabelas com dados numéricos
+        # Indicadores: linhas com pipe (tabela markdown) + dígitos
+        import re
+        has_table = bool(re.search(r'\|.*\d.*\|', full_text))
+        if not has_table:
             return None
 
         try:
@@ -1039,18 +1063,19 @@ Nunca invente informações."""
 
             validation = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=2000,
+                max_tokens=500,
                 messages=[{
                     "role": "user",
                     "content": (
-                        "Analise esta resposta de um assistente de logística e identifique "
-                        "APENAS problemas GRAVES de coerência:\n"
-                        "- Números que contradizem entre si (ex: 'total de 5 itens' mas lista 8)\n"
-                        "- Valores monetários inconsistentes\n"
-                        "- Informação que contradiz a si mesma\n\n"
-                        "Se a resposta está coerente, responda EXATAMENTE: OK\n"
-                        "Se encontrar problema, descreva em UMA frase curta.\n\n"
-                        f"Resposta a validar:\n{full_text[:3000]}"
+                        "Verifique APENAS inconsistências ARITMÉTICAS nesta resposta:\n"
+                        "- Soma de itens não bate com total declarado\n"
+                        "- Percentual diverge dos valores absolutos\n"
+                        "- Contagem de linhas contradiz quantidade mencionada\n\n"
+                        "NÃO avalie: qualidade da escrita, completude, formatação ou "
+                        "informações que não envolvem cálculos.\n\n"
+                        "Se não há erro aritmético, responda EXATAMENTE: OK\n"
+                        "Se encontrar, descreva em UMA frase curta (ex: 'Total diz 5 itens mas tabela tem 8').\n\n"
+                        f"Resposta:\n{full_text[:3000]}"
                     )
                 }]
             )
@@ -1058,10 +1083,10 @@ Nunca invente informações."""
             result = validation.content[0].text.strip()
 
             if result.upper() == "OK" or len(result) < 5:
-                logger.debug("[SELF-CORRECTION] Resposta validada: OK")
+                logger.debug("[SELF-CORRECTION] Validação aritmética: OK")
                 return None
 
-            logger.warning(f"[SELF-CORRECTION] Problema detectado: {result}")
+            logger.warning(f"[SELF-CORRECTION] Inconsistência aritmética detectada: {result}")
             return result
 
         except Exception as e:
@@ -1637,25 +1662,15 @@ Nunca invente informações."""
             options_dict["max_budget_usd"] = MAX_BUDGET_USD
             logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
 
-        # Extended Context (1M tokens) — Sonnet 4.5+/4.6 e Opus 4.6+
-        # Sonnet 4.6 confirmado com 1M context (CLI 2.1.49 release notes)
+        # Extended Context (1M tokens)
+        # Opus 4.6 e Sonnet 4.6: 1M tokens NATIVO — sem beta header necessário.
+        # Flag mantida apenas para log/documentação. Modelos atuais usam 1M automaticamente.
         if USE_EXTENDED_CONTEXT:
             current_model = str(options_dict.get("model", self.settings.model)).lower()
-            supports_extended = (
-                "sonnet" in current_model          # Sonnet 4.5, Sonnet 4.6
-                or "opus-4-6" in current_model     # Opus 4.6 (hyphen)
-                or "opus_4_6" in current_model     # Opus 4.6 (underscore)
+            logger.info(
+                f"[AGENT_CLIENT] Extended Context: modelo '{current_model}' — "
+                f"1M tokens nativo (Opus 4.6/Sonnet 4.6), sem beta header"
             )
-            if supports_extended:
-                betas = options_dict.get("betas", [])
-                betas.append("context-1m-2025-08-07")
-                options_dict["betas"] = betas
-                logger.info(f"[AGENT_CLIENT] Extended Context habilitado (1M tokens) para {current_model}")
-            else:
-                logger.warning(
-                    f"[AGENT_CLIENT] Extended Context IGNORADO — "
-                    f"modelo '{current_model}' não suportado (Sonnet 4.5+/4.6 ou Opus 4.6+)"
-                )
 
         # Context Clearing automático
         # NOTA: clear-thinking e clear-tool-uses foram promovidos a GA.
@@ -2113,233 +2128,89 @@ Nunca invente informações."""
 
         # =================================================================
         # MCP Servers (Custom Tools in-process)
+        # Helper + glob patterns — CLI resolve "mcp__name__*" automaticamente
         # =================================================================
+        def _register_mcp(name: str, server, user_id_setter=None) -> bool:
+            """Registra MCP server com glob pattern em allowed_tools."""
+            if server is None:
+                logger.debug(f"[AGENT_CLIENT] {name}_server é None — módulo não disponível")
+                return False
+            if user_id and user_id_setter:
+                user_id_setter(user_id)
+            options_dict.setdefault("mcp_servers", {})[name] = server
+            options_dict.setdefault("allowed_tools", []).append(f"mcp__{name}__*")
+            return True
+
+        # SQL (Text-to-SQL com bloqueio condicional de tabelas pessoal_*)
         try:
             from ..tools.text_to_sql_tool import sql_server, set_current_user_id as set_sql_user_id
-            if sql_server is not None:
-                # Definir user_id no contexto para bloqueio condicional de tabelas pessoal_*
-                if user_id:
-                    set_sql_user_id(user_id)
-
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["sql"] = sql_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                # Adicionar tool na allowed_tools
-                allowed = options_dict.get("allowed_tools", [])
-                if "mcp__sql__consultar_sql" not in allowed:
-                    allowed.append("mcp__sql__consultar_sql")
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'consultar_sql' registrada")
-            else:
-                logger.debug("[AGENT_CLIENT] sql_server é None — claude_agent_sdk não disponível no módulo tools")
+            if _register_mcp("sql", sql_server, set_sql_user_id):
+                logger.info("[AGENT_CLIENT] MCP 'sql' registrada")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool text_to_sql não disponível (módulo não encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP sql não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool text_to_sql: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP sql: {e}")
 
-        # =================================================================
-        # MCP Memory Tool (memória persistente do usuário via tool_use)
-        # Substitui o padrão anterior de subagente Haiku (PRE/POST-HOOK)
-        # =================================================================
+        # Memory (memória persistente — 11 operações)
         try:
             from ..tools.memory_mcp_tool import memory_server, set_current_user_id
-
-            if memory_server is not None:
-                # Definir user_id no contexto para as memory tools
-                if user_id:
-                    set_current_user_id(user_id)
-
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["memory"] = memory_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                # Adicionar tools na allowed_tools
-                allowed = options_dict.get("allowed_tools", [])
-                memory_tool_names = [
-                    "mcp__memory__view_memories",
-                    "mcp__memory__save_memory",
-                    "mcp__memory__update_memory",
-                    "mcp__memory__delete_memory",
-                    "mcp__memory__list_memories",
-                    "mcp__memory__clear_memories",
-                    "mcp__memory__search_cold_memories",
-                    "mcp__memory__view_memory_history",
-                    "mcp__memory__restore_memory_version",
-                    "mcp__memory__resolve_pendencia",
-                    "mcp__memory__log_system_pitfall",
-                ]
-                for tool_name in memory_tool_names:
-                    if tool_name not in allowed:
-                        allowed.append(tool_name)
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'memory' registrada (11 operações)")
-            else:
-                logger.debug("[AGENT_CLIENT] memory_server é None — claude_agent_sdk não disponível")
+            if _register_mcp("memory", memory_server, set_current_user_id):
+                logger.info("[AGENT_CLIENT] MCP 'memory' registrada (11 operações)")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool memory não disponível (módulo não encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP memory não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool memory: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP memory: {e}")
 
-        # =================================================================
-        # MCP Schema Tool (descoberta de schema para operações de cadastro)
-        # =================================================================
+        # Schema (descoberta de schema — 2 operações)
         try:
             from ..tools.schema_mcp_tool import schema_server
-            if schema_server is not None:
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["schema"] = schema_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                # Adicionar tools na allowed_tools
-                allowed = options_dict.get("allowed_tools", [])
-                schema_tool_names = [
-                    "mcp__schema__consultar_schema",
-                    "mcp__schema__consultar_valores_campo",
-                ]
-                for tool_name in schema_tool_names:
-                    if tool_name not in allowed:
-                        allowed.append(tool_name)
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'schema' registrada (2 operações)")
-            else:
-                logger.debug("[AGENT_CLIENT] schema_server é None — claude_agent_sdk não disponível")
+            if _register_mcp("schema", schema_server):
+                logger.info("[AGENT_CLIENT] MCP 'schema' registrada (2 operações)")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool schema não disponível (módulo não encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP schema não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool schema: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP schema: {e}")
 
-        # =================================================================
-        # P2-1: MCP Sessions Search Tool (busca em sessões anteriores)
-        # =================================================================
+        # Sessions (busca em sessões anteriores — 4 operações)
         try:
             from ..tools.session_search_tool import sessions_server
             from ..tools.session_search_tool import set_current_user_id as set_session_search_user_id
-
-            if sessions_server is not None:
-                if user_id:
-                    set_session_search_user_id(user_id)
-
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["sessions"] = sessions_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                # Adicionar tools na allowed_tools
-                allowed = options_dict.get("allowed_tools", [])
-                sessions_tool_names = [
-                    "mcp__sessions__search_sessions",
-                    "mcp__sessions__list_recent_sessions",
-                    "mcp__sessions__semantic_search_sessions",
-                    "mcp__sessions__list_session_users",
-                ]
-                for tool_name in sessions_tool_names:
-                    if tool_name not in allowed:
-                        allowed.append(tool_name)
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'sessions' registrada (4 operações)")
-            else:
-                logger.debug("[AGENT_CLIENT] sessions_server é None — claude_agent_sdk não disponível")
+            if _register_mcp("sessions", sessions_server, set_session_search_user_id):
+                logger.info("[AGENT_CLIENT] MCP 'sessions' registrada (4 operações)")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool sessions não disponível (módulo não encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP sessions não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool sessions: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP sessions: {e}")
 
-        # =================================================================
-        # MCP Render Logs Tool (consulta de logs e metricas do Render)
-        # =================================================================
+        # Render (logs e métricas — 3 operações)
         try:
             from ..tools.render_logs_tool import render_server
-
-            if render_server is not None:
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["render"] = render_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                allowed = options_dict.get("allowed_tools", [])
-                render_tool_names = [
-                    "mcp__render__consultar_logs",
-                    "mcp__render__consultar_erros",
-                    "mcp__render__status_servicos",
-                ]
-                for tool_name in render_tool_names:
-                    if tool_name not in allowed:
-                        allowed.append(tool_name)
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'render' registrada (3 operações)")
-            else:
-                logger.debug("[AGENT_CLIENT] render_server é None — claude_agent_sdk não disponível")
+            if _register_mcp("render", render_server):
+                logger.info("[AGENT_CLIENT] MCP 'render' registrada (3 operações)")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool render não disponível (módulo não encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP render não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool render: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP render: {e}")
 
-        # =================================================================
-        # MCP Browser Tool (navegacao web via Playwright headless)
-        # =================================================================
+        # Browser (Playwright headless — SSW + Atacadão, 12 operações)
         try:
             from ..tools.playwright_mcp_tool import browser_server
-
-            if browser_server is not None:
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["browser"] = browser_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                allowed = options_dict.get("allowed_tools", [])
-                browser_tool_names = [
-                    "mcp__browser__browser_navigate",
-                    "mcp__browser__browser_snapshot",
-                    "mcp__browser__browser_screenshot",
-                    "mcp__browser__browser_click",
-                    "mcp__browser__browser_type",
-                    "mcp__browser__browser_select_option",
-                    "mcp__browser__browser_read_content",
-                    "mcp__browser__browser_close",
-                    "mcp__browser__browser_evaluate_js",
-                    "mcp__browser__browser_switch_frame",
-                    "mcp__browser__browser_ssw_login",
-                    "mcp__browser__browser_ssw_navigate_option",
-                ]
-                for tool_name in browser_tool_names:
-                    if tool_name not in allowed:
-                        allowed.append(tool_name)
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'browser' registrada (12 operações)")
-            else:
-                logger.debug("[AGENT_CLIENT] browser_server é None — playwright não disponível")
+            if _register_mcp("browser", browser_server):
+                logger.info("[AGENT_CLIENT] MCP 'browser' registrada (12 operações)")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool browser não disponível (módulo não encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP browser não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool browser: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP browser: {e}")
 
-        # =================================================================
-        # MCP Routes Search Tool (busca semantica de rotas e templates)
-        # =================================================================
+        # Routes (busca semântica de rotas — 1 operação)
         try:
             from ..tools.routes_search_tool import routes_server
-
-            if routes_server is not None:
-                mcp_servers = options_dict.get("mcp_servers", {})
-                mcp_servers["routes"] = routes_server
-                options_dict["mcp_servers"] = mcp_servers
-
-                allowed = options_dict.get("allowed_tools", [])
-                if "mcp__routes__search_routes" not in allowed:
-                    allowed.append("mcp__routes__search_routes")
-                options_dict["allowed_tools"] = allowed
-
-                logger.info("[AGENT_CLIENT] Custom Tool MCP 'routes' registrada (1 operacao)")
-            else:
-                logger.debug("[AGENT_CLIENT] routes_server e None — claude_agent_sdk nao disponivel")
+            if _register_mcp("routes", routes_server):
+                logger.info("[AGENT_CLIENT] MCP 'routes' registrada (1 operação)")
         except ImportError:
-            logger.debug("[AGENT_CLIENT] Custom Tool routes nao disponivel (modulo nao encontrado)")
+            logger.debug("[AGENT_CLIENT] MCP routes não disponível")
         except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro ao registrar Custom Tool routes: {e}")
+            logger.warning(f"[AGENT_CLIENT] Erro MCP routes: {e}")
 
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
