@@ -328,10 +328,25 @@
     white-space: nowrap;
 }
 
-/* Ensure tables inside table-responsive have a minimum width to prevent
-   extreme compression — forces horizontal scroll instead of text wrapping */
+/* Tables inside .table-responsive use auto layout to respect cell min-widths.
+   width: auto overrides Bootstrap's width: 100% so columns can expand beyond the container.
+   min-width: 100% ensures the table never shrinks below the container width.
+   The .table-responsive wrapper provides horizontal scroll when the table exceeds viewport. */
 .table-responsive > .table {
-    min-width: 800px;
+    width: auto;
+    min-width: 100%;
+}
+
+/* Default: data cells in responsive tables don't wrap — forces horizontal scroll
+   instead of compressing columns. Use .cell-wrap on cells that should wrap. */
+.table-responsive > .table > :not(caption) > * > * {
+    white-space: nowrap;
+}
+
+/* Opt-out: cells that need text wrapping (descriptions, notes, obs) */
+.table-responsive .cell-wrap {
+    white-space: normal;
+    min-width: 150px;
 }
 
 } /* End of @layer components */

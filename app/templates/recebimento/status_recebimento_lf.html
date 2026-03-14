@@ -201,67 +201,7 @@
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-    .badge-status {
-        font-size: 0.75rem;
-        padding: 0.3em 0.6em;
-    }
-    .badge-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
-    .badge-processando { background-color: var(--bs-info); color: white; }
-    .badge-processado { background-color: var(--bs-success); color: white; }
-    .badge-erro { background-color: var(--bs-danger); color: white; }
-
-    .btn-action {
-        padding: 0.2rem 0.4rem;
-        font-size: 0.75rem;
-    }
-
-    .erro-msg {
-        font-size: 0.75rem;
-        color: var(--bs-danger);
-        max-width: 200px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .fase-step {
-        width: 60px;
-        color: var(--bs-secondary);
-        transition: color 0.3s;
-    }
-    .fase-step.ativa {
-        color: var(--bs-info);
-        font-weight: bold;
-    }
-    .fase-step.concluida {
-        color: var(--bs-success);
-    }
-    .fase-step.erro {
-        color: var(--bs-danger);
-    }
-    .fase-connector {
-        flex: 1;
-        height: 2px;
-        background-color: var(--bs-border-color);
-        align-self: center;
-        margin: 0 5px;
-    }
-
-    .fase-badge {
-        font-size: 0.7rem;
-        white-space: nowrap;
-    }
-
-    /* Transfer badges */
-    .badge-transfer-sem { background-color: var(--bs-secondary); color: white; }
-    .badge-transfer-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
-    .badge-transfer-processando { background-color: var(--bs-info); color: white; }
-    .badge-transfer-concluido { background-color: var(--bs-success); color: white; }
-    .badge-transfer-erro { background-color: var(--bs-danger); color: white; }
-</style>
-{% endblock %}
+{% block extra_css %}{% endblock %}
 
 {% block scripts %}
 <script>

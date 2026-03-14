@@ -85,6 +85,22 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
+     DASHBOARD — compact stat-cards and action-cards
+     Reduces vertical bulk so KPI row + actions row feel proportional
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Compact action-card variant for dashboard quick-actions */
+  .action-card-sm {
+      padding: 0.75rem 0.5rem;
+      font-size: 0.8rem;
+  }
+
+  .action-card-sm i {
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
      CARD HEADER AND TABLE - Theme-aware backgrounds
      Migrated from visualizar_frete.html and listar_fretes.html inline styles
      ═══════════════════════════════════════════════════════════════════════════ */
@@ -345,6 +361,196 @@
 
   .peso-cubado-preview .badge {
     font-size: 0.8rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     GERENCIAR DESPESAS EXTRAS — tab styling
+     Source: fretes/gerenciar_despesas_extras.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  #despesasTabs .nav-link {
+    font-size: 1.1rem;
+    padding: 1rem 1.5rem;
+    color: var(--bs-secondary-color);
+    border: 2px solid transparent;
+  }
+
+  #despesasTabs .nav-link:hover {
+    border-color: var(--bs-border-color);
+    background-color: var(--bs-tertiary-bg);
+  }
+
+  #despesasTabs .nav-link.active {
+    font-weight: 600;
+    border-bottom: 3px solid var(--bs-primary);
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+  }
+
+  .gerenciar-despesas .tab-content {
+    padding-top: 1.5rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     RELATORIO ANALISE FRETES — filter card, generate button, info box, loading
+     Source: fretes/relatorio_analise_fretes.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .filter-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+
+  .filter-card .card-header {
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 8px 8px 0 0;
+    padding: 0.75rem 1rem;
+  }
+
+  .filter-card .card-body {
+    padding: 1.5rem;
+  }
+
+  .btn-gerar {
+    background: linear-gradient(135deg, var(--semantic-success) 0%, hsl(145 65% 30%) 100%);
+    border: none;
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+    font-weight: 500;
+    color: hsl(0 0% 100%);
+  }
+
+  .btn-gerar:hover {
+    background: linear-gradient(135deg, hsl(145 65% 30%) 0%, hsl(145 65% 25%) 100%);
+    color: hsl(0 0% 100%);
+  }
+
+  .info-box {
+    background-color: hsla(220 80% 53% / 0.08);
+    border-left: 4px solid hsl(220 45% 52%);
+    padding: 1rem;
+    border-radius: 4px;
+    margin-top: 1.5rem;
+  }
+
+  .info-box h6 {
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  .info-box ul {
+    margin-bottom: 0;
+    padding-left: 1.25rem;
+  }
+
+  .info-box li {
+    margin-bottom: 0.25rem;
+  }
+
+  .loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: hsla(0 0% 0% / 0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .loading-overlay.show {
+    display: flex;
+  }
+
+  .loading-content {
+    background: var(--bg-light);
+    padding: 2rem 3rem;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .loading-content .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    color: var(--amber-55);
+  }
+
+  .loading-content p {
+    margin-top: 1rem;
+    margin-bottom: 0;
+    color: var(--text);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CTES INDEX — status badges, stat cards, action buttons
+     Source: fretes/ctes/index.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .status-badge {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.375rem;
+  }
+
+  .status-concluido {
+    background-color: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+  }
+
+  .status-rateio {
+    background-color: rgba(var(--bs-warning-rgb), 0.15);
+    color: var(--bs-warning);
+  }
+
+  .status-po {
+    background-color: rgba(var(--bs-info-rgb), 0.15);
+    color: var(--bs-info);
+  }
+
+  .status-ciencia {
+    background-color: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+  }
+
+  .status-sincronizado {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+  }
+
+  .status-rascunho {
+    background-color: rgba(var(--bs-danger-rgb), 0.15);
+    color: var(--bs-danger);
+  }
+
+  .status-rejeitado {
+    background-color: rgba(var(--bs-danger-rgb), 0.2);
+    color: var(--bs-danger);
+  }
+
+  .vinculado-badge {
+    background-color: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+  }
+
+  .nao-vinculado-badge {
+    background-color: rgba(var(--bs-danger-rgb), 0.15);
+    color: var(--bs-danger);
+  }
+
+  .card-stat {
+    border-left: 4px solid;
+    transition: transform 0.2s;
+  }
+
+  .card-stat:hover {
+    transform: translateY(-2px);
+  }
+
+  .btn-action {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
   }
 
 } /* End @layer modules */

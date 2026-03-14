@@ -3,12 +3,14 @@
    Monitoramento de vulnerabilidades de colaboradores
    ═══════════════════════════════════════════════════════════════ */
 
+@layer modules {
+
 /* Score Circle */
 .seg-score-circle {
     width: 120px;
     height: 120px;
     border-radius: 50%;
-    border: 6px solid var(--bs-secondary-bg, #6c757d);
+    border: 6px solid var(--bs-secondary-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -16,15 +18,15 @@
 }
 
 .seg-score-circle.seg-score-success {
-    border-color: var(--bs-success, #198754);
+    border-color: var(--bs-success);
 }
 
 .seg-score-circle.seg-score-warning {
-    border-color: var(--bs-warning, #ffc107);
+    border-color: var(--bs-warning);
 }
 
 .seg-score-circle.seg-score-danger {
-    border-color: var(--bs-danger, #dc3545);
+    border-color: var(--bs-danger);
 }
 
 .seg-score-value {
@@ -41,7 +43,7 @@
 
 .seg-stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--shadow-md, 0 4px 6px -1px hsla(0 0% 0% / 0.1));
 }
 
 .seg-stat-card .stat-value {
@@ -111,7 +113,8 @@
 }
 
 /* Light mode adjustments — WCAG contrast */
-[data-bs-theme="light"] .seg-badge-status-resolvida,
-[data-theme="light"] .seg-badge-status-resolvida {
+[data-bs-theme="light"] .seg-badge-status-resolvida {
     --_badge-bg: hsl(145 65% 35%);
 }
+
+} /* End @layer modules */

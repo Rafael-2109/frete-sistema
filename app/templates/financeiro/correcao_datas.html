@@ -4,18 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/financeiro/extrato.css') }}">
-<style>
-.data-errada {
-    background: var(--fin-bg-danger) !important;
-    color: var(--fin-accent-danger);
-    font-weight: 600;
-}
-.data-correta {
-    background: var(--fin-bg-success) !important;
-    color: var(--fin-accent-success);
-    font-weight: 600;
-}
-</style>
+{# Styles moved to modules/_financeiro.css #}
 {% endblock %}
 
 {% block content %}

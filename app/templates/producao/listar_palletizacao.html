@@ -2,49 +2,7 @@
 
 {% block title %}Cadastro de Palletização{% endblock %}
 
-{% block extra_css %}
-<style>
-    /* Letras menores na tabela */
-    #tabelaPalletizacao {
-        font-size: 0.85rem;
-    }
-
-    #tabelaPalletizacao th {
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-
-    #tabelaPalletizacao td {
-        font-size: 0.85rem;
-    }
-
-    /* Código em cima, nome embaixo */
-    .produto-info {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .produto-codigo {
-        font-weight: bold;
-        color: var(--bs-body-color);
-        font-size: 0.9rem;
-    }
-
-    .produto-nome {
-        font-size: 0.75rem;
-        color: var(--bs-secondary-color);
-        line-height: 1.2;
-    }
-
-    /* Badges de características do produto (Comp, Prod, Vend) */
-    #tabelaPalletizacao .badge {
-        min-width: 22px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 0.35em 0.5em;
-    }
-</style>
-{% endblock %}
+{% block extra_css %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">

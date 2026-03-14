@@ -297,4 +297,46 @@
     --_badge-color: hsl(0 0% 20%);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BADGE OVERRIDES — Migrado de bootstrap-theme-override.css
+     Garante texto correto em badges Bootstrap
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Badges com fundo colorido - texto escuro para contraste */
+  .badge.bg-primary,
+  .badge.bg-warning {
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* Badges com fundo escuro - texto claro */
+  .badge.bg-secondary,
+  .badge.bg-success,
+  .badge.bg-danger,
+  .badge.bg-info {
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* Badge light - adapta ao tema */
+  .badge.bg-light {
+    --_badge-color: var(--text);
+    --_badge-bg: var(--bs-secondary-bg, var(--bg-light));
+    --_badge-border: var(--border);
+  }
+
+  /* Light mode: ajustar success/info para melhor contraste */
+  [data-bs-theme="light"] .badge.bg-success,
+  [data-theme="light"] .badge.bg-success {
+    --_badge-bg: hsl(135 65% 35%);
+  }
+
+  [data-bs-theme="light"] .badge.bg-info,
+  [data-theme="light"] .badge.bg-info {
+    --_badge-bg: hsl(250 40% 40%);
+  }
+
+  [data-bs-theme="light"] .badge.bg-dark,
+  [data-theme="light"] .badge.bg-dark {
+    --_badge-bg: hsl(0 0% 25%);
+  }
+
 } /* End @layer components */

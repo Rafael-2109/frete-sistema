@@ -1,50 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<style>
-  /* MIGRADO: Usando variaveis de _variables.css */
-  @media print {
-    body {
-      font-size: 11px;
-    }
-
-    .btn,
-    .no-print,
-    nav,
-    .navbar {
-      display: none !important;
-    }
-
-    .card,
-    .container {
-      box-shadow: none;
-      border: none;
-      padding: 0;
-      max-width: 100%;
-    }
-
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      font-size: 14px;
-    }
-  }
-
-  .dados-tabela .row {
-    margin-bottom: 0.5rem;
-  }
-
-  /* Badges: centralizados em components/_badges.css */
-
-  .valor-destaque {
-    font-weight: bold;
-    color: var(--bs-body-color);
-  }
-</style>
-
 <div class="container my-4">
   <div class="card">
     <div class="card-header">

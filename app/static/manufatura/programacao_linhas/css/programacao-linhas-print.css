@@ -3,12 +3,14 @@
    Formato: Paisagem (Landscape)
    ============================================================ */
 
+@layer modules {
+
 /* Variaveis */
 :root {
     --print-primary: #198754;
     --print-secondary: #6c757d;
     --print-border: #dee2e6;
-    --print-header-bg: #f8f9fa;
+    --print-header-bg: var(--bg-light, #f8f9fa);
 }
 
 /* ============================================================
@@ -60,7 +62,7 @@
     top: 0;
     left: 0;
     right: 0;
-    background: #fff;
+    background: hsl(0 0% 100%);
     border-bottom: 2px solid var(--print-primary);
     padding: 10px 20px;
     z-index: 1000;
@@ -69,7 +71,7 @@
 
 .controls-bar .form-label {
     font-size: 0.85rem;
-    color: #495057;
+    color: var(--text-muted, #495057);
 }
 
 /* ============================================================
@@ -124,7 +126,7 @@
 
 .header-info {
     font-size: 0.85rem;
-    color: #495057;
+    color: var(--text-muted, #495057);
 }
 
 .info-item {
@@ -196,7 +198,7 @@
 }
 
 .print-table thead {
-    background: #e9ecef;
+    background: var(--bs-secondary-bg, #e9ecef);
 }
 
 .print-table th {
@@ -204,7 +206,7 @@
     font-weight: 600;
     text-align: left;
     border-bottom: 2px solid var(--print-border);
-    color: #495057;
+    color: var(--text-muted, #495057);
     font-size: 0.8rem;
     text-transform: uppercase;
 }
@@ -216,18 +218,18 @@
 }
 
 .print-table tbody tr:nth-child(even) {
-    background: #f8f9fa;
+    background: var(--bg-light, #f8f9fa);
 }
 
 .print-table tbody tr:hover {
-    background: #e9ecef;
+    background: var(--bs-secondary-bg, #e9ecef);
 }
 
 /* Celulas especificas */
 .code-cell {
     font-family: monospace;
     font-weight: 600;
-    color: #0d6efd;
+    color: var(--bs-primary, #0d6efd);
 }
 
 .product-name {
@@ -244,7 +246,7 @@
 
 .obs-cell {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--text-muted, #6c757d);
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -253,16 +255,16 @@
 
 /* Linhas de subtotal e total */
 .subtotal-row {
-    background: #fff3cd !important;
+    background: var(--bs-warning-bg-subtle, #fff3cd) !important;
 }
 
 .subtotal-row td {
-    border-top: 1px dashed #ffc107;
+    border-top: 1px dashed var(--bs-warning, #ffc107);
     font-size: 0.8rem;
 }
 
 .total-row {
-    background: #d1e7dd !important;
+    background: var(--bs-success-bg-subtle, #d1e7dd) !important;
 }
 
 .total-row td {
@@ -301,14 +303,14 @@
 }
 
 .resumo-table thead th {
-    background: #e9ecef;
+    background: var(--bs-secondary-bg, #e9ecef);
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.8rem;
 }
 
 .resumo-table .total-row {
-    background: #d1e7dd;
+    background: var(--bs-success-bg-subtle, #d1e7dd);
 }
 
 .resumo-table .total-row td {
@@ -402,17 +404,19 @@
    BADGES CUSTOMIZADOS
    ============================================================ */
 .badge.bg-info {
-    background-color: #0dcaf0 !important;
+    background-color: var(--bs-info, #0dcaf0) !important;
 }
 
 .badge.bg-success {
-    background-color: #198754 !important;
+    background-color: var(--bs-success, #198754) !important;
 }
 
 .badge.bg-primary {
-    background-color: #0d6efd !important;
+    background-color: var(--bs-primary, #0d6efd) !important;
 }
 
 .badge.bg-secondary {
-    background-color: #6c757d !important;
+    background-color: var(--bs-secondary, #6c757d) !important;
 }
+
+} /* End @layer modules */

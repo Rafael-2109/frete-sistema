@@ -436,8 +436,62 @@ i.text-muted,
     }
 }
 
-/* TABLE HOVER do Bootstrap: desativação movida para bootstrap-theme-override.css
-   (fora de @layer) para vencer o CDN */
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE HOVER — Desativa mecanismo interno Bootstrap (background-image)
+   para que apenas nosso hover (background-color via --hover-bg) atue.
+   Migrado de bootstrap-theme-override.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-hover > tbody > tr:hover > * {
+    --bs-table-bg-state: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE SORTABLE HEADER HOVER
+   Migrado de bootstrap-theme-override.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+thead.table-dark th.sortable:hover {
+    background-color: var(--bs-secondary) !important;
+    transition: background-color 0.2s;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTON PRIMARY - Light mode texto branco para contraste
+   Migrado de bootstrap-theme-override.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-bs-theme="light"] .btn-primary,
+[data-theme="light"] .btn-primary {
+    color: hsl(0 0% 100%) !important;
+}
+
+[data-bs-theme="light"] .btn-primary:hover,
+[data-theme="light"] .btn-primary:hover,
+[data-bs-theme="light"] .btn-primary:focus,
+[data-theme="light"] .btn-primary:focus {
+    color: hsl(0 0% 100%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BTN-OUTLINE-WARNING - Light mode texto escuro para contraste legível
+   Migrado de bootstrap-theme-override.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-bs-theme="light"] .btn-outline-warning,
+[data-theme="light"] .btn-outline-warning {
+    color: var(--warning-outline-text, hsl(60 80% 28%));
+    border-color: var(--amber-50);
+}
+
+[data-bs-theme="light"] .btn-outline-warning:hover,
+[data-theme="light"] .btn-outline-warning:hover,
+[data-bs-theme="light"] .btn-check:checked + .btn-outline-warning,
+[data-theme="light"] .btn-check:checked + .btn-outline-warning {
+    background-color: var(--amber-50);
+    color: hsl(0 0% 10%);
+    border-color: var(--amber-50);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OUTLINE BUTTONS - Cores corretas para botões outline

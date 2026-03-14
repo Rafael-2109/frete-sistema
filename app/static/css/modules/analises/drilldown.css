@@ -1,6 +1,7 @@
 /* ========================================
    ANÁLISES DE FRETES - DRILL-DOWN DINÂMICO
    ======================================== */
+@layer modules {
 
 /* ========== BREADCRUMB DRILL-DOWN ========== */
 .drill-breadcrumb {
@@ -8,10 +9,10 @@
     align-items: center;
     gap: 10px;
     padding: 15px;
-    background: #f8f9fa;
+    background: var(--bg);
     border-radius: 8px;
     flex-wrap: wrap;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 3px hsla(0 0% 0% / 0.1);
 }
 
 .breadcrumb-item {
@@ -19,26 +20,27 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-weight: 500;
+    color: var(--text);
     position: relative;
     transition: all 0.2s;
 }
 
 .breadcrumb-item:hover {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 6px hsla(0 0% 0% / 0.1);
 }
 
 .breadcrumb-item i {
-    color: #007bff;
+    color: var(--semantic-info);
 }
 
 .breadcrumb-item .btn-remove {
     background: transparent;
     border: none;
-    color: #dc3545;
+    color: var(--semantic-danger);
     cursor: pointer;
     padding: 0 5px;
     margin-left: 8px;
@@ -47,27 +49,28 @@
 }
 
 .breadcrumb-item .btn-remove:hover {
-    color: #a02622;
+    color: var(--semantic-danger);
+    filter: brightness(0.75);
     transform: scale(1.2);
 }
 
 .breadcrumb-current {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
+    background: var(--semantic-info);
+    color: hsl(0 0% 100%);
+    border-color: var(--semantic-info);
 }
 
 .breadcrumb-current i {
-    color: white;
+    color: hsl(0 0% 100%);
 }
 
 /* ========== MENU CONTEXTUAL DE DRILL-DOWN ========== */
 .drill-context-menu {
     position: absolute;
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.15);
     z-index: 9999;
     min-width: 220px;
     max-width: 300px;
@@ -75,11 +78,11 @@
 
 .drill-context-menu .menu-header {
     padding: 12px 15px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
     font-weight: 600;
     font-size: 14px;
-    color: #495057;
+    color: var(--text-muted);
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
 }
@@ -93,21 +96,21 @@
     width: 100%;
     padding: 10px 15px;
     border: none;
-    background: white;
+    background: var(--bg-light);
     text-align: left;
     cursor: pointer;
     transition: background 0.2s;
     font-size: 14px;
-    color: #212529;
+    color: var(--text);
 }
 
 .drill-context-menu .menu-item:hover {
-    background: #f8f9fa;
+    background: var(--bg);
 }
 
 .drill-context-menu .menu-item i {
     margin-right: 10px;
-    color: #007bff;
+    color: var(--semantic-info);
     width: 20px;
     text-align: center;
 }
@@ -120,11 +123,11 @@
 }
 
 .metric-card {
-    background: white;
-    border-left: 4px solid #007bff;
+    background: var(--bg-light);
+    border-left: 4px solid var(--semantic-info);
     padding: 15px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px hsla(0 0% 0% / 0.1);
     flex: 1;
     min-width: 140px;
     transition: all 0.3s;
@@ -132,36 +135,36 @@
 
 .metric-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 8px hsla(0 0% 0% / 0.15);
 }
 
 .metric-card:nth-child(1) {
-    border-left-color: #28a745;
+    border-left-color: var(--semantic-success);
 }
 
 .metric-card:nth-child(2) {
-    border-left-color: #17a2b8;
+    border-left-color: var(--semantic-info);
 }
 
 .metric-card:nth-child(3) {
-    border-left-color: #ffc107;
+    border-left-color: var(--amber-50);
 }
 
 .metric-card:nth-child(4) {
-    border-left-color: #dc3545;
+    border-left-color: var(--semantic-danger);
 }
 
 .metric-card:nth-child(5) {
-    border-left-color: #6f42c1;
+    border-left-color: var(--semantic-info);
 }
 
 .metric-card:nth-child(6) {
-    border-left-color: #fd7e14;
+    border-left-color: var(--amber-60);
 }
 
 .metric-label {
     font-size: 11px;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 5px;
@@ -171,7 +174,7 @@
 .metric-value {
     font-size: 20px;
     font-weight: bold;
-    color: #212529;
+    color: var(--text);
 }
 
 /* ========== BOTÕES DE DIMENSÃO ========== */
@@ -181,7 +184,7 @@
 
 .dimension-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 8px hsla(0 0% 0% / 0.15);
 }
 
 .dimension-btn i {
@@ -195,8 +198,8 @@
 }
 
 .table-row-drillable:hover {
-    background: #f8f9fa !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    background: var(--bg);
+    box-shadow: 0 2px 4px hsla(0 0% 0% / 0.05);
     transform: scale(1.01);
 }
 
@@ -205,7 +208,8 @@
 }
 
 #drill-table thead th {
-    background-color: #f8f9fa;
+    background-color: var(--bg);
+    color: var(--text);
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
@@ -232,7 +236,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: hsla(0 0% 0% / 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -240,11 +244,11 @@
 }
 
 .loading-spinner {
-    background: white;
+    background: var(--bg-light);
     padding: 30px;
     border-radius: 10px;
     text-align: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 20px hsla(0 0% 0% / 0.3);
 }
 
 .loading-spinner .spinner-border {
@@ -257,13 +261,13 @@
     margin-top: 15px;
     margin-bottom: 0;
     font-weight: 600;
-    color: #495057;
+    color: var(--text-muted);
 }
 
 /* ========== TABS CUSTOMIZADAS ========== */
 .nav-tabs .nav-link {
     font-weight: 600;
-    color: #6c757d;
+    color: var(--text-muted);
     border: none;
     border-bottom: 3px solid transparent;
     transition: all 0.3s;
@@ -271,14 +275,14 @@
 
 .nav-tabs .nav-link:hover {
     border-color: transparent;
-    border-bottom-color: #dee2e6;
+    border-bottom-color: var(--border);
 }
 
 .nav-tabs .nav-link.active {
-    color: #007bff;
+    color: var(--semantic-info);
     background: transparent;
     border-color: transparent;
-    border-bottom-color: #007bff;
+    border-bottom-color: var(--semantic-info);
 }
 
 /* ========== BOTÃO DE EXPORTAÇÃO ========== */
@@ -351,20 +355,57 @@
 .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .empty-state i {
     font-size: 64px;
-    color: #dee2e6;
+    color: var(--border);
     margin-bottom: 20px;
 }
 
 .empty-state h5 {
-    color: #495057;
+    color: var(--text-muted);
     margin-bottom: 10px;
 }
 
 .empty-state p {
-    color: #6c757d;
+    color: var(--text-muted);
 }
+
+/* ========== DARK MODE ========== */
+[data-bs-theme="dark"] {
+    .drill-breadcrumb {
+        box-shadow: 0 1px 3px hsla(0 0% 0% / 0.3);
+    }
+
+    .breadcrumb-item:hover {
+        box-shadow: 0 2px 6px hsla(0 0% 0% / 0.3);
+    }
+
+    .drill-context-menu {
+        box-shadow: 0 4px 12px hsla(0 0% 0% / 0.4);
+    }
+
+    .metric-card {
+        box-shadow: 0 2px 4px hsla(0 0% 0% / 0.25);
+    }
+
+    .metric-card:hover {
+        box-shadow: 0 4px 8px hsla(0 0% 0% / 0.35);
+    }
+
+    .dimension-btn:hover {
+        box-shadow: 0 4px 8px hsla(0 0% 0% / 0.35);
+    }
+
+    .table-row-drillable:hover {
+        box-shadow: 0 2px 4px hsla(0 0% 0% / 0.15);
+    }
+
+    .loading-spinner {
+        box-shadow: 0 4px 20px hsla(0 0% 0% / 0.5);
+    }
+}
+
+} /* End @layer modules */

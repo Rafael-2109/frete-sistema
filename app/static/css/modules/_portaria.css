@@ -1,0 +1,115 @@
+/**
+ * _portaria.css - Portaria Module Styles
+ *
+ * Migrated from portaria/historico.html inline <style> block.
+ *
+ * Token mapping:
+ * - var(--bg-light) for elevated backgrounds
+ * - var(--text) for primary text
+ * - var(--text-muted) for secondary text
+ * - var(--border) for borders
+ */
+
+@layer modules {
+
+  /* ========================================================================
+     PORTARIA MODULE
+     Migrated from portaria/historico.html
+     ======================================================================== */
+
+  /* ---------------------------------------------------------------------------
+     Card Header Theme Aware
+     --------------------------------------------------------------------------- */
+  .card-header-theme {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .card-header-theme h5,
+  .card-header-theme h6 {
+    color: var(--bs-body-color);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Thead Theme Aware
+     --------------------------------------------------------------------------- */
+  .table thead.table-thead-theme {
+    background-color: var(--bs-tertiary-bg);
+  }
+
+  .table thead.table-thead-theme th {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-bottom: 2px solid var(--bs-border-color);
+    font-weight: 600;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Dark Mode: Reset table variables for #tabela-historico
+     NOTE: !important kept throughout dark mode section — overrides Bootstrap
+     table utility classes (.table-light, .table-success, .table-warning,
+     .table-secondary) which apply background-color with their own !important
+     --------------------------------------------------------------------------- */
+  [data-bs-theme="dark"] #tabela-historico {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: rgba(var(--bs-primary-rgb), 0.12);
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-hover-color: var(--bs-body-color);
+  }
+
+  /* Reset base cells */
+  [data-bs-theme="dark"] #tabela-historico tbody tr td {
+    background-color: transparent !important;
+    color: var(--bs-body-color) !important;
+  }
+
+  /* STATUS: table-light (SAIU) */
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-light td {
+    background-color: hsla(220 9% 46% / 0.12) !important;
+  }
+
+  /* STATUS: table-success (DENTRO) */
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-success td {
+    background-color: hsla(161 83% 39% / 0.15) !important;
+  }
+
+  /* STATUS: table-warning (AGUARDANDO) */
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-warning td {
+    background-color: hsla(43 96% 56% / 0.15) !important;
+  }
+
+  /* STATUS: table-secondary */
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-secondary td {
+    background-color: hsla(220 9% 46% / 0.15) !important;
+  }
+
+  /* HOVER: Intensify colors */
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-light:hover td {
+    background-color: hsla(220 9% 46% / 0.25) !important;
+  }
+
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-success:hover td {
+    background-color: hsla(161 83% 39% / 0.28) !important;
+  }
+
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-warning:hover td {
+    background-color: hsla(43 96% 56% / 0.28) !important;
+  }
+
+  [data-bs-theme="dark"] #tabela-historico tbody tr.table-secondary:hover td {
+    background-color: hsla(220 9% 46% / 0.28) !important;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Cards/Badges - text-dark must stay dark on colored backgrounds
+     NOTE: !important kept — overrides Bootstrap dark mode text color inversion
+     --------------------------------------------------------------------------- */
+  .bg-warning .text-dark,
+  .bg-warning .card-title,
+  .bg-warning .card-text,
+  .badge.bg-warning.text-dark {
+    color: var(--text) !important;
+  }
+
+} /* End @layer modules */

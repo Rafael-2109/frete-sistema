@@ -3,6 +3,8 @@
    Suporte completo a Light/Dark mode
    ================================================== */
 
+@layer modules {
+
 /* ==================================================
    CSS CUSTOM PROPERTIES - TEMA
    ================================================== */
@@ -723,7 +725,7 @@ table.table-necessidade td.col-criticidade {
 }
 .badge-media {
     background-color: var(--np-warning) !important;
-    color: #212529 !important;
+    color: var(--text) !important;
 }
 .badge-baixa {
     background-color: var(--np-success) !important;
@@ -1249,3 +1251,5 @@ table.table-necessidade thead th.col-necessidade {
         width: 60px;
     }
 }
+
+} /* End @layer modules */

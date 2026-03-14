@@ -4,6 +4,8 @@
    Usa design tokens (--bg, --text, --border) em vez de --bs-*.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+@layer modules {
+
 /* ── Page Layout ── */
 .insights-page {
   padding: 1.5rem;
@@ -1150,3 +1152,5 @@
     flex-wrap: wrap;
   }
 }
+
+} /* End @layer modules */

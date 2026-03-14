@@ -2,6 +2,7 @@
    ANALISE DE MARGEM - Styles
    Usa design tokens de _design-tokens.css
    ═══════════════════════════════════════════════════════════════════════════ */
+@layer modules {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    STAT CARDS
@@ -166,7 +167,7 @@
    TABLE RESPONSIVE
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.table-responsive {
+.margem-page .table-responsive {
     max-height: 65vh;
     overflow-y: auto;
 }
@@ -270,3 +271,4 @@
     font-size: 0.9rem;
     vertical-align: middle;
 }
+} /* End @layer modules */

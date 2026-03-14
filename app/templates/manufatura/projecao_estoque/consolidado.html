@@ -5,28 +5,10 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/projecao_estoque/css/projecao-consolidado.css') }}">
-<style>
-    /* Forçar remoção de TODOS os espaços - página fullscreen */
-    main, .main-content, #content, .content { padding: 0 !important; margin: 0 !important; }
-    /* Container de flash messages - zerar margens */
-    nav.navbar + .container { margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
-    nav.navbar + .container:not(:has(.alert)) { display: none !important; }
-    /* Container principal desta página */
-    .container-fluid.px-1 { margin-top: 0 !important; }
-
-    /* Table thead theme-aware */
-    .table-thead-theme {
-        background-color: var(--bs-tertiary-bg) !important;
-    }
-    .table-thead-theme th {
-        background-color: var(--bs-tertiary-bg) !important;
-        color: var(--bs-body-color) !important;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-1 py-0 m-0 premium-page">
+<div class="container-fluid px-1 py-0 m-0 premium-page macro-projecao-page">
     <!-- ========== BARRA COMPACTA (sempre visível) ========== -->
     <div class="barra-compacta d-flex align-items-center justify-content-between gap-2">
         <!-- Esquerda: Título + Badge -->

@@ -182,4 +182,633 @@
     height: 1rem;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PEDIDOS COMPRAS - Accordion, autocomplete, table and pagination
+     Migrated from manufatura/pedidos_compras/index.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Accordion styles */
+  .pedido-accordion {
+    margin-bottom: 0.5rem;
+  }
+  .pedido-accordion .accordion-button {
+    background-color: var(--bs-tertiary-bg);
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    color: var(--bs-body-color);
+  }
+  .pedido-accordion .accordion-button:not(.collapsed) {
+    background-color: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-body-color);
+  }
+  .pedido-accordion .accordion-body {
+    padding: 0;
+  }
+
+  /* Autocomplete styles */
+  .autocomplete-container {
+    position: relative;
+  }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.15);
+    display: none;
+    min-width: 450px;
+  }
+  .autocomplete-list.show {
+    display: block;
+  }
+  .autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--bs-border-color);
+    transition: background-color 0.15s;
+  }
+  .autocomplete-item:hover,
+  .autocomplete-item.active {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+  }
+  .autocomplete-item strong {
+    color: var(--bs-primary);
+    font-size: 0.95em;
+  }
+  .autocomplete-item small {
+    display: block;
+    color: var(--bs-secondary-color);
+    font-size: 0.9em;
+    margin-top: 3px;
+  }
+  .autocomplete-loading {
+    padding: 12px;
+    text-align: center;
+    color: var(--bs-secondary-color);
+  }
+  .autocomplete-no-results {
+    padding: 12px;
+    text-align: center;
+    color: var(--bs-danger);
+    font-style: italic;
+  }
+
+  /* Table styles */
+  .table-linhas {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+  }
+  .table-linhas th {
+    font-weight: 600;
+    background-color: var(--bs-tertiary-bg);
+    padding: 0.6rem 0.5rem;
+    border-bottom: 2px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+  }
+  .table-linhas td {
+    padding: 0.6rem 0.5rem;
+    vertical-align: middle;
+  }
+  .linha-produto:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+  }
+  .btn-historico {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  .badge-status {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.6rem;
+  }
+
+  /* Pagination styles */
+  .pagination {
+    margin-top: 1rem;
+    margin-bottom: 0;
+  }
+
+  /* Badges theme-aware */
+  .badge-tipo-pedido {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+  }
+
+  /* Historico table theme-aware */
+  .table-thead-theme {
+    background-color: var(--bs-tertiary-bg);
+  }
+  .table-thead-theme th {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PROJECAO ESTOQUE CONSOLIDADO - Fullscreen layout overrides
+     Migrated from manufatura/projecao_estoque/consolidado.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Fullscreen page overrides
+     Used by: projecao_estoque/consolidado, necessidade_producao/index
+     These pages add body[data-page="fullscreen"] or use :has() to self-identify
+     NOTE: !important kept — overrides base layout inline styles set by JS */
+  body:has(.container-fluid.px-1.py-0) main,
+  body:has(.container-fluid.px-1.py-0) .main-content,
+  body:has(.container-fluid.px-1.py-0) #content,
+  body:has(.container-fluid.px-1.py-0) .content {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  body:has(.container-fluid.px-1.py-0) nav.navbar + .container {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+  body:has(.container-fluid.px-1.py-0) nav.navbar + .container:not(:has(.alert)) {
+    display: none !important;
+  }
+  body:has(.container-fluid.px-1.py-0) .container-fluid.px-1 {
+    margin-top: 0 !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MANUFATURA INDEX - Module cards, sections and page header
+     Migrated from manufatura/index.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Module Cards - Base */
+  .module-card {
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid var(--bs-border-color);
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--bs-card-bg, var(--bs-body-bg));
+  }
+  .module-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px hsla(0 0% 0% / 0.2);
+    border-color: var(--module-color);
+  }
+  .module-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: linear-gradient(90deg, var(--module-color) 0%, var(--module-color-light) 100%);
+  }
+
+  /* Module Categories - Theme-aware colors */
+  .module-card.planning {
+    --module-color: var(--bs-info);
+    --module-color-light: var(--mfg-info-light, hsl(187 77% 69%));
+  }
+  .module-card.production {
+    --module-color: var(--bs-success);
+    --module-color-light: var(--mfg-success-light, hsl(145 35% 59%));
+  }
+  .module-card.structure {
+    --module-color: var(--mfg-purple, hsl(258 72% 66%));
+    --module-color-light: var(--mfg-purple-light, hsl(258 65% 76%));
+  }
+  .module-card.purchasing {
+    --module-color: var(--bs-warning);
+    --module-color-light: var(--mfg-warning-light, hsl(45 97% 56%));
+  }
+  .module-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--module-color);
+    opacity: 0.9;
+  }
+  .module-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0;
+    color: var(--bs-body-color);
+  }
+
+  /* Section titles */
+  .section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Page header - Gradient with theme-aware fallback */
+  .page-header {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, var(--mfg-purple, hsl(258 72% 66%)) 100%);
+    color: hsl(0 0% 100%);
+    padding: 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(var(--bs-primary-rgb), 0.3);
+  }
+  .page-header h1 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 2rem;
+    color: hsl(0 0% 100%);
+  }
+  .page-header p {
+    margin: 0.5rem 0 0 0;
+    opacity: 0.9;
+    font-size: 1.1rem;
+    color: hsl(0 0% 100%);
+  }
+
+  /* Dark mode specific adjustments */
+  [data-bs-theme="dark"] .module-card {
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.3);
+  }
+  [data-bs-theme="dark"] .module-card:hover {
+    box-shadow: 0 12px 24px hsla(0 0% 0% / 0.4);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ANALISE PRODUCAO - Indentation, adjustments and grouping
+     Migrated from manufatura/analise_producao/index.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .nivel-indent {
+    padding-left: calc(var(--nivel) * 1.5rem);
+  }
+  .nivel-0 { --nivel: 0; }
+  .nivel-1 { --nivel: 1; }
+  .nivel-2 { --nivel: 2; }
+  .nivel-3 { --nivel: 3; }
+  .nivel-4 { --nivel: 4; }
+
+  /* Ajustes - Theme-aware */
+  .ajuste-positivo {
+    color: var(--bs-success);
+    font-weight: bold;
+  }
+  .ajuste-negativo {
+    color: var(--bs-danger);
+    font-weight: bold;
+  }
+
+  /* Dark mode - cores mais vibrantes */
+  [data-bs-theme="dark"] .ajuste-positivo {
+    color: var(--mfg-success-vibrant, hsl(145 72% 58%));
+  }
+  [data-bs-theme="dark"] .ajuste-negativo {
+    color: var(--mfg-danger-vibrant, hsl(0 90% 71%));
+  }
+
+  .input-ajuste {
+    width: 100px;
+    text-align: right;
+  }
+
+  /* Componente row - Theme-aware */
+  .componente-row {
+    transition: background-color 0.2s;
+  }
+  .componente-row:hover {
+    background-color: var(--bs-tertiary-bg);
+  }
+  .componente-row.modificado {
+    background-color: rgba(var(--bs-warning-rgb), 0.2);
+  }
+  .tree-icon {
+    color: var(--bs-secondary-color);
+    margin-right: 0.5rem;
+  }
+  .modal-xl-custom {
+    max-width: 95%;
+  }
+
+  /* Sticky header - Theme-aware */
+  .sticky-header {
+    position: sticky;
+    top: 0;
+    background: var(--bs-tertiary-bg);
+    z-index: 10;
+  }
+
+  /* Card header theme-aware (shared) */
+  .card-header-theme {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  /* Modal headers - Keep colored but ensure visibility */
+  .modal-header.bg-primary,
+  .modal-header.bg-success {
+    border-bottom: none;
+  }
+
+  /* Card header bg-success em modal */
+  .card .card-header.bg-success {
+    background-color: var(--bs-success);
+  }
+
+  /* Linha agrupada */
+  .row-grupo {
+    cursor: pointer;
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+  }
+  .row-grupo:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.12);
+  }
+  .row-grupo .chevron-icon {
+    transition: transform 0.2s;
+  }
+  .row-grupo.expanded .chevron-icon {
+    transform: rotate(90deg);
+  }
+
+  /* Sub-linhas (expandidas) */
+  .row-subitem {
+    background-color: rgba(var(--bs-secondary-rgb), 0.05);
+    font-size: 0.85rem;
+  }
+  .row-subitem td {
+    vertical-align: middle;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     RECURSOS PRODUCAO - Table, cards and dark mode
+     Migrated from manufatura/recursos_producao.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .table-recursos {
+    font-size: 0.85rem;
+  }
+
+  /* Card stats - Theme-aware */
+  .card-stats {
+    border-left: 4px solid var(--bs-success);
+  }
+
+  /* Colored th cells in dark mode - adjust opacity
+     NOTE: !important kept — overrides Bootstrap .bg-info/.bg-success utility */
+  [data-bs-theme="dark"] .bg-info {
+    background-color: var(--bs-info) !important;
+  }
+  [data-bs-theme="dark"] .bg-success {
+    background-color: var(--bs-success) !important;
+  }
+
+  /* Subtle backgrounds - Theme-aware
+     NOTE: !important kept — overrides Bootstrap .bg-*-subtle utility */
+  [data-bs-theme="dark"] .bg-info-subtle {
+    background-color: rgba(var(--bs-info-rgb), 0.15) !important;
+  }
+  [data-bs-theme="dark"] .bg-success-subtle {
+    background-color: rgba(var(--bs-success-rgb), 0.15) !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     REQUISICOES COMPRAS - Cards, lines and projection
+     Migrated from manufatura/requisicoes_compras/listar.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .req-card {
+    margin-bottom: 0.5rem;
+    box-shadow: 0 1px 3px hsla(0 0% 0% / 0.1);
+  }
+  .req-card .card-header {
+    padding: 0.5rem 1rem;
+    background-color: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+  .req-card .card-body {
+    padding: 0;
+  }
+  .linha-produto {
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  .btn-toggle-projecao {
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    color: var(--bs-secondary-color);
+  }
+  .btn-toggle-projecao:hover {
+    color: var(--bs-primary);
+  }
+  .projecao-row td {
+    background-color: var(--bs-tertiary-bg);
+    border-top: none;
+  }
+  .projecao-content-wrapper {
+    background-color: var(--bs-tertiary-bg);
+  }
+  .badge-tipo-unknown {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PREVISAO DEMANDA - Editable cells, comparison and sorting
+     Migrated from manufatura/previsao_demanda_nova.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .comparison-selector {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .comparison-selector button {
+    padding: 5px 12px;
+    font-size: 0.85rem;
+    border-radius: 20px;
+  }
+  .comparison-selector button.active {
+    background-color: var(--bs-primary, var(--semantic-info));
+    color: hsl(0 0% 100%);
+  }
+  .editable-cell {
+    cursor: pointer;
+    position: relative;
+  }
+  .editable-cell:hover {
+    background-color: var(--bs-tertiary-bg, var(--bg-light));
+  }
+  .editable-cell input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: right;
+    padding: 5px;
+    color: var(--bs-body-color);
+  }
+  .editable-cell input:focus {
+    outline: 2px solid var(--bs-primary, var(--semantic-info));
+    background: var(--bs-body-bg, hsl(0 0% 100%));
+  }
+  .editable-select {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--bs-body-color);
+  }
+  .editable-select:focus {
+    outline: 2px solid var(--bs-primary, var(--semantic-info));
+    background: var(--bs-body-bg, hsl(0 0% 100%));
+  }
+  .comparison-header {
+    background-color: var(--bs-tertiary-bg, var(--bg-light));
+    font-weight: 600;
+  }
+  .grupo-restante {
+    font-style: italic;
+    color: var(--bs-secondary-color, var(--text-muted));
+  }
+  .save-indicator {
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bs-success, var(--semantic-success));
+    display: none;
+  }
+  .save-indicator.show {
+    display: block;
+  }
+  .comparison-value {
+    color: var(--bs-secondary-color, var(--text-muted));
+    font-size: 0.9rem;
+  }
+  .previsto-value {
+    font-weight: 600;
+    color: var(--bs-body-color, var(--text));
+  }
+  .table-sticky {
+    position: sticky;
+    left: 0;
+    background: var(--bs-body-bg, hsl(0 0% 100%));
+    z-index: 10;
+  }
+  .sortable {
+    cursor: pointer;
+    user-select: none;
+  }
+  .sortable:hover {
+    background-color: var(--bs-tertiary-bg, var(--bg-light));
+  }
+  .produto-info {
+    min-width: 200px;
+  }
+  .table-sortable thead th i {
+    font-size: 0.8rem;
+    opacity: 0.6;
+  }
+  .table-sortable thead th:hover i {
+    opacity: 1;
+  }
+
+  /* Colunas especiais da tabela - Theme-aware */
+  .col-prevista {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+  }
+  .col-realizada {
+    background-color: rgba(var(--bs-warning-rgb), 0.1);
+  }
+
+  /* Dark mode - save indicator vibrant */
+  [data-bs-theme="dark"] .save-indicator {
+    color: var(--mfg-success-vibrant, hsl(145 72% 58%));
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     NECESSIDADE PRODUCAO - Badge count
+     Migrated from manufatura/necessidade_producao/index.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .badge-count {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TABLE THEAD THEME-AWARE (shared across multiple templates)
+     Also used by: projecao_estoque/index.html, lista_materiais/importar.html,
+                   projecao_estoque/consolidado.html
+     Note: .table-thead-theme defined above in PEDIDOS COMPRAS section
+     with border-bottom added below for templates that use it.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .table-thead-theme th {
+    border-bottom: 2px solid var(--bs-border-color);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LISTAR PALLETIZACAO — compact table, produto info layout, badges
+     Source: producao/listar_palletizacao.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  #tabelaPalletizacao {
+    font-size: 0.85rem;
+  }
+
+  #tabelaPalletizacao th {
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  #tabelaPalletizacao td {
+    font-size: 0.85rem;
+  }
+
+  .produto-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .produto-codigo {
+    font-weight: bold;
+    color: var(--bs-body-color);
+    font-size: 0.9rem;
+  }
+
+  .produto-nome {
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    line-height: 1.2;
+  }
+
+  #tabelaPalletizacao .badge {
+    min-width: 22px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35em 0.5em;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LISTAR PALLETIZACAO NOVO — compact table variant with primary-colored codes
+     Source: producao/listar_palletizacao_novo.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .palletizacao-novo .produto-codigo {
+    color: var(--bs-primary);
+  }
+
+  .palletizacao-novo .produto-nome {
+    color: var(--text-muted);
+  }
+
+  .medidas-info {
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+
 } /* End @layer modules */

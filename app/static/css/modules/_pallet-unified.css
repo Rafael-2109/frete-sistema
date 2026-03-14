@@ -7,6 +7,8 @@
  * Dark mode: automatico via tokens
  * =========================================================================== */
 
+@layer modules {
+
 /* ===========================
    PAGE LAYOUT
    =========================== */
@@ -77,14 +79,14 @@
 
 .pu-kpi:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 3px 10px hsla(0 0% 0% / 0.12);
 }
 
 .pu-kpi--primary { border-left: 3px solid var(--bs-primary); }
 .pu-kpi--warning { border-left: 3px solid var(--bs-warning); }
 .pu-kpi--info { border-left: 3px solid var(--bs-info); }
 .pu-kpi--danger { border-left: 3px solid var(--bs-danger); }
-.pu-kpi--accent { border-left: 3px solid var(--amber-55, #f59e0b); }
+.pu-kpi--accent { border-left: 3px solid var(--amber-55); }
 .pu-kpi--secondary { border-left: 3px solid var(--bs-secondary); }
 
 .pu-kpi__icon {
@@ -142,21 +144,21 @@
 }
 
 .pu-alerta--danger {
-  background: rgba(220, 53, 69, 0.12);
+  background: hsla(354 70% 54% / 0.12);
   color: var(--bs-danger);
-  border-color: rgba(220, 53, 69, 0.2);
+  border-color: hsla(354 70% 54% / 0.2);
 }
 
 .pu-alerta--warning {
-  background: rgba(255, 193, 7, 0.12);
+  background: hsla(45 100% 51% / 0.12);
   color: var(--bs-warning);
-  border-color: rgba(255, 193, 7, 0.2);
+  border-color: hsla(45 100% 51% / 0.2);
 }
 
 .pu-alerta--info {
-  background: rgba(13, 202, 240, 0.12);
+  background: hsla(189 94% 50% / 0.12);
   color: var(--bs-info);
-  border-color: rgba(13, 202, 240, 0.2);
+  border-color: hsla(189 94% 50% / 0.2);
 }
 
 /* ===========================
@@ -271,11 +273,11 @@
 }
 
 .pu-table tbody tr:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  background: var(--bg-hover, hsla(0 0% 0% / 0.04));
 }
 
 .pu-table tbody tr.pu-row--selected {
-  background: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.08);
+  background: rgba(var(--bs-primary-rgb), 0.08);
 }
 
 .pu-table tbody td {
@@ -292,9 +294,9 @@
   border-radius: 4px;
 }
 
-.pu-badge-empresa--cd { background: rgba(13, 110, 253, 0.15); color: var(--bs-primary); }
-.pu-badge-empresa--fb { background: rgba(25, 135, 84, 0.15); color: var(--bs-success); }
-.pu-badge-empresa--sc { background: rgba(108, 117, 125, 0.15); color: var(--bs-secondary); }
+.pu-badge-empresa--cd { background: rgba(var(--bs-primary-rgb), 0.15); color: var(--bs-primary); }
+.pu-badge-empresa--fb { background: rgba(var(--bs-success-rgb), 0.15); color: var(--bs-success); }
+.pu-badge-empresa--sc { background: rgba(var(--bs-secondary-rgb), 0.15); color: var(--bs-secondary); }
 
 .pu-badge-tipo {
   font-size: 0.65rem;
@@ -302,8 +304,8 @@
   border-radius: 4px;
 }
 
-.pu-badge-tipo--transportadora { background: rgba(111, 66, 193, 0.12); color: #7c3aed; }
-.pu-badge-tipo--cliente { background: rgba(13, 202, 240, 0.12); color: var(--bs-info); }
+.pu-badge-tipo--transportadora { background: hsla(271 69% 51% / 0.12); color: hsl(263 83% 57%); }
+.pu-badge-tipo--cliente { background: hsla(189 94% 50% / 0.12); color: var(--bs-info); }
 
 .pu-badge-status {
   font-size: 0.65rem;
@@ -311,9 +313,9 @@
   border-radius: 4px;
 }
 
-.pu-badge-status--ativa { background: rgba(25, 135, 84, 0.15); color: var(--bs-success); }
-.pu-badge-status--resolvida { background: rgba(108, 117, 125, 0.15); color: var(--bs-secondary); }
-.pu-badge-status--cancelada { background: rgba(220, 53, 69, 0.15); color: var(--bs-danger); }
+.pu-badge-status--ativa { background: rgba(var(--bs-success-rgb), 0.15); color: var(--bs-success); }
+.pu-badge-status--resolvida { background: rgba(var(--bs-secondary-rgb), 0.15); color: var(--bs-secondary); }
+.pu-badge-status--cancelada { background: rgba(var(--bs-danger-rgb), 0.15); color: var(--bs-danger); }
 
 /* Progress bars Pallets / Pend. NF */
 .pu-progress {
@@ -515,8 +517,8 @@
 
 /* Sugestao pendente no offcanvas */
 .pu-sugestao {
-  background: rgba(13, 202, 240, 0.06);
-  border: 1px solid rgba(13, 202, 240, 0.2);
+  background: hsla(189 94% 50% / 0.06);
+  border: 1px solid hsla(189 94% 50% / 0.2);
   border-radius: 8px;
   padding: 0.75rem;
   margin-bottom: 0.5rem;
@@ -583,3 +585,5 @@
 @media (max-width: 480px) {
   .pu-kpis { grid-template-columns: 1fr; }
 }
+
+} /* End @layer modules */

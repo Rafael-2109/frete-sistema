@@ -1,0 +1,440 @@
+/**
+ * _comercial.css - Comercial Module Styles
+ *
+ * Extracted from inline <style> blocks in comercial templates.
+ * Covers: lista_clientes, editar_permissoes, lista_vendedores,
+ *         vendedores_equipe, dashboard_diretoria.
+ *
+ * Token mapping:
+ * - Use var(--bg-light) for card backgrounds
+ * - Use var(--text) for primary text
+ * - Use var(--text-muted) for secondary text
+ * - Use var(--border) for borders
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LISTA CLIENTES
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Custom Table Styling */
+  .table-custom {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-custom table {
+    margin-bottom: 0;
+  }
+
+  .table-custom thead th {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+    border-bottom: 2px solid var(--bs-border-color);
+  }
+
+  .table-custom tbody tr {
+    border-bottom: 1px solid var(--bs-border-color);
+    transition: all 0.2s ease;
+  }
+
+  .table-custom tbody tr:hover {
+    background: var(--bs-tertiary-bg);
+  }
+
+  .table-custom tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+  }
+
+  /* DataTables Customization */
+  .dataTables_wrapper {
+    color: var(--bs-body-color);
+  }
+
+  .dataTables_length label,
+  .dataTables_filter label {
+    color: var(--bs-secondary-color);
+  }
+
+  .dataTables_length select,
+  .dataTables_filter input {
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    border-radius: 6px;
+    padding: 0.375rem 0.75rem;
+  }
+
+  .dataTables_paginate .paginate_button {
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color) !important;
+    border-radius: 6px;
+    margin: 0 2px;
+  }
+
+  .dataTables_paginate .paginate_button:hover {
+    background-color: var(--bs-secondary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+    color: var(--bs-body-color) !important;
+  }
+
+  .dataTables_paginate .paginate_button.current {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+    color: hsl(0 0% 10%) !important;
+  }
+
+  .dataTables_info {
+    color: var(--bs-secondary-color);
+  }
+
+  /* Modal Styling */
+  .comercial-modal .modal-content {
+    background-color: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+  }
+
+  .comercial-modal .modal-header {
+    background-color: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .comercial-modal .modal-footer {
+    background-color: var(--bs-tertiary-bg);
+    border-top: 1px solid var(--bs-border-color);
+  }
+
+  /* Alert Custom */
+  .comercial-alert-custom {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    border-radius: 8px;
+  }
+
+  /* Btn Action */
+  .btn-action {
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+  }
+
+  .btn-action:hover {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: hsl(0 0% 100%);
+    transform: translateY(-1px);
+  }
+
+  /* Card Filtros */
+  .card-filtros {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+  }
+
+  .card-filtros .card-header {
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 0.75rem 1rem;
+  }
+
+  .card-filtros .form-control,
+  .card-filtros .form-select {
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+  }
+
+  .card-filtros .form-control:focus,
+  .card-filtros .form-select:focus {
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+    color: var(--bs-body-color);
+  }
+
+  /* Text monospace */
+  .comercial-text-monospace {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--bs-secondary-color);
+  }
+
+  /* Pedido row highlight */
+  .pedido-row {
+    background-color: var(--bs-tertiary-bg) !important;
+  }
+
+  .pedido-row:hover {
+    background-color: var(--bs-secondary-bg) !important;
+  }
+
+  /* Expanded row styling */
+  .pedido-row[style*="border-left"] {
+    background-color: var(--bs-body-bg) !important;
+  }
+
+  /* Documentos accordion */
+  .docs-content {
+    background-color: var(--bs-body-bg);
+  }
+
+  /* Table secondary header */
+  .comercial-table-secondary {
+    background-color: var(--bs-tertiary-bg) !important;
+  }
+
+  .comercial-table-secondary th {
+    color: var(--bs-secondary-color) !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     EDITAR PERMISSOES
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Card Sections */
+  .card-section {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+
+  .card-section .card-header {
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 1rem 1.25rem;
+    font-weight: 600;
+  }
+
+  .card-section .card-body {
+    padding: 1.25rem;
+  }
+
+  /* Select controls */
+  .permission-select {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    border-radius: 8px;
+    width: 100%;
+    min-height: 250px;
+  }
+
+  .permission-select option {
+    padding: 0.5rem;
+  }
+
+  .permission-select option:checked {
+    background: var(--bs-primary);
+    color: hsl(0 0% 100%);
+  }
+
+  /* Transfer Buttons */
+  .transfer-buttons .btn {
+    width: 50px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Alert boxes */
+  .alert-info-custom {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-info);
+    border-left: 4px solid var(--bs-info);
+    color: var(--bs-body-color);
+    border-radius: 8px;
+  }
+
+  .alert-warning-custom {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-warning);
+    border-left: 4px solid var(--bs-warning);
+    color: var(--bs-body-color);
+    border-radius: 8px;
+  }
+
+  /* Table Logs */
+  .logs-container {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .logs-container .table {
+    margin-bottom: 0;
+  }
+
+  .logs-container thead th {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.75rem;
+    position: sticky;
+    top: 0;
+  }
+
+  .logs-container tbody td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LISTA VENDEDORES (admin)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Table Container */
+  .table-container {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-container .table {
+    margin-bottom: 0;
+  }
+
+  .table-container thead th {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+    border-bottom: 2px solid var(--bs-border-color);
+  }
+
+  .table-container tbody tr {
+    border-bottom: 1px solid var(--bs-border-color);
+    transition: all 0.2s ease;
+  }
+
+  .table-container tbody tr:hover {
+    background: var(--bs-tertiary-bg);
+  }
+
+  .table-container tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     DASHBOARD DIRETORIA + VENDEDORES EQUIPE (shared)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Metric Cards */
+  .metric-card {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+
+  .metric-card h5 {
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+  }
+
+  .metric-card h2 {
+    font-weight: 700;
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Equipe Badge Cards (dashboard_diretoria) */
+  .equipe-badge {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .equipe-badge:hover {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .equipe-badge .card-title {
+    font-weight: 600;
+  }
+
+  .equipe-badge small {
+    color: var(--bs-secondary-color);
+  }
+
+  /* Vendedor Badge Cards (vendedores_equipe) */
+  .vendedor-badge {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .vendedor-badge:hover {
+    background: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .vendedor-badge .card-title {
+    font-weight: 600;
+  }
+
+  .vendedor-badge small {
+    color: var(--bs-secondary-color);
+  }
+
+  /* Valor em destaque */
+  .valor-destaque {
+    color: var(--bs-success);
+    font-weight: 600;
+  }
+
+  /* Icon colors */
+  .icon-primary { color: var(--bs-primary); }
+  .icon-success { color: var(--bs-success); }
+  .icon-warning { color: var(--bs-warning); }
+  .icon-info { color: var(--bs-info); }
+  .icon-cyan { color: var(--bs-info); }
+
+  /* Alert custom (shared across dashboard + vendedores_equipe) */
+  .alert-custom {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    border-radius: 8px;
+  }
+
+} /* End @layer modules */

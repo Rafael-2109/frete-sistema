@@ -6,11 +6,12 @@
  * PARA: app/static/css/modules/carteira/separacao-animations.css
  * DATA: 2025-12-17
  */
+@layer modules {
 
 /* Animacao de criacao de separacao */
 .separacao-criada-animation {
     animation: sucessoPulse 0.5s ease-in-out;
-    background: linear-gradient(45deg, rgba(var(--bs-success-rgb), 0.1) 0%, transparent 100%) !important;
+    background: linear-gradient(45deg, rgba(var(--bs-success-rgb), 0.1) 0%, transparent 100%);
 }
 
 @keyframes sucessoPulse {
@@ -93,7 +94,7 @@
 .card-lote:hover,
 .card-separacao:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px hsla(0 0% 0% / 0.1);
 }
 
 /* Botoes com loading */
@@ -111,7 +112,7 @@
     width: 20px;
     height: 20px;
     margin: -10px 0 0 -10px;
-    border: 2px solid hsl(0, 0%, 100%);
+    border: 2px solid hsl(0 0% 100%);
     border-radius: 50%;
     border-top-color: transparent;
     animation: spinner 0.6s linear infinite;
@@ -159,20 +160,20 @@
 
 /* Efeito de sucesso no card */
 .success-glow {
-    box-shadow: 0 0 20px rgba(var(--bs-success-rgb), 0.3) !important;
-    border: 1px solid rgba(var(--bs-success-rgb), 0.5) !important;
+    box-shadow: 0 0 20px rgba(var(--bs-success-rgb), 0.3);
+    border: 1px solid rgba(var(--bs-success-rgb), 0.5);
 }
 
 /* Efeito de aviso no card */
 .warning-glow {
-    box-shadow: 0 0 20px rgba(var(--bs-warning-rgb), 0.3) !important;
-    border: 1px solid rgba(var(--bs-warning-rgb), 0.5) !important;
+    box-shadow: 0 0 20px rgba(var(--bs-warning-rgb), 0.3);
+    border: 1px solid rgba(var(--bs-warning-rgb), 0.5);
 }
 
 /* Efeito de erro no card */
 .error-glow {
-    box-shadow: 0 0 20px rgba(var(--bs-danger-rgb), 0.3) !important;
-    border: 1px solid rgba(var(--bs-danger-rgb), 0.5) !important;
+    box-shadow: 0 0 20px rgba(var(--bs-danger-rgb), 0.3);
+    border: 1px solid rgba(var(--bs-danger-rgb), 0.5);
 }
 
 /* Transicoes suaves para todos os cards */
@@ -216,7 +217,7 @@
 }
 
 .card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.1);
 }
 
 /* Notificacao inline */
@@ -228,7 +229,7 @@
     z-index: 9999;
     padding: 15px 20px;
     border-radius: 5px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 15px hsla(0 0% 0% / 0.2);
 }
 
 @keyframes slideInRight {
@@ -244,15 +245,16 @@
 
 .notification-inline.success {
     background: var(--bs-success);
-    color: #fff;
+    color: hsl(0 0% 100%);
 }
 
 .notification-inline.error {
     background: var(--bs-danger);
-    color: #fff;
+    color: hsl(0 0% 100%);
 }
 
 .notification-inline.warning {
     background: var(--bs-warning);
-    color: #000;
+    color: hsl(0 0% 0%);
 }
+} /* End @layer modules */

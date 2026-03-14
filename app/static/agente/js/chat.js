@@ -288,37 +288,55 @@ if (debugModeToggle) {
 // FEAT-003: PAINEL DE THINKING
 // ============================================
 function toggleThinkingPanel() {
-    const body = document.getElementById('thinking-text');
-    const icon = document.getElementById('thinking-toggle-icon');
+    const panel = document.getElementById('thinking-panel');
+    const toggleBtn = document.getElementById('thinking-toggle-btn');
 
-    thinkingCollapsed = !thinkingCollapsed;
-    body.style.display = thinkingCollapsed ? 'none' : 'block';
-    icon.className = thinkingCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        // Abrir painel
+        panel.style.display = 'block';
+        toggleBtn.style.display = 'none';
+    } else {
+        // Fechar painel totalmente — mostrar botão flutuante
+        panel.style.display = 'none';
+        const text = document.getElementById('thinking-text');
+        if (text && text.innerHTML.trim()) {
+            toggleBtn.style.display = 'flex';
+        }
+    }
 }
 
 function showThinking(content) {
     const panel = document.getElementById('thinking-panel');
     const text = document.getElementById('thinking-text');
     const status = document.getElementById('thinking-status');
+    const toggleBtn = document.getElementById('thinking-toggle-btn');
 
     panel.style.display = 'block';
+    toggleBtn.style.display = 'none';
     status.textContent = 'Pensando...';
     text.innerHTML += formatMessage(content);
     text.scrollTop = text.scrollHeight;
 }
 
 function hideThinkingPanel() {
+    const panel = document.getElementById('thinking-panel');
     const status = document.getElementById('thinking-status');
+    const toggleBtn = document.getElementById('thinking-toggle-btn');
+
     if (status) {
         status.textContent = 'Concluído';
     }
-    // Não esconde automaticamente - deixa visível para o usuário ver o raciocínio
+    // Auto-colapsa apos conclusao — botão flutuante permite reabrir
+    panel.style.display = 'none';
+    toggleBtn.style.display = 'flex';
 }
 
 function clearThinking() {
     const panel = document.getElementById('thinking-panel');
     const text = document.getElementById('thinking-text');
+    const toggleBtn = document.getElementById('thinking-toggle-btn');
     panel.style.display = 'none';
+    toggleBtn.style.display = 'none';
     text.innerHTML = '';
 }
 

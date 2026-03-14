@@ -297,4 +297,120 @@
       padding: 0.15rem 0.4rem;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ACCORDION HOVER/EXPANDED — Overrides
+     Migrado de bootstrap-theme-override.css
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Row-level hover: destaque amber em TODAS colunas expandiveis */
+  tr:has(.rec-expandable):hover > .rec-expandable {
+      background-color: hsla(60 80% 45% / 0.08);
+  }
+
+  /* Barra lateral accent na primeira celula */
+  tr:has(.rec-expandable):hover > td:first-child {
+      box-shadow: inset 3px 0 0 var(--amber-50);
+  }
+
+  /* Quando expandido */
+  tr.rec-row-expanded > .rec-expandable {
+      background-color: hsla(60 80% 45% / 0.06);
+      box-shadow: inset 0 -2px 0 var(--amber-50);
+  }
+
+  tr.rec-row-expanded > td:first-child {
+      box-shadow: inset 3px 0 0 var(--amber-50);
+  }
+
+  /* Sub-row do accordion */
+  .rec-divergencias-row > td {
+      background-color: var(--bg-light);
+      border-top: 2px solid var(--amber-50);
+  }
+
+  /* Dark mode */
+  [data-bs-theme="dark"] tr:has(.rec-expandable):hover > .rec-expandable {
+      background-color: hsla(60 80% 45% / 0.05);
+  }
+
+  [data-bs-theme="dark"] tr.rec-row-expanded > .rec-expandable {
+      background-color: hsla(60 80% 45% / 0.04);
+  }
+
+  [data-bs-theme="dark"] .rec-divergencias-row > td {
+      background-color: hsla(0 0% 100% / 0.03);
+      border-top-color: var(--amber-50);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     STATUS RECEBIMENTO — badge statuses, action buttons, error messages
+     Source: recebimento/status_recebimento.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .badge-status {
+    font-size: 0.75rem;
+    padding: 0.3em 0.6em;
+  }
+
+  .badge-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
+  .badge-processando { background-color: var(--bs-info); color: white; }
+  .badge-processado { background-color: var(--bs-success); color: white; }
+  .badge-erro { background-color: var(--bs-danger); color: white; }
+  .badge-cancelado { background-color: var(--bs-secondary); color: white; }
+
+  .rec-status .btn-action {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+  }
+
+  .erro-msg {
+    font-size: 0.75rem;
+    color: var(--bs-danger);
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     STATUS RECEBIMENTO LF — phase steps, connectors, transfer badges
+     Source: recebimento/status_recebimento_lf.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .fase-step {
+    width: 60px;
+    color: var(--bs-secondary);
+    transition: color 0.3s;
+  }
+
+  .fase-step.ativa {
+    color: var(--bs-info);
+    font-weight: bold;
+  }
+
+  .fase-step.concluida {
+    color: var(--bs-success);
+  }
+
+  .fase-step.erro {
+    color: var(--bs-danger);
+  }
+
+  .fase-connector {
+    flex: 1;
+    height: 2px;
+    background-color: var(--bs-border-color);
+    align-self: center;
+    margin: 0 5px;
+  }
+
+  .fase-badge {
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .badge-transfer-sem { background-color: var(--bs-secondary); color: white; }
+  .badge-transfer-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
+  .badge-transfer-processando { background-color: var(--bs-info); color: white; }
+  .badge-transfer-concluido { background-color: var(--bs-success); color: white; }
+  .badge-transfer-erro { background-color: var(--bs-danger); color: white; }
+
 } /* End @layer modules */

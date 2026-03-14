@@ -7,19 +7,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/necessidade_producao/css/necessidade-producao.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/necessidade_producao/css/necessidade-producao-layout.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='manufatura/necessidade_producao/css/modal-recursos-produtivos.css') }}">
-<style>
-    /* Forçar remoção de TODOS os espaços - página fullscreen */
-    main, .main-content, #content, .content { padding: 0 !important; margin: 0 !important; }
-    nav.navbar + .container { margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
-    nav.navbar + .container:not(:has(.alert)) { display: none !important; }
-    .container-fluid.px-1 { margin-top: 0 !important; }
-
-    /* Badge theme-aware */
-    .badge-count {
-        background-color: var(--bs-tertiary-bg) !important;
-        color: var(--bs-body-color) !important;
-    }
-</style>
 {% endblock %}
 
 {% block content %}

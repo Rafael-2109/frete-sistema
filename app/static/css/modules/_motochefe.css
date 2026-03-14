@@ -222,12 +222,12 @@
 
   .moto-alert-toast.success {
     background-color: var(--semantic-success);
-    color: white;
+    color: hsl(0 0% 100%);
   }
 
   .moto-alert-toast.error {
     background-color: var(--semantic-danger);
-    color: white;
+    color: hsl(0 0% 100%);
   }
 
   [data-bs-theme="dark"] .moto-alert-toast {

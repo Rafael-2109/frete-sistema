@@ -10,41 +10,51 @@
 
    VARIÁVEIS POR TEMA:
    DARK MODE:                    LIGHT MODE:
-   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 95%)  ← sutil cinza
-   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 98%)  ← quase branco
+   --bg-dark:  hsl(0 0% 0%)      --bg-dark:  hsl(0 0% 90%)  ← cinza
+   --bg:       hsl(0 0% 5%)      --bg:       hsl(0 0% 95%)  ← cinza claro
    --bg-light: hsl(0 0% 10%)     --bg-light: hsl(0 0% 100%) ← branco (elevado)
-   --text:     hsl(0 0% 95%)     --text:     hsl(0 0% 10%)
-   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 40%)
+   --text:     hsl(0 0% 95%)     --text:     hsl(0 0% 5%)
+   --text-muted: hsl(0 0% 70%)   --text-muted: hsl(0 0% 30%)
    --border:   hsl(0 0% 30%)     --border:   hsl(0 0% 85%)
 
-   --gradient:       linear-gradient de --bg-light para --bg (topo→base)
-   --gradient-hover: linear-gradient sólido --bg-light
-   --highlight:      borda superior clara (20% dark / 100% light)
+   --gradient:       linear-gradient(0deg, bg 95% → bg-light)
+   --gradient-hover: linear-gradient(0deg, bg → bg-light)
+   --highlight:      borda superior (60% dark / 100% light)
    --border-card:    solid 1px (30% dark / 85% light)
+
+   SEMANTIC COLORS (Hue 60 Chartreuse palette):
+   --semantic-success: hsl(145 80% 52%)   verde menta brilhante
+   --semantic-danger:  hsl(350 55% 55%)   coral rosa
+   --semantic-warning: hsl(55 70% 45%)    amarelo-chartreuse
+   --semantic-info:    hsl(250 40% 60%)   lavanda/roxo
 
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
     /* ═══════════════════════════════════════════════════════════════════════
-       ACCENT: Amarelo Ambar (UNICA cor de destaque)
+       ACCENT: Chartreuse Hue 60 (UNICA cor de destaque)
        ═══════════════════════════════════════════════════════════════════════ */
-    --amber-28: hsl(45 100% 28%);
-    --amber-40: hsl(45 100% 40%);
-    --amber-50: hsl(45 100% 50%);
-    --amber-55: hsl(45 95% 55%);
-    --amber-60: hsl(45 90% 60%);
+    --amber-28: hsl(60 70% 25%);
+    --amber-40: hsl(60 70% 35%);
+    --amber-50: hsl(60 80% 45%);
+    --amber-55: hsl(60 75% 50%);
+    --amber-60: hsl(60 70% 55%);
 
-    /* Interação: hover e focus baseados no amber */
-    --hover-bg: hsla(45 100% 50% / 0.06);
-    --focus-ring: hsla(45 100% 50% / 0.15);
+    /* Interação: hover e focus baseados no accent */
+    --hover-bg: hsla(60 80% 45% / 0.06);
+    --focus-ring: hsla(60 80% 45% / 0.15);
 
     /* ═══════════════════════════════════════════════════════════════════════
-       SEMANTICAS: Apenas SUCCESS e DANGER
+       SEMANTICAS: SUCCESS, DANGER, WARNING e INFO
        ═══════════════════════════════════════════════════════════════════════ */
-    --semantic-success: hsl(145 65% 40%);
+    --semantic-success: hsl(145 80% 52%);
     --semantic-success-subtle: hsl(145 30% 15%);
-    --semantic-danger: hsl(0 70% 50%);
-    --semantic-danger-subtle: hsl(0 30% 15%);
+    --semantic-danger: hsl(350 55% 55%);
+    --semantic-danger-subtle: hsl(350 25% 15%);
+    --semantic-warning: hsl(55 70% 45%);
+    --semantic-warning-subtle: hsla(55 70% 45% / 0.15);
+    --semantic-info: hsl(250 40% 60%);
+    --semantic-info-subtle: hsla(250 40% 60% / 0.15);
 
     /* ═══════════════════════════════════════════════════════════════════════
        TIPOGRAFIA
@@ -88,10 +98,10 @@
     /* Borda (30%) */
     --border: hsl(0 0% 30%);
 
-    /* Gradients e Detalhes */
-    --gradient: linear-gradient(180deg, var(--bg-light), var(--bg));
-    --gradient-hover: linear-gradient(180deg, var(--bg-light), var(--bg-light));
-    --highlight: hsl(0 0% 20%);
+    /* Gradients e Detalhes (ref: 0deg, bg 95% → bg-light) */
+    --gradient: linear-gradient(0deg, var(--bg) 95%, var(--bg-light));
+    --gradient-hover: linear-gradient(0deg, var(--bg), var(--bg-light));
+    --highlight: hsl(0 0% 60%);
     --border-card: solid 1px var(--border);
 
     /* Bootstrap mapping */
@@ -114,9 +124,25 @@
     --bs-warning: var(--amber-50);
     --bs-warning-rgb: 255, 200, 0;
     --bs-secondary: hsl(0 0% 40%);
-    --bs-info: hsl(0 0% 50%);
-    --bs-info-rgb: 128, 128, 128;
+    --bs-info: var(--semantic-info);
+    --bs-info-rgb: 102, 92, 184;
     --bs-link-color: var(--amber-55);
+
+    /* Component backgrounds (migrado de bootstrap-theme-override.css) */
+    --bs-card-bg: hsl(0 0% 5%);
+    --bs-card-cap-bg: transparent;
+    --bs-card-border-color: hsl(0 0% 30%);
+    --bs-table-bg: hsl(0 0% 10%);
+    --bs-table-color: hsl(0 0% 95%);
+    --bs-table-border-color: hsl(0 0% 30%);
+    --bs-table-striped-bg: hsl(0 0% 8%);
+    --bs-table-hover-bg: var(--hover-bg);
+    --bs-form-control-bg: hsl(0 0% 10%);
+    --bs-modal-bg: hsl(0 0% 5%);
+    --bs-dropdown-bg: hsl(0 0% 5%);
+    --bs-dropdown-border-color: hsl(0 0% 30%);
+    --bs-dropdown-link-color: hsl(0 0% 95%);
+    --bs-dropdown-link-hover-bg: hsl(0 0% 10%);
 
     color-scheme: dark;
 }
@@ -129,18 +155,18 @@
 [data-bs-theme="light"],
 [data-theme="light"] {
     /* 4 tons de background - hierarquia sutil
-       Body 95% (levemente cinza) → Cards 100% (branco) */
-    --bg-dark: hsl(0 0% 95%);     /* body - sutil cinza */
-    --bg: hsl(0 0% 98%);          /* surfaces intermediárias */
+       Body 90% (cinza) → Cards 100% (branco) */
+    --bg-dark: hsl(0 0% 90%);     /* body - cinza */
+    --bg: hsl(0 0% 95%);          /* surfaces intermediárias */
     --bg-light: hsl(0 0% 100%);   /* cards, inputs - elevados (branco) */
-    --bg-button: hsl(0 0% 96%);   /* botões - 4% abaixo do card (100%) para distinção visual */
+    --bg-button: hsl(0 0% 94%);   /* botões - 6% abaixo do card para distinção */
 
-    /* 2 tons de texto (10% → 40%) */
-    --text: hsl(0 0% 10%);
-    --text-muted: hsl(0 0% 40%);
+    /* 2 tons de texto (5% → 30%) */
+    --text: hsl(0 0% 5%);
+    --text-muted: hsl(0 0% 30%);
 
     /* Warning outline: texto legível no light mode */
-    --warning-outline-text: hsl(45 100% 30%);
+    --warning-outline-text: hsl(60 80% 28%);
 
     /* Borda (85% - sutil) */
     --border: hsl(0 0% 85%);
@@ -162,65 +188,41 @@
     --bs-aberto-color: hsl(40,100%,30%);
     --bs-primary: var(--amber-50);
     --bs-primary-rgb: 255, 204, 0;
-    --bs-success: hsl(145 70% 32%);
-    --bs-success-rgb: 34, 139, 84;
-    --bs-danger: hsl(0 75% 45%);
-    --bs-danger-rgb: 200, 57, 57;
+    --bs-success: hsl(135 70% 35%);
+    --bs-success-rgb: 41, 152, 82;
+    --bs-danger: hsl(350 60% 45%);
+    --bs-danger-rgb: 184, 46, 64;
     --bs-warning: var(--amber-50);
-    --bs-warning-rgb: 255, 193, 7;
+    --bs-warning-rgb: 184, 184, 23;
     --bs-secondary: hsl(0 0% 50%);
-    --bs-info: hsl(0 0% 50%);
-    --bs-info-rgb: 128, 128, 128;
+    --bs-info: hsl(250 40% 45%);
+    --bs-info-rgb: 82, 69, 161;
     --bs-link-color: var(--amber-28);
 
+    /* Component backgrounds (migrado de bootstrap-theme-override.css) */
+    --bs-card-bg: hsl(0 0% 100%);
+    --bs-card-cap-bg: transparent;
+    --bs-card-border-color: hsl(0 0% 88%);
+    --bs-table-bg: hsl(0 0% 100%);
+    --bs-table-color: hsl(0 0% 5%);
+    --bs-table-border-color: hsl(0 0% 88%);
+    --bs-table-striped-bg: hsl(0 0% 98%);
+    --bs-table-hover-bg: var(--hover-bg);
+    --bs-form-control-bg: hsl(0 0% 100%);
+    --bs-modal-bg: hsl(0 0% 100%);
+    --bs-dropdown-bg: hsl(0 0% 100%);
+    --bs-dropdown-border-color: hsl(0 0% 85%);
+    --bs-dropdown-link-color: hsl(0 0% 5%);
+    --bs-dropdown-link-hover-bg: hsl(0 0% 95%);
+
     /* Semânticas light mode */
-    --semantic-success-subtle: hsl(145 40% 90%);
-    --semantic-danger-subtle: hsl(0 50% 92%);
+    --semantic-success-subtle: hsl(135 40% 90%);
+    --semantic-danger-subtle: hsl(350 50% 92%);
+    --semantic-warning-subtle: hsla(55 70% 45% / 0.15);
+    --semantic-info-subtle: hsla(250 40% 60% / 0.15);
 
     color-scheme: light;
 }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   BODY - Background usa bg-dark (0% dark / 90% light)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-body {
-    background: var(--bg-dark);
-    color: var(--text-muted);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENTES - TABLES
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.table {
-    color: var(--text);
-    background-color: var(--bg-light);
-}
-
-.table > thead {
-    background: var(--bg-light);
-}
-
-.table > thead th {
-    background: var(--bg-light);
-    color: var(--text);
-    font-weight: 600;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    border-bottom: 2px solid var(--border);
-}
-
-/* thead com contraste */
-.table-thead-theme,
-.table-thead-theme th {
-    background-color: var(--bg-light) !important;
-    color: var(--text) !important;
-    border-bottom: 2px solid var(--border) !important;
-}
-
-/* hover de tabela: definido em _tables.css e bootstrap-theme-override.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    COMPONENTES - DROPDOWNS
@@ -356,7 +358,7 @@ a:hover { filter: brightness(1.1); }
 .border-left-danger { border-left: 3px solid var(--semantic-danger) !important; }
 .border-left-warning { border-left: 3px solid var(--amber-50) !important; }
 .border-left-info, .border-left-secondary { border-left: 3px solid var(--border) !important; }
-.border-left-dark { border-left: 3px solid #343a40 !important; }
+.border-left-dark { border-left: 3px solid var(--text) !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VARIÁVEIS LEGADAS - Para compatibilidade com arquivos não migrados
@@ -400,13 +402,11 @@ a:hover { filter: brightness(1.1); }
     --border-default: var(--border);
     --accent-primary: var(--amber-55);
 
-    /* Semantic legado */
-    --semantic-warning: var(--amber-50);
-    --semantic-warning-subtle: hsla(45 100% 50% / 0.15);
-    --semantic-warning-text: var(--amber-50);
+    /* Semantic legado — warning/info agora tem tokens proprios em :root */
+    --semantic-warning-text: var(--semantic-warning);
     --semantic-success-text: var(--semantic-success);
     --semantic-danger-text: var(--semantic-danger);
-    --semantic-info-text: var(--text-muted);
+    --semantic-info-text: var(--semantic-info);
 
     /* Shadows legado */
     --shadow-sm: 0 1px 2px hsla(0 0% 0% / 0.05);
@@ -437,11 +437,10 @@ a:hover { filter: brightness(1.1); }
     --border-default: var(--border);
 
     /* Semantic legado light */
-    --semantic-warning-subtle: hsla(45 100% 50% / 0.15);
-    --semantic-warning-text: hsl(45 100% 35%);
-    --semantic-success-text: hsl(145 70% 30%);
-    --semantic-danger-text: hsl(0 75% 40%);
-    --semantic-info-text: var(--text-muted);
+    --semantic-warning-text: hsl(55 70% 35%);
+    --semantic-success-text: hsl(135 70% 30%);
+    --semantic-danger-text: hsl(350 60% 40%);
+    --semantic-info-text: var(--semantic-info);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

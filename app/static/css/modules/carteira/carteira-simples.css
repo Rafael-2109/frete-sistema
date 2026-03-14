@@ -5,6 +5,8 @@
  * Usa variaveis Bootstrap - dark/light mode automatico
  */
 
+@layer modules {
+
 /* ==========================================================================
    VARIAVEIS LOCAIS (apenas tamanhos, nao cores)
    ========================================================================== */
@@ -49,7 +51,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    margin-bottom: 0 !important;
+    margin-bottom: 0;
     height: 100%;
     background-color: var(--bs-card-bg);
     border-color: var(--bs-border-color);
@@ -60,7 +62,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: 0 !important;
+    padding: 0;
     min-height: 0;
     background-color: var(--bs-card-bg);
     color: var(--bs-body-color);
@@ -74,8 +76,8 @@
 
 .carteira-simples-container .table-responsive {
     flex: 1;
-    overflow-y: scroll !important;
-    overflow-x: auto !important;
+    overflow-y: scroll;
+    overflow-x: auto;
     height: 100%;
     min-height: 0;
     scroll-behavior: smooth;
@@ -86,7 +88,7 @@
    ========================================================================== */
 .table-carteira-simples {
     font-size: var(--cs-font-size-base);
-    margin-bottom: 0 !important;
+    margin-bottom: 0;
     line-height: 1.0;
     background-color: var(--bs-secondary-bg);
     color: var(--bs-body-color);
@@ -94,11 +96,11 @@
 
 .table-carteira-simples th,
 .table-carteira-simples td {
-    padding: var(--cs-padding-cell) !important;
-    vertical-align: middle !important;
-    white-space: nowrap !important;
-    font-size: var(--cs-font-size-base) !important;
-    line-height: 1.0 !important;
+    padding: var(--cs-padding-cell);
+    vertical-align: middle;
+    white-space: nowrap;
+    font-size: var(--cs-font-size-base);
+    line-height: 1.0;
 }
 
 /* Cabecalho */
@@ -109,7 +111,7 @@
     color: var(--bs-body-color);
     z-index: 10;
     font-weight: 600;
-    padding: 4px 4px !important;
+    padding: 4px 4px;
     border-bottom: 2px solid var(--bs-border-color);
     font-size: var(--cs-font-size-header);
     text-transform: uppercase;
@@ -140,24 +142,24 @@
 
 /* Separacao ATRASADA - danger */
 .table-carteira-simples tr.separacao-atrasada {
-    border-left: 4px solid var(--bs-danger) !important;
+    border-left: 4px solid var(--bs-danger);
 }
 
 .table-carteira-simples tr.separacao-atrasada td {
-    background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
-    color: var(--bs-danger) !important;
+    background-color: rgba(var(--bs-danger-rgb), 0.15);
+    color: var(--bs-danger);
 }
 
 /* Separacao ABERTO - warning */
 .table-carteira-simples tr.table-warning td {
-    background-color: rgba(var(--bs-aberto-rgb), 0.05) !important;
-    color: var(--bs-aberto-color) !important;
+    background-color: rgba(var(--bs-aberto-rgb), 0.05);
+    color: var(--bs-aberto-color);
 }
 
 /* Separacao COTADO - info (mapeado para secondary) */
 .table-carteira-simples tr.table-info td {
-    background-color: rgba(var(--bs-cotacao-rgb), 0.15) !important;
-    color: var(--bs-cotacao-color) !important;
+    background-color: rgba(var(--bs-cotacao-rgb), 0.15);
+    color: var(--bs-cotacao-color);
 }
 
 /* Hover em linhas especiais */
@@ -171,11 +173,11 @@
    SEPARADORES VISUAIS
    ========================================================================== */
 .table-carteira-simples tr.border-pedido-top {
-    border-top: 2px solid var(--bs-border-color) !important;
+    border-top: 2px solid var(--bs-border-color);
 }
 
 .table-carteira-simples tr.border-lote-top {
-    border-top: 1px solid var(--bs-border-color) !important;
+    border-top: 1px solid var(--bs-border-color);
 }
 
 /* ==========================================================================
@@ -254,37 +256,37 @@
 
 /* Botoes semanticos */
 .btn-ok {
-    background-color: var(--bs-success) !important;
-    color: #fff !important;
-    border-color: var(--bs-success) !important;
+    background-color: var(--bs-success);
+    color: hsl(0 0% 100%);
+    border-color: var(--bs-success);
 }
 
 .btn-confirmar {
-    background-color: var(--bs-success) !important;
-    color: #fff !important;
-    border-color: var(--bs-success) !important;
+    background-color: var(--bs-success);
+    color: hsl(0 0% 100%);
+    border-color: var(--bs-success);
     font-weight: bold;
 }
 
 .btn-confirmar:disabled {
-    background-color: var(--bg-button) !important;
-    border-color: var(--bs-border-color) !important;
-    color: var(--bs-secondary-color) !important;
+    background-color: var(--bg-button);
+    border-color: var(--bs-border-color);
+    color: var(--bs-secondary-color);
 }
 
 /* Botoes neutros (cinza) */
 .btn-add-qtd,
 .btn-add-all,
 .btn-d1 {
-    background-color: var(--bg-button) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+    background-color: var(--bg-button);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
 }
 
 .btn-add-qtd:hover:not(:disabled),
 .btn-add-all:hover:not(:disabled),
 .btn-d1:hover:not(:disabled) {
-    filter: brightness(0.95) !important;
+    filter: brightness(0.95);
 }
 
 /* ==========================================================================
@@ -316,7 +318,7 @@
 /* Estoque negativo - semantico danger */
 .estoque-dia.negativo {
     background-color: var(--bs-danger);
-    color: #fff;
+    color: hsl(0 0% 100%);
     border-color: var(--bs-danger);
     font-weight: 600;
 }
@@ -438,7 +440,7 @@
 .carteira-simples-container .btn-success {
     background-color: var(--bs-success);
     border-color: var(--bs-success);
-    color: #fff;
+    color: hsl(0 0% 100%);
 }
 
 .carteira-simples-container .btn-success:hover {
@@ -458,14 +460,14 @@
 .carteira-simples-container .btn-danger {
     background-color: var(--bs-danger);
     border-color: var(--bs-danger);
-    color: #fff;
+    color: hsl(0 0% 100%);
 }
 
 /* Btn Warning - semantico */
 .carteira-simples-container .btn-warning {
     background-color: var(--bs-warning);
     border-color: var(--bs-warning);
-    color: #000;
+    color: hsl(0 0% 0%);
 }
 
 /* ==========================================================================
@@ -568,7 +570,7 @@
 }
 
 /* ==========================================================================
-   TOAST TOTAIS DA SEPARAÇÃO
+   TOAST TOTAIS DA SEPARACAO
    ========================================================================== */
 .toast-totais-separacao .toast-body {
     background-color: var(--bs-body-bg);
@@ -757,3 +759,4 @@
 .autocomplete-item.text-muted:hover {
     background-color: transparent;
 }
+} /* End @layer modules */

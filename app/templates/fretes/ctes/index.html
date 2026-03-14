@@ -2,69 +2,7 @@
 
 {% block title %}CTes (Conhecimentos de Transporte) - Sistema de Fretes{% endblock %}
 
-{% block extra_css %}
-<style>
-    .status-badge {
-        padding: 0.25rem 0.75rem;
-        font-size: 0.875rem;
-        font-weight: 600;
-        border-radius: 0.375rem;
-    }
-
-    /* Status badges usando variáveis CSS do tema */
-    .status-concluido {
-        background-color: rgba(var(--bs-success-rgb), 0.15);
-        color: var(--bs-success);
-    }
-    .status-rateio {
-        background-color: rgba(var(--bs-warning-rgb), 0.15);
-        color: var(--bs-warning);
-    }
-    .status-po {
-        background-color: rgba(var(--bs-info-rgb), 0.15);
-        color: var(--bs-info);
-    }
-    .status-ciencia {
-        background-color: rgba(var(--bs-primary-rgb), 0.15);
-        color: var(--bs-primary);
-    }
-    .status-sincronizado {
-        background-color: var(--bs-tertiary-bg);
-        color: var(--bs-secondary-color);
-    }
-    .status-rascunho {
-        background-color: rgba(var(--bs-danger-rgb), 0.15);
-        color: var(--bs-danger);
-    }
-    .status-rejeitado {
-        background-color: rgba(var(--bs-danger-rgb), 0.2);
-        color: var(--bs-danger);
-    }
-
-    .vinculado-badge {
-        background-color: rgba(var(--bs-success-rgb), 0.15);
-        color: var(--bs-success);
-    }
-    .nao-vinculado-badge {
-        background-color: rgba(var(--bs-danger-rgb), 0.15);
-        color: var(--bs-danger);
-    }
-
-    .card-stat {
-        border-left: 4px solid;
-        transition: transform 0.2s;
-    }
-
-    .card-stat:hover {
-        transform: translateY(-2px);
-    }
-
-    .btn-action {
-        padding: 0.375rem 0.75rem;
-        font-size: 0.875rem;
-    }
-</style>
-{% endblock %}
+{% block extra_css %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">

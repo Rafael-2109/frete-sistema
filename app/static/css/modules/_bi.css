@@ -404,4 +404,12 @@
     font-size: 0.95rem;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BI TRANSPORTADORAS + DESPESAS — chart-container override (taller charts)
+     Source: bi/transportadoras.html, bi/despesas.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .chart-container {
+    height: 350px;
+  }
+
 } /* End @layer modules */

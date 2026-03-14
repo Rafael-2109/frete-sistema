@@ -5,6 +5,8 @@
    MIGRADO: Agora usa variaveis de _variables.css
    ======================================== */
 
+@layer modules {
+
 @media (max-width: 767px) {
     /* ===========================
        CARDS DE PEDIDOS
@@ -296,3 +298,5 @@
         animation: fadeIn 0.3s ease;
     }
 }
+
+} /* End @layer modules */

@@ -2,6 +2,8 @@
    PROJEÇÃO DE ESTOQUE - Theme-aware CSS
    ============================================================ */
 
+@layer modules {
+
 /* ========== BARRA COMPACTA ========== */
 .barra-compacta {
     background: linear-gradient(135deg, var(--bs-primary, #667eea) 0%, #8b5cf6 100%);
@@ -303,3 +305,5 @@ body.font-large .col-detalhes .btn i {
         max-width: 200px;
     }
 }
+
+} /* End @layer modules */

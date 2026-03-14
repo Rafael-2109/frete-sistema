@@ -23,13 +23,684 @@
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     MONITORAMENTO - Observation Inline Input
-     Migrated from listar_entregas.html inline styles
+     MONITORAMENTO - Hybrid Pagination
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  .obs-inline-wrapper {
+  #hybrid-pagination {
     position: relative;
+    background: var(--bg-dark);
+    border-bottom: 2px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 8px 0;
+    margin: 0;
+    transition: all 0.3s ease;
+    z-index: 50;
+  }
+
+  #hybrid-pagination.is-stuck {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
     width: 100%;
+    border: 2px solid var(--amber-55);
+    background: var(--bg-light);
+    transform: translateY(0);
+    z-index: 50;
+  }
+
+  #hybrid-pagination .container-fluid {
+    max-width: none;
+    padding: 0 15px;
+  }
+
+  #hybrid-pagination .pagination {
+    margin: 0;
+    padding: 0;
+    display: flex;
+  }
+
+  #hybrid-pagination .page-link {
+    color: var(--text);
+    background-color: var(--bg-button);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    margin: 0 2px;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+  }
+
+  #hybrid-pagination .page-item.active .page-link {
+    background-color: var(--amber-55);
+    color: var(--text);
+    border-color: var(--amber-55);
+  }
+
+  #hybrid-pagination .page-link:hover {
+    background-color: var(--bg-light);
+    color: var(--text);
+    border-color: var(--amber-55);
+    transform: scale(1.02);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Offsets
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-filters-offset {
+    margin-top: 0;
+    padding-top: 10px;
+  }
+
+  .monitoramento-pagination-offset {
+    margin-top: 20px;
+    padding-top: 10px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Filter Navbar
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  #navbarFiltros {
+    background: transparent;
+  }
+
+  nav.navbar.nc-filter-navbar {
+    background: var(--bg-light);
+    position: relative;
+    z-index: 100;
+  }
+
+  .nc-filter-navbar .dropdown-menu {
+    z-index: 1050;
+  }
+
+  nav.navbar.nc-filter-navbar .navbar-brand,
+  nav.navbar.nc-filter-navbar .nav-link,
+  .nc-filter-navbar .navbar-brand,
+  .nc-filter-navbar .nav-link {
+    color: var(--text);
+  }
+
+  nav.navbar.nc-filter-navbar .nav-link:hover,
+  .nc-filter-navbar .nav-link:hover {
+    background: rgba(var(--bs-primary-rgb), 0.1);
+    color: var(--bs-primary);
+  }
+
+  nav.navbar.nc-filter-navbar .nav-link.fw-bold,
+  .nc-filter-navbar .nav-link.fw-bold {
+    background: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+  }
+
+  /* Light mode */
+  [data-bs-theme="light"] nav.navbar.nc-filter-navbar .navbar-brand,
+  [data-bs-theme="light"] nav.navbar.nc-filter-navbar .nav-link,
+  [data-theme="light"] nav.navbar.nc-filter-navbar .navbar-brand,
+  [data-theme="light"] nav.navbar.nc-filter-navbar .nav-link {
+    color: var(--text);
+  }
+
+  [data-bs-theme="light"] nav.navbar.nc-filter-navbar .nav-link:hover,
+  [data-theme="light"] nav.navbar.nc-filter-navbar .nav-link:hover {
+    color: var(--bs-primary);
+  }
+
+  /* Dark mode for filter navbar */
+  [data-bs-theme="dark"] nav.navbar.nc-filter-navbar,
+  [data-theme="dark"] nav.navbar.nc-filter-navbar {
+    background: var(--bg-light);
+    border-color: var(--border);
+  }
+
+  [data-bs-theme="dark"] nav.navbar.nc-filter-navbar .navbar-brand,
+  [data-bs-theme="dark"] nav.navbar.nc-filter-navbar .nav-link,
+  [data-theme="dark"] nav.navbar.nc-filter-navbar .navbar-brand,
+  [data-theme="dark"] nav.navbar.nc-filter-navbar .nav-link {
+    color: var(--text);
+  }
+
+  [data-bs-theme="dark"] .nc-filter-navbar .dropdown-menu,
+  [data-theme="dark"] .nc-filter-navbar .dropdown-menu {
+    background: var(--bg-light);
+    border-color: var(--border);
+  }
+
+  [data-bs-theme="dark"] .nc-filter-navbar .dropdown-item,
+  [data-theme="dark"] .nc-filter-navbar .dropdown-item {
+    color: var(--text);
+  }
+
+  [data-bs-theme="dark"] .nc-filter-navbar .dropdown-item:hover,
+  [data-theme="dark"] .nc-filter-navbar .dropdown-item:hover {
+    background: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+  }
+
+  /* Navbar light style */
+  .monitoramento-page nav.navbar.navbar-light {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 10px;
+    box-shadow: var(--bs-box-shadow);
+  }
+
+  [data-theme="light"] .monitoramento-page nav.navbar.navbar-light,
+  [data-bs-theme="light"] .monitoramento-page nav.navbar.navbar-light {
+    background: var(--bs-secondary-bg);
+    box-shadow: var(--bs-box-shadow);
+  }
+
+  [data-theme="dark"] .monitoramento-page nav.navbar.navbar-light,
+  [data-bs-theme="dark"] .monitoramento-page nav.navbar.navbar-light {
+    background: var(--bs-secondary-bg);
+    box-shadow: var(--bs-box-shadow);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Table & Theme Overrides
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  [data-theme="dark"] .monitoramento-page .bg-light,
+  [data-bs-theme="dark"] .monitoramento-page .bg-light {
+    background-color: var(--bg-light);
+  }
+
+  [data-theme="dark"] .monitoramento-page .table,
+  [data-bs-theme="dark"] .monitoramento-page .table {
+    background-color: var(--bg-light);
+    color: var(--text);
+  }
+
+  /* Dark mode: all cells use --bg-light as base */
+  [data-theme="dark"] .monitoramento-page .table tbody td,
+  [data-bs-theme="dark"] .monitoramento-page .table tbody td {
+    background-color: var(--bg-light);
+  }
+
+  /* Dark mode: odd rows (striped) - includes sticky columns */
+  [data-theme="dark"] .monitoramento-page .table.table-striped tbody tr:nth-of-type(odd) td,
+  [data-bs-theme="dark"] .monitoramento-page .table.table-striped tbody tr:nth-of-type(odd) td {
+    background-color: var(--bg);
+  }
+
+  /* Dark mode: amber hover */
+  [data-theme="dark"] .monitoramento-page .table.table-hover tbody tr:hover td,
+  [data-bs-theme="dark"] .monitoramento-page .table.table-hover tbody tr:hover td {
+    background-color: var(--hover-bg);
+  }
+
+  /* Sticky columns - shadow and border, inheriting row background */
+  [data-theme="dark"] .sticky-col,
+  [data-theme="dark"] .sticky-col-2,
+  [data-theme="dark"] .sticky-col-3,
+  [data-bs-theme="dark"] .sticky-col,
+  [data-bs-theme="dark"] .sticky-col-2,
+  [data-bs-theme="dark"] .sticky-col-3 {
+    box-shadow: 2px 0 5px hsla(0 0% 0% / 0.3);
+    border-right: 1px solid var(--border);
+  }
+
+  /* Light mode: consistency */
+  [data-theme="light"] .monitoramento-page .table tbody td,
+  [data-bs-theme="light"] .monitoramento-page .table tbody td {
+    background-color: var(--bs-table-bg, var(--bg-light));
+  }
+
+  [data-theme="light"] .monitoramento-page .table.table-striped tbody tr:nth-of-type(odd) td,
+  [data-bs-theme="light"] .monitoramento-page .table.table-striped tbody tr:nth-of-type(odd) td {
+    background-color: var(--bs-table-striped-bg, var(--bg));
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Dark Mode Button Outlines
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  [data-theme="dark"] .monitoramento-page .btn-outline,
+  [data-bs-theme="dark"] .monitoramento-page .btn-outline {
+    background-color: var(--bg-button);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  [data-theme="dark"] .monitoramento-page .btn-outline:hover,
+  [data-bs-theme="dark"] .monitoramento-page .btn-outline:hover {
+    background-color: var(--bg-light);
+    border-color: var(--amber-55);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Navbar Brand & Links
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .navbar-brand {
+    color: var(--gray-100);
+    font-weight: 600;
+  }
+
+  nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link {
+    color: var(--gray-100);
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-radius: 5px;
+    padding: 8px 15px;
+  }
+
+  /* Light mode text colors */
+  [data-theme="light"] .monitoramento-page .table,
+  [data-bs-theme="light"] .monitoramento-page .table {
+    color: var(--bs-body-color);
+  }
+
+  [data-theme="light"] .monitoramento-page .text-muted,
+  [data-bs-theme="light"] .monitoramento-page .text-muted {
+    color: var(--bs-secondary-color);
+  }
+
+  [data-theme="light"] .monitoramento-page .dropdown-item,
+  [data-bs-theme="light"] .monitoramento-page .dropdown-item {
+    color: var(--bs-body-color);
+  }
+
+  [data-theme="light"] .monitoramento-page h1,
+  [data-theme="light"] .monitoramento-page h2,
+  [data-theme="light"] .monitoramento-page h3,
+  [data-theme="light"] .monitoramento-page h4,
+  [data-theme="light"] .monitoramento-page h5,
+  [data-theme="light"] .monitoramento-page h6,
+  [data-bs-theme="light"] .monitoramento-page h1,
+  [data-bs-theme="light"] .monitoramento-page h2,
+  [data-bs-theme="light"] .monitoramento-page h3,
+  [data-bs-theme="light"] .monitoramento-page h4,
+  [data-bs-theme="light"] .monitoramento-page h5,
+  [data-bs-theme="light"] .monitoramento-page h6 {
+    color: var(--bs-body-color);
+  }
+
+  [data-theme="light"] .monitoramento-page label,
+  [data-bs-theme="light"] .monitoramento-page label {
+    color: var(--bs-secondary-color);
+  }
+
+  [data-theme="light"] .monitoramento-page .card-body,
+  [data-bs-theme="light"] .monitoramento-page .card-body {
+    color: var(--bs-body-color);
+  }
+
+  /* Hover on links (except design system navbars) */
+  nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link:hover {
+    background: hsla(0 0% 100% / 0.2);
+    color: var(--gray-100);
+  }
+
+  /* Active/selected link (except design system navbars) */
+  nav.navbar:not(.nc-filter-navbar):not(.nc-navbar) .nav-link.fw-bold {
+    background: hsla(0 0% 100% / 0.25);
+    color: var(--gray-100);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Dropdown Menus
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-page .dropdown-menu {
+    border-radius: 10px;
+    box-shadow: 0 5px 25px hsla(0 0% 0% / 0.15);
+    border: none;
+    padding: 10px 5px;
+    min-width: 250px;
+    animation: monitoramento-fadeInDropdown 0.3s ease;
+  }
+
+  @keyframes monitoramento-fadeInDropdown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .monitoramento-page .dropdown-item {
+    border-radius: 5px;
+    padding: 10px 15px;
+    margin: 2px 5px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+  }
+
+  .monitoramento-page .dropdown-item:hover {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    transform: translateX(5px);
+  }
+
+  .monitoramento-page .dropdown-item.active {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+  }
+
+  .monitoramento-page .dropdown-item .badge {
+    font-size: 0.75rem;
+    padding: 3px 6px;
+  }
+
+  /* Badges in navbar counters */
+  nav.navbar .badge.rounded-pill {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    margin-left: 5px;
+    animation: monitoramento-pulse 2s infinite;
+  }
+
+  @keyframes monitoramento-pulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .monitoramento-page .dropdown-divider {
+    border-color: var(--bs-border-color);
+    margin: 8px 10px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Mobile Toggler
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .nc-filter-navbar .navbar-toggler {
+    border: 2px solid var(--bs-border-color);
+    padding: 4px 8px;
+    background: transparent;
+  }
+
+  [data-bs-theme="light"] .nc-filter-navbar .navbar-toggler-icon,
+  [data-theme="light"] .nc-filter-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2833, 37, 41, 0.85%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+  }
+
+  [data-bs-theme="dark"] .nc-filter-navbar .navbar-toggler-icon,
+  [data-theme="dark"] .nc-filter-navbar .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28230, 237, 243, 0.9%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Filter Clear Button
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  nav.navbar .nav-link.text-danger {
+    color: var(--amber-55);
+    font-weight: 600;
+  }
+
+  nav.navbar .nav-link.text-danger:hover {
+    background: hsla(45 100% 50% / 0.2);
+    color: var(--amber-60);
+  }
+
+  /* Badge for current status */
+  nav.navbar .navbar-brand .badge.bg-primary {
+    background: hsla(0 0% 100% / 0.3);
+    font-size: 0.8rem;
+    padding: 5px 10px;
+    border-radius: 15px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Responsive (max-width: 992px)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  @media (max-width: 992px) {
+    nav.navbar .navbar-collapse {
+      background: var(--bs-secondary-bg);
+      border-radius: 10px;
+      padding: 15px;
+      margin-top: 15px;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    nav.navbar .navbar-collapse .nav-link {
+      color: var(--bs-body-color);
+      border-bottom: 1px solid var(--bs-border-color);
+      margin: 5px 0;
+    }
+
+    nav.navbar .navbar-collapse .nav-link:hover {
+      background: var(--bs-tertiary-bg);
+    }
+
+    /* !important needed: overrides Popper.js inline styles on dropdown menus */
+    .monitoramento-page .dropdown-menu {
+      position: static !important;
+      transform: none !important;
+      box-shadow: none;
+      background: var(--bs-tertiary-bg);
+      margin: 10px 0;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Responsive (max-width: 768px)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  @media (max-width: 768px) {
+    .sticky-pagination-simple {
+      top: 50px; /* Slightly smaller navbar on mobile */
+    }
+
+    .monitoramento-page .table thead th {
+      top: 86px; /* 50px navbar + ~36px pagination on mobile */
+    }
+
+    .sticky-pagination-simple .pagination {
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .sticky-pagination-simple .page-link {
+      font-size: 0.8rem;
+      padding: 6px 12px;
+    }
+
+    .monitoramento-pagination-offset {
+      margin-top: 25px;
+      padding-top: 15px;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Loading & Pagination States
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-pagination-loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Sticky Columns
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .sticky-col, .sticky-col-2, .sticky-col-3 {
+    position: sticky;
+    box-shadow: 2px 0 5px hsla(0 0% 0% / 0.1);
+    border-right: 1px solid var(--border);
+  }
+
+  .sticky-col {
+    left: 0;
+    z-index: 11;
+    min-width: 120px;
+  }
+
+  .sticky-col-2 {
+    left: 120px;
+    z-index: 10;
+    min-width: 140px;
+  }
+
+  .sticky-col-3 {
+    left: 260px;
+    z-index: 9;
+    min-width: 200px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Table Hover Effects
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-page .table.table-hover tbody tr:hover {
+    background-color: var(--hover-bg);
+    transform: scale(1.001);
+    transition: all 0.2s ease;
+  }
+
+  .monitoramento-page .table.table-hover tbody tr:hover td.sticky-col,
+  .monitoramento-page .table.table-hover tbody tr:hover td.sticky-col-2,
+  .monitoramento-page .table.table-hover tbody tr:hover td.sticky-col-3 {
+    background-color: var(--hover-bg);
+  }
+
+  .monitoramento-page .table.loading {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Badge & Transition
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-page .badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .monitoramento-page-transition {
+    animation: monitoramento-fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes monitoramento-fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Pagination Container Fixes
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .pagination-container {
+    overflow: visible;
+    white-space: normal;
+    position: relative;
+  }
+
+  .pagination-container .table-responsive {
+    overflow: visible;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Simple Sticky Pagination
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .sticky-pagination-simple {
+    position: sticky;
+    top: 56px; /* Below the main .nc-navbar (56px height) */
+    z-index: 50; /* Below navbar dropdowns (1030) but above table headers (40) */
+    background: var(--bg-dark);
+    border-bottom: 2px solid var(--border);
+    box-shadow: var(--shadow);
+    margin: 0;
+    padding: 0;
+  }
+
+  .sticky-pagination-simple.stuck {
+    border-color: var(--amber-55);
+    background: var(--bg-light);
+    box-shadow: var(--shadow);
+  }
+
+  [data-bs-theme="dark"] .sticky-pagination-simple.stuck,
+  [data-theme="dark"] .sticky-pagination-simple.stuck {
+    background: var(--bg-light);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Sticky Table Headers
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-page .table thead th {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 96px; /* 56px navbar + ~40px sticky pagination bar */
+    z-index: 40;
+    background: var(--bg);
+  }
+
+  .monitoramento-page .table thead th.sticky-col,
+  .monitoramento-page .table thead th.sticky-col-2,
+  .monitoramento-page .table thead th.sticky-col-3 {
+    z-index: 45;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Date Buttons
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-page .btn-sm.btn-info,
+  .monitoramento-page .btn-sm.btn-primary {
+    line-height: 1.2;
+    padding: 8px 12px;
+    font-weight: 500;
+  }
+
+  .monitoramento-page .btn-sm.btn-info small,
+  .monitoramento-page .btn-sm.btn-primary small {
+    display: block;
+    font-size: 0.7rem;
+    opacity: 0.9;
+    margin-top: 2px;
+  }
+
+  .monitoramento-page .btn-sm.btn-info:hover,
+  .monitoramento-page .btn-sm.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px hsla(0 0% 0% / 0.2);
+    transition: all 0.2s ease;
+  }
+
+  .monitoramento-page .btn-sm.btn-warning:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px hsla(45 100% 51% / 0.4);
+    transition: all 0.2s ease;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Observation Inline Input
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .obs-cell-container {
+    position: relative;
+    vertical-align: top;
+    overflow: visible;
+  }
+
+  .obs-inline-wrapper {
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    width: 300%;
     height: 22px;
     z-index: 100;
   }
@@ -80,9 +751,31 @@
     height: auto;
   }
 
+  /* Dark theme obs input */
+  [data-theme="dark"] .obs-inline-input {
+    background: var(--bg);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  [data-theme="dark"] .obs-inline-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  [data-theme="dark"] .obs-inline-input:hover {
+    border-color: var(--border);
+    background: var(--bg-light);
+  }
+
+  [data-theme="dark"] .obs-inline-input:focus,
+  [data-theme="dark"] .obs-inline-input.expanded {
+    border-color: var(--amber-55);
+    background: var(--bg-light);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.3);
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════════
      MONITORAMENTO - Status Indicators
-     Migrated from listar_entregas.html inline styles
      ═══════════════════════════════════════════════════════════════════════════ */
 
   .obs-inline-status {
@@ -109,7 +802,6 @@
 
   /* ═══════════════════════════════════════════════════════════════════════════
      MONITORAMENTO - Loading Spinner
-     Migrated from listar_entregas.html inline styles
      ═══════════════════════════════════════════════════════════════════════════ */
 
   .obs-spinner {
@@ -127,19 +819,42 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     MONITORAMENTO - Filter Clear Button
-     Migrated from listar_entregas.html inline styles
+     MONITORAMENTO - Hierarchy: 3 Tones (90% body -> 95% filters -> 100% table)
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Clear filter button - using amber accent instead of danger red */
-  nav.navbar .nav-link.text-danger {
-    color: var(--amber-55) !important;
-    font-weight: 600;
+  #form-filtros {
+    background: var(--bg);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
   }
 
-  nav.navbar .nav-link.text-danger:hover {
-    background: hsla(45 100% 50% / 0.2);
-    color: var(--amber-60) !important;
+  .nc-filter-navbar {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0.25rem 0;
+  }
+
+  .monitoramento-page .form-control,
+  .monitoramento-page .form-select {
+    background-color: var(--bg-light);
+    border: 1px solid var(--border);
+  }
+
+  .container-fluid .card.shadow {
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px hsla(0 0% 0% / 0.1);
+  }
+
+  [data-bs-theme="dark"] .container-fluid .card.shadow,
+  [data-theme="dark"] .container-fluid .card.shadow {
+    background: var(--bg-light);
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.3);
+  }
+
+  .container-fluid .card.shadow .table {
+    background: transparent;
   }
 
 } /* End @layer modules */

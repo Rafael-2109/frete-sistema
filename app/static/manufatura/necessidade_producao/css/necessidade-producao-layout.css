@@ -2,6 +2,8 @@
    NECESSIDADE PRODUCAO LAYOUT - Theme-aware CSS
    ================================================== */
 
+@layer modules {
+
 /* Table container com altura fixa e scroll */
 .table-container {
     max-height: calc(100vh - 250px);
@@ -97,3 +99,5 @@
 #dropdown-container .menu-acoes-lista {
     pointer-events: auto;
 }
+
+} /* End @layer modules */

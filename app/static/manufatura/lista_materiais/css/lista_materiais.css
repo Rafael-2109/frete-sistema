@@ -3,6 +3,8 @@
    Nova estrutura com cards hierárquicos
    ======================================== */
 
+@layer modules {
+
 /* Container principal da árvore BOM */
 .bom-tree {
     padding: 0;
@@ -546,7 +548,7 @@
 
 /* Badge de unificação */
 .badge-unificado {
-    background: #8b5cf6;
+    background: hsl(263 70% 66%);
     color: white;
     padding: 2px 8px;
     border-radius: 12px;
@@ -910,3 +912,5 @@
     background: rgba(248, 113, 113, 0.2);
     color: #f87171;
 }
+
+} /* End @layer modules */

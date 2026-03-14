@@ -3,6 +3,8 @@
  * Módulo: Manufatura
  */
 
+@layer modules {
+
 /* ========================================
    Cards e Containers
 ======================================== */
@@ -68,7 +70,7 @@
 
 .badge.bg-warning {
     background-color: var(--bs-warning, #ffc107) !important;
-    color: #212529 !important;
+    color: var(--text) !important;
 }
 
 .badge.bg-secondary {
@@ -338,3 +340,5 @@ dl.row dd {
     max-height: 70vh;
     overflow-y: auto;
 }
+
+} /* End @layer modules */

@@ -325,4 +325,226 @@
     background: hsl(220, 13%, 10%);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TAGPLUS VINCULAR NFS — table highlight, row hover
+     Source: integracoes/tagplus_vincular_nfs.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .table-success {
+    background-color: hsla(134 40% 88% / 1) !important;
+  }
+
+  [data-bs-theme="dark"] .table-success {
+    background-color: hsla(134 40% 25% / 0.3) !important;
+  }
+
+  .nf-row {
+    cursor: pointer;
+  }
+
+  .nf-row:hover {
+    background-color: var(--bg);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TAGPLUS CORRECAO PEDIDOS — products detail, table overflow
+     Source: integracoes/tagplus_correcao_pedidos.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .produtos-detail {
+    padding: 10px;
+    background-color: var(--bg);
+    border-radius: 5px;
+    margin-top: 10px;
+  }
+
+  .correcao-pedidos .table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SENDAS VERIFICACAO — result section, table container, status badges, actions
+     Source: portal/sendas/verificacao.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .result-section {
+    margin-top: 20px;
+    display: none;
+  }
+
+  .result-table {
+    margin-top: 15px;
+  }
+
+  .verificacao .table-container {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .verificacao .status-badge {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.875em;
+    font-weight: bold;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     CENTRAL PORTAIS — typing animation, step cards, browser mockup, comparison
+     Source: portal/central_portais.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  @keyframes typing {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .typing-step {
+    animation: typing 0.5s ease-in-out;
+    animation-fill-mode: both;
+  }
+
+  .typing-step:nth-child(1) { animation-delay: 0.5s; }
+  .typing-step:nth-child(2) { animation-delay: 1s; }
+  .typing-step:nth-child(3) { animation-delay: 1.5s; }
+  .typing-step:nth-child(4) { animation-delay: 2s; }
+  .typing-step:nth-child(5) { animation-delay: 2.5s; }
+  .typing-step:nth-child(6) { animation-delay: 3s; }
+  .typing-step:nth-child(7) { animation-delay: 3.5s; }
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+
+  .step-number {
+    animation: pulse 2s infinite;
+  }
+
+  .step-card {
+    transition: all 0.3s ease;
+  }
+
+  .step-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.1);
+  }
+
+  .browser-mockup {
+    box-shadow: 0 4px 12px hsla(0 0% 0% / 0.15);
+  }
+
+  .browser-dots span {
+    transition: all 0.3s ease;
+  }
+
+  .browser-mockup:hover .browser-dots span {
+    transform: scale(1.2);
+  }
+
+  @keyframes codeAppear {
+    from {
+      opacity: 0;
+      background-color: hsl(60 100% 50%);
+    }
+    to {
+      opacity: 1;
+      background-color: transparent;
+    }
+  }
+
+  .code-highlight {
+    animation: codeAppear 1s ease;
+  }
+
+  @keyframes arrowMove {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(10px); }
+  }
+
+  .central-portais .fa-arrow-right {
+    animation: arrowMove 2s infinite;
+  }
+
+  .comparison-table .card {
+    transition: all 0.3s ease;
+  }
+
+  .comparison-table .card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px hsla(0 0% 0% / 0.2);
+  }
+
+  .central-portais .accordion-button:not(.collapsed) {
+    background-color: hsla(207 89% 86% / 0.5);
+    color: hsl(210 79% 46%);
+    font-weight: bold;
+  }
+
+  .demo-container {
+    scroll-behavior: smooth;
+  }
+
+  @keyframes live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .badge-live {
+    background-color: hsl(0 100% 50%);
+    color: var(--bg-light);
+    animation: live 1.5s infinite;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SENDAS SESSAO — code block formatting
+     Source: portal/sendas_sessao.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .sendas-sessao code {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre;
+    display: block;
+    overflow-x: auto;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SENDAS EXPORTACAO — status badge, loading state
+     Source: portal/sendas/exportacao.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .exportacao .status-badge {
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+
+  .exportacao .loading {
+    text-align: center;
+    padding: 20px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SENDAS GERENCIAR SESSAO — loading spinner, capture progress
+     Source: portal/sendas/gerenciar_sessao.html
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .loading-spinner {
+    display: none;
+  }
+
+  .loading-spinner.active {
+    display: inline-block;
+  }
+
+  .capture-progress {
+    display: none;
+    margin-top: 20px;
+  }
+
+  .capture-progress.active {
+    display: block;
+  }
+
 } /* End @layer modules */

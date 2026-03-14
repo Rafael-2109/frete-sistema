@@ -11,7 +11,7 @@
 
 .carvia-stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--shadow-md, 0 4px 6px -1px hsla(0 0% 0% / 0.1));
 }
 
 .carvia-stat-card .stat-value {
@@ -130,29 +130,21 @@
 [data-bs-theme="light"] .carvia-badge-paga,
 [data-bs-theme="light"] .carvia-badge-pago,
 [data-bs-theme="light"] .carvia-badge-ativa,
-[data-bs-theme="light"] .carvia-badge-aprovado,
-[data-theme="light"] .carvia-badge-confirmado,
-[data-theme="light"] .carvia-badge-conferido,
-[data-theme="light"] .carvia-badge-paga,
-[data-theme="light"] .carvia-badge-pago,
-[data-theme="light"] .carvia-badge-ativa,
-[data-theme="light"] .carvia-badge-aprovado {
+[data-bs-theme="light"] .carvia-badge-aprovado {
     --_badge-bg: hsl(145 65% 35%);
 }
 
-[data-bs-theme="light"] .carvia-badge-enviado,
-[data-theme="light"] .carvia-badge-enviado {
+[data-bs-theme="light"] .carvia-badge-enviado {
     --_badge-bg: hsl(210 80% 45%);
 }
 
-[data-bs-theme="light"] .carvia-badge-emitido,
-[data-theme="light"] .carvia-badge-emitido {
+[data-bs-theme="light"] .carvia-badge-emitido {
     --_badge-bg: hsl(210 80% 45%);
 }
 
 /* Upload Area */
 .carvia-upload-area {
-    border: 2px dashed var(--border-color, #dee2e6);
+    border: 2px dashed var(--border);
     border-radius: var(--radius-lg, 0.75rem);
     padding: 2rem;
     text-align: center;
@@ -162,8 +154,8 @@
 
 .carvia-upload-area:hover,
 .carvia-upload-area.dragover {
-    border-color: var(--bs-primary, #0d6efd);
-    background-color: var(--bg-light, rgba(13, 110, 253, 0.05));
+    border-color: var(--bs-primary);
+    background-color: var(--hover-bg);
 }
 
 .carvia-upload-area .upload-icon {
@@ -174,40 +166,40 @@
 
 /* Operacao Detail */
 .carvia-nf-list .nf-item {
-    border-left: 3px solid var(--bs-primary, #0d6efd);
+    border-left: 3px solid var(--bs-primary);
     padding-left: 1rem;
     margin-bottom: 0.75rem;
 }
 
 .carvia-subcontrato-card {
-    border-left: 4px solid var(--bs-info, #0dcaf0);
+    border-left: 4px solid var(--semantic-info);
     transition: border-color 0.15s ease;
 }
 
 .carvia-subcontrato-card.confirmado {
-    border-left-color: var(--bs-success, #198754);
+    border-left-color: var(--semantic-success);
 }
 
 .carvia-subcontrato-card.cancelado {
-    border-left-color: var(--bs-danger, #dc3545);
+    border-left-color: var(--semantic-danger);
     opacity: 0.7;
 }
 
 /* Cotacao Result */
 .carvia-cotacao-resultado {
-    background: var(--bg-light, #f8f9fa);
+    background: var(--bg-light);
     border-radius: var(--radius-md, 0.5rem);
     padding: 1rem;
     margin-top: 1rem;
 }
 
 [data-bs-theme="dark"] .carvia-cotacao-resultado {
-    background: var(--bg-dark, #212529);
+    background: var(--bg-dark);
 }
 
 /* Sortable Headers */
 .carvia-sortable {
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--text-muted);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -216,12 +208,12 @@
 }
 
 .carvia-sortable:hover {
-    color: var(--bs-primary, #0d6efd);
+    color: var(--bs-primary);
 }
 
 .carvia-sortable i {
     font-size: 0.7rem;
-    color: var(--bs-primary, #0d6efd);
+    color: var(--bs-primary);
 }
 
 /* Table Responsive */
@@ -309,14 +301,14 @@
 
 /* Badges de valores no header do accordion */
 .carvia-fluxo-badge-receber {
-    color: var(--semantic-success, #198754);
+    color: var(--semantic-success);
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.85rem;
     font-weight: 600;
 }
 
 .carvia-fluxo-badge-pagar {
-    color: var(--semantic-danger, #dc3545);
+    color: var(--semantic-danger);
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.85rem;
     font-weight: 600;
@@ -331,13 +323,13 @@
 }
 
 .carvia-fluxo-badge-saldo.positivo {
-    color: var(--semantic-success, #198754);
-    background: hsla(145, 65%, 40%, 0.1);
+    color: var(--semantic-success);
+    background: hsla(145 65% 40% / 0.1);
 }
 
 .carvia-fluxo-badge-saldo.negativo {
-    color: var(--semantic-danger, #dc3545);
-    background: hsla(0, 65%, 50%, 0.1);
+    color: var(--semantic-danger);
+    background: hsla(0 65% 50% / 0.1);
 }
 
 /* Accordion body */
@@ -347,11 +339,11 @@
 
 /* Borda lateral colorida por saldo */
 .accordion-item:has(.carvia-fluxo-badge-saldo.positivo) {
-    border-left: 3px solid var(--semantic-success, #198754);
+    border-left: 3px solid var(--semantic-success);
 }
 
 .accordion-item:has(.carvia-fluxo-badge-saldo.negativo) {
-    border-left: 3px solid var(--semantic-danger, #dc3545);
+    border-left: 3px solid var(--semantic-danger);
 }
 
 /* Botao menor para acoes inline */
@@ -383,22 +375,22 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .carvia-extrato-credito {
-    color: var(--semantic-success, #198754);
+    color: var(--semantic-success);
     font-weight: 600;
 }
 
 .carvia-extrato-debito {
-    color: var(--semantic-danger, #dc3545);
+    color: var(--semantic-danger);
     font-weight: 600;
 }
 
 .carvia-extrato-saldo-row {
-    background: var(--bg-light, #f8f9fa);
+    background: var(--bg-light);
     font-weight: 600;
 }
 
 [data-bs-theme="dark"] .carvia-extrato-saldo-row {
-    background: var(--bg-dark, #212529);
+    background: var(--bg-dark);
 }
 
 [data-bs-theme="light"] .carvia-extrato-credito {
@@ -448,7 +440,7 @@
     border-top: none;
     border-radius: 0 0 var(--radius-md, 0.5rem) var(--radius-md, 0.5rem);
     background: var(--bg-light);
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--shadow-md, 0 4px 6px -1px hsla(0 0% 0% / 0.1));
     display: none;
 }
 
@@ -481,7 +473,7 @@
 
 .carvia-quick-nav-sep {
     width: 1px;
-    background: var(--border, #dee2e6);
+    background: var(--border);
     margin: 0.15rem 0.15rem;
     align-self: stretch;
     opacity: 0.5;
@@ -508,34 +500,34 @@
 /* Row secundaria (descricao) */
 .carvia-conciliacao-row-secondary {
     font-size: 0.72rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
 }
 
 /* Linha selecionada */
 .carvia-conciliacao-selected {
-    background: hsla(210, 80%, 55%, 0.08);
+    background: hsla(210 80% 55% / 0.08);
 }
 
 [data-bs-theme="dark"] .carvia-conciliacao-selected {
-    background: hsla(210, 80%, 55%, 0.15);
+    background: hsla(210 80% 55% / 0.15);
 }
 
 /* Borda lateral colorida por tipo */
 .carvia-extrato-row-credito {
-    border-left: 3px solid var(--semantic-success, #198754);
+    border-left: 3px solid var(--semantic-success);
 }
 
 .carvia-extrato-row-debito {
-    border-left: 3px solid var(--semantic-danger, #dc3545);
+    border-left: 3px solid var(--semantic-danger);
 }
 
 /* Cards topo — match/mismatch */
 .carvia-conciliacao-card-match {
-    border-color: var(--semantic-success, #198754);
+    border-color: var(--semantic-success);
 }
 
 .carvia-conciliacao-card-mismatch {
-    border-color: var(--amber-50, hsl(45, 100%, 50%));
+    border-color: var(--amber-50);
 }
 
 /* Badge de status conciliacao */
@@ -556,8 +548,7 @@
 }
 
 /* Light mode adjustments */
-[data-bs-theme="light"] .carvia-badge-conciliado,
-[data-theme="light"] .carvia-badge-conciliado {
+[data-bs-theme="light"] .carvia-badge-conciliado {
     --_badge-bg: hsl(145 65% 35%);
 }
 
@@ -613,7 +604,7 @@
 
 .carvia-breakdown-table {
     font-size: 0.82rem;
-    border: 1px solid var(--border, #dee2e6);
+    border: 1px solid var(--border);
 }
 
 .carvia-breakdown-table th,
@@ -622,12 +613,12 @@
 }
 
 .carvia-breakdown-total {
-    background-color: var(--bg-light, #f8f9fa);
+    background-color: var(--bg-light);
     font-weight: 600;
 }
 
 [data-bs-theme="dark"] .carvia-breakdown-total {
-    background-color: var(--bg-dark, #2b3035);
+    background-color: var(--bg);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -635,13 +626,13 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .carvia-cotacao-manual-section {
-    border-style: dashed !important;
-    border-color: var(--border, #dee2e6) !important;
-    background-color: var(--bg-light, #f8f9fa);
+    border-style: dashed;
+    border-color: var(--border);
+    background-color: var(--bg-light);
 }
 
 [data-bs-theme="dark"] .carvia-cotacao-manual-section {
-    background-color: var(--bg-dark, #2b3035);
+    background-color: var(--bg);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -663,6 +654,6 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .carvia-autocomplete-wrapper input.is-invalid {
-    border-color: var(--bs-danger, #dc3545);
-    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.15);
+    border-color: var(--semantic-danger);
+    box-shadow: 0 0 0 0.2rem hsla(350 55% 55% / 0.15);
 }

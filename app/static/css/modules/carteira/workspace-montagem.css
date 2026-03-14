@@ -8,6 +8,7 @@
    - elementos: --bg-light (10%)
    - botões: --bg-button (15%)
    ========================================================================== */
+@layer modules {
 
 /* ==========================================================================
    WORKSPACE BASE
@@ -24,9 +25,9 @@
 }
 
 .workspace-header {
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
-    background: transparent !important;
-    color: var(--text) !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: transparent;
+    color: var(--text);
     border-bottom: 1px solid var(--border);
     padding: 1rem;
 }
@@ -44,11 +45,11 @@
 }
 
 .produto-origem:hover {
-    background-color: var(--bg-light) !important;
+    background-color: var(--bg-light);
 }
 
 .produto-origem.selected {
-    background-color: var(--bg-button) !important;
+    background-color: var(--bg-button);
     box-shadow: inset 0 0 0 2px var(--amber-55);
 }
 
@@ -141,7 +142,7 @@
 }
 
 .lote-card .card-header {
-    background: transparent !important;
+    background: transparent;
     border-bottom: 1px solid var(--border);
     color: var(--text);
 }
@@ -213,15 +214,15 @@
 }
 
 .lote-card.com-estoque .card-header {
-    background: var(--semantic-success-subtle) !important;
-    border-bottom: 2px solid var(--semantic-success) !important;
-    color: var(--semantic-success) !important;
+    background: var(--semantic-success-subtle);
+    border-bottom: 2px solid var(--semantic-success);
+    color: var(--semantic-success);
 }
 
 .lote-card.sem-estoque .card-header {
-    background: hsla(45 100% 50% / 0.15) !important;
-    border-bottom: 2px solid var(--amber-50) !important;
-    color: var(--amber-50) !important;
+    background: hsla(45 100% 50% / 0.15);
+    border-bottom: 2px solid var(--amber-50);
+    color: var(--amber-50);
 }
 
 /* ==========================================================================
@@ -275,7 +276,7 @@
 }
 
 #modal-cardex .modal-header {
-    background: transparent !important;
+    background: transparent;
     color: var(--text);
     border-bottom: 1px solid var(--border);
 }
@@ -313,11 +314,11 @@
    ========================================================================== */
 
 .cardex-resumo-visual .stat-card .text-success {
-    color: var(--semantic-success) !important;
+    color: var(--semantic-success);
 }
 
 .cardex-resumo-visual .stat-card .text-danger {
-    color: var(--semantic-danger) !important;
+    color: var(--semantic-danger);
 }
 
 .cardex-resumo-visual .stat-card h5 {
@@ -357,11 +358,11 @@
 
 /* Status das linhas */
 .cardex-tabela .table-danger {
-    background-color: var(--semantic-danger-subtle) !important;
+    background-color: var(--semantic-danger-subtle);
 }
 
 .cardex-tabela .table-warning {
-    background-color: hsla(45 100% 50% / 0.15) !important;
+    background-color: hsla(45 100% 50% / 0.15);
 }
 
 /* Alertas do cardex */
@@ -503,12 +504,12 @@
     }
 
     .workspace-header {
-        padding: 1rem !important;
+        padding: 1rem;
     }
 
     .workspace-produtos,
     .workspace-lotes {
-        padding: 1rem !important;
+        padding: 1rem;
     }
 
     .cardex-resumo-visual .row {
@@ -540,3 +541,4 @@
         animation: none !important;
     }
 }
+} /* End @layer modules */

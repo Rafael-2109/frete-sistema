@@ -5,6 +5,8 @@
    MIGRADO: Agora usa variaveis de _variables.css
    ======================================== */
 
+@layer modules {
+
 /* ===========================
    GLOBAL - PREVENIR OVERFLOW NO CONTAINER
    APLICADO APENAS EM MOBILE para não interferir nos dropdowns do navbar
@@ -752,3 +754,5 @@
         touch-action: manipulation;
     }
 }
+
+} /* End @layer modules */

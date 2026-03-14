@@ -2,6 +2,7 @@
    CUSTEIO - Styles
    Usa design tokens de _design-tokens.css
    ═══════════════════════════════════════════════════════════════════════════ */
+@layer modules {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TIPO BADGES
@@ -193,6 +194,8 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PREVIEW MODAL
+   NOTE: !important kept — overrides Bootstrap .bg-primary/.bg-warning/.bg-success
+   utility classes which use their own !important internally
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .preview-card {
@@ -202,7 +205,7 @@
 
 .preview-card .card-header.bg-primary {
     background: hsl(210, 80%, 50%) !important;
-    color: white;
+    color: hsl(0 0% 100%);
 }
 
 .preview-card .card-header.bg-warning {
@@ -212,7 +215,7 @@
 
 .preview-card .card-header.bg-success {
     background: var(--semantic-success) !important;
-    color: white;
+    color: hsl(0 0% 100%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -442,6 +445,8 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    EDITABLE INPUT STATES
+   NOTE: !important kept — overrides .editable-input base styles above
+   when JS adds .is-valid/.is-invalid classes (competing same-layer)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .editable-input.is-loading {
@@ -480,17 +485,17 @@
    MENSAL BOM EXPANSION INLINE
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Linha expandível com cursor */
+/* Linha expandivel com cursor */
 .row-expandable {
     cursor: pointer;
     transition: background-color var(--transition-fast);
 }
 
 .row-expandable:hover {
-    background-color: var(--bg-light) !important;
+    background-color: var(--bg-light);
 }
 
-/* Ícone de expansão */
+/* Icone de expansao */
 .expand-icon {
     color: var(--text-muted);
     transition: transform var(--transition-fast);
@@ -519,7 +524,8 @@
     opacity: 0.85;
 }
 
-/* Linha de total BOM */
+/* Linha de total BOM
+   NOTE: !important kept — overrides .bom-row base background */
 .bom-total {
     background-color: hsla(45, 100%, 50%, 0.08) !important;
     border-left: 3px solid var(--amber-55);
@@ -541,7 +547,7 @@
     color: var(--amber-55);
 }
 
-/* Animação de loading em expansão */
+/* Animacao de loading em expansao */
 @keyframes bom-loading {
     0% { opacity: 0.5; }
     50% { opacity: 1; }
@@ -556,7 +562,7 @@
    DEFINICAO - VALORES EXPANDIVEIS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Valores clicáveis nas colunas de custo */
+/* Valores clicaveis nas colunas de custo */
 .valor-expandivel {
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -578,13 +584,13 @@
 /* Celula de custo considerado - valor nao editavel (PRODUZIDO) */
 #tabela-definicao td[data-tipo="custo_considerado"] {
     font-family: var(--font-mono);
-    text-align: center !important;
+    text-align: center;
 }
 
 /* Celula de custo considerado - container do input (COMPRADO) */
 #tabela-definicao td:has(.editable-input) {
-    padding: 4px 8px !important;
-    text-align: center !important;
+    padding: 4px 8px;
+    text-align: center;
 }
 
 /* Input editavel centralizado */
@@ -593,7 +599,7 @@
     margin: 0 auto;
 }
 
-/* Cabeçalho expansível */
+/* Cabecalho expansivel */
 .expandable-header {
     cursor: pointer;
     user-select: none;
@@ -631,7 +637,7 @@
 
 .detail-row td {
     font-size: 0.85em;
-    padding: 4px 8px !important;
+    padding: 4px 8px;
 }
 
 .detail-label {
@@ -663,7 +669,7 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     color: var(--text-muted);
-    padding: 6px 8px !important;
+    padding: 6px 8px;
     white-space: nowrap;
 }
 
@@ -673,12 +679,12 @@
     cursor: pointer;
     transition: background-color var(--transition-fast);
     border-left: 1px solid var(--border);
-    padding: 4px 6px !important;
-    vertical-align: middle !important;
+    padding: 4px 6px;
+    vertical-align: middle;
 }
 
 .bom-custo-cell:hover {
-    background-color: hsla(45, 100%, 50%, 0.15) !important;
+    background-color: hsla(45, 100%, 50%, 0.15);
 }
 
 .bom-custo-cell.custo-destacado {
@@ -791,14 +797,15 @@
 }
 
 .card-estoque .card-body .text-muted {
-    color: var(--text-muted) !important;
+    color: var(--text-muted);
 }
 
 .card-estoque .card-body .fw-bold {
     color: var(--text);
 }
 
-/* Linha destacada na tabela */
+/* Linha destacada na tabela
+   NOTE: !important kept — overrides Bootstrap table row utility */
 #modalDetalhesCusto .table-row-success {
     background: var(--semantic-success-subtle) !important;
 }
@@ -875,7 +882,8 @@
     font-weight: 600;
 }
 
-/* Badge de historico */
+/* Badge de historico
+   NOTE: !important kept on .active — overrides Bootstrap badge bg utility */
 .badge-historico {
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -1023,3 +1031,46 @@
     opacity: 0.3;
     margin-bottom: 1rem;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMISSAO — autocomplete suggestions, criterio container
+   Source: custeio/comissao.html
+   ═══════════════════════════════════════════════════════════════════════════ */
+.sugestoes-autocomplete {
+    position: absolute;
+    z-index: 1000;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    width: calc(100% - 24px);
+    display: none;
+}
+
+.sugestoes-autocomplete.show {
+    display: block;
+}
+
+.sugestoes-autocomplete .sugestao-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+}
+
+.sugestoes-autocomplete .sugestao-item:hover {
+    background-color: var(--bg);
+}
+
+.sugestoes-autocomplete .sugestao-item:last-child {
+    border-bottom: none;
+}
+
+.criterio-container {
+    background-color: var(--bg);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+} /* End @layer modules */

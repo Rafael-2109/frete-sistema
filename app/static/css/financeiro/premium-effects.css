@@ -5,6 +5,8 @@
  * Efeitos: Grain, Aurora, Glass, Colored Shadows, Spotlight, Reveal
  */
 
+@layer modules {
+
 /* =============================================================================
    1. GRAIN TEXTURE
    ============================================================================= */
@@ -62,7 +64,7 @@
         0 4px 6px rgba(0, 0, 0, 0.1),
         0 0 40px rgba(var(--glow-color-rgb), 0.12),
         0 0 80px rgba(var(--glow-color-rgb), 0.06);
-    transition: box-shadow var(--fin-transition-normal);
+    transition: box-shadow var(--transition-normal);
 }
 
 .shadow-glow:hover {
@@ -152,7 +154,7 @@
    ============================================================================= */
 
 .text-gradient {
-    background: linear-gradient(135deg, var(--fin-accent-primary) 0%, var(--fin-accent-info) 50%, hsl(271, 91%, 65%) 100%);
+    background: linear-gradient(135deg, var(--amber-55) 0%, var(--semantic-info) 50%, hsl(271, 91%, 65%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -391,3 +393,4 @@
         transform: none;
     }
 }
+} /* End @layer modules */

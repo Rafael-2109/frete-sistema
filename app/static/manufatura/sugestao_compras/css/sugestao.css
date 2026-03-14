@@ -10,6 +10,8 @@
  * - var(--hover-bg) for row hover
  */
 
+@layer modules {
+
 /* Cards */
 .sc-card {
     background: var(--bg-light);
@@ -307,3 +309,5 @@
     background: hsla(38, 92%, 50%, 0.1);
     border-color: hsla(38, 92%, 50%, 0.2);
 }
+
+} /* End @layer modules */

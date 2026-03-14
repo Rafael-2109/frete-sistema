@@ -81,6 +81,10 @@
 @import url('./modules/_insights.css') layer(modules);
 @import url('./modules/_carvia.css') layer(modules);
 @import url('./modules/_seguranca.css') layer(modules);
+@import url('./financeiro/premium-effects.css') layer(modules);
+@import url('./modules/_comercial.css') layer(modules);
+@import url('./modules/_portaria.css') layer(modules);
+@import url('./modules/_transportadoras.css') layer(modules);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);

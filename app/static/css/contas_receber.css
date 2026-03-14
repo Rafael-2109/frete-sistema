@@ -2,6 +2,7 @@
    CSS: Contas a Receber - Listagem
    Suporte a Dark/Light Mode
    ============================================== */
+@layer modules {
 
 /* === VARIAVEIS CSS === */
 /* NOTA: Este arquivo usa variaveis de _variables.css (--bs-*)
@@ -32,17 +33,17 @@
 .table-contas td strong,
 .table-contas td small,
 .table-contas td i {
-    color: var(--text) !important;
+    color: var(--text);
 }
 
 /* Classe cliente-col */
 .table-contas .cliente-col {
-    color: var(--text) !important;
+    color: var(--text);
 }
 
 /* Classe tipo-titulo */
 .table-contas .tipo-titulo {
-    color: var(--text-muted) !important;
+    color: var(--text-muted);
 }
 
 /* Exceções para badges que devem manter suas cores */
@@ -149,17 +150,17 @@ input[type="date"] {
 /* === TABELA — padrão pallet/v2 === */
 .table-contas {
     font-size: 0.8rem;
-    background: var(--bg-light) !important;
+    background: var(--bg-light);
     --bs-table-bg: var(--bg-light);
     --bs-table-striped-bg: var(--bg);
     --bs-table-hover-bg: var(--hover-bg);
     --bs-table-border-color: var(--border);
-    color: var(--text) !important;
+    color: var(--text);
 }
 
 .table-contas th {
-    background: var(--bg) !important;
-    color: var(--text-muted) !important;
+    background: var(--bg);
+    color: var(--text-muted);
     font-weight: 600;
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -168,36 +169,36 @@ input[type="date"] {
     position: sticky;
     top: 0;
     z-index: 10;
-    border-color: var(--border) !important;
+    border-color: var(--border);
 }
 
 .table-contas th a {
-    color: var(--text-muted) !important;
+    color: var(--text-muted);
     text-decoration: none;
 }
 
 .table-contas th a:hover {
-    color: var(--amber-55) !important;
+    color: var(--amber-55);
 }
 
 .table-contas td {
-    color: var(--text) !important;
-    border-color: var(--border) !important;
+    color: var(--text);
+    border-color: var(--border);
     vertical-align: middle;
     background: transparent;
 }
 
 /* Sobrescrever table-striped do Bootstrap — pallet/v2 */
 .table-contas.table-striped > tbody > tr:nth-of-type(odd) > * {
-    background-color: var(--bg) !important;
+    background-color: var(--bg);
     --bs-table-accent-bg: var(--bg);
-    color: var(--text) !important;
+    color: var(--text);
 }
 
 .table-contas.table-striped > tbody > tr:nth-of-type(even) > * {
-    background-color: var(--bg-light) !important;
+    background-color: var(--bg-light);
     --bs-table-accent-bg: var(--bg-light);
-    color: var(--text) !important;
+    color: var(--text);
 }
 
 .table-contas tbody tr {
@@ -206,9 +207,9 @@ input[type="date"] {
 
 /* Hover amber sutil — padrão pallet/v2 */
 .table-contas.table-hover > tbody > tr:hover > * {
-    background-color: var(--hover-bg) !important;
+    background-color: var(--hover-bg);
     --bs-table-accent-bg: var(--hover-bg);
-    color: var(--text) !important;
+    color: var(--text);
 }
 
 /* === BADGES DE EMPRESA === */
@@ -309,7 +310,7 @@ input[type="date"] {
     text-transform: uppercase;
 }
 .confirmacao-ok {
-    color: #fff;
+    color: hsl(0 0% 100%);
     background-color: var(--bs-success);
 }
 .confirmacao-ok:hover {
@@ -336,7 +337,7 @@ input[type="date"] {
     text-align: center;
 }
 .acao-ativa {
-    color: #fff;
+    color: hsl(0 0% 100%);
     background-color: var(--bs-danger);
     font-weight: 500;
 }
@@ -412,8 +413,8 @@ input[type="date"] {
     cursor: help;
 }
 
-/* === RESPONSIVIDADE === */
-.table-responsive {
+/* === RESPONSIVIDADE — scoped a contas_receber === */
+.contas-receber-page .table-responsive {
     max-height: 70vh;
     overflow-y: auto;
 }
@@ -427,7 +428,7 @@ input[type="date"] {
     transition: all 0.2s ease;
 }
 .alerta-on {
-    color: #fff;
+    color: hsl(0 0% 100%);
     background-color: var(--bs-danger);
     animation: pulse-alert 1.5s infinite;
 }
@@ -448,16 +449,16 @@ input[type="date"] {
 .obs-clicavel {
     cursor: pointer;
     text-decoration: underline dotted;
-    color: var(--text-muted) !important;
+    color: var(--text-muted);
 }
 .obs-clicavel:hover {
-    color: var(--amber-55) !important;
+    color: var(--amber-55);
 }
 .obs-clicavel i {
-    color: inherit !important;
+    color: inherit;
 }
 .obs-clicavel small {
-    color: inherit !important;
+    color: inherit;
 }
 
 /* === PREVISAO ENTREGA === */
@@ -477,13 +478,13 @@ input[type="date"] {
 
 /* === LINK TITULO NF === */
 .titulo-nf-link {
-    color: var(--text) !important;
+    color: var(--text);
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 .titulo-nf-link strong {
-    color: var(--text) !important;
+    color: var(--text);
 }
 .titulo-nf-link:hover {
     color: var(--amber-55);
@@ -555,22 +556,22 @@ input[type="date"] {
 }
 
 .modal-header.bg-success {
-    background: linear-gradient(135deg, var(--bs-success), #059669) !important;
+    background: linear-gradient(135deg, var(--bs-success), var(--semantic-success)) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-danger {
-    background: linear-gradient(135deg, var(--bs-danger), #b91c1c) !important;
+    background: linear-gradient(135deg, var(--bs-danger), var(--semantic-danger)) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-warning {
-    background: linear-gradient(135deg, var(--bs-warning), #d97706) !important;
+    background: linear-gradient(135deg, var(--bs-warning), var(--semantic-warning)) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
 .modal-header.bg-info {
-    background: linear-gradient(135deg, var(--bs-info), #0284c7) !important;
+    background: linear-gradient(135deg, var(--bs-info), var(--semantic-info)) !important;
     border-bottom-color: rgba(0, 0, 0, 0.2);
 }
 
@@ -579,7 +580,7 @@ input[type="date"] {
 .modal-header.bg-success .modal-title,
 .modal-header.bg-danger .modal-title,
 .modal-header.bg-info .modal-title {
-    color: #ffffff !important;
+    color: hsl(0 0% 100%) !important;
 }
 
 /* Botão close em headers coloridos - branco */
@@ -879,3 +880,4 @@ input[type="date"] {
     border-color: var(--amber-55);
     color: var(--text);
 }
+} /* End @layer modules */

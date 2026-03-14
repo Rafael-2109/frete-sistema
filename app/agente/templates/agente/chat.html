@@ -232,7 +232,11 @@
             </div>
         </div>
 
-        <!-- FEAT-003: Painel de Thinking -->
+        <!-- FEAT-003: Painel de Thinking — colapsa totalmente quando fechado -->
+        <!-- Botão flutuante para reabrir (visivel apenas quando painel colapsado e tem conteudo) -->
+        <button id="thinking-toggle-btn" class="thinking-toggle-btn" onclick="toggleThinkingPanel()" style="display: none;" title="Ver raciocínio">
+            <i class="fas fa-brain"></i>
+        </button>
         <div id="thinking-panel" class="thinking-panel" style="display: none;">
             <div class="thinking-content">
                 <div class="thinking-header">
@@ -240,8 +244,8 @@
                         <i class="fas fa-brain me-1"></i>
                         <span id="thinking-status">Pensando...</span>
                     </span>
-                    <button class="btn-minimize" onclick="toggleThinkingPanel()" title="Minimizar">
-                        <i class="fas fa-chevron-up" id="thinking-toggle-icon"></i>
+                    <button class="btn-minimize" onclick="toggleThinkingPanel()" title="Fechar">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
                 <div class="thinking-body" id="thinking-text"></div>
@@ -291,7 +295,7 @@
                 <textarea
                     id="message-input"
                     placeholder="Digite sua pergunta... (Enter envia, Shift+Enter nova linha)"
-                    maxlength="2000"
+                    maxlength="15000"
                     rows="1"
                     autocomplete="off"
                 ></textarea>

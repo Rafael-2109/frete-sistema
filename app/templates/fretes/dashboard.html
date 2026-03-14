@@ -20,15 +20,13 @@
     <div class="row mb-4">
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="mb-0">{{ total_fretes }}</h4>
-                            <span class="small">Total de Fretes</span>
+                            <h5 class="mb-0 fw-bold">{{ total_fretes }}</h5>
+                            <span class="small text-muted">Total de Fretes</span>
                         </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-file-invoice fa-2x"></i>
-                        </div>
+                        <i class="fas fa-file-invoice fa-lg text-muted"></i>
                     </div>
                 </div>
             </div>
@@ -37,15 +35,13 @@
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <a href="{{ url_for('cte.listar_ctes') }}" class="text-decoration-none">
                 <div class="card stat-card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h4 class="mb-0"><i class="fas fa-file-invoice"></i></h4>
-                                <span class="small">CTes (Conhecimentos)</span>
+                                <h5 class="mb-0 fw-bold"><i class="fas fa-file-invoice"></i></h5>
+                                <span class="small text-muted">CTes (Conhecimentos)</span>
                             </div>
-                            <div class="align-self-center">
-                                <i class="fas fa-arrow-right fa-2x"></i>
-                            </div>
+                            <i class="fas fa-arrow-right fa-lg text-muted"></i>
                         </div>
                     </div>
                 </div>
@@ -54,15 +50,13 @@
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="mb-0">{{ fretes_pendentes }}</h4>
-                            <span class="small">Fretes Pendentes</span>
+                            <h5 class="mb-0 fw-bold">{{ fretes_pendentes }}</h5>
+                            <span class="small text-muted">Fretes Pendentes</span>
                         </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-clock fa-2x"></i>
-                        </div>
+                        <i class="fas fa-clock fa-lg text-muted"></i>
                     </div>
                 </div>
             </div>
@@ -70,15 +64,13 @@
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="mb-0">{{ aprovacoes_pendentes }}</h4>
-                            <span class="small">Aprovações Pendentes</span>
+                            <h5 class="mb-0 fw-bold">{{ aprovacoes_pendentes }}</h5>
+                            <span class="small text-muted">Aprovações Pendentes</span>
                         </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-check-circle fa-2x"></i>
-                        </div>
+                        <i class="fas fa-check-circle fa-lg text-muted"></i>
                     </div>
                 </div>
             </div>
@@ -86,15 +78,13 @@
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="mb-0">{{ faturas_conferir }}</h4>
-                            <span class="small">Faturas a Conferir</span>
+                            <h5 class="mb-0 fw-bold">{{ faturas_conferir }}</h5>
+                            <span class="small text-muted">Faturas a Conferir</span>
                         </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-receipt fa-2x"></i>
-                        </div>
+                        <i class="fas fa-receipt fa-lg text-muted"></i>
                     </div>
                 </div>
             </div>
@@ -102,15 +92,13 @@
 
         <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
             <div class="card stat-card {% if fretes_sem_nfs > 0 %}stat-card-danger{% else %}stat-card-success{% endif %}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="mb-0">{{ fretes_sem_nfs }}</h4>
-                            <span class="small">Fretes sem NFs</span>
+                            <h5 class="mb-0 fw-bold">{{ fretes_sem_nfs }}</h5>
+                            <span class="small text-muted">Fretes sem NFs</span>
                         </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-exclamation-triangle fa-2x"></i>
-                        </div>
+                        <i class="fas fa-exclamation-triangle fa-lg text-muted"></i>
                     </div>
                 </div>
             </div>
@@ -119,72 +107,72 @@
 
     <!-- Ações rápidas -->
     <div class="row mb-4">
-        <div class="col-12 mb-3">
-            <h4>Ações Rápidas</h4>
+        <div class="col-12 mb-2">
+            <h5 class="text-muted fw-semibold">Ações Rápidas</h5>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.lancar_cte') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.lancar_cte') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-plus"></i>
                 <span>Lançar CTe</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.listar_fretes') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.listar_fretes') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-list"></i>
                 <span>Listar Fretes</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-check"></i>
                 <span>Aprovações</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.listar_faturas') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.listar_faturas') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-file-pdf"></i>
                 <span>Faturas</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.nova_despesa_extra_por_nf') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-plus-circle"></i>
                 <span>Nova Despesa</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.gerenciar_despesas_extras') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-cogs"></i>
                 <span>Gerenciar Despesas</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.listar_contas_correntes') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-balance-scale"></i>
                 <span>Contas Correntes</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.lancamento_freteiros') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-truck"></i>
                 <span>Lançamento Freteiros</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.analises') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.analises') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-chart-bar"></i>
                 <span>Análises</span>
             </a>
         </div>
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="action-card h-100">
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.auditoria_lancamentos') }}" class="action-card action-card-sm h-100">
                 <i class="fas fa-clipboard-check"></i>
                 <span>Auditoria Odoo</span>
             </a>
         </div>
         {% if fretes_sem_nfs > 0 %}
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-3">
-            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}" class="action-card h-100"
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2 col-xl mb-2">
+            <a href="{{ url_for('fretes.corrigir_nfs_fretes') }}" class="action-card action-card-sm h-100"
                onclick="return confirm('Deseja corrigir {{ fretes_sem_nfs }} frete(s) que não possuem NFs preenchidas?')">
                 <i class="fas fa-tools"></i>
                 <span>Corrigir NFs</span>

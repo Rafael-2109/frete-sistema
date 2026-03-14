@@ -2,6 +2,49 @@
    MACRO PROJECAO DE COMPONENTES
    Utiliza variaveis centralizadas de _design-tokens.css
    ============================================================ */
+@layer modules {
+
+/* ========== MODULE CUSTOM PROPERTIES ========== */
+:root {
+    /* Cabecalho principal — indigo profundo */
+    --_macro-header-bg: hsl(232 64% 29%);
+    --_macro-header-color: hsl(0 0% 100%);
+
+    /* Grupo Ruptura — amber/brown */
+    --_macro-ruptura-header: hsl(28 90% 36%);
+    --_macro-ruptura-subheader: hsl(45 100% 90%);
+    --_macro-ruptura-stripe: hsla(45 100% 51% / 0.08);
+
+    /* Grupo Mes Atual — blue */
+    --_macro-mes-atual-header: hsl(213 100% 52%);
+    --_macro-mes-atual-subheader: hsl(213 100% 90%);
+    --_macro-mes-atual-stripe: hsla(213 100% 52% / 0.08);
+
+    /* Grupo Mes Proximo — purple */
+    --_macro-mes-proximo-header: hsl(261 52% 51%);
+    --_macro-mes-proximo-subheader: hsl(261 52% 92%);
+    --_macro-mes-proximo-stripe: hsla(261 52% 51% / 0.08);
+
+    /* Saldo dark-mode text colors */
+    --_macro-saldo-neg-dark-text: hsl(354 70% 91%);
+    --_macro-saldo-pos-dark-text: hsl(145 30% 88%);
+}
+
+[data-bs-theme="dark"] {
+    --_macro-header-bg: hsl(224 60% 15%);
+
+    --_macro-ruptura-header: hsl(28 80% 31%);
+    --_macro-ruptura-subheader: hsl(28 70% 10%);
+    --_macro-ruptura-stripe: hsla(45 100% 51% / 0.12);
+
+    --_macro-mes-atual-header: hsl(221 70% 40%);
+    --_macro-mes-atual-subheader: hsl(221 70% 15%);
+    --_macro-mes-atual-stripe: hsla(213 100% 52% / 0.12);
+
+    --_macro-mes-proximo-header: hsl(263 60% 42%);
+    --_macro-mes-proximo-subheader: hsl(263 60% 15%);
+    --_macro-mes-proximo-stripe: hsla(261 52% 51% / 0.12);
+}
 
 /* ========== CONTAINER PRINCIPAL ========== */
 .macro-container {
@@ -10,8 +53,8 @@
 
 /* ========== FILTROS ========== */
 .filters-card {
-    background: var(--bs-gray-100, #f8f9fa);
-    border: 1px solid var(--bs-border-color);
+    background: var(--bg-light);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 1rem 1.5rem;
     margin-bottom: 1rem;
@@ -26,32 +69,32 @@
     left: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--bs-secondary-color);
+    color: var(--text-muted);
 }
 
 .search-input {
     border-radius: 20px;
     padding-left: 2.5rem;
-    border: 1px solid var(--bs-border-color);
-    background: #ffffff;
-    color: var(--bs-body-color);
+    border: 1px solid var(--border);
+    background: hsl(0 0% 100%);
+    color: var(--text);
 }
 
 .search-input:focus {
     border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
-    background: #ffffff;
+    box-shadow: 0 0 0 0.2rem hsla(0 0% 0% / 0.12);
+    background: hsl(0 0% 100%);
 }
 
 /* ========== TABLE CONTAINER ========== */
 .table-container {
-    background: var(--bs-card-bg, var(--bs-body-bg));
-    border: 1px solid var(--bs-border-color);
+    background: var(--bg-light);
+    border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
 }
 
-.table-responsive {
+.macro-projecao-page .table-responsive {
     max-height: calc(100vh - 200px);
     overflow-y: auto;
 }
@@ -72,8 +115,8 @@
 
 /* Cabecalho principal - OPACO sem transparencia */
 .table-macro thead tr:first-child th {
-    background: #1a237e;
-    color: #ffffff;
+    background: var(--_macro-header-bg);
+    color: var(--_macro-header-color);
     font-weight: 600;
     text-align: center;
     padding: 0.6rem;
@@ -82,39 +125,39 @@
 
 /* Sub-cabecalho - OPACO */
 .table-macro thead tr:nth-child(2) th {
-    background: #e9ecef;
-    color: var(--bs-body-color);
+    background: var(--bg);
+    color: var(--text);
     font-weight: 500;
     text-align: center;
     padding: 0.4rem;
     font-size: 0.8rem;
-    border: 1px solid var(--bs-border-color);
+    border: 1px solid var(--border);
 }
 
 /* Grupos de colunas no cabecalho - cores SOLIDAS */
 .table-macro thead tr:first-child th.grupo-ruptura {
-    background: #b45309;
+    background: var(--_macro-ruptura-header);
 }
 
 .table-macro thead tr:first-child th.grupo-mes-atual {
-    background: #0d6efd;
+    background: var(--_macro-mes-atual-header);
 }
 
 .table-macro thead tr:first-child th.grupo-mes-proximo {
-    background: #6f42c1;
+    background: var(--_macro-mes-proximo-header);
 }
 
 /* Sub-cabecalho grupos - cores SOLIDAS */
 .table-macro thead tr:nth-child(2) th.grupo-ruptura {
-    background: #fff3cd;
+    background: var(--_macro-ruptura-subheader);
 }
 
 .table-macro thead tr:nth-child(2) th.grupo-mes-atual {
-    background: #cfe2ff;
+    background: var(--_macro-mes-atual-subheader);
 }
 
 .table-macro thead tr:nth-child(2) th.grupo-mes-proximo {
-    background: #e2d9f3;
+    background: var(--_macro-mes-proximo-subheader);
 }
 
 .table-macro tbody tr {
@@ -122,14 +165,14 @@
 }
 
 .table-macro tbody tr:hover {
-    background: var(--bs-tertiary-bg);
+    background: var(--hover-bg);
 }
 
 .table-macro td {
     padding: 0.4rem 0.6rem;
-    border: 1px solid var(--bs-border-color);
+    border: 1px solid var(--border);
     vertical-align: middle;
-    color: var(--bs-body-color);
+    color: var(--text);
 }
 
 .table-macro td.codigo {
@@ -152,38 +195,38 @@
 
 /* ========== GRUPOS DE COLUNAS NO BODY ========== */
 .table-macro tbody td.grupo-ruptura {
-    background-color: rgba(255, 193, 7, 0.08);
+    background-color: var(--_macro-ruptura-stripe);
 }
 
 .table-macro tbody td.grupo-mes-atual {
-    background-color: rgba(13, 110, 253, 0.08);
+    background-color: var(--_macro-mes-atual-stripe);
 }
 
 .table-macro tbody td.grupo-mes-proximo {
-    background-color: rgba(111, 66, 193, 0.08);
+    background-color: var(--_macro-mes-proximo-stripe);
 }
 
 /* ========== SALDO INDICATORS ========== */
 .saldo-negativo {
-    background-color: rgba(220, 53, 69, 0.15) !important;
-    color: var(--bs-danger);
+    background-color: hsla(350 55% 55% / 0.15);
+    color: var(--semantic-danger);
     font-weight: 600;
 }
 
 .saldo-positivo {
-    background-color: rgba(25, 135, 84, 0.15) !important;
-    color: var(--bs-success);
+    background-color: hsla(135 70% 45% / 0.15);
+    color: var(--semantic-success);
 }
 
 .saldo-neutro {
-    color: var(--bs-secondary-color);
+    color: var(--text-muted);
 }
 
 /* ========== BADGE UNIFICADO ========== */
 .badge-unificado {
     font-size: 0.6rem;
-    background: var(--bs-warning);
-    color: white;
+    background: var(--amber-50);
+    color: hsl(0 0% 100%);
     padding: 2px 5px;
     border-radius: 4px;
     margin-left: 4px;
@@ -197,7 +240,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--bs-body-bg);
+    background: var(--bg-dark);
     opacity: 0.95;
     display: flex;
     justify-content: center;
@@ -207,7 +250,7 @@
 
 .loading-spinner {
     text-align: center;
-    color: var(--bs-body-color);
+    color: var(--text);
 }
 
 .loading-spinner i {
@@ -223,8 +266,8 @@
 
 /* ========== BUTTONS ========== */
 .btn-export {
-    background: var(--bs-success);
-    color: white;
+    background: var(--semantic-success);
+    color: hsl(0 0% 100%);
     border: none;
     padding: 0.4rem 0.8rem;
     border-radius: 6px;
@@ -233,109 +276,47 @@
 }
 
 .btn-export:hover {
-    background: var(--bs-success);
+    background: var(--semantic-success);
     filter: brightness(0.9);
-    color: white;
+    color: hsl(0 0% 100%);
 }
 
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
-    .table-responsive {
+    .macro-projecao-page .table-responsive {
         max-height: calc(100vh - 300px);
     }
 }
 
 /* ========== DARK MODE OVERRIDES ========== */
-[data-bs-theme="dark"] .filters-card,
-[data-theme="dark"] .filters-card {
-    background: var(--bs-gray-800, #343a40);
+[data-bs-theme="dark"] .filters-card {
+    background: var(--bg);
 }
 
-[data-bs-theme="dark"] .search-input,
-[data-theme="dark"] .search-input {
-    background: var(--bs-gray-900, #212529);
-    color: var(--bs-body-color);
+[data-bs-theme="dark"] .search-input {
+    background: var(--bg-dark);
+    color: var(--text);
 }
 
-[data-bs-theme="dark"] .search-input:focus,
-[data-theme="dark"] .search-input:focus {
-    background: var(--bs-gray-900, #212529);
+[data-bs-theme="dark"] .search-input:focus {
+    background: var(--bg-dark);
 }
 
-/* Cabecalho dark mode - OPACO */
-[data-bs-theme="dark"] .table-macro thead tr:first-child th,
-[data-theme="dark"] .table-macro thead tr:first-child th {
-    background: #0d1b3e;
+[data-bs-theme="dark"] .saldo-negativo {
+    background-color: hsla(350 55% 55% / 0.25);
+    color: var(--_macro-saldo-neg-dark-text);
 }
 
-[data-bs-theme="dark"] .table-macro thead tr:first-child th.grupo-ruptura,
-[data-theme="dark"] .table-macro thead tr:first-child th.grupo-ruptura {
-    background: #92400e;
+[data-bs-theme="dark"] .saldo-positivo {
+    background-color: hsla(135 70% 45% / 0.25);
+    color: var(--_macro-saldo-pos-dark-text);
 }
 
-[data-bs-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-atual,
-[data-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-atual {
-    background: #1e40af;
+[data-bs-theme="dark"] .table-macro tbody tr:hover {
+    background: hsla(0 0% 100% / 0.05);
 }
 
-[data-bs-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-proximo,
-[data-theme="dark"] .table-macro thead tr:first-child th.grupo-mes-proximo {
-    background: #5b21b6;
+[data-bs-theme="dark"] .loading-overlay {
+    background: hsla(0 0% 0% / 0.9);
 }
-
-[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th,
-[data-theme="dark"] .table-macro thead tr:nth-child(2) th {
-    background: var(--bs-gray-800, #343a40);
-}
-
-[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-ruptura,
-[data-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-ruptura {
-    background: #451a03;
-}
-
-[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-atual,
-[data-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-atual {
-    background: #172554;
-}
-
-[data-bs-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-proximo,
-[data-theme="dark"] .table-macro thead tr:nth-child(2) th.grupo-mes-proximo {
-    background: #2e1065;
-}
-
-[data-bs-theme="dark"] .table-macro tbody td.grupo-ruptura,
-[data-theme="dark"] .table-macro tbody td.grupo-ruptura {
-    background-color: rgba(255, 193, 7, 0.12);
-}
-
-[data-bs-theme="dark"] .table-macro tbody td.grupo-mes-atual,
-[data-theme="dark"] .table-macro tbody td.grupo-mes-atual {
-    background-color: rgba(13, 110, 253, 0.12);
-}
-
-[data-bs-theme="dark"] .table-macro tbody td.grupo-mes-proximo,
-[data-theme="dark"] .table-macro tbody td.grupo-mes-proximo {
-    background-color: rgba(111, 66, 193, 0.12);
-}
-
-[data-bs-theme="dark"] .saldo-negativo,
-[data-theme="dark"] .saldo-negativo {
-    background-color: rgba(220, 53, 69, 0.25) !important;
-    color: #f8d7da;
-}
-
-[data-bs-theme="dark"] .saldo-positivo,
-[data-theme="dark"] .saldo-positivo {
-    background-color: rgba(25, 135, 84, 0.25) !important;
-    color: #d1e7dd;
-}
-
-[data-bs-theme="dark"] .table-macro tbody tr:hover,
-[data-theme="dark"] .table-macro tbody tr:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-[data-bs-theme="dark"] .loading-overlay,
-[data-theme="dark"] .loading-overlay {
-    background: rgba(0, 0, 0, 0.9);
-}
+} /* End @layer modules */

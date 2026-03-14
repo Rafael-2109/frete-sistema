@@ -83,6 +83,326 @@
     padding: 1rem;
   }
 
+  /* ---------------------------------------------------------------------------
+     Thead Theme-Aware (visualizar_embarque.html)
+     --------------------------------------------------------------------------- */
+  .table-thead-theme {
+    background-color: var(--bs-tertiary-bg);
+  }
+
+  .table-thead-theme th {
+    background-color: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    border-bottom: 2px solid var(--bs-border-color);
+    font-weight: 600;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Itens Embarque Table - Column sizing (visualizar_embarque.html)
+     Table uses table-layout: auto with min-widths per column
+     --------------------------------------------------------------------------- */
+  .itens-embarque-table th:nth-child(1),  /* Cliente */
+  .itens-embarque-table td:nth-child(1) {
+    min-width: 150px;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(2),  /* Pedido */
+  .itens-embarque-table td:nth-child(2) {
+    min-width: 80px;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(3),  /* Nota Fiscal */
+  .itens-embarque-table td:nth-child(3) {
+    min-width: 80px;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(4),  /* Protocolo */
+  .itens-embarque-table td:nth-child(4) {
+    min-width: 100px;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(5),  /* Forma Agendamento */
+  .itens-embarque-table td:nth-child(5) {
+    min-width: 70px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(6),  /* Data Agendamento */
+  .itens-embarque-table td:nth-child(6) {
+    min-width: 120px;
+  }
+
+  .itens-embarque-table th:nth-child(7),  /* Volumes */
+  .itens-embarque-table td:nth-child(7) {
+    min-width: 60px;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(8),  /* UF */
+  .itens-embarque-table td:nth-child(8) {
+    min-width: 35px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(9),  /* Cidade */
+  .itens-embarque-table td:nth-child(9) {
+    min-width: 100px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(10),  /* Aceita NF */
+  .itens-embarque-table td:nth-child(10) {
+    min-width: 60px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(11),  /* NF Pallet */
+  .itens-embarque-table td:nth-child(11) {
+    min-width: 80px;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(12),  /* Qtd Pallet */
+  .itens-embarque-table td:nth-child(12) {
+    min-width: 60px;
+    white-space: nowrap;
+  }
+
+  .itens-embarque-table th:nth-child(13),  /* Status/Acoes */
+  .itens-embarque-table td:nth-child(13) {
+    min-width: 160px;
+    white-space: nowrap;
+  }
+
+  /* General table settings - full width */
+  .itens-embarque-table {
+    table-layout: auto;
+    width: 100%;
+  }
+
+  .itens-embarque-table input,
+  .itens-embarque-table select {
+    width: 100%;
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Agendamento Column (date + badge inline)
+     --------------------------------------------------------------------------- */
+  .agendamento-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .agendamento-data {
+    flex: 0 0 80%;
+    min-width: 0;
+  }
+
+  .agendamento-data input {
+    width: 100%;
+  }
+
+  .agendamento-status {
+    flex: 0 0 20%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .agendamento-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.3rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .agendamento-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px hsl(0 0% 0% / 0.2);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Cancelled Items - Theme-aware (visualizar_embarque.html)
+     NOTE: !important kept — overrides Bootstrap .table-danger utility and
+     inline style="" attributes set by JS on disabled inputs
+     --------------------------------------------------------------------------- */
+  .table-danger {
+    background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
+    border: 2px solid var(--bs-danger) !important;
+  }
+
+  .table-danger input,
+  .table-danger select,
+  .table-danger textarea {
+    background-color: rgba(var(--bs-danger-rgb), 0.2) !important;
+    border-color: var(--bs-danger) !important;
+    color: var(--bs-danger) !important;
+    pointer-events: none;
+  }
+
+  .badge-cancelado-pulsante {
+    animation: pulse-red 3s infinite;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    font-weight: bold;
+  }
+
+  .badge-removido {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Status/Actions merged column (visualizar_embarque.html)
+     --------------------------------------------------------------------------- */
+  .status-acoes-container {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .status-acoes-container .badge {
+    flex-shrink: 0;
+  }
+
+  .status-acoes-container .btn {
+    flex-shrink: 0;
+  }
+
+  .status-acoes-container .print-icon-inline {
+    font-size: 16px;
+    margin-right: 0.3rem;
+    cursor: help;
+    position: relative;
+  }
+
+  .status-acoes-container .print-icon-inline.printed {
+    color: var(--bs-success);
+  }
+
+  .status-acoes-container .print-icon-inline.not-printed {
+    color: var(--bs-border-color);
+    opacity: 0.5;
+  }
+
+  @keyframes pulse-red {
+    0% {
+      background-color: var(--bs-danger);
+      box-shadow: 0 0 3px hsla(var(--bs-danger-rgb), 0.3);
+    }
+    50% {
+      background-color: color-mix(in srgb, var(--bs-danger) 80%, black);
+      box-shadow: 0 0 8px hsla(var(--bs-danger-rgb), 0.6);
+    }
+    100% {
+      background-color: var(--bs-danger);
+      box-shadow: 0 0 3px hsla(var(--bs-danger-rgb), 0.3);
+    }
+  }
+
+  /* ---------------------------------------------------------------------------
+     Dados Tabela (dados_tabela.html)
+     --------------------------------------------------------------------------- */
+  .dados-tabela .row {
+    margin-bottom: 0.5rem;
+  }
+
+  .valor-destaque {
+    font-weight: bold;
+    color: var(--bs-body-color);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Print styles for embarque screens (non-imprimir_ templates)
+     NOTE: !important kept throughout — @media print requires !important
+     to override screen styles reliably across browsers
+     --------------------------------------------------------------------------- */
+  @media print {
+    body {
+      font-size: 11px;
+    }
+
+    .btn,
+    .no-print,
+    nav,
+    .navbar {
+      display: none !important;
+    }
+
+    .card,
+    .container {
+      box-shadow: none;
+      border: none;
+      padding: 0;
+      max-width: 100%;
+    }
+
+    input, select, textarea {
+      font-size: 11px !important;
+      padding: 2px !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-size: 14px;
+    }
+
+    .item-form {
+      page-break-inside: avoid;
+    }
+
+    .itens-embarque-table th:nth-child(5),
+    .itens-embarque-table td:nth-child(5) {
+      width: 10% !important;
+      min-width: 80px !important;
+    }
+
+    .agendamento-badge {
+      font-size: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      background: transparent !important;
+    }
+
+    .agendamento-badge::after {
+      content: '\2713';
+      font-size: 14px !important;
+      color: var(--bs-success) !important;
+      font-weight: bold;
+    }
+
+    .agendamento-badge.badge-secondary::after,
+    .agendamento-badge.badge-warning::after {
+      content: '';
+    }
+
+    .agendamento-cell {
+      gap: 0.2rem;
+    }
+  }
+
   /*
    * ═══════════════════════════════════════════════════════════════════════════
    * PRINT TEMPLATES - INTENTIONALLY EXCLUDED

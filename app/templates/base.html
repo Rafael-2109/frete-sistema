@@ -7,15 +7,14 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Frete Sistema</title>
   <!-- Bootstrap agora é self-hosted via @import layer(bootstrap) em main.css -->
-  <!-- Bootstrap Theme Override - MUST be after Bootstrap, outside layer system -->
-  <link rel="stylesheet" href="{{ 'css/bootstrap-theme-override.css'|asset_url }}">
+  <!-- bootstrap-theme-override.css removido — regras migradas para design tokens e layer system -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
 
   <!-- Design System Nacom Goya - Layer System -->
   <link rel="stylesheet" href="{{ 'css/main.css'|asset_url }}">
-  <link rel="stylesheet" href="{{ 'css/financeiro/premium-effects.css'|asset_url }}">
   <!-- style.css removido - estilos migrados para css/utilities/_legacy.css -->
+  <!-- premium-effects.css migrado para @import em main.css -->
 
   <!-- Previne flash de tema incorreto -->
   <script>
