@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_file
 from flask_login import login_required
-from sqlalchemy import literal, and_
+from sqlalchemy import func, literal, and_
 from app import db
 from app.vinculos.forms import UploadVinculoForm
 from app.vinculos.forms import ConfirmarImportacaoForm
@@ -129,7 +129,7 @@ def confirmar_importacao_vinculos():
 @vinculos_bp.route('/consulta', methods=['GET'])
 @login_required
 def consulta_vinculos():
-    form = ConsultaVinculoForm()
+    form = ConsultaVinculoForm(formdata=request.args)
     editar_form = EditarVinculoForm()
     filtros = {}
 
@@ -137,7 +137,9 @@ def consulta_vinculos():
 
     if request.args.get('razao_social'):
         filtros['razao_social'] = request.args.get('razao_social')
-        query = query.filter(Transportadora.razao_social.ilike(f"%{filtros['razao_social']}%"))
+        query = query.filter(
+            func.f_unaccent(Transportadora.razao_social).ilike(
+                func.f_unaccent(f"%{filtros['razao_social']}%")))
 
     if request.args.get('cnpj'):
         filtros['cnpj'] = request.args.get('cnpj')
@@ -149,7 +151,9 @@ def consulta_vinculos():
 
     if request.args.get('cidade'):
         filtros['cidade'] = request.args.get('cidade')
-        query = query.filter(Cidade.nome.ilike(f"%{filtros['cidade']}%"))
+        query = query.filter(
+            func.f_unaccent(Cidade.nome).ilike(
+                func.f_unaccent(f"%{filtros['cidade']}%")))
 
     if request.args.get('codigo_ibge'):
         filtros['codigo_ibge'] = request.args.get('codigo_ibge')
@@ -157,7 +161,9 @@ def consulta_vinculos():
 
     if request.args.get('nome_tabela'):
         filtros['nome_tabela'] = request.args.get('nome_tabela')
-        query = query.filter(CidadeAtendida.nome_tabela.ilike(f"%{filtros['nome_tabela']}%"))
+        query = query.filter(
+            func.f_unaccent(CidadeAtendida.nome_tabela).ilike(
+                func.f_unaccent(f"%{filtros['nome_tabela']}%")))
 
     # Filtro por status
     status = request.args.get('status')

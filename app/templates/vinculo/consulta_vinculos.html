@@ -95,9 +95,10 @@
         <label class="form-label">Status do Vínculo</label>
         <select name="status" class="form-select">
           <option value="">Todos os Status</option>
-          <option value="ok" {% if request.args.get('status') == 'ok' %}selected{% endif %}>✅ OK</option>
-          <option value="orfa" {% if request.args.get('status') == 'orfa' %}selected{% endif %}>❌ Órfão</option>
-          <option value="grupo_empresarial" {% if request.args.get('status') == 'grupo_empresarial' %}selected{% endif %}>🔄 Grupo Empresarial</option>
+          <option value="ok" {% if request.args.get('status') == 'ok' %}selected{% endif %}>OK</option>
+          <option value="orfao" {% if request.args.get('status') == 'orfao' %}selected{% endif %}>Orfao</option>
+          <option value="transportadora_errada" {% if request.args.get('status') == 'transportadora_errada' %}selected{% endif %}>Transportadora Errada</option>
+          <option value="grupo_empresarial" {% if request.args.get('status') == 'grupo_empresarial' %}selected{% endif %}>Grupo Empresarial</option>
         </select>
       </div>
       <div class="col-md-3">
