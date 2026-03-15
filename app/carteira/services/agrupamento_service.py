@@ -1,35 +1,64 @@
 """
 Service para lógica de agrupamento de pedidos da carteira
+
+OTIMIZAÇÕES (2026-03-15):
+- E1: Batch queries para rotas, subrotas e separações (3 queries vs ~5N)
+- I1: Soma direta de valor_saldo (sem divisão/multiplicação redundante)
+- I2: Popula expedicao/agendamento no dados_separacao
+- I3: Removido campo expedicao_original inconsistente do fallback
 """
 
+from collections import defaultdict
 from sqlalchemy import func, and_, exists
 from app import db
 from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
+from app.localidades.models import CadastroRota, CadastroSubRota
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 
 class AgrupamentoService:
     """Service responsável por agrupar pedidos da carteira"""
-    
+
     def obter_pedidos_agrupados(self):
         """
-        Obtém pedidos agrupados por num_pedido com agregações
-        Retorna lista de dicionários com dados enriquecidos
+        Obtém pedidos agrupados por num_pedido com agregações.
+        Retorna lista de dicionários com dados enriquecidos.
+
+        OTIMIZADO: Usa batch queries para rotas, subrotas e separações
+        (3 queries extras no total vs ~5 por pedido antes).
         """
         try:
             # Buscar pedidos agrupados base
             pedidos_agrupados = self._query_agrupamento_base()
-            
-            # Enriquecer com dados de separação
+
+            if not pedidos_agrupados:
+                return []
+
+            # Coletar identificadores únicos para batch loading
+            all_num_pedidos = [p.num_pedido for p in pedidos_agrupados]
+            all_ufs = set(p.cod_uf for p in pedidos_agrupados if p.cod_uf)
+
+            # Batch load: 3 queries no total (vs ~5 por pedido antes)
+            rotas_map = self._carregar_rotas_batch(all_ufs)
+            subrotas_lookup = self._carregar_subrotas_batch(all_ufs)
+            separacoes_map = self._carregar_separacoes_batch(all_num_pedidos)
+
+            # Importar GrupoEmpresarial uma vez
+            from app.portal.utils.grupo_empresarial import GrupoEmpresarial
+
+            # Enriquecer com lookups em memória
             pedidos_enriquecidos = []
             for pedido in pedidos_agrupados:
-                pedido_enriquecido = self._enriquecer_pedido_com_separacoes(pedido)
+                pedido_enriquecido = self._enriquecer_pedido_batch(
+                    pedido, rotas_map, subrotas_lookup, separacoes_map, GrupoEmpresarial
+                )
                 pedidos_enriquecidos.append(pedido_enriquecido)
-            
+
             # Ordenar após enriquecimento para usar rotas calculadas
             def get_rota_para_ordenacao(pedido):
                 """Retorna a rota considerando incoterm FOB/RED como rota especial"""
@@ -38,23 +67,22 @@ class AgrupamentoService:
                     return 'FOB'
                 elif incoterm == 'RED':
                     return 'RED'
-                else:
-                    return pedido.get('rota') or 'ZZZZZ'
-            
-            pedidos_ordenados = sorted(pedidos_enriquecidos, 
+                return pedido.get('rota') or 'ZZZZZ'
+
+            pedidos_ordenados = sorted(pedidos_enriquecidos,
                 key=lambda p: (
-                    get_rota_para_ordenacao(p),     # 1º Rota/Incoterm (nulls no final)
-                    p.get('sub_rota') or 'ZZZZZ',  # 2º Sub-rota (nulls no final)
-                    p.get('cnpj_cpf') or 'ZZZZZ'   # 3º CNPJ (nulls no final)
+                    get_rota_para_ordenacao(p),     # 1. Rota/Incoterm (nulls no final)
+                    p.get('sub_rota') or 'ZZZZZ',  # 2. Sub-rota (nulls no final)
+                    p.get('cnpj_cpf') or 'ZZZZZ'   # 3. CNPJ (nulls no final)
                 )
             )
-            
+
             return pedidos_ordenados
-            
+
         except Exception as e:
             logger.error(f"Erro ao obter pedidos agrupados: {e}")
             return []
-    
+
     def _query_agrupamento_base(self):
         """
         Query principal de agrupamento conforme especificação
@@ -82,10 +110,10 @@ class AgrupamentoService:
             CarteiraPrincipal.nome_cidade,
             CarteiraPrincipal.incoterm,
             CarteiraPrincipal.forma_agendamento,
-            CarteiraPrincipal.importante,  # ⭐ Campo importante
-            CarteiraPrincipal.tags_pedido,  # 🏷️ Tags do Odoo
+            CarteiraPrincipal.importante,
+            CarteiraPrincipal.tags_pedido,
 
-            # Agregações conforme especificação
+            # Agregacoes
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido *
                     CarteiraPrincipal.preco_produto_pedido).label('valor_total'),
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido *
@@ -107,9 +135,7 @@ class AgrupamentoService:
             )
         ).filter(
             CarteiraPrincipal.ativo == True,
-            # NOVO FILTRO: Mostrar apenas itens com saldo > 0
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
-            # Filtrar pedidos que NÃO estão em standby OU estão CONFIRMADOS
             ~exists().where(
                 and_(
                     SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
@@ -131,56 +157,190 @@ class AgrupamentoService:
             CarteiraPrincipal.nome_cidade,
             CarteiraPrincipal.incoterm,
             CarteiraPrincipal.forma_agendamento,
-            CarteiraPrincipal.importante,  # ⭐ Campo importante no GROUP BY
-            CarteiraPrincipal.tags_pedido  # 🏷️ Tags do Odoo no GROUP BY
+            CarteiraPrincipal.importante,
+            CarteiraPrincipal.tags_pedido
         ).order_by(
-            CarteiraPrincipal.cod_uf.asc().nullslast(),    # 1º UF
-            CarteiraPrincipal.nome_cidade.asc().nullslast(),  # 2º Cidade
-            CarteiraPrincipal.cnpj_cpf.asc().nullslast()   # 3º CNPJ
+            CarteiraPrincipal.cod_uf.asc().nullslast(),
+            CarteiraPrincipal.nome_cidade.asc().nullslast(),
+            CarteiraPrincipal.cnpj_cpf.asc().nullslast()
         ).all()
-    
-    def _enriquecer_pedido_com_separacoes(self, pedido):
-        """Enriquece pedido com informações de separação"""
+
+    # ─── Batch loading methods (FIX E1) ───────────────────────────
+
+    def _carregar_rotas_batch(self, ufs):
+        """Carrega todas as rotas ativas em 1 query -> dict {cod_uf: rota}"""
+        if not ufs:
+            return {}
         try:
-            # Importar funções de busca de rotas
-            from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
-            # Importar função para identificar grupo do cliente
-            from app.portal.utils.grupo_empresarial import GrupoEmpresarial
-            
-            # Calcular informações de separação
-            qtd_separacoes, valor_separacoes, dados_separacao = self._calcular_separacoes(pedido.num_pedido)
+            rotas = CadastroRota.query.filter(
+                CadastroRota.cod_uf.in_(ufs),
+                CadastroRota.ativa == True
+            ).all()
+            return {r.cod_uf: r.rota for r in rotas}
+        except Exception as e:
+            logger.warning(f"Erro ao carregar rotas em batch: {e}")
+            return {}
 
-            # Buscar dados da 1ª separação (menor id com sincronizado_nf=False)
-            primeira_separacao = self._buscar_primeira_separacao(pedido.num_pedido)
+    def _carregar_subrotas_batch(self, ufs):
+        """
+        Carrega todas as subrotas ativas em 1 query.
+        Retorna dict {cod_uf: [(nome_upper, sub_rota)]} para lookup via substring.
+        Equivalente ao ILIKE %nome% usado na busca individual.
+        """
+        if not ufs:
+            return {}
+        try:
+            subrotas = CadastroSubRota.query.filter(
+                CadastroSubRota.cod_uf.in_(ufs),
+                CadastroSubRota.ativa == True
+            ).all()
 
-            # Calcular valor do saldo restante
+            lookup = defaultdict(list)
+            for sr in subrotas:
+                nome_upper = sr.nome_cidade.strip().upper() if sr.nome_cidade else ''
+                lookup[sr.cod_uf].append((nome_upper, sr.sub_rota))
+            return dict(lookup)
+        except Exception as e:
+            logger.warning(f"Erro ao carregar subrotas em batch: {e}")
+            return {}
+
+    def _buscar_subrota_em_memoria(self, subrotas_lookup, cod_uf, nome_cidade):
+        """Busca subrota em memoria, equivalente a ILIKE %normalizado%"""
+        if not cod_uf or not nome_cidade:
+            return None
+        nome_normalizado = re.sub(r'[^\w\s]', '', nome_cidade.strip().upper())
+        candidates = subrotas_lookup.get(cod_uf, [])
+        for sr_nome, sr_valor in candidates:
+            if nome_normalizado in sr_nome:
+                return sr_valor
+        return None
+
+    def _carregar_separacoes_batch(self, num_pedidos):
+        """
+        Carrega todas separacoes ativas (sincronizado_nf=False) em 1 query.
+        Retorna dict {num_pedido: [separacoes]} ordenado por id asc.
+        """
+        if not num_pedidos:
+            return {}
+        try:
+            separacoes = db.session.query(Separacao).filter(
+                Separacao.num_pedido.in_(num_pedidos),
+                Separacao.sincronizado_nf == False
+            ).order_by(Separacao.id.asc()).all()
+
+            agrupado = defaultdict(list)
+            for sep in separacoes:
+                agrupado[sep.num_pedido].append(sep)
+            return dict(agrupado)
+        except Exception as e:
+            logger.warning(f"Erro ao carregar separacoes em batch: {e}")
+            return {}
+
+    # ─── Processing methods ───────────────────────────────────────
+
+    def _processar_separacoes(self, separacoes_pedido):
+        """
+        Processa lista de separacoes de um pedido (ja carregadas em batch).
+        Retorna (qtd_separacoes, valor_separacoes, dados_separacao, primeira_sep_agendamento)
+
+        Fixes:
+        - I1: Soma valor_saldo diretamente (sem divisao/multiplicacao redundante)
+        - I2: Popula expedicao e agendamento no dados_separacao
+        """
+        dados_vazio = {
+            'tem_protocolo': False,
+            'agendamento_confirmado': False,
+            'separacao_lote_id': None,
+            'expedicao': None,
+            'agendamento': None,
+            'protocolo': None
+        }
+
+        if not separacoes_pedido:
+            return 0, 0, dados_vazio, None
+
+        # Contar lotes unicos
+        lotes_unicos = set(
+            sep.separacao_lote_id for sep in separacoes_pedido
+            if sep.separacao_lote_id
+        )
+        qtd_separacoes = len(lotes_unicos)
+
+        # Calcular valor e buscar dados
+        valor_separacoes = 0
+        dados_separacao = {
+            'tem_protocolo': False,
+            'agendamento_confirmado': False,
+            'separacao_lote_id': None,
+            'expedicao': None,
+            'agendamento': None,
+            'protocolo': None
+        }
+
+        for sep in separacoes_pedido:
+            # FIX I1: Soma direta sem divisao/multiplicacao redundante
+            # Antes: valor_unit = valor_saldo/qtd_saldo; total += qtd_saldo * valor_unit
+            # Isso e matematicamente identico a somar valor_saldo, mas acumula erros float
+            valor_separacoes += float(sep.valor_saldo or 0)
+
+            # FIX I2: Capturar ultimo expedicao/agendamento nao-nulo
+            if sep.expedicao:
+                dados_separacao['expedicao'] = sep.expedicao
+            if sep.agendamento:
+                dados_separacao['agendamento'] = sep.agendamento
+
+            # Verificar protocolo
+            if sep.protocolo:
+                dados_separacao['tem_protocolo'] = True
+                dados_separacao['separacao_lote_id'] = sep.separacao_lote_id
+                dados_separacao['protocolo'] = sep.protocolo
+
+                if sep.agendamento_confirmado:
+                    dados_separacao['agendamento_confirmado'] = True
+
+        # Primeira separacao (menor id) - lista ja ordenada por id asc
+        primeira_sep_agendamento = (
+            separacoes_pedido[0].agendamento
+            if separacoes_pedido[0].agendamento else None
+        )
+
+        return qtd_separacoes, valor_separacoes, dados_separacao, primeira_sep_agendamento
+
+    def _enriquecer_pedido_batch(self, pedido, rotas_map, subrotas_lookup,
+                                 separacoes_map, GrupoEmpresarial):
+        """Enriquece pedido usando lookups em memoria (sem queries individuais)"""
+        try:
+            # Separacoes do pedido (pre-carregadas)
+            separacoes_pedido = separacoes_map.get(pedido.num_pedido, [])
+            qtd_separacoes, valor_separacoes, dados_separacao, primeira_sep_agendamento = \
+                self._processar_separacoes(separacoes_pedido)
+
+            # Calcular saldo restante
             valor_pedido = float(pedido.valor_total) if pedido.valor_total else 0
             valor_saldo_restante = valor_pedido - float(valor_separacoes)
+            totalmente_separado = valor_saldo_restante <= 0.01
 
-            # Determinar se está totalmente em separação
-            totalmente_separado = valor_saldo_restante <= 0.01  # Margem de 1 centavo
-
-            # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado
-            # foram REMOVIDOS de CarteiraPrincipal - agora vêm apenas de Separacao
+            # Dados de separacao
             protocolo_final = dados_separacao.get('protocolo') if dados_separacao.get('tem_protocolo') else None
             agendamento_confirmado_final = dados_separacao.get('agendamento_confirmado', False)
-            expedicao_final = dados_separacao.get('expedicao')
-            agendamento_final = dados_separacao.get('agendamento')
-            
-            # Buscar rota e sub-rota das localidades
-            rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
-            sub_rota_calculada = buscar_sub_rota_por_uf_cidade(pedido.cod_uf, pedido.nome_cidade) if pedido.cod_uf and pedido.nome_cidade else None
-            
-            # Identificar grupo do cliente
-            grupo_cliente = 'outros'  # Default
+            expedicao_final = dados_separacao.get('expedicao')      # FIX I2: agora populado
+            agendamento_final = dados_separacao.get('agendamento')  # FIX I2: agora populado
+
+            # Rotas via lookup em memoria (0 queries)
+            rota_calculada = rotas_map.get(pedido.cod_uf) if pedido.cod_uf else None
+            sub_rota_calculada = self._buscar_subrota_em_memoria(
+                subrotas_lookup, pedido.cod_uf, pedido.nome_cidade
+            )
+
+            # Grupo do cliente (in-memory, sem query)
+            grupo_cliente = 'outros'
             if pedido.cnpj_cpf:
                 grupo = GrupoEmpresarial.identificar_grupo(pedido.cnpj_cpf)
                 if grupo == 'atacadao':
                     grupo_cliente = 'atacadao'
-                elif grupo == 'assai':  # Assaí é mapeado para Sendas
+                elif grupo == 'assai':
                     grupo_cliente = 'sendas'
-                # Se não for Atacadão nem Sendas, mantém 'outros'
-            
+
             return {
                 'num_pedido': pedido.num_pedido,
                 'vendedor': pedido.vendedor,
@@ -190,133 +350,71 @@ class AgrupamentoService:
                 'raz_social_red': pedido.raz_social_red,
                 'rota': rota_calculada,
                 'sub_rota': sub_rota_calculada,
-                'expedicao': expedicao_final,  # SIMPLIFICADO: Sempre usa valor original
+                'expedicao': expedicao_final,
                 'data_entrega_pedido': pedido.data_entrega_pedido,
                 'observ_ped_1': pedido.observ_ped_1,
                 'status_pedido': pedido.status_pedido,
                 'pedido_cliente': pedido.pedido_cliente,
                 'cod_uf': pedido.cod_uf,
                 'nome_cidade': pedido.nome_cidade,
-                'incoterm': pedido.incoterm,  # Mantém apenas a sigla (CIF, FOB, etc)
-                'protocolo': protocolo_final,  # SIMPLIFICADO: Sempre usa valor original
-                'agendamento': agendamento_final,  # SIMPLIFICADO: Sempre usa valor original
-                'agendamento_confirmado': agendamento_confirmado_final,  # SIMPLIFICADO: Sempre usa valor original
+                'incoterm': pedido.incoterm,
+                'protocolo': protocolo_final,
+                'agendamento': agendamento_final,
+                'agendamento_confirmado': agendamento_confirmado_final,
                 'forma_agendamento': pedido.forma_agendamento,
                 'valor_total': valor_pedido,
                 'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
                 'pallet_total': float(pedido.pallet_total) if pedido.pallet_total else 0,
                 'total_itens': pedido.total_itens,
-                # Informações de separação
                 'valor_separacoes': float(valor_separacoes),
                 'valor_saldo_restante': valor_saldo_restante,
                 'qtd_separacoes': qtd_separacoes,
                 'totalmente_separado': totalmente_separado,
-                'tem_protocolo_separacao': dados_separacao.get('tem_protocolo', False),  # Se tem protocolo na Separacao
-                'separacao_lote_id': dados_separacao.get('separacao_lote_id'),  # Passar lote_id
-                'grupo_cliente': grupo_cliente,  # Adicionar grupo do cliente
-                # ⭐ Campos novos para funcionalidade de importante
-                'importante': pedido.importante,  # Marcador de pedido importante
-                'agendamento_primeira_separacao': primeira_separacao,  # Agendamento da 1ª separação
-                # 🏷️ Tags do Odoo
-                'tags_pedido': pedido.tags_pedido  # Tags do pedido (JSON)
+                'tem_protocolo_separacao': dados_separacao.get('tem_protocolo', False),
+                'separacao_lote_id': dados_separacao.get('separacao_lote_id'),
+                'grupo_cliente': grupo_cliente,
+                'importante': pedido.importante,
+                'agendamento_primeira_separacao': primeira_sep_agendamento,
+                'tags_pedido': pedido.tags_pedido
             }
-            
+
         except Exception as e:
             logger.warning(f"Erro ao enriquecer pedido {pedido.num_pedido}: {e}")
-            return self._criar_pedido_basico(pedido)
-    
-    def _calcular_separacoes(self, num_pedido):
-        """Calcula quantidade e valor das separações ativas e retorna dados de separação"""
-        try:
-            # MIGRADO: Removido import de PreSeparacaoItem
+            return self._criar_pedido_basico(
+                pedido, rotas_map, subrotas_lookup, GrupoEmpresarial
+            )
 
-            # Contar separacao_lote_id únicos (quantidade de envios para separação)
-            # MIGRADO: Usa sincronizado_nf=False em vez de JOIN com Pedido
-            qtd_separacoes = db.session.query(
-                func.count(func.distinct(Separacao.separacao_lote_id))
-            ).filter(
-                Separacao.num_pedido == num_pedido,
-                Separacao.sincronizado_nf == False  # MIGRADO: Critério correto
-            ).scalar() or 0
+    def _criar_pedido_basico(self, pedido, rotas_map=None, subrotas_lookup=None,
+                              GrupoEmpresarial=None):
+        """Cria estrutura basica de pedido em caso de erro (FIX I3: sem expedicao_original)"""
+        # Usar batch maps se disponiveis, senao faz query individual (fallback)
+        if rotas_map is not None:
+            rota_calculada = rotas_map.get(pedido.cod_uf) if pedido.cod_uf else None
+        else:
+            from app.carteira.utils.separacao_utils import buscar_rota_por_uf
+            rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
 
-            # Buscar separações para calcular valor total e verificar protocolo/agendamento
-            # MIGRADO: Query simplificada sem JOIN com Pedido
-            separacoes_ativas = db.session.query(Separacao).filter(
-                Separacao.num_pedido == num_pedido,
-                Separacao.sincronizado_nf == False  # MIGRADO: Critério correto
-            ).all()
+        if subrotas_lookup is not None:
+            sub_rota_calculada = self._buscar_subrota_em_memoria(
+                subrotas_lookup, pedido.cod_uf, pedido.nome_cidade
+            )
+        else:
+            from app.carteira.utils.separacao_utils import buscar_sub_rota_por_uf_cidade
+            sub_rota_calculada = buscar_sub_rota_por_uf_cidade(
+                pedido.cod_uf, pedido.nome_cidade
+            ) if pedido.cod_uf and pedido.nome_cidade else None
 
-            # Calcular valor total das separações e buscar dados de separação
-            valor_separacoes = 0
-            dados_separacao = {
-                'tem_protocolo': False,  # Se alguma separação tem protocolo
-                'agendamento_confirmado': False,  # Se alguma separação tem agendamento confirmado
-                'separacao_lote_id': None  # Último lote_id com protocolo
-            }
-
-            for sep in separacoes_ativas:
-                if sep.qtd_saldo and sep.valor_saldo:
-                    valor_unit = sep.valor_saldo / sep.qtd_saldo if sep.qtd_saldo > 0 else 0
-                    valor_separacoes += sep.qtd_saldo * valor_unit
-
-                # Verificar se tem protocolo em alguma separação
-                if sep.protocolo:
-                    dados_separacao['tem_protocolo'] = True
-                    dados_separacao['separacao_lote_id'] = sep.separacao_lote_id
-
-                    # Se tem protocolo e está confirmado
-                    if sep.agendamento_confirmado:
-                        dados_separacao['agendamento_confirmado'] = True
-
-            return qtd_separacoes, valor_separacoes, dados_separacao
-
-        except Exception as e:
-            logger.warning(f"Erro ao calcular separações para {num_pedido}: {e}")
-            return 0, 0, {'tem_protocolo': False, 'agendamento_confirmado': False, 'separacao_lote_id': None}
-
-    def _buscar_primeira_separacao(self, num_pedido):
-        """
-        Busca o agendamento da 1ª separação (menor id com sincronizado_nf=False)
-
-        Returns:
-            Date | None: Data do agendamento da 1ª separação ou None se não houver
-        """
-        try:
-            # Buscar a separação com menor id e sincronizado_nf=False
-            primeira_sep = db.session.query(Separacao.agendamento).filter(
-                Separacao.num_pedido == num_pedido,
-                Separacao.sincronizado_nf == False
-            ).order_by(
-                Separacao.id.asc()  # Menor id = 1ª separação
-            ).first()
-
-            # Retornar o agendamento se existir
-            return primeira_sep[0] if primeira_sep and primeira_sep[0] else None
-
-        except Exception as e:
-            logger.warning(f"Erro ao buscar 1ª separação para {num_pedido}: {e}")
-            return None
-
-    def _criar_pedido_basico(self, pedido):
-        """Cria estrutura básica de pedido em caso de erro"""
-        from app.carteira.utils.separacao_utils import buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
-        from app.portal.utils.grupo_empresarial import GrupoEmpresarial
-        
-        # Buscar rota e sub-rota das localidades
-        rota_calculada = buscar_rota_por_uf(pedido.cod_uf) if pedido.cod_uf else None
-        sub_rota_calculada = buscar_sub_rota_por_uf_cidade(pedido.cod_uf, pedido.nome_cidade) if pedido.cod_uf and pedido.nome_cidade else None
-        
-        # Identificar grupo do cliente
         grupo_cliente = 'outros'
         if pedido.cnpj_cpf:
+            if GrupoEmpresarial is None:
+                from app.portal.utils.grupo_empresarial import GrupoEmpresarial
             grupo = GrupoEmpresarial.identificar_grupo(pedido.cnpj_cpf)
             if grupo == 'atacadao':
                 grupo_cliente = 'atacadao'
             elif grupo == 'assai':
                 grupo_cliente = 'sendas'
-        
-        # NOTA: Campos expedicao, agendamento, protocolo, agendamento_confirmado, rota, sub_rota
-        # foram REMOVIDOS de CarteiraPrincipal - valores padrão ou calculados
+
+        # FIX I3: Estrutura identica ao retorno normal (sem 'expedicao_original')
         return {
             'num_pedido': pedido.num_pedido,
             'vendedor': pedido.vendedor,
@@ -326,8 +424,7 @@ class AgrupamentoService:
             'raz_social_red': pedido.raz_social_red,
             'rota': rota_calculada,
             'sub_rota': sub_rota_calculada,
-            'expedicao': None,  # Removido de CarteiraPrincipal
-            'expedicao_original': None,  # Removido de CarteiraPrincipal
+            'expedicao': None,
             'data_entrega_pedido': pedido.data_entrega_pedido,
             'observ_ped_1': pedido.observ_ped_1,
             'status_pedido': pedido.status_pedido,
@@ -335,9 +432,9 @@ class AgrupamentoService:
             'cod_uf': pedido.cod_uf,
             'nome_cidade': pedido.nome_cidade,
             'incoterm': pedido.incoterm,
-            'protocolo': None,  # Removido de CarteiraPrincipal
-            'agendamento': None,  # Removido de CarteiraPrincipal
-            'agendamento_confirmado': False,  # Removido de CarteiraPrincipal
+            'protocolo': None,
+            'agendamento': None,
+            'agendamento_confirmado': False,
             'forma_agendamento': pedido.forma_agendamento,
             'valor_total': float(pedido.valor_total) if pedido.valor_total else 0,
             'peso_total': float(pedido.peso_total) if pedido.peso_total else 0,
@@ -350,9 +447,7 @@ class AgrupamentoService:
             'tem_protocolo_separacao': False,
             'separacao_lote_id': None,
             'grupo_cliente': grupo_cliente,
-            # ⭐ Campos novos para funcionalidade de importante
             'importante': pedido.importante if hasattr(pedido, 'importante') else False,
             'agendamento_primeira_separacao': None,
-            # 🏷️ Tags do Odoo
             'tags_pedido': pedido.tags_pedido if hasattr(pedido, 'tags_pedido') else None
         }

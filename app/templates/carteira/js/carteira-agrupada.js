@@ -38,36 +38,18 @@ class CarteiraAgrupada {
             }
         });
 
-        // Carregar separações para todos os pedidos visíveis
-        console.log(`📦 Carregando separações para ${this.pedidosVisiveis.size} pedidos iniciais...`);
-        this.carregarSeparacoesCompactasVisiveis();
+        // FIX E2: Removida chamada duplicada carregarSeparacoesCompactasVisiveis()
+        // carregarTodasSeparacoesCompactas() ja inclui todos os visiveis.
+        // FIX E3: Removidas 2 chamadas extras de atualizarContadorProtocolos()
+        // A unica chamada necessaria e a que roda apos carregarSeparacoesEmLoteUnico().
 
-        // ⭐ Atualizar contadores de importante no carregamento inicial
         this.atualizarContadoresImportante();
+        this.atualizarContadorPendentesTotal();
 
-        // Aguardar um pouco para as separações carregarem antes de atualizar contadores
-        setTimeout(() => {
-            // Atualizar contadores
-            this.atualizarContadorProtocolos();
-            this.atualizarContadorPendentesTotal();
-        }, 2000); // 2 segundos para dar tempo de carregar
+        this.setupInterceptadorBotoes();
 
-        this.setupInterceptadorBotoes(); // 🆕 Interceptar cliques em botões
-        console.log('✅ Carteira Agrupada inicializada');
-
-        // Debug: verificar se os badges foram encontrados
-        const totalBadges = document.querySelectorAll('.bg-filtro').length;
-        if (totalBadges === 0) {
-            console.error('❌ ERRO: Nenhum badge .bg-filtro encontrado no DOM!');
-        } else {
-            console.log(`✅ ${totalBadges} badges de filtro encontrados e configurados`);
-        }
-
-        // 🆕 Carregar separações compactas para todos os pedidos
+        // Carregar separacoes compactas para TODOS os pedidos (unica chamada)
         this.carregarTodasSeparacoesCompactas();
-
-        // Atualizar contador de protocolos
-        this.atualizarContadorProtocolos();
     }
 
     initWorkspace() {
@@ -748,18 +730,11 @@ class CarteiraAgrupada {
     atualizarValorTotal() {
         let valorTotal = 0;
 
-        // Somar valores de todos os pedidos visíveis
+        // FIX E4: Usar data-valor numerico em vez de parsear texto formatado
         document.querySelectorAll('.pedido-row:not([style*="display: none"])').forEach(linha => {
             const valorElement = linha.querySelector('.valor-pedido');
             if (valorElement) {
-                // Extrair valor do texto (remover R$, pontos e converter vírgula)
-                const valorTexto = valorElement.textContent
-                    .replace('R$', '')
-                    .replace(/\./g, '')
-                    .replace(',', '.')
-                    .trim();
-
-                const valor = parseFloat(valorTexto) || 0;
+                const valor = parseFloat(valorElement.dataset.valor) || 0;
                 valorTotal += valor;
             }
         });
@@ -1452,14 +1427,14 @@ class CarteiraAgrupada {
     async excluirSeparacao(loteId) {
         console.log(`🗑️ Excluindo separação ${loteId}`);
 
-        // Usar separacaoManager se disponível
+        // Usar separacaoManager se disponivel
         if (window.separacaoManager && typeof window.separacaoManager.excluirSeparacao === 'function') {
-            // Buscar o número do pedido pela linha da tabela
-            const btn = event.target.closest('button');
-            const tr = btn.closest('tr');
-            const table = tr.closest('table');
-            const container = table.closest('.separacoes-compactas-container');
-            const pedidoRow = container.closest('.pedido-detalhes')?.previousElementSibling;
+            // FIX I6: Buscar botao via querySelector em vez de depender de window.event (deprecated)
+            const btn = document.querySelector(`button[onclick*="excluirSeparacao('${loteId}')"]`);
+            const tr = btn?.closest('tr');
+            const table = tr?.closest('table');
+            const container = table?.closest('.separacoes-compactas-container');
+            const pedidoRow = container?.closest('.pedido-detalhes')?.previousElementSibling;
             const numPedido = pedidoRow?.dataset?.pedido || pedidoRow?.dataset?.numPedido || '';
 
             const resultado = await window.separacaoManager.excluirSeparacao(loteId, numPedido);
@@ -1721,9 +1696,10 @@ class CarteiraAgrupada {
         let debugTotalSeparacoes = 0;
 
         pedidosVisiveis.forEach(pedidoRow => {
-            const numPedido = pedidoRow.dataset.numPedido;
+            // FIX I4: Template usa data-pedido (nao data-num-pedido)
+            const numPedido = pedidoRow.dataset.pedido || pedidoRow.dataset.numPedido;
 
-            // NOVO: Buscar nas separações compactas em cache
+            // Buscar nas separacoes compactas em cache
             const separacoesCompactas = window.separacoesCompactasCache?.[numPedido];
 
             if (separacoesCompactas && separacoesCompactas.length > 0) {
@@ -2102,14 +2078,15 @@ class CarteiraAgrupada {
         }, delay);
     }
 
-    // Interceptar cliques em botões para pausar carregamento
+    // Interceptar cliques em botoes de acao para pausar carregamento
     setupInterceptadorBotoes() {
         document.addEventListener('click', (e) => {
             const target = e.target;
-            const isButton = target.closest('button, .btn, a[href], [onclick]');
+            const isButton = target.closest('button, .btn, [onclick]');
 
-            if (isButton) {
-                console.log('⏸️ Pausando carregamentos - botão clicado');
+            // FIX E5: Filtrar apenas botoes dentro da tabela de pedidos
+            // Antes: qualquer link/botao (incluindo menu, tooltips) pausava por 2s
+            if (isButton && isButton.closest('#tabela-carteira, .separacoes-compactas-container, .workspace-container')) {
 
                 // Marcar como pausado
                 this.pausadoPorBotao = true;
@@ -2214,10 +2191,12 @@ class CarteiraAgrupada {
             const estadoAtual = btnEstrela.dataset.importante === 'true';
 
             // Fazer requisição para API
+            // FIX I5: Adicionar X-CSRFToken (antes ausente, poderia falhar com 403)
             const response = await fetch('/carteira/api/toggle-importante', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
                 },
                 body: JSON.stringify({
                     num_pedido: numPedido

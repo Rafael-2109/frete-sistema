@@ -512,7 +512,7 @@
                                 <!-- Informações -->
                                 <td>
                                     <div class="valores-info text-end">
-                                        <strong class="text-success valor-pedido">{{ pedido.valor_total|moeda_carteira }} | <small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small></strong>
+                                        <strong class="text-success valor-pedido" data-valor="{{ pedido.valor_total }}">{{ pedido.valor_total|moeda_carteira }} | <small class="text-muted">{{ pedido.pallet_total|pallet_carteira }}</small></strong>
                                         <br><small class="text-muted">{{ pedido.peso_total|peso_carteira }} | {{ pedido.total_itens }} itens</small>
                                     </div>
                                 </td>
