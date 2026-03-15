@@ -1011,17 +1011,15 @@ Nunca invente informações."""
         else:
             prompt = prompt.replace("{user_id}", "NAO_DISPONIVEL")
 
-        # Módulo Pessoal + SQL Admin: restrição condicional por user_id
-        from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
-        if user_id and user_id in USUARIOS_SQL_ADMIN:
-            prompt = prompt.replace("{restricao_pessoal}", "")
-        elif user_id and user_id in USUARIOS_PESSOAL:
-            prompt = prompt.replace("{restricao_pessoal}", "")
-        else:
-            prompt = prompt.replace(
-                "{restricao_pessoal}",
-                ", acessar ou mencionar tabelas pessoal_* (financas pessoais — dados privados, acesso restrito)"
-            )
+        # Módulo Pessoal + SQL Admin: restrição default seguro (texto inline no prompt)
+        # Se import falhar, restrição permanece (seguro por default)
+        restricao_pessoal = ", acessar ou mencionar tabelas pessoal_* (financas pessoais — dados privados, acesso restrito)"
+        try:
+            from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
+            if user_id and (user_id in USUARIOS_SQL_ADMIN or user_id in USUARIOS_PESSOAL):
+                prompt = prompt.replace(restricao_pessoal, "")
+        except ImportError:
+            pass  # restrição já está no prompt — seguro por default
 
         return prompt
 
