@@ -136,16 +136,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_tabelas_frete_grupo_cliente_id",
+      "name": "ix_carvia_tf_tipo_carga",
       "columns": [
-        "grupo_cliente_id"
+        "tipo_carga"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_tf_tipo_carga",
+      "name": "ix_carvia_tabelas_frete_grupo_cliente_id",
       "columns": [
-        "tipo_carga"
+        "grupo_cliente_id"
       ],
       "unique": false
     }

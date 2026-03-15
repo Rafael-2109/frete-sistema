@@ -186,27 +186,6 @@
   ],
   "indices": [
     {
-      "name": "idx_comp_ofx_checknum",
-      "columns": [
-        "ofx_checknum"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_odoo_statement_line",
-      "columns": [
-        "odoo_statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_beneficiario_cnpj",
-      "columns": [
-        "beneficiario_cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
       "columns": [
         "ofx_fitid"
@@ -228,13 +207,6 @@
       "unique": false
     },
     {
-      "name": "idx_comp_pagador_cnpj",
-      "columns": [
-        "pagador_cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
         "tipo"
@@ -245,6 +217,13 @@
       "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
         "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_pagador_cnpj",
+      "columns": [
+        "pagador_cnpj_cpf"
       ],
       "unique": false
     },
@@ -266,6 +245,27 @@
       "name": "idx_comp_ofx_fitid",
       "columns": [
         "ofx_fitid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_beneficiario_cnpj",
+      "columns": [
+        "beneficiario_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_ofx_checknum",
+      "columns": [
+        "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_odoo_statement_line",
+      "columns": [
+        "odoo_statement_line_id"
       ],
       "unique": false
     }

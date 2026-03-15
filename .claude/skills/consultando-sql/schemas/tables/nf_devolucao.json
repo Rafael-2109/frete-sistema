@@ -235,6 +235,34 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_devolucao_e_pallet_devolucao",
+      "columns": [
+        "e_pallet_devolucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_nfd_numero_serie",
       "columns": [
         "numero_nfd",
@@ -286,13 +314,6 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_odoo_dfe",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
@@ -303,6 +324,13 @@
       "name": "ix_nf_devolucao_tipo_documento",
       "columns": [
         "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_odoo_dfe",
+      "columns": [
+        "odoo_dfe_id"
       ],
       "unique": false
     },
@@ -360,34 +388,6 @@
       "name": "ix_nf_devolucao_ativo",
       "columns": [
         "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_e_pallet_devolucao",
-      "columns": [
-        "e_pallet_devolucao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_numero_nfd",
-      "columns": [
-        "numero_nfd"
       ],
       "unique": false
     }

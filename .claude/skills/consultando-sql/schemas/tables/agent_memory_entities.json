@@ -52,14 +52,6 @@
   ],
   "indices": [
     {
-      "name": "idx_ame_user_type",
-      "columns": [
-        "user_id",
-        "entity_type"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_ame_entity_key",
       "columns": [
         "entity_key"
@@ -70,6 +62,14 @@
       "name": "ix_agent_memory_entities_user_id",
       "columns": [
         "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ame_user_type",
+      "columns": [
+        "user_id",
+        "entity_type"
       ],
       "unique": false
     }

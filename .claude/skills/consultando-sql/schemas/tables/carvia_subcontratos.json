@@ -72,6 +72,28 @@
       "default": "PENDENTE"
     },
     {
+      "name": "valor_considerado",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "status_conferencia",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "conferido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "conferido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "detalhes_conferencia",
+      "type": "json"
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },
