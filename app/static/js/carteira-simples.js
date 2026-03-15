@@ -1706,6 +1706,11 @@
             const separacaoId = parseInt(target.dataset.separacaoId);
             const novaQtd = parseFloat(target.value) || 0;
 
+            if (isNaN(separacaoId) || separacaoId <= 0) {
+                console.error('separacaoId inválido:', target.dataset.separacaoId);
+                return;
+            }
+
             // Debounce para evitar múltiplas chamadas
             clearTimeout(target.debounceTimer);
             target.debounceTimer = setTimeout(() => {

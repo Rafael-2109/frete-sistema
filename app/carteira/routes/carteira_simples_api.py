@@ -1416,8 +1416,20 @@ def atualizar_qtd_separacao():
                 'error': 'Dados inválidos. Esperado: {separacao_id, nova_qtd}'
             }), 400
 
-        separacao_id = int(dados['separacao_id'])
-        nova_qtd = float(dados['nova_qtd'])
+        if dados['separacao_id'] is None or dados['nova_qtd'] is None:
+            return jsonify({
+                'success': False,
+                'error': 'separacao_id e nova_qtd não podem ser nulos'
+            }), 400
+
+        try:
+            separacao_id = int(dados['separacao_id'])
+            nova_qtd = float(dados['nova_qtd'])
+        except (ValueError, TypeError):
+            return jsonify({
+                'success': False,
+                'error': 'separacao_id deve ser inteiro e nova_qtd deve ser numérico'
+            }), 400
 
         if nova_qtd < 0:
             return jsonify({
