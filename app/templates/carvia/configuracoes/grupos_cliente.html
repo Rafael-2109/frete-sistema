@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-users"></i> Grupos de Cliente</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo">
+            <i class="fas fa-plus"></i> Novo Grupo
+        </button>
+    </div>
+
+    {% set carvia_active = 'configuracoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="carvia-config-crud">
+        <div class="card">
+            <div class="card-body p-0">
+                {% if grupos %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Descricao</th>
+                                <th class="text-center">Membros</th>
+                                <th class="text-center">Ativo</th>
+                                <th class="text-center">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grupo in grupos %}
+                            <tr>
+                                <td><strong>{{ grupo.nome }}</strong></td>
+                                <td>{{ grupo.descricao or '-' }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">{{ grupo.membros.count() }}</span>
+                                </td>
+                                <td class="text-center">
+                                    {% if grupo.ativo %}
+                                    <span class="badge bg-success">Sim</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Nao</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-info btn-sm"
+                                            onclick="toggleMembros({{ grupo.id }})"
+                                            title="Ver membros">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#modalEditarGrupo{{ grupo.id }}"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            onclick="desativarGrupo({{ grupo.id }}, '{{ grupo.nome }}')"
+                                            title="Desativar">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {# Linha expandivel com membros #}
+                            <tr id="membros-row-{{ grupo.id }}" style="display:none;" class="table-light">
+                                <td colspan="5">
+                                    <div class="p-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong><i class="fas fa-id-card"></i> CNPJs do grupo "{{ grupo.nome }}"</strong>
+                                            <div class="input-group input-group-sm" style="width:400px">
+                                                <input type="text" class="form-control" id="novoCnpj{{ grupo.id }}"
+                                                       placeholder="CNPJ">
+                                                <input type="text" class="form-control" id="novoNome{{ grupo.id }}"
+                                                       placeholder="Nome empresa (opcional)">
+                                                <button class="btn btn-success" type="button"
+                                                        onclick="adicionarMembro({{ grupo.id }})">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="membros-list-{{ grupo.id }}">
+                                            {% for m in grupo.membros.all() %}
+                                            <span class="badge bg-secondary me-1 mb-1" id="membro-{{ m.id }}">
+                                                {{ m.cnpj }}
+                                                {% if m.nome_empresa %}<small>({{ m.nome_empresa }})</small>{% endif %}
+                                                <button type="button" class="btn-close btn-close-white ms-1" style="font-size:0.5em"
+                                                        onclick="removerMembro({{ grupo.id }}, {{ m.id }})"></button>
+                                            </span>
+                                            {% endfor %}
+                                            {% if grupo.membros.count() == 0 %}
+                                            <em class="text-muted">Nenhum membro cadastrado.</em>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-users fa-3x mb-3"></i>
+                    <p>Nenhum grupo de cliente cadastrado.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Novo Grupo #}
+<div class="modal fade" id="modalNovoGrupo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formNovoGrupo" onsubmit="criarGrupo(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus"></i> Novo Grupo de Cliente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome *</label>
+                        <input type="text" class="form-control" name="nome" required
+                               placeholder="Ex: Atacadao, Grandes Contas">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descricao</label>
+                        <textarea class="form-control" name="descricao" rows="2"
+                                  placeholder="Descricao opcional"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Modais Editar Grupo #}
+{% for grupo in grupos %}
+<div class="modal fade" id="modalEditarGrupo{{ grupo.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form onsubmit="editarGrupo(event, {{ grupo.id }})">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-edit"></i> Editar: {{ grupo.nome }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome *</label>
+                        <input type="text" class="form-control" name="nome" required value="{{ grupo.nome }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descricao</label>
+                        <textarea class="form-control" name="descricao" rows="2">{{ grupo.descricao or '' }}</textarea>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="ativo" id="ativo_{{ grupo.id }}"
+                               {{ 'checked' if grupo.ativo }}>
+                        <label class="form-check-label" for="ativo_{{ grupo.id }}">Ativo</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function csrfHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+    };
+}
+
+function toggleMembros(grupoId) {
+    var row = document.getElementById('membros-row-' + grupoId);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function criarGrupo(event) {
+    event.preventDefault();
+    var form = event.target;
+    fetch('/carvia/api/grupos-cliente', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+            nome: form.querySelector('[name="nome"]').value,
+            descricao: form.querySelector('[name="descricao"]').value
+        })
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function editarGrupo(event, id) {
+    event.preventDefault();
+    var form = event.target;
+    var ativoCheck = form.querySelector('[name="ativo"]');
+    fetch('/carvia/api/grupos-cliente/' + id, {
+        method: 'PUT',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+            nome: form.querySelector('[name="nome"]').value,
+            descricao: form.querySelector('[name="descricao"]').value,
+            ativo: ativoCheck ? ativoCheck.checked : true
+        })
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function desativarGrupo(id, nome) {
+    if (!confirm('Desativar grupo "' + nome + '"?')) return;
+    fetch('/carvia/api/grupos-cliente/' + id, {
+        method: 'DELETE',
+        headers: csrfHeaders()
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function adicionarMembro(grupoId) {
+    var cnpjInput = document.getElementById('novoCnpj' + grupoId);
+    var nomeInput = document.getElementById('novoNome' + grupoId);
+    if (!cnpjInput.value.trim()) { alert('Informe o CNPJ.'); return; }
+
+    fetch('/carvia/api/grupos-cliente/' + grupoId + '/membros', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+            cnpj: cnpjInput.value.trim(),
+            nome_empresa: nomeInput.value.trim()
+        })
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function removerMembro(grupoId, membroId) {
+    if (!confirm('Remover este CNPJ do grupo?')) return;
+    fetch('/carvia/api/grupos-cliente/' + grupoId + '/membros/' + membroId, {
+        method: 'DELETE',
+        headers: csrfHeaders()
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        var badge = document.getElementById('membro-' + membroId);
+        if (badge) badge.remove();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+</script>
+{% endblock %}

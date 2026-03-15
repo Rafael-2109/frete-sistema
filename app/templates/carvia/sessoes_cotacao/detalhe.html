@@ -385,59 +385,134 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                {# --- Cotacao Manual --- #}
-                <div class="card mb-3 border-dashed carvia-cotacao-manual-section">
-                    <div class="card-body py-2">
-                        <h6 class="mb-2"><i class="fas fa-pen"></i> Cotacao Manual</h6>
-                        <div class="row g-2 align-items-end">
-                            <div class="col-md-5">
-                                <label class="form-label form-label-sm mb-0">Transportadora</label>
-                                <select id="manualTransportadora" class="form-select form-select-sm">
-                                    <option value="">Carregando...</option>
-                                </select>
+                {# --- Filtro tipo carga --- #}
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="text-muted fw-bold small">Tipo Carga:</span>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="tipoCargaFiltro" id="filtroTodas"
+                               value="" checked onchange="refetchCotacao()">
+                        <label class="btn btn-outline-secondary" for="filtroTodas">Todas</label>
+                        <input type="radio" class="btn-check" name="tipoCargaFiltro" id="filtroDireta"
+                               value="DIRETA" onchange="refetchCotacao()">
+                        <label class="btn btn-outline-primary" for="filtroDireta">Direta</label>
+                        <input type="radio" class="btn-check" name="tipoCargaFiltro" id="filtroFracionada"
+                               value="FRACIONADA" onchange="refetchCotacao()">
+                        <label class="btn btn-outline-info" for="filtroFracionada">Fracionada</label>
+                    </div>
+                </div>
+
+                {# --- Tabs CarVia / Custo --- #}
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tab-carvia" data-bs-toggle="tab"
+                                data-bs-target="#pane-carvia" type="button" role="tab">
+                            <i class="fas fa-tag"></i> Tabela CarVia
+                            <span class="badge bg-primary ms-1" id="countCarvia">0</span>
+                        </button>
+                    </li>
+                    {% if current_user.perfil == 'administrador' %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-custo" data-bs-toggle="tab"
+                                data-bs-target="#pane-custo" type="button" role="tab">
+                            <i class="fas fa-lock"></i> Tabela de Custo
+                            <span class="badge bg-secondary ms-1" id="countCusto">0</span>
+                        </button>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-manual" data-bs-toggle="tab"
+                                data-bs-target="#pane-manual" type="button" role="tab">
+                            <i class="fas fa-pen"></i> Manual
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    {# Tab CarVia #}
+                    <div class="tab-pane fade show active" id="pane-carvia" role="tabpanel">
+                        <div id="opcoesLoading" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2 text-muted">Calculando opcoes...</p>
+                        </div>
+                        <div id="carviaConteudo" style="display:none;">
+                            <div id="carviaVazio" class="text-center py-4 text-muted" style="display:none;">
+                                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                                <p>Nenhuma tabela CarVia disponivel para esta rota.</p>
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label form-label-sm mb-0">Valor Frete (R$)</label>
-                                <input type="text" id="manualValorFrete" class="form-control form-control-sm"
-                                       placeholder="0,00" inputmode="decimal">
-                            </div>
-                            <div class="col-md-4">
-                                <button type="button" class="btn btn-sm btn-outline-success w-100"
-                                        onclick="usarCotacaoManual()">
-                                    <i class="fas fa-check"></i> Usar Cotacao Manual
-                                </button>
+                            <div class="table-responsive" id="carviaTabela" style="display:none;">
+                                <table class="table table-hover table-sm carvia-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tabela</th>
+                                            <th>Tipo Carga</th>
+                                            <th>Modalidade</th>
+                                            <th>Grupo</th>
+                                            <th class="text-center">Lead Time</th>
+                                            <th class="text-end">Valor Frete</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="carviaBody"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
-                </div>
-                <hr class="my-2">
 
-                <div id="opcoesLoading" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-muted">Calculando opcoes...</p>
-                </div>
-                <div id="opcoesConteudo" style="display:none;">
-                    <div id="opcoesVazio" class="text-center py-4 text-muted" style="display:none;">
-                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
-                        <p>Nenhuma opcao de frete disponivel para esta rota.</p>
+                    {# Tab Custo (admin-only) #}
+                    {% if current_user.perfil == 'administrador' %}
+                    <div class="tab-pane fade" id="pane-custo" role="tabpanel">
+                        <div id="custoConteudo" style="display:none;">
+                            <div id="custoVazio" class="text-center py-4 text-muted" style="display:none;">
+                                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                                <p>Nenhuma tabela de custo disponivel.</p>
+                            </div>
+                            <div class="table-responsive" id="custoTabela" style="display:none;">
+                                <table class="table table-hover table-sm carvia-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Transportadora</th>
+                                            <th>CNPJ</th>
+                                            <th>Tabela</th>
+                                            <th>Tipo Carga</th>
+                                            <th>Modalidade</th>
+                                            <th class="text-center">Lead Time</th>
+                                            <th class="text-end">Valor Frete</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="custoBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <div class="table-responsive" id="opcoesTabela" style="display:none;">
-                        <table class="table table-hover table-sm carvia-table">
-                            <thead>
-                                <tr>
-                                    <th>Transportadora</th>
-                                    <th>CNPJ</th>
-                                    <th>Tabela</th>
-                                    <th>Tipo Carga</th>
-                                    <th>Modalidade</th>
-                                    <th class="text-center">Lead Time</th>
-                                    <th class="text-end">Valor Frete</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="opcoesBody">
-                            </tbody>
-                        </table>
+                    {% endif %}
+
+                    {# Tab Manual #}
+                    <div class="tab-pane fade" id="pane-manual" role="tabpanel">
+                        <div class="card border-dashed carvia-cotacao-manual-section">
+                            <div class="card-body py-3">
+                                <h6 class="mb-2"><i class="fas fa-pen"></i> Cotacao Manual</h6>
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-5">
+                                        <label class="form-label form-label-sm mb-0">Transportadora</label>
+                                        <select id="manualTransportadora" class="form-select form-select-sm">
+                                            <option value="">Carregando...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label form-label-sm mb-0">Valor Frete (R$)</label>
+                                        <input type="text" id="manualValorFrete" class="form-control form-control-sm"
+                                               placeholder="0,00" inputmode="decimal">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button type="button" class="btn btn-sm btn-outline-success w-100"
+                                                onclick="usarCotacaoManual()">
+                                            <i class="fas fa-check"></i> Usar Cotacao Manual
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -543,82 +618,162 @@ function formatBRL(valor) {
 // =====================================================================
 function cotarDemanda(sessaoId, demandaId) {
     currentDemandaId = demandaId;
-    const modal = new bootstrap.Modal(document.getElementById('modalOpcoesFrete'));
-    const loading = document.getElementById('opcoesLoading');
-    const conteudo = document.getElementById('opcoesConteudo');
-    const vazio = document.getElementById('opcoesVazio');
-    const tabela = document.getElementById('opcoesTabela');
-    const body = document.getElementById('opcoesBody');
+    var modal = new bootstrap.Modal(document.getElementById('modalOpcoesFrete'));
+    // Reset filtro
+    var filtroTodas = document.getElementById('filtroTodas');
+    if (filtroTodas) filtroTodas.checked = true;
+    modal.show();
+    fetchCotacao(sessaoId, demandaId, '');
+}
+
+function refetchCotacao() {
+    var tipoCarga = document.querySelector('input[name="tipoCargaFiltro"]:checked');
+    var tc = tipoCarga ? tipoCarga.value : '';
+    fetchCotacao(currentSessaoId, currentDemandaId, tc);
+}
+
+function fetchCotacao(sessaoId, demandaId, tipoCarga) {
+    var loading = document.getElementById('opcoesLoading');
+    var carviaConteudo = document.getElementById('carviaConteudo');
+    var carviaVazio = document.getElementById('carviaVazio');
+    var carviaTabela = document.getElementById('carviaTabela');
+    var carviaBody = document.getElementById('carviaBody');
 
     loading.style.display = 'block';
-    conteudo.style.display = 'none';
-    modal.show();
+    carviaConteudo.style.display = 'none';
+
+    var payload = {};
+    if (tipoCarga) payload.tipo_carga = tipoCarga;
 
     fetch('/carvia/api/sessao-cotacao/' + sessaoId + '/cotar-demanda/' + demandaId, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         loading.style.display = 'none';
-        conteudo.style.display = 'block';
+        carviaConteudo.style.display = 'block';
 
-        if (!data.sucesso || !data.opcoes || data.opcoes.length === 0) {
-            vazio.style.display = 'block';
-            tabela.style.display = 'none';
-            return;
+        // --- Tab CarVia ---
+        var opcCarvia = data.tabela_carvia || data.opcoes || [];
+        var countCarviaEl = document.getElementById('countCarvia');
+        if (countCarviaEl) countCarviaEl.textContent = opcCarvia.length;
+
+        if (opcCarvia.length === 0) {
+            carviaVazio.style.display = 'block';
+            carviaTabela.style.display = 'none';
+        } else {
+            carviaVazio.style.display = 'none';
+            carviaTabela.style.display = 'block';
+            carviaBody.innerHTML = '';
+            opcCarvia.forEach(function(op, idx) {
+                renderOpcaoCarvia(carviaBody, op, idx);
+            });
         }
 
-        vazio.style.display = 'none';
-        tabela.style.display = 'block';
-        body.innerHTML = '';
+        // --- Tab Custo (admin) ---
+        var custoConteudo = document.getElementById('custoConteudo');
+        if (custoConteudo) {
+            custoConteudo.style.display = 'block';
+            var opcCusto = data.tabela_custo || [];
+            var countCustoEl = document.getElementById('countCusto');
+            if (countCustoEl) countCustoEl.textContent = opcCusto.length;
 
-        data.opcoes.forEach(function(op, idx) {
-            const leadTime = op.lead_time != null ? op.lead_time + ' dias' : '-';
-            const rowId = 'opcao-row-' + idx;
-            const detailId = 'opcao-detail-' + idx;
+            var custoVazio = document.getElementById('custoVazio');
+            var custoTabela = document.getElementById('custoTabela');
+            var custoBody = document.getElementById('custoBody');
 
-            const tr = document.createElement('tr');
-            tr.id = rowId;
-            tr.innerHTML =
-                '<td><strong>' + op.transportadora_nome + '</strong></td>' +
-                '<td class="cnpj-col">' + (op.transportadora_cnpj || '-') + '</td>' +
-                '<td>' + (op.tabela_nome || '-') + '</td>' +
-                '<td>' + (op.tipo_carga || '-') + '</td>' +
-                '<td>' + (op.modalidade || '-') + '</td>' +
-                '<td class="text-center">' + leadTime + '</td>' +
-                '<td class="text-end valor-col fw-bold">' + formatBRL(op.valor_frete) + '</td>' +
-                '<td class="text-nowrap">' +
-                    '<button class="btn btn-xs btn-outline-info me-1" onclick="toggleDetalhes(\'' + detailId + '\')" title="Ver detalhes">' +
-                        '<i class="fas fa-info-circle"></i>' +
-                    '</button>' +
-                    '<button class="btn btn-xs btn-success" ' +
-                        'onclick="selecionarOpcaoFromIdx(' + sessaoId + ',' + demandaId + ',' + idx + ')">' +
-                        '<i class="fas fa-check"></i> Selecionar' +
-                    '</button>' +
-                '</td>';
-            body.appendChild(tr);
+            if (opcCusto.length === 0) {
+                custoVazio.style.display = 'block';
+                custoTabela.style.display = 'none';
+            } else {
+                custoVazio.style.display = 'none';
+                custoTabela.style.display = 'block';
+                custoBody.innerHTML = '';
+                opcCusto.forEach(function(op, idx) {
+                    renderOpcaoCusto(custoBody, op, idx);
+                });
+            }
+        }
 
-            // Linha de detalhes (breakdown) — inicialmente oculta
-            var detailTr = document.createElement('tr');
-            detailTr.id = detailId;
-            detailTr.style.display = 'none';
-            detailTr.className = 'table-light';
-            detailTr.innerHTML = '<td colspan="8">' + buildBreakdownHTML(op) + '</td>';
-            body.appendChild(detailTr);
-        });
-
-        // Armazenar opcoes para uso no selecionar
-        window._opcoesAtual = data.opcoes;
+        // Armazenar
+        window._opcoesCarvia = opcCarvia;
+        window._opcoesCusto = data.tabela_custo || [];
+        window._opcoesAtual = opcCarvia;
     })
     .catch(function(err) {
         loading.style.display = 'none';
-        conteudo.style.display = 'block';
-        vazio.style.display = 'block';
-        vazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i>' +
+        carviaConteudo.style.display = 'block';
+        carviaVazio.style.display = 'block';
+        carviaVazio.innerHTML = '<i class="fas fa-exclamation-circle fa-2x mb-2 text-danger"></i>' +
             '<p>Erro ao calcular opcoes: ' + err.message + '</p>';
-        tabela.style.display = 'none';
+        carviaTabela.style.display = 'none';
     });
+}
+
+function renderOpcaoCarvia(tbody, op, idx) {
+    var leadTime = op.lead_time != null ? op.lead_time + ' dias' : '-';
+    var detailId = 'carvia-detail-' + idx;
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+        '<td><strong>' + (op.tabela_nome || '-') + '</strong></td>' +
+        '<td>' + (op.tipo_carga || '-') + '</td>' +
+        '<td>' + (op.modalidade || '-') + '</td>' +
+        '<td>' + (op.grupo_cliente || '-') + '</td>' +
+        '<td class="text-center">' + leadTime + '</td>' +
+        '<td class="text-end valor-col fw-bold">' + formatBRL(op.valor_frete) + '</td>' +
+        '<td class="text-nowrap">' +
+            '<button class="btn btn-xs btn-outline-info me-1" onclick="toggleDetalhes(\'' + detailId + '\')">' +
+                '<i class="fas fa-info-circle"></i>' +
+            '</button>' +
+            '<button class="btn btn-xs btn-success" onclick="selecionarOpcaoFonte(\'carvia\',' + idx + ')">' +
+                '<i class="fas fa-check"></i> Selecionar' +
+            '</button>' +
+        '</td>';
+    tbody.appendChild(tr);
+    var detailTr = document.createElement('tr');
+    detailTr.id = detailId;
+    detailTr.style.display = 'none';
+    detailTr.className = 'table-light';
+    detailTr.innerHTML = '<td colspan="7">' + buildBreakdownHTML(op) + '</td>';
+    tbody.appendChild(detailTr);
+}
+
+function renderOpcaoCusto(tbody, op, idx) {
+    var leadTime = op.lead_time != null ? op.lead_time + ' dias' : '-';
+    var detailId = 'custo-detail-' + idx;
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+        '<td><strong>' + (op.transportadora_nome || '-') + '</strong></td>' +
+        '<td class="cnpj-col">' + (op.transportadora_cnpj || '-') + '</td>' +
+        '<td>' + (op.tabela_nome || '-') + '</td>' +
+        '<td>' + (op.tipo_carga || '-') + '</td>' +
+        '<td>' + (op.modalidade || '-') + '</td>' +
+        '<td class="text-center">' + leadTime + '</td>' +
+        '<td class="text-end valor-col fw-bold">' + formatBRL(op.valor_frete) + '</td>' +
+        '<td class="text-nowrap">' +
+            '<button class="btn btn-xs btn-outline-info me-1" onclick="toggleDetalhes(\'' + detailId + '\')">' +
+                '<i class="fas fa-info-circle"></i>' +
+            '</button>' +
+            '<button class="btn btn-xs btn-success" onclick="selecionarOpcaoFonte(\'custo\',' + idx + ')">' +
+                '<i class="fas fa-check"></i> Selecionar' +
+            '</button>' +
+        '</td>';
+    tbody.appendChild(tr);
+    var detailTr = document.createElement('tr');
+    detailTr.id = detailId;
+    detailTr.style.display = 'none';
+    detailTr.className = 'table-light';
+    detailTr.innerHTML = '<td colspan="8">' + buildBreakdownHTML(op) + '</td>';
+    tbody.appendChild(detailTr);
+}
+
+function selecionarOpcaoFonte(fonte, idx) {
+    var opcao = fonte === 'custo' ? window._opcoesCusto[idx] : window._opcoesCarvia[idx];
+    if (!opcao.detalhes) opcao.detalhes = {};
+    opcao.detalhes.fonte = fonte;
+    selecionarOpcao(currentSessaoId, currentDemandaId, opcao);
 }
 
 // =====================================================================
@@ -731,8 +886,9 @@ function selecionarOpcao(sessaoId, demandaId, opcao) {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-            transportadora_id: opcao.transportadora_id,
+            transportadora_id: opcao.transportadora_id || null,
             tabela_frete_id: opcao.tabela_frete_id || null,
+            tabela_carvia_id: opcao.tabela_carvia_id || null,
             valor_frete: opcao.valor_frete,
             detalhes: opcao.detalhes || {},
             manual: opcao.manual || false,

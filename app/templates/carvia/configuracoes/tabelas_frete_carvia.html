@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-table"></i> Tabelas de Frete CarVia</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaTabela">
+            <i class="fas fa-plus"></i> Nova Tabela
+        </button>
+    </div>
+
+    {% set carvia_active = 'configuracoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# Filtros #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label form-label-sm mb-0">UF</label>
+                    <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for uf in ufs %}
+                        <option value="{{ uf }}" {{ 'selected' if uf_filtro == uf }}>{{ uf }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label form-label-sm mb-0">Tipo Carga</label>
+                    <select name="tipo_carga" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        <option value="DIRETA" {{ 'selected' if tipo_filtro == 'DIRETA' }}>Direta</option>
+                        <option value="FRACIONADA" {{ 'selected' if tipo_filtro == 'FRACIONADA' }}>Fracionada</option>
+                    </select>
+                </div>
+                {% if uf_filtro or tipo_filtro %}
+                <div class="col-auto">
+                    <a href="{{ url_for('carvia.listar_tabelas_carvia') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            {% if tabelas %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Tabela</th>
+                            <th>Origem</th>
+                            <th>Destino</th>
+                            <th>Tipo</th>
+                            <th>Modalidade</th>
+                            <th>Grupo</th>
+                            <th class="text-end">R$/kg</th>
+                            <th class="text-end">Min Peso</th>
+                            <th class="text-end">% Valor</th>
+                            <th class="text-end">Min Valor</th>
+                            <th class="text-center">Ativo</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tabelas %}
+                        <tr>
+                            <td><strong>{{ t.nome_tabela }}</strong></td>
+                            <td>{{ t.uf_origem }}</td>
+                            <td>{{ t.uf_destino }}</td>
+                            <td>
+                                <span class="badge {{ 'bg-primary' if t.tipo_carga == 'DIRETA' else 'bg-info' }}">
+                                    {{ t.tipo_carga }}
+                                </span>
+                            </td>
+                            <td>{{ t.modalidade }}</td>
+                            <td>{{ t.grupo_cliente.nome if t.grupo_cliente else '-' }}</td>
+                            <td class="text-end">{{ t.valor_kg|numero_br(4) if t.valor_kg else '-' }}</td>
+                            <td class="text-end">{{ t.frete_minimo_peso|valor_br if t.frete_minimo_peso else '-' }}</td>
+                            <td class="text-end">{{ t.percentual_valor|numero_br(4) if t.percentual_valor else '-' }}%</td>
+                            <td class="text-end">{{ t.frete_minimo_valor|valor_br if t.frete_minimo_valor else '-' }}</td>
+                            <td class="text-center">
+                                {% if t.ativo %}
+                                <span class="badge bg-success">Sim</span>
+                                {% else %}
+                                <span class="badge bg-danger">Nao</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center text-nowrap">
+                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                        onclick="abrirEditarTabela({{ t.id }})" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="desativarTabela({{ t.id }}, '{{ t.nome_tabela }}')" title="Desativar">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-table fa-3x mb-3"></i>
+                <p>Nenhuma tabela de frete CarVia cadastrada.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Modal Nova Tabela #}
+<div class="modal fade" id="modalNovaTabela" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formNovaTabela" onsubmit="criarTabela(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus"></i> Nova Tabela de Frete CarVia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Nome Tabela *</label>
+                            <input type="text" class="form-control" name="nome_tabela" required
+                                   placeholder="Ex: CARVIA-SP">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UF Origem *</label>
+                            <select name="uf_origem" class="form-select" required>
+                                <option value="">--</option>
+                                {% for uf in ufs %}
+                                <option value="{{ uf }}">{{ uf }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UF Destino *</label>
+                            <select name="uf_destino" class="form-select" required>
+                                <option value="">--</option>
+                                {% for uf in ufs %}
+                                <option value="{{ uf }}">{{ uf }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Tipo Carga *</label>
+                            <select name="tipo_carga" class="form-select" required>
+                                <option value="DIRETA">Direta</option>
+                                <option value="FRACIONADA">Fracionada</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Modalidade *</label>
+                            <input type="text" class="form-control" name="modalidade" required
+                                   placeholder="CIF" value="CIF">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Grupo de Cliente</label>
+                            <select name="grupo_cliente_id" class="form-select">
+                                <option value="">Standard (todos)</option>
+                                {% for g in grupos %}
+                                <option value="{{ g.id }}">{{ g.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6 class="text-muted"><i class="fas fa-calculator"></i> Valores</h6>
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm">R$/kg</label>
+                            <input type="text" class="form-control form-control-sm" name="valor_kg"
+                                   inputmode="decimal" placeholder="0,0000">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm">Frete Min Peso (R$)</label>
+                            <input type="text" class="form-control form-control-sm" name="frete_minimo_peso"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm">% Valor</label>
+                            <input type="text" class="form-control form-control-sm" name="percentual_valor"
+                                   inputmode="decimal" placeholder="0,0000">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label form-label-sm">Frete Min Valor (R$)</label>
+                            <input type="text" class="form-control form-control-sm" name="frete_minimo_valor"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">% GRIS</label>
+                            <input type="text" class="form-control form-control-sm" name="percentual_gris"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">GRIS Min</label>
+                            <input type="text" class="form-control form-control-sm" name="gris_minimo"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">% Ad Valorem</label>
+                            <input type="text" class="form-control form-control-sm" name="percentual_adv"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">ADV Min</label>
+                            <input type="text" class="form-control form-control-sm" name="adv_minimo"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">% RCA</label>
+                            <input type="text" class="form-control form-control-sm" name="percentual_rca"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">Pedagio/100kg</label>
+                            <input type="text" class="form-control form-control-sm" name="pedagio_por_100kg"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">Despacho</label>
+                            <input type="text" class="form-control form-control-sm" name="valor_despacho"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">CTe</label>
+                            <input type="text" class="form-control form-control-sm" name="valor_cte"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">TAS</label>
+                            <input type="text" class="form-control form-control-sm" name="valor_tas"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label form-label-sm">ICMS Proprio %</label>
+                            <input type="text" class="form-control form-control-sm" name="icms_proprio"
+                                   inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" name="icms_incluso" id="novoIcmsIncluso">
+                                <label class="form-check-label" for="novoIcmsIncluso">ICMS Incluso</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function parseBR(value) {
+    if (!value) return null;
+    return parseFloat(String(value).replace(/\./g, '').replace(',', '.'));
+}
+
+function csrfHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+    };
+}
+
+function getFormFields(form) {
+    var data = {};
+    var strFields = ['nome_tabela', 'uf_origem', 'uf_destino', 'tipo_carga', 'modalidade'];
+    var numFields = ['valor_kg', 'frete_minimo_peso', 'percentual_valor', 'frete_minimo_valor',
+                     'percentual_gris', 'gris_minimo', 'percentual_adv', 'adv_minimo',
+                     'percentual_rca', 'pedagio_por_100kg', 'valor_despacho', 'valor_cte',
+                     'valor_tas', 'icms_proprio'];
+
+    strFields.forEach(function(f) {
+        var el = form.querySelector('[name="' + f + '"]');
+        if (el) data[f] = el.value;
+    });
+
+    numFields.forEach(function(f) {
+        var el = form.querySelector('[name="' + f + '"]');
+        if (el) data[f] = parseBR(el.value);
+    });
+
+    var grupoEl = form.querySelector('[name="grupo_cliente_id"]');
+    if (grupoEl) data.grupo_cliente_id = grupoEl.value ? parseInt(grupoEl.value) : null;
+
+    var icmsEl = form.querySelector('[name="icms_incluso"]');
+    if (icmsEl) data.icms_incluso = icmsEl.checked;
+
+    var ativoEl = form.querySelector('[name="ativo"]');
+    if (ativoEl) data.ativo = ativoEl.checked;
+
+    return data;
+}
+
+function criarTabela(event) {
+    event.preventDefault();
+    var data = getFormFields(event.target);
+    fetch('/carvia/api/tabelas-frete-carvia', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function abrirEditarTabela(id) {
+    alert('Para editar, use a API PUT /carvia/api/tabelas-frete-carvia/' + id + ' (modal em construcao)');
+}
+
+function desativarTabela(id, nome) {
+    if (!confirm('Desativar tabela "' + nome + '"?')) return;
+    fetch('/carvia/api/tabelas-frete-carvia/' + id, {
+        method: 'DELETE',
+        headers: csrfHeaders()
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+</script>
+{% endblock %}

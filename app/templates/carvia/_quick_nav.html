@@ -77,8 +77,21 @@
 
     {# --- Config --- #}
     <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.listar_modelos_moto') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'configuracoes' else 'btn-outline-secondary' }}">
-        <i class="fas fa-cog"></i> Config
-    </a>
+    <div class="btn-group">
+        <a href="{{ url_for('carvia.listar_modelos_moto') }}"
+           class="btn btn-sm {{ 'btn-primary' if carvia_active == 'configuracoes' else 'btn-outline-secondary' }}">
+            <i class="fas fa-cog"></i> Config
+        </a>
+        <button type="button" class="btn btn-sm {{ 'btn-primary' if carvia_active == 'configuracoes' else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown">
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_modelos_moto') }}">Modelos Moto</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_empresas_cubagem') }}">Empresas Cubagem</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_grupos_cliente') }}">Grupos de Cliente</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_tabelas_carvia') }}">Tabelas Frete CarVia</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_cidades_carvia') }}">Cidades Atendidas</a></li>
+        </ul>
+    </div>
 </nav>

@@ -197,6 +197,10 @@ def register_sessao_cotacao_routes(bp):
                 data_entrega = request.form.get('data_entrega_prevista') or None
                 data_agendamento = request.form.get('data_agendamento') or None
 
+                # CNPJs opcionais para deteccao de grupo
+                origem_cnpj = request.form.get('origem_cnpj', '').strip() or None
+                destino_cnpj = request.form.get('destino_cnpj', '').strip() or None
+
                 demanda = CarviaSessaoDemanda(
                     sessao_id=sessao.id,
                     ordem=1,
@@ -213,6 +217,8 @@ def register_sessao_cotacao_routes(bp):
                     data_coleta=data_coleta,
                     data_entrega_prevista=data_entrega,
                     data_agendamento=data_agendamento,
+                    origem_cnpj=origem_cnpj,
+                    destino_cnpj=destino_cnpj,
                 )
                 db.session.add(demanda)
                 db.session.commit()
@@ -347,6 +353,10 @@ def register_sessao_cotacao_routes(bp):
             data_entrega = request.form.get('data_entrega_prevista') or None
             data_agendamento = request.form.get('data_agendamento') or None
 
+            # CNPJs opcionais para deteccao de grupo
+            origem_cnpj = request.form.get('origem_cnpj', '').strip() or None
+            destino_cnpj = request.form.get('destino_cnpj', '').strip() or None
+
             demanda = CarviaSessaoDemanda(
                 sessao_id=sessao.id,
                 ordem=max_ordem + 1,
@@ -363,6 +373,8 @@ def register_sessao_cotacao_routes(bp):
                 data_coleta=data_coleta,
                 data_entrega_prevista=data_entrega,
                 data_agendamento=data_agendamento,
+                origem_cnpj=origem_cnpj,
+                destino_cnpj=destino_cnpj,
             )
             db.session.add(demanda)
             sessao.atualizado_em = agora_utc_naive()
@@ -587,19 +599,40 @@ def register_sessao_cotacao_routes(bp):
             from app.carvia.services.cotacao_service import CotacaoService
             service = CotacaoService()
 
-            opcoes = service.cotar_todas_opcoes(
+            # Tipo de carga do request body (DIRETA/FRACIONADA/null)
+            req_data = request.get_json(silent=True) or {}
+            tipo_carga = req_data.get('tipo_carga') or None
+
+            # CNPJ para deteccao de grupo de cliente
+            cnpj_cliente = (
+                getattr(demanda, 'origem_cnpj', None)
+                or getattr(demanda, 'destino_cnpj', None)
+            )
+
+            # Admin ve tabela de custo
+            incluir_custo = getattr(current_user, 'perfil', '') == 'administrador'
+
+            resultado = service.cotar_completa(
                 peso=float(demanda.peso),
                 valor_mercadoria=float(demanda.valor_mercadoria),
                 uf_destino=demanda.destino_uf,
                 cidade_destino=demanda.destino_cidade,
                 uf_origem=demanda.origem_uf,
+                tipo_carga=tipo_carga,
+                cnpj_cliente=cnpj_cliente,
+                incluir_custo=incluir_custo,
             )
 
             return jsonify({
                 'sucesso': True,
                 'demanda_id': demanda.id,
-                'opcoes': opcoes,
-                'total_opcoes': len(opcoes),
+                'tabela_carvia': resultado.get('tabela_carvia', []),
+                'tabela_custo': resultado.get('tabela_custo', []),
+                'total_carvia': len(resultado.get('tabela_carvia', [])),
+                'total_custo': len(resultado.get('tabela_custo', [])),
+                # Backwards compat: 'opcoes' aponta para tabela_carvia
+                'opcoes': resultado.get('tabela_carvia', []),
+                'total_opcoes': len(resultado.get('tabela_carvia', [])),
             })
 
         except Exception as e:
@@ -630,26 +663,38 @@ def register_sessao_cotacao_routes(bp):
         data = request.get_json(silent=True) or {}
         transportadora_id = data.get('transportadora_id')
         tabela_frete_id = data.get('tabela_frete_id')
+        tabela_carvia_id = data.get('tabela_carvia_id')
         valor_frete = data.get('valor_frete')
         detalhes = data.get('detalhes', {})
         manual = data.get('manual', False)
         valor_proposto = data.get('valor_proposto')
 
-        # Cotacao manual: tabela_frete_id pode ser None
-        if not transportadora_id or not valor_frete:
+        # Cotacao CarVia: sem transportadora_id
+        is_carvia = detalhes.get('fonte') == 'carvia' or tabela_carvia_id
+        if not is_carvia and not transportadora_id:
+            if not valor_frete:
+                return jsonify({'erro': 'Dados incompletos'}), 400
             return jsonify({'erro': 'Dados incompletos'}), 400
 
-        if not manual and not tabela_frete_id:
+        if not valor_frete:
+            return jsonify({'erro': 'Valor frete obrigatorio'}), 400
+
+        if not manual and not is_carvia and not tabela_frete_id:
             return jsonify({'erro': 'Dados incompletos'}), 400
 
         try:
-            demanda.transportadora_id = int(transportadora_id)
+            demanda.transportadora_id = int(transportadora_id) if transportadora_id else None
             demanda.tabela_frete_id = int(tabela_frete_id) if tabela_frete_id else None
             demanda.valor_frete_calculado = float(valor_frete)
             demanda.detalhes_calculo = (
                 {'tipo': 'MANUAL', 'observacao': data.get('observacao', '')}
                 if manual else detalhes
             )
+            # Anotar tabela_carvia_id se veio de CarVia
+            if tabela_carvia_id:
+                if not demanda.detalhes_calculo:
+                    demanda.detalhes_calculo = {}
+                demanda.detalhes_calculo['tabela_carvia_id'] = int(tabela_carvia_id)
 
             # Gravar valor proposto se informado
             if valor_proposto is not None:
