@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 221,
+  "total_relationships": 224,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -177,6 +177,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_modelos_moto",
+      "from_column": "categoria_moto_id",
+      "to_table": "carvia_categorias_moto",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_nf_itens",
       "from_column": "nf_id",
       "to_table": "carvia_nfs",
@@ -198,6 +204,18 @@
       "from_table": "carvia_operacoes",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_precos_categoria_moto",
+      "from_column": "tabela_frete_id",
+      "to_table": "carvia_tabelas_frete",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_precos_categoria_moto",
+      "from_column": "categoria_moto_id",
+      "to_table": "carvia_categorias_moto",
       "to_column": "id"
     },
     {

@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 152,
+  "total_tabelas": 154,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -220,6 +220,15 @@
         "num_pedido",
         "cod_produto",
         "pedido_cliente"
+      ]
+    },
+    {
+      "name": "carvia_categorias_moto",
+      "description": "Tabela carvia_categorias_moto",
+      "key_fields": [
+        "nome",
+        "descricao",
+        "ordem"
       ]
     },
     {
@@ -399,6 +408,15 @@
         "cte_numero",
         "cte_chave_acesso",
         "cte_valor"
+      ]
+    },
+    {
+      "name": "carvia_precos_categoria_moto",
+      "description": "Tabela carvia_precos_categoria_moto",
+      "key_fields": [
+        "tabela_frete_id",
+        "categoria_moto_id",
+        "valor_unitario"
       ]
     },
     {

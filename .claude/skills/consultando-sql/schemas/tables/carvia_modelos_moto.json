@@ -42,6 +42,11 @@
       "default": 300
     },
     {
+      "name": "categoria_moto_id",
+      "type": "integer",
+      "description": "FK → carvia_categorias_moto.id"
+    },
+    {
       "name": "ativo",
       "type": "boolean",
       "description": "True = registro ativo",
@@ -56,6 +61,21 @@
       "name": "criado_por",
       "type": "varchar(100)",
       "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "categoria_moto_id",
+      "references": "carvia_categorias_moto.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_modelos_moto_categoria_moto_id",
+      "columns": [
+        "categoria_moto_id"
+      ],
+      "unique": false
     }
   ]
 }

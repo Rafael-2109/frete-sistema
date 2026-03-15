@@ -362,24 +362,24 @@
   ],
   "indices": [
     {
-      "name": "idx_carteira_status_data",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "status_pedido",
-        "data_pedido"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "ix_carteira_principal_vendedor",
       "columns": [
-        "odoo_write_date"
+        "vendedor"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_data_pedido",
+      "name": "ix_carteira_principal_status_pedido",
       "columns": [
-        "data_pedido"
+        "status_pedido"
       ],
       "unique": false
     },
@@ -391,9 +391,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cnpj_cpf",
+      "name": "ix_carteira_principal_ativo",
       "columns": [
-        "cnpj_cpf"
+        "ativo"
       ],
       "unique": false
     },
@@ -405,10 +405,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_produto_saldo",
+      "name": "ix_carteira_principal_cnpj_cpf",
       "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
+        "cnpj_cpf"
       ],
       "unique": false
     },
@@ -428,23 +427,24 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "idx_carteira_status_data",
       "columns": [
-        "vendedor"
+        "status_pedido",
+        "data_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_status_pedido",
+      "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
-        "status_pedido"
+        "odoo_write_date"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_ativo",
+      "name": "ix_carteira_principal_data_pedido",
       "columns": [
-        "ativo"
+        "data_pedido"
       ],
       "unique": false
     }

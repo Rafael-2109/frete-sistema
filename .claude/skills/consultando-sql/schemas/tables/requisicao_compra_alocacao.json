@@ -126,32 +126,9 @@
       "unique": false
     },
     {
-      "name": "ix_requisicao_compra_alocacao_odoo_allocation_id",
+      "name": "ix_requisicao_compra_alocacao_cod_produto",
       "columns": [
-        "odoo_allocation_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "idx_alocacao_produto_estado",
-      "columns": [
-        "cod_produto",
-        "purchase_state"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_requisicao_compra_alocacao_purchase_request_line_odoo_id",
-      "columns": [
-        "purchase_request_line_odoo_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_alocacao_odoo_ids",
-      "columns": [
-        "purchase_request_line_odoo_id",
-        "purchase_order_line_odoo_id"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -163,9 +140,32 @@
       "unique": false
     },
     {
-      "name": "ix_requisicao_compra_alocacao_company_id",
+      "name": "idx_alocacao_produto_estado",
       "columns": [
-        "company_id"
+        "cod_produto",
+        "purchase_state"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_odoo_allocation_id",
+      "columns": [
+        "odoo_allocation_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_alocacao_odoo_ids",
+      "columns": [
+        "purchase_request_line_odoo_id",
+        "purchase_order_line_odoo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compra_alocacao_purchase_request_line_odoo_id",
+      "columns": [
+        "purchase_request_line_odoo_id"
       ],
       "unique": false
     },
@@ -177,16 +177,16 @@
       "unique": false
     },
     {
-      "name": "ix_requisicao_compra_alocacao_purchase_order_line_odoo_id",
+      "name": "ix_requisicao_compra_alocacao_company_id",
       "columns": [
-        "purchase_order_line_odoo_id"
+        "company_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_requisicao_compra_alocacao_cod_produto",
+      "name": "ix_requisicao_compra_alocacao_purchase_order_line_odoo_id",
       "columns": [
-        "cod_produto"
+        "purchase_order_line_odoo_id"
       ],
       "unique": false
     }
