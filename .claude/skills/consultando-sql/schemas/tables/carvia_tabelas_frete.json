@@ -1,0 +1,153 @@
+{
+  "name": "carvia_tabelas_frete",
+  "description": "Tabela carvia_tabelas_frete",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "uf_origem",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "uf_destino",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "nome_tabela",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_carga",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "grupo_cliente_id",
+      "type": "integer",
+      "description": "FK → carvia_grupos_cliente.id"
+    },
+    {
+      "name": "valor_kg",
+      "type": "float"
+    },
+    {
+      "name": "frete_minimo_peso",
+      "type": "float"
+    },
+    {
+      "name": "percentual_valor",
+      "type": "float"
+    },
+    {
+      "name": "frete_minimo_valor",
+      "type": "float"
+    },
+    {
+      "name": "percentual_gris",
+      "type": "float"
+    },
+    {
+      "name": "percentual_adv",
+      "type": "float"
+    },
+    {
+      "name": "percentual_rca",
+      "type": "float"
+    },
+    {
+      "name": "pedagio_por_100kg",
+      "type": "float"
+    },
+    {
+      "name": "valor_despacho",
+      "type": "float"
+    },
+    {
+      "name": "valor_cte",
+      "type": "float"
+    },
+    {
+      "name": "valor_tas",
+      "type": "float"
+    },
+    {
+      "name": "icms_incluso",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "gris_minimo",
+      "type": "float",
+      "default": 0
+    },
+    {
+      "name": "adv_minimo",
+      "type": "float",
+      "default": 0
+    },
+    {
+      "name": "icms_proprio",
+      "type": "float"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "grupo_cliente_id",
+      "references": "carvia_grupos_cliente.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_tf_uf",
+      "columns": [
+        "uf_origem",
+        "uf_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_tabelas_frete_grupo_cliente_id",
+      "columns": [
+        "grupo_cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_tf_tipo_carga",
+      "columns": [
+        "tipo_carga"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 145,
+  "total_tabelas": 152,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -223,6 +223,15 @@
       ]
     },
     {
+      "name": "carvia_cidades_atendidas",
+      "description": "Tabela carvia_cidades_atendidas",
+      "key_fields": [
+        "codigo_ibge",
+        "nome_cidade",
+        "uf"
+      ]
+    },
+    {
       "name": "carvia_conciliacoes",
       "description": "Tabela carvia_conciliacoes",
       "key_fields": [
@@ -238,6 +247,33 @@
         "tipo_doc",
         "doc_id",
         "tipo_movimento"
+      ]
+    },
+    {
+      "name": "carvia_cte_complementares",
+      "description": "Tabela carvia_cte_complementares",
+      "key_fields": [
+        "numero_comp",
+        "operacao_id",
+        "fatura_cliente_id"
+      ]
+    },
+    {
+      "name": "carvia_custo_entrega_anexos",
+      "description": "Tabela carvia_custo_entrega_anexos",
+      "key_fields": [
+        "custo_entrega_id",
+        "nome_original",
+        "nome_arquivo"
+      ]
+    },
+    {
+      "name": "carvia_custos_entrega",
+      "description": "Tabela carvia_custos_entrega",
+      "key_fields": [
+        "numero_custo",
+        "operacao_id",
+        "cte_complementar_id"
       ]
     },
     {
@@ -301,6 +337,24 @@
         "transportadora_id",
         "numero_fatura",
         "data_emissao"
+      ]
+    },
+    {
+      "name": "carvia_grupo_cliente_membros",
+      "description": "Tabela carvia_grupo_cliente_membros",
+      "key_fields": [
+        "grupo_id",
+        "cnpj",
+        "nome_empresa"
+      ]
+    },
+    {
+      "name": "carvia_grupos_cliente",
+      "description": "Tabela carvia_grupos_cliente",
+      "key_fields": [
+        "nome",
+        "descricao",
+        "criado_por"
       ]
     },
     {
@@ -372,6 +426,15 @@
         "operacao_id",
         "transportadora_id",
         "numero_sequencial_transportadora"
+      ]
+    },
+    {
+      "name": "carvia_tabelas_frete",
+      "description": "Tabela carvia_tabelas_frete",
+      "key_fields": [
+        "uf_origem",
+        "uf_destino",
+        "nome_tabela"
       ]
     },
     {

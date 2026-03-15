@@ -112,16 +112,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "name": "ix_carvia_custos_entrega_tipo_custo",
       "columns": [
-        "cte_complementar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_numero_custo",
-      "columns": [
-        "numero_custo"
+        "tipo_custo"
       ],
       "unique": false
     },
@@ -133,16 +126,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_status",
+      "name": "ix_carvia_custos_entrega_numero_custo",
       "columns": [
-        "status"
+        "numero_custo"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
       "columns": [
-        "tipo_custo"
+        "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

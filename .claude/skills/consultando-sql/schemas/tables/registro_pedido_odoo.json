@@ -114,16 +114,16 @@
   ],
   "indices": [
     {
-      "name": "idx_registro_odoo_order",
+      "name": "ix_registro_pedido_odoo_rede",
       "columns": [
-        "odoo_order_id"
+        "rede"
       ],
       "unique": false
     },
     {
-      "name": "ix_registro_pedido_odoo_rede",
+      "name": "idx_registro_odoo_order",
       "columns": [
-        "rede"
+        "odoo_order_id"
       ],
       "unique": false
     },

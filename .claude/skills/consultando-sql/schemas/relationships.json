@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 214,
+  "total_relationships": 221,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -93,6 +93,36 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_cte_complementares",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cte_complementares",
+      "from_column": "fatura_cliente_id",
+      "to_table": "carvia_faturas_cliente",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custo_entrega_anexos",
+      "from_column": "custo_entrega_id",
+      "to_table": "carvia_custos_entrega",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "cte_complementar_id",
+      "to_table": "carvia_cte_complementares",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_fatura_cliente_itens",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
@@ -138,6 +168,12 @@
       "from_table": "carvia_faturas_transportadora",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_grupo_cliente_membros",
+      "from_column": "grupo_id",
+      "to_table": "carvia_grupos_cliente",
       "to_column": "id"
     },
     {
@@ -204,6 +240,12 @@
       "from_table": "carvia_subcontratos",
       "from_column": "fatura_transportadora_id",
       "to_table": "carvia_faturas_transportadora",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_tabelas_frete",
+      "from_column": "grupo_cliente_id",
+      "to_table": "carvia_grupos_cliente",
       "to_column": "id"
     },
     {

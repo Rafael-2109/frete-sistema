@@ -1,0 +1,75 @@
+{
+  "name": "carvia_cidades_atendidas",
+  "description": "Tabela carvia_cidades_atendidas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo_ibge",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "nome_cidade",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "nome_tabela",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "lead_time",
+      "type": "integer"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "unique_constraints": [
+    [
+      "codigo_ibge",
+      "nome_tabela"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_cidade_uf",
+      "columns": [
+        "uf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cidade_ibge",
+      "columns": [
+        "codigo_ibge"
+      ],
+      "unique": false
+    }
+  ]
+}

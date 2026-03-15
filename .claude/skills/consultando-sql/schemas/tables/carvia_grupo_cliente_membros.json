@@ -1,0 +1,65 @@
+{
+  "name": "carvia_grupo_cliente_membros",
+  "description": "Tabela carvia_grupo_cliente_membros",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "grupo_id",
+      "type": "integer",
+      "description": "FK → carvia_grupos_cliente.id",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_empresa",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "grupo_id",
+      "references": "carvia_grupos_cliente.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "grupo_id",
+      "cnpj"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_grupo_cliente_membros_grupo_id",
+      "columns": [
+        "grupo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_grupo_cliente_membros_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    }
+  ]
+}
