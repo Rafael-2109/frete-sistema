@@ -11,10 +11,15 @@
     // Reads CSS custom properties for theme-aware styling
     // ==============================================
     const DesignTokens = {
+        _cache: {},
         get(name) {
-            return getComputedStyle(document.documentElement)
-                .getPropertyValue(`--${name}`).trim();
+            if (!(name in this._cache)) {
+                this._cache[name] = getComputedStyle(document.documentElement)
+                    .getPropertyValue(`--${name}`).trim();
+            }
+            return this._cache[name];
         },
+        invalidateCache() { this._cache = {}; },
         // Semantic colors
         success: () => DesignTokens.get('semantic-success') || 'hsl(145 65% 40%)',
         danger: () => DesignTokens.get('semantic-danger') || 'hsl(0 70% 50%)',
@@ -35,6 +40,10 @@
         purple: () => 'hsl(261 51% 51%)',
         pink: () => 'hsl(330 81% 60%)'
     };
+
+    // Invalidar cache de tokens ao trocar tema (dark/light)
+    new MutationObserver(() => DesignTokens.invalidateCache())
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 
     // Odoo tag color mapping using design tokens
     const OdooTagColors = {
@@ -720,6 +729,23 @@
     }
 
     // ==============================================
+    // RENDERIZAÇÃO DE ESTOQUES EM CHUNKS (performance)
+    // ==============================================
+    function renderizarEstoquesEmLote(from, to) {
+        const CHUNK = 25;
+        let i = from;
+        function chunk() {
+            const fim = Math.min(i + CHUNK, to);
+            for (; i < fim; i++) {
+                try { renderizarEstoquePrecalculado(i, state.dados[i]); }
+                catch (e) { console.error(`Erro estoque ${i}:`, e); }
+            }
+            if (i < to) requestAnimationFrame(chunk);
+        }
+        requestAnimationFrame(chunk);
+    }
+
+    // ==============================================
     // RENDERIZAÇÃO DA TABELA (VIRTUAL SCROLLING)
     // ==============================================
     function renderizarTabela() {
@@ -787,14 +813,8 @@
 
         tbody.appendChild(fragment);
 
-        // Renderizar estoques das linhas visíveis
-        for (let i = start; i < end; i++) {
-            try {
-                renderizarEstoquePrecalculado(i, state.dados[i]);
-            } catch (erro) {
-                console.error(`Erro ao renderizar estoque ${i}:`, erro);
-            }
-        }
+        // Renderizar estoques em chunks (nao bloqueia main thread)
+        renderizarEstoquesEmLote(start, end);
 
         // Aplicar classes visuais
         aplicarClassesVisuais();
@@ -877,14 +897,8 @@
 
         tbody.appendChild(fragment);
 
-        // Renderizar estoques do novo lote
-        for (let i = currentRendered; i < nextBatch; i++) {
-            try {
-                renderizarEstoquePrecalculado(i, state.dados[i]);
-            } catch (erro) {
-                console.error(`Erro ao renderizar estoque ${i}:`, erro);
-            }
-        }
+        // Renderizar estoques em chunks (nao bloqueia main thread)
+        renderizarEstoquesEmLote(currentRendered, nextBatch);
 
         // ✅ CORREÇÃO: Aplicar visibilidade nas novas linhas carregadas
         // Verificar e ocultar pedidos com saldo=0 no novo lote
@@ -3084,25 +3098,12 @@
         if (menor7dEl) {
             menor7dEl.textContent = Math.round(resultado.menor_estoque_d7);
 
-            // HIERARQUIA DE CORES: Vermelho > Laranja > Verde
-            // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
+            // HIERARQUIA DE CORES via CSS classes (performance)
+            menor7dEl.classList.remove('est-negativo', 'est-baixo');
             if (resultado.menor_estoque_d7 < 0) {
-                // Usar CSS custom properties for theme-aware colors
-                menor7dEl.style.setProperty('background-color', DesignTokens.danger(), 'important');
-                menor7dEl.style.setProperty('color', 'white', 'important');
-                menor7dEl.style.setProperty('font-weight', 'bold', 'important');
-            }
-            // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
-            else if (resultado.menor_estoque_d7 < 100) {
-                menor7dEl.style.setProperty('background-color', DesignTokens.warning(), 'important');
-                menor7dEl.style.setProperty('color', DesignTokens.warningText(), 'important');
-                menor7dEl.style.setProperty('font-weight', 'bold', 'important');
-            }
-            // REGRA 3: Estoque OK = Sem cor
-            else {
-                menor7dEl.style.backgroundColor = '';
-                menor7dEl.style.color = '';
-                menor7dEl.style.fontWeight = '';
+                menor7dEl.classList.add('est-negativo');
+            } else if (resultado.menor_estoque_d7 < 100) {
+                menor7dEl.classList.add('est-baixo');
             }
         }
     }
@@ -3141,25 +3142,12 @@
 
             estDataEl.textContent = Math.round(estoqueDisponivel);
 
-            // HIERARQUIA DE CORES: Vermelho > Laranja > Verde
-            // REGRA 1: NEGATIVO = VERMELHO (PRIORIDADE MÁXIMA)
+            // HIERARQUIA DE CORES via CSS classes (performance)
+            estDataEl.classList.remove('est-negativo', 'est-baixo');
             if (estoqueDisponivel < 0) {
-                // Use CSS custom properties for theme-aware colors
-                estDataEl.style.setProperty('background-color', DesignTokens.danger(), 'important');
-                estDataEl.style.setProperty('color', 'white', 'important');
-                estDataEl.style.setProperty('font-weight', 'bold', 'important');
-            }
-            // REGRA 2: Baixo estoque (< 100) = Amarelo com texto preto
-            else if (estoqueDisponivel < 100) {
-                estDataEl.style.setProperty('background-color', DesignTokens.warning(), 'important');
-                estDataEl.style.setProperty('color', DesignTokens.warningText(), 'important');
-                estDataEl.style.setProperty('font-weight', 'bold', 'important');
-            }
-            // REGRA 3: Estoque OK = Sem cor
-            else {
-                estDataEl.style.backgroundColor = '';
-                estDataEl.style.color = '';
-                estDataEl.style.fontWeight = '';
+                estDataEl.classList.add('est-negativo');
+            } else if (estoqueDisponivel < 100) {
+                estDataEl.classList.add('est-baixo');
             }
         } else {
             estDataEl.textContent = '-';
@@ -3272,9 +3260,8 @@
      */
     function escapeHtml(texto) {
         if (!texto) return '';
-        const div = document.createElement('div');
-        div.textContent = texto;
-        return div.innerHTML;
+        return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     /**
@@ -3317,28 +3304,25 @@
 
     function inicializarTooltips() {
         const tooltips = document.querySelectorAll('.truncate-tooltip');
-        tooltips.forEach(el => {
-            el.title = el.title || el.textContent;
-        });
+        tooltips.forEach(el => { el.title = el.title || el.textContent; });
 
-        // 🆕 Inicializar tooltips Bootstrap para ícones de observação
-        const iconesObs = document.querySelectorAll('.icone-obs[data-bs-toggle="tooltip"]');
-        iconesObs.forEach(el => {
-            new bootstrap.Tooltip(el, {
-                container: 'body',
-                boundary: 'viewport'
-            });
-        });
-
-        // 🆕 Inicializar popovers Bootstrap para ícones de tags
-        const iconesTags = document.querySelectorAll('.icone-tags[data-bs-toggle="popover"]');
-        iconesTags.forEach(el => {
-            new bootstrap.Popover(el, {
-                container: 'body',
-                boundary: 'viewport',
-                sanitize: false  // Permitir HTML nos badges
-            });
-        });
+        // Lazy init via event delegation (1 listener em vez de N instancias Bootstrap)
+        const tbody = document.getElementById('tbody-carteira');
+        if (!tbody || tbody._tooltipDelegation) return;
+        tbody.addEventListener('mouseenter', function(e) {
+            const obs = e.target.closest('.icone-obs[data-bs-toggle="tooltip"]');
+            if (obs && !obs._bsInit) {
+                new bootstrap.Tooltip(obs, { container: 'body', boundary: 'viewport' });
+                obs._bsInit = true;
+                obs.dispatchEvent(new MouseEvent('mouseenter'));
+            }
+            const tag = e.target.closest('.icone-tags[data-bs-toggle="popover"]');
+            if (tag && !tag._bsInit) {
+                new bootstrap.Popover(tag, { container: 'body', boundary: 'viewport', sanitize: false });
+                tag._bsInit = true;
+            }
+        }, true);
+        tbody._tooltipDelegation = true;
     }
 
     // ==============================================
