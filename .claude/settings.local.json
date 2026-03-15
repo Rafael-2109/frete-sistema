@@ -155,7 +155,8 @@
       "WebFetch(domain:01.me)",
       "Bash(find /home/rafaelnascimento/projetos/frete_sistema -maxdepth 3 -type f \\\\\\( -name \"*.env*\" -o -name \"*env*.md\" -o -name \"config*.md\" \\\\\\) 2>/dev/null | grep -v node_modules | grep -v venv | grep -v \".venv\" | head -20)",
       "Bash(pip list:*)",
-      "Bash(find /home/rafaelnascimento/projetos/frete_sistema -name \"*.py\" -exec grep -l \"redis\\\\|Redis\\\\|rq\\\\|Queue\\\\|enqueue\" {} \\\\; 2>/dev/null | wc -l)"
+      "Bash(find /home/rafaelnascimento/projetos/frete_sistema -name \"*.py\" -exec grep -l \"redis\\\\|Redis\\\\|rq\\\\|Queue\\\\|enqueue\" {} \\\\; 2>/dev/null | wc -l)",
+      "mcp__sentry__search_events"
     ],
     "deny": []
   },
