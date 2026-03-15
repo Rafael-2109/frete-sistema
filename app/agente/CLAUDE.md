@@ -227,6 +227,45 @@ as capacidades extras — resultado: falha em investigacao cross-user.
 
 ---
 
+## Pipeline SSE — Contrato de 3 Camadas
+
+### R8: Novo evento = atualizar TODAS as 3 camadas
+
+Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
+
+1. **`sdk/client.py:_parse_sdk_message()`** — emitir `StreamEvent(type='xxx', ...)`
+2. **`routes.py:_process_stream_event()`** — `elif event.type == 'xxx':` → `_sse_event('xxx', ...)`
+3. **`static/agente/js/chat.js`** — `case 'xxx':` no switch de SSE
+
+**Se uma camada faltar, o evento e silenciosamente descartado.** Nao ha validacao automatica.
+
+### Mapa de eventos (atualizado 2026-03-15)
+
+| Evento | client.py | routes.py | chat.js | Origem |
+|--------|-----------|-----------|---------|--------|
+| `init` | StreamEvent | _sse_event | case | Streaming paths (v2/v3) |
+| `text` | StreamEvent | _sse_event | case | AssistantMessage.TextBlock |
+| `thinking` | StreamEvent | _sse_event | case | AssistantMessage.ThinkingBlock |
+| `tool_call` | StreamEvent | _sse_event | case | AssistantMessage.ToolUseBlock |
+| `tool_result` | StreamEvent | _sse_event | case | UserMessage.ToolResultBlock |
+| `todos` | StreamEvent | _sse_event | case | ToolResult (TodoWrite) |
+| `error` | StreamEvent | _sse_event | case | API errors, exceptions |
+| `interrupt_ack` | StreamEvent | _sse_event | case | ResultMessage (interrupted) |
+| `task_started` | StreamEvent | _sse_event | case | TaskStartedMessage (subagente) |
+| `task_progress` | StreamEvent | _sse_event | case | TaskProgressMessage (subagente) |
+| `task_notification` | StreamEvent | _sse_event | case | TaskNotificationMessage (subagente) |
+| `done` | StreamEvent | _sse_event | case | ResultMessage (fim) |
+| `start` | — | SSE generator | case | Inicio do SSE stream |
+| `heartbeat` | — | SSE generator | case | Keep-alive 10s |
+| `suggestions` | — | pos-stream | case | suggestion_generator |
+| `ask_user_question` | — | AskUserQuestion | case | SDK AskUserQuestion tool |
+| `memory_saved` | — | hooks pos-sessao | case | Memoria salva |
+| `action_pending` | — | (legacy) | case | Confirmacao pre-acao |
+
+**Hooks SDK (8 registrados)**: PreToolUse, PostToolUse, PostToolUseFailure, PreCompact, Stop, UserPromptSubmit, SubagentStart, SubagentStop.
+
+---
+
 ## Memoria Compartilhada (PRD v2.1)
 
 ### Conceito
