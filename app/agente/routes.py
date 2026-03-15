@@ -567,6 +567,14 @@ def _stream_chat_response(
                         'last_tool_name': event.metadata.get('last_tool_name', ''),
                     }))
 
+                elif event.type == 'task_notification':
+                    # SDK 0.1.46+: Subagente concluiu
+                    event_queue.put(_sse_event('task_notification', {
+                        'summary': event.content or '',
+                        'task_id': event.metadata.get('task_id', ''),
+                        'status': event.metadata.get('status', ''),
+                    }))
+
                 elif event.type == 'done':
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)

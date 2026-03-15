@@ -1186,10 +1186,21 @@ Nunca invente informações."""
                 summary = getattr(message, 'summary', '') or ''
                 status = getattr(message, 'status', '') or ''
                 task_id = getattr(message, 'task_id', '') or ''
+                usage = getattr(message, 'usage', None)
                 logger.info(
                     f"[AGENT_SDK] TaskNotification: {summary[:80]} | "
-                    f"status={status} | task_id={task_id[:12]}"
+                    f"status={status} | task_id={task_id[:12]} | "
+                    f"usage={usage}"
                 )
+                events.append(StreamEvent(
+                    type='task_notification',
+                    content=summary,
+                    metadata={
+                        'task_id': task_id,
+                        'status': status,
+                        'usage': usage if isinstance(usage, dict) else None,
+                    }
+                ))
                 return events
 
         # ─── AssistantMessage ───
@@ -1719,12 +1730,13 @@ Nunca invente informações."""
                 HookContext,
             )
 
-            # SDK 0.1.48+: SubagentStart hook para notificacao instantanea
+            # SDK 0.1.48+: Subagent lifecycle hooks
+            _has_subagent_hooks = False
             try:
-                from claude_agent_sdk import SubagentStartHookInput
-                _has_subagent_start = True
+                from claude_agent_sdk import SubagentStartHookInput, SubagentStopHookInput  # noqa: F811
+                _has_subagent_hooks = True
             except ImportError:
-                _has_subagent_start = False
+                pass
 
             async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
                 """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
@@ -1996,6 +2008,86 @@ Nunca invente informações."""
                     logger.debug(f"[HOOK:SubagentStart] Suppressed: {e}")
                     return {}
 
+            # ─── SubagentStop Hook — metricas de subagente ao finalizar ───
+            async def _subagent_stop_hook(hook_input, signal, context: HookContext):
+                """Hook de fim de subagente: extrai custo e duracao do transcript.
+
+                SDK 0.1.48+: SubagentStop dispara APOS o subagente terminar.
+                Recebe agent_transcript_path — JSONL com todas as mensagens do
+                subagente, incluindo ResultMessage com cost/usage.
+                """
+                try:
+                    agent_id = hook_input.get('agent_id', '')
+                    agent_type = hook_input.get('agent_type', '')
+                    transcript_path = hook_input.get('agent_transcript_path', '')
+
+                    # Extrair custo do transcript (ultima linha ResultMessage)
+                    cost_usd = None
+                    duration_ms = None
+                    num_turns = None
+                    stop_reason = ''
+
+                    if transcript_path:
+                        try:
+                            import json as _json
+                            with open(transcript_path, 'r') as f:
+                                last_result = None
+                                for line in f:
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    try:
+                                        msg = _json.loads(line)
+                                        if msg.get('type') == 'result':
+                                            last_result = msg
+                                    except _json.JSONDecodeError:
+                                        continue
+
+                                if last_result:
+                                    cost_usd = last_result.get('total_cost_usd')
+                                    duration_ms = last_result.get('duration_ms')
+                                    num_turns = last_result.get('num_turns')
+                                    stop_reason = last_result.get('stop_reason', '')
+                        except (OSError, IOError) as file_err:
+                            logger.debug(
+                                f"[HOOK:SubagentStop] Transcript inacessivel: {file_err}"
+                            )
+
+                    logger.info(
+                        f"[HOOK:SubagentStop] "
+                        f"agent_type={agent_type} | "
+                        f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
+                        f"cost=${cost_usd or 0:.4f} | "
+                        f"duration={duration_ms or 0}ms | "
+                        f"turns={num_turns or 'N/A'} | "
+                        f"stop_reason={stop_reason or 'end_turn'} | "
+                        f"user_id={user_id or 'None'}"
+                    )
+
+                    # Registrar custo no cost_tracker
+                    if cost_usd and cost_usd > 0:
+                        try:
+                            from .cost_tracker import cost_tracker
+                            cost_tracker.record_cost(
+                                message_id=f"subagent_{agent_id[:12] if agent_id else 'unknown'}",
+                                input_tokens=0,  # Detalhes no log, aqui o total
+                                output_tokens=0,
+                                session_id=hook_input.get('session_id', ''),
+                                user_id=user_id or 0,
+                                tool_name=f"subagent:{agent_type}",
+                            )
+                            logger.debug(
+                                f"[HOOK:SubagentStop] Custo registrado no cost_tracker: "
+                                f"${cost_usd:.4f} ({agent_type})"
+                            )
+                        except Exception as cost_err:
+                            logger.debug(f"[HOOK:SubagentStop] cost_tracker falhou: {cost_err}")
+
+                    return {}
+                except Exception as e:
+                    logger.debug(f"[HOOK:SubagentStop] Suppressed: {e}")
+                    return {}
+
             # ─── UserPromptSubmit Hook — injeta memórias + logging ───
             async def _user_prompt_submit_hook(
                 hook_input: UserPromptSubmitHookInput, signal, context: HookContext
@@ -2184,10 +2276,13 @@ Nunca invente informações."""
                 ],
             }
 
-            # SDK 0.1.48+: SubagentStart hook (notificacao instantanea)
-            if _has_subagent_start:
+            # SDK 0.1.48+: Subagent lifecycle hooks
+            if _has_subagent_hooks:
                 options_dict["hooks"]["SubagentStart"] = [
                     HookMatcher(hooks=[_subagent_start_hook]),
+                ]
+                options_dict["hooks"]["SubagentStop"] = [
+                    HookMatcher(hooks=[_subagent_stop_hook]),
                 ]
 
             hooks_list = list(options_dict["hooks"].keys())

@@ -973,6 +973,27 @@ function processSSEEvent(eventType, data, state) {
                 break;
             }
 
+            // SDK 0.1.48: Subagente concluiu
+            case 'task_notification': {
+                const notifStatus = data.status || '';
+                const notifSummary = data.summary || '';
+                const isSuccess = notifStatus === 'completed';
+
+                // Atualiza ultimo item de timeline (subagente)
+                updateLastTimelineItem({
+                    status: isSuccess ? 'success' : 'error',
+                    duration_ms: 0
+                });
+
+                if (isSuccess) {
+                    showTyping('📋 Processando resultado do subagente...');
+                } else {
+                    showTyping(`⚠️ Subagente finalizou: ${notifStatus}`);
+                }
+                console.log(`[SSE] Subagente concluiu: status=${notifStatus} summary=${notifSummary.substring(0, 80)}`);
+                break;
+            }
+
             case 'error':
                 hideTyping();
                 hideThinkingPanel();
