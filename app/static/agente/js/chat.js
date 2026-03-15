@@ -944,6 +944,35 @@ function processSSEEvent(eventType, data, state) {
                 console.log('[SSE] Interrupt acknowledgment recebido');
                 break;
 
+            // SDK 0.1.48: Subagente iniciou — feedback imediato
+            case 'task_started': {
+                const taskDesc = data.description || 'subagente';
+                const taskType = data.task_type || '';
+                const agentLabel = taskType === 'local_agent'
+                    ? taskDesc.split(' ').slice(0, 4).join(' ')
+                    : taskDesc;
+                showTyping(`🤖 Delegando: ${agentLabel}...`);
+                addTimelineItem({
+                    tool_name: `Subagente`,
+                    description: agentLabel,
+                    status: 'pending',
+                    timestamp: new Date()
+                });
+                console.log(`[SSE] Subagente iniciado: ${taskDesc} (type=${taskType})`);
+                break;
+            }
+
+            // SDK 0.1.48: Progresso de subagente
+            case 'task_progress': {
+                const progressDesc = data.description || '';
+                const lastTool = data.last_tool_name || '';
+                if (lastTool) {
+                    showTyping(`🤖 Subagente usando ${lastTool}...`);
+                }
+                console.log(`[SSE] Subagente progresso: ${progressDesc} (last_tool=${lastTool})`);
+                break;
+            }
+
             case 'error':
                 hideTyping();
                 hideThinkingPanel();

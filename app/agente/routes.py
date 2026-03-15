@@ -551,6 +551,22 @@ def _stream_chat_response(
                         'message': event.content if isinstance(event.content, str) else 'Operação interrompida',
                     }))
 
+                elif event.type == 'task_started':
+                    # SDK 0.1.46+: Subagente iniciou — notificar frontend
+                    event_queue.put(_sse_event('task_started', {
+                        'description': event.content or '',
+                        'task_id': event.metadata.get('task_id', ''),
+                        'task_type': event.metadata.get('task_type', ''),
+                    }))
+
+                elif event.type == 'task_progress':
+                    # SDK 0.1.46+: Progresso de subagente
+                    event_queue.put(_sse_event('task_progress', {
+                        'description': event.content or '',
+                        'task_id': event.metadata.get('task_id', ''),
+                        'last_tool_name': event.metadata.get('last_tool_name', ''),
+                    }))
+
                 elif event.type == 'done':
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)
@@ -581,13 +597,17 @@ def _stream_chat_response(
                             user_id=user_id,
                         )
 
-                    # Evento done
-                    event_queue.put(_sse_event('done', {
+                    # Evento done (inclui structured_output se output_format ativo)
+                    done_payload = {
                         'session_id': response_state['our_session_id'],
                         'input_tokens': response_state['input_tokens'],
                         'output_tokens': response_state['output_tokens'],
                         'cost_usd': cost_usd,
-                    }))
+                    }
+                    structured = event.content.get('structured_output')
+                    if structured is not None:
+                        done_payload['structured_output'] = structured
+                    event_queue.put(_sse_event('done', done_payload))
 
                 return False  # Não é init, não precisa continue
 

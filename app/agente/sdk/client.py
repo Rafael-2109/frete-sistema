@@ -1410,6 +1410,15 @@ Nunca invente informações."""
                             metadata={'self_correction': True}
                         ))
 
+                # SDK nativo: structured_output (quando output_format configurado)
+                structured_output = getattr(message, 'structured_output', None)
+                if structured_output is not None:
+                    logger.info(
+                        f"[AGENT_SDK] Structured output recebido: "
+                        f"type={type(structured_output).__name__} | "
+                        f"keys={list(structured_output.keys()) if isinstance(structured_output, dict) else 'N/A'}"
+                    )
+
                 state.done_emitted = True
                 events.append(StreamEvent(
                     type='done',
@@ -1423,6 +1432,7 @@ Nunca invente informações."""
                         'self_corrected': correction is not None if correction else False,
                         'interrupted': is_interrupted,
                         'stop_reason': stop_reason,
+                        'structured_output': structured_output,
                     },
                     metadata={'message_id': state.last_message_id or ''}
                 ))
@@ -1449,6 +1459,7 @@ Nunca invente informações."""
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
         our_session_id: Optional[str] = None,
+        output_format: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -1468,6 +1479,7 @@ Nunca invente informações."""
             sdk_session_id: Session ID do SDK para resume (do DB)
             can_use_tool: Callback de permissão
             our_session_id: Nosso UUID de sessão (usado pelo path persistente como pool key)
+            output_format: JSON Schema para structured output (SDK nativo)
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -1487,6 +1499,7 @@ Nunca invente informações."""
                 sdk_session_id=sdk_session_id,
                 can_use_tool=can_use_tool,
                 our_session_id=our_session_id,
+                output_format=output_format,
             ):
                 yield event
         else:
@@ -1501,6 +1514,7 @@ Nunca invente informações."""
                 image_files=image_files,
                 sdk_session_id=sdk_session_id,
                 can_use_tool=can_use_tool,
+                output_format=output_format,
             ):
                 yield event
 
@@ -1513,6 +1527,7 @@ Nunca invente informações."""
         effort_level: str = "off",
         plan_mode: bool = False,
         user_id: int = None,
+        output_format: Optional[Dict[str, Any]] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -1528,6 +1543,7 @@ Nunca invente informações."""
             effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura
             user_id: ID do usuário (para Memory Tool)
+            output_format: JSON Schema para structured output (SDK nativo)
 
         Returns:
             ClaudeAgentOptions configurado
@@ -1647,6 +1663,14 @@ Nunca invente informações."""
         if can_use_tool:
             options_dict["can_use_tool"] = can_use_tool
 
+        # Structured Output (SDK nativo)
+        # Força a resposta final do agente a seguir um JSON Schema.
+        # Útil para fluxos programáticos (API, dashboard, automação).
+        # ResultMessage.structured_output conterá o JSON parseado.
+        if output_format:
+            options_dict["output_format"] = output_format
+            logger.info(f"[AGENT_CLIENT] Structured output ativo: {output_format.get('type', 'unknown')}")
+
         # =================================================================
         # FEATURE FLAGS: Quick Wins (ativados via env vars)
         # =================================================================
@@ -1694,6 +1718,13 @@ Nunca invente informações."""
                 PreCompactHookInput, StopHookInput, UserPromptSubmitHookInput,
                 HookContext,
             )
+
+            # SDK 0.1.48+: SubagentStart hook para notificacao instantanea
+            try:
+                from claude_agent_sdk import SubagentStartHookInput
+                _has_subagent_start = True
+            except ImportError:
+                _has_subagent_start = False
 
             async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
                 """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
@@ -1931,6 +1962,40 @@ Nunca invente informações."""
                     logger.debug(f"[HOOK:Stop] Suppressed (stream likely closed): {e}")
                     return {}
 
+            # ─── SubagentStart Hook — notificacao instantanea ao frontend ───
+            async def _subagent_start_hook(hook_input, signal, context: HookContext):
+                """Hook de inicio de subagente: emite SSE event ANTES do subagente processar.
+
+                SDK 0.1.48+: SubagentStart dispara INSTANTANEAMENTE no spawn,
+                antes mesmo do TaskStartedMessage (que e async e pode demorar).
+                Permite ao frontend mostrar 'Delegando para analista-carteira...'
+                imediatamente.
+                """
+                try:
+                    agent_id = hook_input.get('agent_id', '')
+                    agent_type = hook_input.get('agent_type', '')
+
+                    logger.info(
+                        f"[HOOK:SubagentStart] "
+                        f"agent_type={agent_type} | "
+                        f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
+                        f"user_id={user_id or 'None'}"
+                    )
+
+                    # Contexto para o modelo: saber que subagente foi acionado
+                    return {
+                        "hookSpecificOutput": {
+                            "hookEventName": "SubagentStart",
+                            "additionalContext": (
+                                f"Subagente '{agent_type}' iniciado (id={agent_id[:12] if agent_id else 'N/A'}). "
+                                f"Aguarde resultado antes de responder ao usuario."
+                            ),
+                        }
+                    }
+                except Exception as e:
+                    logger.debug(f"[HOOK:SubagentStart] Suppressed: {e}")
+                    return {}
+
             # ─── UserPromptSubmit Hook — injeta memórias + logging ───
             async def _user_prompt_submit_hook(
                 hook_input: UserPromptSubmitHookInput, signal, context: HookContext
@@ -2118,10 +2183,16 @@ Nunca invente informações."""
                     ),
                 ],
             }
+
+            # SDK 0.1.48+: SubagentStart hook (notificacao instantanea)
+            if _has_subagent_start:
+                options_dict["hooks"]["SubagentStart"] = [
+                    HookMatcher(hooks=[_subagent_start_hook]),
+                ]
+
+            hooks_list = list(options_dict["hooks"].keys())
             logger.debug(
-                "[AGENT_CLIENT] Hooks SDK configurados: "
-                "PreToolUse(+additionalContext) + PostToolUse(+tool_use_id) + "
-                "PostToolUseFailure + PreCompact + Stop + UserPromptSubmit"
+                f"[AGENT_CLIENT] Hooks SDK configurados: {', '.join(hooks_list)}"
             )
         except (ImportError, Exception) as e:
             logger.warning(f"[AGENT_CLIENT] Hooks SDK não disponíveis: {e}")
@@ -2234,6 +2305,7 @@ Nunca invente informações."""
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
         our_session_id: Optional[str] = None,
+        output_format: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.
@@ -2279,6 +2351,7 @@ Nunca invente informações."""
             effort_level=effort_level,
             plan_mode=plan_mode,
             can_use_tool=can_use_tool,
+            output_format=output_format,
         )
 
         # ─── RESUME: só na primeira conexão ───
@@ -2610,6 +2683,7 @@ Nunca invente informações."""
         image_files: Optional[List[dict]] = None,
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
+        output_format: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando query() + resume.
@@ -2645,6 +2719,7 @@ Nunca invente informações."""
             effort_level=effort_level,
             plan_mode=plan_mode,
             can_use_tool=can_use_tool,
+            output_format=output_format,
         )
 
         # ─── RESUME: Continuar conversa anterior ───
