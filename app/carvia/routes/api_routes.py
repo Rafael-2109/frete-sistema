@@ -129,13 +129,20 @@ def register_api_routes(bp):
     @bp.route('/api/cotar-standalone', methods=['POST'])
     @login_required
     def api_cotar_standalone():
-        """Cota todas opcoes de frete standalone (NF ou CTe)."""
+        """Cota todas opcoes de frete standalone (NF ou CTe).
+
+        Aceita parametro opcional 'categorias_moto' para cotacao por
+        categoria de moto (preco por unidade). Exemplo:
+          {"categorias_moto": [{"categoria_id": 1, "quantidade": 3}]}
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
         data = request.get_json()
         if not data:
             return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        categorias_moto = data.get('categorias_moto')
 
         try:
             peso = float(data.get('peso', 0))
@@ -146,13 +153,30 @@ def register_api_routes(bp):
         uf_destino = (data.get('uf_destino') or '').strip().upper()
         cidade_destino = (data.get('cidade_destino') or '').strip() or None
         uf_origem = (data.get('uf_origem') or '').strip().upper() or None
+        cnpj_cliente = (data.get('cnpj_cliente') or '').strip() or None
 
-        if peso <= 0:
+        # Peso obrigatorio apenas se nao ha categorias_moto
+        if not categorias_moto and peso <= 0:
             return jsonify({'erro': 'Peso deve ser maior que zero'}), 400
         if not uf_destino:
             return jsonify({'erro': 'UF destino e obrigatoria'}), 400
 
         try:
+            # Se tem categorias_moto, usar CarviaTabelaService diretamente
+            if categorias_moto:
+                from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+                svc = CarviaTabelaService()
+                opcoes = svc.cotar_carvia(
+                    peso=peso,
+                    valor_mercadoria=valor,
+                    uf_origem=uf_origem or 'SP',
+                    uf_destino=uf_destino,
+                    cidade_destino=cidade_destino,
+                    cnpj_cliente=cnpj_cliente,
+                    categorias_moto=categorias_moto,
+                )
+                return jsonify({'sucesso': True, 'opcoes': opcoes})
+
             from app.carvia.services.cotacao_service import CotacaoService
             service = CotacaoService()
             opcoes = service.cotar_todas_opcoes(

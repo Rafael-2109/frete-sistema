@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-tags"></i> Categorias de Moto</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaCategoria">
+            <i class="fas fa-plus"></i> Nova Categoria
+        </button>
+    </div>
+
+    {% set carvia_active = 'configuracoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="alert alert-info py-2 small mb-3">
+        <i class="fas fa-info-circle"></i>
+        Categorias definem tipos de moto (ex: Leve, Pesada, Scooter) para precificacao por unidade.
+        Associe modelos de moto a categorias e defina precos por categoria nas tabelas de frete.
+    </div>
+
+    <div class="carvia-config-crud">
+        <div class="card">
+            <div class="card-body p-0">
+                {% if categorias %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Descricao</th>
+                                <th class="text-center">Ordem</th>
+                                <th class="text-center">Ativo</th>
+                                <th class="text-center">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat in categorias %}
+                            <tr>
+                                <td><strong>{{ cat.nome }}</strong></td>
+                                <td>{{ cat.descricao or '-' }}</td>
+                                <td class="text-center">{{ cat.ordem }}</td>
+                                <td class="text-center">
+                                    {% if cat.ativo %}
+                                    <span class="badge bg-success">Sim</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Nao</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#modalEditarCategoria{{ cat.id }}"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            onclick="excluirCategoria({{ cat.id }}, '{{ cat.nome }}')"
+                                            title="Desativar">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-tags fa-3x mb-3"></i>
+                    <p>Nenhuma categoria de moto cadastrada.</p>
+                    <p class="small">Crie categorias como "Leve", "Pesada", "Scooter" para precificacao por unidade.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Nova Categoria #}
+<div class="modal fade" id="modalNovaCategoria" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formNovaCategoria" onsubmit="criarCategoria(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus"></i> Nova Categoria de Moto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-8">
+                            <label for="novo_cat_nome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="novo_cat_nome" name="nome" required
+                                   placeholder="Ex: Leve, Pesada, Scooter">
+                        </div>
+                        <div class="col-4">
+                            <label for="novo_cat_ordem" class="form-label">Ordem</label>
+                            <input type="number" class="form-control" id="novo_cat_ordem" name="ordem"
+                                   value="0" min="0">
+                        </div>
+                        <div class="col-12">
+                            <label for="novo_cat_descricao" class="form-label">Descricao</label>
+                            <input type="text" class="form-control" id="novo_cat_descricao" name="descricao"
+                                   placeholder="Ex: Motos 100-160cc, peso ate 120kg">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Modais Editar Categoria #}
+{% for cat in categorias %}
+<div class="modal fade" id="modalEditarCategoria{{ cat.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form onsubmit="editarCategoria(event, {{ cat.id }})">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-edit"></i> Editar: {{ cat.nome }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-8">
+                            <label class="form-label">Nome *</label>
+                            <input type="text" class="form-control" name="nome" required value="{{ cat.nome }}">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Ordem</label>
+                            <input type="number" class="form-control" name="ordem" value="{{ cat.ordem }}" min="0">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descricao</label>
+                            <input type="text" class="form-control" name="descricao"
+                                   value="{{ cat.descricao or '' }}">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="ativo"
+                                       id="ativo_{{ cat.id }}" {{ 'checked' if cat.ativo }}>
+                                <label class="form-check-label" for="ativo_{{ cat.id }}">Ativo</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function csrfHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+    };
+}
+
+function criarCategoria(event) {
+    event.preventDefault();
+    var form = event.target;
+    var data = {
+        nome: form.querySelector('[name="nome"]').value,
+        descricao: form.querySelector('[name="descricao"]').value || null,
+        ordem: parseInt(form.querySelector('[name="ordem"]').value) || 0
+    };
+
+    fetch('/carvia/api/categorias-moto', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function editarCategoria(event, id) {
+    event.preventDefault();
+    var form = event.target;
+    var data = {
+        nome: form.querySelector('[name="nome"]').value,
+        descricao: form.querySelector('[name="descricao"]').value || null,
+        ordem: parseInt(form.querySelector('[name="ordem"]').value) || 0,
+        ativo: form.querySelector('[name="ativo"]').checked
+    };
+
+    fetch('/carvia/api/categorias-moto/' + id, {
+        method: 'PUT',
+        headers: csrfHeaders(),
+        body: JSON.stringify(data)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function excluirCategoria(id, nome) {
+    if (!confirm('Desativar categoria "' + nome + '"?')) return;
+
+    fetch('/carvia/api/categorias-moto/' + id, {
+        method: 'DELETE',
+        headers: csrfHeaders()
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+</script>
+{% endblock %}

@@ -79,6 +79,8 @@ def register_config_routes(bp):
             if not regex_pattern:
                 regex_pattern = _auto_gerar_regex(nome)
 
+            cat_id = data.get('categoria_moto_id')
+
             modelo = CarviaModeloMoto(
                 nome=nome,
                 comprimento=data.get('comprimento', 0),
@@ -87,6 +89,7 @@ def register_config_routes(bp):
                 peso_medio=data.get('peso_medio'),
                 cubagem_minima=data.get('cubagem_minima', 300),
                 regex_pattern=regex_pattern or None,
+                categoria_moto_id=int(cat_id) if cat_id else None,
                 criado_em=agora_utc_naive(),
                 criado_por=current_user.email,
             )
@@ -152,6 +155,9 @@ def register_config_routes(bp):
                     # Auto-gerar do nome atual (ou novo nome se editado)
                     regex_val = _auto_gerar_regex(modelo.nome)
                 modelo.regex_pattern = regex_val or None
+            if 'categoria_moto_id' in data:
+                cat_id = data['categoria_moto_id']
+                modelo.categoria_moto_id = int(cat_id) if cat_id else None
             if 'ativo' in data:
                 modelo.ativo = data['ativo']
 
@@ -247,6 +253,306 @@ def register_config_routes(bp):
             'metodo': 'nenhum',
             'mensagem': 'Nenhum match encontrado.',
         })
+
+    # ==================== CATEGORIAS MOTO ====================
+
+    @bp.route('/configuracoes/categorias-moto')
+    @login_required
+    def listar_categorias_moto():
+        """Lista categorias de moto cadastradas"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.models import CarviaCategoriaMoto
+        categorias = CarviaCategoriaMoto.query.order_by(
+            CarviaCategoriaMoto.ordem.asc(),
+            CarviaCategoriaMoto.nome.asc(),
+        ).all()
+
+        return render_template(
+            'carvia/configuracoes/categorias_moto.html',
+            categorias=categorias,
+        )
+
+    @bp.route('/api/categorias-moto', methods=['POST'])
+    @login_required
+    def criar_categoria_moto():
+        """Cria nova categoria de moto (JSON API)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCategoriaMoto
+        from app.utils.timezone import agora_utc_naive
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        nome = (data.get('nome') or '').strip()
+        if not nome:
+            return jsonify({'erro': 'Nome e obrigatorio.'}), 400
+
+        existente = CarviaCategoriaMoto.query.filter_by(nome=nome).first()
+        if existente:
+            return jsonify({'erro': f'Categoria "{nome}" ja existe.'}), 409
+
+        try:
+            categoria = CarviaCategoriaMoto(
+                nome=nome,
+                descricao=(data.get('descricao') or '').strip() or None,
+                ordem=data.get('ordem', 0),
+                criado_em=agora_utc_naive(),
+                criado_por=current_user.email,
+            )
+            db.session.add(categoria)
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'id': categoria.id,
+                'nome': categoria.nome,
+                'mensagem': f'Categoria "{categoria.nome}" criada com sucesso.',
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao criar categoria moto: %s", e)
+            return jsonify({'erro': f'Erro ao criar categoria: {e}'}), 500
+
+    @bp.route('/api/categorias-moto/<int:cat_id>', methods=['PUT'])
+    @login_required
+    def atualizar_categoria_moto(cat_id):
+        """Atualiza categoria de moto (JSON API)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCategoriaMoto
+
+        categoria = db.session.get(CarviaCategoriaMoto, cat_id)
+        if not categoria:
+            return jsonify({'erro': 'Categoria nao encontrada.'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        try:
+            if 'nome' in data:
+                nome = (data['nome'] or '').strip()
+                if not nome:
+                    return jsonify({'erro': 'Nome e obrigatorio.'}), 400
+                existente = CarviaCategoriaMoto.query.filter(
+                    CarviaCategoriaMoto.nome == nome,
+                    CarviaCategoriaMoto.id != cat_id,
+                ).first()
+                if existente:
+                    return jsonify({'erro': f'Categoria "{nome}" ja existe.'}), 409
+                categoria.nome = nome
+
+            if 'descricao' in data:
+                categoria.descricao = (data['descricao'] or '').strip() or None
+            if 'ordem' in data:
+                categoria.ordem = data['ordem']
+            if 'ativo' in data:
+                categoria.ativo = data['ativo']
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'id': categoria.id,
+                'nome': categoria.nome,
+                'mensagem': f'Categoria "{categoria.nome}" atualizada.',
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao atualizar categoria moto #%s: %s", cat_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/categorias-moto/<int:cat_id>', methods=['DELETE'])
+    @login_required
+    def desativar_categoria_moto(cat_id):
+        """Soft-delete categoria de moto (ativo=False)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCategoriaMoto
+
+        categoria = db.session.get(CarviaCategoriaMoto, cat_id)
+        if not categoria:
+            return jsonify({'erro': 'Categoria nao encontrada.'}), 404
+
+        try:
+            categoria.ativo = False
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'Categoria "{categoria.nome}" desativada.',
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao desativar categoria moto #%s: %s", cat_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/categorias-moto-lista')
+    @login_required
+    def api_categorias_moto_lista():
+        """Lista categorias ativas (para dropdowns)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCategoriaMoto
+        categorias = CarviaCategoriaMoto.query.filter_by(ativo=True).order_by(
+            CarviaCategoriaMoto.ordem.asc(),
+            CarviaCategoriaMoto.nome.asc(),
+        ).all()
+
+        return jsonify({
+            'categorias': [
+                {'id': c.id, 'nome': c.nome, 'descricao': c.descricao}
+                for c in categorias
+            ]
+        })
+
+    # ==================== PRECOS CATEGORIA MOTO (por Tabela) ====================
+
+    @bp.route('/api/tabela-carvia/<int:tid>/precos-moto')
+    @login_required
+    def listar_precos_moto(tid):
+        """Lista precos por categoria de uma tabela"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+        svc = CarviaTabelaService()
+        precos = svc.buscar_precos_categoria(tid)
+        return jsonify({'sucesso': True, 'precos': precos})
+
+    @bp.route('/api/tabela-carvia/<int:tid>/precos-moto', methods=['POST'])
+    @login_required
+    def criar_preco_moto(tid):
+        """Define preco para categoria em tabela"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaPrecoCategoriaMoto, CarviaTabelaFrete
+        from app.utils.timezone import agora_utc_naive
+
+        tabela = db.session.get(CarviaTabelaFrete, tid)
+        if not tabela:
+            return jsonify({'erro': 'Tabela nao encontrada.'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        categoria_id = data.get('categoria_moto_id')
+        valor_unitario = data.get('valor_unitario')
+
+        if not categoria_id or valor_unitario is None:
+            return jsonify({'erro': 'categoria_moto_id e valor_unitario obrigatorios.'}), 400
+
+        try:
+            valor = float(valor_unitario)
+            if valor <= 0:
+                return jsonify({'erro': 'Valor unitario deve ser positivo.'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'erro': 'Valor unitario invalido.'}), 400
+
+        # Verificar duplicata
+        existente = CarviaPrecoCategoriaMoto.query.filter_by(
+            tabela_frete_id=tid,
+            categoria_moto_id=int(categoria_id),
+        ).first()
+        if existente:
+            return jsonify({'erro': 'Ja existe preco para esta categoria nesta tabela.'}), 409
+
+        try:
+            preco = CarviaPrecoCategoriaMoto(
+                tabela_frete_id=tid,
+                categoria_moto_id=int(categoria_id),
+                valor_unitario=valor,
+                criado_em=agora_utc_naive(),
+                criado_por=current_user.email,
+            )
+            db.session.add(preco)
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'id': preco.id,
+                'mensagem': 'Preco adicionado.',
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao criar preco moto: %s", e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/precos-moto/<int:preco_id>', methods=['PUT'])
+    @login_required
+    def atualizar_preco_moto(preco_id):
+        """Atualiza preco de categoria"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaPrecoCategoriaMoto
+
+        preco = db.session.get(CarviaPrecoCategoriaMoto, preco_id)
+        if not preco:
+            return jsonify({'erro': 'Preco nao encontrado.'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        try:
+            if 'valor_unitario' in data:
+                valor = float(data['valor_unitario'])
+                if valor <= 0:
+                    return jsonify({'erro': 'Valor deve ser positivo.'}), 400
+                preco.valor_unitario = valor
+
+            if 'ativo' in data:
+                preco.ativo = data['ativo']
+
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'id': preco.id,
+                'mensagem': 'Preco atualizado.',
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao atualizar preco moto #%s: %s", preco_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/precos-moto/<int:preco_id>', methods=['DELETE'])
+    @login_required
+    def remover_preco_moto(preco_id):
+        """Remove preco de categoria (soft-delete)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaPrecoCategoriaMoto
+
+        preco = db.session.get(CarviaPrecoCategoriaMoto, preco_id)
+        if not preco:
+            return jsonify({'erro': 'Preco nao encontrado.'}), 404
+
+        try:
+            preco.ativo = False
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Preco removido.',
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao remover preco moto #%s: %s", preco_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
 
     # ==================== EMPRESAS CUBAGEM ====================
 

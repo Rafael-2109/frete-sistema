@@ -330,6 +330,64 @@ class MotoRecognitionService:
 
         return resultado
 
+    def categorizar_itens_operacao(self, operacao_id: int) -> Dict:
+        """Identifica motos nos itens de NF e agrupa por categoria.
+
+        Args:
+            operacao_id: ID da CarviaOperacao
+
+        Returns:
+            Dict com 'por_categoria', 'total_motos', 'nao_categorizados'
+        """
+        from app.carvia.models import CarviaModeloMoto, CarviaCategoriaMoto
+
+        itens_match = self.identificar_motos_operacao(operacao_id)
+        if not itens_match:
+            return {'por_categoria': [], 'total_motos': 0, 'nao_categorizados': 0}
+
+        # Agrupar por categoria
+        categorias = {}  # cat_id -> {'nome', 'quantidade', 'modelos': set}
+        nao_categorizados = 0
+        total_motos = 0
+
+        for item in itens_match:
+            qtd = int(item.get('quantidade', 1))
+            total_motos += qtd
+            modelo_id = item.get('modelo_moto_id')
+
+            if not modelo_id:
+                nao_categorizados += qtd
+                continue
+
+            modelo = db.session.get(CarviaModeloMoto, modelo_id)
+            if not modelo or not modelo.categoria_moto_id:
+                nao_categorizados += qtd
+                continue
+
+            cat_id = modelo.categoria_moto_id
+            if cat_id not in categorias:
+                categoria = db.session.get(CarviaCategoriaMoto, cat_id)
+                categorias[cat_id] = {
+                    'categoria_id': cat_id,
+                    'categoria_nome': categoria.nome if categoria else f'Cat#{cat_id}',
+                    'quantidade': 0,
+                    'modelos': set(),
+                }
+            categorias[cat_id]['quantidade'] += qtd
+            categorias[cat_id]['modelos'].add(item.get('modelo_match', ''))
+
+        # Converter sets para listas
+        por_categoria = []
+        for info in categorias.values():
+            info['modelos'] = sorted(info['modelos'])
+            por_categoria.append(info)
+
+        return {
+            'por_categoria': por_categoria,
+            'total_motos': total_motos,
+            'nao_categorizados': nao_categorizados,
+        }
+
     def empresa_usa_cubagem(self, cnpj: str) -> bool:
         """
         Verifica se a empresa (CNPJ) esta configurada para usar cubagem.

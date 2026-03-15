@@ -13,6 +13,8 @@ Reutiliza:
 import logging
 from typing import Dict, List, Optional
 
+from app import db
+
 logger = logging.getLogger(__name__)
 
 
@@ -179,6 +181,115 @@ class CarviaTabelaService:
             logger.warning("Erro ao calcular frete CarVia: %s", e)
             return None
 
+    def _calcular_por_categoria_moto(
+        self,
+        tabela,
+        categorias_qtd: List[Dict],
+        valor_mercadoria: float = 0,
+    ) -> Optional[Dict]:
+        """Calcula frete por categoria de moto (preco fixo por unidade).
+
+        Args:
+            tabela: CarviaTabelaFrete
+            categorias_qtd: [{'categoria_id': int, 'quantidade': int}, ...]
+            valor_mercadoria: para referencia (nao afeta calculo por categoria)
+
+        Returns:
+            Dict com valor_total, breakdown por categoria, icms ou None
+        """
+        from app.carvia.models import CarviaPrecoCategoriaMoto, CarviaCategoriaMoto
+
+        precos = CarviaPrecoCategoriaMoto.query.filter(
+            CarviaPrecoCategoriaMoto.tabela_frete_id == tabela.id,
+            CarviaPrecoCategoriaMoto.ativo == True,  # noqa: E712
+        ).all()
+
+        if not precos:
+            return None
+
+        precos_map = {p.categoria_moto_id: p for p in precos}
+
+        breakdown = []
+        subtotal = 0
+
+        for item in categorias_qtd:
+            cat_id = item.get('categoria_id')
+            qtd = int(item.get('quantidade', 0))
+
+            if not cat_id or qtd <= 0:
+                continue
+
+            preco = precos_map.get(cat_id)
+            if not preco:
+                logger.warning(
+                    "Categoria %s sem preco na tabela %s",
+                    cat_id, tabela.id
+                )
+                continue
+
+            valor_unitario = float(preco.valor_unitario)
+            valor_linha = valor_unitario * qtd
+
+            categoria = db.session.get(CarviaCategoriaMoto, cat_id)
+            breakdown.append({
+                'categoria_id': cat_id,
+                'categoria_nome': categoria.nome if categoria else f'Cat#{cat_id}',
+                'quantidade': qtd,
+                'valor_unitario': round(valor_unitario, 2),
+                'valor_linha': round(valor_linha, 2),
+            })
+            subtotal += valor_linha
+
+        if not breakdown:
+            return None
+
+        # Aplicar ICMS se nao incluso
+        icms_percentual = float(tabela.icms_proprio) if tabela.icms_proprio else 0
+        valor_icms = 0
+        valor_total = subtotal
+
+        if icms_percentual > 0 and not tabela.icms_incluso:
+            # ICMS por fora: total / (1 - icms/100)
+            fator = 1 - (icms_percentual / 100)
+            if fator > 0:
+                valor_total = subtotal / fator
+                valor_icms = valor_total - subtotal
+
+        return {
+            'valor': round(valor_total, 2),
+            'subtotal': round(subtotal, 2),
+            'valor_icms': round(valor_icms, 2),
+            'icms_percentual': icms_percentual,
+            'breakdown': breakdown,
+            'tipo_calculo': 'CATEGORIA_MOTO',
+        }
+
+    def buscar_precos_categoria(self, tabela_id: int) -> List[Dict]:
+        """Retorna precos por categoria para uma tabela.
+
+        Args:
+            tabela_id: ID da CarviaTabelaFrete
+
+        Returns:
+            Lista de dicts com categoria + valor_unitario
+        """
+        from app.carvia.models import CarviaPrecoCategoriaMoto
+
+        precos = CarviaPrecoCategoriaMoto.query.filter(
+            CarviaPrecoCategoriaMoto.tabela_frete_id == tabela_id,
+            CarviaPrecoCategoriaMoto.ativo == True,  # noqa: E712
+        ).all()
+
+        return [
+            {
+                'id': p.id,
+                'categoria_id': p.categoria_moto_id,
+                'categoria_nome': p.categoria.nome if p.categoria else None,
+                'valor_unitario': float(p.valor_unitario),
+            }
+            for p in precos
+        ]
+
     def cotar_carvia(
         self,
         peso: float,
@@ -188,22 +299,31 @@ class CarviaTabelaService:
         cidade_destino: str = None,
         tipo_carga: str = None,
         cnpj_cliente: str = None,
+        categorias_moto: List[Dict] = None,
     ) -> List[Dict]:
         """Orquestrador: resolve grupo -> busca tabelas -> calcula -> ordena.
 
+        Deteccao automatica: se categorias_moto fornecido E tabela tem
+        CarviaPrecoCategoriaMoto, usa calculo por categoria. Senao, por peso.
+
         Args:
-            peso: Peso em kg
+            peso: Peso em kg (pode ser 0 se categorias_moto)
             valor_mercadoria: Valor da mercadoria R$
             uf_origem: UF origem
             uf_destino: UF destino
             cidade_destino: Cidade destino (para filtrar via CarviaCidadeAtendida)
             tipo_carga: DIRETA / FRACIONADA / None (todas)
             cnpj_cliente: CNPJ para deteccao de grupo
+            categorias_moto: [{'categoria_id': int, 'quantidade': int}, ...]
 
         Returns:
             List[Dict] ordenada por valor (menor primeiro)
         """
-        if peso <= 0 or not uf_destino or not uf_origem:
+        if not uf_destino or not uf_origem:
+            return []
+
+        # Peso obrigatorio apenas se nao ha categorias_moto
+        if not categorias_moto and peso <= 0:
             return []
 
         try:
@@ -228,10 +348,46 @@ class CarviaTabelaService:
 
             opcoes = []
             for tabela in tabelas:
-                resultado = self.calcular_com_tabela_carvia(
-                    tabela, peso, valor_mercadoria
-                )
-                if resultado:
+                resultado = None
+                tipo_calculo = 'PESO'
+
+                # Tentar calculo por categoria moto primeiro
+                if categorias_moto:
+                    resultado = self._calcular_por_categoria_moto(
+                        tabela, categorias_moto, valor_mercadoria
+                    )
+                    if resultado:
+                        tipo_calculo = 'CATEGORIA_MOTO'
+
+                # Fallback: calculo por peso
+                if not resultado and peso > 0:
+                    resultado = self.calcular_com_tabela_carvia(
+                        tabela, peso, valor_mercadoria
+                    )
+                    tipo_calculo = 'PESO'
+
+                if not resultado:
+                    continue
+
+                if tipo_calculo == 'CATEGORIA_MOTO':
+                    opcoes.append({
+                        'tabela_carvia_id': tabela.id,
+                        'tabela_nome': tabela.nome_tabela,
+                        'tipo_carga': tabela.tipo_carga,
+                        'modalidade': tabela.modalidade,
+                        'grupo_cliente': (
+                            tabela.grupo_cliente.nome
+                            if tabela.grupo_cliente_id and tabela.grupo_cliente
+                            else None
+                        ),
+                        'valor_frete': resultado['valor'],
+                        'detalhes': resultado,
+                        'descritivo': self._montar_descritivo_categoria(resultado),
+                        'lead_time': getattr(tabela, '_lead_time', None),
+                        'fonte': 'carvia',
+                        'tipo_calculo': 'CATEGORIA_MOTO',
+                    })
+                else:
                     tabela_dados = resultado.get('tabela_dados', {})
                     detalhes = resultado.get('detalhes', {})
                     descritivo = cotacao_svc._montar_descritivo(
@@ -253,6 +409,7 @@ class CarviaTabelaService:
                         'descritivo': descritivo,
                         'lead_time': getattr(tabela, '_lead_time', None),
                         'fonte': 'carvia',
+                        'tipo_calculo': 'PESO',
                     })
 
             # 4. Ordenar por valor
@@ -262,3 +419,27 @@ class CarviaTabelaService:
         except Exception as e:
             logger.error("Erro ao cotar CarVia: %s", e)
             return []
+
+    @staticmethod
+    def _montar_descritivo_categoria(resultado: Dict) -> str:
+        """Monta texto descritivo do calculo por categoria de moto."""
+        linhas = []
+        for item in resultado.get('breakdown', []):
+            linhas.append(
+                f"{item['quantidade']}x {item['categoria_nome']} "
+                f"@ R$ {item['valor_unitario']:,.2f} = "
+                f"R$ {item['valor_linha']:,.2f}"
+            )
+
+        subtotal = resultado.get('subtotal', 0)
+        linhas.append(f"Subtotal: R$ {subtotal:,.2f}")
+
+        icms = resultado.get('valor_icms', 0)
+        icms_pct = resultado.get('icms_percentual', 0)
+        if icms > 0:
+            linhas.append(f"ICMS ({icms_pct}%): R$ {icms:,.2f}")
+
+        total = resultado.get('valor', 0)
+        linhas.append(f"TOTAL: R$ {total:,.2f}")
+
+        return '\n'.join(linhas)

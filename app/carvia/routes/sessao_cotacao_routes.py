@@ -602,12 +602,38 @@ def register_sessao_cotacao_routes(bp):
             # Tipo de carga do request body (DIRETA/FRACIONADA/null)
             req_data = request.get_json(silent=True) or {}
             tipo_carga = req_data.get('tipo_carga') or None
+            categorias_moto = req_data.get('categorias_moto') or None
 
             # CNPJ para deteccao de grupo de cliente
             cnpj_cliente = (
                 getattr(demanda, 'origem_cnpj', None)
                 or getattr(demanda, 'destino_cnpj', None)
             )
+
+            # Se tem categorias_moto, cotar via CarviaTabelaService
+            if categorias_moto:
+                from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+                tabela_svc = CarviaTabelaService()
+                opcoes_cat = tabela_svc.cotar_carvia(
+                    peso=float(demanda.peso) if demanda.peso else 0,
+                    valor_mercadoria=float(demanda.valor_mercadoria),
+                    uf_origem=demanda.origem_uf,
+                    uf_destino=demanda.destino_uf,
+                    cidade_destino=demanda.destino_cidade,
+                    tipo_carga=tipo_carga,
+                    cnpj_cliente=cnpj_cliente,
+                    categorias_moto=categorias_moto,
+                )
+                return jsonify({
+                    'sucesso': True,
+                    'demanda_id': demanda.id,
+                    'tabela_carvia': opcoes_cat,
+                    'tabela_custo': [],
+                    'total_carvia': len(opcoes_cat),
+                    'total_custo': 0,
+                    'opcoes': opcoes_cat,
+                    'total_opcoes': len(opcoes_cat),
+                })
 
             # Admin ve tabela de custo
             incluir_custo = getattr(current_user, 'perfil', '') == 'administrador'

@@ -21,6 +21,7 @@
                         <thead>
                             <tr>
                                 <th>Nome</th>
+                                <th>Categoria</th>
                                 <th class="text-end">Comprimento (m)</th>
                                 <th class="text-end">Largura (m)</th>
                                 <th class="text-end">Altura (m)</th>
@@ -35,6 +36,13 @@
                             {% for modelo in modelos %}
                             <tr>
                                 <td>{{ modelo.nome }}</td>
+                                <td>
+                                    {% if modelo.categoria %}
+                                    <span class="badge bg-info">{{ modelo.categoria.nome }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                                 <td class="text-end">{{ modelo.comprimento|numero_br(2) }}</td>
                                 <td class="text-end">{{ modelo.largura|numero_br(2) }}</td>
                                 <td class="text-end">{{ modelo.altura|numero_br(2) }}</td>
@@ -96,10 +104,16 @@
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row g-3">
-                        <div class="col-12">
+                        <div class="col-8">
                             <label for="novo_nome" class="form-label">Nome *</label>
                             <input type="text" class="form-control" id="novo_nome" name="nome" required
                                    placeholder="Ex: CG 160, Biz 125">
+                        </div>
+                        <div class="col-4">
+                            <label for="novo_categoria" class="form-label">Categoria</label>
+                            <select class="form-select" id="novo_categoria" name="categoria_moto_id">
+                                <option value="">Nenhuma</option>
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label for="novo_comprimento" class="form-label">Comprimento (m) *</label>
@@ -190,10 +204,17 @@
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row g-3">
-                        <div class="col-12">
+                        <div class="col-8">
                             <label class="form-label">Nome *</label>
                             <input type="text" class="form-control" name="nome" required
                                    value="{{ modelo.nome }}">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Categoria</label>
+                            <select class="form-select categoria-select" name="categoria_moto_id"
+                                    data-current="{{ modelo.categoria_moto_id or '' }}">
+                                <option value="">Nenhuma</option>
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Comprimento (m) *</label>
@@ -304,6 +325,11 @@ function getFormData(form) {
         }
     });
 
+    const catSelect = form.querySelector('[name="categoria_moto_id"]');
+    if (catSelect) {
+        data.categoria_moto_id = catSelect.value ? parseInt(catSelect.value) : null;
+    }
+
     const ativoCheck = form.querySelector('[name="ativo"]');
     if (ativoCheck) {
         data.ativo = ativoCheck.checked;
@@ -366,6 +392,26 @@ function excluirModelo(id, nome) {
     })
     .catch(err => alert(err.message));
 }
+
+// Carregar categorias nos selects
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/carvia/api/categorias-moto-lista', {headers: csrfHeaders()})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.categorias) return;
+        document.querySelectorAll('select[name="categoria_moto_id"]').forEach(function(sel) {
+            var currentVal = sel.dataset.current || '';
+            data.categorias.forEach(function(cat) {
+                var opt = document.createElement('option');
+                opt.value = cat.id;
+                opt.textContent = cat.nome;
+                if (String(cat.id) === String(currentVal)) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        });
+    })
+    .catch(function() {});
+});
 
 function testarRegex(btn) {
     const container = btn.closest('.accordion-collapse') || btn.closest('.modal-content');

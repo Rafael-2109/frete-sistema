@@ -1202,6 +1202,26 @@ class CarviaConciliacao(db.Model):
         )
 
 
+class CarviaCategoriaMoto(db.Model):
+    """Categorias/tipos de moto para precificacao por unidade (ex: Leve, Pesada, Scooter)"""
+    __tablename__ = 'carvia_categorias_moto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(50), nullable=False, unique=True)
+    descricao = db.Column(db.Text)
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    # Relationships
+    modelos = db.relationship('CarviaModeloMoto', backref='categoria', lazy='dynamic')
+    precos = db.relationship('CarviaPrecoCategoriaMoto', backref='categoria', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<CarviaCategoriaMoto {self.nome} ordem={self.ordem}>'
+
+
 class CarviaModeloMoto(db.Model):
     """Modelos de moto para calculo automatico de peso cubado"""
     __tablename__ = 'carvia_modelos_moto'
@@ -1214,6 +1234,12 @@ class CarviaModeloMoto(db.Model):
     altura = db.Column(db.Numeric(10, 4), nullable=False)
     peso_medio = db.Column(db.Numeric(10, 3), nullable=True)
     cubagem_minima = db.Column(db.Numeric(10, 2), nullable=False, default=300)
+    categoria_moto_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_categorias_moto.id'),
+        nullable=True,
+        index=True,
+    )
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
@@ -1235,6 +1261,45 @@ class CarviaEmpresaCubagem(db.Model):
 
     def __repr__(self):
         return f'<CarviaEmpresaCubagem {self.cnpj_empresa} cubagem={self.considerar_cubagem}>'
+
+
+class CarviaPrecoCategoriaMoto(db.Model):
+    """Preco fixo por unidade para combinacao tabela_frete × categoria_moto"""
+    __tablename__ = 'carvia_precos_categoria_moto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tabela_frete_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_tabelas_frete.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    categoria_moto_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_categorias_moto.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    valor_unitario = db.Column(db.Numeric(15, 2), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'tabela_frete_id', 'categoria_moto_id',
+            name='uq_carvia_preco_cat_moto'
+        ),
+    )
+
+    # Relationships
+    tabela_frete = db.relationship('CarviaTabelaFrete', backref='precos_categoria_moto')
+
+    def __repr__(self):
+        return (
+            f'<CarviaPrecoCategoriaMoto tabela={self.tabela_frete_id} '
+            f'cat={self.categoria_moto_id} R${self.valor_unitario}>'
+        )
 
 
 # =====================================================================

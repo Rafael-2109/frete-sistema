@@ -28,7 +28,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 | 12 | **Sessao Cotacao** | `CarviaSessaoCotacao` | `/carvia/sessoes-cotacao` | Lista + Nova + Detalhe (cotar AJAX + selecionar opcao + enviar + resposta) |
 | 13 | **Conciliacao** | `CarviaConciliacaoService` | `/carvia/conciliacao` | Painel duplo extrato/documentos + Match |
 | 14 | **Extrato Bancario** | `CarviaExtratoLinha` | `/carvia/extrato-bancario` | Importar OFX + CSV + Lista linhas |
-| 15 | **Configuracoes** | `CarviaModeloMoto` / `CarviaEmpresaCubagem` | `/carvia/configuracoes/modelos-moto` | CRUD inline modelos moto + empresas cubagem |
+| 15 | **Configuracoes** | `CarviaModeloMoto` / `CarviaEmpresaCubagem` / `CarviaCategoriaMoto` | `/carvia/configuracoes/modelos-moto` | CRUD inline modelos moto + empresas cubagem + categorias moto |
 
 ### Cross-links entre documentos (navegacao completa)
 
@@ -65,10 +65,10 @@ app/carvia/
   │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar, custo_entrega)
   ├── services/        # 12 services (parsers, matching, importacao, cotacao, conferencia, fatura_pdf_parser, linking,
   │                    #   fluxo_caixa, carvia_conciliacao, dacte_pdf_parser)
-  ├── models.py        # 20 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
+  ├── models.py        # 22 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
   │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao, SessaoCotacao,
   │                    #   SessaoDemanda, CteComplementar, CustoEntrega, CustoEntregaAnexo,
-  │                    #   ModeloMoto, EmpresaCubagem)
+  │                    #   CategoriaMoto, ModeloMoto, PrecoCategoriaMoto, EmpresaCubagem)
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/
@@ -83,7 +83,7 @@ app/templates/carvia/
   ├── faturas_transportadora/  # listar.html, nova.html, detalhe.html
   ├── despesas/                # listar.html, criar.html, detalhe.html, editar.html
   ├── sessoes_cotacao/         # listar.html, nova.html, detalhe.html
-  └── configuracoes/           # modelos_moto.html, empresas_cubagem.html
+  └── configuracoes/           # modelos_moto.html, empresas_cubagem.html, categorias_moto.html
 ```
 
 ---
@@ -182,7 +182,9 @@ Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 | CarviaSessaoDemanda | `carvia_sessao_demandas` | Demanda de rota dentro de sessao. UNIQUE(sessao_id, ordem). FK `transportadora_id` e `tabela_frete_id` (preenchidos ao selecionar opcao). `detalhes_calculo` JSON com breakdown da CalculadoraFrete. `limpar_frete_selecionado()` zera campos ao editar |
 | CarviaExtratoLinha | `carvia_extrato_linhas` | Linhas importadas do extrato bancario OFX. `fitid` UNIQUE. `tipo`: CREDITO/DEBITO. `status_conciliacao`: PENDENTE/CONCILIADO/PARCIAL. `total_conciliado` + `saldo_a_conciliar` (@property). Campos enriquecimento CSV: `razao_social`, `observacao` |
 | CarviaConciliacao | `carvia_conciliacoes` | Junction N:N extrato↔documento. UNIQUE(extrato_linha_id, tipo_documento, documento_id). `tipo_documento`: fatura_cliente/fatura_transportadora/despesa/custo_entrega. `valor_alocado` sempre positivo |
-| CarviaModeloMoto | `carvia_modelos_moto` | Modelos de moto para calculo automatico de peso cubado. `nome` UNIQUE. `regex_pattern` para match automatico. Dimensoes (comprimento, largura, altura) + `cubagem_minima`. CRUD inline em `/carvia/configuracoes/modelos-moto` |
+| CarviaCategoriaMoto | `carvia_categorias_moto` | Categorias/tipos de moto para precificacao por unidade. `nome` UNIQUE (ex: "Leve", "Pesada", "Scooter"). `ordem` para UI. Soft-delete via `ativo`. Relationships: `modelos` (CarviaModeloMoto), `precos` (CarviaPrecoCategoriaMoto). CRUD em `/carvia/configuracoes/categorias-moto` |
+| CarviaModeloMoto | `carvia_modelos_moto` | Modelos de moto para calculo automatico de peso cubado. `nome` UNIQUE. `regex_pattern` para match automatico. Dimensoes (comprimento, largura, altura) + `cubagem_minima`. **`categoria_moto_id`** FK nullable para CarviaCategoriaMoto. CRUD inline em `/carvia/configuracoes/modelos-moto` |
+| CarviaPrecoCategoriaMoto | `carvia_precos_categoria_moto` | Preco fixo por unidade para combinacao tabela_frete × categoria_moto. `valor_unitario` NUMERIC(15,2). UNIQUE(tabela_frete_id, categoria_moto_id). Soft-delete via `ativo`. Relationship `tabela_frete` (CarviaTabelaFrete backref `precos_categoria_moto`). CRUD via API em tabelas de frete |
 | CarviaEmpresaCubagem | `carvia_empresas_cubagem` | Empresas que utilizam cubagem. `cnpj_empresa` UNIQUE. `considerar_cubagem` Boolean. CRUD inline em `/carvia/configuracoes/empresas-cubagem` |
 
 ---
@@ -345,6 +347,24 @@ Cidade nome + UF → buscar_cidade_unificada() → Cidade.codigo_ibge
 **Retorno enriquecido**: `lead_time` (do vinculo CidadeAtendida), `icms_destino` (da Cidade)
 **Fallback**: Se cidade nao encontrada ou sem vinculos, busca por UF (comportamento anterior)
 
+### Cotacao por Categoria de Moto (Preco por Unidade)
+
+Empresas de moto podem ter preco fixo por unidade em vez de calculo por peso.
+Deteccao automatica: se `categorias_moto` fornecido E tabela tem `CarviaPrecoCategoriaMoto`, usa preco por categoria.
+
+```
+CarviaTabelaService.cotar_carvia(categorias_moto=[{categoria_id, quantidade}]):
+  1. Resolver grupo (existente)
+  2. Buscar tabelas (existente)
+  3. Para cada tabela:
+     → TEM precos por categoria? → _calcular_por_categoria_moto()
+     → NAO TEM → calcular_com_tabela_carvia() (peso, existente)
+  4. Retorno inclui tipo_calculo: 'CATEGORIA_MOTO' | 'PESO'
+```
+
+**ICMS**: Aplicado sobre o total por categoria (mesma logica de `icms_incluso`/`icms_proprio`).
+**Backward compat**: Tabelas sem `CarviaPrecoCategoriaMoto` continuam usando calculo por peso.
+
 ### Sessao de Cotacao (Ferramenta Comercial)
 
 **Prefixo**: `COTACAO-###` (anteriormente SC-###, backfill aplicado)
@@ -424,6 +444,7 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/backfill_prefixo_cotacao_carvia.py` + `.sql` — DML: renomeia SC-### → COTACAO-### em numero_sessao
 - `scripts/migrations/criar_tabelas_custo_entrega_cte_complementar.py` + `.sql` — 3 tabelas (`carvia_cte_complementares`, `carvia_custos_entrega`, `carvia_custo_entrega_anexos`), 13 indices
 - `scripts/migrations/adicionar_conferencia_subcontrato.py` + `.sql` — 5 campos conferencia em `carvia_subcontratos` (`valor_considerado`, `status_conferencia`, `conferido_por`, `conferido_em`, `detalhes_conferencia`) + indice
+- `scripts/migrations/criar_tabelas_categoria_moto.py` + `.sql` — 2 tabelas (`carvia_categorias_moto`, `carvia_precos_categoria_moto`) + FK `categoria_moto_id` em `carvia_modelos_moto` + 3 indices
 
 ---
 
