@@ -974,6 +974,18 @@ TIPOS (campo tipo):
 IGNORE: meta-AI (memoria, embedding, SDK, prompt, agente, Claude, Sonnet, Haiku, KG, RAG, dedup, PRD, daemon thread), resultados pontuais, status temporarios, dados do sistema.
 Se conversa INTEIRAMENTE sobre dev/debug do proprio sistema → array vazio.
 Prefira POUCOS itens de ALTA qualidade a muitos de baixa qualidade.
+
+FILTRO ANTI-RUIDO (aplicar ANTES de incluir qualquer item):
+1. Definicoes triviais: Se um LLM treinado SABERIA a definicao sem contexto Nacom, NAO extraia.
+   Exemplos de termos que NUNCA devem ser extraidos: "cross-docking", "D+2", "lote",
+   "pedido de venda", "data de expedicao", "separacao", "carteira", "janela de descarga".
+   Estes sao conceitos de logistica generica, nao conhecimento tacito.
+2. Fatos pontuais: "NF 12345 era da empresa 3" ou "endereco do pedido VCD267 era Guarulhos"
+   sao especificos de UM caso. NAO extraia — morrem no primeiro uso.
+3. Perfis de usuario minimos: "Rafael eh administrador" ou "Edson eh analista comercial"
+   sao informacoes de Nivel 1 (lookup na tabela usuarios). NAO extraia.
+4. Termos do sistema: nomes de tabelas, campos, modelos ORM. Estao no codigo. NAO extraia.
+
 RESPONDA APENAS JSON VALIDO, sem markdown.""")
 
     return "".join(parts)
@@ -1313,27 +1325,25 @@ def _save_conhecimentos_legado(
 
     Mantido para backward-compatibility durante transicao.
     Mapeamento:
-    - term_definitions → heuristica, nivel 3
+    - term_definitions → DESCARTADO (Nivel 1-2 — definicoes triviais, LLM ja sabe)
+      Auditoria 15/03/2026: 15+ termos injetados centenas de vezes sem nunca serem
+      efetivos. Definicoes como "cross-docking", "D+2", "lote" gastam tokens sem valor.
     - role_identifications → descartado (Nivel 1 — lookup de pessoa)
     - business_rules → armadilha, nivel 4
     - corrections → armadilha, nivel 4
     """
     conhecimentos_convertidos = []
 
-    for item in knowledge.get('term_definitions', []):
-        termo = item.get('termo', '').strip()
-        definicao = item.get('definicao', '').strip()
-        if not termo or not definicao:
-            continue
-        conhecimentos_convertidos.append({
-            'titulo': f'Definicao de {termo}',
-            'tipo': 'heuristica',
-            'nivel': 3,
-            'dominio': '',
-            'criterios_atendidos': [3, 4],
-            'descricao': f'{termo}: {definicao}',
-            'prescricao': f'Quando alguem mencionar "{termo}", interpretar como: {definicao}',
-        })
+    # term_definitions DESCARTADO — Nivel 1-2 (lookup/composicao)
+    # Definicoes de termos sao informacao de treinamento do LLM, nao
+    # conhecimento tacito da Nacom. A auditoria mostrou effective_count=0
+    # para todos os termos, mesmo com centenas de injecoes.
+    skipped_terms = len(knowledge.get('term_definitions', []))
+    if skipped_terms > 0:
+        logger.debug(
+            f"[KNOWLEDGE_EXTRACTION] Descartando {skipped_terms} term_definitions "
+            f"(Nivel 1-2, nao geram conhecimento tacito)"
+        )
 
     # role_identifications descartado — Nivel 1 (lookup de pessoa)
     # Nao gera conhecimento tacito util.

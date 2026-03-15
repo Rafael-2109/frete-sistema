@@ -1057,7 +1057,7 @@ def run_post_session_processing(
 
                 thread = Thread(
                     target=_run_extraction_background,
-                    daemon=True,
+                    daemon=False,
                     name=f"knowledge-extraction-{user_id}",
                 )
                 thread.start()

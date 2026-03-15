@@ -277,7 +277,9 @@ def processar_mensagem_bot(
                 # Nao bloqueia resposta se falhar ao salvar
 
             # C2: Post-session processing (summarization, patterns, extraction, embedding)
-            # Roda em daemon thread para não bloquear resposta do Teams.
+            # Roda em non-daemon thread — daemon=True morria com reciclagem gunicorn,
+            # impedindo toda a cadeia de aprendizado (summary → extração → memórias).
+            # Fix: daemon=False garante conclusão (coerente com R1 do Teams CLAUDE.md).
             try:
                 from flask import current_app
                 _app = current_app._get_current_object()
@@ -294,6 +296,12 @@ def processar_mensagem_bot(
                                 session_id=teams_session_id
                             ).first()
                             if fresh_session:
+                                logger.info(
+                                    f"[TEAMS-BOT] Post-session iniciando "
+                                    f"(user={teams_user_id}, session={teams_session_id[:8]}..., " # type: ignore
+                                    f"msg_count={fresh_session.message_count}, "
+                                    f"has_summary={fresh_session.summary is not None})"
+                                )
                                 run_post_session_processing(
                                     app=_app,
                                     session=fresh_session,
@@ -302,8 +310,20 @@ def processar_mensagem_bot(
                                     user_message=mensagem,
                                     assistant_message=resposta_texto,
                                 )
+                                logger.info(
+                                    f"[TEAMS-BOT] Post-session concluído "
+                                    f"(user={teams_user_id}, session={teams_session_id[:8]}...)" # type: ignore
+                                )
+                            else:
+                                logger.warning(
+                                    f"[TEAMS-BOT] Post-session: session {teams_session_id[:8]}... " # type: ignore
+                                    f"não encontrada no re-fetch"
+                                )
                     except Exception as ps_err:
-                        logger.warning(f"[TEAMS-BOT] Post-session processing falhou (ignorado): {ps_err}")
+                        logger.warning(
+                            f"[TEAMS-BOT] Post-session processing falhou (ignorado): {ps_err}",
+                            exc_info=True,
+                        )
                     finally:
                         try:
                             with _app.app_context():
@@ -314,10 +334,10 @@ def processar_mensagem_bot(
 
                 Thread(
                     target=_teams_post_session,
-                    daemon=True,
+                    daemon=False,
                     name=f"teams-post-session-{teams_user_id}",
                 ).start()
-                logger.info(f"[TEAMS-BOT] Post-session processing disparado em background")
+                logger.info(f"[TEAMS-BOT] Post-session processing disparado em background (non-daemon)")
             except Exception as ps_setup_err:
                 logger.warning(f"[TEAMS-BOT] Erro ao disparar post-session (ignorado): {ps_setup_err}")
 
@@ -1250,25 +1270,45 @@ def process_teams_task_async(
             # Substitui CAPDo inline por run_post_session_processing() que
             # executa: sumarização, pattern learning, behavioral profile,
             # knowledge extraction (CAPDo) e embedding generation.
+            # Re-fetch session para evitar objeto stale após commit (linha 1241).
             # =================================================================
             if session and resposta_texto:
                 try:
                     from app.agente.routes import run_post_session_processing
-                    run_post_session_processing(
-                        app=app,
-                        session=session,
-                        session_id=teams_session_id,
-                        user_id=teams_user_id,
-                        user_message=mensagem,
-                        assistant_message=resposta_texto,
-                    )
-                    logger.info(
-                        f"[TEAMS-ASYNC] Post-session processing concluído "
-                        f"(user={teams_user_id}, session={teams_session_id[:8]})"
-                    )
+                    from app.agente.models import AgentSession
+
+                    # Re-fetch: commit anterior pode ter expirado o objeto ORM
+                    fresh_session = AgentSession.query.filter_by(
+                        session_id=teams_session_id
+                    ).first()
+                    if fresh_session:
+                        logger.info(
+                            f"[TEAMS-ASYNC] Post-session iniciando "
+                            f"(user={teams_user_id}, session={teams_session_id[:8]}..., "
+                            f"msg_count={fresh_session.message_count}, "
+                            f"has_summary={fresh_session.summary is not None})"
+                        )
+                        run_post_session_processing(
+                            app=app,
+                            session=fresh_session,
+                            session_id=teams_session_id,
+                            user_id=teams_user_id,
+                            user_message=mensagem,
+                            assistant_message=resposta_texto,
+                        )
+                        logger.info(
+                            f"[TEAMS-ASYNC] Post-session processing concluído "
+                            f"(user={teams_user_id}, session={teams_session_id[:8]}...)"
+                        )
+                    else:
+                        logger.warning(
+                            f"[TEAMS-ASYNC] Post-session: session {teams_session_id[:8]}... "
+                            f"não encontrada no re-fetch"
+                        )
                 except Exception as post_err:
                     logger.warning(
-                        f"[TEAMS-ASYNC] Post-session processing falhou (ignorado): {post_err}"
+                        f"[TEAMS-ASYNC] Post-session processing falhou (ignorado): {post_err}",
+                        exc_info=True,
                     )
 
             # =================================================================
