@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**34 arquivos** | **~19.8K LOC** | **51 templates** | **Atualizado**: 14/03/2026
+**35 arquivos** | **~20.1K LOC** | **51 templates** | **Atualizado**: 14/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -63,7 +63,7 @@ CarviaCustoEntrega (Custo de Entrega)
 app/carvia/
   ├── routes/          # 14 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
   │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar, custo_entrega)
-  ├── services/        # 11 services (parsers, matching, importacao, cotacao, fatura_pdf_parser, linking,
+  ├── services/        # 12 services (parsers, matching, importacao, cotacao, conferencia, fatura_pdf_parser, linking,
   │                    #   fluxo_caixa, carvia_conciliacao, dacte_pdf_parser)
   ├── models.py        # 20 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
   │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao, SessaoCotacao,
@@ -117,6 +117,18 @@ Custo Entrega:      PENDENTE → PAGO                              [CANCELADO ex
 ```
 NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
+**Conferencia individual de subcontrato** (`status_conferencia`, eixo independente de `status`):
+```
+Sub.status_conferencia:  PENDENTE → APROVADO | DIVERGENTE
+Fatura.status_conferencia cascade:
+  Todos APROVADO → CONFERIDO (auto)
+  Algum DIVERGENTE → DIVERGENTE
+  Mix → EM_CONFERENCIA
+```
+Fatura so aceita CONFERIDO manual se TODOS subs tem `status_conferencia=APROVADO`.
+Service: `ConferenciaService` em `app/carvia/services/conferencia_service.py`.
+API: `POST /carvia/api/conferencia-subcontrato/<id>/calcular` e `.../registrar`.
+
 ### R5: Fatura vincula por status elegivel + fatura_id IS NULL
 Faturas CarVia selecionam operacoes `status IN (RASCUNHO, COTADO, CONFIRMADO), fatura_cliente_id IS NULL`.
 **CTe Complementares** tambem elegiveis: `status IN (RASCUNHO, EMITIDO), fatura_cliente_id IS NULL`.
@@ -157,7 +169,7 @@ Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 | CarviaNfItem | `carvia_nf_itens` | Itens de produto da NF. FK `nf_id`. Cascade delete-orphan |
 | CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo. **`gerar_numero_cte()`**: static method, retorna CTe-### (R8) |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
-| CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7). **`gerar_numero_sub()`**: static method, retorna Sub-### (R8) |
+| CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7). **`gerar_numero_sub()`**: static method, retorna Sub-### (R8). **Conferencia individual**: `valor_considerado`, `status_conferencia` (PENDENTE/APROVADO/DIVERGENTE), `conferido_por`, `conferido_em`, `detalhes_conferencia` (JSONB snapshot) |
 | CarviaFaturaCliente | `carvia_faturas_cliente` | **UNIQUE(numero_fatura, cnpj_cliente)**. Status: PENDENTE, EMITIDA, PAGA, CANCELADA. `pago_por`/`pago_em` preenchidos ao pagar. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
 | CarviaFaturaClienteItem | `carvia_fatura_cliente_itens` | Itens CTe de detalhe por fatura. FK `fatura_cliente_id` CASCADE. **FK `operacao_id` e `nf_id`** (nullable, resolvidos por LinkingService). Campos: cte_numero, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, frete, icms, iss, st, base_calculo |
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
@@ -411,6 +423,7 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/adicionar_contato_sessao_cotacao_carvia.py` + `.sql` — 4 campos contato cliente (cliente_nome, cliente_email, cliente_telefone, cliente_responsavel)
 - `scripts/migrations/backfill_prefixo_cotacao_carvia.py` + `.sql` — DML: renomeia SC-### → COTACAO-### em numero_sessao
 - `scripts/migrations/criar_tabelas_custo_entrega_cte_complementar.py` + `.sql` — 3 tabelas (`carvia_cte_complementares`, `carvia_custos_entrega`, `carvia_custo_entrega_anexos`), 13 indices
+- `scripts/migrations/adicionar_conferencia_subcontrato.py` + `.sql` — 5 campos conferencia em `carvia_subcontratos` (`valor_considerado`, `status_conferencia`, `conferido_por`, `conferido_em`, `detalhes_conferencia`) + indice
 
 ---
 

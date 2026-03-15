@@ -1031,6 +1031,10 @@ def register_fatura_routes(bp):
         valor_cotado_total = sum(float(s.valor_cotado or 0) for s in subcontratos)
         valor_acertado_total = sum(float(s.valor_final or 0) for s in subcontratos)
 
+        # Resumo de conferencia individual
+        from app.carvia.services.conferencia_service import ConferenciaService
+        conferencia_resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
+
         # Cross-links: itens, NFs, faturas cliente
         from app.carvia.models import (
             CarviaFaturaTransportadoraItem, CarviaNf,
@@ -1077,6 +1081,7 @@ def register_fatura_routes(bp):
             subcontratos=subcontratos,
             valor_cotado_total=valor_cotado_total,
             valor_acertado_total=valor_acertado_total,
+            conferencia_resumo=conferencia_resumo,
             itens=itens,
             nfs=nfs,
             faturas_cliente=faturas_cliente,
@@ -1138,6 +1143,33 @@ def register_fatura_routes(bp):
 
         try:
             from app.utils.timezone import agora_utc_naive
+
+            if novo_status == 'CONFERIDO':
+                # Verificar se todos subcontratos tem conferencia individual APROVADO
+                subs_pendentes = [
+                    s for s in fatura.subcontratos
+                    if s.status in ('FATURADO', 'CONFERIDO')
+                    and s.status_conferencia != 'APROVADO'
+                ]
+                subs_divergentes = [
+                    s for s in fatura.subcontratos
+                    if s.status_conferencia == 'DIVERGENTE'
+                ]
+                if subs_divergentes:
+                    flash(
+                        f'{len(subs_divergentes)} subcontrato(s) com status DIVERGENTE. '
+                        f'Resolva antes de conferir a fatura.',
+                        'warning',
+                    )
+                    return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+                if subs_pendentes:
+                    flash(
+                        f'{len(subs_pendentes)} subcontrato(s) ainda nao conferidos individualmente. '
+                        f'Confira cada subcontrato antes de aprovar a fatura.',
+                        'warning',
+                    )
+                    return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
             fatura.status_conferencia = novo_status
             # GAP-32: Registrar autor/timestamp para TODOS os status de conferencia
             fatura.conferido_por = current_user.email

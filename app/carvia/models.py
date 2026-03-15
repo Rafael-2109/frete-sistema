@@ -342,6 +342,13 @@ class CarviaSubcontrato(db.Model):
     # PENDENTE, COTADO, CONFIRMADO, FATURADO, CONFERIDO, CANCELADO
     status = db.Column(db.String(20), nullable=False, default='PENDENTE')
 
+    # Conferencia individual (CTe vs TabelaFrete)
+    valor_considerado = db.Column(db.Numeric(15, 2), nullable=True)
+    status_conferencia = db.Column(db.String(20), nullable=False, default='PENDENTE')
+    conferido_por = db.Column(db.String(100), nullable=True)
+    conferido_em = db.Column(db.DateTime, nullable=True)
+    detalhes_conferencia = db.Column(db.JSON, nullable=True)
+
     # Auditoria
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)

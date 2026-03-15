@@ -676,6 +676,67 @@ def register_api_routes(bp):
             logger.error(f"Erro ao gerar DACTE para subcontrato {subcontrato_id}: {e}")
             return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
 
+    # ------------------------------------------------------------------
+    # Conferencia de CTe Subcontratado
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/conferencia-subcontrato/<int:sub_id>/calcular', methods=['POST'])
+    @login_required
+    def api_calcular_conferencia(sub_id):
+        """Calcula todas as opcoes de frete para conferencia de um subcontrato."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.services.conferencia_service import ConferenciaService
+            service = ConferenciaService()
+            resultado = service.calcular_opcoes_conferencia(sub_id)
+            return jsonify(resultado)
+        except Exception as e:
+            logger.error(f"Erro ao calcular conferencia sub {sub_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/conferencia-subcontrato/<int:sub_id>/registrar', methods=['POST'])
+    @login_required
+    def api_registrar_conferencia(sub_id):
+        """Registra conferencia de um subcontrato (APROVADO/DIVERGENTE)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        valor_considerado = data.get('valor_considerado')
+        status = data.get('status', '').strip().upper()
+        observacoes = data.get('observacoes', '').strip() or None
+
+        if valor_considerado is None:
+            return jsonify({'erro': 'valor_considerado e obrigatorio'}), 400
+
+        try:
+            valor_considerado = float(valor_considerado)
+        except (ValueError, TypeError):
+            return jsonify({'erro': 'valor_considerado deve ser numerico'}), 400
+
+        if status not in ('APROVADO', 'DIVERGENTE'):
+            return jsonify({'erro': 'status deve ser APROVADO ou DIVERGENTE'}), 400
+
+        try:
+            from app.carvia.services.conferencia_service import ConferenciaService
+            service = ConferenciaService()
+            resultado = service.registrar_conferencia(
+                subcontrato_id=sub_id,
+                valor_considerado=valor_considerado,
+                status=status,
+                usuario=current_user.email,
+                observacoes=observacoes,
+            )
+            return jsonify(resultado)
+        except Exception as e:
+            logger.error(f"Erro ao registrar conferencia sub {sub_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
     @bp.route('/api/atualizar-cubagem', methods=['POST'])
     @login_required
     def api_atualizar_cubagem():
