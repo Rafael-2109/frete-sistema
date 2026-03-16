@@ -25,9 +25,7 @@ class IdentificacaoDocumento:
     numero_documento: Optional[str] = None
     confianca: float = 0.0  # 0.0 a 1.0
     detalhes: Optional[Dict] = None
-    # Nota: texto_extraido foi removido (commit 969de26f).
-    # O identificador extrai apenas 3 páginas, insuficiente para extractors
-    # que precisam de TODAS as páginas do PDF.
+    texto_extraido: str = ""  # Texto completo de TODAS as paginas, reutilizado pelos extractors
 
 
 class IdentificadorDocumento:
@@ -164,26 +162,43 @@ class IdentificadorDocumento:
                 'confianca_tipo': confianca_tipo,
                 'texto_encontrado': self.texto_primeira_pagina[:500] if self.texto_primeira_pagina else None
             },
+            texto_extraido=self.texto_completo,
         )
 
     def _extrair_texto(self, pdf_path: str):
-        """Extrai texto do PDF usando pdfplumber"""
-        self.texto_completo = ""
+        """Extrai texto de TODAS as paginas do PDF usando pdfplumber.
+
+        O texto completo e armazenado em self.texto_completo para ser
+        reutilizado pelo extractor, eliminando o duplo-open do PDF.
+        Identificacao usa apenas self.texto_primeira_pagina (pagina 0).
+
+        IMPORTANTE: A concatenacao segue o mesmo padrao de
+        base.py:extract_text_with_pdfplumber — pula paginas vazias e
+        junta com "\\n" (sem trailing newline), garantindo que os regex
+        dos extractors recebam texto identico.
+        """
         self.texto_primeira_pagina = ""
+        chunks = []
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
-                # Extrai primeira página para identificação
-                if pdf.pages:
-                    self.texto_primeira_pagina = pdf.pages[0].extract_text() or ""
-
-                # Extrai texto completo (primeiras 3 páginas)
-                for i, page in enumerate(pdf.pages[:3]):
-                    texto = page.extract_text() or ""
-                    self.texto_completo += texto + "\n"
+                for i, page in enumerate(pdf.pages):
+                    texto = page.extract_text()
+                    if texto:
+                        chunks.append(texto)
+                    page.flush_cache()
+                    # GC periodico a cada 20 paginas para PDFs grandes
+                    if i > 0 and i % 20 == 0:
+                        import gc
+                        gc.collect()
+                    # Primeira pagina para identificacao rapida
+                    if i == 0:
+                        self.texto_primeira_pagina = texto or ""
 
         except Exception as e:
             print(f"Erro ao extrair texto do PDF: {e}")
+
+        self.texto_completo = "\n".join(chunks)
 
     def _identificar_rede(self) -> Tuple[str, float]:
         """

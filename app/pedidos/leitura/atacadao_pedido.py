@@ -27,14 +27,15 @@ class AtacadaoPedidoExtractor(PDFExtractor):
         self._clientes_cache = {}  # Cache batch de dados de clientes
         self._odoo_client = None  # Conexão Odoo reutilizada entre filiais
 
-    def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
+    def extract(self, pdf_path: str, texto_pre_extraido: str = None) -> List[Dict[str, Any]]:
         """
         Extrai dados do PDF de Pedido do Atacadão
 
         Args:
             pdf_path: Caminho do arquivo PDF
+            texto_pre_extraido: Texto ja extraido pelo identificador (evita duplo-open)
         """
-        text = self.extract_text_with_pdfplumber(pdf_path)
+        text = self.extract_text_with_pdfplumber(pdf_path, texto_pre_extraido=texto_pre_extraido)
 
         if not text:
             text = self.extract_text_with_pypdf2(pdf_path)

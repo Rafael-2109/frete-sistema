@@ -20,12 +20,13 @@ class PDFExtractor(ABC):
         self.warnings = []
         
     @abstractmethod
-    def extract(self, pdf_path: str) -> List[Dict[str, Any]]:
+    def extract(self, pdf_path: str, texto_pre_extraido: str = None) -> List[Dict[str, Any]]:
         """
         Extrai dados do PDF.
 
         Args:
             pdf_path: Caminho do arquivo PDF
+            texto_pre_extraido: Texto ja extraido pelo identificador (evita duplo-open)
         """
         pass
     
@@ -110,12 +111,18 @@ class PDFExtractor(ABC):
         
         return None
     
-    def extract_text_with_pdfplumber(self, pdf_path: str) -> str:
+    def extract_text_with_pdfplumber(self, pdf_path: str, texto_pre_extraido: str = None) -> str:
         """Extrai texto usando pdfplumber (melhor para tabelas)
+
+        Se texto_pre_extraido for fornecido (ja extraido pelo identificador),
+        retorna diretamente sem reabrir o PDF — elimina duplo-open.
 
         Processa página a página com flush_cache() para liberar memória
         de cada página após extração, evitando pico de RAM em PDFs grandes.
         """
+        if texto_pre_extraido:
+            return texto_pre_extraido
+
         chunks = []
         try:
             with pdfplumber.open(pdf_path) as pdf:

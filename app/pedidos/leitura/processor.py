@@ -108,9 +108,10 @@ class PedidoProcessor:
                 result['errors'].append(f"Formato '{formato}' não suportado")
                 return result
 
-            # Extrai dados
+            # Extrai dados — reutiliza texto do identificador se disponivel (evita duplo-open)
             extractor = extractor_class()
-            data = extractor.extract(file_path)
+            texto_pre = self.identificacao.texto_extraido if self.identificacao else None
+            data = extractor.extract(file_path, texto_pre_extraido=texto_pre)
 
             if not data:
                 result['errors'].append("Nenhum dado foi extraído do PDF")
