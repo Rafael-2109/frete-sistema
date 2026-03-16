@@ -2277,6 +2277,76 @@ def api_retomar_fila_impostos():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/verificar-imposto-odoo', methods=['POST'])
+@login_required
+def api_verificar_imposto_odoo():
+    """Verifica se impostos ja foram calculados no Odoo.
+
+    Se calculados: retorna status 'calculado' (nao reenfileira).
+    Se nao: reenfileira na fila impostos automaticamente.
+    """
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        order_name = data.get('order_name')
+
+        if not order_id:
+            return jsonify({'success': False, 'error': 'order_id obrigatorio'}), 400
+
+        from app.odoo.utils.connection import get_odoo_connection
+        conn = get_odoo_connection()
+        if not conn.authenticate():
+            return jsonify({'success': False, 'error': 'Falha ao conectar com Odoo'}), 500
+
+        order_data = conn.read(
+            'sale.order', [order_id],
+            ['l10n_br_total_tributos', 'l10n_br_cfop_id', 'name']
+        )
+
+        if not order_data:
+            return jsonify({
+                'success': False,
+                'error': f'Pedido {order_id} nao encontrado no Odoo'
+            }), 404
+
+        order = order_data[0]
+        total_tributos = order.get('l10n_br_total_tributos', 0) or 0
+        cfop = order.get('l10n_br_cfop_id')
+
+        if total_tributos > 0 and cfop:
+            cfop_nome = cfop[1] if isinstance(cfop, list) else str(cfop)
+            return jsonify({
+                'success': True,
+                'status': 'calculado',
+                'message': f'Impostos OK no Odoo (tributos: R$ {total_tributos:,.2f}, CFOP: {cfop_nome})',
+                'order_id': order_id,
+                'order_name': order_name or order.get('name'),
+            })
+        else:
+            from app.portal.workers import enqueue_job
+            from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+
+            novo_job = enqueue_job(
+                calcular_impostos_odoo,
+                order_id,
+                order_name,
+                queue_name='impostos',
+                timeout='15m'
+            )
+
+            return jsonify({
+                'success': True,
+                'status': 'reenfileirado',
+                'message': f'Impostos nao encontrados — reenfileirado para calculo',
+                'order_id': order_id,
+                'order_name': order_name,
+                'novo_job_id': novo_job.id,
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # ROTAS API PARA CADASTRO INLINE DE FILIAIS DE-PARA
 # ============================================================================

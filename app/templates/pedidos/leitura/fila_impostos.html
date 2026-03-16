@@ -182,11 +182,12 @@
                                     <th>Finalizado em</th>
                                     <th>Resultado</th>
                                     <th>Tempo</th>
+                                    <th>Acoes</th>
                                 </tr>
                             </thead>
                             <tbody id="tabelaConcluidos">
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
+                                    <td colspan="6" class="text-center text-muted py-4">
                                         <i class="fas fa-spinner fa-spin"></i> Carregando...
                                     </td>
                                 </tr>
@@ -525,7 +526,7 @@ $(document).ready(function() {
         if (!jobs || jobs.length === 0) {
             tbody.append(`
                 <tr>
-                    <td colspan="5" class="text-center text-muted py-4">
+                    <td colspan="6" class="text-center text-muted py-4">
                         <i class="fas fa-inbox"></i> Nenhum job concluido recentemente
                     </td>
                 </tr>
@@ -538,6 +539,12 @@ $(document).ready(function() {
             const resultado = job.resultado || {};
             const tempo = resultado.tempo_segundos ? resultado.tempo_segundos.toFixed(1) + 's' : '-';
             const mensagem = resultado.message || (sucesso ? 'Sucesso' : 'Falha no job');
+            const acoes = sucesso ? '' : `
+                <button class="btn btn-sm btn-outline-primary btn-verificar"
+                    data-order-id="${job.args.order_id}" data-order-name="${job.args.order_name || ''}"
+                    title="Verificar no Odoo">
+                    <i class="fas fa-search"></i> Verificar
+                </button>`;
 
             tbody.append(`
                 <tr class="${sucesso ? '' : 'table-warning'}">
@@ -552,6 +559,7 @@ $(document).ready(function() {
                         <small class="d-block text-muted">${mensagem}</small>
                     </td>
                     <td>${tempo}</td>
+                    <td>${acoes}</td>
                 </tr>
             `);
         });
@@ -585,7 +593,12 @@ $(document).ready(function() {
                         <small class="d-block text-danger">${erroResumido}${job.erro && job.erro.length > 100 ? '...' : ''}</small>
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-warning btn-reprocessar" data-job-id="${job.id}" title="Reprocessar">
+                        <button class="btn btn-sm btn-outline-primary btn-verificar me-1"
+                            data-order-id="${job.args.order_id}" data-order-name="${job.args.order_name || ''}"
+                            title="Verificar no Odoo">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="btn btn-sm btn-warning btn-reprocessar" data-job-id="${job.id}" title="Forcar recalculo">
                             <i class="fas fa-redo"></i>
                         </button>
                     </td>
@@ -605,6 +618,57 @@ $(document).ready(function() {
             second: '2-digit'
         });
     }
+
+    // Evento de verificar no Odoo
+    $(document).on('click', '.btn-verificar', function() {
+        const btn = $(this);
+        const orderId = btn.data('order-id');
+        const orderName = btn.data('order-name');
+        const originalHtml = btn.html();
+        const row = btn.closest('tr');
+
+        btn.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.api_verificar_imposto_odoo") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ order_id: orderId, order_name: orderName }),
+            success: function(response) {
+                if (response.success) {
+                    if (response.status === 'calculado') {
+                        // Impostos OK — trocar linha para verde
+                        row.removeClass('table-danger table-warning');
+                        row.addClass('table-success');
+                        row.find('.badge').removeClass('bg-danger bg-warning text-dark')
+                            .addClass('bg-success')
+                            .html('<i class="fas fa-check"></i> OK no Odoo');
+                        row.find('.badge').siblings('small').text(response.message);
+                        btn.replaceWith('<span class="badge bg-success"><i class="fas fa-check"></i> OK</span>');
+                        // Remover botao reprocessar se existir
+                        row.find('.btn-reprocessar').remove();
+                    } else {
+                        // Reenfileirado
+                        row.removeClass('table-danger table-warning');
+                        row.addClass('table-info');
+                        btn.replaceWith('<span class="badge bg-info"><i class="fas fa-clock"></i> Na fila</span>');
+                        row.find('.btn-reprocessar').remove();
+                        if (typeof toastr !== 'undefined') toastr.info(response.message);
+                    }
+                } else {
+                    btn.html(originalHtml).prop('disabled', false);
+                    if (typeof toastr !== 'undefined') toastr.error(response.error);
+                    else alert(response.error);
+                }
+            },
+            error: function(xhr) {
+                btn.html(originalHtml).prop('disabled', false);
+                const resp = xhr.responseJSON || {};
+                if (typeof toastr !== 'undefined') toastr.error(resp.error || 'Erro ao verificar');
+                else alert(resp.error || 'Erro ao verificar');
+            }
+        });
+    });
 
     // Evento de reprocessar
     $(document).on('click', '.btn-reprocessar', function() {
