@@ -837,10 +837,6 @@ def create_app(config_name=None):
     app.register_blueprint(embarques_bp)
     app.register_blueprint(faturamento_bp)
     app.register_blueprint(atualizar_nf_bp)
-    # Importar e registrar blueprint de faturamentos parciais
-    from app.carteira.api.faturamentos_parciais_api import faturamentos_parciais_bp
-
-    app.register_blueprint(faturamentos_parciais_bp)
 
     app.register_blueprint(localidades_bp)
     app.register_blueprint(main_bp)

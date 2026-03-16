@@ -286,15 +286,42 @@ td[style*="background-color:#198754"] {
     border-bottom: 1px solid var(--border) !important;
 }
 
-/* Success e Danger mantêm cor */
-.card-header.bg-success {
-    background: var(--semantic-success) !important;
-    color: hsl(0 0% 100%) !important;
+/* Success e Danger — neutros (consistência com primary/warning/info/secondary) */
+.card-header.bg-success,
+.card-header.bg-danger {
+    background: var(--bg-light) !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid var(--border) !important;
 }
 
-.card-header.bg-danger {
-    background: var(--semantic-danger) !important;
-    color: hsl(0 0% 100%) !important;
+/* ═══════════════════════════════════════════════════════════════════════════
+   PAGE HEADERS - Sempre neutros
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.page-header {
+    color: var(--text);
+}
+.page-header h1 {
+    color: var(--text);
+}
+.page-header p {
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL HEADERS - Converter cores para neutro
+   Análogo à regra de card-headers acima
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-header.bg-primary,
+.modal-header.bg-info,
+.modal-header.bg-warning,
+.modal-header.bg-secondary,
+.modal-header.bg-success,
+.modal-header.bg-danger {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid var(--border) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -457,20 +484,20 @@ thead.table-dark th.sortable:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   BUTTON PRIMARY - Light mode texto branco para contraste
-   Migrado de bootstrap-theme-override.css
+   BUTTON PRIMARY - Light mode texto escuro para contraste sobre amber
+   WCAG 4.5:1 — hsl(0 0% 10%) sobre amber vs antigo branco (1.6:1)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 [data-bs-theme="light"] .btn-primary,
 [data-theme="light"] .btn-primary {
-    color: hsl(0 0% 100%) !important;
+    color: hsl(0 0% 10%) !important;
 }
 
 [data-bs-theme="light"] .btn-primary:hover,
 [data-theme="light"] .btn-primary:hover,
 [data-bs-theme="light"] .btn-primary:focus,
 [data-theme="light"] .btn-primary:focus {
-    color: hsl(0 0% 100%) !important;
+    color: hsl(0 0% 10%) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

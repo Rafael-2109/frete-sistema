@@ -203,20 +203,7 @@
     overflow-y: auto;
 }
 
-.preview-card .card-header.bg-primary {
-    background: hsl(210, 80%, 50%) !important;
-    color: hsl(0 0% 100%);
-}
-
-.preview-card .card-header.bg-warning {
-    background: var(--amber-50) !important;
-    color: var(--text);
-}
-
-.preview-card .card-header.bg-success {
-    background: var(--semantic-success) !important;
-    color: hsl(0 0% 100%);
-}
+/* card-header.bg-*: cobertos pela regra global em _bootstrap-overrides.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NAV TABS

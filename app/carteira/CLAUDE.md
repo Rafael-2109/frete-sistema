@@ -1,6 +1,6 @@
 # Carteira — Guia de Desenvolvimento
 
-**LOC**: ~22.5K | **Arquivos**: 68 | **Atualizado**: 15/03/2026
+**LOC**: ~17.6K | **Arquivos**: 64 | **Atualizado**: 16/03/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -17,16 +17,15 @@ app/carteira/
   ├── routes/                    # 26 APIs + agrupados.py
   │   └── programacao_em_lote/   # 4 arquivos (Atacadao/Sendas)
   ├── services/                  # 4 services (agrupamento, mapa, importacao, atualizacao)
-  ├── utils/                     # 4 helpers (separacao, workspace, formatters, helpers)
-  ├── api/                       # faturamentos_parciais_api.py
+  ├── utils/                     # 3 helpers (separacao, workspace, formatters)
   ├── models.py                  # 7 models (703 linhas)
   ├── models_alertas.py          # AlertaSeparacaoCotada
   ├── models_adapter_presep.py   # Adapter PreSeparacaoItem -> Separacao
-  └── main_routes.py             # OBSOLETO — NAO usar
+  └── main_routes.py             # Apenas dashboard index() — NAO adicionar novas rotas
 ```
 
-**Templates**: 14 HTML (8.5K LOC) em `app/templates/carteira/`
-**JavaScript**: 21 arquivos (14.7K LOC) em `app/templates/carteira/js/`
+**Templates**: 13 HTML em `app/templates/carteira/`
+**JavaScript**: 21 arquivos em `app/templates/carteira/js/`
 **CSS**: `app/static/css/modules/_carteira.css` + `carteira/carteira-simples.css`
 
 ---
@@ -38,8 +37,8 @@ app/carteira/
 `separacao_lote_id` foram REMOVIDOS de CarteiraPrincipal. Dados vem APENAS de `Separacao`.
 Usar `agrupamento_service.py` que enriquece via batch queries.
 
-### R2: main_routes.py e OBSOLETO
-546 linhas legadas. NUNCA adicionar codigo em `main_routes.py`.
+### R2: main_routes.py contem apenas dashboard index()
+189 linhas (limpo na Fase 3). NUNCA adicionar novas rotas em `main_routes.py`.
 Novas rotas: criar arquivo em `routes/` e registrar em `routes/__init__.py`.
 
 ### R3: PreSeparacaoItem e um Adapter
@@ -92,7 +91,7 @@ headers: { 'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || 
 | SaldoStandby | `saldo_standby` | Filtra pedido INTEIRO da agrupada quando status IN ('ATIVO','BLOQ. COML.','SALDO') |
 | TipoCarga | `tipo_carga` | FK `separacao_lote_id`. Tipos: TOTAL/PARCIAL/COMPLEMENTAR/STANDBY |
 | PreSeparacaoItem | _(adapter)_ | NAO e tabela real — usa Separacao com status='PREVISAO' (R3) |
-| FaturamentoParcialJustificativa | `faturamento_parcial_justificativa` | Motivos: RUPTURA_ESTOQUE, AVARIA, ERRO_SEPARACAO, etc. |
+| FaturamentoParcialJustificativa | `faturamento_parcial_justificativa` | Model existe em models.py mas API/tela removidos (Fase 3) |
 | ControleCruzadoSeparacao | `controle_cruzado_separacao` | Detecta diferencas separacao <-> faturamento |
 
 ---
@@ -126,7 +125,7 @@ Adicionar novo campo: incluir na query base, no batch loading se necessario, e n
 
 | Exporta para | O que | Cuidado |
 |-------------|-------|---------|
-| `app/templates/carteira/` | Templates Jinja2 | 14 telas + 21 JS files |
+| `app/templates/carteira/` | Templates Jinja2 | 13 telas + 21 JS files |
 | `app/odoo/jobs/` | CarteiraPrincipal model | Sincronizacao incremental importa model |
 
 ---

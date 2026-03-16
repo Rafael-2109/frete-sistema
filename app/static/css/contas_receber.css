@@ -548,49 +548,7 @@ input[type="date"] {
     border-bottom-color: var(--border);
 }
 
-/* Para modal headers com classes Bootstrap de cor - Usar cores do DESIGN SYSTEM */
-/* NÃO usar cores genéricas Bootstrap - usar paleta financeira única */
-.modal-header.bg-primary {
-    background: linear-gradient(135deg, var(--bs-primary), var(--bs-info)) !important;
-    border-bottom-color: rgba(0, 0, 0, 0.2);
-}
-
-.modal-header.bg-success {
-    background: linear-gradient(135deg, var(--bs-success), var(--semantic-success)) !important;
-    border-bottom-color: rgba(0, 0, 0, 0.2);
-}
-
-.modal-header.bg-danger {
-    background: linear-gradient(135deg, var(--bs-danger), var(--semantic-danger)) !important;
-    border-bottom-color: rgba(0, 0, 0, 0.2);
-}
-
-.modal-header.bg-warning {
-    background: linear-gradient(135deg, var(--bs-warning), var(--semantic-warning)) !important;
-    border-bottom-color: rgba(0, 0, 0, 0.2);
-}
-
-.modal-header.bg-info {
-    background: linear-gradient(135deg, var(--bs-info), var(--semantic-info)) !important;
-    border-bottom-color: rgba(0, 0, 0, 0.2);
-}
-
-/* Texto branco em headers coloridos - garantir visibilidade */
-.modal-header.bg-primary .modal-title,
-.modal-header.bg-success .modal-title,
-.modal-header.bg-danger .modal-title,
-.modal-header.bg-info .modal-title {
-    color: hsl(0 0% 100%) !important;
-}
-
-/* Botão close em headers coloridos - branco */
-.modal-header.bg-primary .btn-close,
-.modal-header.bg-success .btn-close,
-.modal-header.bg-danger .btn-close,
-.modal-header.bg-info .btn-close {
-    filter: brightness(0) invert(1);
-    opacity: 0.8;
-}
+/* modal-header.bg-*: cobertos pela regra global em _bootstrap-overrides.css */
 
 .modal-title {
     color: var(--text);

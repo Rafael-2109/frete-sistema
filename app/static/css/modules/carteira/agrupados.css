@@ -764,12 +764,7 @@ td .badge-incoterm-red,
     border-color: var(--border-default);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   CARD HEADER PRIMARY - Com suporte a tema
-   ═══════════════════════════════════════════════════════════════════════════ */
-.table-section .card-header.bg-primary {
-    background: var(--cart-dropdown-header-bg);
-}
+/* card-header.bg-primary: coberto pela regra global em _bootstrap-overrides.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    UTILITARIOS DE TEXTO COM TEMA
@@ -1085,27 +1080,7 @@ tr.table-success > td,
     color: var(--text-primary);
 }
 
-[data-bs-theme="dark"] .modal .card-header.bg-info,
-[data-bs-theme="dark"] .modal .card-header.bg-success,
-[data-bs-theme="dark"] .modal .card-header.bg-warning,
-[data-bs-theme="dark"] .modal .card-header.bg-danger,
-[data-bs-theme="dark"] .modal .card-header.bg-primary,
-[data-bs-theme="dark"] .modal .card-header.bg-secondary,
-[data-bs-theme="dark"] .modal .card-header.bg-dark,
-[data-theme="dark"] .modal .card-header.bg-info,
-[data-theme="dark"] .modal .card-header.bg-success,
-[data-theme="dark"] .modal .card-header.bg-warning,
-[data-theme="dark"] .modal .card-header.bg-danger,
-[data-theme="dark"] .modal .card-header.bg-primary,
-[data-theme="dark"] .modal .card-header.bg-secondary,
-[data-theme="dark"] .modal .card-header.bg-dark {
-    border-color: transparent;
-}
-
-[data-bs-theme="dark"] .modal .card-header.bg-warning,
-[data-theme="dark"] .modal .card-header.bg-warning {
-    color: var(--gray-10);
-}
+/* modal .card-header.bg-*: cobertos pela regra global em _bootstrap-overrides.css */
 
 [data-bs-theme="dark"] .modal .form-control,
 [data-bs-theme="dark"] .modal .form-select,
