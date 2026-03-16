@@ -3,7 +3,6 @@ from app import db
 from app.utils.timezone import agora_utc_naive
 from sqlalchemy import Index, func
 import logging
-import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -570,93 +569,6 @@ class PreSeparacaoItem(db.Model):
     
     def __repr__(self):
         return f'<PreSeparacaoItem {self.num_pedido}-{self.cod_produto}: {self.qtd_selecionada_usuario}/{self.qtd_original_carteira}>'
-    
-    # ===== PROPERTIES CALCULADAS =====
-    
-    @property
-    def valor_selecionado(self):
-        """Valor da quantidade selecionada"""
-        if self.valor_original_item and self.qtd_original_carteira:
-            return (float(self.qtd_selecionada_usuario) / float(self.qtd_original_carteira)) * float(self.valor_original_item)
-        return 0
-    
-    @property 
-    def valor_restante(self):
-        """Valor da quantidade restante"""
-        if self.valor_original_item and self.qtd_original_carteira:
-            return (float(self.qtd_restante_calculada) / float(self.qtd_original_carteira)) * float(self.valor_original_item)
-        return 0
-        
-    @property
-    def peso_selecionado(self):
-        """Peso da quantidade selecionada"""
-        if self.peso_original_item and self.qtd_original_carteira:
-            return (float(self.qtd_selecionada_usuario) / float(self.qtd_original_carteira)) * float(self.peso_original_item)
-        return 0
-        
-    @property
-    def percentual_selecionado(self):
-        """Percentual selecionado do total"""
-        if self.qtd_original_carteira:
-            return (float(self.qtd_selecionada_usuario) / float(self.qtd_original_carteira)) * 100
-        return 0
-    
-    # ===== MÉTODOS DE NEGÓCIO =====
-    
-    def gerar_hash_item(self, carteira_item):
-        """Gera hash do item para detectar mudanças"""
-        dados = f"{carteira_item.num_pedido}|{carteira_item.cod_produto}|{carteira_item.qtd_saldo_produto_pedido}|{carteira_item.preco_produto_pedido}"
-        return hashlib.md5(dados.encode()).hexdigest()
-    
-    def validar_quantidades(self):
-        """Valida se quantidades são consistentes"""
-        if float(self.qtd_selecionada_usuario) > float(self.qtd_original_carteira):
-            raise ValueError("Quantidade selecionada não pode ser maior que a original")
-        
-        if float(self.qtd_restante_calculada) != (float(self.qtd_original_carteira) - float(self.qtd_selecionada_usuario)):
-            self.qtd_restante_calculada = float(self.qtd_original_carteira) - float(self.qtd_selecionada_usuario)
-    
-    def marcar_como_recomposto(self, usuario):
-        """Marca item como recomposto após sincronização Odoo"""
-        self.recomposto = True
-        self.data_recomposicao = agora_utc_naive()
-        self.recomposto_por = usuario
-        # CRÍTICO: NÃO mudar status se já é ENVIADO_SEPARACAO
-        # Items que viraram Separacao devem manter esse status!
-        if self.status != 'ENVIADO_SEPARACAO':
-            self.status = 'RECOMPOSTO'
-    
-    def recompor_na_carteira(self, carteira_item, usuario):
-        """Recompõe divisão na carteira após reimportação Odoo"""
-        try:
-            # Verificar se hash mudou (item foi alterado)
-            novo_hash = self.gerar_hash_item(carteira_item)
-            
-            if self.hash_item_original != novo_hash:
-                logger.warning(f"Item {self.num_pedido}-{self.cod_produto} foi alterado no Odoo")
-            
-            # NÃO criar linha de saldo - manter apenas uma linha por pedido/produto
-            # O saldo disponível será calculado dinamicamente:
-            # saldo_disponivel = qtd_carteira - soma(pre_separacoes) - soma(separacoes)
-            
-            # Aplicar dados editáveis preservados na pré-separação
-            if self.data_expedicao_editada:
-                # Dados ficam na pré-separação, não na carteira
-                logger.info(f"Data expedição preservada na pré-separação: {self.data_expedicao_editada}")
-            if self.data_agendamento_editada:
-                logger.info(f"Data agendamento preservada na pré-separação: {self.data_agendamento_editada}")
-            if self.protocolo_editado:
-                logger.info(f"Protocolo preservado na pré-separação: {self.protocolo_editado}")
-                    
-            # Marcar como recomposto
-            self.marcar_como_recomposto(usuario)
-            
-            logger.info(f"✅ Item {self.num_pedido}-{self.cod_produto} recomposto com sucesso")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao recompor item {self.num_pedido}-{self.cod_produto}: {e}")
-            return False
     
 class CadastroCliente(db.Model):
     """

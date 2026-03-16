@@ -19,7 +19,7 @@ app/carteira/
   ├── services/                  # 4 services (agrupamento, mapa, importacao, atualizacao)
   ├── utils/                     # 4 helpers (separacao, workspace, formatters, helpers)
   ├── api/                       # faturamentos_parciais_api.py
-  ├── models.py                  # 7 models (791 linhas)
+  ├── models.py                  # 7 models (703 linhas)
   ├── models_alertas.py          # AlertaSeparacaoCotada
   ├── models_adapter_presep.py   # Adapter PreSeparacaoItem -> Separacao
   └── main_routes.py             # OBSOLETO — NAO usar
