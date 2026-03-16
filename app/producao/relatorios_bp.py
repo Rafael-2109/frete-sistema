@@ -64,7 +64,8 @@ def exportar_relatorios_producao():
             Separacao.cod_produto,
             func.sum(Separacao.qtd_saldo).label('qtd_separacao')
         ).filter(
-            Separacao.sincronizado_nf == False
+            Separacao.sincronizado_nf == False,
+            Separacao.qtd_saldo > 0
         ).group_by(Separacao.cod_produto).all()
 
         qtd_separacao_dict = {s.cod_produto: float(s.qtd_separacao or 0) for s in separacoes_query}
@@ -73,6 +74,8 @@ def exportar_relatorios_producao():
         carteira_query = db.session.query(
             CarteiraPrincipal.cod_produto,
             func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido).label('qtd_carteira')
+        ).filter(
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).group_by(CarteiraPrincipal.cod_produto).all()
 
         qtd_carteira_dict = {c.cod_produto: float(c.qtd_carteira or 0) for c in carteira_query}
