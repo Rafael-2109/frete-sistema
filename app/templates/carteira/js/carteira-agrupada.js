@@ -3,6 +3,8 @@
  * Gerencia funcionalidades da página de carteira agrupada
  */
 
+const DEBUG = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 class CarteiraAgrupada {
     constructor() {
         this.filtrosAtivos = {
@@ -24,7 +26,7 @@ class CarteiraAgrupada {
     }
 
     init() {
-        console.log('🚀 Inicializando CarteiraAgrupada...');
+        if (DEBUG) console.log('🚀 Inicializando CarteiraAgrupada...');
         this.setupEventListeners();
         this.initWorkspace();
         this.initBadgesFiltros();
@@ -56,7 +58,7 @@ class CarteiraAgrupada {
         // Garantir que o workspace seja criado globalmente
         if (!window.workspace && window.WorkspaceMontagem) {
             window.workspace = new window.WorkspaceMontagem();
-            console.log('✅ Workspace global criado');
+            if (DEBUG) console.log('✅ Workspace global criado');
         } else if (!window.WorkspaceMontagem) {
             console.error('❌ WorkspaceMontagem não encontrado - verifique se o script foi carregado');
         }
@@ -77,7 +79,7 @@ class CarteiraAgrupada {
     }
 
     setupBotoesImportante() {
-        console.log('🔧 Configurando listener de botões importante...');
+        if (DEBUG) console.log('🔧 Configurando listener de botões importante...');
 
         // Usar event delegation no document para garantir prioridade
         document.addEventListener('click', (e) => {
@@ -85,19 +87,19 @@ class CarteiraAgrupada {
             const btnImportante = e.target.closest('.btn-importante');
 
             if (btnImportante) {
-                console.log('✅ Detectado clique em botão importante!');
+                if (DEBUG) console.log('✅ Detectado clique em botão importante!');
                 e.preventDefault();
                 e.stopPropagation();
 
                 const numPedido = btnImportante.dataset.pedido;
-                console.log('📋 Dados do botão:', {
+                if (DEBUG) console.log('📋 Dados do botão:', {
                     numPedido: numPedido,
                     importante: btnImportante.dataset.importante,
                     classes: btnImportante.className
                 });
 
                 if (numPedido) {
-                    console.log('⭐ Chamando toggleImportante para:', numPedido);
+                    if (DEBUG) console.log('⭐ Chamando toggleImportante para:', numPedido);
                     this.toggleImportante(numPedido);
                 } else {
                     console.error('❌ Botão importante sem data-pedido:', btnImportante);
@@ -105,7 +107,7 @@ class CarteiraAgrupada {
             }
         }, true); // ⚠️ CAPTURE PHASE - executa antes de outros listeners
 
-        console.log('✅ Event delegation para botões importante configurado (capture phase)');
+        if (DEBUG) console.log('✅ Event delegation para botões importante configurado (capture phase)');
     }
 
     setupFiltros() {
@@ -156,7 +158,7 @@ class CarteiraAgrupada {
             badge.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('🔍 Badge clicado:', badge.dataset.tipo, badge.dataset.valor);
+                if (DEBUG) console.log('🔍 Badge clicado:', badge.dataset.tipo, badge.dataset.valor);
                 this.toggleBadgeFiltro(badge);
             });
         });
@@ -194,7 +196,7 @@ class CarteiraAgrupada {
             limparImportante.addEventListener('click', () => this.limparFiltroImportante());
         }
 
-        console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.bg-filtro').length);
+        if (DEBUG) console.log('✅ Badges de filtros inicializados. Total de badges:', document.querySelectorAll('.bg-filtro').length);
     }
 
     toggleBadgeFiltro(badge) {
@@ -678,7 +680,7 @@ class CarteiraAgrupada {
             }
         });
 
-        console.log(`🔍 Filtros aplicados: ${totalVisiveis} pedidos visíveis`);
+        if (DEBUG) console.log(`🔍 Filtros aplicados: ${totalVisiveis} pedidos visíveis`);
 
         // Atualizar contador de pedidos
         this.atualizarContador(totalVisiveis);
@@ -762,7 +764,7 @@ class CarteiraAgrupada {
                 this.expandirDetalhes(numPedido, detalhesRow, icon);
             }
         });
-        console.log('📖 Todos os pedidos expandidos');
+        if (DEBUG) console.log('📖 Todos os pedidos expandidos');
     }
 
     colapsarTodos() {
@@ -773,7 +775,7 @@ class CarteiraAgrupada {
 
             this.colapsarDetalhes(detalhesRow, icon);
         });
-        console.log('📖 Todos os pedidos colapsados');
+        if (DEBUG) console.log('📖 Todos os pedidos colapsados');
     }
 
     // 🎯 DETALHES DOS PEDIDOS
@@ -806,7 +808,7 @@ class CarteiraAgrupada {
         if (contentDiv && (!contentDiv.innerHTML.trim() || contentDiv.style.display === 'none')) {
             // Chamar workspace diretamente
             if (window.workspace && window.workspace.abrirWorkspace) {
-                console.log(`🚀 Abrindo workspace para pedido ${numPedido}`);
+                if (DEBUG) console.log(`🚀 Abrindo workspace para pedido ${numPedido}`);
                 window.workspace.abrirWorkspace(numPedido);
             } else {
                 console.error('❌ WorkspaceMontagem não está disponível');
@@ -857,7 +859,7 @@ class CarteiraAgrupada {
      * 🆕 CANCELAR TODAS AS REQUISIÇÕES ASSÍNCRONAS
      */
     cancelarTodasRequisicoes() {
-        console.log(`🚫 Cancelando ${this.abortControllers.size} requisições assíncronas...`);
+        if (DEBUG) console.log(`🚫 Cancelando ${this.abortControllers.size} requisições assíncronas...`);
         this.abortControllers.forEach((controller) => {
             controller.abort();
         });
@@ -867,7 +869,7 @@ class CarteiraAgrupada {
         if (window.workspace && window.workspace.abortControllerEstoque) {
             window.workspace.abortControllerEstoque.abort();
             window.workspace.abortControllerEstoque = null;
-            console.log(`✔️ Carregamento de estoque do workspace cancelado`);
+            if (DEBUG) console.log(`✔️ Carregamento de estoque do workspace cancelado`);
         }
     }
 
@@ -910,7 +912,7 @@ class CarteiraAgrupada {
                 const data = await response.json();
 
                 // LOG DE DEBUG: Verificar resposta completa da API
-                console.log('🔍 DEBUG API Response (carregarSeparacoesEmLoteUnico):', data);
+                if (DEBUG) console.log('🔍 DEBUG API Response (carregarSeparacoesEmLoteUnico):', data);
 
                 if (data.success && data.pedidos) {
                     // Salvar no cache
@@ -918,9 +920,9 @@ class CarteiraAgrupada {
                         const separacoes = data.pedidos[numPedido];
 
                         // LOG DE DEBUG: Verificar estrutura de cada separação
-                        console.log(`📦 DEBUG - Pedido ${numPedido} - Separações da API:`, separacoes);
+                        if (DEBUG) console.log(`📦 DEBUG - Pedido ${numPedido} - Separações da API:`, separacoes);
                         if (separacoes && separacoes.length > 0) {
-                            console.log(`📅 DEBUG - Primeira separação tem expedição? ${separacoes[0].expedicao}, agendamento? ${separacoes[0].agendamento}`);
+                            if (DEBUG) console.log(`📅 DEBUG - Primeira separação tem expedição? ${separacoes[0].expedicao}, agendamento? ${separacoes[0].agendamento}`);
                         }
 
                         window.separacoesCompactasCache[numPedido] = separacoes;
@@ -937,7 +939,7 @@ class CarteiraAgrupada {
                         }
                     });
 
-                    console.log(`✅ Carregado: ${Object.keys(data.pedidos).length} pedidos`);
+                    if (DEBUG) console.log(`✅ Carregado: ${Object.keys(data.pedidos).length} pedidos`);
 
                     // Atualizar contador
                     this.atualizarContadorProtocolos();
@@ -959,14 +961,14 @@ class CarteiraAgrupada {
         if (!container) return;
 
         // Log de debug para verificar estrutura do cache
-        console.log(`📊 Dados do cache para pedido ${numPedido}:`, separacoes);
+        if (DEBUG) console.log(`📊 Dados do cache para pedido ${numPedido}:`, separacoes);
 
         // Converter formato do cache para o formato esperado por renderizarSeparacoesCompactas
         const separacoesData = {
             success: true,
             separacoes: separacoes.map(sep => {
                 // Log de debug para cada separação
-                console.log(`📅 Mapeando separação - expedição: ${sep.expedicao}, agendamento: ${sep.agendamento}`);
+                if (DEBUG) console.log(`📅 Mapeando separação - expedição: ${sep.expedicao}, agendamento: ${sep.agendamento}`);
 
                 return {
                     separacao_lote_id: sep.lote_id,
@@ -992,7 +994,7 @@ class CarteiraAgrupada {
      * 🆕 CARREGAR TODAS AS SEPARAÇÕES COMPACTAS
      */
     async carregarTodasSeparacoesCompactas() {
-        console.log('📦 Carregando separações compactas para TODOS os pedidos...');
+        if (DEBUG) console.log('📦 Carregando separações compactas para TODOS os pedidos...');
 
         // Buscar todos os pedidos na página
         const todosPedidos = [];
@@ -1028,11 +1030,11 @@ class CarteiraAgrupada {
         });
 
         if (pedidosParaCarregar.length === 0) {
-            console.log('✅ Todas as separações já estão em cache');
+            if (DEBUG) console.log('✅ Todas as separações já estão em cache');
             return;
         }
 
-        console.log(`📦 Carregando separações em LOTE para ${pedidosParaCarregar.length} pedidos...`);
+        if (DEBUG) console.log(`📦 Carregando separações em LOTE para ${pedidosParaCarregar.length} pedidos...`);
 
         // Inicializar cache se não existir
         if (!window.separacoesCompactasCache) {
@@ -1061,7 +1063,7 @@ class CarteiraAgrupada {
                     const data = await response.json();
 
                     // LOG DE DEBUG: Verificar resposta completa da API
-                    console.log('🔍 DEBUG API Response (carregarSeparacoesEmLote):', data);
+                    if (DEBUG) console.log('🔍 DEBUG API Response (carregarSeparacoesEmLote):', data);
 
                     if (data.success && data.pedidos) {
                         // Salvar no cache E renderizar
@@ -1069,9 +1071,9 @@ class CarteiraAgrupada {
                             const separacoes = data.pedidos[numPedido];
 
                             // LOG DE DEBUG: Verificar estrutura de cada separação
-                            console.log(`📦 DEBUG - Pedido ${numPedido} - Separações da API:`, separacoes);
+                            if (DEBUG) console.log(`📦 DEBUG - Pedido ${numPedido} - Separações da API:`, separacoes);
                             if (separacoes && separacoes.length > 0) {
-                                console.log(`📅 DEBUG - Primeira separação tem expedição? ${separacoes[0].expedicao}, agendamento? ${separacoes[0].agendamento}`);
+                                if (DEBUG) console.log(`📅 DEBUG - Primeira separação tem expedição? ${separacoes[0].expedicao}, agendamento? ${separacoes[0].agendamento}`);
                             }
 
                             window.separacoesCompactasCache[numPedido] = separacoes;
@@ -1088,9 +1090,9 @@ class CarteiraAgrupada {
                             }
                         });
 
-                        console.log(`✅ Lote ${Math.floor(i / tamanhoLote) + 1}: ${Object.keys(data.pedidos).length} pedidos carregados`);
-                        console.log(`   📊 Total separações: ${data.totais.total_separacoes}`);
-                        console.log(`   🔖 Protocolos pendentes: ${data.totais.protocolos_unicos_pendentes}`);
+                        if (DEBUG) console.log(`✅ Lote ${Math.floor(i / tamanhoLote) + 1}: ${Object.keys(data.pedidos).length} pedidos carregados`);
+                        if (DEBUG) console.log(`   📊 Total separações: ${data.totais.total_separacoes}`);
+                        if (DEBUG) console.log(`   🔖 Protocolos pendentes: ${data.totais.protocolos_unicos_pendentes}`);
                     }
                 } else {
                     console.error(`❌ Erro ao carregar lote ${Math.floor(i / tamanhoLote) + 1}`);
@@ -1251,7 +1253,7 @@ class CarteiraAgrupada {
      */
     async carregarEstoqueAssincrono(numPedido, itens) {
         try {
-            console.log(`📊 Carregando estoque assíncrono para pedido ${numPedido}`);
+            if (DEBUG) console.log(`📊 Carregando estoque assíncrono para pedido ${numPedido}`);
 
             // Mostrar loading
             const loadingSpinner = document.getElementById(`loading-estoque-${numPedido}`);
@@ -1331,8 +1333,8 @@ class CarteiraAgrupada {
      * 🆕 FUNÇÕES AUXILIARES PARA BOTÕES
      */
     async abrirModalDatas(loteId, isSeparacao, expedicao, agendamento, protocolo, agendamentoConfirmado) {
-        console.log(`📅 Abrindo modal de datas para ${loteId} (Separação: ${isSeparacao})`);
-        console.log(`   Dados: expedição=${expedicao}, agendamento=${agendamento}, protocolo=${protocolo}, confirmado=${agendamentoConfirmado}`);
+        if (DEBUG) console.log(`📅 Abrindo modal de datas para ${loteId} (Separação: ${isSeparacao})`);
+        if (DEBUG) console.log(`   Dados: expedição=${expedicao}, agendamento=${agendamento}, protocolo=${protocolo}, confirmado=${agendamentoConfirmado}`);
 
         // Redirecionar para workspace se disponível
         if (window.workspace) {
@@ -1352,7 +1354,7 @@ class CarteiraAgrupada {
     }
 
     async alterarStatusSeparacao(loteId, novoStatus) {
-        console.log(`🔄 Alterando status da separação ${loteId} para ${novoStatus}`);
+        if (DEBUG) console.log(`🔄 Alterando status da separação ${loteId} para ${novoStatus}`);
 
         try {
             // Buscar dados da separação para verificar se tem agendamento
@@ -1369,7 +1371,7 @@ class CarteiraAgrupada {
 
                 // 🆕 Se houver data de agendamento e mudando para ABERTO, agendar automaticamente no portal
                 if (novoStatus === 'ABERTO' && dadosSeparacao && dadosSeparacao.agendamento && !dadosSeparacao.protocolo) {
-                    console.log('🤖 Agendando automaticamente no portal após confirmação...');
+                    if (DEBUG) console.log('🤖 Agendando automaticamente no portal após confirmação...');
                     setTimeout(() => {
                         this.agendarNoPortal(loteId, dadosSeparacao.agendamento);
                     }, 2000); // Aguardar 2 segundos após confirmação
@@ -1389,7 +1391,7 @@ class CarteiraAgrupada {
                     if (confirmResponse.ok) {
                         // 🆕 Agendar automaticamente se tiver data de agendamento
                         if (dadosSeparacao && dadosSeparacao.agendamento && !dadosSeparacao.protocolo) {
-                            console.log('🤖 Agendando automaticamente no portal após confirmação...');
+                            if (DEBUG) console.log('🤖 Agendando automaticamente no portal após confirmação...');
                             setTimeout(() => {
                                 this.agendarNoPortal(loteId, dadosSeparacao.agendamento);
                             }, 2000);
@@ -1425,7 +1427,7 @@ class CarteiraAgrupada {
      * Delega para o separacaoManager que já tem toda a lógica
      */
     async excluirSeparacao(loteId) {
-        console.log(`🗑️ Excluindo separação ${loteId}`);
+        if (DEBUG) console.log(`🗑️ Excluindo separação ${loteId}`);
 
         // Usar separacaoManager se disponivel
         if (window.separacaoManager && typeof window.separacaoManager.excluirSeparacao === 'function') {
@@ -1536,7 +1538,7 @@ class CarteiraAgrupada {
             // Converter Map para Array
             const protocolosParaVerificar = Array.from(protocolosUnicos.values());
 
-            console.log(`📊 Protocolos únicos encontrados para verificar: ${protocolosParaVerificar.length}`);
+            if (DEBUG) console.log(`📊 Protocolos únicos encontrados para verificar: ${protocolosParaVerificar.length}`);
 
             if (protocolosParaVerificar.length === 0) {
                 Swal.fire({
@@ -1646,7 +1648,7 @@ class CarteiraAgrupada {
 
                     // Se completou, mostrar resultado
                     if (data.status === 'completed') {
-                        console.log('✅ Verificação concluída:', data.resultados);
+                        if (DEBUG) console.log('✅ Verificação concluída:', data.resultados);
 
                         // Recarregar página para mostrar atualizações
                         if (data.atualizados > 0) {
@@ -1667,7 +1669,7 @@ class CarteiraAgrupada {
                     }
                 } else if (data.status === 'processing') {
                     // Atualizar progresso se disponível
-                    console.log(`🔄 Processando... ${data.processados}/${data.total}`);
+                    if (DEBUG) console.log(`🔄 Processando... ${data.processados}/${data.total}`);
                 }
             } catch (error) {
                 console.error('Erro no polling:', error);
@@ -1688,7 +1690,7 @@ class CarteiraAgrupada {
             '.pedido-row:not([style*="display: none"])'
         );
 
-        console.log(`🔍 DEBUG: Total de pedidos visíveis: ${pedidosVisiveis.length}`);
+        if (DEBUG) console.log(`🔍 DEBUG: Total de pedidos visíveis: ${pedidosVisiveis.length}`);
 
         let debugPedidosComProtocolo = 0;
         let debugPedidosSemProtocolo = 0;
@@ -1739,7 +1741,7 @@ class CarteiraAgrupada {
 
         const totalProtocolosUnicos = protocolosUnicos.size;
 
-        console.log(`📊 DEBUG Contadores (SEPARAÇÕES):
+        if (DEBUG) console.log(`📊 DEBUG Contadores (SEPARAÇÕES):
             - Pedidos visíveis: ${pedidosVisiveis.length}
             - Pedidos com protocolo: ${debugPedidosComProtocolo}
             - Pedidos sem protocolo: ${debugPedidosSemProtocolo}
@@ -1913,7 +1915,7 @@ class CarteiraAgrupada {
 
                     // Se completou, mostrar resultado detalhado
                     if (data.status === 'completed') {
-                        console.log('✅ Verificação de todos protocolos concluída');
+                        if (DEBUG) console.log('✅ Verificação de todos protocolos concluída');
 
                         // Preparar HTML com lista de alterações
                         let alteracoesHtml = '';
@@ -2104,7 +2106,7 @@ class CarteiraAgrupada {
 
                 // Reagendar para 2 segundos depois
                 setTimeout(() => {
-                    console.log('▶️ Retomando carregamentos');
+                    if (DEBUG) console.log('▶️ Retomando carregamentos');
                     this.pausadoPorBotao = false;
 
                     // Processar fila de estoque com prioridade alta primeiro
@@ -2127,7 +2129,7 @@ class CarteiraAgrupada {
 
     // Método para atualizar dados de uma separação compacta sem re-renderizar
     atualizarSeparacaoCompacta(loteId, dadosAtualizados) {
-        console.log(`🔄 Atualizando separação compacta ${loteId}`);
+        if (DEBUG) console.log(`🔄 Atualizando separação compacta ${loteId}`);
 
         // Atualizar dados na memória
         if (this.separacoesPorPedido) {
@@ -2139,7 +2141,7 @@ class CarteiraAgrupada {
                     if (dadosAtualizados.agendamento !== undefined) sep.agendamento = dadosAtualizados.agendamento;
                     if (dadosAtualizados.protocolo !== undefined) sep.protocolo = dadosAtualizados.protocolo;
                     if (dadosAtualizados.agendamento_confirmado !== undefined) sep.agendamento_confirmado = dadosAtualizados.agendamento_confirmado;
-                    console.log(`✅ Dados atualizados na memória para ${loteId}`);
+                    if (DEBUG) console.log(`✅ Dados atualizados na memória para ${loteId}`);
                     break;
                 }
             }
@@ -2156,7 +2158,7 @@ class CarteiraAgrupada {
                         if (dadosAtualizados.agendamento !== undefined) sepCompacta.agendamento = dadosAtualizados.agendamento;
                         if (dadosAtualizados.protocolo !== undefined) sepCompacta.protocolo = dadosAtualizados.protocolo;
                         if (dadosAtualizados.agendamento_confirmado !== undefined) sepCompacta.agendamento_confirmado = dadosAtualizados.agendamento_confirmado;
-                        console.log(`✅ Dados atualizados em dadosAgrupados para ${loteId}`);
+                        if (DEBUG) console.log(`✅ Dados atualizados em dadosAgrupados para ${loteId}`);
                         break;
                     }
                 }
@@ -2240,7 +2242,7 @@ class CarteiraAgrupada {
                 window.Notifications.success(data.message);
             }
 
-            console.log(`✅ Importante atualizado: ${numPedido} -> ${data.importante}`);
+            if (DEBUG) console.log(`✅ Importante atualizado: ${numPedido} -> ${data.importante}`);
 
         } catch (error) {
             console.error('Erro ao toggle importante:', error);
@@ -2277,7 +2279,7 @@ class CarteiraAgrupada {
         if (contadorTotal) contadorTotal.textContent = totalImportantes;
         if (contadorSemSep) contadorSemSep.textContent = importantesSemSeparacao;
 
-        console.log(`📊 Contadores importantes: ${importantesSemSeparacao} / ${totalImportantes}`);
+        if (DEBUG) console.log(`📊 Contadores importantes: ${importantesSemSeparacao} / ${totalImportantes}`);
     }
 
     // Toggle do filtro importante (exclusivo mútuo) - CSS controla estilos
@@ -2310,7 +2312,7 @@ class CarteiraAgrupada {
 }
 
 function avaliarEstoques(numPedido) {
-    console.log(`📊 Avaliar estoques do pedido ${numPedido}`);
+    if (DEBUG) console.log(`📊 Avaliar estoques do pedido ${numPedido}`);
 
     // Abrir workspace para visualizar dados de estoque
     const btnExpandir = document.querySelector(`[data-pedido="${numPedido}"].btn-expandir`);
@@ -2348,7 +2350,7 @@ function avaliarEstoques(numPedido) {
 // Função removida - modal de agendamento não é mais necessário
 
 function abrirModalEndereco(numPedido) {
-    console.log(`📍 Abrir modal de endereço do pedido ${numPedido}`);
+    if (DEBUG) console.log(`📍 Abrir modal de endereço do pedido ${numPedido}`);
     if (window.modalEndereco) {
         window.modalEndereco.abrirModalEndereco(numPedido);
     } else {

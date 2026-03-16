@@ -215,11 +215,11 @@ Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de de
 - `app/agente/CLAUDE.md` — ~20.7K LOC, 41 arquivos (+ `services/CLAUDE.md` — 5.8K LOC, 12 arquivos)
 - `app/seguranca/CLAUDE.md` — ~2K LOC, 14 arquivos, 8 templates
 - `app/teams/CLAUDE.md` — ~1.8K LOC, 4 arquivos
+- `app/carteira/CLAUDE.md` — ~29K LOC, 78 arquivos, 14 templates
 
 **Planejados (ainda nao criados):**
 - `app/recebimento/CLAUDE.md` — P0 (maior modulo sem CLAUDE.md)
-- `app/carteira/CLAUDE.md` — P1
-- `app/pallet/CLAUDE.md` — P2
+- `app/pallet/CLAUDE.md` — P1
 
 ---
 
