@@ -29,6 +29,8 @@ FIRE_TIMEOUT = 90       # Timeout para disparar onchange (90s)
 POLL_INTERVAL = 15      # Intervalo entre polls (15s)
 MAX_POLL_TIME = 600     # Tempo máximo de polling (10 min)
 POLL_TIMEOUT = 30       # Timeout para cada poll individual (30s)
+COOLDOWN_ENTRE_CALCULOS = 30  # Pausa entre calculos para Odoo respirar
+MAX_RECONEXOES_POLL = 2       # Maximo de reconexoes durante polling
 
 
 def calcular_impostos_odoo(order_id: int, order_name: str = None):
@@ -125,6 +127,16 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
         if needs_polling:
             elapsed = 0
             poll_count = 0
+            reconexoes = 0
+
+            # Reutilizar conexao: 1 chamada XML-RPC por poll (nao 3)
+            socket.setdefaulttimeout(POLL_TIMEOUT)
+            poll_models = xmlrpc.client.ServerProxy(
+                f'{url}/xmlrpc/2/object',
+                context=ssl_context,
+                allow_none=True
+            )
+            poll_uid = uid  # uid da autenticacao inicial
 
             while elapsed < MAX_POLL_TIME:
                 time.sleep(POLL_INTERVAL)
@@ -132,8 +144,35 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
                 poll_count += 1
 
                 impostos_ok = _verificar_impostos_calculados(
-                    order_id, url, database, username, api_key, ssl_context
+                    order_id, database, poll_uid, api_key, poll_models
                 )
+
+                # None = erro de conexao — reconectar e tentar novamente
+                if impostos_ok is None and reconexoes < MAX_RECONEXOES_POLL:
+                    reconexoes += 1
+                    logger.info(
+                        f"[Job Impostos] {pedido_ref} — reconectando "
+                        f"({reconexoes}/{MAX_RECONEXOES_POLL})..."
+                    )
+                    try:
+                        common_retry = xmlrpc.client.ServerProxy(
+                            f'{url}/xmlrpc/2/common',
+                            context=ssl_context,
+                            allow_none=True
+                        )
+                        poll_uid = common_retry.authenticate(
+                            database, username, api_key, {}
+                        )
+                        poll_models = xmlrpc.client.ServerProxy(
+                            f'{url}/xmlrpc/2/object',
+                            context=ssl_context,
+                            allow_none=True
+                        )
+                    except Exception as e_reconn:
+                        logger.warning(
+                            f"[Job Impostos] Falha ao reconectar: {e_reconn}"
+                        )
+                    continue
 
                 if impostos_ok:
                     tempo_total = (datetime.now() - inicio).total_seconds()
@@ -177,7 +216,18 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
 
 
 def _resultado_sucesso(order_id, order_name, tempo_total, sufixo=''):
-    """Helper para montar resultado de sucesso."""
+    """Helper para montar resultado de sucesso. Inclui cooldown para Odoo respirar."""
+    # Pausa entre calculos para Odoo respirar antes do proximo job
+    try:
+        pedido_ref = order_name or f"ID:{order_id}"
+        logger.info(
+            f"[Job Impostos] {pedido_ref} — aguardando {COOLDOWN_ENTRE_CALCULOS}s "
+            f"para Odoo respirar..."
+        )
+        time.sleep(COOLDOWN_ENTRE_CALCULOS)
+    except Exception:
+        pass  # Nao falhar o job por causa da pausa
+
     return {
         'success': True,
         'order_id': order_id,
@@ -187,34 +237,17 @@ def _resultado_sucesso(order_id, order_name, tempo_total, sufixo=''):
     }
 
 
-def _verificar_impostos_calculados(order_id: int, url: str, database: str,
-                                    username: str, api_key: str, ssl_context) -> bool:
+def _verificar_impostos_calculados(order_id, database, uid, api_key, models_proxy):
     """
     Verifica se os impostos foram calculados no Odoo.
 
-    Usa timeout curto (30s) para não bloquear o polling.
-    Considera calculado se l10n_br_total_tributos > 0 E l10n_br_cfop_id preenchido.
+    Reutiliza models_proxy e uid pre-autenticados (1 chamada XML-RPC por poll).
+    Retorna True (calculado), False (aguardando), ou None (erro de conexao).
     """
     try:
         socket.setdefaulttimeout(POLL_TIMEOUT)
 
-        common = xmlrpc.client.ServerProxy(
-            f'{url}/xmlrpc/2/common',
-            context=ssl_context,
-            allow_none=True
-        )
-        uid = common.authenticate(database, username, api_key, {})
-
-        if not uid:
-            return False
-
-        models = xmlrpc.client.ServerProxy(
-            f'{url}/xmlrpc/2/object',
-            context=ssl_context,
-            allow_none=True
-        )
-
-        order_data = models.execute_kw(
+        order_data = models_proxy.execute_kw(
             database, uid, api_key,
             'sale.order', 'read',
             [[order_id]],
@@ -234,5 +267,10 @@ def _verificar_impostos_calculados(order_id: int, url: str, database: str,
         return bool(total_tributos > 0 and cfop)
 
     except Exception as e:
+        error_str = str(e).lower()
+        # Erros de conexao retornam None para sinalizar reconexao
+        if any(kw in error_str for kw in ('timed out', 'timeout', 'eof', 'connection', 'broken pipe')):
+            logger.warning(f"[Job Impostos] Erro de conexao no poll: {e}")
+            return None
         logger.warning(f"[Job Impostos] Erro ao verificar impostos (poll): {e}")
         return False

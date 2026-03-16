@@ -203,7 +203,9 @@ WORKER_COUNT=${WORKER_CONCURRENCY:-2}
 echo "👷 Configuração do Worker:"
 echo "   Workers paralelos: $WORKER_COUNT"
 echo "   Timeout padrão: 30 minutos"
-echo "   Filas: atacadao, odoo_lancamento, impostos, high, default"
+echo "   Worker 1: todas as filas (impostos exclusivo)"
+echo "   Worker 2+: filas gerais (sem impostos)"
+echo "   Filas: atacadao, odoo_lancamento, impostos, recebimento, high, default"
 echo ""
 
 # Iniciar worker

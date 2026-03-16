@@ -181,12 +181,27 @@ def run_worker(workers, verbose, burst, queues):
 
             from multiprocessing import Process
 
+            # Fila exclusiva: apenas 1 worker processa impostos (evita concorrencia no Odoo)
+            FILA_EXCLUSIVA = 'impostos'
+
             processes = []
             for i in range(workers):
-                p = Process(target=run_single_worker, args=(worker_config, burst))
+                if i == 0:
+                    # Worker 1: todas as filas (incluindo impostos)
+                    config_i = {**worker_config, 'queues': queues_obj}
+                else:
+                    # Workers 2+: todas as filas EXCETO impostos
+                    config_i = {
+                        **worker_config,
+                        'queues': [q for q in queues_obj if q.name != FILA_EXCLUSIVA],
+                    }
+
+                p = Process(target=run_single_worker, args=(config_i, burst))
                 p.start()
                 processes.append(p)
-                logger.info(f"   Worker {i+1} iniciado (PID: {p.pid})")
+
+                filas_worker = [q.name for q in config_i['queues']]
+                logger.info(f"   Worker {i+1} iniciado (PID: {p.pid}) — filas: {filas_worker}")
 
             # Aguardar todos terminarem
             for p in processes:
