@@ -191,6 +191,13 @@
       "unique": false
     },
     {
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "columns": [
+        "numero_nf_solucao"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_nf_solucao_confirmado",
       "columns": [
         "confirmado",
@@ -203,13 +210,6 @@
       "columns": [
         "cnpj_emitente",
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
-      "columns": [
-        "numero_nf_solucao"
       ],
       "unique": false
     },
