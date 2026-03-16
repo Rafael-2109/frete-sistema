@@ -25,6 +25,25 @@
                 <i class="fas fa-file-pdf"></i> DACTE
             </button>
             {% endif %}
+            <!-- Botoes de cotacao -->
+            <button type="button" class="btn btn-outline-info btn-sm" id="btnCotarConferencia" title="Simular cotacao (read-only)">
+                <i class="fas fa-calculator"></i> Conferir Cotacao
+            </button>
+            {% if sub.status == 'PENDENTE' %}
+            <form method="POST" action="{{ url_for('carvia.cotar_subcontrato', sub_id=sub.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success btn-sm"
+                        onclick="return confirm('Aplicar cotacao via tabela de frete?')">
+                    <i class="fas fa-calculator"></i> Cotar
+                </button>
+            </form>
+            {% endif %}
+            {% if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO') %}
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#modalRecotar" title="Recotar subcontrato">
+                <i class="fas fa-redo"></i> Recotar
+            </button>
+            {% endif %}
             <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-file-invoice"></i> Ver CTe CarVia
             </a>
@@ -315,6 +334,110 @@
     {% endif %}
 </div>
 
+    <!-- Card: Resultado da Conferencia de Cotacao -->
+    <div class="card mt-4" id="cardConferenciaCotacao" style="display:none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-calculator"></i> Conferencia de Cotacao</h5>
+            <button type="button" class="btn-close" onclick="document.getElementById('cardConferenciaCotacao').style.display='none'"></button>
+        </div>
+        <div class="card-body">
+            <div id="confLoading" class="text-center py-3">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Calculando...</p>
+            </div>
+            <div id="confResultado" style="display:none;">
+                <div id="confErro" class="alert alert-warning" style="display:none;"></div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Valor CTe</small>
+                        <h5 id="confValorCte">-</h5>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Melhor Cotacao</small>
+                        <h5 class="text-primary" id="confValorCotado">-</h5>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Divergencia (R$)</small>
+                        <h5 id="confDivergenciaValor">-</h5>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Divergencia (%)</small>
+                        <h5 id="confDivergenciaPct">-</h5>
+                    </div>
+                </div>
+                <div id="confDescritivo">
+                    <table class="table table-sm carvia-breakdown-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Componente</th>
+                                <th>Fator</th>
+                                <th>Base</th>
+                                <th class="text-end">Valor (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="confBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Recotar Subcontrato -->
+{% if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO') %}
+<div class="modal fade" id="modalRecotar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formRecotar" method="POST" action="{{ url_for('carvia.recotar_subcontrato', sub_id=sub.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-calculator"></i> Recotar Subcontrato</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="recotarLoading" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Calculando...</p>
+                    </div>
+                    <div id="recotarConteudo" style="display:none;">
+                        <div id="recotarErro" class="alert alert-warning" style="display:none;"></div>
+                        <div id="recotarDescritivo">
+                            <table class="table table-sm carvia-breakdown-table mb-3">
+                                <thead>
+                                    <tr>
+                                        <th>Componente</th>
+                                        <th>Fator</th>
+                                        <th>Base</th>
+                                        <th class="text-end">Valor (R$)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recotarBody"></tbody>
+                            </table>
+                        </div>
+                        <hr>
+                        <div class="row align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Valor para Recotacao (R$)</label>
+                                <input type="text" class="form-control" name="valor_override"
+                                       id="recotarValorOverride" inputmode="decimal"
+                                       placeholder="Edite para usar valor diferente">
+                                <small class="text-muted">Deixe o valor calculado ou edite manualmente</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnConfirmarRecotacao" disabled>
+                        <i class="fas fa-check"></i> Confirmar Recotacao
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {{ modal_admin_excluir(
     entidade_tipo='subcontrato',
     entidade_id=sub.id,
@@ -324,4 +447,130 @@
     ],
     bloqueios=(['Vinculado a fatura transportadora #' ~ sub.fatura_transportadora_id ~ '. Exclua a fatura primeiro.'] if sub.fatura_transportadora_id else [])
 ) }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function formatBRL(valor) {
+    return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor);
+}
+
+function montarDescritivo(bodyEl, descritivo, valorCotado) {
+    bodyEl.innerHTML = '';
+    if (descritivo && descritivo.length > 0) {
+        descritivo.forEach(function(linha) {
+            var tr = document.createElement('tr');
+            var cls = '';
+            if (linha.is_total) cls = 'carvia-breakdown-total';
+            else if (linha.is_subtotal) cls = 'fw-bold';
+            tr.className = cls;
+            tr.innerHTML =
+                '<td>' + linha.componente + '</td>' +
+                '<td>' + (linha.fator || '') + '</td>' +
+                '<td>' + (linha.base || '') + '</td>' +
+                '<td class="text-end valor-col">' + formatBRL(linha.resultado) + '</td>';
+            bodyEl.appendChild(tr);
+        });
+    } else if (valorCotado) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="3">Valor Calculado</td>' +
+            '<td class="text-end valor-col fw-bold">' + formatBRL(valorCotado) + '</td>';
+        bodyEl.appendChild(tr);
+    }
+}
+
+// Conferencia de cotacao (read-only)
+document.getElementById('btnCotarConferencia')?.addEventListener('click', function() {
+    var card = document.getElementById('cardConferenciaCotacao');
+    var loading = document.getElementById('confLoading');
+    var resultado = document.getElementById('confResultado');
+    var erro = document.getElementById('confErro');
+
+    card.style.display = 'block';
+    loading.style.display = 'block';
+    resultado.style.display = 'none';
+    erro.style.display = 'none';
+
+    // Scroll para o card
+    card.scrollIntoView({behavior: 'smooth', block: 'start'});
+
+    fetch('/carvia/api/subcontrato/{{ sub.id }}/simular-recotacao')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loading.style.display = 'none';
+            resultado.style.display = 'block';
+
+            if (!data.sucesso) {
+                erro.style.display = 'block';
+                erro.textContent = data.erro || 'Erro ao calcular';
+                return;
+            }
+
+            document.getElementById('confValorCte').textContent = data.valor_cte ? formatBRL(data.valor_cte) : '-';
+            document.getElementById('confValorCotado').textContent = data.valor_cotado ? formatBRL(data.valor_cotado) : '-';
+
+            if (data.divergencia_valor !== undefined) {
+                var divVal = document.getElementById('confDivergenciaValor');
+                divVal.textContent = formatBRL(data.divergencia_valor);
+                divVal.className = data.divergencia_valor > 0 ? 'text-danger' : 'text-success';
+
+                var divPct = document.getElementById('confDivergenciaPct');
+                divPct.textContent = (data.divergencia_pct || 0).toFixed(1) + '%';
+                divPct.className = data.divergencia_valor > 0 ? 'text-danger' : 'text-success';
+            } else {
+                document.getElementById('confDivergenciaValor').textContent = '-';
+                document.getElementById('confDivergenciaPct').textContent = '-';
+            }
+
+            montarDescritivo(document.getElementById('confBody'), data.descritivo, data.valor_cotado);
+        })
+        .catch(function(err) {
+            loading.style.display = 'none';
+            resultado.style.display = 'block';
+            erro.style.display = 'block';
+            erro.textContent = 'Erro de conexao: ' + err.message;
+        });
+});
+
+// Modal Recotar — carregar simulacao ao abrir
+var modalRecotar = document.getElementById('modalRecotar');
+if (modalRecotar) {
+    modalRecotar.addEventListener('show.bs.modal', function() {
+        var loading = document.getElementById('recotarLoading');
+        var conteudo = document.getElementById('recotarConteudo');
+        var erro = document.getElementById('recotarErro');
+        var btnConfirmar = document.getElementById('btnConfirmarRecotacao');
+
+        loading.style.display = 'block';
+        conteudo.style.display = 'none';
+        erro.style.display = 'none';
+        btnConfirmar.disabled = true;
+
+        fetch('/carvia/api/subcontrato/{{ sub.id }}/simular-recotacao')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                loading.style.display = 'none';
+                conteudo.style.display = 'block';
+
+                if (!data.sucesso) {
+                    erro.style.display = 'block';
+                    erro.textContent = data.erro || 'Erro ao calcular';
+                    return;
+                }
+
+                btnConfirmar.disabled = false;
+                document.getElementById('recotarValorOverride').value =
+                    data.valor_cotado ? data.valor_cotado.toFixed(2).replace('.', ',') : '';
+
+                montarDescritivo(document.getElementById('recotarBody'), data.descritivo, data.valor_cotado);
+            })
+            .catch(function(err) {
+                loading.style.display = 'none';
+                conteudo.style.display = 'block';
+                erro.style.display = 'block';
+                erro.textContent = 'Erro de conexao: ' + err.message;
+            });
+    });
+}
+</script>
 {% endblock %}

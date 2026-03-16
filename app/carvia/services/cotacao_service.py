@@ -89,7 +89,10 @@ class CotacaoService:
         if not transportadora:
             return {'sucesso': False, 'erro': 'Transportadora nao encontrada'}
 
-        peso = float(operacao.peso_utilizado or operacao.peso_bruto or 0)
+        # Fallback defensivo: garantir max(bruto, cubado) mesmo se peso_utilizado stale
+        peso_bruto = float(operacao.peso_bruto or 0)
+        peso_cubado = float(operacao.peso_cubado or 0)
+        peso = max(peso_bruto, peso_cubado)
         valor_mercadoria = float(operacao.valor_mercadoria or 0)
         uf_destino = operacao.uf_destino
         uf_origem = operacao.uf_origem
@@ -262,7 +265,10 @@ class CotacaoService:
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(tabela)
             operacao = db.session.get(CarviaOperacao, operacao_id)
 
-            peso = float(operacao.peso_utilizado or operacao.peso_bruto or 0)
+            # Fallback defensivo: garantir max(bruto, cubado) mesmo se peso_utilizado stale
+            peso_bruto = float(operacao.peso_bruto or 0)
+            peso_cubado = float(operacao.peso_cubado or 0)
+            peso = max(peso_bruto, peso_cubado)
             valor_mercadoria = float(operacao.valor_mercadoria or 0)
 
             # Montar descritivo legivel

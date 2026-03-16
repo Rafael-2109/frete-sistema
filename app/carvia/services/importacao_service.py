@@ -1367,8 +1367,8 @@ class ImportacaoService:
             cte_data_emissao=self._parsear_data_cte(
                 cte_data.get('cte_data_emissao')
             ),
-            valor_cotado=cte_data.get('cte_valor'),
-            status='COTADO',
+            valor_cotado=None,
+            status='PENDENTE',
             criado_por=criado_por,
         )
         db.session.add(sub)

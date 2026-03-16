@@ -3,8 +3,9 @@ Rotas de Importacao CarVia — Upload PDF/XML, parsing, matching
 """
 
 import logging
+import os
 import uuid as uuid_mod
-from flask import render_template, request, flash, redirect, url_for, session
+from flask import render_template, request, flash, redirect, url_for, session, send_file, Response
 from flask_login import login_required, current_user
 
 logger = logging.getLogger(__name__)
@@ -115,8 +116,15 @@ def register_importacao_routes(bp):
         if indice < 0 or indice >= len(items):
             return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
 
-        # Atualizar campo
-        items[indice][campo] = valor
+        # Atualizar campo — suporte a dot-notation (ex: "emitente.cnpj")
+        if '.' in campo:
+            parts = campo.split('.')
+            target = items[indice]
+            for part in parts[:-1]:
+                target = target.setdefault(part, {})
+            target[parts[-1]] = valor
+        else:
+            items[indice][campo] = valor
         resultado[lista_key] = items
 
         # Salvar de volta no Redis com a mesma chave
@@ -249,6 +257,215 @@ def register_importacao_routes(bp):
         )
 
         return {'sucesso': True}
+
+    # ------------------------------------------------------------------ #
+    #  API: Edicao de sub-itens (itens NF, itens fatura)
+    # ------------------------------------------------------------------ #
+
+    @bp.route('/api/importacao/editar-item-detalhe', methods=['POST'])
+    @login_required
+    def api_importacao_editar_item_detalhe():
+        """Edita um campo de um sub-item (ex: itens de NF, itens de fatura)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        tipo = data.get('tipo')  # 'nf' ou 'fatura'
+        indice = data.get('indice')
+        sub_tipo = data.get('sub_tipo')  # 'itens' ou 'itens_detalhe'
+        sub_indice = data.get('sub_indice')
+        campo = data.get('campo')
+        valor = data.get('valor')
+
+        if not all([chave, tipo, indice is not None, sub_tipo, sub_indice is not None, campo]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios faltando.'}, 400
+
+        tipo_key_map = {'nf': 'nfs_parseadas', 'fatura': 'faturas_parseadas'}
+        lista_key = tipo_key_map.get(tipo)
+        if not lista_key:
+            return {'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        items = resultado.get(lista_key, [])
+        if indice < 0 or indice >= len(items):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        sub_items = items[indice].get(sub_tipo, [])
+        if sub_indice < 0 or sub_indice >= len(sub_items):
+            return {'sucesso': False, 'erro': f'Sub-indice {sub_indice} fora do range.'}, 400
+
+        sub_items[sub_indice][campo] = valor
+        items[indice][sub_tipo] = sub_items
+        resultado[lista_key] = items
+
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: {tipo}[{indice}].{sub_tipo}[{sub_indice}].{campo} = {valor!r}"
+        )
+        return {'sucesso': True, 'valor_atualizado': valor}
+
+    @bp.route('/api/importacao/adicionar-item-detalhe', methods=['POST'])
+    @login_required
+    def api_importacao_adicionar_item_detalhe():
+        """Adiciona um sub-item vazio (ex: novo item de NF)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        tipo = data.get('tipo')
+        indice = data.get('indice')
+        sub_tipo = data.get('sub_tipo')
+
+        if not all([chave, tipo, indice is not None, sub_tipo]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios faltando.'}, 400
+
+        tipo_key_map = {'nf': 'nfs_parseadas', 'fatura': 'faturas_parseadas'}
+        lista_key = tipo_key_map.get(tipo)
+        if not lista_key:
+            return {'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        items = resultado.get(lista_key, [])
+        if indice < 0 or indice >= len(items):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        if sub_tipo not in items[indice]:
+            items[indice][sub_tipo] = []
+
+        items[indice][sub_tipo].append({})
+        novo_sub_indice = len(items[indice][sub_tipo]) - 1
+        resultado[lista_key] = items
+
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: adicionou {tipo}[{indice}].{sub_tipo}[{novo_sub_indice}]"
+        )
+        return {'sucesso': True, 'sub_indice': novo_sub_indice}
+
+    @bp.route('/api/importacao/remover-item-detalhe', methods=['POST'])
+    @login_required
+    def api_importacao_remover_item_detalhe():
+        """Remove um sub-item (ex: item de NF)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        tipo = data.get('tipo')
+        indice = data.get('indice')
+        sub_tipo = data.get('sub_tipo')
+        sub_indice = data.get('sub_indice')
+
+        if not all([chave, tipo, indice is not None, sub_tipo, sub_indice is not None]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios faltando.'}, 400
+
+        tipo_key_map = {'nf': 'nfs_parseadas', 'fatura': 'faturas_parseadas'}
+        lista_key = tipo_key_map.get(tipo)
+        if not lista_key:
+            return {'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        items = resultado.get(lista_key, [])
+        if indice < 0 or indice >= len(items):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        sub_items = items[indice].get(sub_tipo, [])
+        if sub_indice < 0 or sub_indice >= len(sub_items):
+            return {'sucesso': False, 'erro': f'Sub-indice {sub_indice} fora do range.'}, 400
+
+        sub_items.pop(sub_indice)
+        items[indice][sub_tipo] = sub_items
+        resultado[lista_key] = items
+
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: removeu {tipo}[{indice}].{sub_tipo}[{sub_indice}]"
+        )
+        return {'sucesso': True, 'restantes': len(sub_items)}
+
+    # ------------------------------------------------------------------ #
+    #  API: Viewer de documento fonte (PDF/XML)
+    # ------------------------------------------------------------------ #
+
+    @bp.route('/api/importacao/documento')
+    @login_required
+    def api_importacao_documento():
+        """Retorna o arquivo PDF/XML original para visualizacao no preview."""
+        chave = request.args.get('importacao_chave')
+        tipo = request.args.get('tipo')  # 'nf', 'cte', 'fatura'
+        indice = request.args.get('indice', type=int)
+
+        if not all([chave, tipo, indice is not None]):
+            return {'sucesso': False, 'erro': 'Parametros obrigatorios: importacao_chave, tipo, indice.'}, 400
+
+        tipo_key_map = {
+            'nf': 'nfs_parseadas',
+            'cte': 'ctes_parseados',
+            'fatura': 'faturas_parseadas',
+        }
+        lista_key = tipo_key_map.get(tipo)
+        if not lista_key:
+            return {'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        items = resultado.get(lista_key, [])
+        if indice < 0 or indice >= len(items):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        item = items[indice]
+
+        # Tentar obter path do documento (varios nomes de campo possíveis)
+        path = (
+            item.get('arquivo_pdf_path')
+            or item.get('arquivo_xml_path')
+            or item.get('cte_xml_path')
+        )
+
+        if not path:
+            return {'sucesso': False, 'erro': 'Documento fonte nao disponivel para este item.'}, 404
+
+        # Se e um path S3 (comeca com http), redirecionar para presigned URL
+        if path.startswith('http'):
+            return redirect(path)
+
+        # Path local — servir arquivo
+        if os.path.exists(path):
+            mimetype = 'application/pdf' if path.lower().endswith('.pdf') else 'text/xml'
+            return send_file(
+                path,
+                mimetype=mimetype,
+                as_attachment=False,
+                download_name=os.path.basename(path),
+            )
+
+        # Tentar via FileStorage (S3)
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_presigned_url(path, expires_in=300)
+            if url:
+                return redirect(url)
+        except Exception as e:
+            logger.warning(f"Falha ao obter presigned URL para {path}: {e}")
+
+        return {'sucesso': False, 'erro': 'Arquivo nao encontrado.'}, 404
 
     # ------------------------------------------------------------------ #
     #  Rotas originais

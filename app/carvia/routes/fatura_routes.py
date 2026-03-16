@@ -1186,3 +1186,150 @@ def register_fatura_routes(bp):
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+    # ==================== VINCULAR/DESVINCULAR OPERACAO ↔ FATURA CLIENTE ====================
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/vincular-operacao', methods=['POST'])
+    @login_required
+    def api_vincular_operacao_fatura_cliente(fatura_id):
+        """Vincula operacao a fatura cliente: status -> FATURADO, seta FK."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao aceita vinculos.'}), 400
+
+        data = request.get_json(silent=True) or {}
+        operacao_id = data.get('operacao_id')
+        if not operacao_id:
+            return jsonify({'sucesso': False, 'erro': 'operacao_id obrigatorio.'}), 400
+
+        try:
+            operacao = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id == operacao_id,
+                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.fatura_cliente_id.is_(None),
+            ).with_for_update().first()
+
+            if not operacao:
+                return jsonify({'sucesso': False, 'erro': 'Operacao nao encontrada ou ja faturada.'}), 400
+
+            operacao.fatura_cliente_id = fatura.id
+            operacao.status = 'FATURADO'
+
+            # Recalcular valor_total da fatura
+            soma = db.session.query(
+                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(CarviaOperacao.fatura_cliente_id == fatura.id).scalar()
+
+            soma_comp = db.session.query(
+                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+            ).filter(CarviaCteComplementar.fatura_cliente_id == fatura.id).scalar()
+
+            fatura.valor_total = (soma or 0) + (soma_comp or 0)
+            db.session.commit()
+
+            logger.info(
+                f"Operacao #{operacao_id} vinculada a fatura cliente #{fatura_id} "
+                f"por {current_user.email}. Valor total: R$ {fatura.valor_total:.2f}"
+            )
+            return jsonify({'sucesso': True, 'valor_total': float(fatura.valor_total or 0)})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao vincular operacao #{operacao_id} a fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/desvincular-operacao/<int:op_id>', methods=['POST'])
+    @login_required
+    def api_desvincular_operacao_fatura_cliente(fatura_id, op_id):
+        """Desvincula operacao de fatura cliente: reverte status, limpa FK."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao permite desvincular.'}), 400
+
+        try:
+            operacao = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id == op_id,
+                CarviaOperacao.fatura_cliente_id == fatura_id,
+            ).with_for_update().first()
+
+            if not operacao:
+                return jsonify({'sucesso': False, 'erro': 'Operacao nao encontrada nesta fatura.'}), 404
+
+            operacao.fatura_cliente_id = None
+            operacao.status = 'CONFIRMADO'
+
+            # Recalcular valor_total
+            soma = db.session.query(
+                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(CarviaOperacao.fatura_cliente_id == fatura.id).scalar()
+
+            soma_comp = db.session.query(
+                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+            ).filter(CarviaCteComplementar.fatura_cliente_id == fatura.id).scalar()
+
+            fatura.valor_total = (soma or 0) + (soma_comp or 0)
+            db.session.commit()
+
+            logger.info(
+                f"Operacao #{op_id} desvinculada de fatura cliente #{fatura_id} "
+                f"por {current_user.email}"
+            )
+            return jsonify({'sucesso': True, 'valor_total': float(fatura.valor_total or 0)})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao desvincular operacao #{op_id} de fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/operacoes-disponiveis-fatura')
+    @login_required
+    def api_operacoes_disponiveis_fatura():
+        """Lista operacoes disponiveis para vincular a fatura cliente (R5)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        busca = request.args.get('busca', '')
+        cnpj_cliente = request.args.get('cnpj_cliente', '')
+
+        query = db.session.query(CarviaOperacao).filter(
+            CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+            CarviaOperacao.fatura_cliente_id.is_(None),
+        )
+
+        if cnpj_cliente:
+            query = query.filter(CarviaOperacao.cnpj_cliente == cnpj_cliente)
+
+        if busca:
+            busca_like = f'%{busca}%'
+            query = query.filter(db.or_(
+                CarviaOperacao.cte_numero.ilike(busca_like),
+                CarviaOperacao.nome_cliente.ilike(busca_like),
+                CarviaOperacao.cidade_destino.ilike(busca_like),
+            ))
+
+        operacoes = query.order_by(CarviaOperacao.criado_em.desc()).limit(50).all()
+
+        return jsonify({
+            'sucesso': True,
+            'operacoes': [{
+                'id': op.id,
+                'cte_numero': op.cte_numero,
+                'nome_cliente': op.nome_cliente,
+                'cnpj_cliente': op.cnpj_cliente,
+                'cte_valor': float(op.cte_valor) if op.cte_valor else None,
+                'status': op.status,
+                'destino': f'{op.cidade_destino}/{op.uf_destino}' if op.cidade_destino else '-',
+            } for op in operacoes],
+        })

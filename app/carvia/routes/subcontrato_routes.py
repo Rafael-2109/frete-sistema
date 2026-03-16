@@ -357,3 +357,144 @@ def register_subcontrato_routes(bp):
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+    # ==================== COTAR SUBCONTRATO ====================
+
+    @bp.route('/subcontratos/<int:sub_id>/cotar', methods=['POST'])
+    @login_required
+    def cotar_subcontrato(sub_id):
+        """Aplica cotacao ao subcontrato (state-mutating: PENDENTE -> COTADO)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            flash('CTe Subcontrato nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_subcontratos'))
+
+        if not sub.transportadora_id:
+            flash('Subcontrato sem transportadora — impossivel cotar.', 'warning')
+            return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+        try:
+            from app.carvia.services.cotacao_service import CotacaoService
+            cotacao = CotacaoService().cotar_subcontrato(
+                operacao_id=sub.operacao_id,
+                transportadora_id=sub.transportadora_id,
+            )
+
+            if cotacao.get('sucesso'):
+                sub.valor_cotado = cotacao['valor_cotado']
+                sub.tabela_frete_id = cotacao.get('tabela_frete_id')
+                if sub.status == 'PENDENTE':
+                    sub.status = 'COTADO'
+                db.session.commit()
+                flash(
+                    f'Cotacao aplicada: R$ {cotacao["valor_cotado"]:.2f}'
+                    + (f' (Tabela: {cotacao.get("tabela_nome", "")})' if cotacao.get('tabela_nome') else ''),
+                    'success',
+                )
+            else:
+                flash(f'Cotacao falhou: {cotacao.get("erro", "desconhecido")}', 'warning')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao cotar subcontrato #{sub_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+    @bp.route('/subcontratos/<int:sub_id>/recotar', methods=['POST'])
+    @login_required
+    def recotar_subcontrato(sub_id):
+        """Recota subcontrato com valor override opcional."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            flash('CTe Subcontrato nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_subcontratos'))
+
+        if sub.status in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
+            flash(f'Subcontrato com status {sub.status} nao pode ser recotado.', 'warning')
+            return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+        try:
+            valor_override_raw = request.form.get('valor_override', '').strip()
+
+            if valor_override_raw:
+                valor_override = float(valor_override_raw.replace('.', '').replace(',', '.'))
+                sub.valor_cotado = valor_override
+                msg = f'Valor recotado manualmente: R$ {valor_override:.2f}'
+            else:
+                from app.carvia.services.cotacao_service import CotacaoService
+                cotacao = CotacaoService().cotar_subcontrato(
+                    operacao_id=sub.operacao_id,
+                    transportadora_id=sub.transportadora_id,
+                )
+                if cotacao.get('sucesso'):
+                    sub.valor_cotado = cotacao['valor_cotado']
+                    sub.tabela_frete_id = cotacao.get('tabela_frete_id')
+                    msg = f'Recotacao: R$ {cotacao["valor_cotado"]:.2f}'
+                else:
+                    flash(f'Recotacao falhou: {cotacao.get("erro", "desconhecido")}', 'warning')
+                    return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+            if sub.status == 'PENDENTE':
+                sub.status = 'COTADO'
+
+            db.session.commit()
+            flash(msg, 'success')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao recotar subcontrato #{sub_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
+
+    @bp.route('/api/subcontrato/<int:sub_id>/simular-recotacao')
+    @login_required
+    def api_simular_recotacao_subcontrato(sub_id):
+        """API read-only: simula cotacao para conferencia (card resultado)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            return {'sucesso': False, 'erro': 'Subcontrato nao encontrado.'}, 404
+
+        if not sub.transportadora_id:
+            return {'sucesso': False, 'erro': 'Subcontrato sem transportadora.'}, 400
+
+        try:
+            from app.carvia.services.cotacao_service import CotacaoService
+            cotacao = CotacaoService().cotar_subcontrato(
+                operacao_id=sub.operacao_id,
+                transportadora_id=sub.transportadora_id,
+            )
+
+            resultado = {
+                'sucesso': cotacao.get('sucesso', False),
+                'valor_cotado': cotacao.get('valor_cotado'),
+                'tabela_nome': cotacao.get('tabela_nome'),
+                'valor_cte': float(sub.cte_valor) if sub.cte_valor else None,
+                'valor_cotado_atual': float(sub.valor_cotado) if sub.valor_cotado else None,
+                'descritivo': cotacao.get('descritivo', []),
+                'erro': cotacao.get('erro'),
+            }
+
+            if resultado['valor_cotado'] and resultado['valor_cte']:
+                diff = resultado['valor_cte'] - resultado['valor_cotado']
+                resultado['divergencia_valor'] = round(diff, 2)
+                if resultado['valor_cotado'] > 0:
+                    resultado['divergencia_pct'] = round((diff / resultado['valor_cotado']) * 100, 1)
+
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro ao simular cotacao subcontrato #{sub_id}: {e}")
+            return {'sucesso': False, 'erro': str(e)}, 500

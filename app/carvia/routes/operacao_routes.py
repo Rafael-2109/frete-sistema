@@ -421,6 +421,19 @@ def register_operacao_routes(bp):
                 operacao.valor_mercadoria = form.valor_mercadoria.data
                 operacao.observacoes = form.observacoes.data
                 operacao.calcular_peso_utilizado()
+
+                # Re-executar auto-cubagem se empresa usa cubagem (R3)
+                try:
+                    from app.carvia.services.moto_recognition_service import MotoRecognitionService
+                    moto_svc = MotoRecognitionService()
+                    if operacao.cnpj_cliente and moto_svc.empresa_usa_cubagem(operacao.cnpj_cliente):
+                        resultado_cub = moto_svc.calcular_peso_cubado_operacao(operacao.id)
+                        if resultado_cub and resultado_cub.get('peso_cubado_total', 0) > 0:
+                            operacao.peso_cubado = resultado_cub['peso_cubado_total']
+                            operacao.calcular_peso_utilizado()
+                except Exception as e_cub:
+                    logger.warning(f"Auto-cubagem falhou na edicao (best-effort): {e_cub}")
+
                 db.session.commit()
                 flash('Operacao atualizada com sucesso.', 'success')
                 return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
@@ -871,6 +884,150 @@ def register_operacao_routes(bp):
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+    # ==================== VINCULAR/DESVINCULAR NFs ====================
+
+    @bp.route('/api/operacao/<int:operacao_id>/vincular-nf', methods=['POST'])
+    @login_required
+    def api_vincular_nf_operacao(operacao_id):
+        """Vincula NF a operacao via junction carvia_operacao_nfs."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            return {'sucesso': False, 'erro': 'Operacao nao encontrada.'}, 404
+
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        nf_id = data.get('nf_id')
+        if not nf_id:
+            return {'sucesso': False, 'erro': 'nf_id obrigatorio.'}, 400
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return {'sucesso': False, 'erro': 'NF nao encontrada.'}, 404
+
+        try:
+            # Verificar duplicata
+            existente = db.session.query(CarviaOperacaoNf).filter_by(
+                operacao_id=operacao_id, nf_id=nf_id
+            ).first()
+            if existente:
+                return {'sucesso': False, 'erro': 'NF ja vinculada a esta operacao.'}, 400
+
+            junction = CarviaOperacaoNf(operacao_id=operacao_id, nf_id=nf_id)
+            db.session.add(junction)
+
+            # Recalcular peso_bruto como soma das NFs
+            nfs_vinculadas = operacao.nfs.all()
+            peso_total = sum(float(n.peso_bruto or 0) for n in nfs_vinculadas) + float(nf.peso_bruto or 0)
+            if peso_total > 0:
+                operacao.peso_bruto = peso_total
+                operacao.calcular_peso_utilizado()
+
+            db.session.commit()
+
+            logger.info(
+                f"NF #{nf_id} vinculada a operacao #{operacao_id} por {current_user.email}"
+            )
+            return {
+                'sucesso': True,
+                'peso_utilizado': float(operacao.peso_utilizado or 0),
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao vincular NF #{nf_id} a operacao #{operacao_id}: {e}")
+            return {'sucesso': False, 'erro': str(e)}, 500
+
+    @bp.route('/api/operacao/<int:operacao_id>/desvincular-nf/<int:nf_id>', methods=['POST'])
+    @login_required
+    def api_desvincular_nf_operacao(operacao_id, nf_id):
+        """Remove vinculo NF<->Operacao."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            return {'sucesso': False, 'erro': 'Operacao nao encontrada.'}, 404
+
+        try:
+            deleted = CarviaOperacaoNf.query.filter_by(
+                operacao_id=operacao_id, nf_id=nf_id
+            ).delete()
+
+            if not deleted:
+                return {'sucesso': False, 'erro': 'Vinculo nao encontrado.'}, 404
+
+            # Recalcular peso_bruto
+            nfs_vinculadas = operacao.nfs.all()
+            peso_total = sum(float(n.peso_bruto or 0) for n in nfs_vinculadas)
+            if peso_total >= 0:
+                operacao.peso_bruto = peso_total if peso_total > 0 else operacao.peso_bruto
+                operacao.calcular_peso_utilizado()
+
+            db.session.commit()
+
+            logger.info(
+                f"NF #{nf_id} desvinculada de operacao #{operacao_id} por {current_user.email}"
+            )
+            return {
+                'sucesso': True,
+                'peso_utilizado': float(operacao.peso_utilizado or 0),
+            }
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao desvincular NF #{nf_id} de operacao #{operacao_id}: {e}")
+            return {'sucesso': False, 'erro': str(e)}, 500
+
+    @bp.route('/api/operacao/<int:operacao_id>/nfs-disponiveis')
+    @login_required
+    def api_nfs_disponiveis(operacao_id):
+        """Lista NFs disponiveis para vinculacao (sem operacao ou do mesmo cliente)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            return {'sucesso': False, 'erro': 'Operacao nao encontrada.'}, 404
+
+        busca = request.args.get('busca', '')
+
+        # NFs que nao estao vinculadas a NENHUMA operacao
+        subq_vinculadas = db.session.query(CarviaOperacaoNf.nf_id)
+        query = db.session.query(CarviaNf).filter(
+            CarviaNf.status == 'ATIVA',
+            ~CarviaNf.id.in_(subq_vinculadas),
+        )
+
+        if busca:
+            busca_like = f'%{busca}%'
+            query = query.filter(
+                db.or_(
+                    CarviaNf.numero_nf.ilike(busca_like),
+                    CarviaNf.nome_emitente.ilike(busca_like),
+                    CarviaNf.cnpj_emitente.ilike(busca_like),
+                )
+            )
+
+        nfs = query.order_by(CarviaNf.criado_em.desc()).limit(50).all()
+
+        return {
+            'sucesso': True,
+            'nfs': [{
+                'id': nf.id,
+                'numero_nf': nf.numero_nf,
+                'nome_emitente': nf.nome_emitente,
+                'cnpj_emitente': nf.cnpj_emitente,
+                'valor_total': float(nf.valor_total) if nf.valor_total else None,
+                'peso_bruto': float(nf.peso_bruto) if nf.peso_bruto else None,
+                'tipo_fonte': nf.tipo_fonte,
+            } for nf in nfs],
+        }
 
     @bp.route('/api/operacao/<int:operacao_id>/subcontrato/<int:sub_id>/simular-recotacao')
     @login_required

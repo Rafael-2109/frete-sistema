@@ -135,7 +135,15 @@
                     </div>
                     {% endif %}
                     <hr>
-                    <h6>CTe CarVia Vinculados: {{ operacoes|length }}</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">CTe CarVia Vinculados: {{ operacoes|length }}</h6>
+                        {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                        <button type="button" class="btn btn-outline-success btn-xs"
+                                data-bs-toggle="modal" data-bs-target="#modalVincularOp">
+                            <i class="fas fa-plus"></i> Vincular
+                        </button>
+                        {% endif %}
+                    </div>
                     <p class="text-muted small mb-0">
                         Soma CTe: R$ {{ "%.2f"|format(operacoes|selectattr('cte_valor')|map(attribute='cte_valor')|sum) }}
                     </p>
@@ -440,6 +448,30 @@
     </div>
 </div>
 
+<!-- Modal: Vincular Operacao a Fatura -->
+{% if fatura.status not in ('PAGA', 'CANCELADA') %}
+<div class="modal fade" id="modalVincularOp" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-link"></i> Vincular CTe CarVia</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="buscaOpVincular"
+                           placeholder="Buscar CTe por numero, cliente ou destino...">
+                </div>
+                <div id="opVincularLoading" class="text-center py-3" style="display:none;">
+                    <div class="spinner-border spinner-border-sm text-primary"></div> Buscando...
+                </div>
+                <div id="opVincularResultados" class="list-group" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {{ modal_admin_excluir(
     entidade_tipo='fatura-cliente',
     entidade_id=fatura.id,
@@ -455,6 +487,10 @@
 
 {% block scripts %}
 <script>
+var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+             || document.querySelector('input[name="csrf_token"]')?.value || '';
+var faturaId = {{ fatura.id }};
+
 function downloadFaturaPdf(faturaId) {
     fetch(`/carvia/api/fatura-cliente/${faturaId}/pdf`)
         .then(r => r.json())
@@ -481,5 +517,75 @@ function downloadFaturaPdf(faturaId) {
         });
     }
 })();
+
+// ─── Vincular Operacao ───
+var buscaOp = document.getElementById('buscaOpVincular');
+var opResultados = document.getElementById('opVincularResultados');
+var opLoading = document.getElementById('opVincularLoading');
+var debounceOp;
+
+if (buscaOp) {
+    document.getElementById('modalVincularOp')?.addEventListener('show.bs.modal', function() {
+        buscarOpsDisponiveis('');
+    });
+
+    buscaOp.addEventListener('input', function() {
+        clearTimeout(debounceOp);
+        debounceOp = setTimeout(function() {
+            buscarOpsDisponiveis(buscaOp.value);
+        }, 300);
+    });
+}
+
+function buscarOpsDisponiveis(busca) {
+    if (!opResultados) return;
+    opLoading.style.display = 'block';
+    opResultados.innerHTML = '';
+
+    var cnpj = '{{ fatura.cnpj_cliente or "" }}';
+    var url = '/carvia/api/operacoes-disponiveis-fatura?busca=' + encodeURIComponent(busca);
+    if (cnpj) url += '&cnpj_cliente=' + encodeURIComponent(cnpj);
+
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            opLoading.style.display = 'none';
+            if (!data.sucesso || !data.operacoes.length) {
+                opResultados.innerHTML = '<div class="text-center text-muted py-3">Nenhuma operacao disponivel.</div>';
+                return;
+            }
+            data.operacoes.forEach(function(op) {
+                var item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'list-group-item list-group-item-action py-2';
+                item.innerHTML =
+                    '<div class="d-flex justify-content-between">' +
+                        '<strong>' + (op.cte_numero || '#' + op.id) + '</strong>' +
+                        '<span>' + (op.cte_valor ? 'R$ ' + op.cte_valor.toFixed(2) : '-') + '</span>' +
+                    '</div>' +
+                    '<small class="text-muted">' + (op.nome_cliente || '-') + ' | ' + (op.destino || '-') +
+                    ' | <span class="badge bg-secondary">' + op.status + '</span></small>';
+                item.addEventListener('click', function() {
+                    vincularOp(op.id, op.cte_numero || '#' + op.id);
+                });
+                opResultados.appendChild(item);
+            });
+        });
+}
+
+function vincularOp(opId, cteNumero) {
+    if (!confirm('Vincular ' + cteNumero + ' a esta fatura? Status mudara para FATURADO.')) return;
+    fetch('/carvia/faturas-cliente/' + faturaId + '/vincular-operacao', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({operacao_id: opId}),
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'desconhecido'));
+        }
+    });
+}
 </script>
 {% endblock %}
