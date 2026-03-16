@@ -248,14 +248,14 @@
      NOTE: !important kept — overrides Bootstrap .table-danger utility and
      inline style="" attributes set by JS on disabled inputs
      --------------------------------------------------------------------------- */
-  .table-danger {
+  .itens-embarque-table .table-danger {
     background-color: rgba(var(--bs-danger-rgb), 0.15) !important;
     border: 2px solid var(--bs-danger) !important;
   }
 
-  .table-danger input,
-  .table-danger select,
-  .table-danger textarea {
+  .itens-embarque-table .table-danger input,
+  .itens-embarque-table .table-danger select,
+  .itens-embarque-table .table-danger textarea {
     background-color: rgba(var(--bs-danger-rgb), 0.2) !important;
     border-color: var(--bs-danger) !important;
     color: var(--bs-danger) !important;
