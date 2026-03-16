@@ -988,6 +988,14 @@
         headerDatas.innerHTML = diasHTML.join('');
     }
 
+    // Helper: classe CSS de cor baseada em valor de estoque
+    function classeCorEstoque(valor) {
+        if (valor === undefined || valor === null) return '';
+        if (valor < 0) return ' est-negativo';
+        if (valor < 100) return ' est-baixo';
+        return '';
+    }
+
     // 🆕 FUNÇÃO PARA RENDERIZAR LINHA DE SEPARAÇÃO
     function renderizarLinhaSeparacao(item, index) {
         const rowId = `row-sep-${index}`;
@@ -1099,10 +1107,10 @@
                 <td>${item.sub_rota || ''}</td>
 
                 <!-- Estoque projetado (PRÉ-CALCULADO) -->
-                <td class="text-end est-data-edit" id="est-data-${index}" data-estoque-original="${item.estoque_atual || 0}">
-                    -
+                <td class="text-end est-data-edit${classeCorEstoque(item.menor_estoque_d7)}" id="est-data-${index}" data-estoque-original="${item.estoque_atual || 0}">
+                    ${item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
                 </td>
-                <td class="text-end menor-est-7d" id="menor-7d-${index}" data-menor-original="${item.menor_estoque_d7 || 0}">
+                <td class="text-end menor-est-7d${classeCorEstoque(item.menor_estoque_d7)}" id="menor-7d-${index}" data-menor-original="${item.menor_estoque_d7 || 0}">
                     ${item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
                 </td>
 
@@ -1275,10 +1283,10 @@
                 <td>${item.sub_rota || ''}</td>
 
                 <!-- Estoque projetado (PRÉ-CALCULADO) -->
-                <td class="text-end est-data-edit" id="est-data-${index}" data-estoque-original="${item.estoque_atual || 0}">
-                    -
+                <td class="text-end est-data-edit${classeCorEstoque(item.menor_estoque_d7)}" id="est-data-${index}" data-estoque-original="${item.estoque_atual || 0}">
+                    ${item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
                 </td>
-                <td class="text-end menor-est-7d" id="menor-7d-${index}" data-menor-original="${item.menor_estoque_d7 || 0}">
+                <td class="text-end menor-est-7d${classeCorEstoque(item.menor_estoque_d7)}" id="menor-7d-${index}" data-menor-original="${item.menor_estoque_d7 || 0}">
                     ${item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
                 </td>
 
@@ -3087,13 +3095,16 @@
             dia: p.dia
         }));
 
-        // 4. Renderizar projeções D0-D28
+        // 4. Persistir menor_estoque_d7 no state.dados para re-renders
+        item.menor_estoque_d7 = resultado.menor_estoque_d7;
+
+        // 5. Renderizar projeções D0-D28
         renderizarProjecaoDias(rowIndex, projecoesFormatadas);
 
-        // 5. Atualizar EST DATA com base na data de expedição
+        // 6. Atualizar EST DATA com base na data de expedição
         atualizarEstoqueNaData(rowIndex, item, projecoesFormatadas);
 
-        // 6. Atualizar MENOR 7D com HIERARQUIA DE CORES
+        // 7. Atualizar MENOR 7D com HIERARQUIA DE CORES
         const menor7dEl = document.getElementById(`menor-7d-${rowIndex}`);
         if (menor7dEl) {
             menor7dEl.textContent = Math.round(resultado.menor_estoque_d7);
@@ -3104,6 +3115,22 @@
                 menor7dEl.classList.add('est-negativo');
             } else if (resultado.menor_estoque_d7 < 100) {
                 menor7dEl.classList.add('est-baixo');
+            }
+        } else {
+            console.warn(`[EST] menor-7d-${rowIndex} não encontrado no DOM (tipo=${item.tipo})`);
+        }
+
+        // 8. Atualizar EST DATA — garantir cores mesmo quando est-data não foi atualizado via atualizarEstoqueNaData
+        const estDataEl = document.getElementById(`est-data-${rowIndex}`);
+        if (estDataEl && !estDataEl.classList.contains('est-negativo') && !estDataEl.classList.contains('est-baixo')) {
+            // Se atualizarEstoqueNaData não aplicou cores (early return por data vazia), usar menor_estoque_d7
+            if (estDataEl.textContent.trim() === '-') {
+                estDataEl.classList.remove('est-negativo', 'est-baixo');
+                if (resultado.menor_estoque_d7 < 0) {
+                    estDataEl.classList.add('est-negativo');
+                } else if (resultado.menor_estoque_d7 < 100) {
+                    estDataEl.classList.add('est-baixo');
+                }
             }
         }
     }

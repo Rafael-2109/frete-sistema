@@ -33,6 +33,9 @@ bp = Blueprint('leitura_pedidos', __name__, url_prefix='/pedidos/leitura')
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
+# Flag Redis para pausa de emergencia da fila de impostos
+REDIS_KEY_PAUSADO = 'impostos:pausado'
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -1959,11 +1962,23 @@ def api_fila_impostos():
         total_concluidos = len(finished_registry)
         total_falhados = len(failed_registry)
 
+        # Status de pausa
+        pausada = bool(redis_conn.exists(REDIS_KEY_PAUSADO))
+        pausa_info = None
+        if pausada:
+            import json as _json
+            try:
+                pausa_info = _json.loads(redis_conn.get(REDIS_KEY_PAUSADO))
+            except Exception:
+                pausa_info = {'pausado_em': 'desconhecido'}
+
         stats = {
             'pendentes': total_pendentes,
             'em_execucao': total_em_execucao,
             'concluidos': total_concluidos,
-            'falhados': total_falhados
+            'falhados': total_falhados,
+            'pausada': pausada,
+            'pausa_info': pausa_info
         }
 
         # Jobs pendentes (paginado)
@@ -2191,6 +2206,75 @@ def api_reprocessar_imposto(job_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# PAUSA/RETOMADA DA FILA DE IMPOSTOS
+# ============================================================================
+
+@bp.route('/api/fila-impostos/pausar', methods=['POST'])
+@login_required
+def api_pausar_fila_impostos():
+    """Pausa a fila de impostos. Jobs em execucao NAO sao interrompidos.
+
+    O proximo job aguarda ate ser retomado (max 30 min, safety net).
+    TTL de 2h no Redis: se ninguem retomar, despausa sozinho.
+    """
+    try:
+        from app.portal.workers import get_redis_connection
+        import json
+        import logging as _log
+
+        redis_conn = get_redis_connection()
+        motivo = request.json.get('motivo', '') if request.is_json else ''
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        redis_conn.setex(
+            REDIS_KEY_PAUSADO,
+            7200,  # TTL 2h safety net
+            json.dumps({
+                'pausado_em': agora_utc_naive().isoformat(),
+                'motivo': motivo,
+                'usuario': usuario,
+            })
+        )
+
+        _log.getLogger('app.pedidos').info(
+            f"[Fila Impostos] PAUSADA por {usuario} — motivo: {motivo or 'nao informado'}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Fila de impostos pausada. Jobs em execucao nao serao interrompidos.',
+            'ttl_segundos': 7200
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/fila-impostos/retomar', methods=['POST'])
+@login_required
+def api_retomar_fila_impostos():
+    """Retoma a fila de impostos."""
+    try:
+        from app.portal.workers import get_redis_connection
+        import logging as _log
+
+        redis_conn = get_redis_connection()
+        existia = redis_conn.delete(REDIS_KEY_PAUSADO)
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user)
+
+        _log.getLogger('app.pedidos').info(f"[Fila Impostos] RETOMADA por {usuario}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Fila de impostos retomada.' if existia else 'Fila ja estava ativa.',
+            'estava_pausada': bool(existia)
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================================================

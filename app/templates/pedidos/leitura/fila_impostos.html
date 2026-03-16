@@ -9,12 +9,27 @@
             <i class="fas fa-calculator"></i> Fila de Calculo de Impostos
         </h1>
         <div>
+            <button id="btnPausar" class="btn btn-warning me-2" style="display:none;">
+                <i class="fas fa-pause"></i> Pausar Fila
+            </button>
+            <button id="btnRetomar" class="btn btn-success me-2" style="display:none;">
+                <i class="fas fa-play"></i> Retomar Fila
+            </button>
             <button id="btnAtualizar" class="btn btn-primary me-2">
                 <i class="fas fa-sync-alt"></i> Atualizar
             </button>
             <a href="{{ url_for('leitura_pedidos.index') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
+        </div>
+    </div>
+
+    <!-- Banner de Pausa -->
+    <div id="bannerPausa" class="alert alert-warning d-flex align-items-center mb-4" role="alert" style="display:none !important;">
+        <i class="fas fa-pause-circle fa-lg me-3"></i>
+        <div>
+            <strong>Fila PAUSADA</strong> — O proximo calculo de impostos aguardara ate ser retomado.
+            <span id="pausaDetalhes" class="d-block small text-muted"></span>
         </div>
     </div>
 
@@ -316,6 +331,23 @@ $(document).ready(function() {
         $('#badgeConcluidos').text(data.stats.concluidos);
         $('#badgeFalhados').text(data.stats.falhados);
 
+        // Status de pausa
+        const pausada = data.stats.pausada;
+        if (pausada) {
+            $('#bannerPausa').removeAttr('style').show();
+            $('#btnPausar').hide();
+            $('#btnRetomar').show();
+            const info = data.stats.pausa_info || {};
+            let detalhes = '';
+            if (info.pausado_em) detalhes += 'Desde ' + new Date(info.pausado_em).toLocaleTimeString('pt-BR');
+            if (info.usuario) detalhes += ' por ' + info.usuario;
+            $('#pausaDetalhes').text(detalhes);
+        } else {
+            $('#bannerPausa').hide();
+            $('#btnPausar').show();
+            $('#btnRetomar').hide();
+        }
+
         // Ultima atualizacao
         const agora = new Date();
         $('#ultimaAtualizacao').text(agora.toLocaleTimeString('pt-BR'));
@@ -611,6 +643,47 @@ $(document).ready(function() {
                     alert(resp.error || 'Erro ao reprocessar');
                 }
             }
+        });
+    });
+
+    // Botao Pausar
+    $('#btnPausar').on('click', function() {
+        if (!confirm('Pausar a fila de impostos? Jobs em execucao nao serao interrompidos.')) return;
+        const btn = $(this);
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.api_pausar_fila_impostos") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({}),
+            success: function(response) {
+                btn.prop('disabled', false);
+                if (response.success) {
+                    if (typeof toastr !== 'undefined') toastr.warning(response.message);
+                    carregarDados();
+                }
+            },
+            error: function() { btn.prop('disabled', false); }
+        });
+    });
+
+    // Botao Retomar
+    $('#btnRetomar').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.api_retomar_fila_impostos") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({}),
+            success: function(response) {
+                btn.prop('disabled', false);
+                if (response.success) {
+                    if (typeof toastr !== 'undefined') toastr.success(response.message);
+                    carregarDados();
+                }
+            },
+            error: function() { btn.prop('disabled', false); }
         });
     });
 

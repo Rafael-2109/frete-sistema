@@ -32,6 +32,44 @@ POLL_TIMEOUT = 30       # Timeout para cada poll individual (30s)
 COOLDOWN_ENTRE_CALCULOS = 30  # Pausa entre calculos para Odoo respirar
 MAX_RECONEXOES_POLL = 2       # Maximo de reconexoes durante polling
 
+# Pausa de emergencia — flag Redis
+REDIS_KEY_PAUSADO = 'impostos:pausado'
+MAX_ESPERA_PAUSA = 1800  # 30 min maximo aguardando pausa
+POLL_PAUSA = 15           # Check a cada 15s se ainda pausado
+
+
+def _aguardar_se_pausado(pedido_ref):
+    """Aguarda se a fila de impostos esta pausada (flag Redis).
+
+    Nao interrompe job em execucao — apenas segura o PROXIMO job antes de iniciar.
+    Safety net: max 30 min de espera, depois retoma mesmo pausado.
+    """
+    try:
+        from app.portal.workers import get_redis_connection
+        redis_conn = get_redis_connection()
+
+        if not redis_conn.exists(REDIS_KEY_PAUSADO):
+            return  # Nao pausado, seguir
+
+        logger.info(f"[Job Impostos] {pedido_ref} — fila PAUSADA, aguardando retomada...")
+        elapsed = 0
+
+        while redis_conn.exists(REDIS_KEY_PAUSADO) and elapsed < MAX_ESPERA_PAUSA:
+            time.sleep(POLL_PAUSA)
+            elapsed += POLL_PAUSA
+
+        if elapsed >= MAX_ESPERA_PAUSA:
+            logger.warning(
+                f"[Job Impostos] {pedido_ref} — espera maxima ({MAX_ESPERA_PAUSA}s) atingida, "
+                f"retomando mesmo pausado..."
+            )
+        else:
+            logger.info(
+                f"[Job Impostos] {pedido_ref} — fila RETOMADA apos {elapsed}s de pausa"
+            )
+    except Exception as e:
+        logger.warning(f"[Job Impostos] Erro ao verificar pausa: {e}")
+
 
 def calcular_impostos_odoo(order_id: int, order_name: str = None):
     """
@@ -51,6 +89,9 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
     pedido_ref = order_name or f"ID:{order_id}"
 
     logger.info(f"[Job Impostos] Iniciando calculo para {pedido_ref}")
+
+    # Verificar se fila esta pausada (emergencia/manutencao Odoo)
+    _aguardar_se_pausado(pedido_ref)
 
     try:
         from app.odoo.config.odoo_config import ODOO_CONFIG
