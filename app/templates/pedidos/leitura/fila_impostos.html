@@ -640,13 +640,18 @@ $(document).ready(function() {
                         // Impostos OK — trocar linha para verde
                         row.removeClass('table-danger table-warning');
                         row.addClass('table-success');
-                        row.find('.badge').removeClass('bg-danger bg-warning text-dark')
+                        row.find('.badge').first().removeClass('bg-danger bg-warning text-dark')
                             .addClass('bg-success')
                             .html('<i class="fas fa-check"></i> OK no Odoo');
-                        row.find('.badge').siblings('small').text(response.message);
+                        row.find('.badge').first().siblings('small').text(response.message);
                         btn.replaceWith('<span class="badge bg-success"><i class="fas fa-check"></i> OK</span>');
-                        // Remover botao reprocessar se existir
                         row.find('.btn-reprocessar').remove();
+                        if (typeof toastr !== 'undefined') toastr.success(response.message);
+                    } else if (response.status === 'ja_na_fila') {
+                        // Ja esta na fila — sinalizar sem duplicar
+                        btn.replaceWith('<span class="badge bg-info"><i class="fas fa-clock"></i> Na fila</span>');
+                        row.find('.btn-reprocessar').remove();
+                        if (typeof toastr !== 'undefined') toastr.warning(response.message);
                     } else {
                         // Reenfileirado
                         row.removeClass('table-danger table-warning');

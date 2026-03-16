@@ -2184,13 +2184,23 @@ def api_reprocessar_imposto(job_id):
         order_id = job_original.args[0]
         order_name = job_original.args[1] if len(job_original.args) > 1 else None
 
+        # Dedup: verificar se order_id ja esta na fila
+        from rq import Queue
+        queue = Queue('impostos', connection=redis_conn)
+        ja_existe = _order_na_fila_impostos(order_id, queue, redis_conn)
+        if ja_existe:
+            return jsonify({
+                'success': False,
+                'error': f'Pedido ja esta na fila ({ja_existe})'
+            }), 409
+
         # Enfileirar novo job
         novo_job = enqueue_job(
             calcular_impostos_odoo,
             order_id,
             order_name,
             queue_name='impostos',
-            timeout='5m'  # 5 minutos - aumentado devido lentidão no Odoo
+            timeout='15m'
         )
 
         return jsonify({
@@ -2277,6 +2287,37 @@ def api_retomar_fila_impostos():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _order_na_fila_impostos(order_id, queue, redis_conn):
+    """Verifica se order_id ja esta pendente ou em execucao na fila impostos.
+
+    Returns:
+        str descritivo se encontrado ('pendente' ou 'em execucao'), None se nao.
+    """
+    from rq.job import Job
+    from rq.registry import StartedJobRegistry
+
+    # Pendentes
+    for job_id in queue.job_ids:
+        try:
+            job = Job.fetch(job_id, connection=redis_conn)
+            if job.args and len(job.args) > 0 and job.args[0] == order_id:
+                return 'pendente'
+        except Exception:
+            pass
+
+    # Em execucao
+    started = StartedJobRegistry(queue=queue)
+    for job_id in started.get_job_ids():
+        try:
+            job = Job.fetch(job_id, connection=redis_conn)
+            if job.args and len(job.args) > 0 and job.args[0] == order_id:
+                return 'em execucao'
+        except Exception:
+            pass
+
+    return None
+
+
 @bp.route('/api/verificar-imposto-odoo', methods=['POST'])
 @login_required
 def api_verificar_imposto_odoo():
@@ -2323,8 +2364,23 @@ def api_verificar_imposto_odoo():
                 'order_name': order_name or order.get('name'),
             })
         else:
-            from app.portal.workers import enqueue_job
+            # Dedup: verificar se order_id ja esta na fila ou em execucao
+            from app.portal.workers import get_redis_connection, enqueue_job
             from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+            from rq import Queue
+
+            redis_conn = get_redis_connection()
+            queue = Queue('impostos', connection=redis_conn)
+
+            ja_existe = _order_na_fila_impostos(order_id, queue, redis_conn)
+            if ja_existe:
+                return jsonify({
+                    'success': True,
+                    'status': 'ja_na_fila',
+                    'message': f'Pedido ja esta na fila de impostos ({ja_existe})',
+                    'order_id': order_id,
+                    'order_name': order_name,
+                })
 
             novo_job = enqueue_job(
                 calcular_impostos_odoo,
