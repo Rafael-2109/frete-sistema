@@ -577,6 +577,115 @@ class PedidoImportacaoTemp(db.Model):
 
         return resultado
 
+    def obter_divergencias_por_regiao(self) -> list:
+        """
+        Agrupa itens divergentes por (regiao, codigo_rede) para edição em lote.
+
+        Usa validacao_precos['por_filial'] para mapear cnpj→regiao,
+        e dados_filiais para itens divergentes.
+
+        Returns:
+            Lista no formato:
+            [
+                {
+                    "regiao": "SUDESTE",
+                    "codigo_rede": "35642",
+                    "nosso_codigo": "35642",
+                    "descricao": "AZEITONA...",
+                    "preco_tabela": 195.00,
+                    "total_filiais": 50,
+                    "qtd_total": 750,
+                    "precos": [
+                        {
+                            "preco": 199.48,
+                            "filiais": [{"cnpj": "...", "nome_cliente": "...", "uf": "SP"}],
+                            "qtd_filiais": 48
+                        }
+                    ]
+                }
+            ]
+        """
+        if not self.dados_filiais:
+            return []
+
+        # 1. Mapa cnpj → regiao a partir de validacao_precos
+        cnpj_regiao = {}
+        if self.validacao_precos and self.validacao_precos.get('por_filial'):
+            for val_filial in self.validacao_precos['por_filial']:
+                cnpj = val_filial.get('cnpj')
+                regiao = val_filial.get('regiao')
+                if cnpj and regiao:
+                    cnpj_regiao[cnpj] = regiao
+
+        if not cnpj_regiao:
+            return []
+
+        # 2. Agrupa itens divergentes por (regiao, codigo_rede)
+        from collections import defaultdict
+        # Chave: (regiao, codigo_rede)
+        # Valor: {info do produto, precos: {preco_doc: [filiais]}}
+        grupos = defaultdict(lambda: {
+            'nosso_codigo': None,
+            'descricao': None,
+            'preco_tabela': None,
+            'filiais_por_preco': defaultdict(list),
+            'qtd_total': 0
+        })
+
+        for filial in self.dados_filiais:
+            cnpj = filial.get('cnpj')
+            regiao = cnpj_regiao.get(cnpj)
+            if not regiao:
+                continue
+
+            for item in filial.get('itens', []):
+                if not item.get('divergente'):
+                    continue
+
+                codigo_rede = item.get('codigo_rede')
+                chave = (regiao, codigo_rede)
+                grupo = grupos[chave]
+
+                # Preenche info do produto (primeiro encontrado)
+                if grupo['nosso_codigo'] is None:
+                    grupo['nosso_codigo'] = item.get('nosso_codigo')
+                    grupo['descricao'] = item.get('nossa_descricao') or item.get('descricao')
+                    grupo['preco_tabela'] = item.get('preco_tabela')
+
+                preco_doc = item.get('preco_documento', 0)
+                grupo['filiais_por_preco'][preco_doc].append({
+                    'cnpj': cnpj,
+                    'nome_cliente': filial.get('nome_cliente'),
+                    'uf': filial.get('uf')
+                })
+                grupo['qtd_total'] += item.get('quantidade', 0)
+
+        # 3. Monta resultado final
+        resultado = []
+        for (regiao, codigo_rede), grupo in sorted(grupos.items()):
+            precos = []
+            total_filiais = 0
+            for preco, filiais in sorted(grupo['filiais_por_preco'].items()):
+                precos.append({
+                    'preco': preco,
+                    'filiais': filiais,
+                    'qtd_filiais': len(filiais)
+                })
+                total_filiais += len(filiais)
+
+            resultado.append({
+                'regiao': regiao,
+                'codigo_rede': codigo_rede,
+                'nosso_codigo': grupo['nosso_codigo'],
+                'descricao': grupo['descricao'],
+                'preco_tabela': grupo['preco_tabela'],
+                'total_filiais': total_filiais,
+                'qtd_total': grupo['qtd_total'],
+                'precos': precos
+            })
+
+        return resultado
+
     def marcar_lancando(self):
         """Marca como em processo de lançamento"""
         self.status = 'LANCANDO'

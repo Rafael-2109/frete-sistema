@@ -322,6 +322,7 @@ def upload():
                 'errors': result.get('errors', []),
                 # Dados agregados de divergências para seção do topo
                 'divergencias_agregadas': registro_temp.obter_itens_divergentes_agregados(),
+                'divergencias_por_regiao': registro_temp.obter_divergencias_por_regiao(),
                 'dados_filiais': registro_temp.dados_filiais
             }
 
@@ -942,6 +943,60 @@ def editar_preco():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/editar-preco-lote', methods=['POST'])
+@login_required
+def editar_preco_lote():
+    """
+    Edita preços em lote para múltiplas filiais de uma vez.
+
+    Body JSON:
+    - session_key: Chave da importação
+    - alteracoes: [{cnpjs: [...], codigo_rede: "35642", novo_preco: 195.00}, ...]
+    """
+    try:
+        data = request.get_json()
+        session_key = data.get('session_key')
+        alteracoes = data.get('alteracoes', [])
+
+        if not session_key:
+            return jsonify({'success': False, 'error': 'Chave de importação não fornecida'}), 400
+
+        if not alteracoes:
+            return jsonify({'success': False, 'error': 'Nenhuma alteração informada'}), 400
+
+        registro_temp = PedidoImportacaoTemp.buscar_por_chave(session_key)
+        if not registro_temp:
+            return jsonify({'success': False, 'error': 'Importação não encontrada'}), 404
+
+        itens_atualizados = 0
+        for alteracao in alteracoes:
+            cnpjs = alteracao.get('cnpjs', [])
+            codigo_rede = alteracao.get('codigo_rede')
+            novo_preco = alteracao.get('novo_preco')
+
+            if not cnpjs or not codigo_rede or novo_preco is None:
+                continue
+
+            codigo_rede = str(codigo_rede)
+            novo_preco = float(novo_preco)
+            for cnpj in cnpjs:
+                if registro_temp.atualizar_preco_item(cnpj, codigo_rede, novo_preco):
+                    itens_atualizados += 1
+
+        flag_modified(registro_temp, 'dados_filiais')
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{itens_atualizados} item(ns) atualizado(s)',
+            'itens_atualizados': itens_atualizados
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/aplicar-justificativa-global', methods=['POST'])
 @login_required
 def aplicar_justificativa_global():
@@ -1058,6 +1113,7 @@ def obter_dados_importacao(session_key):
             'pode_inserir': registro_temp.pode_inserir,
             'dados_filiais': registro_temp.dados_filiais,
             'divergencias_agregadas': registro_temp.obter_itens_divergentes_agregados(),
+            'divergencias_por_regiao': registro_temp.obter_divergencias_por_regiao(),
             'justificativa_global': registro_temp.justificativa_global,
             'summary': registro_temp.summary,
             'itens_sem_depara': registro_temp.itens_sem_depara,

@@ -167,6 +167,15 @@
                         </div>
                     </div>
 
+                    <!-- Botao Editar por Regiao -->
+                    <div id="btnEditarPorRegiaoContainer" class="mb-3" style="display: none;">
+                        <button id="btnEditarPorRegiao" class="btn btn-outline-primary" onclick="abrirModalPrecoRegiao()">
+                            <i class="fas fa-map-marked-alt"></i> Editar por Regiao
+                            <span id="badgeRegiaoCount" class="badge bg-primary ms-1">0</span>
+                        </button>
+                        <small class="text-muted ms-2">Edite precos em lote agrupados por produto e regiao</small>
+                    </div>
+
                     <!-- Tabela de Divergencias Agregadas -->
                     <div class="table-responsive">
                         <table class="table table-sm table-hover" id="tabelaDivergenciasAgregadas">
@@ -393,10 +402,56 @@
     </div>
 </div>
 
+<!-- Modal Preco por Regiao -->
+<div class="modal fade" id="modalPrecoRegiao" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-map-marked-alt"></i> Editar Precos por Regiao
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 mb-3">
+                    <i class="fas fa-info-circle"></i>
+                    Itens divergentes agrupados por produto e regiao. Edite o preco e clique em <strong>Aplicar Alteracoes</strong> para atualizar todas as filiais do grupo.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="tabelaPrecoRegiao">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>Regiao</th>
+                                <th>Cod. Rede</th>
+                                <th>Nosso Cod.</th>
+                                <th>Descricao</th>
+                                <th class="text-end">Tabela</th>
+                                <th class="text-end" style="width: 120px;">Preco</th>
+                                <th class="text-center">Filiais</th>
+                                <th class="text-center" style="width: 80px;">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyPrecoRegiao">
+                            <!-- Preenchido dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnAplicarPrecoRegiao">
+                    <i class="fas fa-check-double"></i> Aplicar Alteracoes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 $(document).ready(function() {
     let currentSessionKey = null;
     let currentResponse = null;
+    let currentDivergenciasPorRegiao = [];
 
     // Configura CSRF token para todas as requisicoes AJAX
     const csrfToken = '{{ csrf_token() }}';
@@ -426,7 +481,8 @@ $(document).ready(function() {
         submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Processando...').prop('disabled', true);
 
         // Limpa resultados anteriores
-        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaFiliaisDepara, #alertaDivergencia, #secaoDivergenciasAgregadas').hide();
+        $('#resultArea, #errorArea, #warningArea, #identificacaoCard, #alertaDepara, #alertaFiliaisDepara, #alertaDivergencia, #secaoDivergenciasAgregadas, #btnEditarPorRegiaoContainer').hide();
+        currentDivergenciasPorRegiao = [];
 
         $.ajax({
             url: '{{ url_for("leitura_pedidos.upload") }}',
@@ -496,6 +552,12 @@ $(document).ready(function() {
             if (response.divergencias_agregadas && response.divergencias_agregadas.length > 0) {
                 popularTabelaDivergenciasAgregadas(response.divergencias_agregadas);
                 $('#secaoDivergenciasAgregadas').show();
+            }
+            // Armazena divergencias por regiao e mostra botao se houver
+            currentDivergenciasPorRegiao = response.divergencias_por_regiao || [];
+            if (currentDivergenciasPorRegiao.length > 0) {
+                $('#badgeRegiaoCount').text(currentDivergenciasPorRegiao.length);
+                $('#btnEditarPorRegiaoContainer').show();
             }
         }
 
@@ -1829,7 +1891,7 @@ $(document).ready(function() {
                     // Preenche campo de justificativa em todas as filiais divergentes
                     $('.justificativa-filial').each(function() {
                         const card = $(this).closest('.card');
-                        if (card.hasClass('border-danger') || card.find('.badge-danger').length > 0) {
+                        if (card.attr('data-tem-divergencia') === 'true') {
                             $(this).val(justificativa);
                         }
                     });
@@ -1846,6 +1908,166 @@ $(document).ready(function() {
             error: function(xhr) {
                 const response = xhr.responseJSON || {};
                 alert('Erro ao aplicar justificativa: ' + (response.error || 'Erro desconhecido'));
+            },
+            complete: function() {
+                btn.html(originalText).prop('disabled', false);
+            }
+        });
+    });
+
+    // ============================================================================
+    // Modal Preco por Regiao
+    // ============================================================================
+
+    // Abre e popula o modal de preco por regiao
+    window.abrirModalPrecoRegiao = function() {
+        const tbody = $('#tbodyPrecoRegiao');
+        tbody.empty();
+
+        if (!currentDivergenciasPorRegiao || currentDivergenciasPorRegiao.length === 0) {
+            tbody.append('<tr><td colspan="8" class="text-center">Nenhuma divergencia por regiao</td></tr>');
+            $('#modalPrecoRegiao').modal('show');
+            return;
+        }
+
+        currentDivergenciasPorRegiao.forEach(function(grupo) {
+            grupo.precos.forEach(function(precoGrupo, precoIndex) {
+                const cnpjsJson = JSON.stringify(precoGrupo.filiais.map(f => f.cnpj));
+                const filiaisHtml = precoGrupo.filiais.map(f =>
+                    `<div class="small">${f.nome_cliente || ''} <span class="text-muted">(${f.cnpj})</span> - ${f.uf || ''}</div>`
+                ).join('');
+
+                const rowId = `regiao_${grupo.regiao}_${grupo.codigo_rede}_${precoIndex}`;
+
+                let html = `
+                    <tr id="${rowId}"
+                        data-cnpjs='${cnpjsJson}'
+                        data-codigo="${grupo.codigo_rede}"
+                        data-preco-tabela="${grupo.preco_tabela || 0}"
+                        data-preco-original="${precoGrupo.preco}">
+                        <td><span class="badge bg-secondary">${grupo.regiao}</span></td>
+                        <td><code>${grupo.codigo_rede}</code></td>
+                        <td><code>${grupo.nosso_codigo || '-'}</code></td>
+                        <td><small>${grupo.descricao || '-'}</small></td>
+                        <td class="text-end">${grupo.preco_tabela ? 'R$ ' + formatMoney(grupo.preco_tabela) : '-'}</td>
+                        <td class="text-end">
+                            <input type="number" step="0.01" min="0"
+                                class="form-control form-control-sm preco-regiao text-end"
+                                style="width: 100px;"
+                                value="${precoGrupo.preco}">
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-info btn-ver-filiais"
+                                data-bs-toggle="popover"
+                                data-bs-trigger="focus"
+                                data-bs-html="true"
+                                data-bs-title="Filiais (${precoGrupo.qtd_filiais})"
+                                data-bs-content="${filiaisHtml.replace(/"/g, '&quot;')}">
+                                <i class="fas fa-store"></i> ${precoGrupo.qtd_filiais}
+                            </button>
+                        </td>
+                        <td class="text-center">
+                            ${grupo.preco_tabela ? `
+                            <button class="btn btn-sm btn-outline-success btn-usar-tabela"
+                                title="Corrigir para R$ ${formatMoney(grupo.preco_tabela)} (preco da tabela)">
+                                <i class="fas fa-table"></i> R$ ${formatMoney(grupo.preco_tabela)}
+                            </button>` : ''}
+                        </td>
+                    </tr>
+                `;
+                tbody.append(html);
+            });
+        });
+
+        // Inicializa popovers
+        const popoverTriggerList = [].slice.call(document.querySelectorAll('#tbodyPrecoRegiao [data-bs-toggle="popover"]'));
+        popoverTriggerList.map(function(el) {
+            return new bootstrap.Popover(el, { placement: 'left' });
+        });
+
+        $('#modalPrecoRegiao').modal('show');
+    };
+
+    // Botao "Usar Tabela" — preenche input com preco_tabela
+    $(document).on('click', '.btn-usar-tabela', function() {
+        const row = $(this).closest('tr');
+        const precoTabela = parseFloat(row.data('preco-tabela')) || 0;
+        row.find('.preco-regiao').val(precoTabela.toFixed(2)).addClass('bg-warning-subtle');
+    });
+
+    // Botao "Aplicar Alteracoes" do modal
+    $('#btnAplicarPrecoRegiao').on('click', function() {
+        const alteracoes = [];
+
+        $('#tbodyPrecoRegiao tr').each(function() {
+            const row = $(this);
+            const precoOriginal = parseFloat(row.data('preco-original')) || 0;
+            const novoPreco = parseFloat(row.find('.preco-regiao').val()) || 0;
+
+            if (Math.abs(novoPreco - precoOriginal) < 0.001 || novoPreco <= 0) {
+                return; // Nao alterou
+            }
+
+            const cnpjs = row.data('cnpjs');
+            const codigoRede = String(row.data('codigo'));
+
+            alteracoes.push({
+                cnpjs: typeof cnpjs === 'string' ? JSON.parse(cnpjs) : cnpjs,
+                codigo_rede: codigoRede,
+                novo_preco: novoPreco
+            });
+        });
+
+        if (alteracoes.length === 0) {
+            alert('Nenhum preco foi alterado.');
+            return;
+        }
+
+        const btn = $(this);
+        const originalText = btn.html();
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Aplicando...').prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url_for("leitura_pedidos.editar_preco_lote") }}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_key: currentSessionKey,
+                alteracoes: alteracoes
+            }),
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+
+                    // Sincroniza precos nos inputs da pagina principal
+                    alteracoes.forEach(function(alt) {
+                        const codRede = String(alt.codigo_rede);
+                        alt.cnpjs.forEach(function(cnpj) {
+                            sincronizarPrecoFilial(cnpj, codRede, alt.novo_preco);
+                            sincronizarPrecoDivergencias(cnpj, codRede, alt.novo_preco);
+                        });
+
+                        // Atualiza currentDivergenciasPorRegiao para refletir novo preco
+                        currentDivergenciasPorRegiao.forEach(function(grupo) {
+                            if (String(grupo.codigo_rede) === codRede) {
+                                grupo.precos.forEach(function(p) {
+                                    const cnpjsGrupo = p.filiais.map(f => f.cnpj);
+                                    if (alt.cnpjs.some(c => cnpjsGrupo.includes(c))) {
+                                        p.preco = alt.novo_preco;
+                                    }
+                                });
+                            }
+                        });
+                    });
+
+                    $('#modalPrecoRegiao').modal('hide');
+                } else {
+                    alert('Erro: ' + response.error);
+                }
+            },
+            error: function(xhr) {
+                const resp = xhr.responseJSON || {};
+                alert('Erro ao aplicar precos: ' + (resp.error || 'Erro desconhecido'));
             },
             complete: function() {
                 btn.html(originalText).prop('disabled', false);
