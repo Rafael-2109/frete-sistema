@@ -1028,9 +1028,9 @@
         if (isAtrasada) {
             classesCor = 'separacao-atrasada'; // ✅ VERMELHO - PRIORIDADE MÁXIMA
         } else if (item.status_calculado === 'ABERTO') {
-            classesCor = 'table-warning'; // Amarelo Bootstrap
+            classesCor = 'separacao-aberta'; // Amarelo customizado
         } else if (item.status_calculado === 'COTADO') {
-            classesCor = 'table-info'; // Azul Bootstrap
+            classesCor = 'separacao-cotada'; // Azul customizado
         }
 
         return `

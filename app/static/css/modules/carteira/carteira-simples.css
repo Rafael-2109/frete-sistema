@@ -148,21 +148,29 @@
     color: var(--bs-danger);
 }
 
-/* Separacao ABERTO - warning */
-.table-carteira-simples tr.table-warning td {
-    background-color: rgba(var(--bs-aberto-rgb), 0.05);
+/* Separacao ABERTO - amarelo customizado */
+.table-carteira-simples tr.separacao-aberta {
+    border-left: 4px solid var(--bs-aberto-color);
+}
+
+.table-carteira-simples tr.separacao-aberta td {
+    background-color: rgba(var(--bs-aberto-rgb), 0.15);
     color: var(--bs-aberto-color);
 }
 
-/* Separacao COTADO - info (mapeado para secondary) */
-.table-carteira-simples tr.table-info td {
+/* Separacao COTADO - azul customizado */
+.table-carteira-simples tr.separacao-cotada {
+    border-left: 4px solid var(--bs-cotacao-color);
+}
+
+.table-carteira-simples tr.separacao-cotada td {
     background-color: rgba(var(--bs-cotacao-rgb), 0.15);
     color: var(--bs-cotacao-color);
 }
 
 /* Hover em linhas especiais */
-.table-carteira-simples tbody tr.table-warning:hover td,
-.table-carteira-simples tbody tr.table-info:hover td,
+.table-carteira-simples tbody tr.separacao-aberta:hover td,
+.table-carteira-simples tbody tr.separacao-cotada:hover td,
 .table-carteira-simples tbody tr.separacao-atrasada:hover td {
     opacity: 0.85;
 }
