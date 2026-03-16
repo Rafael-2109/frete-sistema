@@ -85,16 +85,16 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_em",
+      "name": "ix_lista_materiais_historico_operacao",
       "columns": [
-        "alterado_em"
+        "operacao"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_operacao",
+      "name": "ix_lista_materiais_historico_alterado_em",
       "columns": [
-        "operacao"
+        "alterado_em"
       ],
       "unique": false
     },

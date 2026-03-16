@@ -112,23 +112,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_custos_entrega_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_tipo_custo",
-      "columns": [
-        "tipo_custo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_custos_entrega_operacao_id",
       "columns": [
         "operacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_numero_custo",
+      "columns": [
+        "numero_custo"
       ],
       "unique": false
     },
@@ -140,9 +133,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_numero_custo",
+      "name": "ix_carvia_custos_entrega_status",
       "columns": [
-        "numero_custo"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "columns": [
+        "tipo_custo"
       ],
       "unique": false
     }
