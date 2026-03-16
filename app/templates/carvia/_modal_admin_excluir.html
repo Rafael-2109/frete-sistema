@@ -4,7 +4,7 @@
     Macro reutilizavel para exclusao admin de qualquer entidade CarVia.
 
     Uso:
-        {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir %}
+        {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
         {{ modal_admin_excluir(
             entidade_tipo='nf',
             entidade_id=nf.id,
