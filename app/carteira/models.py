@@ -294,58 +294,6 @@ class ControleCruzadoSeparacao(db.Model):
     def __repr__(self):
         return f'<ControleCruzado Lote:{self.separacao_lote_id} {self.num_pedido}-{self.cod_produto} Dif:{self.diferenca_detectada}>'
 
-class TipoCarga(db.Model):
-    """
-    🎯 CONTROLE DE TIPO DE CARGA - SOLUÇÃO PARA CONFLITO DE REGRAS
-    
-    PROBLEMA RESOLVIDO:
-    - Separação parcial vs preservar dados operacionais
-    - Alterações podem tornar carga inviável (peso limite)
-    - Necessidade de controle inteligente de capacidade
-    """
-    __tablename__ = 'tipo_carga'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    
-    # 🆔 IDENTIFICAÇÃO DA CARGA
-    separacao_lote_id = db.Column(db.String(50), nullable=False, unique=True, index=True)
-    
-    # 🎯 TIPO DE ENVIO (SOLUÇÃO PRINCIPAL)
-    tipo_envio = db.Column(db.String(20), nullable=False, default='TOTAL', index=True)
-    # TOTAL: Carga completa - aceita alterações até o limite
-    # PARCIAL: Carga parcial planejada - alterações vão para nova carga  
-    # COMPLEMENTAR: Carga para completar PARCIAL anterior
-    # STANDBY: Aguardando definição comercial
-    
-    # 📊 CAPACIDADES E LIMITES
-    capacidade_maxima_peso = db.Column(db.Numeric(15,3), nullable=True)     # Peso máximo suportado
-    capacidade_maxima_pallets = db.Column(db.Numeric(15,3), nullable=True)  # Pallets máximos
-    capacidade_maxima_valor = db.Column(db.Numeric(15,2), nullable=True)    # Valor máximo (seguro)
-    
-    # 📈 UTILIZAÇÃO ATUAL  
-    peso_atual = db.Column(db.Numeric(15,3), default=0, nullable=False)
-    pallets_atual = db.Column(db.Numeric(15,3), default=0, nullable=False)
-    valor_atual = db.Column(db.Numeric(15,2), default=0, nullable=False)
-    
-    # 🔄 COMPORTAMENTO PARA ALTERAÇÕES
-    aceita_incremento = db.Column(db.Boolean, default=True, nullable=False)
-    # True: Alterações são adicionadas à carga existente
-    # False: Alterações vão para nova carga (em branco)
-    
-    # 📋 JUSTIFICATIVA E CONTROLE
-    motivo_tipo = db.Column(db.String(200), nullable=True)
-    # "Carga completa planejada", "Separação parcial por peso", etc.
-    
-    criado_por = db.Column(db.String(100), nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
-    
-    # 🔗 RELACIONAMENTO COM COMPLEMENTARES
-    carga_principal_id = db.Column(db.Integer, db.ForeignKey('tipo_carga.id'), nullable=True)
-    # Para cargas COMPLEMENTAR, aponta para a PARCIAL original
-    
-    def __repr__(self):
-        return f'<FlexibilidadeCarga {self.separacao_lote_id} - {self.tipo_envio}>'
-    
 class FaturamentoParcialJustificativa(db.Model):
     """
     📋 JUSTIFICATIVAS PARA FATURAMENTO PARCIAL

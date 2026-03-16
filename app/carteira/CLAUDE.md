@@ -59,13 +59,12 @@ Novo dado necessario: adicionar ao batch loading (`_carregar_*_batch`).
 ### R6: carteira_simples_api.py e monolito (2.3K LOC)
 NUNCA adicionar mais endpoints neste arquivo. Novas APIs: criar arquivo separado em `routes/`.
 
-### R7: 3 variantes de ruptura — escolher a correta
+### R7: 2 variantes de ruptura — escolher a correta
 
 | Variante | Arquivo | Quando usar |
 |----------|---------|-------------|
 | Com cache | `ruptura_api.py` (667L) | Consulta rapida, dados podem ter delay |
 | Sem cache | `ruptura_api_sem_cache.py` (575L) | Dados criticos em tempo real |
-| Worker async | `ruptura_worker_api.py` (239L) | Processamento pesado via RQ |
 
 ### R8: Template usa `data-pedido` (NAO `data-num-pedido`)
 `agrupados_balanceado.html` usa `data-pedido="{{ pedido.num_pedido }}"`.
@@ -89,7 +88,6 @@ headers: { 'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || 
 | CarteiraPrincipal | `carteira_principal` | `qtd_saldo_produto_pedido` (NAO `qtd_saldo`). SEM campos de separacao (R1) |
 | CarteiraCopia | `carteira_copia` | Espelho para nao-Odoo. Property `baixa_produto_pedido` via FaturamentoProduto |
 | SaldoStandby | `saldo_standby` | Filtra pedido INTEIRO da agrupada quando status IN ('ATIVO','BLOQ. COML.','SALDO') |
-| TipoCarga | `tipo_carga` | FK `separacao_lote_id`. Tipos: TOTAL/PARCIAL/COMPLEMENTAR/STANDBY |
 | PreSeparacaoItem | _(adapter)_ | NAO e tabela real — usa Separacao com status='PREVISAO' (R3) |
 | FaturamentoParcialJustificativa | `faturamento_parcial_justificativa` | Model existe em models.py mas API/tela removidos (Fase 3) |
 | ControleCruzadoSeparacao | `controle_cruzado_separacao` | Detecta diferencas separacao <-> faturamento |
