@@ -156,17 +156,17 @@
       "unique": false
     },
     {
-      "name": "idx_requisicao_empresa",
+      "name": "ix_requisicao_compras_requisicao_odoo_id",
       "columns": [
-        "company_id",
-        "num_requisicao"
+        "requisicao_odoo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_requisicao_compras_requisicao_odoo_id",
+      "name": "idx_requisicao_empresa",
       "columns": [
-        "requisicao_odoo_id"
+        "company_id",
+        "num_requisicao"
       ],
       "unique": false
     }

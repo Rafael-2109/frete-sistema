@@ -75,9 +75,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
+      "name": "ix_portal_atacadao_produto_depara_codigo_nosso",
       "columns": [
-        "codigo_atacadao"
+        "codigo_nosso"
       ],
       "unique": false
     },
@@ -89,9 +89,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_nosso",
+      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
       "columns": [
-        "codigo_nosso"
+        "codigo_atacadao"
       ],
       "unique": false
     }

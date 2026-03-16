@@ -155,13 +155,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
-      "columns": [
-        "nf_remessa_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_solucao_confirmado",
       "columns": [
         "confirmado",
@@ -195,6 +188,13 @@
       "name": "ix_pallet_nf_solucoes_odoo_picking_id",
       "columns": [
         "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
       ],
       "unique": false
     },

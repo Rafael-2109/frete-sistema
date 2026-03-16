@@ -122,16 +122,16 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_pendente_tagplus_importado",
+      "name": "ix_nf_pendente_tagplus_origem",
       "columns": [
-        "importado"
+        "origem"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_origem",
+      "name": "ix_nf_pendente_tagplus_resolvido",
       "columns": [
-        "origem"
+        "resolvido"
       ],
       "unique": false
     },
@@ -143,9 +143,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_resolvido",
+      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
       "columns": [
-        "resolvido"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -158,9 +158,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
+      "name": "ix_nf_pendente_tagplus_importado",
       "columns": [
-        "cnpj_cliente"
+        "importado"
       ],
       "unique": false
     }
