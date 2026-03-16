@@ -66,10 +66,14 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 .page-header {
     background: var(--cart-page-header-bg);
+    color: var(--text);
     border-radius: var(--radius-lg);
     padding: var(--space-5);
     margin-bottom: var(--space-4);
     border: 1px solid var(--cart-border-color);
+}
+.page-header h1 {
+    color: var(--text);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

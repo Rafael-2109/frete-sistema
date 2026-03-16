@@ -352,10 +352,10 @@
   }
 
   .badge-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
-  .badge-processando { background-color: var(--bs-info); color: white; }
-  .badge-processado { background-color: var(--bs-success); color: white; }
-  .badge-erro { background-color: var(--bs-danger); color: white; }
-  .badge-cancelado { background-color: var(--bs-secondary); color: white; }
+  .badge-processando { background-color: var(--bs-info); color: hsl(0 0% 100%); }
+  .badge-processado { background-color: var(--bs-success); color: hsl(0 0% 100%); }
+  .badge-erro { background-color: var(--bs-danger); color: hsl(0 0% 100%); }
+  .badge-cancelado { background-color: var(--bs-secondary); color: hsl(0 0% 100%); }
 
   .rec-status .btn-action {
     padding: 0.2rem 0.4rem;
@@ -407,10 +407,10 @@
     white-space: nowrap;
   }
 
-  .badge-transfer-sem { background-color: var(--bs-secondary); color: white; }
+  .badge-transfer-sem { background-color: var(--bs-secondary); color: hsl(0 0% 100%); }
   .badge-transfer-pendente { background-color: var(--bs-warning); color: var(--bs-dark); }
-  .badge-transfer-processando { background-color: var(--bs-info); color: white; }
-  .badge-transfer-concluido { background-color: var(--bs-success); color: white; }
-  .badge-transfer-erro { background-color: var(--bs-danger); color: white; }
+  .badge-transfer-processando { background-color: var(--bs-info); color: hsl(0 0% 100%); }
+  .badge-transfer-concluido { background-color: var(--bs-success); color: hsl(0 0% 100%); }
+  .badge-transfer-erro { background-color: var(--bs-danger); color: hsl(0 0% 100%); }
 
 } /* End @layer modules */

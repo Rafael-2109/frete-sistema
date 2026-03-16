@@ -683,6 +683,17 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
+     PAGE HEADER — Defensive color for pages not loading agrupados.css
+     (e.g. standby.html). Prevents inheriting white from other modules.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .page-header {
+    color: var(--text);
+  }
+  .page-header h1 {
+    color: var(--text);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
      NOVA UNIFICACAO CODIGO — required field marker
      Source: estoque/nova_unificacao_codigo.html
      ═══════════════════════════════════════════════════════════════════════════ */

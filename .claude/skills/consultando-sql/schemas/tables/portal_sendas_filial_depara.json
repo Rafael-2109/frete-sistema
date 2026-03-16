@@ -56,9 +56,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sendas_filial_depara_filial",
+      "name": "ix_portal_sendas_filial_depara_ativo",
       "columns": [
-        "filial"
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sendas_filial_depara_cnpj",
+      "columns": [
+        "cnpj"
       ],
       "unique": true
     },
@@ -70,16 +77,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_sendas_filial_depara_ativo",
+      "name": "ix_portal_sendas_filial_depara_filial",
       "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_portal_sendas_filial_depara_cnpj",
-      "columns": [
-        "cnpj"
+        "filial"
       ],
       "unique": true
     }

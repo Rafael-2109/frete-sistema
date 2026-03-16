@@ -115,9 +115,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
+      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
       "columns": [
-        "codigo_produto_interno"
+        "nf_devolucao_id"
       ],
       "unique": false
     },
@@ -136,9 +136,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
+      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
       "columns": [
-        "nf_devolucao_id"
+        "codigo_produto_interno"
       ],
       "unique": false
     },

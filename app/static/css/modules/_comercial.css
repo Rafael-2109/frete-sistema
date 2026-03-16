@@ -429,6 +429,18 @@
   .icon-info { color: var(--bs-info); }
   .icon-cyan { color: var(--bs-info); }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PAGE HEADER — Defensive color for comercial templates.
+     Prevents inheriting white from other modules.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .page-header {
+    margin-bottom: 1.5rem;
+    color: var(--text);
+  }
+  .page-header h1 {
+    color: var(--text);
+  }
+
   /* Alert custom (shared across dashboard + vendedores_equipe) */
   .alert-custom {
     background: var(--bs-secondary-bg);
