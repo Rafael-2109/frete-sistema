@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -59,6 +60,16 @@
             <button type="button" class="btn btn-success btn-sm"
                     data-bs-toggle="modal" data-bs-target="#modalCriarFaturaRapida">
                 <i class="fas fa-file-invoice-dollar"></i> Criar Fatura
+            </button>
+            {% endif %}
+            {% if current_user.perfil == 'administrador' %}
+            <a href="{{ url_for('carvia.admin_editar', tipo='operacao', id=operacao.id) }}" class="btn carvia-admin-btn"
+               title="Edicao completa (admin)">
+                <i class="fas fa-shield-alt"></i> Editar
+            </a>
+            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+                    title="Exclusao permanente (admin)">
+                <i class="fas fa-shield-alt"></i> Excluir
             </button>
             {% endif %}
             <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary">
@@ -586,6 +597,19 @@
     </div>
     {% endif %}
 </div>
+
+{{ modal_admin_excluir(
+    entidade_tipo='operacao',
+    entidade_id=operacao.id,
+    entidade_label='Operacao #' ~ operacao.id,
+    impacto_cascade=[
+        'Junctions NF-Operacao',
+        'Subcontratos vinculados (sem fatura transportadora)',
+        'CTes Complementares vinculados',
+        'Custos de Entrega vinculados (com anexos)',
+        'FKs em itens de fatura serao desvinculados',
+    ]
+) }}
 {% endblock %}
 
 <!-- Modal Recotar com Descritivo -->

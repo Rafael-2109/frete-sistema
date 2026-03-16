@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -18,6 +19,16 @@
             <a href="{{ url_for('carvia.editar_despesa', despesa_id=despesa.id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-edit"></i> Editar
             </a>
+            {% endif %}
+            {% if current_user.perfil == 'administrador' %}
+            <a href="{{ url_for('carvia.admin_editar', tipo='despesa', id=despesa.id) }}" class="btn carvia-admin-btn"
+               title="Edicao completa (admin)">
+                <i class="fas fa-shield-alt"></i> Editar
+            </a>
+            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+                    title="Exclusao permanente (admin)">
+                <i class="fas fa-shield-alt"></i> Excluir
+            </button>
             {% endif %}
             <a href="{{ url_for('carvia.listar_despesas') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
@@ -119,6 +130,15 @@
     {% include 'carvia/_modal_data_pagamento.html' %}
 {% endwith %}
 
+{{ modal_admin_excluir(
+    entidade_tipo='despesa',
+    entidade_id=despesa.id,
+    entidade_label='Despesa #' ~ despesa.id,
+    impacto_cascade=[
+        'Movimentacao financeira e conciliacoes serao removidas',
+    ],
+    bloqueios=(['Status PAGO. Desfaca o pagamento primeiro.'] if despesa.status == 'PAGO' else [])
+) }}
 {% endblock %}
 
 {% block scripts %}

@@ -657,3 +657,93 @@
     border-color: var(--semantic-danger);
     box-shadow: 0 0 0 0.2rem hsla(350 55% 55% / 0.15);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Admin — Botao de exclusao, edicao inline, preview editavel
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Botao admin (outline-danger, pequeno, com icone shield) */
+.carvia-admin-btn {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-color: var(--semantic-danger);
+    color: var(--semantic-danger);
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.carvia-admin-btn:hover {
+    opacity: 1;
+    background-color: var(--semantic-danger);
+    border-color: var(--semantic-danger);
+    color: hsl(0 0% 100%);
+}
+
+/* Celula editavel no preview de importacao */
+.carvia-editable-cell {
+    cursor: pointer;
+    position: relative;
+    border-bottom: 1px dashed var(--text-muted);
+    transition: border-color 0.15s ease;
+}
+
+.carvia-editable-cell:hover {
+    border-color: var(--bs-primary);
+}
+
+.carvia-editable-cell::after {
+    content: '\f303'; /* fa-pencil-alt */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 0.6rem;
+    margin-left: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.carvia-editable-cell:hover::after {
+    opacity: 0.5;
+}
+
+/* Input inline no preview (substituindo celula) */
+.carvia-cell-editor {
+    font-size: 0.82rem;
+    padding: 0.1rem 0.3rem;
+    width: 100%;
+    max-width: 200px;
+    border: 1px solid var(--bs-primary);
+    border-radius: var(--radius-sm, 0.25rem);
+    background: var(--bg-light);
+    color: var(--text);
+}
+
+.carvia-cell-editor:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.15rem hsla(210 80% 55% / 0.2);
+}
+
+/* Feedback visual ao salvar celula */
+@keyframes carvia-cell-flash-success {
+    0%   { background-color: hsla(145 65% 40% / 0.2); }
+    100% { background-color: transparent; }
+}
+
+@keyframes carvia-cell-flash-error {
+    0%   { background-color: hsla(0 65% 50% / 0.2); }
+    100% { background-color: transparent; }
+}
+
+.carvia-cell-saved {
+    animation: carvia-cell-flash-success 0.6s ease;
+}
+
+.carvia-cell-error {
+    animation: carvia-cell-flash-error 0.6s ease;
+}
+
+/* Linha removida no preview (strikethrough + fade) */
+.carvia-preview-removed {
+    text-decoration: line-through;
+    opacity: 0.35;
+    pointer-events: none;
+}

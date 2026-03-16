@@ -18,13 +18,19 @@ def _importacao_redis_key(user_id, chave_uuid):
     return f'carvia:importacao:{user_id}:{chave_uuid}'
 
 
-def _salvar_importacao_temp(user_id, resultado):
+def _salvar_importacao_temp(user_id, resultado, chave_uuid=None):
     """Salva resultado de importacao no Redis (preferencia) ou session (fallback).
+
+    Args:
+        user_id: ID do usuario
+        resultado: dict com dados parseados
+        chave_uuid: UUID existente para update parcial (se None, gera novo)
 
     Returns:
         str: UUID da chave usada
     """
-    chave_uuid = str(uuid_mod.uuid4())
+    if chave_uuid is None:
+        chave_uuid = str(uuid_mod.uuid4())
 
     from app.utils.redis_cache import redis_cache
     if redis_cache.disponivel:
@@ -69,6 +75,184 @@ def _limpar_importacao_temp(user_id, chave_uuid):
 
 
 def register_importacao_routes(bp):
+
+    # ------------------------------------------------------------------ #
+    #  API: Edicao do preview pre-importacao (muta dados no Redis)
+    # ------------------------------------------------------------------ #
+
+    @bp.route('/api/importacao/editar-item', methods=['POST'])
+    @login_required
+    def api_importacao_editar_item():
+        """Edita um campo de um item no preview de importacao (Redis)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        tipo = data.get('tipo')  # 'nf', 'cte', 'fatura'
+        indice = data.get('indice')
+        campo = data.get('campo')
+        valor = data.get('valor')
+
+        if not all([chave, tipo is not None, indice is not None, campo]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios: importacao_chave, tipo, indice, campo, valor.'}, 400
+
+        # Mapear tipo para chave no resultado
+        tipo_key_map = {
+            'nf': 'nfs_parseadas',
+            'cte': 'ctes_parseados',
+            'fatura': 'faturas_parseadas',
+        }
+        lista_key = tipo_key_map.get(tipo)
+        if not lista_key:
+            return {'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        items = resultado.get(lista_key, [])
+        if indice < 0 or indice >= len(items):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        # Atualizar campo
+        items[indice][campo] = valor
+        resultado[lista_key] = items
+
+        # Salvar de volta no Redis com a mesma chave
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: {tipo}[{indice}].{campo} = {valor!r}"
+        )
+
+        return {'sucesso': True, 'valor_atualizado': valor}
+
+    @bp.route('/api/importacao/remover-item', methods=['POST'])
+    @login_required
+    def api_importacao_remover_item():
+        """Remove um item da lista no preview de importacao (Redis)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        tipo = data.get('tipo')
+        indice = data.get('indice')
+
+        if not all([chave, tipo is not None, indice is not None]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios: importacao_chave, tipo, indice.'}, 400
+
+        tipo_key_map = {
+            'nf': 'nfs_parseadas',
+            'cte': 'ctes_parseados',
+            'fatura': 'faturas_parseadas',
+        }
+        lista_key = tipo_key_map.get(tipo)
+        if not lista_key:
+            return {'sucesso': False, 'erro': f'Tipo invalido: {tipo}'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        items = resultado.get(lista_key, [])
+        if indice < 0 or indice >= len(items):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        removed = items.pop(indice)
+        resultado[lista_key] = items
+
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: removeu {tipo}[{indice}] "
+            f"({removed.get('numero_nf') or removed.get('cte_numero') or removed.get('numero_fatura')})"
+        )
+
+        return {'sucesso': True, 'restantes': len(items)}
+
+    @bp.route('/api/importacao/reclassificar-cte', methods=['POST'])
+    @login_required
+    def api_importacao_reclassificar_cte():
+        """Altera classificacao de um CTe (CTE_CARVIA ↔ CTE_SUBCONTRATO)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        indice = data.get('indice')
+        nova_classificacao = data.get('nova_classificacao')
+
+        if not all([chave, indice is not None, nova_classificacao]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios: importacao_chave, indice, nova_classificacao.'}, 400
+
+        if nova_classificacao not in ('CTE_CARVIA', 'CTE_SUBCONTRATO'):
+            return {'sucesso': False, 'erro': 'Classificacao deve ser CTE_CARVIA ou CTE_SUBCONTRATO.'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        ctes = resultado.get('ctes_parseados', [])
+        if indice < 0 or indice >= len(ctes):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        old_class = ctes[indice].get('classificacao')
+        ctes[indice]['classificacao'] = nova_classificacao
+        resultado['ctes_parseados'] = ctes
+
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: CTe[{indice}] "
+            f"{old_class} -> {nova_classificacao}"
+        )
+
+        return {'sucesso': True}
+
+    @bp.route('/api/importacao/reclassificar-fatura', methods=['POST'])
+    @login_required
+    def api_importacao_reclassificar_fatura():
+        """Altera tipo/destino de uma fatura (CLIENTE ↔ TRANSPORTADORA)."""
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        indice = data.get('indice')
+        novo_tipo = data.get('novo_tipo')
+
+        if not all([chave, indice is not None, novo_tipo]):
+            return {'sucesso': False, 'erro': 'Campos obrigatorios: importacao_chave, indice, novo_tipo.'}, 400
+
+        if novo_tipo not in ('CLIENTE', 'TRANSPORTADORA'):
+            return {'sucesso': False, 'erro': 'Tipo deve ser CLIENTE ou TRANSPORTADORA.'}, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {'sucesso': False, 'erro': 'Importacao nao encontrada ou expirada.'}, 404
+
+        faturas = resultado.get('faturas_parseadas', [])
+        if indice < 0 or indice >= len(faturas):
+            return {'sucesso': False, 'erro': f'Indice {indice} fora do range.'}, 400
+
+        old_tipo = faturas[indice].get('tipo_destino')
+        faturas[indice]['tipo_destino'] = novo_tipo
+        resultado['faturas_parseadas'] = faturas
+
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: Fatura[{indice}] "
+            f"tipo {old_tipo} -> {novo_tipo}"
+        )
+
+        return {'sucesso': True}
+
+    # ------------------------------------------------------------------ #
+    #  Rotas originais
+    # ------------------------------------------------------------------ #
 
     @bp.route('/importar', methods=['GET', 'POST'])
     @login_required

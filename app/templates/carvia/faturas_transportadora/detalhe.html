@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -19,6 +20,16 @@
             {% if fatura.arquivo_pdf_path %}
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadFaturaTranspPdf({{ fatura.id }})" title="Baixar PDF original da fatura">
                 <i class="fas fa-download"></i> PDF
+            </button>
+            {% endif %}
+            {% if current_user.perfil == 'administrador' %}
+            <a href="{{ url_for('carvia.admin_editar', tipo='fatura-transportadora', id=fatura.id) }}" class="btn carvia-admin-btn"
+               title="Edicao completa (admin)">
+                <i class="fas fa-shield-alt"></i> Editar
+            </a>
+            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+                    title="Exclusao permanente (admin)">
+                <i class="fas fa-shield-alt"></i> Excluir
             </button>
             {% endif %}
             <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-secondary">
@@ -719,6 +730,17 @@
         </div>
     </div>
 </div>
+
+{{ modal_admin_excluir(
+    entidade_tipo='fatura-transportadora',
+    entidade_id=fatura.id,
+    entidade_label='Fatura ' ~ fatura.numero_fatura,
+    impacto_cascade=[
+        'Itens da fatura',
+        'Subcontratos vinculados voltarao para CONFIRMADO',
+        'Movimentacao financeira e conciliacoes serao removidas',
+    ]
+) }}
 {% endblock %}
 
 {% block scripts %}

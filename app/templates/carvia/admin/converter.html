@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-exchange-alt"></i> Converter {{ tipo_origem_label }}
+                <i class="fas fa-arrow-right text-muted mx-2"></i>
+                {{ tipo_destino_label }}
+            </h2>
+            <p class="text-muted mb-0">Converter tipo do documento com mapeamento automatico de campos</p>
+        </div>
+        <a href="{{ url_referrer }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'admin' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <form method="POST" id="formConverterAdmin">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="tipo_destino" value="{{ tipo_destino }}">
+
+        <div class="row g-4">
+            {# Coluna esquerda: dados atuais (read-only) #}
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="fas fa-file"></i> Dados Atuais ({{ tipo_origem_label }})</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            {% for campo in campos_origem %}
+                            <div class="col-6">
+                                <small class="text-muted d-block">{{ campo.label }}</small>
+                                <strong class="{{ 'text-primary' if campo.name in mapeamento_campos else '' }}">
+                                    {{ campo.valor if campo.valor is not none else '-' }}
+                                </strong>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Seta central #}
+            <div class="col-md-2 d-flex align-items-center justify-content-center">
+                <div class="text-center">
+                    <i class="fas fa-arrow-right fa-3x text-muted"></i>
+                    <div class="small text-muted mt-2">Campos mapeados<br>automaticamente</div>
+                </div>
+            </div>
+
+            {# Coluna direita: novo tipo (editavel) #}
+            <div class="col-md-5">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-file-alt"></i> Novo Documento ({{ tipo_destino_label }})</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            {% for campo in campos_destino %}
+                            <div class="col-{{ campo.get('col', 6) }}">
+                                <label class="form-label small mb-0">
+                                    {{ campo.label }}
+                                    {% if campo.get('obrigatorio') %}<span class="text-danger">*</span>{% endif %}
+                                </label>
+
+                                {% if campo.tipo == 'select' %}
+                                <select name="{{ campo.name }}" class="form-select form-select-sm"
+                                        {{ 'required' if campo.get('obrigatorio') }}>
+                                    {% for opt_val, opt_label in campo.opcoes %}
+                                    <option value="{{ opt_val }}" {{ 'selected' if campo.valor == opt_val }}>{{ opt_label }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% elif campo.tipo == 'number' %}
+                                <input type="number" name="{{ campo.name }}" class="form-control form-control-sm"
+                                       value="{{ campo.valor if campo.valor is not none else '' }}"
+                                       step="{{ campo.get('step', '0.01') }}"
+                                       {{ 'required' if campo.get('obrigatorio') }}>
+                                {% elif campo.tipo == 'date' %}
+                                <input type="date" name="{{ campo.name }}" class="form-control form-control-sm"
+                                       value="{{ campo.valor or '' }}"
+                                       {{ 'required' if campo.get('obrigatorio') }}>
+                                {% else %}
+                                <input type="text" name="{{ campo.name }}" class="form-control form-control-sm"
+                                       value="{{ campo.valor or '' }}"
+                                       {{ 'required' if campo.get('obrigatorio') }}>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="motivoConversao" class="form-label">
+                        <strong>Motivo da conversao</strong> <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" id="motivoConversao" name="motivo"
+                              rows="2" required minlength="10"
+                              placeholder="Descreva o motivo (min. 10 caracteres)..."></textarea>
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>ATENCAO:</strong> O documento original sera <strong>excluido</strong> e um novo sera criado no tipo destino.
+                    Links existentes serao transferidos quando possivel. A operacao e auditada.
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-warning" id="btnConverterAdmin">
+                <i class="fas fa-exchange-alt"></i> Converter Documento
+            </button>
+            <a href="{{ url_referrer }}" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('formConverterAdmin').addEventListener('submit', function(e) {
+    var motivo = document.getElementById('motivoConversao').value.trim();
+    if (motivo.length < 10) {
+        e.preventDefault();
+        alert('Motivo obrigatorio (minimo 10 caracteres).');
+        return;
+    }
+    if (!confirm('Tem certeza que deseja converter este documento? O original sera excluido.')) {
+        e.preventDefault();
+        return;
+    }
+    var btn = document.getElementById('btnConverterAdmin');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Convertendo...';
+});
+</script>
+{% endblock %}

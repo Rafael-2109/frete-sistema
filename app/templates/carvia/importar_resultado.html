@@ -109,24 +109,32 @@
                             <th>Valor</th>
                             <th>Peso</th>
                             <th>Fonte</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for nf in resultado.nfs_parseadas %}
-                        <tr>
-                            <td><strong>{{ nf.numero_nf or '-' }}</strong></td>
+                        <tr class="carvia-preview-row" data-tipo="nf" data-indice="{{ loop.index0 }}">
+                            <td>
+                                <strong class="carvia-editable-cell" data-campo="numero_nf">{{ nf.numero_nf or '-' }}</strong>
+                            </td>
                             <td class="cnpj-col small">
                                 {{ nf.chave_acesso_nf[:20] + '...' if nf.chave_acesso_nf else '-' }}
                             </td>
-                            <td>{{ nf.nome_emitente or '-' }}</td>
-                            <td class="cnpj-col">{{ nf.cnpj_emitente or '-' }}</td>
-                            <td class="valor-col">
+                            <td class="carvia-editable-cell" data-campo="nome_emitente">{{ nf.nome_emitente or '-' }}</td>
+                            <td class="cnpj-col carvia-editable-cell" data-campo="cnpj_emitente">{{ nf.cnpj_emitente or '-' }}</td>
+                            <td class="valor-col carvia-editable-cell" data-campo="valor_total">
                                 {% if nf.valor_total %}R$ {{ "%.2f"|format(nf.valor_total) }}{% else %}-{% endif %}
                             </td>
-                            <td class="valor-col">
+                            <td class="valor-col carvia-editable-cell" data-campo="peso_bruto">
                                 {% if nf.peso_bruto %}{{ "%.1f"|format(nf.peso_bruto) }} kg{% else %}-{% endif %}
                             </td>
                             <td><span class="badge bg-secondary">{{ nf.tipo_fonte }}</span></td>
+                            <td>
+                                <button type="button" class="btn btn-outline-danger btn-xs carvia-preview-remove-btn" title="Remover">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -154,19 +162,20 @@
                             <th>Emitente</th>
                             <th>Transportadora</th>
                             <th>NFs Ref.</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for cte in resultado.ctes_parseados %}
                         {% set cnpj_emit_digits = ((cte.emitente or {}).get('cnpj', '') or '')|replace('/','') | replace('.','') | replace('-','') %}
-                        <tr>
-                            <td><strong>{{ cte.cte_numero or '-' }}</strong></td>
+                        <tr class="carvia-preview-row" data-tipo="cte" data-indice="{{ loop.index0 }}">
+                            <td><strong class="carvia-editable-cell" data-campo="cte_numero">{{ cte.cte_numero or '-' }}</strong></td>
                             <td>
-                                {% if cte.classificacao == 'CTE_SUBCONTRATO' %}
-                                <span class="badge bg-warning text-dark">CTe Subcontrato</span>
-                                {% else %}
-                                <span class="badge bg-primary">CTe CarVia</span>
-                                {% endif %}
+                                <select class="form-select form-select-sm carvia-cte-classificacao"
+                                        data-indice="{{ loop.index0 }}" style="width:auto; font-size:0.78rem;">
+                                    <option value="CTE_CARVIA" {{ 'selected' if cte.classificacao != 'CTE_SUBCONTRATO' }}>CTe CarVia</option>
+                                    <option value="CTE_SUBCONTRATO" {{ 'selected' if cte.classificacao == 'CTE_SUBCONTRATO' }}>CTe Subcontrato</option>
+                                </select>
                             </td>
                             <td>
                                 {{ cte.cidade_origem or '?' }}/{{ cte.uf_origem or '?' }}
@@ -194,6 +203,11 @@
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ (cte.nfs_referenciadas or [])|length }}</span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-outline-danger btn-xs carvia-preview-remove-btn" title="Remover">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -225,12 +239,13 @@
                             <th>CTes Ref.</th>
                             <th>Metodo</th>
                             <th>Confianca</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for fat in faturas %}
                         {% set fat_id = loop.index %}
-                        <tr{% if fat.get('cancelada') %} class="table-danger"{% endif %}>
+                        <tr class="carvia-preview-row{{ ' table-danger' if fat.get('cancelada') else '' }}" data-tipo="fatura" data-indice="{{ loop.index0 }}">
                             <td>
                                 <strong>{{ fat.numero_fatura or '-' }}</strong>
                                 {% if fat.get('cancelada') %}
@@ -298,6 +313,11 @@
                                 {% else %}
                                     <span class="badge bg-danger">{{ "%.0f"|format(conf * 100) }}%</span>
                                 {% endif %}
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-outline-danger btn-xs carvia-preview-remove-btn" title="Remover">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </td>
                         </tr>
                         {% if fat.get('itens_detalhe') %}
@@ -468,6 +488,123 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
                    || document.querySelector('input[name="csrf_token"]')?.value
                    || '';
+
+    const importacaoChave = '{{ importacao_chave }}';
+
+    // ─── Click-to-edit em celulas ───
+    document.querySelectorAll('.carvia-editable-cell').forEach(function(cell) {
+        cell.addEventListener('click', function() {
+            if (cell.querySelector('.carvia-cell-editor')) return; // Ja editando
+            var row = cell.closest('.carvia-preview-row');
+            if (!row || row.classList.contains('carvia-preview-removed')) return;
+
+            var campo = cell.dataset.campo;
+            var valorAtual = cell.textContent.trim().replace(/^R\$\s*/, '').replace(/\s*kg$/, '');
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'carvia-cell-editor';
+            input.value = valorAtual === '-' ? '' : valorAtual;
+            cell.textContent = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+
+            function salvar() {
+                var novoValor = input.value.trim();
+                cell.textContent = novoValor || '-';
+                cell.classList.add('carvia-cell-saved');
+                setTimeout(function() { cell.classList.remove('carvia-cell-saved'); }, 600);
+
+                // Converter numeros
+                var valorEnviar = novoValor;
+                if (['valor_total', 'peso_bruto', 'cte_valor'].includes(campo)) {
+                    valorEnviar = parseFloat(novoValor.replace(',', '.')) || null;
+                }
+
+                fetch('/carvia/api/importacao/editar-item', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                    body: JSON.stringify({
+                        importacao_chave: importacaoChave,
+                        tipo: row.dataset.tipo,
+                        indice: parseInt(row.dataset.indice),
+                        campo: campo,
+                        valor: valorEnviar,
+                    }),
+                }).then(function(r) { return r.json(); }).then(function(data) {
+                    if (!data.sucesso) {
+                        cell.classList.add('carvia-cell-error');
+                        setTimeout(function() { cell.classList.remove('carvia-cell-error'); }, 600);
+                    }
+                });
+            }
+
+            input.addEventListener('blur', salvar);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { cell.textContent = valorAtual; }
+            });
+        });
+    });
+
+    // ─── Remover item ───
+    document.querySelectorAll('.carvia-preview-remove-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var row = btn.closest('.carvia-preview-row');
+            if (!row) return;
+            if (!confirm('Remover este item do preview?')) return;
+
+            row.classList.add('carvia-preview-removed');
+            btn.disabled = true;
+
+            fetch('/carvia/api/importacao/remover-item', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                body: JSON.stringify({
+                    importacao_chave: importacaoChave,
+                    tipo: row.dataset.tipo,
+                    indice: parseInt(row.dataset.indice),
+                }),
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.sucesso) {
+                    // Atualizar contadores nos cards
+                    var tipo = row.dataset.tipo;
+                    var cardMap = {nf: 0, cte: 1, fatura: 2};
+                    var cards = document.querySelectorAll('.card.border-primary h3, .card.border-info h3, .card.border-warning h3');
+                    var idx = cardMap[tipo];
+                    if (cards[idx]) cards[idx].textContent = data.restantes;
+                    // Re-indexar linhas restantes
+                    var rows = document.querySelectorAll('.carvia-preview-row[data-tipo="' + tipo + '"]:not(.carvia-preview-removed)');
+                    rows.forEach(function(r, i) { r.dataset.indice = i; });
+                } else {
+                    row.classList.remove('carvia-preview-removed');
+                    btn.disabled = false;
+                    alert('Erro ao remover: ' + (data.erro || 'desconhecido'));
+                }
+            });
+        });
+    });
+
+    // ─── Reclassificar CTe ───
+    document.querySelectorAll('.carvia-cte-classificacao').forEach(function(sel) {
+        sel.addEventListener('change', function() {
+            var indice = parseInt(sel.dataset.indice);
+            fetch('/carvia/api/importacao/reclassificar-cte', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                body: JSON.stringify({
+                    importacao_chave: importacaoChave,
+                    indice: indice,
+                    nova_classificacao: sel.value,
+                }),
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.sucesso) {
+                    sel.classList.add('carvia-cell-saved');
+                    setTimeout(function() { sel.classList.remove('carvia-cell-saved'); }, 600);
+                }
+            });
+        });
+    });
 
     // GAP-30: Debounce — desabilitar botao apos primeiro clique
     var formConfirmar = document.getElementById('form-confirmar-importacao');

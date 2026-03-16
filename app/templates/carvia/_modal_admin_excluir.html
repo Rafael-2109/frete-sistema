@@ -1,0 +1,109 @@
+{#
+    Modal Admin: Exclusao Permanente (Hard Delete)
+    ===============================================
+    Macro reutilizavel para exclusao admin de qualquer entidade CarVia.
+
+    Uso:
+        {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir %}
+        {{ modal_admin_excluir(
+            entidade_tipo='nf',
+            entidade_id=nf.id,
+            entidade_label='NF ' ~ nf.numero_nf,
+            impacto_cascade=[
+                'Itens de NF vinculados',
+                'Junctions operacao-NF',
+            ]
+        ) }}
+#}
+
+{% macro modal_admin_excluir(entidade_tipo, entidade_id, entidade_label, impacto_cascade=[], bloqueios=[]) %}
+{% if current_user.perfil == 'administrador' %}
+<div class="modal fade" id="modalAdminExcluir" tabindex="-1" aria-labelledby="modalAdminExcluirLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalAdminExcluirLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Exclusao Permanente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formAdminExcluir" method="POST"
+                  action="{{ url_for('carvia.admin_excluir', tipo=entidade_tipo, id=entidade_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-danger mb-3">
+                        <strong>ATENCAO:</strong> Esta acao e <strong>irreversivel</strong>.
+                        O registro <strong>{{ entidade_label }}</strong> sera excluido permanentemente do banco de dados.
+                    </div>
+
+                    {% if bloqueios %}
+                    <div class="alert alert-warning mb-3">
+                        <strong>Bloqueios detectados:</strong>
+                        <ul class="mb-0 mt-1">
+                            {% for bloqueio in bloqueios %}
+                            <li>{{ bloqueio }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    {% if impacto_cascade %}
+                    <div class="mb-3">
+                        <strong>Impacto cascade (tambem serao afetados):</strong>
+                        <ul class="mt-1 mb-0">
+                            {% for item in impacto_cascade %}
+                            <li class="text-danger">{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="motivoExclusao" class="form-label">
+                            <strong>Motivo da exclusao</strong> <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="motivoExclusao" name="motivo"
+                                  rows="3" required minlength="10"
+                                  placeholder="Descreva o motivo da exclusao (min. 10 caracteres)..."></textarea>
+                    </div>
+
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="confirmarExclusao" required>
+                        <label class="form-check-label text-danger" for="confirmarExclusao">
+                            Confirmo que entendo que esta acao e irreversivel
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btnConfirmarExclusao" disabled>
+                        <i class="fas fa-trash-alt"></i> Excluir Permanentemente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    const checkbox = document.getElementById('confirmarExclusao');
+    const btn = document.getElementById('btnConfirmarExclusao');
+    const motivo = document.getElementById('motivoExclusao');
+    function updateBtn() {
+        btn.disabled = !(checkbox.checked && motivo.value.trim().length >= 10);
+    }
+    checkbox.addEventListener('change', updateBtn);
+    motivo.addEventListener('input', updateBtn);
+
+    document.getElementById('formAdminExcluir').addEventListener('submit', function(e) {
+        if (!checkbox.checked || motivo.value.trim().length < 10) {
+            e.preventDefault();
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+    });
+})();
+</script>
+{% endif %}
+{% endmacro %}

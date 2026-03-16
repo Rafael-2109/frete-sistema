@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -27,6 +28,16 @@
             <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-file-invoice"></i> Ver CTe CarVia
             </a>
+            {% if current_user.perfil == 'administrador' %}
+            <a href="{{ url_for('carvia.admin_editar', tipo='subcontrato', id=sub.id) }}" class="btn carvia-admin-btn"
+               title="Edicao completa (admin)">
+                <i class="fas fa-shield-alt"></i> Editar
+            </a>
+            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+                    title="Exclusao permanente (admin)">
+                <i class="fas fa-shield-alt"></i> Excluir
+            </button>
+            {% endif %}
             <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -303,4 +314,14 @@
     </div>
     {% endif %}
 </div>
+
+{{ modal_admin_excluir(
+    entidade_tipo='subcontrato',
+    entidade_id=sub.id,
+    entidade_label='Subcontrato #' ~ sub.id,
+    impacto_cascade=[
+        'FKs em itens de fatura transportadora serao desvinculados',
+    ],
+    bloqueios=(['Vinculado a fatura transportadora #' ~ sub.fatura_transportadora_id ~ '. Exclua a fatura primeiro.'] if sub.fatura_transportadora_id else [])
+) }}
 {% endblock %}

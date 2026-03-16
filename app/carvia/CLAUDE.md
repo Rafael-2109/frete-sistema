@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**35 arquivos** | **~20.1K LOC** | **51 templates** | **Atualizado**: 14/03/2026
+**37 arquivos** | **~21K LOC** | **54 templates** | **Atualizado**: 16/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -29,6 +29,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 | 13 | **Conciliacao** | `CarviaConciliacaoService` | `/carvia/conciliacao` | Painel duplo extrato/documentos + Match |
 | 14 | **Extrato Bancario** | `CarviaExtratoLinha` | `/carvia/extrato-bancario` | Importar OFX + CSV + Lista linhas |
 | 15 | **Configuracoes** | `CarviaModeloMoto` / `CarviaEmpresaCubagem` / `CarviaCategoriaMoto` | `/carvia/configuracoes/modelos-moto` | CRUD inline modelos moto + empresas cubagem + categorias moto |
+| 16 | **Admin** | `CarviaAdminAudit` + `AdminService` | `/carvia/admin/auditoria` | Hard delete + Edicao completa + Conversao tipo + Re-link + Auditoria |
 
 ### Cross-links entre documentos (navegacao completa)
 
@@ -61,14 +62,14 @@ CarviaCustoEntrega (Custo de Entrega)
 
 ```
 app/carvia/
-  ├── routes/          # 14 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
-  │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar, custo_entrega)
-  ├── services/        # 12 services (parsers, matching, importacao, cotacao, conferencia, fatura_pdf_parser, linking,
-  │                    #   fluxo_caixa, carvia_conciliacao, dacte_pdf_parser)
-  ├── models.py        # 22 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
+  ├── routes/          # 15 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
+  │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar, custo_entrega, admin)
+  ├── services/        # 13 services (parsers, matching, importacao, cotacao, conferencia, fatura_pdf_parser, linking,
+  │                    #   fluxo_caixa, carvia_conciliacao, dacte_pdf_parser, admin)
+  ├── models.py        # 23 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
   │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao, SessaoCotacao,
   │                    #   SessaoDemanda, CteComplementar, CustoEntrega, CustoEntregaAnexo,
-  │                    #   CategoriaMoto, ModeloMoto, PrecoCategoriaMoto, EmpresaCubagem)
+  │                    #   CategoriaMoto, ModeloMoto, PrecoCategoriaMoto, EmpresaCubagem, AdminAudit)
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/
@@ -83,7 +84,8 @@ app/templates/carvia/
   ├── faturas_transportadora/  # listar.html, nova.html, detalhe.html
   ├── despesas/                # listar.html, criar.html, detalhe.html, editar.html
   ├── sessoes_cotacao/         # listar.html, nova.html, detalhe.html
-  └── configuracoes/           # modelos_moto.html, empresas_cubagem.html, categorias_moto.html
+  ├── configuracoes/           # modelos_moto.html, empresas_cubagem.html, categorias_moto.html
+  └── admin/                   # auditoria.html, editar_completo.html, converter.html
 ```
 
 ---
@@ -157,6 +159,25 @@ Gerado via `CarviaOperacao.gerar_numero_cte()` e `CarviaSubcontrato.gerar_numero
 Campo `cte_numero VARCHAR(20)` ja existia — sem DDL, apenas backfill.
 Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 
+### R9: Admin — Hard Delete com Auditoria
+GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete com:
+1. Verificacao de bloqueios (PAGO, FATURADO com dependentes, conciliado)
+2. Serializacao completa (snapshot + filhos cascade) para `CarviaAdminAudit`
+3. Limpeza de FKs (nullify), revert de status, limpeza financeira
+4. Delete em single transaction
+5. Restrito a `@require_admin` (perfil=administrador)
+
+**Acoes auditadas**: HARD_DELETE, FIELD_EDIT, TYPE_CHANGE, RELINK, IMPORT_EDIT
+**Bloqueios por entidade**:
+- Subcontrato: bloqueado se `fatura_transportadora_id != NULL`
+- Fatura Cliente: bloqueado se `conciliado=True`
+- Fatura Transportadora: bloqueado se tem `CarviaConciliacao` vinculada
+- CTe Complementar: bloqueado se `status=FATURADO`
+- Custo Entrega: bloqueado se `status=PAGO`
+- Despesa: bloqueado se `status=PAGO`
+
+**Preview editavel**: Importacao em `/carvia/importar` permite click-to-edit, remover items e reclassificar CTes/Faturas ANTES de salvar. APIs mutam dados no Redis (`carvia:importacao:{user_id}:{uuid}`).
+
 ---
 
 ## Modelos
@@ -186,6 +207,7 @@ Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
 | CarviaModeloMoto | `carvia_modelos_moto` | Modelos de moto para calculo automatico de peso cubado. `nome` UNIQUE. `regex_pattern` para match automatico. Dimensoes (comprimento, largura, altura) + `cubagem_minima`. **`categoria_moto_id`** FK nullable para CarviaCategoriaMoto. CRUD inline em `/carvia/configuracoes/modelos-moto` |
 | CarviaPrecoCategoriaMoto | `carvia_precos_categoria_moto` | Preco fixo por unidade para combinacao tabela_frete × categoria_moto. `valor_unitario` NUMERIC(15,2). UNIQUE(tabela_frete_id, categoria_moto_id). Soft-delete via `ativo`. Relationship `tabela_frete` (CarviaTabelaFrete backref `precos_categoria_moto`). CRUD via API em tabelas de frete |
 | CarviaEmpresaCubagem | `carvia_empresas_cubagem` | Empresas que utilizam cubagem. `cnpj_empresa` UNIQUE. `considerar_cubagem` Boolean. CRUD inline em `/carvia/configuracoes/empresas-cubagem` |
+| CarviaAdminAudit | `carvia_admin_audit` | Auditoria de acoes admin (HARD_DELETE, TYPE_CHANGE, RELINK, FIELD_EDIT, IMPORT_EDIT). `dados_snapshot` JSONB com serializacao completa ANTES da acao. `dados_relacionados` JSONB com filhos cascade-deleted. Indices: acao, (entidade_tipo, entidade_id), executado_em, executado_por |
 
 ---
 
@@ -445,6 +467,7 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 - `scripts/migrations/criar_tabelas_custo_entrega_cte_complementar.py` + `.sql` — 3 tabelas (`carvia_cte_complementares`, `carvia_custos_entrega`, `carvia_custo_entrega_anexos`), 13 indices
 - `scripts/migrations/adicionar_conferencia_subcontrato.py` + `.sql` — 5 campos conferencia em `carvia_subcontratos` (`valor_considerado`, `status_conferencia`, `conferido_por`, `conferido_em`, `detalhes_conferencia`) + indice
 - `scripts/migrations/criar_tabelas_categoria_moto.py` + `.sql` — 2 tabelas (`carvia_categorias_moto`, `carvia_precos_categoria_moto`) + FK `categoria_moto_id` em `carvia_modelos_moto` + 3 indices
+- `scripts/migrations/criar_tabela_carvia_admin_audit.py` + `.sql` — Tabela `carvia_admin_audit` (auditoria admin: snapshot JSONB, 4 indices, check constraint acoes)
 
 ---
 

@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-shield-alt"></i> Auditoria Admin CarVia</h2>
+            <p class="text-muted mb-0">Registro de acoes administrativas (exclusoes, edicoes, conversoes)</p>
+        </div>
+        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'admin' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# Filtros #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Acao</label>
+                    <select name="acao" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for a in ['HARD_DELETE', 'TYPE_CHANGE', 'RELINK', 'FIELD_EDIT', 'IMPORT_EDIT'] %}
+                        <option value="{{ a }}" {{ 'selected' if acao_filtro == a }}>{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Entidade</label>
+                    <select name="entidade_tipo" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for e in ['CarviaNf', 'CarviaOperacao', 'CarviaSubcontrato',
+                                     'CarviaFaturaCliente', 'CarviaFaturaTransportadora',
+                                     'CarviaCteComplementar', 'CarviaCustoEntrega', 'CarviaDespesa'] %}
+                        <option value="{{ e }}" {{ 'selected' if entidade_tipo_filtro == e }}>{{ e }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('carvia.admin_auditoria') }}" class="btn btn-sm btn-outline-secondary">Limpar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Tabela #}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover carvia-table mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Acao</th>
+                        <th>Entidade</th>
+                        <th>ID Entidade</th>
+                        <th>Motivo</th>
+                        <th>Executado Por</th>
+                        <th>Data/Hora</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in registros %}
+                    <tr>
+                        <td>{{ r.id }}</td>
+                        <td>
+                            <span class="badge {{ 'bg-danger' if r.acao == 'HARD_DELETE' else 'bg-warning text-dark' if r.acao == 'TYPE_CHANGE' else 'bg-info' }}">
+                                {{ r.acao }}
+                            </span>
+                        </td>
+                        <td class="small">{{ r.entidade_tipo }}</td>
+                        <td>{{ r.entidade_id }}</td>
+                        <td class="text-truncate-col" title="{{ r.motivo }}">{{ r.motivo }}</td>
+                        <td class="small">{{ r.executado_por }}</td>
+                        <td class="small">{{ r.executado_em|formatar_data_hora_brasil if r.executado_em else '-' }}</td>
+                        <td>
+                            <button type="button" class="btn btn-outline-secondary btn-xs"
+                                    onclick="verDetalhes({{ r.id }})" title="Ver snapshot">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            Nenhum registro de auditoria encontrado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# Paginacao #}
+    {% if pagination.pages > 1 %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {{ 'active' if p == pagination.page }}">
+                <a class="page-link" href="{{ url_for('carvia.admin_auditoria', page=p, acao=acao_filtro, entidade_tipo=entidade_tipo_filtro) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% endif %}
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+{# Modal de detalhes #}
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-database"></i> Snapshot da Entidade</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detalhesLoading" class="text-center py-3">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                </div>
+                <div id="detalhesContent" style="display:none;">
+                    <h6>Dados Snapshot</h6>
+                    <pre id="snapshotPre" class="bg-dark text-light p-3 rounded small" style="max-height:300px; overflow:auto;"></pre>
+                    <div id="relacionadosDiv" style="display:none;">
+                        <h6 class="mt-3">Dados Relacionados</h6>
+                        <pre id="relacionadosPre" class="bg-dark text-light p-3 rounded small" style="max-height:200px; overflow:auto;"></pre>
+                    </div>
+                    <div id="detalhesExtraDiv" style="display:none;">
+                        <h6 class="mt-3">Detalhes Extra</h6>
+                        <pre id="detalhesExtraPre" class="bg-dark text-light p-3 rounded small" style="max-height:150px; overflow:auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verDetalhes(auditId) {
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+    document.getElementById('detalhesLoading').style.display = '';
+    document.getElementById('detalhesContent').style.display = 'none';
+    modal.show();
+
+    fetch(`/carvia/admin/auditoria/${auditId}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('detalhesLoading').style.display = 'none';
+            document.getElementById('detalhesContent').style.display = '';
+
+            document.getElementById('snapshotPre').textContent =
+                JSON.stringify(data.dados_snapshot, null, 2);
+
+            const relDiv = document.getElementById('relacionadosDiv');
+            if (data.dados_relacionados && Object.keys(data.dados_relacionados).length) {
+                relDiv.style.display = '';
+                document.getElementById('relacionadosPre').textContent =
+                    JSON.stringify(data.dados_relacionados, null, 2);
+            } else {
+                relDiv.style.display = 'none';
+            }
+
+            const detDiv = document.getElementById('detalhesExtraDiv');
+            if (data.detalhes && Object.keys(data.detalhes).length) {
+                detDiv.style.display = '';
+                document.getElementById('detalhesExtraPre').textContent =
+                    JSON.stringify(data.detalhes, null, 2);
+            } else {
+                detDiv.style.display = 'none';
+            }
+        })
+        .catch(err => {
+            document.getElementById('detalhesLoading').innerHTML =
+                '<div class="text-danger">Erro ao carregar detalhes.</div>';
+        });
+}
+</script>
+{% endblock %}
