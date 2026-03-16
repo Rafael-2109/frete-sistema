@@ -11,6 +11,7 @@ from app import db
 from app.separacao.models import Separacao
 from app.faturamento.models import FaturamentoProduto
 from app.producao.models import CadastroPalletizacao
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,8 @@ class SincronizadorItemsService:
                             separacao_exemplo=separacao_exemplo,
                             item_faturamento=item_faturamento,
                             separacao_lote_id=separacao_lote_id,
-                            numero_nf=numero_nf
+                            numero_nf=numero_nf,
+                            usuario=usuario
                         )
 
                         db.session.add(nova_separacao)
@@ -191,6 +193,10 @@ class SincronizadorItemsService:
 
             # Commit
             db.session.commit()
+
+            # Recalcular EmbarqueItem para consistência com novas Separacoes
+            if adicionados > 0 or zerados > 0 or atualizados > 0:
+                self._recalcular_embarque_item(separacao_lote_id)
 
             logger.info(f"  ✅ Sincronização COMPLETA concluída:")
             logger.info(f"     - {atualizados} itens atualizados")
@@ -296,7 +302,8 @@ class SincronizadorItemsService:
         separacao_exemplo: Separacao,
         item_faturamento: FaturamentoProduto,
         separacao_lote_id: str,
-        numero_nf: str
+        numero_nf: str,
+        usuario: str = 'Sistema'
     ) -> Separacao:
         """
         Cria nova Separacao baseada em item de FaturamentoProduto
@@ -314,6 +321,7 @@ class SincronizadorItemsService:
             item_faturamento: Item de FaturamentoProduto com dados do produto
             separacao_lote_id: ID do lote
             numero_nf: Número da NF
+            usuario: Nome do usuário que solicitou a sincronização
 
         Returns:
             Nova instância de Separacao
@@ -360,13 +368,6 @@ class SincronizadorItemsService:
             # Localização (copiado do exemplo)
             nome_cidade=separacao_exemplo.nome_cidade,
             cod_uf=separacao_exemplo.cod_uf,
-            cnpj_endereco_ent=separacao_exemplo.cnpj_endereco_ent,
-            empresa_endereco_ent=separacao_exemplo.empresa_endereco_ent,
-            cep_endereco_ent=separacao_exemplo.cep_endereco_ent,
-            bairro_endereco_ent=separacao_exemplo.bairro_endereco_ent,
-            rua_endereco_ent=separacao_exemplo.rua_endereco_ent,
-            endereco_ent=separacao_exemplo.endereco_ent,
-            telefone_endereco_ent=separacao_exemplo.telefone_endereco_ent,
 
             # Datas (copiado do exemplo)
             data_pedido=separacao_exemplo.data_pedido,
@@ -385,8 +386,75 @@ class SincronizadorItemsService:
             tipo_envio=separacao_exemplo.tipo_envio,
             sincronizado_nf=True,  # Mantém True conforme solicitado
             nf_cd=separacao_exemplo.nf_cd,
+
+            # Campos de lote (copiados do exemplo)
+            tags_pedido=separacao_exemplo.tags_pedido,
+            agendamento_confirmado=separacao_exemplo.agendamento_confirmado,
+            cotacao_id=separacao_exemplo.cotacao_id,
+            data_embarque=separacao_exemplo.data_embarque,
+            cidade_normalizada=separacao_exemplo.cidade_normalizada,
+            uf_normalizada=separacao_exemplo.uf_normalizada,
+            codigo_ibge=separacao_exemplo.codigo_ibge,
+
+            # Auditoria
+            data_sincronizacao=agora_utc_naive(),
+            criado_por=usuario,
         )
 
         logger.info(f"      ✅ Criada Separacao para {cod_produto}: qtd={qtd_faturada}, valor=R${valor_faturado:.2f}, peso={peso_total}kg, pallets={pallets}")
 
         return nova_separacao
+
+    def _recalcular_embarque_item(self, separacao_lote_id: str) -> None:
+        """
+        Recalcula totais do EmbarqueItem após sincronização completa.
+
+        Soma TODAS as Separacoes do lote (incluindo sincronizado_nf=True)
+        e atualiza EmbarqueItem.peso, .valor, .pallets.
+        Também recalcula os totais do Embarque pai.
+        """
+        from app.embarques.models import EmbarqueItem, Embarque
+
+        embarque_item = EmbarqueItem.query.filter_by(
+            separacao_lote_id=separacao_lote_id,
+            status='ativo'
+        ).first()
+
+        if not embarque_item:
+            logger.debug(f"  ℹ️ Nenhum EmbarqueItem ativo para lote {separacao_lote_id} - skip recálculo")
+            return
+
+        # Somar TODAS as Separacoes do lote (inclui sincronizado_nf=True e False)
+        totais = db.session.query(
+            db.func.coalesce(db.func.sum(Separacao.peso), 0),
+            db.func.coalesce(db.func.sum(Separacao.valor_saldo), 0),
+            db.func.coalesce(db.func.sum(Separacao.pallet), 0)
+        ).filter(
+            Separacao.separacao_lote_id == separacao_lote_id
+        ).one()
+
+        embarque_item.peso = float(totais[0])
+        embarque_item.valor = float(totais[1])
+        embarque_item.pallets = float(totais[2])
+
+        logger.info(f"  📊 EmbarqueItem recalculado: peso={embarque_item.peso}, valor={embarque_item.valor}, pallets={embarque_item.pallets}")
+
+        # Recalcular Embarque pai
+        embarque = Embarque.query.get(embarque_item.embarque_id)
+        if embarque:
+            totais_embarque = db.session.query(
+                db.func.coalesce(db.func.sum(EmbarqueItem.peso), 0),
+                db.func.coalesce(db.func.sum(EmbarqueItem.valor), 0),
+                db.func.coalesce(db.func.sum(EmbarqueItem.pallets), 0)
+            ).filter(
+                EmbarqueItem.embarque_id == embarque.id,
+                EmbarqueItem.status == 'ativo'
+            ).one()
+
+            embarque.peso_total = float(totais_embarque[0])
+            embarque.valor_total = float(totais_embarque[1])
+            embarque.pallet_total = float(totais_embarque[2])
+
+            logger.info(f"  📊 Embarque #{embarque.numero} recalculado: peso={embarque.peso_total}, valor={embarque.valor_total}, pallets={embarque.pallet_total}")
+
+        db.session.commit()
