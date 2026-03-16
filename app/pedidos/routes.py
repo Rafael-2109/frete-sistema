@@ -27,7 +27,6 @@ pedidos_bp = Blueprint('pedidos', __name__, url_prefix='/pedidos')
 @pedidos_bp.route('/lista_pedidos', methods=['GET','POST'])
 @login_required
 def lista_pedidos():
-    from datetime import datetime
     
     # Form para filtrar:
     filtro_form = FiltroPedidosForm()
@@ -1801,12 +1800,8 @@ def processar_cotacao_manual():
 
         # Cria itens do embarque
         for pedido in pedidos:
-            # ✅ NOVO: Busca cidade correta usando LocalizacaoService (igual ao "Cotar Frete")
-            cidade_correta = LocalizacaoService.buscar_cidade_unificada(pedido=pedido)
-            
-            # ✅ NOVO: Usa nome correto da cidade ou fallback para o nome normalizado
-            nome_cidade_correto = cidade_correta.nome if cidade_correta else pedido.cidade_normalizada or pedido.nome_cidade
-            uf_correto = cidade_correta.uf if cidade_correta else pedido.uf_normalizada or pedido.cod_uf
+            # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
+            nome_cidade_correto, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
             
             # Prepara dados vazios para EmbarqueItem (DIRETA não usa tabela nos itens)
             dados_vazio = TabelaFreteManager.preparar_cotacao_vazia()
@@ -1981,12 +1976,8 @@ def embarque_fob():
 
         # Cria itens do embarque
         for pedido in pedidos:
-            # ✅ Busca cidade correta usando LocalizacaoService (igual ao "Cotar Frete")
-            cidade_correta = LocalizacaoService.buscar_cidade_unificada(pedido=pedido)
-            
-            # ✅ Usa nome correto da cidade ou fallback para o nome normalizado
-            nome_cidade_correto = cidade_correta.nome if cidade_correta else pedido.cidade_normalizada or pedido.nome_cidade
-            uf_correto = cidade_correta.uf if cidade_correta else pedido.uf_normalizada or pedido.cod_uf
+            # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
+            nome_cidade_correto, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
             
             # Prepara dados vazios para EmbarqueItem (FOB não usa tabela)
             dados_vazio = TabelaFreteManager.preparar_cotacao_vazia()

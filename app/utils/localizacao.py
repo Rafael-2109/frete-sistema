@@ -370,6 +370,61 @@ class LocalizacaoService:
             return False
     
     @staticmethod
+    def obter_cidade_destino_embarque(pedido):
+        """
+        Retorna (cidade, uf) para EmbarqueItem.cidade_destino/uf_destino.
+
+        Para RED: usa nome_cidade/cod_uf diretamente (cidade real de entrega).
+        NAO usa codigo_ibge para RED (corrompido pela normalizacao RED->Guarulhos).
+        NAO aplica regra RED de normalizacao (que forca Guarulhos/SP).
+
+        Para outros: resolucao normal (IBGE -> normalizacao -> fallback).
+        """
+        rota = getattr(pedido, 'rota', None)
+
+        if rota and rota.strip().upper() == 'RED':
+            # RED: usar nome_cidade/cod_uf DIRETAMENTE (cidade real de entrega)
+            nome_cidade = getattr(pedido, 'nome_cidade', None)
+            cod_uf = getattr(pedido, 'cod_uf', None)
+
+            if nome_cidade and cod_uf:
+                # Busca na base de localidades para nome formatado corretamente
+                cidade_obj = LocalizacaoService.buscar_cidade_por_nome(nome_cidade, cod_uf)
+                if cidade_obj:
+                    logger.debug(f"RED: cidade real de entrega via localidades: {cidade_obj.nome}/{cidade_obj.uf}")
+                    return cidade_obj.nome, cidade_obj.uf
+
+            # Fallback: retorna valores originais com formatacao basica
+            nome_fmt = nome_cidade.strip() if nome_cidade else nome_cidade
+            uf_fmt = cod_uf.strip().upper() if cod_uf else cod_uf
+            logger.debug(f"RED: cidade real de entrega (fallback): {nome_fmt}/{uf_fmt}")
+            return nome_fmt, uf_fmt
+
+        # Nao-RED: resolucao normal
+        # 1. Tenta IBGE (confiavel para nao-RED)
+        codigo_ibge = getattr(pedido, 'codigo_ibge', None)
+        if codigo_ibge:
+            cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(codigo_ibge)
+            if cidade_obj:
+                return cidade_obj.nome, cidade_obj.uf
+
+        # 2. Tenta normalizacao + busca por nome
+        nome_cidade = getattr(pedido, 'nome_cidade', None)
+        cod_uf = getattr(pedido, 'cod_uf', None)
+        nome_norm = LocalizacaoService.normalizar_nome_cidade_com_regras(nome_cidade, rota)
+        uf_norm = LocalizacaoService.normalizar_uf_com_regras(cod_uf, nome_cidade, rota)
+
+        if nome_norm and uf_norm:
+            cidade_obj = LocalizacaoService.buscar_cidade_por_nome(nome_norm, uf_norm)
+            if cidade_obj:
+                return cidade_obj.nome, cidade_obj.uf
+
+        # 3. Fallback: valores normalizados ou originais
+        cidade_fb = getattr(pedido, 'cidade_normalizada', None) or nome_cidade
+        uf_fb = getattr(pedido, 'uf_normalizada', None) or cod_uf
+        return cidade_fb, uf_fb
+
+    @staticmethod
     def obter_icms_cidade(pedido=None, nome=None, uf=None, codigo_ibge=None, rota=None):
         """
         Obtém o ICMS da cidade usando a busca unificada.

@@ -1522,24 +1522,8 @@ def fechar_frete():
                 if not pedido:
                     continue
 
-                uf_correto = pedido.cod_uf
-                
-                # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
-                cidade_formatada = None
-                if pedido.codigo_ibge:
-                    # Busca cidade por código IBGE (mais confiável)
-                    cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(pedido.codigo_ibge)
-                    if cidade_obj:
-                        cidade_formatada = cidade_obj.nome
-                        print(f"[DEBUG] ✅ Cidade encontrada por IBGE {pedido.codigo_ibge}: {cidade_formatada}")
-                
-                if not cidade_formatada:
-                    # Fallback: normalização de nome
-                    cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
-                        pedido.nome_cidade, 
-                        getattr(pedido, 'rota', None)
-                    ) or pedido.nome_cidade
-                    print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
+                # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
+                cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
                 
                 protocolo_formatado = formatar_protocolo(pedido.protocolo)
                 data_formatada = formatar_data_brasileira(pedido.agendamento)
@@ -1879,24 +1863,8 @@ def fechar_frete_grupo():
 
         # Cria EmbarqueItems
         for pedido in todos_pedidos:
-            uf_correto = pedido.cod_uf
-            
-            # ✅ ESTRATÉGIA CODIGO IBGE: Usa código IBGE se disponível, senão usa normalização
-            cidade_formatada = None
-            if pedido.codigo_ibge:
-                # Busca cidade por código IBGE (mais confiável)
-                cidade_obj = LocalizacaoService.buscar_cidade_por_ibge(pedido.codigo_ibge)
-                if cidade_obj:
-                    cidade_formatada = cidade_obj.nome
-                    print(f"[DEBUG] ✅ Cidade encontrada por IBGE {pedido.codigo_ibge}: {cidade_formatada}")
-            
-            if not cidade_formatada:
-                # Fallback: normalização de nome
-                cidade_formatada = LocalizacaoService.normalizar_nome_cidade_com_regras(
-                    pedido.nome_cidade,
-                    getattr(pedido, 'rota', None)
-                ) or pedido.nome_cidade
-                print(f"[DEBUG] 🔄 Cidade por normalização: {cidade_formatada}")
+            # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
+            cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
 
             # ✅ BUSCAR numero_nf da Separacao correspondente
             nota_fiscal = None
@@ -3347,18 +3315,8 @@ def incluir_em_embarque():
         pedidos_nao_incluidos = []
         
         for pedido in pedidos:
-            # ✅ CORREÇÃO: Busca cidade normalizada para consistência
-            cidade_obj = LocalizacaoService.buscar_cidade_unificada(
-                nome=pedido.nome_cidade,
-                uf=pedido.cod_uf,
-                rota=getattr(pedido, 'rota', None)
-            )
-            # ✅ PADRONIZAÇÃO: Prioriza nome da tabela de localidades, senão usa normalização
-            cidade_formatada = (cidade_obj.nome if cidade_obj else 
-                              LocalizacaoService.normalizar_nome_cidade_com_regras(
-                                  pedido.nome_cidade, 
-                                  getattr(pedido, 'rota', None)
-                              ) or pedido.nome_cidade)
+            # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
+            cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
             
             # ✅ CORREÇÃO: Formatar protocolo e data corretamente
             protocolo_formatado = formatar_protocolo(getattr(pedido, 'protocolo', None))
@@ -3391,8 +3349,8 @@ def incluir_em_embarque():
                 valor=pedido.valor_saldo_total,
                 pallets=pedido.pallet_total,  # ✅ NOVO: Adiciona pallets reais do pedido
                 status='ativo',
-                uf_destino=pedido.cod_uf,
-                cidade_destino=cidade_formatada  # ✅ CORREÇÃO: Usa cidade normalizada
+                uf_destino=uf_correto,
+                cidade_destino=cidade_formatada
             )
             
             # ✅ CORREÇÃO: Para carga fracionada, OBRIGATÓRIO usar dados da tabela DA COTAÇÃO da mesma transportadora
