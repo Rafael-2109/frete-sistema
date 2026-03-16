@@ -112,6 +112,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "columns": [
+        "tipo_custo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_custos_entrega_operacao_id",
       "columns": [
         "operacao_id"
@@ -136,13 +143,6 @@
       "name": "ix_carvia_custos_entrega_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_tipo_custo",
-      "columns": [
-        "tipo_custo"
       ],
       "unique": false
     }

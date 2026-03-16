@@ -195,16 +195,16 @@
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_cod_produto",
+      "name": "ix_historico_pedido_compras_pedido_compra_id",
       "columns": [
-        "cod_produto"
+        "pedido_compra_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_pedido_compra_id",
+      "name": "ix_historico_pedido_compras_cod_produto",
       "columns": [
-        "pedido_compra_id"
+        "cod_produto"
       ],
       "unique": false
     },

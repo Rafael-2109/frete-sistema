@@ -265,13 +265,6 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_data_registro",
-      "columns": [
-        "data_registro"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_origem_registro",
       "columns": [
         "origem_registro"
@@ -282,6 +275,13 @@
       "name": "ix_nf_devolucao_numero_nf_venda",
       "columns": [
         "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_data_registro",
+      "columns": [
+        "data_registro"
       ],
       "unique": false
     },

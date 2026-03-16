@@ -121,17 +121,17 @@
   ],
   "indices": [
     {
-      "name": "idx_documento_tipo_recebido",
+      "name": "ix_pallet_documentos_credito_id",
       "columns": [
-        "tipo",
-        "recebido"
+        "credito_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_documentos_credito_id",
+      "name": "idx_documento_tipo_recebido",
       "columns": [
-        "credito_id"
+        "tipo",
+        "recebido"
       ],
       "unique": false
     },
