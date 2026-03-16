@@ -100,7 +100,7 @@
       "unique": false
     },
     {
-      "name": "ix_correcao_data_nf_credito_status",
+      "name": "idx_correcao_status",
       "columns": [
         "status"
       ],
@@ -114,7 +114,7 @@
       "unique": false
     },
     {
-      "name": "idx_correcao_status",
+      "name": "ix_correcao_data_nf_credito_status",
       "columns": [
         "status"
       ],

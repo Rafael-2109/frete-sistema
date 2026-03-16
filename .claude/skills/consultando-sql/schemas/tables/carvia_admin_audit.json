@@ -1,0 +1,85 @@
+{
+  "name": "carvia_admin_audit",
+  "description": "Tabela carvia_admin_audit",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "acao",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "entidade_tipo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "entidade_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "dados_snapshot",
+      "type": "json",
+      "nullable": false
+    },
+    {
+      "name": "dados_relacionados",
+      "type": "json"
+    },
+    {
+      "name": "motivo",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "executado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "executado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "detalhes",
+      "type": "json"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_audit_entidade",
+      "columns": [
+        "entidade_tipo",
+        "entidade_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_audit_executado_por",
+      "columns": [
+        "executado_por"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_audit_acao",
+      "columns": [
+        "acao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_audit_executado_em",
+      "columns": [
+        "executado_em"
+      ],
+      "unique": false
+    }
+  ]
+}
