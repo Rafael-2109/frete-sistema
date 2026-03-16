@@ -1,16 +1,18 @@
 ---
 name: conciliando-odoo-po
 description: >-
-  Use for split and consolidacao of purchase orders in Odoo to reconcile with
-  a nota fiscal: consolidar POs de uma NF, executar split de pedido, criar PO
-  Conciliador, reverter consolidacao, or ajustar quantidades de linhas de PO.
-  Also use to debug errors during these operations (AttributeError, PO criado
-  sem linhas corretas, fornecedor nao encontrado) or to explain conceptually
-  how split/consolidacao works.
-  Do NOT use for: read-only document queries (usar rastreando-odoo),
-  NF x PO matching before consolidation (usar validacao-nf-po),
-  financial payments (usar executando-odoo-financeiro),
-  or exploring unknown Odoo model fields (usar descobrindo-odoo-estrutura).
+  Esta skill deve ser usada quando o usuario precisa executar operacoes de
+  split e consolidacao de pedidos de compra no Odoo para conciliar com nota
+  fiscal: consolidar POs de uma NF, executar split de pedido, criar PO
+  Conciliador, reverter consolidacao, ajustar quantidades de linhas de PO,
+  vincular PO a NF, desvincular PO, trocar PO vinculado, remover PO da nota
+  e vincular outro, ou substituir PO. Tambem usar para depurar erros nestas
+  operacoes (AttributeError, PO criado sem linhas corretas, fornecedor nao
+  encontrado) ou explicar conceitualmente como split/consolidacao funciona.
+  NAO usar para: consultas read-only de documentos (usar rastreando-odoo),
+  match NF x PO antes da consolidacao (usar validacao-nf-po), pagamentos
+  financeiros (usar executando-odoo-financeiro), ou explorar campos de
+  modelo Odoo desconhecido (usar descobrindo-odoo-estrutura).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

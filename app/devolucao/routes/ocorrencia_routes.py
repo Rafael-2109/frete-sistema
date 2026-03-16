@@ -271,14 +271,12 @@ def index():
             FaturamentoProduto.equipe_vendas
         ).filter(
             FaturamentoProduto.numero_nf.in_(nfs_para_busca)
-        ).distinct(
-            FaturamentoProduto.numero_nf
         ).order_by(
-            FaturamentoProduto.numero_nf,
             FaturamentoProduto.data_fatura.desc()
         ).all()
         for r in fat_results:
-            vendedor_por_nf[r.numero_nf] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
+            if r.numero_nf not in vendedor_por_nf:
+                vendedor_por_nf[r.numero_nf] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
 
     vendedor_por_cnpj = {}
     if cnpjs_para_busca:
@@ -288,14 +286,12 @@ def index():
             FaturamentoProduto.equipe_vendas
         ).filter(
             FaturamentoProduto.cnpj_cliente.in_(cnpjs_para_busca)
-        ).distinct(
-            FaturamentoProduto.cnpj_cliente
         ).order_by(
-            FaturamentoProduto.cnpj_cliente,
             FaturamentoProduto.data_fatura.desc()
         ).all()
         for r in fat_cnpj:
-            vendedor_por_cnpj[r.cnpj_cliente] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
+            if r.cnpj_cliente not in vendedor_por_cnpj:
+                vendedor_por_cnpj[r.cnpj_cliente] = {'vendedor': r.vendedor, 'equipe': r.equipe_vendas}
 
     for oc in ocorrencias:
         info = None

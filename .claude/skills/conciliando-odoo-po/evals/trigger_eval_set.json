@@ -118,5 +118,23 @@
     "query": "O lote nao foi criado no quality check, o que aconteceu?",
     "should_trigger": false,
     "reason": "Recebimento fisico Fase 4, usar recebimento-fisico-odoo"
+  },
+  {
+    "id": 20,
+    "query": "preciso remover o PO C2615060 da nota 84186 e vincular o PO C2615061",
+    "should_trigger": true,
+    "reason": "Remover e vincular PO a NF e operacao de vinculacao desta skill"
+  },
+  {
+    "id": 21,
+    "query": "preciso desvincular um pedido de compra da nota fiscal",
+    "should_trigger": true,
+    "reason": "Desvincular PO de NF e operacao de vinculacao desta skill"
+  },
+  {
+    "id": 22,
+    "query": "trocar o PO vinculado à NF 12345",
+    "should_trigger": true,
+    "reason": "Trocar PO vinculado e operacao de vinculacao desta skill"
   }
 ]

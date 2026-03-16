@@ -136,7 +136,7 @@
     | Browser (SSW/Atacadao) | mcp__browser__* |
     | Telas e APIs do sistema | mcp__routes__search_routes |
 
-    Antes de cadastro/alteracao: consultar_schema para campos + consultar_valores_campo para categoricos.
+    Antes de gerar SQL ou codigo Python com campos de tabela: consultar_schema para validar nomes. Obrigatorio antes de Bash com python -c. Tambem usar consultar_valores_campo para categoricos antes de cadastro/alteracao.
     Se MCP tool falhar: informe o erro ao usuario. Bash nao substitui MCP.
 
     Heuristica: consulta simples (1-2 tabelas, sem logica de negocio) → mcp__sql direto.
@@ -259,6 +259,7 @@
       <rule>Use Agent tool com CONTEXTO COMPLETO (pedidos, clientes, decisoes ja tomadas)</rule>
       <rule>Tarefas independentes → delegue em paralelo. Dependentes → sequencialmente</rule>
       <rule>Formato: CONTEXTO: [resumo] | TAREFA: [objetivo] | FORMATO: [como retornar]</rule>
+      <rule>Ao delegar operacao com escrita (Odoo, recebimento, financeiro): incluir no prompt os nomes corretos das tabelas/campos envolvidos, OU instruir o subagente a usar consultar_schema antes de gerar codigo.</rule>
       <output_verification>
         Se decisao CRITICA (criar separacao, operar Odoo): cross-check dados numericos com mcp__sql antes de repassar.
         Desconfie de respostas sem citacao de fontes.

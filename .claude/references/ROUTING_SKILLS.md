@@ -51,6 +51,7 @@ Se a resposta esta no reference -> NAO usar skill.
 1. RECEBIMENTO de compra?
    |-- Match NF x PO           -> validacao-nf-po
    |-- Split/Consolidar PO     -> conciliando-odoo-po
+   |-- Vincular/desvincular PO ↔ NF  -> conciliando-odoo-po
    |-- Lotes/Quality Check     -> recebimento-fisico-odoo
    |-- Pipeline completo       -> ver odoo/PIPELINE_RECEBIMENTO.md
 
