@@ -21,7 +21,7 @@
     {% else %}
     <!-- Tabela de Pendências -->
     <div class="card">
-        <div class="card-header bg-warning text-dark">
+        <div class="card-header">
             <h5 class="mb-0">
                 <i class="fas fa-exclamation-triangle"></i>
                 {{ pendentes|length }} ação(ões) aguardando confirmação
@@ -125,7 +125,7 @@
                         <div class="modal fade" id="modalAprovar{{ aud.id }}" tabindex="-1">
                             <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
                                 <div class="modal-content" style="word-wrap: break-word;">
-                                    <div class="modal-header bg-success text-white">
+                                    <div class="modal-header">
                                         <h5 class="modal-title">
                                             <i class="fas fa-check-circle"></i> Aprovar Ação
                                         </h5>
@@ -172,7 +172,7 @@
                         <div class="modal fade" id="modalRejeitar{{ aud.id }}" tabindex="-1">
                             <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
                                 <div class="modal-content" style="word-wrap: break-word;">
-                                    <div class="modal-header bg-danger text-white">
+                                    <div class="modal-header">
                                         <h5 class="modal-title">
                                             <i class="fas fa-times-circle"></i> Rejeitar Ação
                                         </h5>

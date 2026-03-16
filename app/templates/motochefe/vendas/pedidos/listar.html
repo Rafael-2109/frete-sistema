@@ -166,11 +166,11 @@
                         <div class="modal fade" id="modalCancelar{{ p.id }}" tabindex="-1">
                             <div class="modal-dialog modal-dialog-centered modal-lg">
                                 <div class="modal-content">
-                                    <div class="modal-header bg-danger text-white">
+                                    <div class="modal-header">
                                         <h5 class="modal-title">
                                             <i class="fas fa-ban"></i> Solicitar Cancelamento
                                         </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                     </div>
                                     <form method="POST" action="{{ url_for('motochefe.solicitar_cancelamento_pedido', id=p.id) }}">
                                         <div class="modal-body" style="overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; hyphens: auto;">
@@ -206,12 +206,12 @@
                         <div class="modal fade" id="modalFaturar{{ p.id }}" tabindex="-1">
                             <div class="modal-dialog">
                                 <div class="modal-content">
-                                    <div class="modal-header bg-success text-white">
+                                    <div class="modal-header">
                                         <h5 class="modal-title">
-                                            <i class="fas fa-file-invoice-dollar"></i> 
+                                            <i class="fas fa-file-invoice-dollar"></i>
                                             Faturar Pedido {{ p.numero_pedido }}
                                         </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                     </div>
                                     <form method="POST" action="{{ url_for('motochefe.faturar_pedido', id=p.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -262,12 +262,12 @@
                         <div class="modal fade modal-lg" id="modalEditarNF{{ p.id }}" tabindex="-1">
                             <div class="modal-dialog">
                                 <div class="modal-content">
-                                    <div class="modal-header bg-primary text-white">
+                                    <div class="modal-header">
                                         <h5 class="modal-title">
                                             <i class="fas fa-edit"></i>
                                             Editar NF do Pedido {{ p.numero_pedido }}
                                         </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                     </div>
                                     <form method="POST" action="{{ url_for('motochefe.editar_nf_pedido', id=p.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -322,12 +322,12 @@
                         <div class="modal fade modal-lg" id="modalReceber{{ p.id }}" tabindex="-1">
                             <div class="modal-dialog">
                                 <div class="modal-content">
-                                    <div class="modal-header bg-success text-white">
+                                    <div class="modal-header">
                                         <h5 class="modal-title">
                                             <i class="fas fa-dollar-sign"></i>
                                             Receber Pagamento - Pedido {{ p.numero_pedido }}
                                         </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                     </div>
                                     <form method="POST" action="{{ url_for('motochefe.receber_pedido', id=p.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -398,9 +398,9 @@
 <div class="modal fade" id="modalEstoqueAgrupamento" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-layer-group"></i> Visualizar Estoque de Motos</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- FILTROS -->
@@ -654,11 +654,11 @@
             <div class="modal fade" id="modalListaMotosEstoque" tabindex="-1">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
+                        <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="fas fa-motorcycle"></i> Lista de Motos - ${cor} ${potencia}
                             </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <table class="table table-sm table-hover">

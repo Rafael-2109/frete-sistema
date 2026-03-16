@@ -104,7 +104,7 @@
         <!-- Informações do Pedido -->
         <div class="col-md-6">
             <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <i class="fas fa-info-circle"></i> Informações do Pedido
                 </div>
                 <div class="card-body">
@@ -159,7 +159,7 @@
 
             <!-- Informações do Cliente -->
             <div class="card mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header">
                     <i class="fas fa-user"></i> Cliente
                 </div>
                 <div class="card-body">
@@ -190,7 +190,7 @@
 
             <!-- Informações do Vendedor -->
             <div class="card">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <i class="fas fa-user-tie"></i> Vendedor
                 </div>
                 <div class="card-body">
@@ -219,7 +219,7 @@
         <!-- Itens do Pedido -->
         <div class="col-md-6">
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <i class="fas fa-motorcycle"></i> Motos do Pedido ({{ pedido.quantidade_motos }} unidade(s))
                 </div>
                 <div class="card-body p-0">
@@ -392,7 +392,7 @@
     <div class="row mt-4">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header">
                     <i class="fas fa-tools"></i> Detalhes das Montagens
                 </div>
                 <div class="card-body p-0">
@@ -460,14 +460,14 @@
 <div class="modal fade" id="modalSelecaoMoto" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Substituir Moto</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- Moto a ser substituída -->
                 <div class="card mb-3 border-danger">
-                    <div class="card-header bg-danger text-white">
+                    <div class="card-header">
                         <strong>Moto a ser Substituída</strong>
                     </div>
                     <div class="card-body">
@@ -510,7 +510,7 @@
                 <input type="hidden" name="chassi_antigo" id="chassiAntigoForm"/>
                 <input type="hidden" name="chassi_novo" id="chassiNovoForm"/>
 
-                <div class="modal-header bg-warning text-dark">
+                <div class="modal-header">
                     <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmar Substituição</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>

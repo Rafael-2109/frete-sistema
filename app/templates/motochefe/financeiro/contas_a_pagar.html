@@ -48,7 +48,7 @@
 
         <!-- 🆕 SELEÇÃO DE EMPRESA PAGADORA (OBRIGATÓRIO) -->
         <div class="card mb-4 border-warning">
-            <div class="card-header bg-warning text-dark">
+            <div class="card-header">
                 <i class="fas fa-building"></i> <strong>Empresa Pagadora (Obrigatório)</strong>
             </div>
             <div class="card-body">
@@ -80,7 +80,7 @@
         <!-- 1. MOTOS -->
         {% if motos_agrupados %}
         <div class="card mb-3">
-            <div class="card-header bg-success text-white">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <button type="button" class="btn btn-sm btn-light me-2"
                             onclick="abrirModalPagamentoGrupo('motos')">
@@ -131,7 +131,7 @@
         {% for item in itens %}
         {% if item.tipo == 'TITULO_A_PAGAR' %}
         <div class="card mb-3">
-            <div class="card-header bg-warning text-dark">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-file-invoice"></i> Títulos a Pagar - {{ item.dados.tipo }}
                     <span class="badge bg-dark float-end">R$ {{ item.dados.total|valor_br }}</span>
@@ -167,7 +167,7 @@
         <!-- 3. FRETES -->
         {% if fretes_agrupados %}
         <div class="card mb-3">
-            <div class="card-header bg-info text-white">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-truck"></i> Fretes de Embarques
                     <span class="badge bg-light text-dark float-end">R$ {{ total_fretes|valor_br }}</span>
@@ -212,7 +212,7 @@
         <!-- 3. COMISSÕES -->
         {% if comissoes_agrupadas %}
         <div class="card mb-3">
-            <div class="card-header bg-warning text-dark">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-percent"></i> Comissões de Vendedores
                     <span class="badge bg-dark float-end">R$ {{ total_comissoes|valor_br }}</span>
@@ -253,7 +253,7 @@
         <!-- 4. MONTAGENS -->
         {% if montagens_agrupadas %}
         <div class="card mb-3">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-tools"></i> Montagens de Motos
                     <span class="badge bg-light text-dark float-end">R$ {{ total_montagens|valor_br }}</span>
@@ -296,7 +296,7 @@
         <!-- 5. DESPESAS -->
         {% if despesas_agrupadas %}
         <div class="card mb-3">
-            <div class="card-header bg-secondary text-white">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-wallet"></i> Despesas Mensais
                     <span class="badge bg-light text-dark float-end">R$ {{ total_despesas|valor_br }}</span>
@@ -332,7 +332,7 @@
         <!-- 6. MOVIMENTAÇÕES -->
         {% if movimentacoes_agrupadas %}
         <div class="card mb-3">
-            <div class="card-header bg-info text-white">
+            <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-exchange-alt"></i> Custos de Movimentação (MargemSogima)
                     <span class="badge bg-light text-dark float-end">R$ {{ total_movimentacoes|valor_br }}</span>

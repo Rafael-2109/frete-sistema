@@ -26,7 +26,7 @@
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-info-circle"></i> Resumo do Lançamento
                     </h5>
@@ -125,7 +125,7 @@
     <div class="row">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-dark text-white">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-list-ol"></i> Timeline de Execução ({{ auditorias|length }} etapas)
                     </h5>
@@ -146,23 +146,23 @@
                     {# Definir cores baseado no status e se foi corrigido #}
                     {% if auditoria.status == 'SUCESSO' %}
                         {% set cor_borda = 'border-success' %}
-                        {% set cor_header = 'bg-success' %}
+                        {% set cor_header = '' %}
                         {% set icone = 'fa-check-circle' %}
                         {% set status_texto = '' %}
                     {% elif erro_corrigido %}
                         {% set cor_borda = 'border-warning' %}
-                        {% set cor_header = 'bg-warning text-dark' %}
+                        {% set cor_header = '' %}
                         {% set icone = 'fa-sync-alt' %}
                         {% set status_texto = ' (Retentativa)' %}
                     {% else %}
                         {% set cor_borda = 'border-danger' %}
-                        {% set cor_header = 'bg-danger' %}
+                        {% set cor_header = '' %}
                         {% set icone = 'fa-times-circle' %}
                         {% set status_texto = '' %}
                     {% endif %}
 
                     <div class="card mb-3 {{ cor_borda }}">
-                        <div class="card-header {{ cor_header }} {% if not erro_corrigido or auditoria.status == 'SUCESSO' %}text-white{% endif %}">
+                        <div class="card-header {{ cor_header }}">
                             <div class="row align-items-center">
                                 <div class="col-md-6">
                                     <h6 class="mb-0">

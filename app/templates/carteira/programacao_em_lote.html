@@ -405,7 +405,7 @@
 <div class="modal fade" id="modalAgendamento" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-calendar-alt"></i> Agendamento em Lote
                 </h5>
@@ -853,16 +853,16 @@
         <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
           <div class="modal-dialog modal-xl">
             <div class="modal-content">
-              <div class="modal-header bg-primary text-white">
+              <div class="modal-header">
                 <h5 class="modal-title">
                   <i class="fas fa-calendar-check"></i> Agendamento Sendas - CNPJ ${numero}/${total}
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
               </div>
               <div class="modal-body">
                 <!-- Info do CNPJ -->
                 <div class="card mb-3">
-                  <div class="card-header bg-info">
+                  <div class="card-header">
                     <h6 class="mb-0"><i class="fas fa-building"></i> Dados do Cliente</h6>
                   </div>
                   <div class="card-body">
@@ -894,7 +894,7 @@
 
                 <!-- Resumo dos pedidos/produtos -->
                 <div class="card mb-3">
-                  <div class="card-header bg-secondary text-white">
+                  <div class="card-header">
                     <h6 class="mb-0">
                       <i class="fas fa-boxes"></i> Pedidos e Produtos
                       <span class="badge bg-light text-dark ms-2">${dadosCnpj.pedidos.length} itens</span>
@@ -930,7 +930,7 @@
 
                 <!-- Resultado da comparação -->
                 <div class="card">
-                  <div class="card-header bg-success text-white">
+                  <div class="card-header">
                     <h6 class="mb-0"><i class="fas fa-check-circle"></i> Resultado da Comparação</h6>
                   </div>
                   <div class="card-body">

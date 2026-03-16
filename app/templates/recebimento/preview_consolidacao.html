@@ -17,7 +17,7 @@
 
     <!-- Info da NF -->
     <div class="card mb-4 border-primary">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-file-invoice me-2"></i>Dados da NF-e</h5>
         </div>
         <div class="card-body">
@@ -93,7 +93,7 @@
 
     <!-- PO que será vinculado -->
     <div class="card mb-4 border-success">
-        <div class="card-header bg-success text-white">
+        <div class="card-header">
             <h6 class="mb-0">
                 <i class="fas fa-link me-2"></i>
                 PO EXISTENTE (será vinculado à NF)
@@ -197,7 +197,7 @@
 
     <!-- PO Original (será ajustado) -->
     <div class="card mb-4 border-primary">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h6 class="mb-0">
                 <i class="fas fa-edit me-2"></i>
                 PO ORIGINAL (será ajustado para NF)
@@ -272,7 +272,7 @@
     <!-- PO Saldo (será criado) -->
     {% if preview.pos_originais %}
     <div class="card mb-4 border-warning">
-        <div class="card-header bg-warning text-dark">
+        <div class="card-header">
             <h6 class="mb-0">
                 <i class="fas fa-plus-square me-2"></i>
                 PO SALDO (será criado com restante)
@@ -392,7 +392,7 @@
 
     <!-- PO Conciliador (NOVO) -->
     <div class="card mb-4 border-success">
-        <div class="card-header bg-success text-white">
+        <div class="card-header">
             <h6 class="mb-0">
                 <i class="fas fa-plus-square me-2"></i>
                 PO CONCILIADOR (sera criado)
@@ -466,7 +466,7 @@
 
     <!-- POs Originais (ficarão com SALDO) -->
     <div class="card mb-4">
-        <div class="card-header bg-warning text-dark">
+        <div class="card-header">
             <h6 class="mb-0">
                 <i class="fas fa-boxes me-2"></i>
                 POs ORIGINAIS (ficarão com SALDO)
@@ -543,7 +543,7 @@
     <!-- Lista de Ações (comum a todos cenários) -->
     {% if preview.acoes %}
     <div class="card mb-4">
-        <div class="card-header bg-dark text-white">
+        <div class="card-header">
             <h6 class="mb-0"><i class="fas fa-list-ol me-2"></i>Ações que Serão Executadas no Odoo ({{ preview.acoes|length }} ações)</h6>
         </div>
         <div class="card-body">

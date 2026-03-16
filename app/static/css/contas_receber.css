@@ -548,8 +548,6 @@ input[type="date"] {
     border-bottom-color: var(--border);
 }
 
-/* modal-header.bg-*: cobertos pela regra global em _bootstrap-overrides.css */
-
 .modal-title {
     color: var(--text);
 }

@@ -343,7 +343,7 @@
                 <h5 class="modal-title" id="modalResolverTitle">
                     <i class="fas fa-check me-2"></i>Resolver Pendencia
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="resolver-id">
@@ -390,11 +390,11 @@
 <div class="modal fade" id="modalDetalhes" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-info-circle me-2"></i>Detalhes da Pendencia
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="detalhes-conteudo">
                 <!-- Conteudo carregado dinamicamente -->
@@ -439,7 +439,7 @@
         const opcoesRejeitar = document.getElementById('resolver-opcoes-rejeitar');
 
         if (acao === 'aprovar') {
-            header.className = 'modal-header bg-success text-white';
+            header.className = 'modal-header';
             title.innerHTML = '<i class="fas fa-check me-2"></i>Aprovar Pendencia';
             btn.className = 'btn btn-success';
             btn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="resolver-spinner"></span><i class="fas fa-check me-1"></i> Aprovar';
@@ -447,7 +447,7 @@
             opcoesAprovar.classList.remove('d-none');
             opcoesRejeitar.classList.add('d-none');
         } else {
-            header.className = 'modal-header bg-danger text-white';
+            header.className = 'modal-header';
             title.innerHTML = '<i class="fas fa-times me-2"></i>Rejeitar Pendencia';
             btn.className = 'btn btn-danger';
             btn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="resolver-spinner"></span><i class="fas fa-times me-1"></i> Rejeitar';
@@ -632,7 +632,7 @@
 
                 html += `
                     <div class="card mb-3 ${naoMatchNenhum ? 'border-danger' : 'border-success'}">
-                        <div class="card-header ${naoMatchNenhum ? 'bg-danger' : 'bg-success'} text-white py-2">
+                        <div class="card-header py-2">
                             <i class="fas fa-${naoMatchNenhum ? 'times-circle' : 'check-circle'} me-2"></i>
                             <strong>Formula:</strong> Base IBS/CBS = (vBC_ICMS - vICMS) × (1 - PIS/COFINS%)
                         </div>
@@ -673,7 +673,7 @@
                                 <!-- Lucro Presumido -->
                                 <div class="col-md-6">
                                     <div class="card ${matchPresumido ? 'border-success bg-success-subtle' : 'border-secondary'}">
-                                        <div class="card-header py-1 ${matchPresumido ? 'bg-success text-white' : 'bg-light'}">
+                                        <div class="card-header py-1 ${matchPresumido ? '' : 'bg-light'}">
                                             <strong>${matchPresumido ? '✓ ' : ''}Lucro Presumido</strong>
                                             <span class="badge ${matchPresumido ? 'bg-white text-success' : 'bg-secondary'} float-end">3,65%</span>
                                         </div>
@@ -691,7 +691,7 @@
                                 <!-- Lucro Real -->
                                 <div class="col-md-6">
                                     <div class="card ${matchReal ? 'border-success bg-success-subtle' : 'border-secondary'}">
-                                        <div class="card-header py-1 ${matchReal ? 'bg-success text-white' : 'bg-light'}">
+                                        <div class="card-header py-1 ${matchReal ? '' : 'bg-light'}">
                                             <strong>${matchReal ? '✓ ' : ''}Lucro Real</strong>
                                             <span class="badge ${matchReal ? 'bg-white text-success' : 'bg-secondary'} float-end">9,25%</span>
                                         </div>
@@ -775,7 +775,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="card ${ibsUfAliq == 0.10 ? 'border-success' : 'border-danger'}">
-                                <div class="card-header ${ibsUfAliq == 0.10 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                <div class="card-header py-1 px-2">
                                     <small>IBS UF ${ibsUfAliq == 0.10 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
@@ -787,7 +787,7 @@
                         </div>
                         <div class="col-md-4">
                             <div class="card ${ibsMunAliq == 0.00 ? 'border-success' : 'border-danger'}">
-                                <div class="card-header ${ibsMunAliq == 0.00 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                <div class="card-header py-1 px-2">
                                     <small>IBS Mun ${ibsMunAliq == 0.00 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
@@ -799,7 +799,7 @@
                         </div>
                         <div class="col-md-4">
                             <div class="card ${cbsAliq == 0.90 ? 'border-success' : 'border-danger'}">
-                                <div class="card-header ${cbsAliq == 0.90 ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                                <div class="card-header py-1 px-2">
                                     <small>CBS ${cbsAliq == 0.90 ? '✓' : '✗'}</small>
                                 </div>
                                 <div class="card-body p-2 text-center">
@@ -875,7 +875,7 @@
             <div class="row">
                 <div class="col-md-3">
                     <div class="card border-secondary">
-                        <div class="card-header bg-secondary text-white py-1 px-2">
+                        <div class="card-header py-1 px-2">
                             <small>CST Esperado</small>
                         </div>
                         <div class="card-body p-2 text-center">
@@ -885,7 +885,7 @@
                 </div>
                 <div class="col-md-3">
                     <div class="card border-primary">
-                        <div class="card-header bg-primary text-white py-1 px-2">
+                        <div class="card-header py-1 px-2">
                             <small>IBS UF</small>
                         </div>
                         <div class="card-body p-2 text-center">
@@ -895,7 +895,7 @@
                 </div>
                 <div class="col-md-3">
                     <div class="card border-info">
-                        <div class="card-header bg-info text-white py-1 px-2">
+                        <div class="card-header py-1 px-2">
                             <small>IBS Mun</small>
                         </div>
                         <div class="card-body p-2 text-center">
@@ -905,7 +905,7 @@
                 </div>
                 <div class="col-md-3">
                     <div class="card border-success">
-                        <div class="card-header bg-success text-white py-1 px-2">
+                        <div class="card-header py-1 px-2">
                             <small>CBS</small>
                         </div>
                         <div class="card-body p-2 text-center">
@@ -925,7 +925,7 @@
                 <div class="row">
                     <div class="col-md-3">
                         <div class="card ${ibs.cst === ncmCadastro.cst_esperado ? 'border-success' : 'border-danger'}">
-                            <div class="card-header ${ibs.cst === ncmCadastro.cst_esperado ? 'bg-success' : 'bg-danger'} text-white py-1 px-2">
+                            <div class="card-header py-1 px-2">
                                 <small>CST Encontrado</small>
                             </div>
                             <div class="card-body p-2 text-center">

@@ -221,11 +221,11 @@
         <div class="modal fade" id="modalReceberPedido{{ pedido_id }}" tabindex="-1">
             <div class="modal-dialog modal-md">
                 <div class="modal-content">
-                    <div class="modal-header bg-success text-white">
+                    <div class="modal-header">
                         <h4 class="modal-title m-0">
                             <i class="fas fa-dollar-sign"></i> Receber - Pedido {{ dados_pedido.pedido.numero_pedido }}
                         </h4>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <form method="POST" action="{{ url_for('motochefe.receber_pedido_contas', pedido_id=pedido_id) }}" id="formRecebimentoPedido{{ pedido_id }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -294,7 +294,7 @@
                 <div class="modal fade" id="modalReceberMoto{{ pedido_id }}-{{ chassi|replace('.', '-') }}" tabindex="-1">
                     <div class="modal-dialog modal-sm">
                         <div class="modal-content">
-                            <div class="modal-header bg-warning">
+                            <div class="modal-header">
                                 <h6 class="modal-title m-0">
                                     <i class="fas fa-motorcycle"></i> Receber - Moto {{ chassi }}
                                 </h6>

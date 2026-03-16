@@ -7,7 +7,7 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <h4 class="mb-0">
                         <i class="fas fa-shield-alt"></i> Sincronização Integrada Segura
                         <span class="badge bg-light text-success ml-2">SEQUÊNCIA AUTOMÁTICA</span>
@@ -46,7 +46,7 @@
                             <div
                                 class="card border-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
                                 <div
-                                    class="card-header bg-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }} text-white">
+                                    class="card-header bg-{{ 'success' if status.nivel_risco == 'BAIXO' else ('warning' if status.nivel_risco == 'MÉDIO' else 'danger') }}">
                                     <h6 class="mb-0"><i class="fas fa-chart-line"></i> Status do Sistema</h6>
                                 </div>
                                 <div class="card-body">
@@ -94,7 +94,7 @@
                         <div class="col-md-6">
                             <!-- 🔧 CIRCUIT BREAKER DO ODOO -->
                             <div class="card border-info mb-3" id="circuit-breaker-card">
-                                <div class="card-header bg-info text-white">
+                                <div class="card-header">
                                     <h6 class="mb-0">
                                         <i class="fas fa-shield-alt"></i> Circuit Breaker Odoo
                                         <span class="badge bg-light text-info ml-2" id="cb-state-badge">...</span>
@@ -112,7 +112,7 @@
 
                             <!-- 🔄 BOTÃO PRINCIPAL DE SINCRONIZAÇÃO -->
                             <div class="card border-primary">
-                                <div class="card-header bg-primary text-white">
+                                <div class="card-header">
                                     <h6 class="mb-0"><i class="fas fa-sync"></i> Sincronização Segura</h6>
                                 </div>
                                 <div class="card-body text-center">
@@ -206,7 +206,7 @@
                     <div class="row">
                         <div class="col-12">
                             <div class="card">
-                                <div class="card-header bg-info text-white">
+                                <div class="card-header">
                                     <h6 class="mb-0"><i class="fas fa-balance-scale"></i> Comparação: Processo Anterior
                                         vs Processo Seguro</h6>
                                 </div>

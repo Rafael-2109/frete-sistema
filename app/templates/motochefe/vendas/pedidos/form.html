@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="card">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h4 class="mb-0">
                 <i class="fas fa-file-invoice"></i>
                 {% if pedido %}Editar Pedido{% else %}Novo Pedido de Venda{% endif %}
@@ -627,9 +627,9 @@ async function buscarProximoNumero() {
 <div class="modal fade" id="modalEstoqueAgrupamento" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-layer-group"></i> Visualizar Estoque de Motos</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- FILTROS -->

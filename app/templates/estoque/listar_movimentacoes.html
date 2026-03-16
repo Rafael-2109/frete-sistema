@@ -371,7 +371,7 @@
 <div class="modal fade" id="modalProducoesSemOP" tabindex="-1" aria-labelledby="modalProducoesSemOPLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-warning">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalProducoesSemOPLabel">
                     <i class="fas fa-exclamation-triangle"></i> Produções sem Ordem de Produção
                 </h5>
@@ -549,11 +549,11 @@
 <div class="modal fade" id="modalEditarMovimentacao" tabindex="-1" aria-labelledby="modalEditarMovimentacaoLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalEditarMovimentacaoLabel">
                     <i class="fas fa-edit"></i> Editar Movimentação de Estoque
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formEditarMovimentacao" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -581,7 +581,7 @@
 
                     <!-- SEÇÃO 2: DADOS EDITÁVEIS DA MOVIMENTAÇÃO -->
                     <div class="card mb-3">
-                        <div class="card-header bg-success text-white">
+                        <div class="card-header">
                             <h6 class="mb-0"><i class="fas fa-edit"></i> Dados Editáveis</h6>
                         </div>
                         <div class="card-body">
@@ -635,7 +635,7 @@
 
                     <!-- SEÇÃO 3: VÍNCULOS (Pedidos, NF, Embarque) -->
                     <div class="card mb-3">
-                        <div class="card-header bg-info text-white">
+                        <div class="card-header">
                             <h6 class="mb-0"><i class="fas fa-link"></i> Vínculos (Pedido / NF / Embarque)</h6>
                         </div>
                         <div class="card-body">
@@ -677,7 +677,7 @@
 
                     <!-- SEÇÃO 4: DADOS ODOO -->
                     <div class="card mb-3">
-                        <div class="card-header bg-warning">
+                        <div class="card-header">
                             <h6 class="mb-0"><i class="fas fa-database"></i> Dados Odoo (Rastreabilidade)</h6>
                         </div>
                         <div class="card-body">
@@ -700,7 +700,7 @@
 
                     <!-- SEÇÃO 5: VINCULAÇÃO PRODUÇÃO/CONSUMO -->
                     <div class="card mb-3">
-                        <div class="card-header text-white" style="background-color: var(--bs-purple);">
+                        <div class="card-header" style="background-color: var(--bs-purple);">
                             <h6 class="mb-0"><i class="fas fa-industry"></i> Vinculação Produção/Consumo</h6>
                         </div>
                         <div class="card-body">
@@ -733,7 +733,7 @@
 
                     <!-- SEÇÃO 6: AUDITORIA -->
                     <div class="card">
-                        <div class="card-header bg-secondary text-white">
+                        <div class="card-header">
                             <h6 class="mb-0"><i class="fas fa-history"></i> Auditoria</h6>
                         </div>
                         <div class="card-body">
@@ -782,7 +782,7 @@
 <div class="modal fade" id="modalExportar" tabindex="-1" aria-labelledby="modalExportarLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-warning">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalExportarLabel">
                     <i class="fas fa-file-export"></i> Exportar Movimentações para Excel
                 </h5>

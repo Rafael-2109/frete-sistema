@@ -30,7 +30,7 @@
 
     <!-- Dados da Fatura -->
     <div class="card">
-        <div class="card-header bg-info text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Dados da Fatura</h5>
         </div>
         <div class="card-body">
@@ -92,7 +92,7 @@
 
     <!-- Resumo de Vinculações -->
     <div class="card mt-4">
-        <div class="card-header bg-secondary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Resumo</h5>
         </div>
         <div class="card-body">
@@ -146,7 +146,7 @@
     <!-- Fretes Vinculados (se houver) -->
     {% if fatura.total_fretes() > 0 %}
     <div class="card mt-4">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-truck"></i> Fretes Vinculados ({{ fatura.total_fretes() }})</h5>
         </div>
         <div class="card-body">
@@ -250,7 +250,7 @@
     <!-- Despesas Extras Vinculadas (se houver) -->
     {% if fatura.total_despesas_extras() > 0 %}
     <div class="card mt-4">
-        <div class="card-header bg-warning text-dark">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-exclamation-circle"></i> Despesas Extras Vinculadas ({{
                 fatura.total_despesas_extras() }})</h5>
         </div>
@@ -338,7 +338,7 @@
     <!-- Conferência (se houver) -->
     {% if fatura.status_conferencia == 'CONFERIDO' and fatura.conferido_por %}
     <div class="card mt-4">
-        <div class="card-header bg-success text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-check-circle"></i> Informações da Conferência</h5>
         </div>
         <div class="card-body">
@@ -367,7 +367,7 @@
     ======================================== -->
     {% if fatura.status_conferencia == 'CONFERIDO' %}
     <div class="card mt-4">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Lançamento no Odoo</h5>
         </div>
         <div class="card-body">
@@ -393,11 +393,11 @@
     <div class="modal fade" id="modalLancarOdoo" tabindex="-1" aria-labelledby="modalLancarOdooLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
+                <div class="modal-header">
                     <h5 class="modal-title" id="modalLancarOdooLabel">
                         <i class="fas fa-cloud-upload-alt"></i> Lançar Fatura no Odoo
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
@@ -460,7 +460,7 @@
     {% else %}
     <!-- Fatura não conferida - não pode lançar -->
     <div class="card mt-4">
-        <div class="card-header bg-secondary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-cloud-upload-alt"></i> Lançamento no Odoo</h5>
         </div>
         <div class="card-body">
@@ -481,11 +481,11 @@
     <div class="modal fade" id="modalRemoverFrete" tabindex="-1" aria-labelledby="modalRemoverFreteLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
+                <div class="modal-header">
                     <h5 class="modal-title" id="modalRemoverFreteLabel">
                         <i class="fas fa-unlink"></i> Remover Frete da Fatura
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-warning">

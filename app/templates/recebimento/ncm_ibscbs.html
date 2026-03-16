@@ -226,11 +226,11 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('recebimento_views.ncm_ibscbs_salvar') }}">
-                <div class="modal-header bg-primary text-white">
+                <div class="modal-header">
                     <h5 class="modal-title" id="modalNCMTitle">
                         <i class="fas fa-barcode me-2"></i>Cadastrar NCM IBS/CBS
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="id" id="ncm-id">
@@ -320,11 +320,11 @@
 <div class="modal fade" id="modalExcluir" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Desativacao
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p>Tem certeza que deseja desativar o NCM <strong id="excluir-ncm"></strong>?</p>
@@ -346,11 +346,11 @@
 <div class="modal fade" id="modalOdoo" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-cloud-upload-alt me-2"></i>Atualizar NCMs no Odoo
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- Mensagem de sucesso do salvamento local -->
@@ -361,7 +361,7 @@
 
                 <!-- Informacoes do padrao cadastrado -->
                 <div class="card mb-3">
-                    <div class="card-header bg-primary text-white py-2">
+                    <div class="card-header py-2">
                         <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Padrao Cadastrado - Prefixo <code id="odoo-prefixo" class="text-white"></code></h6>
                     </div>
                     <div class="card-body py-2">

@@ -165,7 +165,7 @@ class LoteManager {
 
         return `
             <div class="card lote-card h-100 border-${config.cor}" data-lote-id="${loteData.lote_id}" data-status="${status}">
-                <div class="card-header bg-${config.cor} ${config.cor === 'warning' ? 'text-dark' : 'text-white'}">
+                <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">
                             <i class="fas fa-${config.icone} me-2"></i>

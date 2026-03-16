@@ -23,7 +23,7 @@
 
     <!-- Informações da Fatura -->
     <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Informações da Fatura</h5>
         </div>
         <div class="card-body">
@@ -54,7 +54,7 @@
 
     <!-- Análise de Valores -->
     <div class="card mb-4">
-        <div class="card-header bg-info text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-calculator"></i> Análise de Valores</h5>
         </div>
         <div class="card-body">
@@ -107,7 +107,7 @@
 
     <!-- Status dos Documentos -->
     <div class="card mb-4">
-        <div class="card-header bg-warning text-dark">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-list-check"></i> Status dos Documentos</h5>
         </div>
         <div class="card-body">
@@ -184,7 +184,7 @@
 
     <!-- Validações -->
     <div class="card mb-4">
-        <div class="card-header {% if pode_aprovar %}bg-success{% else %}bg-danger{% endif %} text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Validações para Aprovação</h5>
         </div>
         <div class="card-body">
@@ -212,7 +212,7 @@
     <!-- Formulário de Aprovação -->
     {% if pode_aprovar and fatura.status_conferencia != 'CONFERIDO' %}
     <div class="card mb-4">
-        <div class="card-header bg-success text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-check-circle"></i> Aprovar Conferência da Fatura</h5>
         </div>
         <div class="card-body">
@@ -264,7 +264,7 @@
     {% elif fatura.status_conferencia == 'CONFERIDO' %}
     <!-- Fatura já conferida - opção para reabrir -->
     <div class="card mb-4">
-        <div class="card-header bg-secondary text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-lock"></i> Fatura Conferida</h5>
         </div>
         <div class="card-body">
@@ -298,7 +298,7 @@
     {% else %}
     <!-- Não pode aprovar -->
     <div class="card mb-4">
-        <div class="card-header bg-danger text-white">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-times-circle"></i> Não Pode Aprovar</h5>
         </div>
         <div class="card-body">

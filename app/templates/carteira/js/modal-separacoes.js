@@ -151,7 +151,7 @@ class ModalSeparacoes {
 
         let html = `
             <div class="card mb-3 border-${statusClass}">
-                <div class="card-header bg-${statusClass} bg-opacity-10">
+                <div class="card-header bg-opacity-10">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">
                             <i class="fas fa-box me-2"></i>

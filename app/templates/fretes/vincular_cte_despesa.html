@@ -26,7 +26,7 @@
         <!-- Informações da Despesa -->
         <div class="col-md-4">
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-exclamation-circle"></i> Dados da Despesa
                     </h5>
@@ -91,7 +91,7 @@
             <!-- Prioridade 0: CTe Normal do Frete -->
             {% if sugestoes_prioridade_0 %}
             <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-star"></i> CTe do Frete (Recomendado)
                         <span class="badge bg-light text-dark">{{ sugestoes_prioridade_0|length }}</span>
@@ -129,7 +129,7 @@
             <!-- Prioridade 1 -->
             {% if sugestoes_prioridade_1 %}
             <div class="card mb-4">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-check-circle"></i> Sugestão Principal (Prioridade 1)
                         <span class="badge bg-light text-dark">{{ sugestoes_prioridade_1|length }}</span>
@@ -167,7 +167,7 @@
             <!-- Prioridade 2 -->
             {% if sugestoes_prioridade_2 %}
             <div class="card mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-search"></i> Sugestões por NFs em Comum (Prioridade 2)
                         <span class="badge bg-light text-dark">{{ sugestoes_prioridade_2|length }}</span>
@@ -202,7 +202,7 @@
             <!-- Prioridade 3 -->
             {% if sugestoes_prioridade_3 %}
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-building"></i> Sugestões por CNPJ (Prioridade 3)
                         <span class="badge bg-dark">{{ sugestoes_prioridade_3|length }}</span>
@@ -237,7 +237,7 @@
             <!-- Prioridade 4: CTes Normais via NFs em comum -->
             {% if sugestoes_prioridade_4 %}
             <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-file-alt"></i> CTes Normais com NFs em Comum
                         <span class="badge bg-light text-dark">{{ sugestoes_prioridade_4|length }}</span>

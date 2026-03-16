@@ -10,7 +10,7 @@
             {% for category, message in messages %}
                 {% if category == 'danger' and 'ERROS ENCONTRADOS' in message %}
                     <div class="card mb-4">
-                        <div class="card-header bg-danger text-white">
+                        <div class="card-header">
                             <h5 class="mb-0">Erros na Importação</h5>
                         </div>
                         <div class="card-body">
@@ -23,7 +23,7 @@
                     </div>
                 {% elif category == 'success' and 'TRANSPORTADORAS IMPORTADAS' in message %}
                     <div class="card mb-4">
-                        <div class="card-header bg-success text-white">
+                        <div class="card-header">
                             <h5 class="mb-0">Transportadoras Importadas</h5>
                         </div>
                         <div class="card-body">
@@ -38,7 +38,7 @@
                     </div>
                 {% elif category == 'info' and 'TRANSPORTADORAS ATUALIZADAS' in message %}
                     <div class="card mb-4">
-                        <div class="card-header bg-info text-white">
+                        <div class="card-header">
                             <h5 class="mb-0">Transportadoras Atualizadas</h5>
                         </div>
                         <div class="card-body">
@@ -66,7 +66,7 @@
 
     <!-- Card de Grupos de Transportadoras -->
     <div class="card mb-4">
-        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-layer-group"></i> Grupos de Transportadoras</h5>
             <button class="btn btn-sm btn-light" onclick="abrirModalNovoGrupo()">
                 <i class="fas fa-plus"></i> Novo Grupo
@@ -113,7 +113,7 @@
     </div>
 
     <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             Cadastrar Nova Transportadora
         </div>
         <div class="card-body">
@@ -175,7 +175,7 @@
     </div>
 
     <div class="card">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header">
             <h5 class="mb-0">Lista de Transportadoras</h5>
         </div>
         <div class="card-body">
@@ -257,7 +257,7 @@
 <div class="modal fade" id="modalConfigurarFrete" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-calculator"></i> Configuração de Cálculo de Frete -
                     <span id="config_transportadora_nome"></span>
@@ -284,7 +284,7 @@
                         <!-- Coluna 1: Taxas Percentuais -->
                         <div class="col-md-6">
                             <div class="card mb-3">
-                                <div class="card-header bg-secondary text-white">
+                                <div class="card-header">
                                     <h6 class="mb-0"><i class="fas fa-percentage"></i> Taxas Percentuais</h6>
                                 </div>
                                 <div class="card-body">
@@ -330,7 +330,7 @@
                         <!-- Coluna 2: Taxas Fixas -->
                         <div class="col-md-6">
                             <div class="card mb-3">
-                                <div class="card-header bg-secondary text-white">
+                                <div class="card-header">
                                     <h6 class="mb-0"><i class="fas fa-dollar-sign"></i> Taxas Fixas</h6>
                                 </div>
                                 <div class="card-body">
@@ -376,7 +376,7 @@
 
                     <!-- Pedágio -->
                     <div class="card mb-3">
-                        <div class="card-header bg-secondary text-white">
+                        <div class="card-header">
                             <h6 class="mb-0"><i class="fas fa-road"></i> Configuração de Pedágio</h6>
                         </div>
                         <div class="card-body">
@@ -639,9 +639,9 @@
 <div class="modal fade" id="modalGrupo" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalGrupoTitulo">Novo Grupo de Transportadoras</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formGrupo">
                 <div class="modal-body">

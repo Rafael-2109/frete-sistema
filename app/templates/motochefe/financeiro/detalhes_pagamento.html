@@ -25,7 +25,7 @@
 
     <!-- RESUMO DO LOTE -->
     <div class="card mb-4 {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}border-success{% else %}border-danger{% endif %}">
-        <div class="card-header {% if movimentacao_pai.tipo == 'RECEBIMENTO' %}bg-success{% else %}bg-danger{% endif %} text-white">
+        <div class="card-header">
             <i class="fas fa-info-circle"></i> Resumo do {{ movimentacao_pai.tipo|title }}
         </div>
         <div class="card-body">
@@ -125,7 +125,7 @@
     <!-- 🆕 Ocultar tabela se for pagamento individual (sem filhos) -->
     {% if not eh_pagamento_individual %}
     <div class="card">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <span><i class="fas fa-list"></i> Itens Desta Movimentação ({{ itens_relacionados|length }})</span>
             {% if itens_por_pedido %}
             <button type="button" class="btn btn-sm btn-light" onclick="expandirTodosAccordions()">
@@ -358,7 +358,7 @@
     <!-- PANORAMA GERAL - TODOS OS TÍTULOS DO PEDIDO -->
     {% if todos_titulos_pedido %}
     <div class="card mt-4">
-        <div class="card-header bg-info text-white">
+        <div class="card-header">
             <i class="fas fa-file-invoice"></i> Panorama Geral - Todos os Títulos do Pedido {{ movimentacao_pai.pedido.numero_pedido if movimentacao_pai.pedido else '' }}
         </div>
         <div class="card-body">
@@ -434,7 +434,7 @@
 
     <!-- AUDITORIA -->
     <div class="card mt-4">
-        <div class="card-header bg-secondary text-white">
+        <div class="card-header">
             <i class="fas fa-info"></i> Informações de Auditoria
         </div>
         <div class="card-body">

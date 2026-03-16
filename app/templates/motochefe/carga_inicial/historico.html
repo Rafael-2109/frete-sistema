@@ -64,7 +64,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-primary">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-file-upload"></i> Upload do Arquivo Excel</h5>
                 </div>
                 <div class="card-body">
@@ -102,7 +102,7 @@
     <div class="row mb-4" id="areaPreview" style="display: none;">
         <div class="col-12">
             <div class="card border-success">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-check-circle"></i> Preview dos Dados</h5>
                 </div>
                 <div class="card-body">
@@ -345,7 +345,7 @@ function mostrarResultado(data) {
     const resultadoTitulo = document.getElementById('resultadoTitulo');
     const resultadoBody = document.getElementById('resultadoBody');
 
-    resultadoHeader.className = 'card-header bg-success text-white';
+    resultadoHeader.className = 'card-header';
     resultadoTitulo.innerHTML = '<i class="fas fa-check-circle"></i> Importação Concluída com Sucesso!';
 
     let html = '<div class="row">';
@@ -396,7 +396,7 @@ function mostrarResultadoErro(data) {
     const resultadoTitulo = document.getElementById('resultadoTitulo');
     const resultadoBody = document.getElementById('resultadoBody');
 
-    resultadoHeader.className = 'card-header bg-danger text-white';
+    resultadoHeader.className = 'card-header';
     resultadoTitulo.innerHTML = '<i class="fas fa-times-circle"></i> Erro na Importação';
 
     let html = `<p class="text-danger"><strong>${data.mensagem}</strong></p>`;

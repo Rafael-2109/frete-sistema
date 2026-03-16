@@ -147,11 +147,11 @@
 <div class="modal fade" id="modalHistorico" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-history"></i> Histórico de Alterações
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="historico-loading" class="text-center py-4">
@@ -570,7 +570,7 @@ function renderizarHistorico(data, codProduto, nomeProduto) {
 
             html += `
                 <div class="card mb-3 ${snapshot.operacao === 'CRIAR' ? 'border-success' : 'border-primary'}">
-                    <div class="card-header ${snapshot.operacao === 'CRIAR' ? 'bg-success' : 'bg-primary'} text-white">
+                    <div class="card-header">
                         <div class="d-flex justify-content-between">
                             <span><strong>${snapshot.operacao}</strong></span>
                             <span>${new Date(snapshot.alterado_em).toLocaleString('pt-BR')}</span>

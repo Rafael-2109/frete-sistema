@@ -21,11 +21,11 @@
 <div class="modal fade" id="modalAdminExcluir" tabindex="-1" aria-labelledby="modalAdminExcluirLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalAdminExcluirLabel">
                     <i class="fas fa-exclamation-triangle"></i> Exclusao Permanente
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <form id="formAdminExcluir" method="POST"
                   action="{{ url_for('carvia.admin_excluir', tipo=entidade_tipo, id=entidade_id) }}">

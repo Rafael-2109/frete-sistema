@@ -324,7 +324,7 @@ class ModalCardexExpandido {
                     <div class="card dia-card mb-2 border-warning border-3" 
                          data-tem-ruptura="false"
                          data-data="sem_data">
-                        <div class="card-header bg-warning text-dark py-1 px-2" 
+                        <div class="card-header py-1 px-2"
                              style="cursor: pointer;"
                              onclick="cardexExpandido.toggleCard('sem_data')">
                             <div class="d-flex justify-content-between align-items-center">

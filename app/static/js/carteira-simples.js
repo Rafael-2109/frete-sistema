@@ -3123,6 +3123,16 @@
 
         if (!dataExpedicao || !projecoes || projecoes.length === 0) {
             estDataEl.textContent = '-';
+            // ✅ FALLBACK: Aplicar hierarquia de cores usando menor_estoque_d7 do backend
+            estDataEl.classList.remove('est-negativo', 'est-baixo');
+            const fallback = item.menor_estoque_d7;
+            if (fallback !== undefined && fallback !== null) {
+                if (fallback < 0) {
+                    estDataEl.classList.add('est-negativo');
+                } else if (fallback < 100) {
+                    estDataEl.classList.add('est-baixo');
+                }
+            }
             return;
         }
 

@@ -21,7 +21,7 @@
         <!-- Informações da Comissão -->
         <div class="col-md-6">
             <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <i class="fas fa-info-circle"></i> Informações da Comissão
                 </div>
                 <div class="card-body">
@@ -87,7 +87,7 @@
             <!-- Pagamento -->
             {% if comissao.status == 'PAGO' %}
             <div class="card mb-4 border-success">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <i class="fas fa-check-circle"></i> Informações do Pagamento
                 </div>
                 <div class="card-body">
@@ -115,7 +115,7 @@
         <!-- Informações do Pedido Relacionado -->
         <div class="col-md-6">
             <div class="card mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header">
                     <i class="fas fa-shopping-cart"></i> Pedido que Gerou a Comissão
                 </div>
                 <div class="card-body">
@@ -216,7 +216,7 @@
     <div class="row mt-4">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <i class="fas fa-users"></i> Comissões Rateadas da Equipe ({{ comissao.qtd_vendedores_equipe }} vendedores)
                 </div>
                 <div class="card-body p-0">

@@ -41,7 +41,7 @@
         <div class="col-md-8">
             <!-- Dados Principais -->
             <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados Principais</h5>
                 </div>
                 <div class="card-body">
@@ -105,7 +105,7 @@
             <!-- CTe Complementar / Original -->
             {% if cte.tipo_cte == '1' or (cte.ctes_complementares and cte.ctes_complementares.count() > 0) %}
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <h5 class="mb-0">
                         {% if cte.tipo_cte == '1' %}
                         <i class="fas fa-file-invoice"></i> CTe Original
@@ -239,7 +239,7 @@
 
             <!-- Transportadora (Emitente) -->
             <div class="card mb-4">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-truck"></i> Transportadora (Emitente)</h5>
                 </div>
                 <div class="card-body">
@@ -258,7 +258,7 @@
 
             <!-- Partes Envolvidas -->
             <div class="card mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-users"></i> Partes Envolvidas</h5>
                 </div>
                 <div class="card-body">
@@ -308,7 +308,7 @@
             {% if cte.tipo_cte == '1' %}
             <!-- CTe COMPLEMENTAR: Vínculo com Despesa Extra -->
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-link"></i> Vínculo com Despesa Extra</h5>
                 </div>
                 <div class="card-body">
@@ -352,7 +352,7 @@
             {% else %}
             <!-- CTe NORMAL: Vínculo com Frete -->
             <div class="card mb-4">
-                <div class="card-header bg-dark text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-link"></i> Vínculo com Frete</h5>
                 </div>
                 <div class="card-body">
@@ -395,7 +395,7 @@
             <!-- Fretes Sugeridos -->
             {% if fretes_relacionados and fretes_relacionados|length > 0 %}
             <div class="card mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-search"></i> Fretes Sugeridos ({{ fretes_relacionados|length }})
                     </h5>
@@ -495,7 +495,7 @@
             {% elif cte.tipo_cte != '1' and not cte.frete_id %}
             <!-- Nenhum frete sugerido encontrado (apenas para CTes não complementares sem vínculo) -->
             <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-search"></i> Fretes Sugeridos
                     </h5>
@@ -515,7 +515,7 @@
             <!-- DESPESAS SUGERIDAS (para CTe Complementar) -->
             {% if cte.tipo_cte == '1' and despesas_sugeridas and despesas_sugeridas|length > 0 %}
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-search"></i> Despesas Sugeridas ({{ despesas_sugeridas|length }})
                     </h5>
@@ -575,7 +575,7 @@
             {% elif cte.tipo_cte == '1' and not (cte.despesas_extras_vinculadas | first) %}
             <!-- CTe Complementar sem despesas sugeridas -->
             <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-search"></i> Despesas Sugeridas
                     </h5>
@@ -594,7 +594,7 @@
 
             <!-- Arquivos -->
             <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-file"></i> Arquivos</h5>
                 </div>
                 <div class="card-body">
@@ -622,7 +622,7 @@
 
             <!-- Dados Odoo -->
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-database"></i> Dados Odoo</h5>
                 </div>
                 <div class="card-body">

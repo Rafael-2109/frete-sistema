@@ -21,7 +21,7 @@
         <!-- Informações do Título -->
         <div class="col-md-6">
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <i class="fas fa-info-circle"></i> Informações do Título
                 </div>
                 <div class="card-body">
@@ -90,7 +90,7 @@
             <!-- Empresa Pagadora (se já pagou) -->
             {% if titulo.empresa_pagadora %}
             <div class="card mb-4 border-success">
-                <div class="card-header bg-success text-white">
+                <div class="card-header">
                     <i class="fas fa-building"></i> Empresa Pagadora
                 </div>
                 <div class="card-body">
@@ -107,7 +107,7 @@
         <div class="col-md-6">
             {% if titulo.moto %}
             <div class="card mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header">
                     <i class="fas fa-motorcycle"></i> Moto Relacionada
                 </div>
                 <div class="card-body">
@@ -135,7 +135,7 @@
 
             {% if titulo.pedido %}
             <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header">
                     <i class="fas fa-shopping-cart"></i> Pedido Relacionado
                 </div>
                 <div class="card-body">
@@ -196,7 +196,7 @@
     <div class="row mt-4">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-dark text-white">
+                <div class="card-header">
                     <i class="fas fa-exchange-alt"></i> Histórico de Pagamentos
                 </div>
                 <div class="card-body p-0">
@@ -271,11 +271,11 @@
         <div class="modal-content">
             <form method="POST" action="{{ url_for('motochefe.pagar_titulo_a_pagar_route', id=titulo.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="modal-header bg-success text-white">
+                <div class="modal-header">
                     <h5 class="modal-title">
                         <i class="fas fa-money-bill-wave"></i> Pagar Título #{{ titulo.id }}
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">

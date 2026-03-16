@@ -764,8 +764,6 @@ td .badge-incoterm-red,
     border-color: var(--border-default);
 }
 
-/* card-header.bg-primary: coberto pela regra global em _bootstrap-overrides.css */
-
 /* ═══════════════════════════════════════════════════════════════════════════
    UTILITARIOS DE TEXTO COM TEMA
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -1079,8 +1077,6 @@ tr.table-success > td,
 [data-theme="dark"] .modal .card-body {
     color: var(--text-primary);
 }
-
-/* modal .card-header.bg-*: cobertos pela regra global em _bootstrap-overrides.css */
 
 [data-bs-theme="dark"] .modal .form-control,
 [data-bs-theme="dark"] .modal .form-select,

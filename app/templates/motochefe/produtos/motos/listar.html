@@ -262,9 +262,9 @@
 <div class="modal fade" id="modalAgrupamento" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-layer-group"></i> Visualizar Agrupamento de Motos</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- FILTROS -->
@@ -633,11 +633,11 @@
             <div class="modal fade" id="modalListaMotos" tabindex="-1">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
+                        <div class="modal-header">
                             <h5 class="modal-title">
                                 <i class="fas fa-motorcycle"></i> Lista de Motos - ${cor} ${potencia}
                             </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <table class="table table-sm table-hover">
@@ -706,9 +706,9 @@
         <div class="modal-content">
             <form method="POST" id="formMarcarAvaria">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="modal-header bg-danger text-white">
+                <div class="modal-header">
                     <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Marcar Moto como Avariada</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <p><strong>Chassi:</strong> <span id="chassiAvaria"></span></p>

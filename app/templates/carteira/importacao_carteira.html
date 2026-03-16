@@ -145,7 +145,7 @@
 <div class="modal fade" id="modalCadastrarClientes" tabindex="-1" role="dialog" aria-labelledby="modalCadastrarClientesLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
-            <div class="modal-header bg-warning text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="modalCadastrarClientesLabel">
                     <i class="fas fa-exclamation-triangle"></i> Clientes Não Cadastrados - Ação Necessária
                 </h5>
@@ -414,7 +414,7 @@ function mostrarResultado(response) {
             const statusIcon = arquivo.success ? '✅' : '❌';
 
             html += `<div class="card mb-2">`;
-            html += `<div class="card-header bg-${statusClass} text-white">`;
+            html += `<div class="card-header">`;
             html += `${statusIcon} ${arquivo.nome_arquivo} - ${arquivo.pedidos_importados} pedido(s) importado(s)`;
             html += `</div>`;
 

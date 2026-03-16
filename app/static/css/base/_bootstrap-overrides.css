@@ -274,24 +274,67 @@ td[style*="background-color:#198754"] {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CARD HEADERS - Converter cores para cinza
+   NEUTRALIZAR BOOTSTRAP bg-* UTILITIES EM HEADERS
+   Estratégia: --bs-bg-opacity: 0 torna o rgba() transparente.
+   O !important do Bootstrap continua, mas calcula cor transparente.
+   Motivo: CSS Cascade Level 5 inverte prioridade de !important por layer.
+   Bootstrap (@layer bootstrap, 1º) vence qualquer !important posterior.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.card-header.bg-primary,
-.card-header.bg-info,
-.card-header.bg-warning,
-.card-header.bg-secondary {
-    background: var(--bg-light) !important;
-    color: var(--text) !important;
-    border-bottom: 1px solid var(--border) !important;
+/* Modal headers — fundo neutro */
+.modal-header[class*="bg-"] {
+    --bs-bg-opacity: 0;
+    border-bottom: 1px solid var(--border);
 }
 
-/* Success e Danger — neutros (consistência com primary/warning/info/secondary) */
-.card-header.bg-success,
-.card-header.bg-danger {
-    background: var(--bg-light) !important;
-    color: var(--text) !important;
-    border-bottom: 1px solid var(--border) !important;
+/* Card headers — fundo neutro */
+.card-header[class*="bg-"] {
+    --bs-bg-opacity: 0;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Neutralizar text-white em modal/card headers (light mode → texto escuro) */
+.modal-header .text-white,
+.modal-header.text-white,
+.card-header .text-white,
+.card-header.text-white {
+    --bs-white-rgb: 13, 13, 13;
+}
+
+/* Dark mode: text-white → texto claro */
+[data-bs-theme="dark"] .modal-header .text-white,
+[data-bs-theme="dark"] .modal-header.text-white,
+[data-bs-theme="dark"] .card-header .text-white,
+[data-bs-theme="dark"] .card-header.text-white,
+[data-theme="dark"] .modal-header .text-white,
+[data-theme="dark"] .modal-header.text-white,
+[data-theme="dark"] .card-header .text-white,
+[data-theme="dark"] .card-header.text-white {
+    --bs-white-rgb: 242, 242, 242;
+}
+
+/* Neutralizar text-dark em headers (dark mode → texto claro) */
+[data-bs-theme="dark"] .modal-header .text-dark,
+[data-bs-theme="dark"] .modal-header.text-dark,
+[data-bs-theme="dark"] .card-header .text-dark,
+[data-bs-theme="dark"] .card-header.text-dark,
+[data-theme="dark"] .modal-header .text-dark,
+[data-theme="dark"] .modal-header.text-dark,
+[data-theme="dark"] .card-header .text-dark,
+[data-theme="dark"] .card-header.text-dark {
+    --bs-dark-rgb: 242, 242, 242;
+}
+
+/* btn-close-white em headers neutralizados — reset filter (light mode) */
+.modal-header[class*="bg-"] .btn-close-white,
+.card-header[class*="bg-"] .btn-close-white {
+    filter: none;
+}
+[data-bs-theme="dark"] .modal-header[class*="bg-"] .btn-close-white,
+[data-bs-theme="dark"] .card-header[class*="bg-"] .btn-close-white,
+[data-theme="dark"] .modal-header[class*="bg-"] .btn-close-white,
+[data-theme="dark"] .card-header[class*="bg-"] .btn-close-white {
+    filter: invert(1) grayscale(100%) brightness(200%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -306,22 +349,6 @@ td[style*="background-color:#198754"] {
 }
 .page-header p {
     color: var(--text-muted);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   MODAL HEADERS - Converter cores para neutro
-   Análogo à regra de card-headers acima
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.modal-header.bg-primary,
-.modal-header.bg-info,
-.modal-header.bg-warning,
-.modal-header.bg-secondary,
-.modal-header.bg-success,
-.modal-header.bg-danger {
-    background: var(--bg) !important;
-    color: var(--text) !important;
-    border-bottom: 1px solid var(--border) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
