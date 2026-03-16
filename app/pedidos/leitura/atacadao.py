@@ -370,7 +370,7 @@ class AtacadaoExtractor(PDFExtractor):
         # Ex: 1 35642-114 AZEITONA VERDE CAMPO BELO BALDE CXA 1 X 6 2KG N 15/07/25 770 199,48 0,00 0,00 0,00
         
         # Regex para capturar linhas de produtos
-        produto_pattern = r'(\d+)\s+(\d+)-(\d+)\s+([A-Z\s\./\-]+?)\s+(CXA\s+\d+\s+X\s+[\d,]+\s*\w+)\s+([N|S])\s+(\d{2}/\d{2}/\d{2})\s+([\d\.]+)\s+([\d,\.]+)'
+        produto_pattern = r'(\d+)\s+(\d+)-(\d+)\s+([A-Z\s\./\-]+?)\s+(CXA\s+\d+\s+X\s+[\d,]+\s*[\w,\.]+)\s+([N|S])\s+(\d{2}/\d{2}/\d{2})\s+([\d\.]+)\s+([\d,\.]+)'
         
         matches = re.finditer(produto_pattern, text)
         
