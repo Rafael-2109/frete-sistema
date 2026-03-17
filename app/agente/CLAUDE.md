@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~20.7K | **Arquivos**: 41 | **Atualizado**: 08/03/2026
+**LOC**: ~20.7K | **Arquivos**: 41 | **Atualizado**: 17/03/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -25,8 +25,9 @@ app/agente/                          # Root — 5 arquivos
 ├── hooks/                           # Hooks do Agent SDK — 2 arquivos
 │   ├── __init__.py
 │   └── README.md
-├── prompts/                         # Prompts do agente web — 2 arquivos
+├── prompts/                         # Prompts do agente web — 3 arquivos
 │   ├── __init__.py
+│   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
 ├── sdk/                             # Integracao com Claude Agent SDK — 6 arquivos
 │   ├── __init__.py
@@ -63,6 +64,46 @@ app/agente/                          # Root — 5 arquivos
     ├── session_search_tool.py       # 4 operacoes de busca em sessoes
     └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ```
+
+---
+
+## Arquitetura de Prompts (v2 — 17/03/2026)
+
+### Dois modos (feature flag `USE_CUSTOM_SYSTEM_PROMPT`)
+
+| Flag | System Prompt | Identidade | Tokens |
+|------|--------------|------------|--------|
+| `false` (default) | `{preset: "claude_code", append: system_prompt.md}` | Claude Code + Agente (conflito) | ~7K |
+| `true` | `preset_operacional.md + system_prompt.md` (string) | Apenas Agente (coerente) | ~4K |
+
+### Camadas (com flag true)
+
+```
+┌──────────────────────────────────────────┐
+│ 1. preset_operacional.md (~600 tok)      │ ← Tools, safety, environment
+│ 2. system_prompt.md (~3K tok)            │ ← Identidade, regras, routing
+│ 3. CLAUDE.md compartilhado (~1.5K tok)   │ ← Referencia (modelos, indices)
+│ 4. Dynamic injections (hook)             │ ← Memorias, contexto operacional
+└──────────────────────────────────────────┘
+```
+
+### Separacao de responsabilidades
+
+| Arquivo | O QUE define | NAO define |
+|---------|-------------|------------|
+| `preset_operacional.md` | AWARENESS: "existem MCP tools, safety rules, /tmp restriction" | Identidade, regras de negocio |
+| `system_prompt.md` | COMPORTAMENTO: R0-R7, I1-I6, routing, skills, subagentes | Tool instructions genericas |
+| `CLAUDE.md` (raiz) | REFERENCIA: gotchas de modelos, indices, caminhos | Regras dev, CSS, migrations |
+
+### Rollback
+Env var `AGENT_CUSTOM_SYSTEM_PROMPT=false` restaura o preset claude_code instantaneamente.
+
+### Arquivos envolvidos
+- `prompts/preset_operacional.md` — preset customizado (~65 linhas)
+- `prompts/system_prompt.md` — system prompt operacional
+- `sdk/client.py` — `_load_preset_operacional()`, `_build_full_system_prompt()`, guard em `_build_options()`
+- `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`
+- `config/settings.py` — `operational_preset_path`
 
 ---
 
@@ -164,8 +205,11 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 
 ## Gotchas
 
-### system_prompt.md vs CLAUDE.md
-`prompts/system_prompt.md` = prompt do agente web (usuarios finais). Este arquivo = Claude Code (dev). NUNCA misturar.
+### system_prompt.md vs preset_operacional.md vs CLAUDE.md
+- `prompts/system_prompt.md` = identidade + regras do agente web (usuarios finais)
+- `prompts/preset_operacional.md` = tool instructions + safety (substitui preset claude_code)
+- Este arquivo (`CLAUDE.md`) = Claude Code (dev). NUNCA misturar prompts dev com prompts agente.
+- Ver secao "Arquitetura de Prompts" acima para detalhes da separacao.
 
 ### SDK max_buffer_size: 10MB
 `client.py:561` configura `max_buffer_size=10_000_000` (10MB). Default do SDK e 1MB — insuficiente para screenshots base64 (PNG full-page: 1.3-2.6MB). Se reduzir abaixo de 2MB, browser_screenshot volta a crashar com "JSON message exceeded maximum buffer size".

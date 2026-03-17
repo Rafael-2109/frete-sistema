@@ -1,25 +1,9 @@
-# Sistema de Fretes — Instrucoes de Projeto
+# Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 08/03/2026
+**Ultima Atualizacao**: 17/03/2026
 
----
-
-## Quick Start
-
-```bash
-# Setup
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# Dev server (porta 5000, debug mode)
-python run.py
-
-# Workers RQ (terminal separado, requer Redis local)
-python worker_atacadao.py --queues atacadao,high,default
-
-# Testes
-pytest
-```
+> Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
+> Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
 
 ---
 
@@ -34,29 +18,8 @@ pytest
 
 ### SEMPRE:
 1. **AMBIENTE VIRTUAL**: `source .venv/bin/activate` quando executar scripts Python
-2. **NUNCA criar tela sem acesso via UI** — TODA tela DEVE ter link no menu (`app/templates/base.html`) ou em tela relacionada
-3. **NUNCA mantenha lixo** — codigo substituido DEVE ser removido
-4. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
-5. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
-6. **QUALIDADE > VELOCIDADE**: Sempre opte por pesquisar demais do que ser rápido mas não verificar algo importante.
-7. **COMPONENTES UI**: ANTES de escrever botoes, badges ou elementos com cor: LER `.claude/references/design/GUIA_COMPONENTES_UI.md`
-
-### ANTES DE PROPOR NOVOS ARQUIVOS:
-1. **LER** o INDICE DE REFERENCIAS abaixo
-2. **VERIFICAR** se conteudo ja existe — se SIM, NAO criar novo
-3. **MOSTRAR** o que cada arquivo existente contem antes de criar novo
-
-**Se nao souber onde encontrar uma informacao**: LER `.claude/references/INDEX.md`
-
----
-
-## MIGRATIONS
-
-**SEMPRE gerar DOIS artefatos** para DDL (ALTER/CREATE/DROP):
-1. `scripts/migrations/NOME.py` — Python com `create_app()` + verificacao before/after
-2. `scripts/migrations/NOME.sql` — SQL idempotente para Render Shell (`IF NOT EXISTS`)
-
-Excecao: data fixes (UPDATE/INSERT sem DDL) podem ser apenas Python.
+2. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
+3. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
 
 ---
 
@@ -123,28 +86,6 @@ Documentos adicionais:
 
 ---
 
-## ARQUITETURA CSS
-
-**Sistema de layers** (`main.css`): `tokens → base → components → modules → utilities`
-- `bootstrap-theme-override.css` FORA de layers (sobrescreve Bootstrap CDN)
-
-### REGRAS CSS:
-1. **NUNCA adicionar `<style>` blocks em templates** — usar CSS de modulo (`modules/_nome.css`)
-2. **Badges compartilhados** (3+ modulos): `components/_badges.css` usando API `--_badge-bg/color/border`
-3. **Badges de modulo**: no CSS do modulo (`_fretes.css`, `_financeiro.css`, `_manufatura.css`)
-4. **Cores**: SEMPRE usar design tokens (`var(--text)`, `var(--bg-light)`, etc.) — NUNCA hex hardcoded
-5. **Dark mode**: tokens adaptam automaticamente. Se precisar ajuste: `[data-bs-theme="light"]` selector
-
-| Arquivo | Papel |
-|---------|-------|
-| `css/components/_badges.css` | Fonte unica para badges compartilhados |
-| `css/bootstrap-theme-override.css` | Ponte Bootstrap CDN → design tokens |
-| `css/tokens/_design-tokens.css` | Tokens de design (light/dark) |
-| `css/main.css` | Entry point do sistema de layers |
-| `css/modules/_*.css` | Estilos por modulo (fretes, financeiro, etc.) |
-
----
-
 ## CAMINHOS DO SISTEMA
 
 | Modulo | Caminhos corretos |
@@ -199,33 +140,3 @@ Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao auto
 4. Para implementacao: REVISAR todos os arquivos tocados
 
 **Sinais de alerta**: output sem citacao de fontes, dados sem nuances, ausencia de "nao encontrado"
-
----
-
-## SUBDIRECTORY CLAUDE.md
-
-> **Manual**: `.claude/references/MANUAL_CLAUDE_MD.md` — template, principios, checklist e exemplo comentado
-
-Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
-
-**Criados:**
-- `app/carvia/CLAUDE.md` — ~13.8K LOC, 26 arquivos, 32 templates
-- `app/financeiro/CLAUDE.md` — ~43.5K LOC, 75 arquivos
-- `app/odoo/CLAUDE.md` — ~17.9K LOC, 41 arquivos
-- `app/agente/CLAUDE.md` — ~20.7K LOC, 41 arquivos (+ `services/CLAUDE.md` — 5.8K LOC, 12 arquivos)
-- `app/seguranca/CLAUDE.md` — ~2K LOC, 14 arquivos, 8 templates
-- `app/teams/CLAUDE.md` — ~1.8K LOC, 4 arquivos
-- `app/carteira/CLAUDE.md` — ~17.6K LOC, 64 arquivos, 13 templates
-
-**Planejados (ainda nao criados):**
-- `app/recebimento/CLAUDE.md` — P0 (maior modulo sem CLAUDE.md)
-- `app/pallet/CLAUDE.md` — P1
-
----
-
-## MCP — Context7
-
-Usar para documentacao de libs externas:
-```
-resolve-library-id("sqlalchemy") -> query-docs("/...", "bulk insert")
-```

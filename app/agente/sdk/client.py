@@ -855,6 +855,9 @@ class AgentClient:
         # Carrega system prompt
         self.system_prompt = self._load_system_prompt()
 
+        # Carrega preset operacional (para USE_CUSTOM_SYSTEM_PROMPT)
+        self.operational_preset = self._load_preset_operacional()
+
         # Cliente para health check (API direta)
         self._anthropic_client = anthropic.Anthropic(api_key=self.settings.api_key)
 
@@ -878,6 +881,49 @@ class AgentClient:
                 f"{self.settings.system_prompt_path}"
             )
             return self._get_default_system_prompt()
+
+    def _load_preset_operacional(self) -> str:
+        """Carrega preset operacional do arquivo.
+
+        Substitui o preset claude_code quando USE_CUSTOM_SYSTEM_PROMPT=true.
+        Contém apenas: tool instructions, safety, environment, persistent systems.
+        NÃO contém identidade dev, git, CSS, migrations.
+        """
+        preset_path = self.settings.operational_preset_path
+        try:
+            with open(preset_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                logger.debug(
+                    f"[AGENT_CLIENT] Preset operacional carregado: "
+                    f"{preset_path} ({len(content)} chars)"
+                )
+                return content
+        except FileNotFoundError:
+            logger.warning(
+                f"[AGENT_CLIENT] preset_operacional.md nao encontrado: {preset_path}"
+            )
+            return ""
+
+    def _build_full_system_prompt(self, custom_instructions: str) -> str:
+        """Concatena preset operacional + system_prompt formatado.
+
+        Retorna string única que SUBSTITUI o preset claude_code.
+        Economia estimada: ~3-4K tokens input por request.
+
+        Args:
+            custom_instructions: System prompt formatado (_format_system_prompt output)
+
+        Returns:
+            String completa para system_prompt (sem preset)
+        """
+        preset = self.operational_preset
+        if not preset:
+            logger.warning(
+                "[AGENT_CLIENT] Preset operacional vazio — usando apenas system_prompt.md"
+            )
+            return custom_instructions
+
+        return f"{preset}\n\n{custom_instructions}"
 
     def _get_default_system_prompt(self) -> str:
         """Retorna system prompt padrão."""
@@ -1594,12 +1640,9 @@ Nunca invente informações."""
             # FONTE: claude_agent_sdk/_internal/subprocess_cli.py:29
             "max_buffer_size": 10_000_000,  # 10MB
 
-            # System Prompt: preset "claude_code" para ter tools funcionando
-            "system_prompt": {
-                "type": "preset",
-                "preset": "claude_code",
-                "append": custom_instructions
-            },
+            # System Prompt: depende de USE_CUSTOM_SYSTEM_PROMPT (configurado abaixo)
+            # Placeholder — preenchido pelo guard de feature flag
+            "system_prompt": None,
 
             # CWD: Diretório de trabalho para Skills
             "cwd": project_cwd,
@@ -1634,6 +1677,28 @@ Nunca invente informações."""
                 "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "240000",  # 240s (4 min) em ms
             },
         }
+
+        # =================================================================
+        # System Prompt: preset claude_code vs preset operacional
+        # Flag: USE_CUSTOM_SYSTEM_PROMPT (default false para rollback seguro)
+        # =================================================================
+        from ..config.feature_flags import USE_CUSTOM_SYSTEM_PROMPT
+
+        if USE_CUSTOM_SYSTEM_PROMPT:
+            # Prompt Architecture v2: string pura (preset_operacional + system_prompt)
+            # Elimina ~3-4K tokens do preset claude_code (git, CSS, dev identity)
+            options_dict["system_prompt"] = self._build_full_system_prompt(custom_instructions)
+            logger.info(
+                "[AGENT_CLIENT] System prompt: custom (preset_operacional.md + system_prompt.md)"
+            )
+        else:
+            # Original: preset claude_code + append system_prompt.md
+            options_dict["system_prompt"] = {
+                "type": "preset",
+                "preset": "claude_code",
+                "append": custom_instructions
+            }
+            logger.info("[AGENT_CLIENT] System prompt: preset claude_code + append")
 
         # =================================================================
         # Agents customizados (.claude/agents/*.md)

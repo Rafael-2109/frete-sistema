@@ -84,6 +84,9 @@ class AgentSettings:
     # System prompt
     system_prompt_path: str = "app/agente/prompts/system_prompt.md"
 
+    # Preset operacional (substitui preset claude_code quando USE_CUSTOM_SYSTEM_PROMPT=true)
+    operational_preset_path: str = "app/agente/prompts/preset_operacional.md"
+
     # Logs
     log_tool_calls: bool = True
 
