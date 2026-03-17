@@ -4,7 +4,7 @@ API Routes CarVia — Endpoints AJAX (cotacao, busca, cubagem)
 
 import logging
 import re
-from flask import jsonify, request
+from flask import jsonify, request, redirect
 from flask_login import login_required, current_user
 
 from app import db
@@ -699,6 +699,93 @@ def register_api_routes(bp):
         except Exception as e:
             logger.error(f"Erro ao gerar DACTE para subcontrato {subcontrato_id}: {e}")
             return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
+
+    # ------------------------------------------------------------------
+    # Download PDF Original (CTe importado de PDF)
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/subcontrato/<int:subcontrato_id>/pdf-original')
+    @login_required
+    def api_download_subcontrato_pdf_original(subcontrato_id):
+        """Retorna o PDF original importado de um CarviaSubcontrato."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        import os
+        from flask import send_file as flask_send_file
+        from app.carvia.models import CarviaSubcontrato
+        from app import db
+
+        sub = db.session.get(CarviaSubcontrato, subcontrato_id)
+        if not sub:
+            return jsonify({'erro': 'Subcontrato nao encontrado'}), 404
+
+        if not sub.cte_pdf_path:
+            return jsonify({'erro': 'PDF original nao disponivel para este subcontrato'}), 404
+
+        path = sub.cte_pdf_path
+
+        # Path S3 (URL)
+        if path.startswith('http'):
+            return redirect(path)
+
+        # Path local
+        if os.path.exists(path):
+            nome = f'CTe_Sub_{sub.cte_numero or subcontrato_id}_original.pdf'
+            return flask_send_file(path, mimetype='application/pdf',
+                                   as_attachment=False, download_name=nome)
+
+        # Fallback: presigned URL via FileStorage
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_presigned_url(path, expires_in=300)
+            if url:
+                return redirect(url)
+        except Exception as e:
+            logger.warning(f"Falha ao obter presigned URL para {path}: {e}")
+
+        return jsonify({'erro': 'Arquivo nao encontrado'}), 404
+
+    @bp.route('/api/operacao/<int:operacao_id>/pdf-original')
+    @login_required
+    def api_download_operacao_pdf_original(operacao_id):
+        """Retorna o PDF original importado de uma CarviaOperacao."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        import os
+        from flask import send_file as flask_send_file
+        from app.carvia.models import CarviaOperacao
+        from app import db
+
+        op = db.session.get(CarviaOperacao, operacao_id)
+        if not op:
+            return jsonify({'erro': 'Operacao nao encontrada'}), 404
+
+        if not op.cte_pdf_path:
+            return jsonify({'erro': 'PDF original nao disponivel para esta operacao'}), 404
+
+        path = op.cte_pdf_path
+
+        if path.startswith('http'):
+            return redirect(path)
+
+        if os.path.exists(path):
+            nome = f'CTe_{op.cte_numero or operacao_id}_original.pdf'
+            return flask_send_file(path, mimetype='application/pdf',
+                                   as_attachment=False, download_name=nome)
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            url = storage.get_presigned_url(path, expires_in=300)
+            if url:
+                return redirect(url)
+        except Exception as e:
+            logger.warning(f"Falha ao obter presigned URL para {path}: {e}")
+
+        return jsonify({'erro': 'Arquivo nao encontrado'}), 404
 
     # ------------------------------------------------------------------
     # Conferencia de CTe Subcontratado

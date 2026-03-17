@@ -212,9 +212,10 @@ class ImportacaoService:
                 elif tipo == 'PDF_DACTE':
                     dados = self._parsear_dacte_pdf(conteudo, nome)
                     if dados:
-                        dados['cte_xml_path'] = self._salvar_arquivo_storage(
+                        pdf_path = self._salvar_arquivo_storage(
                             conteudo, nome, 'carvia/ctes_pdf'
                         )
+                        dados['cte_pdf_path'] = pdf_path
                         ctes_parseados.append(dados)
                     else:
                         erros.append(f'{nome}: Nao foi possivel extrair dados do DACTE PDF')
@@ -1198,6 +1199,7 @@ class ImportacaoService:
             cte_valor=cte_data.get('cte_valor'),
             cte_xml_nome_arquivo=cte_data.get('arquivo_nome_original'),
             cte_xml_path=cte_data.get('cte_xml_path'),
+            cte_pdf_path=cte_data.get('cte_pdf_path'),
             cte_data_emissao=self._parsear_data_cte(cte_data.get('cte_data_emissao')),
             cnpj_cliente=rem.get('cnpj') or 'DESCONHECIDO',
             nome_cliente=rem.get('nome'),
@@ -1364,6 +1366,7 @@ class ImportacaoService:
             cte_valor=cte_data.get('cte_valor'),
             cte_xml_nome_arquivo=cte_data.get('arquivo_nome_original'),
             cte_xml_path=cte_data.get('cte_xml_path'),
+            cte_pdf_path=cte_data.get('cte_pdf_path'),
             cte_data_emissao=self._parsear_data_cte(
                 cte_data.get('cte_data_emissao')
             ),

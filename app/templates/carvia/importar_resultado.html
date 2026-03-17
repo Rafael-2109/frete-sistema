@@ -330,7 +330,7 @@
                                         data-bs-toggle="collapse" data-bs-target="#cte-detail-{{ loop.index0 }}" title="Expandir detalhes">
                                     <i class="fas fa-chevron-down"></i>
                                 </button>
-                                {% if cte.get('cte_xml_path') or cte.get('arquivo_pdf_path') %}
+                                {% if cte.get('cte_pdf_path') or cte.get('cte_xml_path') or cte.get('arquivo_pdf_path') %}
                                 <button type="button" class="btn btn-outline-secondary btn-xs carvia-preview-doc-btn"
                                         data-tipo="cte" data-indice="{{ loop.index0 }}" title="Ver documento fonte">
                                     <i class="fas fa-file-pdf"></i>

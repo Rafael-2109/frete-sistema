@@ -18,6 +18,13 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            {% if sub.cte_pdf_path %}
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="window.open('/carvia/api/subcontrato/{{ sub.id }}/pdf-original', '_blank')"
+                    title="PDF original importado">
+                <i class="fas fa-file-pdf"></i> Original
+            </button>
+            {% endif %}
             {% if sub.cte_xml_path or sub.cte_chave_acesso %}
             <button type="button" class="btn btn-outline-success btn-sm"
                     onclick="window.open('/carvia/api/subcontrato/{{ sub.id }}/dacte', '_blank')"

@@ -431,9 +431,10 @@ def register_importacao_routes(bp):
 
         item = items[indice]
 
-        # Tentar obter path do documento (varios nomes de campo possíveis)
+        # Tentar obter path do documento (varios nomes de campo possiveis)
         path = (
-            item.get('arquivo_pdf_path')
+            item.get('cte_pdf_path')
+            or item.get('arquivo_pdf_path')
             or item.get('arquivo_xml_path')
             or item.get('cte_xml_path')
         )

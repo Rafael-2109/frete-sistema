@@ -151,6 +151,7 @@ class CarviaOperacao(db.Model):
     cte_valor = db.Column(db.Numeric(15, 2))
     cte_xml_path = db.Column(db.String(500))
     cte_xml_nome_arquivo = db.Column(db.String(255))
+    cte_pdf_path = db.Column(db.String(500))
     cte_data_emissao = db.Column(db.Date)
 
     # Cliente (remetente da carga)
@@ -320,6 +321,7 @@ class CarviaSubcontrato(db.Model):
     cte_valor = db.Column(db.Numeric(15, 2))
     cte_xml_path = db.Column(db.String(500))
     cte_xml_nome_arquivo = db.Column(db.String(255))
+    cte_pdf_path = db.Column(db.String(500))
     cte_data_emissao = db.Column(db.Date)
 
     # Cotacao

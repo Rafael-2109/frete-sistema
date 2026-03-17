@@ -91,10 +91,11 @@
                         <strong class="small">Extrato Bancario</strong>
                         <div class="d-flex gap-1">
                             <select id="filtroStatusExtrato" class="form-select form-select-sm" style="width:auto;font-size:0.75rem">
-                                <option value="">Todos</option>
-                                <option value="PENDENTE" selected>Pendentes</option>
+                                <option value="" selected>Todos</option>
+                                <option value="PENDENTE">Pendentes</option>
                                 <option value="PARCIAL">Parciais</option>
                                 <option value="CONCILIADO">Conciliados</option>
+                                <option value="RECEBIMENTO">Recebimento</option>
                             </select>
                             <input type="text" id="filtroBuscaExtrato" class="form-control form-control-sm"
                                    placeholder="Buscar..." style="width:120px;font-size:0.75rem">
@@ -538,27 +539,25 @@
     }
 
     // Filtros client-side
-    document.getElementById('filtroStatusExtrato')?.addEventListener('change', function() {
-        const status = this.value;
+    function aplicarFiltrosExtrato() {
+        const status = document.getElementById('filtroStatusExtrato').value;
         const busca = document.getElementById('filtroBuscaExtrato').value.toLowerCase();
         const filtradas = todasLinhas.filter(l => {
-            if (status && l.status !== status) return false;
-            if (busca && !(l.descricao || '').toLowerCase().includes(busca)) return false;
+            // Filtro especial: RECEBIMENTO = valor > 0 (credito)
+            if (status === 'RECEBIMENTO') {
+                if (l.valor <= 0) return false;
+            } else if (status) {
+                if (l.status !== status) return false;
+            }
+            if (busca && !(l.descricao || '').toLowerCase().includes(busca)
+                      && !(l.razao_social || '').toLowerCase().includes(busca)) return false;
             return true;
         });
         renderizarLinhas(filtradas);
-    });
+    }
 
-    document.getElementById('filtroBuscaExtrato')?.addEventListener('input', function() {
-        const status = document.getElementById('filtroStatusExtrato').value;
-        const busca = this.value.toLowerCase();
-        const filtradas = todasLinhas.filter(l => {
-            if (status && l.status !== status) return false;
-            if (busca && !(l.descricao || '').toLowerCase().includes(busca)) return false;
-            return true;
-        });
-        renderizarLinhas(filtradas);
-    });
+    document.getElementById('filtroStatusExtrato')?.addEventListener('change', aplicarFiltrosExtrato);
+    document.getElementById('filtroBuscaExtrato')?.addEventListener('input', aplicarFiltrosExtrato);
 })();
 </script>
 
