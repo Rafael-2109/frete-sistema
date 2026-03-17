@@ -355,6 +355,23 @@ def processar_mensagem_bot(
             except Exception:
                 pass  # Cleanup nao pode bloquear a resposta
 
+        # Cleanup user_id cross-thread dos MCP tools (espelha finally do async path)
+        try:
+            from app.agente.tools.memory_mcp_tool import clear_current_user_id as clear_memory_uid
+            clear_memory_uid()
+        except (ImportError, Exception):
+            pass
+        try:
+            from app.agente.tools.session_search_tool import clear_current_user_id as clear_session_uid
+            clear_session_uid()
+        except (ImportError, Exception):
+            pass
+        try:
+            from app.agente.tools.text_to_sql_tool import clear_current_user_id as clear_sql_uid
+            clear_sql_uid()
+        except (ImportError, Exception):
+            pass
+
 
 def _get_or_create_teams_session(
     conversation_id: str,
@@ -1404,6 +1421,25 @@ def process_teams_task_async(
             if teams_session_id:
                 cleanup_teams_task_context(teams_session_id)
                 cleanup_session_context(teams_session_id)
+
+            # Cleanup user_id cross-thread dos MCP tools
+            # Remove entrada do dict keyed por thread ID para evitar stale entries
+            # que causariam cross-user data leak em invocações concorrentes.
+            try:
+                from app.agente.tools.memory_mcp_tool import clear_current_user_id as clear_memory_uid
+                clear_memory_uid()
+            except (ImportError, Exception):
+                pass
+            try:
+                from app.agente.tools.session_search_tool import clear_current_user_id as clear_session_uid
+                clear_session_uid()
+            except (ImportError, Exception):
+                pass
+            try:
+                from app.agente.tools.text_to_sql_tool import clear_current_user_id as clear_sql_uid
+                clear_sql_uid()
+            except (ImportError, Exception):
+                pass
 
             try:
                 db.session.remove()

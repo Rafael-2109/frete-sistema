@@ -16,23 +16,43 @@ Uso pelo agente:
 """
 
 import logging
+import threading
 from typing import Any, Dict, Optional, Tuple
 from contextvars import ContextVar
 
 logger = logging.getLogger(__name__)
 
-# User ID thread-safe (compartilhado com memory_mcp_tool via routes.py)
+# User ID: ContextVar (mesma thread) + dict cross-thread SEGURO.
+# MCP tools executam em sdk-pool-daemon thread — ContextVar não propaga.
+# Dict só resolve se TODOS os callers ativos têm o MESMO user_id.
 _current_user_id: ContextVar[int] = ContextVar('_session_search_user_id', default=0)
+_user_id_by_caller: dict[int, int] = {}
+_uid_lock = threading.Lock()
 
 
 def set_current_user_id(user_id: int) -> None:
-    """Define user_id para o contexto atual."""
+    """Define user_id para o contexto atual (ContextVar + dict cross-thread)."""
     _current_user_id.set(user_id)
+    tid = threading.current_thread().ident
+    with _uid_lock:
+        _user_id_by_caller[tid] = user_id
+
+
+def clear_current_user_id() -> None:
+    """Remove user_id do caller atual no dict cross-thread."""
+    tid = threading.current_thread().ident
+    with _uid_lock:
+        _user_id_by_caller.pop(tid, None)
 
 
 def get_current_user_id() -> int:
-    """Obtém user_id do contexto atual."""
+    """Obtém user_id: ContextVar primeiro, fallback dict cross-thread seguro."""
     uid = _current_user_id.get()
+    if uid == 0:
+        with _uid_lock:
+            unique_ids = set(_user_id_by_caller.values())
+            if len(unique_ids) == 1:
+                uid = next(iter(unique_ids))
     if uid == 0:
         raise RuntimeError("user_id não definido para session search")
     return uid

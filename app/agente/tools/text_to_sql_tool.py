@@ -20,18 +20,22 @@ import os
 import sys
 import json
 import logging
+import threading
 from contextvars import ContextVar
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # =====================================================================
-# CONTEXTO DO USUÁRIO (thread-safe via contextvars)
+# CONTEXTO DO USUÁRIO (ContextVar + fallback cross-thread SEGURO)
 # =====================================================================
 # MCP tools são singleton (nível de módulo), mas user_id muda por request.
 # O client.py define set_current_user_id() antes de cada stream_response().
+# Dict cross-thread para MCP tools em sdk-pool-daemon thread.
 
 _current_user_id: ContextVar[int] = ContextVar('_sql_tool_user_id', default=0)
+_user_id_by_caller: dict[int, int] = {}
+_uid_lock = threading.Lock()
 
 # Importar listas de acesso da fonte unica de verdade
 from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
@@ -45,8 +49,18 @@ TABELAS_PESSOAL = {
 
 
 def set_current_user_id(user_id: int) -> None:
-    """Define o user_id para o contexto atual (chamado por client.py)."""
+    """Define o user_id para o contexto atual (ContextVar + dict cross-thread)."""
     _current_user_id.set(user_id)
+    tid = threading.current_thread().ident
+    with _uid_lock:
+        _user_id_by_caller[tid] = user_id
+
+
+def clear_current_user_id() -> None:
+    """Remove user_id do caller atual no dict cross-thread."""
+    tid = threading.current_thread().ident
+    with _uid_lock:
+        _user_id_by_caller.pop(tid, None)
 
 
 # Garantir que o path do projeto está disponível para importar o pipeline
@@ -409,6 +423,11 @@ try:
 
             # Bloqueio condicional por nível de acesso do usuário
             user_id = _current_user_id.get()
+            if user_id == 0:
+                with _uid_lock:
+                    unique_ids = set(_user_id_by_caller.values())
+                    if len(unique_ids) == 1:
+                        user_id = next(iter(unique_ids))
             is_sql_admin = user_id in USUARIOS_SQL_ADMIN
 
             # SQL Admin: bypass total (tabelas + keywords + read-only)

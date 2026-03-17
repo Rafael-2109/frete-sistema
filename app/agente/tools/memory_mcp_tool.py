@@ -16,18 +16,34 @@ Referência Memory Tool:
 
 import logging
 import re
+import threading
 from contextvars import ContextVar
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 # =====================================================================
-# CONTEXTO DO USUÁRIO (thread-safe via contextvars)
+# CONTEXTO DO USUÁRIO (ContextVar + fallback cross-thread SEGURO)
 # =====================================================================
 # MCP tools são singleton (nível de módulo), mas user_id muda por request.
-# O routes.py define set_current_user_id() antes de cada query.
+# O routes.py/client.py define set_current_user_id() antes de cada query.
+#
+# PROBLEMA: O Claude Agent SDK executa MCP tools na thread "sdk-pool-daemon",
+# diferente da thread onde set_current_user_id() é chamado. ContextVar é
+# isolado por thread, então o valor não é visível no daemon.
+#
+# SOLUÇÃO: ContextVar (correto na mesma thread) + dict keyed por thread ID
+# como fallback. O dict armazena {caller_thread_id: user_id}. No getter,
+# se ContextVar=0, só usa fallback quando TODOS os callers ativos têm o
+# MESMO user_id. Se há callers com IDs diferentes (concorrência multi-user),
+# NÃO resolve — mantém o erro original para evitar cross-user data leak.
+#
+# Cleanup: clear_current_user_id() remove entrada do dict. Deve ser chamado
+# no finally do agent invocation (client.py).
 
 _current_user_id: ContextVar[int] = ContextVar('_current_user_id', default=0)
+_user_id_by_caller: dict[int, int] = {}
+_uid_lock = threading.Lock()
 
 
 def set_current_user_id(user_id: int) -> None:
@@ -35,24 +51,55 @@ def set_current_user_id(user_id: int) -> None:
     Define o user_id para o contexto atual.
 
     Deve ser chamado em routes.py antes de cada stream_response().
+    Grava em ContextVar (mesma thread) E dict por caller thread (cross-thread).
 
     Args:
         user_id: ID do usuário no banco de dados
     """
     _current_user_id.set(user_id)
+    tid = threading.current_thread().ident
+    with _uid_lock:
+        _user_id_by_caller[tid] = user_id
+
+
+def clear_current_user_id() -> None:
+    """
+    Remove user_id do caller atual no dict cross-thread.
+
+    Deve ser chamado no finally do agent invocation para evitar stale entries.
+    """
+    tid = threading.current_thread().ident
+    with _uid_lock:
+        _user_id_by_caller.pop(tid, None)
 
 
 def get_current_user_id() -> int:
     """
     Obtém o user_id do contexto atual.
 
+    Tenta ContextVar primeiro (isolamento por thread). Se não setado (MCP
+    daemon thread), consulta dict cross-thread — só resolve se TODOS os
+    callers ativos têm o MESMO user_id. Com callers diferentes, mantém
+    o erro para evitar cross-user data leak.
+
     Returns:
         ID do usuário
 
     Raises:
-        RuntimeError: Se user_id não foi definido
+        RuntimeError: Se user_id não pode ser determinado com segurança
     """
     uid = _current_user_id.get()
+    if uid == 0:
+        with _uid_lock:
+            unique_ids = set(_user_id_by_caller.values())
+            if len(unique_ids) == 1:
+                uid = next(iter(unique_ids))
+            elif len(unique_ids) > 1:
+                logger.warning(
+                    "[MEMORY_MCP] Múltiplos user_ids ativos (%s) — "
+                    "não é seguro resolver cross-thread",
+                    unique_ids,
+                )
     if uid == 0:
         raise RuntimeError(
             "[MEMORY_MCP] user_id não definido. "
