@@ -229,6 +229,14 @@
   ],
   "indices": [
     {
+      "name": "idx_sep_estoque_projetado",
+      "columns": [
+        "cod_produto",
+        "expedicao"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_expedicao_produto",
       "columns": [
         "expedicao",
@@ -356,14 +364,6 @@
       "name": "ix_separacao_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_estoque_projetado",
-      "columns": [
-        "cod_produto",
-        "expedicao"
       ],
       "unique": false
     }

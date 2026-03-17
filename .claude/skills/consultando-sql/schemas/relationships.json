@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 224,
+  "total_relationships": 223,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1266,12 +1266,6 @@
       "from_table": "tabelas_frete",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "tipo_carga",
-      "from_column": "carga_principal_id",
-      "to_table": "tipo_carga",
       "to_column": "id"
     },
     {

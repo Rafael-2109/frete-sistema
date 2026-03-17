@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 154,
+  "total_tabelas": 155,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -220,6 +220,15 @@
         "num_pedido",
         "cod_produto",
         "pedido_cliente"
+      ]
+    },
+    {
+      "name": "carvia_admin_audit",
+      "description": "Tabela carvia_admin_audit",
+      "key_fields": [
+        "acao",
+        "entidade_tipo",
+        "entidade_id"
       ]
     },
     {

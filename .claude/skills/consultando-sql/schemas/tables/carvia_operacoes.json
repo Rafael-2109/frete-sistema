@@ -28,6 +28,10 @@
       "type": "varchar(255)"
     },
     {
+      "name": "cte_pdf_path",
+      "type": "varchar(500)"
+    },
+    {
       "name": "cte_data_emissao",
       "type": "date"
     },
@@ -142,6 +146,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_operacoes_cte_numero",
+      "columns": [
+        "cte_numero"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
         "fatura_cliente_id"
@@ -152,13 +163,6 @@
       "name": "ix_carvia_operacoes_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_operacoes_cte_numero",
-      "columns": [
-        "cte_numero"
       ],
       "unique": false
     }
