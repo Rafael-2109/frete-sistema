@@ -2054,6 +2054,29 @@ def api_fila_impostos():
             except Exception:
                 pass
 
+        # Anotar jobs verificados via lupa (cache Redis 24h)
+        import json as _json_fila
+        for job_data in jobs_concluidos:
+            if not job_data.get('sucesso'):
+                oid = job_data.get('args', {}).get('order_id')
+                if oid:
+                    cached = redis_conn.get(f'impostos:verificado:{oid}')
+                    if cached:
+                        info = _json_fila.loads(cached)
+                        job_data['verificado'] = True
+                        tributos = info.get('total_tributos', 0)
+                        job_data['verificado_msg'] = f"OK no Odoo (R$ {tributos:,.2f})"
+
+        for job_data in jobs_falhados:
+            oid = job_data.get('args', {}).get('order_id')
+            if oid:
+                cached = redis_conn.get(f'impostos:verificado:{oid}')
+                if cached:
+                    info = _json_fila.loads(cached)
+                    job_data['verificado'] = True
+                    tributos = info.get('total_tributos', 0)
+                    job_data['verificado_msg'] = f"OK no Odoo (R$ {tributos:,.2f})"
+
         # Calcular total de páginas
         import math
         total_pages_pendentes = math.ceil(total_pendentes / per_page) if total_pendentes > 0 else 1
@@ -2356,6 +2379,25 @@ def api_verificar_imposto_odoo():
 
         if total_tributos > 0 and cfop:
             cfop_nome = cfop[1] if isinstance(cfop, list) else str(cfop)
+
+            # Persistir verificacao no Redis para que o auto-refresh respeite
+            try:
+                import json as _json_v
+                from app.portal.workers import get_redis_connection as _get_redis_v
+                _redis_v = _get_redis_v()
+                _redis_v.setex(
+                    f'impostos:verificado:{order_id}',
+                    86400,  # 24h TTL
+                    _json_v.dumps({
+                        'verificado': True,
+                        'total_tributos': total_tributos,
+                        'cfop': cfop_nome,
+                        'verificado_em': agora_utc_naive().isoformat(),
+                    })
+                )
+            except Exception:
+                pass  # Nao bloquear resposta se Redis falhar
+
             return jsonify({
                 'success': True,
                 'status': 'calculado',

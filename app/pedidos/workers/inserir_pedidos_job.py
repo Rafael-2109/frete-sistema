@@ -138,7 +138,7 @@ def inserir_pedidos_lote_job(session_key: str, filiais_dados: list,
 
                 # Registra auditoria
                 _registrar_auditoria(
-                    db, service, cnpj, itens_odoo, rede, tipo_doc,
+                    db, cnpj, itens_odoo, rede, tipo_doc,
                     numero_doc, s3_path, usuario, filial, resultado
                 )
 

@@ -535,10 +535,12 @@ $(document).ready(function() {
         }
 
         jobs.forEach(function(job) {
-            const sucesso = job.sucesso;
+            const sucesso = job.sucesso || job.verificado;
             const resultado = job.resultado || {};
             const tempo = resultado.tempo_segundos ? resultado.tempo_segundos.toFixed(1) + 's' : '-';
-            const mensagem = resultado.message || (sucesso ? 'Sucesso' : 'Falha no job');
+            const mensagem = job.verificado
+                ? job.verificado_msg
+                : (resultado.message || (sucesso ? 'Sucesso' : 'Falha no job'));
             const acoes = sucesso ? '' : `
                 <button class="btn btn-sm btn-outline-primary btn-verificar"
                     data-order-id="${job.args.order_id}" data-order-name="${job.args.order_name || ''}"
@@ -546,15 +548,20 @@ $(document).ready(function() {
                     <i class="fas fa-search"></i> Verificar
                 </button>`;
 
+            const badgeClass = job.verificado ? 'bg-success' : (job.sucesso ? 'bg-success' : 'bg-warning text-dark');
+            const badgeIcon = sucesso ? 'fa-check' : 'fa-exclamation-triangle';
+            const badgeText = job.verificado ? 'Verificado' : (sucesso ? 'OK' : 'Aviso');
+            const rowClass = job.verificado ? 'table-success' : (job.sucesso ? '' : 'table-warning');
+
             tbody.append(`
-                <tr class="${sucesso ? '' : 'table-warning'}">
+                <tr class="${rowClass}">
                     <td><strong>${job.args.order_name || '-'}</strong></td>
                     <td><a href="https://odoo.nacomgoya.com.br/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
                     <td>${formatarData(job.finalizado_em)}</td>
                     <td>
-                        <span class="badge ${sucesso ? 'bg-success' : 'bg-warning text-dark'}">
-                            <i class="fas ${sucesso ? 'fa-check' : 'fa-exclamation-triangle'}"></i>
-                            ${sucesso ? 'OK' : 'Aviso'}
+                        <span class="badge ${badgeClass}">
+                            <i class="fas ${badgeIcon}"></i>
+                            ${badgeText}
                         </span>
                         <small class="d-block text-muted">${mensagem}</small>
                     </td>
@@ -581,6 +588,27 @@ $(document).ready(function() {
         }
 
         jobs.forEach(function(job) {
+            if (job.verificado) {
+                // Job verificado OK no Odoo — linha verde, sem botoes de acao
+                tbody.append(`
+                    <tr class="table-success">
+                        <td><strong>${job.args.order_name || '-'}</strong></td>
+                        <td><a href="https://odoo.nacomgoya.com.br/web#id=${job.args.order_id}&model=sale.order&view_type=form" target="_blank"><code>${job.args.order_id || '-'}</code></a></td>
+                        <td>${formatarData(job.finalizado_em)}</td>
+                        <td>
+                            <span class="badge bg-success">
+                                <i class="fas fa-check"></i> Verificado
+                            </span>
+                            <small class="d-block text-success">${job.verificado_msg}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-success"><i class="fas fa-check"></i> OK</span>
+                        </td>
+                    </tr>
+                `);
+                return; // Skip normal rendering
+            }
+
             const erroResumido = (job.erro || 'Erro desconhecido').substring(0, 100);
 
             tbody.append(`
