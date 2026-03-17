@@ -155,7 +155,6 @@
 
 .table-carteira-simples tr.separacao-aberta td {
     background-color: rgba(var(--bs-aberto-rgb), 0.15);
-    color: var(--bs-aberto-color);
 }
 
 /* Separacao COTADO - azul customizado */
@@ -165,7 +164,6 @@
 
 .table-carteira-simples tr.separacao-cotada td {
     background-color: rgba(var(--bs-cotacao-rgb), 0.15);
-    color: var(--bs-cotacao-color);
 }
 
 /* Hover em linhas especiais */

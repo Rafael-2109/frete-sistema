@@ -991,8 +991,10 @@
     // Helper: classe CSS de cor baseada em valor de estoque
     function classeCorEstoque(valor) {
         if (valor === undefined || valor === null) return '';
-        if (valor < 0) return ' est-negativo';
-        if (valor < 100) return ' est-baixo';
+        const rounded = Math.round(valor);
+        if (rounded === 0) return '';
+        if (rounded < 0) return ' est-negativo';
+        if (rounded < 100) return ' est-baixo';
         return '';
     }
 
@@ -3111,10 +3113,13 @@
 
             // HIERARQUIA DE CORES via CSS classes (performance)
             menor7dEl.classList.remove('est-negativo', 'est-baixo');
-            if (resultado.menor_estoque_d7 < 0) {
-                menor7dEl.classList.add('est-negativo');
-            } else if (resultado.menor_estoque_d7 < 100) {
-                menor7dEl.classList.add('est-baixo');
+            const menor7dRounded = Math.round(resultado.menor_estoque_d7);
+            if (menor7dRounded !== 0) {
+                if (menor7dRounded < 0) {
+                    menor7dEl.classList.add('est-negativo');
+                } else if (menor7dRounded < 100) {
+                    menor7dEl.classList.add('est-baixo');
+                }
             }
         } else {
             console.warn(`[EST] menor-7d-${rowIndex} não encontrado no DOM (tipo=${item.tipo})`);
@@ -3126,10 +3131,13 @@
             // Se atualizarEstoqueNaData não aplicou cores (early return por data vazia), usar menor_estoque_d7
             if (estDataEl.textContent.trim() === '-') {
                 estDataEl.classList.remove('est-negativo', 'est-baixo');
-                if (resultado.menor_estoque_d7 < 0) {
-                    estDataEl.classList.add('est-negativo');
-                } else if (resultado.menor_estoque_d7 < 100) {
-                    estDataEl.classList.add('est-baixo');
+                const estDataRounded = Math.round(resultado.menor_estoque_d7);
+                if (estDataRounded !== 0) {
+                    if (estDataRounded < 0) {
+                        estDataEl.classList.add('est-negativo');
+                    } else if (estDataRounded < 100) {
+                        estDataEl.classList.add('est-baixo');
+                    }
                 }
             }
         }
@@ -3154,10 +3162,13 @@
             estDataEl.classList.remove('est-negativo', 'est-baixo');
             const fallback = item.menor_estoque_d7;
             if (fallback !== undefined && fallback !== null) {
-                if (fallback < 0) {
-                    estDataEl.classList.add('est-negativo');
-                } else if (fallback < 100) {
-                    estDataEl.classList.add('est-baixo');
+                const fallbackRounded = Math.round(fallback);
+                if (fallbackRounded !== 0) {
+                    if (fallbackRounded < 0) {
+                        estDataEl.classList.add('est-negativo');
+                    } else if (fallbackRounded < 100) {
+                        estDataEl.classList.add('est-baixo');
+                    }
                 }
             }
             return;
@@ -3181,10 +3192,13 @@
 
             // HIERARQUIA DE CORES via CSS classes (performance)
             estDataEl.classList.remove('est-negativo', 'est-baixo');
-            if (estoqueDisponivel < 0) {
-                estDataEl.classList.add('est-negativo');
-            } else if (estoqueDisponivel < 100) {
-                estDataEl.classList.add('est-baixo');
+            const estRounded = Math.round(estoqueDisponivel);
+            if (estRounded !== 0) {
+                if (estRounded < 0) {
+                    estDataEl.classList.add('est-negativo');
+                } else if (estRounded < 100) {
+                    estDataEl.classList.add('est-baixo');
+                }
             }
         } else {
             estDataEl.textContent = '-';
