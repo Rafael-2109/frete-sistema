@@ -252,10 +252,11 @@ def exportar_relatorios_producao():
                     try:
                         entrada_val = float(dia.get('entrada', 0) or dia.get('producao', 0) or 0)
                         saida_val = float(dia.get('saida', 0) or dia.get('saidas', 0) or 0)
+                        saldo_inicial_val = float(dia.get('saldo_inicial', 0) or dia.get('estoque_inicial', 0) or 0)
                         saldo_val = float(dia.get('saldo_final', 0) or dia.get('estoque_final', 0) or 0)
                     except (TypeError, ValueError) as e:
                         logger.warning(f"Erro ao converter valores para produto {cod_produto}: {e}")
-                        entrada_val = saida_val = saldo_val = 0
+                        entrada_val = saida_val = saldo_inicial_val = saldo_val = 0
 
                     # Adicionar apenas se houver entrada OU saída
                     if entrada_val > 0 or saida_val > 0:
@@ -270,6 +271,7 @@ def exportar_relatorios_producao():
                             'linha_producao': linha_producao,
                             'tipo_materia_prima': tipo_materia_prima,
                             'tipo_embalagem': tipo_embalagem,
+                            'saldo_inicial': saldo_inicial_val,
                             'saida': saida_val,
                             'entrada': entrada_val,
                             'saldo': saldo_val
@@ -282,15 +284,16 @@ def exportar_relatorios_producao():
         for (data_str, cod_produto), mov in sorted(movimentacoes_por_dia_produto.items()):
             dados_movimentacoes.append({
                 'Data': mov['data_obj'],  # Usar datetime object para ordenação correta
-                'Linha': mov['linha_producao'],  # ✅ NOVA COLUNA após Data
+                'Linha': mov['linha_producao'],
                 'Código Produto': mov['cod_produto'],
                 'Nome Produto': mov['nome_produto'],
                 'Categoria': mov['categoria'],
-                'MP': mov['tipo_materia_prima'],  # ✅ NOVA COLUNA após Categoria
-                'Emb.': mov['tipo_embalagem'],  # ✅ NOVA COLUNA após MP
-                'Saídas Previstas': int(round(mov['saida'])),  # Inteiro puro
-                'Entradas Previstas': int(round(mov['entrada'])),  # Inteiro puro
-                'Saldo Projetado': int(round(mov['saldo']))  # Inteiro puro
+                'MP': mov['tipo_materia_prima'],
+                'Emb.': mov['tipo_embalagem'],
+                'Saldo Inicial': int(round(mov['saldo_inicial'])),  # Saldo no início do dia
+                'Saídas Previstas': int(round(mov['saida'])),
+                'Entradas Previstas': int(round(mov['entrada'])),
+                'Saldo Projetado': int(round(mov['saldo']))  # Saldo no final do dia
             })
         
         # Debug: verificar movimentações
@@ -320,9 +323,6 @@ def exportar_relatorios_producao():
             # Verificar se há projeção
             projecao = estoque_info.get('projecao')
             if projecao and isinstance(projecao, list):
-                # Estoque atual (D0)
-                estoque_atual = estoque_info.get('estoque_atual', 0)
-
                 # Processar cada dia da projeção
                 for idx, dia in enumerate(projecao[:30]):  # Limitar a 30 dias
                     if not isinstance(dia, dict):
@@ -346,11 +346,13 @@ def exportar_relatorios_producao():
                         except Exception as e:
                             continue
 
-                    # Obter saída do dia (SEM considerar entrada/produção)
+                    # Obter saída do dia e saldo inicial (SEM considerar entrada/produção)
                     try:
                         saida_dia = float(dia.get('saida', 0) or dia.get('saidas', 0) or 0)
+                        saldo_inicial_dia = float(dia.get('saldo_inicial', 0) or dia.get('estoque_inicial', 0) or 0)
                     except (TypeError, ValueError):
                         saida_dia = 0
+                        saldo_inicial_dia = 0
 
                     # Apenas adicionar linhas com saída > 0
                     if saida_dia > 0:
@@ -363,17 +365,16 @@ def exportar_relatorios_producao():
                                 except (TypeError, ValueError):
                                     pass
 
-                        # Calcular saldo SEM programação de produção
-                        # saldo = estoque_atual - saída_acumulada
-                        saldo_sem_producao = estoque_atual - saida_acumulada
+                        # Saldo sem produção = saldo_inicial do dia - saída do dia
+                        saldo_sem_producao = saldo_inicial_dia - saida_dia
 
                         dados_saidas_previstas.append({
                             'Código Produto': cod_produto,
                             'Nome Produto': nome_produto,
-                            'Linha': linha_producao,  # ✅ NOVA COLUNA
-                            'MP': tipo_materia_prima,  # ✅ NOVA COLUNA
+                            'Linha': linha_producao,
+                            'MP': tipo_materia_prima,
                             'Data': data_obj,
-                            'Estoque Atual': int(estoque_atual),
+                            'Saldo Inicial': int(round(saldo_inicial_dia)),
                             'Saída do Dia': int(round(saida_dia)),
                             'Saída Acumulada': int(round(saida_acumulada)),
                             'Saldo sem Produção': int(round(saldo_sem_producao))
@@ -535,7 +536,7 @@ def exportar_relatorios_producao():
                         worksheet_mov.set_column(col_num, col_num, 15)  # ✅ NOVA
                     elif col_name == 'Emb.':
                         worksheet_mov.set_column(col_num, col_num, 12)  # ✅ NOVA
-                    elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
+                    elif col_name in ['Saldo Inicial', 'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
                         worksheet_mov.set_column(col_num, col_num, 18)
 
                 # Adicionar formatação condicional para as linhas com formato de número brasileiro
@@ -623,7 +624,7 @@ def exportar_relatorios_producao():
                         elif col_name == 'Saldo Projetado' and saldo_negativo:
                             # Saldo negativo - formato especial vermelho escuro (sanitizado)
                             worksheet_mov.write_number(row_num, col_num, sanitizar_numero(valor), saldo_negativo_format)
-                        elif col_name in ['Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
+                        elif col_name in ['Saldo Inicial', 'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado']:
                             # Colunas numéricas com formato de milhar (sanitizado)
                             worksheet_mov.write_number(row_num, col_num, sanitizar_numero(valor), formato_numero)
                         else:
@@ -633,7 +634,7 @@ def exportar_relatorios_producao():
                 logger.warning("Criando aba vazia de Movimentações Previstas")
                 df_vazia = pd.DataFrame(columns=['Data', 'Linha', 'Código Produto', 'Nome Produto',
                                                  'Categoria', 'MP', 'Emb.',
-                                                 'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado'])
+                                                 'Saldo Inicial', 'Saídas Previstas', 'Entradas Previstas', 'Saldo Projetado'])
                 df_vazia.to_excel(writer, sheet_name='Movimentações Previstas', index=False)
                 worksheet_mov = writer.sheets['Movimentações Previstas']
 
@@ -685,7 +686,7 @@ def exportar_relatorios_producao():
                         elif col_name == 'Saldo sem Produção' and valor < 0:
                             # Saldo negativo - formato especial vermelho (sanitizado)
                             worksheet_saidas.write_number(row_num, col_num, sanitizar_numero(valor), formato_saldo_negativo)
-                        elif col_name in ['Estoque Atual', 'Saída do Dia', 'Saída Acumulada', 'Saldo sem Produção']:
+                        elif col_name in ['Saldo Inicial', 'Saída do Dia', 'Saída Acumulada', 'Saldo sem Produção']:
                             # Colunas numéricas (sanitizado)
                             worksheet_saidas.write_number(row_num, col_num, sanitizar_numero(valor), formato_inteiro_saida)
                         else:
@@ -694,10 +695,10 @@ def exportar_relatorios_producao():
                 # Ajustar larguras das colunas
                 worksheet_saidas.set_column(0, 0, 15)  # Código Produto
                 worksheet_saidas.set_column(1, 1, 40)  # Nome Produto
-                worksheet_saidas.set_column(2, 2, 15)  # ✅ Linha
-                worksheet_saidas.set_column(3, 3, 15)  # ✅ MP
+                worksheet_saidas.set_column(2, 2, 15)  # Linha
+                worksheet_saidas.set_column(3, 3, 15)  # MP
                 worksheet_saidas.set_column(4, 4, 12)  # Data
-                worksheet_saidas.set_column(5, 5, 15)  # Estoque Atual
+                worksheet_saidas.set_column(5, 5, 15)  # Saldo Inicial
                 worksheet_saidas.set_column(6, 6, 15)  # Saída do Dia
                 worksheet_saidas.set_column(7, 7, 18)  # Saída Acumulada
                 worksheet_saidas.set_column(8, 8, 20)  # Saldo sem Produção
@@ -705,8 +706,8 @@ def exportar_relatorios_producao():
                 # Criar aba vazia se não houver saídas previstas
                 logger.warning("Criando aba vazia de Saídas Previstas")
                 df_vazia_saidas = pd.DataFrame(columns=[
-                    'Código Produto', 'Nome Produto', 'Linha', 'MP', 'Data',  # ✅ Incluir Linha e MP
-                    'Estoque Atual', 'Saída do Dia',
+                    'Código Produto', 'Nome Produto', 'Linha', 'MP', 'Data',
+                    'Saldo Inicial', 'Saída do Dia',
                     'Saída Acumulada', 'Saldo sem Produção'
                 ])
                 df_vazia_saidas.to_excel(writer, sheet_name='Saídas Previstas', index=False)
