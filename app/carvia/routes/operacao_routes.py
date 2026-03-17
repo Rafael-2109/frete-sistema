@@ -1058,7 +1058,7 @@ def register_operacao_routes(bp):
 
     @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/recotar', methods=['POST'])
     @login_required
-    def recotar_subcontrato(operacao_id, sub_id):
+    def recotar_subcontrato_from_operacao(operacao_id, sub_id):
         """Recalcula cotacao de um subcontrato. Aceita valor_override opcional."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')

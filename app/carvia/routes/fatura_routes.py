@@ -25,9 +25,9 @@ def register_fatura_routes(bp):
 
     # ===================== FATURAS CLIENTE =====================
 
-    @bp.route('/faturas-cliente')
+    @bp.route('/faturas-cliente') # type: ignore
     @login_required
-    def listar_faturas_cliente():
+    def listar_faturas_cliente(): # type: ignore
         """Lista faturas CarVia emitidas ao cliente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -100,9 +100,9 @@ def register_fatura_routes(bp):
             today=today,
         )
 
-    @bp.route('/faturas-cliente/nova', methods=['GET', 'POST'])
+    @bp.route('/faturas-cliente/nova', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def nova_fatura_cliente():
+    def nova_fatura_cliente(): # type: ignore
         """Cria nova fatura para o cliente — agrupa operacoes confirmadas"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -300,9 +300,9 @@ def register_fatura_routes(bp):
             ctes_comp_disponiveis=ctes_comp_disponiveis,
         )
 
-    @bp.route('/faturas-cliente/<int:fatura_id>')
+    @bp.route('/faturas-cliente/<int:fatura_id>') # type: ignore
     @login_required
-    def detalhe_fatura_cliente(fatura_id):
+    def detalhe_fatura_cliente(fatura_id): # type: ignore
         """Detalhe de uma fatura CarVia ao cliente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -368,9 +368,9 @@ def register_fatura_routes(bp):
             ctes_complementares=ctes_complementares,
         )
 
-    @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST'])
+    @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST']) # type: ignore
     @login_required
-    def editar_valor_fatura_cliente(fatura_id):
+    def editar_valor_fatura_cliente(fatura_id): # type: ignore
         """Edita valor total de uma fatura cliente (admin only)"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -418,9 +418,9 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
-    @bp.route('/faturas-cliente/<int:fatura_id>/editar-vencimento', methods=['POST'])
+    @bp.route('/faturas-cliente/<int:fatura_id>/editar-vencimento', methods=['POST']) # type: ignore
     @login_required
-    def editar_vencimento_fatura_cliente(fatura_id):
+    def editar_vencimento_fatura_cliente(fatura_id): # type: ignore
         """Edita vencimento de uma fatura cliente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -454,9 +454,9 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
-    @bp.route('/faturas-cliente/<int:fatura_id>/status', methods=['POST'])
+    @bp.route('/faturas-cliente/<int:fatura_id>/status', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_status_fatura_cliente(fatura_id):
+    def atualizar_status_fatura_cliente(fatura_id): # type: ignore
         """Atualiza status de uma fatura cliente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -526,9 +526,9 @@ def register_fatura_routes(bp):
 
     # ===================== CRIAR FATURA RAPIDA =====================
 
-    @bp.route('/faturas-cliente/criar-rapida', methods=['POST'])
+    @bp.route('/faturas-cliente/criar-rapida', methods=['POST']) # type: ignore
     @login_required
-    def criar_fatura_rapida():
+    def criar_fatura_rapida(): # type: ignore
         """Cria fatura cliente a partir de uma unica operacao (atalho do detalhe)"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -606,9 +606,9 @@ def register_fatura_routes(bp):
 
     # ===================== FATURAS TRANSPORTADORA =====================
 
-    @bp.route('/faturas-transportadora')
+    @bp.route('/faturas-transportadora') # type: ignore
     @login_required
-    def listar_faturas_transportadora():
+    def listar_faturas_transportadora(): # type: ignore
         """Lista faturas recebidas dos subcontratados"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -689,9 +689,9 @@ def register_fatura_routes(bp):
             today=today,
         )
 
-    @bp.route('/faturas-transportadora/nova', methods=['GET', 'POST'])
+    @bp.route('/faturas-transportadora/nova', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def nova_fatura_transportadora():
+    def nova_fatura_transportadora(): # type: ignore
         """Cria nova fatura de transportadora — form simplificado sem subcontratos"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -790,9 +790,9 @@ def register_fatura_routes(bp):
 
     # ===================== ANEXAR / DESANEXAR SUBCONTRATOS =====================
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/anexar-subcontratos', methods=['POST'])
+    @bp.route('/faturas-transportadora/<int:fatura_id>/anexar-subcontratos', methods=['POST']) # type: ignore
     @login_required
-    def anexar_subcontratos_fatura_transportadora(fatura_id):
+    def anexar_subcontratos_fatura_transportadora(fatura_id): # type: ignore
         """Anexa subcontratos confirmados a uma fatura de transportadora existente"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
@@ -864,9 +864,9 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao anexar subcontratos fatura #{fatura_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/desanexar-subcontrato/<int:sub_id>', methods=['POST'])
+    @bp.route('/faturas-transportadora/<int:fatura_id>/desanexar-subcontrato/<int:sub_id>', methods=['POST']) # type: ignore
     @login_required
-    def desanexar_subcontrato_fatura_transportadora(fatura_id, sub_id):
+    def desanexar_subcontrato_fatura_transportadora(fatura_id, sub_id): # type: ignore
         """Desanexa um subcontrato de uma fatura de transportadora"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
@@ -927,9 +927,9 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao desanexar subcontrato #{sub_id} da fatura #{fatura_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/subcontratos-disponiveis/<int:transportadora_id>')
+    @bp.route('/api/subcontratos-disponiveis/<int:transportadora_id>') # type: ignore
     @login_required
-    def api_subcontratos_disponiveis(transportadora_id):
+    def api_subcontratos_disponiveis(transportadora_id): # type: ignore
         """Lista subcontratos disponiveis para anexar a uma fatura"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -963,9 +963,9 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao listar subcontratos disponiveis: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/atualizar-valor', methods=['POST'])
+    @bp.route('/faturas-transportadora/<int:fatura_id>/atualizar-valor', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_valor_fatura_transportadora(fatura_id):
+    def atualizar_valor_fatura_transportadora(fatura_id): # type: ignore
         """Atualiza valor total de uma fatura de transportadora"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
@@ -1010,9 +1010,9 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao atualizar valor fatura #{fatura_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>')
+    @bp.route('/faturas-transportadora/<int:fatura_id>') # type: ignore
     @login_required
-    def detalhe_fatura_transportadora(fatura_id):
+    def detalhe_fatura_transportadora(fatura_id): # type: ignore
         """Detalhe de uma fatura de transportadora"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1088,9 +1088,9 @@ def register_fatura_routes(bp):
             operacoes=operacoes,
         )
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/editar-vencimento', methods=['POST'])
+    @bp.route('/faturas-transportadora/<int:fatura_id>/editar-vencimento', methods=['POST']) # type: ignore
     @login_required
-    def editar_vencimento_fatura_transportadora(fatura_id):
+    def editar_vencimento_fatura_transportadora(fatura_id): # type: ignore
         """Edita vencimento de uma fatura transportadora"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1123,9 +1123,9 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/conferencia', methods=['POST'])
+    @bp.route('/faturas-transportadora/<int:fatura_id>/conferencia', methods=['POST']) # type: ignore
     @login_required
-    def conferir_fatura_transportadora(fatura_id):
+    def conferir_fatura_transportadora(fatura_id): # type: ignore
         """Atualiza status de conferencia de uma fatura de transportadora"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1189,9 +1189,9 @@ def register_fatura_routes(bp):
 
     # ==================== VINCULAR/DESVINCULAR OPERACAO ↔ FATURA CLIENTE ====================
 
-    @bp.route('/faturas-cliente/<int:fatura_id>/vincular-operacao', methods=['POST'])
+    @bp.route('/faturas-cliente/<int:fatura_id>/vincular-operacao', methods=['POST']) # type: ignore
     @login_required
-    def api_vincular_operacao_fatura_cliente(fatura_id):
+    def api_vincular_operacao_fatura_cliente(fatura_id): # type: ignore
         """Vincula operacao a fatura cliente: status -> FATURADO, seta FK."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
@@ -1244,9 +1244,9 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao vincular operacao #{operacao_id} a fatura #{fatura_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/faturas-cliente/<int:fatura_id>/desvincular-operacao/<int:op_id>', methods=['POST'])
+    @bp.route('/faturas-cliente/<int:fatura_id>/desvincular-operacao/<int:op_id>', methods=['POST']) # type: ignore
     @login_required
-    def api_desvincular_operacao_fatura_cliente(fatura_id, op_id):
+    def api_desvincular_operacao_fatura_cliente(fatura_id, op_id): # type: ignore
         """Desvincula operacao de fatura cliente: reverte status, limpa FK."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
@@ -1293,9 +1293,9 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao desvincular operacao #{op_id} de fatura #{fatura_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/operacoes-disponiveis-fatura')
+    @bp.route('/api/operacoes-disponiveis-fatura') # type: ignore
     @login_required
-    def api_operacoes_disponiveis_fatura():
+    def api_operacoes_disponiveis_fatura(): # type: ignore
         """Lista operacoes disponiveis para vincular a fatura cliente (R5)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
