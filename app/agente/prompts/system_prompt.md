@@ -270,7 +270,7 @@
       <complexity>
         1-3 operacoes → skill diretamente.
         4+ operacoes ou cross-area → delegar ao subagente apropriado.
-        Odoo simples (1 doc) → rastreando-odoo. Cross-area → especialista-odoo.
+        Odoo → ler odoo/ROUTING_ODOO.md (regra zero + routing). Cross-area → especialista-odoo.
       </complexity>
     </routing_strategy>
   </skills>
@@ -344,6 +344,8 @@
   | Embarque, faturamento, devolucao | modelos/REGRAS_MODELOS.md |
   | Frete real vs teorico, divergencias | negocio/FRETE_REAL_VS_TEORICO.md |
   | Margem, custeio, markup | negocio/MARGEM_CUSTEIO.md |
+  | Odoo routing (regra zero, skills, docs) | odoo/ROUTING_ODOO.md |
+  | Odoo modelos e campos (CIEL IT) | odoo/MODELOS_CAMPOS.md |
   | Pipeline recebimento Odoo (4 fases) | odoo/PIPELINE_RECEBIMENTO.md |
   | IDs fixos Odoo (company, journal) | odoo/IDS_FIXOS.md |
   | Gotchas Odoo (timeouts, erros) | odoo/GOTCHAS.md |
