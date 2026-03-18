@@ -25,9 +25,10 @@ from app import db
 
 logger = logging.getLogger(__name__)
 
-# Patterns padrao para modelos de moto conhecidos
-# Formato: MARCA + NUMERO (ex: CG 160, FACTOR 150, BIZ 125)
-DEFAULT_MOTO_PATTERN = re.compile(
+# --- Patterns de reconhecimento de motos (3 camadas) ---
+
+# Camada 1: Motos convencionais — MARCA + cilindrada (ex: CG 160, BIZ 125)
+CONVENCIONAL_MOTO_PATTERN = re.compile(
     r'\b(CG|FACTOR|BIZ|NXR|POP|XRE|TITAN|YBR|FAZER|FAN|CB|CBR|BROS|CROSSER'
     r'|LANDER|TENERE|MT|XTZ|NMAX|NEO|FLUO|PCX|SH|ADV|SAHARA'
     r'|DUKE|NINJA|Z\d{3}|TRACER|R\d)'
@@ -35,6 +36,23 @@ DEFAULT_MOTO_PATTERN = re.compile(
     r'(\d{2,3})',
     re.IGNORECASE
 )
+
+# Camada 2: Veiculos eletricos — deteccao por keyword
+VEICULO_ELETRICO_DETECT = re.compile(
+    r'\b(MOTO|SCOOTER|BIKE)\b',
+    re.IGNORECASE
+)
+
+# Camada 2b: Modelos conhecidos de veiculos eletricos (producao real)
+# Patterns mais longos PRIMEIRO para evitar match parcial (X11 MINI antes de X11)
+VEICULO_ELETRICO_MODELOS = re.compile(
+    r'\b(X11[\s-]?MINI|JOY[\s-]?SUPER|MIA[\s-]?TRI'
+    r'|X12|X15|X11|B2|B3|GRID|JET|ROMA|GIGA|RET|S8|BOB|DOT|POP|VED)\b',
+    re.IGNORECASE
+)
+
+# Camada 3: Prefixo de codigo de produto (MT-JET, MT-X12, etc.)
+CODIGO_MOTO_PREFIX = re.compile(r'^MT-(.+)$', re.IGNORECASE)
 
 
 class MotoRecognitionService:
@@ -59,12 +77,19 @@ class MotoRecognitionService:
         return volume_m3 * cubagem * qtd
 
     @staticmethod
-    def _match_descricao(texto: str, modelos: list) -> Optional[str]:
+    def _match_descricao(texto: str, modelos: list, codigo_produto: str = None) -> Optional[str]:
         """Match descricao contra lista de modelos pre-carregada (sem query DB).
+
+        Ordem de prioridade:
+        1. Patterns customizados de CarviaModeloMoto (regex_pattern ou nome exato)
+        2. Motos convencionais (MARCA + cilindrada: CG 160, BIZ 125)
+        3. Veiculos eletricos (keyword MOTO/SCOOTER/BIKE + modelo conhecido)
+        4. Prefixo codigo_produto MT-XXX
 
         Args:
             texto: Descricao do produto
             modelos: Lista de CarviaModeloMoto (ja carregados)
+            codigo_produto: Codigo do produto (opcional, usado como fallback)
 
         Returns:
             Nome do modelo matcheado ou None
@@ -74,7 +99,7 @@ class MotoRecognitionService:
 
         texto_upper = texto.upper().strip()
 
-        # 1. Patterns customizados
+        # 1. Patterns customizados do banco
         for modelo in modelos:
             if modelo.regex_pattern:
                 try:
@@ -86,31 +111,46 @@ class MotoRecognitionService:
             if modelo.nome.upper() in texto_upper:
                 return modelo.nome
 
-        # 2. Fallback: pattern padrao
-        match = DEFAULT_MOTO_PATTERN.search(texto_upper)
+        # 2. Motos convencionais (Honda, Yamaha, etc.)
+        match = CONVENCIONAL_MOTO_PATTERN.search(texto_upper)
         if match:
             marca = match.group(1).upper()
             cilindrada = match.group(2)
             return f'{marca} {cilindrada}'
 
+        # 3. Veiculos eletricos — keyword + modelo conhecido
+        if VEICULO_ELETRICO_DETECT.search(texto_upper):
+            modelo_match = VEICULO_ELETRICO_MODELOS.search(texto_upper)
+            if modelo_match:
+                nome = modelo_match.group(1).upper().strip()
+                # Normalizar separadores: "X11-MINI" → "X11 MINI"
+                return re.sub(r'[\s-]+', ' ', nome)
+
+        # 4. Fallback: prefixo codigo de produto (MT-JET, MT-X12, etc.)
+        if codigo_produto:
+            cod_match = CODIGO_MOTO_PREFIX.match(codigo_produto.strip())
+            if cod_match:
+                return cod_match.group(1).upper()
+
         return None
 
-    def extrair_modelo(self, texto: str) -> Optional[str]:
+    def extrair_modelo(self, texto: str, codigo_produto: str = None) -> Optional[str]:
         """
         Extrai modelo de moto do texto da descricao.
 
         Tenta primeiro patterns customizados de CarviaModeloMoto,
-        depois o pattern padrao.
+        depois veiculos eletricos por keyword, depois convencional.
 
         Args:
             texto: Descricao do produto
+            codigo_produto: Codigo do produto (opcional, usado como fallback)
 
         Returns:
-            Nome normalizado do modelo (ex: 'CG 160') ou None
+            Nome normalizado do modelo (ex: 'CG 160', 'X12', 'JET') ou None
         """
         from app.carvia.models import CarviaModeloMoto
         modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
-        return self._match_descricao(texto, modelos)
+        return self._match_descricao(texto, modelos, codigo_produto)
 
     def identificar_motos_operacao(self, operacao_id: int) -> List[Dict]:
         """
@@ -142,7 +182,7 @@ class MotoRecognitionService:
         from app.carvia.models import CarviaModeloMoto
 
         for item in itens:
-            modelo_nome = self.extrair_modelo(item.descricao)
+            modelo_nome = self.extrair_modelo(item.descricao, item.codigo_produto)
             if modelo_nome:
                 # Tentar encontrar modelo cadastrado
                 modelo_db = CarviaModeloMoto.query.filter(
@@ -259,7 +299,7 @@ class MotoRecognitionService:
         peso_cubado_total = 0
 
         for item in itens:
-            modelo_nome = self._match_descricao(item.descricao, modelos)
+            modelo_nome = self._match_descricao(item.descricao, modelos, item.codigo_produto)
             if not modelo_nome or modelo_nome not in modelos_by_nome:
                 continue
 
@@ -318,7 +358,7 @@ class MotoRecognitionService:
         for nf_id in nf_ids:
             peso_cubado = 0.0
             for item in itens_por_nf.get(nf_id, []):
-                modelo_nome = self._match_descricao(item.descricao, modelos)
+                modelo_nome = self._match_descricao(item.descricao, modelos, item.codigo_produto)
                 if not modelo_nome or modelo_nome not in modelos_by_nome:
                     continue
                 modelo = modelos_by_nome[modelo_nome]
