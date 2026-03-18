@@ -841,7 +841,7 @@ def register_necessidade_producao_routes(bp):
             from datetime import datetime
 
             dados = request.json
-            cod_produto = dados.get('cod_produto')
+            cod_produto = str(dados.get('cod_produto', ''))  # VARCHAR no banco — garantir string
             data_programacao_str = dados.get('data_programacao')
             linha_producao = dados.get('linha_producao')
             qtd_programada = dados.get('qtd_programada')
