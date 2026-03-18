@@ -50,6 +50,13 @@ if _sentry_dsn:
         import sentry_sdk  # type: ignore[import-untyped]
         from sentry_sdk.integrations.flask import FlaskIntegration
 
+        def _before_send(event, hint):
+            """Enriquece eventos do agente com component tag."""
+            tags = event.get("tags", {})
+            if tags.get("agent.active") == "true":
+                event.setdefault("tags", {})["component"] = "agent"
+            return event
+
         def _before_send_transaction(event, hint):
             """Descarta transacoes de static files e health checks."""
             url = event.get("request", {}).get("url", "")
@@ -91,6 +98,8 @@ if _sentry_dsn:
             release=os.getenv("RENDER_GIT_COMMIT", "dev"),
             # Ambiente: production, development, testing
             environment=os.getenv("ENVIRONMENT", "development"),
+            # Enriquece eventos do agente com component tag
+            before_send=_before_send,
             # Filtra transacoes de static files e health checks
             before_send_transaction=_before_send_transaction,
             # Breadcrumbs para contexto de erro
@@ -710,19 +719,19 @@ def create_app(config_name=None):
 
     # Registra funções globais para templates
     @app.template_global()
-    def safe_strftime(obj, formato="%d/%m/%Y"):
+    def safe_strftime(obj, formato="%d/%m/%Y"): # type: ignore
         """Função global segura para formatação de datas em templates"""
         return formatar_data_segura(obj, formato)
 
     @app.template_global()
-    def agora_brasil():
+    def agora_brasil(): # type: ignore
         """Função global para obter datetime atual no timezone brasileiro"""
         from app.utils.timezone import agora_brasil
 
         return agora_brasil()
 
     @app.template_global()
-    def timezone_info():
+    def timezone_info(): # type: ignore
         """Função global para exibir informações de timezone"""
         from app.utils.timezone import diferenca_horario_brasil, eh_horario_verao_brasil
 
@@ -737,12 +746,12 @@ def create_app(config_name=None):
         }
 
     @app.template_global()
-    def abs(valor):
+    def abs(valor): # type: ignore
         """Função global para valor absoluto em templates"""
         return __builtins__["abs"](valor)
 
     @login_manager.user_loader
-    def load_user(user_id):
+    def load_user(user_id): # type: ignore
         from app.auth.models import Usuario
 
         return db.session.get(Usuario,int(user_id)) if user_id else None
@@ -905,7 +914,7 @@ def create_app(config_name=None):
 
     # 🎭 Registrar helpers de permissão nos templates
     @app.context_processor
-    def inject_permission_helpers():
+    def inject_permission_helpers(): # type: ignore
         """Injeta helpers de permissão nos templates Jinja2"""
         if not has_request_context():
             return {
@@ -1209,7 +1218,7 @@ def create_app(config_name=None):
 
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
     @app.before_request
-    def ensure_db_connection():
+    def ensure_db_connection(): # type: ignore
         """Garante que a conexão com o banco está ativa"""
         try:
             # Testa a conexão com uma query simples
@@ -1230,7 +1239,7 @@ def create_app(config_name=None):
 
     # ✅ MIDDLEWARE PARA LIMPAR CONEXÕES APÓS CADA REQUEST
     @app.teardown_appcontext
-    def shutdown_session(exception=None):
+    def shutdown_session(exception=None): # type: ignore
         """
         Remove a sessão do banco ao final de cada requisição.
 

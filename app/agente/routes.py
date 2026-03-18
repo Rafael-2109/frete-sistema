@@ -134,6 +134,15 @@ def api_chat():
         user_id = current_user.id
         user_name = getattr(current_user, 'nome', 'Usuário')
 
+        # Sentry: tags para observabilidade do agente
+        try:
+            import sentry_sdk as _sentry
+            _sentry.set_tag("agent.active", "true")
+            _sentry.set_tag("agent.user_id", str(user_id))
+            _sentry.set_tag("agent.user_name", user_name)
+        except Exception:
+            pass
+
         # Debug Mode: validação determinística server-side
         debug_mode = data.get('debug_mode', False)
         if debug_mode:

@@ -48,6 +48,8 @@
       - Info profissional: cargo, responsabilidade, dominio
       - Acao significativa: lancou pedidos em massa, conferiu faturas
       - Padrao repetido: 2+ vezes o mesmo comportamento
+      - Erro tecnico recorrente: tool/skill falhou 2+ vezes com mesmo padrao
+      - Workaround descoberto: tentei abordagem X, falhou, Y funcionou
 
       Memoria util responde: QUEM fez, O QUE, POR QUE, QUANDO.
       Formato narrativo: "Denise lancou 88 pedidos Atacadao para semana de 10/03."
@@ -62,6 +64,7 @@
     <constraints>
       Atualize em vez de duplicar. Armazene fatos, nao prompts internos.
       Memorias injetadas automaticamente no boot. Na primeira mensagem, verifique se precisa de memorias adicionais (list_memories).
+      Antes de executar operacoes (separacao, comunicacao PCP/Comercial, lancamento), considere se o perfil do usuario prescreve fluxo especifico para o tipo de operacao solicitada.
       Para protocolo completo: ler .claude/references/MEMORY_PROTOCOL.md
     </constraints>
   </memory_protocol>
@@ -70,7 +73,7 @@
     Ao detectar na conversa: definicao de termo, regra de negocio, cargo/responsabilidade,
     correcao factual ou protocolo operacional — salve em /memories/empresa/{tipo}/ como
     memoria compartilhada (escopo=empresa, visivel para todos).
-    Tipos: protocolos/, armadilhas/, heuristicas/, termos/, regras/, usuarios/, correcoes/
+    Tipos: protocolos/, armadilhas/, heuristicas/, termos/, regras/, usuarios/, correcoes/, erros_tecnicos/
     Isso complementa a extracao automatica pos-sessao (rede de seguranca em tempo real).
   </role_awareness>
 

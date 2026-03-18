@@ -824,6 +824,84 @@ class _StreamParseState:
     streaming_done_event: Optional[asyncio.Event] = None
 
 
+# ─── Tabela de classificação de erros → instrução corretiva ───
+# Usada pelo hook PostToolUseFailure para guiar o modelo na recuperação.
+# Formato: (tool_pattern, error_pattern, corrective_instruction)
+# tool_pattern=None → qualquer tool. Ordem importa (first match wins).
+ERROR_CLASSIFICATIONS = [
+    # Dados (campo/schema) — ORDEM IMPORTA: tabela antes de campo (ambos contêm "does not exist")
+    (None, r'relation.*does not exist|undefined table',
+     "Tabela não encontrada. Consulte schemas em .claude/skills/consultando-sql/schemas/tables/."),
+    (None, r'column|field|does not exist|no such column',
+     "Campo não existe. Use mcp__schema__consultar_schema para verificar nomes corretos ANTES de gerar SQL."),
+    (None, r'multiple|ambig|mais de um',
+     "Entidade ambígua. Use resolvendo-entidades para identificar CNPJ/código exato."),
+    (None, r'type.*error|cannot cast|invalid input syntax',
+     "Tipo incompatível. Verifique tipo do campo via consultar_schema antes de filtrar."),
+
+    # SQL
+    (r'sql|consultar', r'timeout|canceling statement',
+     "Consulta excedeu timeout. Simplifique: LIMIT, menos JOINs, período menor."),
+    (r'sql|consultar', r'permission|read.only',
+     "Apenas consultas SELECT são permitidas no banco de dados."),
+
+    # Conexão
+    (None, r'connection|refused|broken pipe|ssl|operationalerror',
+     "Erro de conexão transiente — aguarde 30s e tente novamente."),
+    (None, r'rate.limit|429|too many',
+     "Rate limit atingido. Aguarde 60s antes de tentar novamente."),
+
+    # Bash/Script (tool_lower já é lowercase — patterns devem ser lowercase)
+    (r'bash', r'permission denied',
+     "Comando sem permissão. Verifique caminho e permissões."),
+    (r'bash', r'not found|no such file',
+     "Comando ou arquivo não encontrado."),
+    (r'bash', r'traceback|exit code|error:',
+     "Script falhou. Leia o traceback. Se for campo/tabela errado, use consultar_schema."),
+
+    # Browser
+    (r'browser|playwright', r'timeout',
+     "Browser timeout. Portais podem estar lentos — tente em 2 min ou use abordagem sem browser."),
+    (r'browser|playwright', r'login|auth|session|expired',
+     "Sessão expirada. Use browser_ssw_login ou browser_atacadao_login para reautenticar."),
+
+    # Memory — duplicata (caso mais comum: 10+ ocorrências em sessão real 17/03)
+    (r'memory', r'similar|duplica|ja existe|nao salva',
+     "Memória similar já existe. NÃO tente save_memory com conteúdo parecido em path diferente — "
+     "o dedup gate vai bloquear. Para MOVER: delete_memory no path antigo, depois save_memory no novo. "
+     "Para ATUALIZAR conteúdo existente: use update_memory no path que já existe."),
+    # Memory — user_id (bug de contexto no boot)
+    (r'memory', r'user_id.*não definido|user_id.*not set',
+     "Erro interno de contexto (user_id não definido). Isto é transiente no início da sessão. "
+     "Aguarde o próximo turno e tente novamente — o contexto será restaurado."),
+    # Memory — outros
+    (r'memory', r'.*',
+     "Erro ao acessar memórias. Se for 'não encontrado', verifique o path com list_memories. "
+     "Se for 'texto aparece N vezes', use um trecho mais específico no update_memory."),
+
+    # Skill
+    (None, r'skill.*not found|unavailable',
+     "Skill não encontrada. Use ToolSearch para verificar disponibilidade."),
+]
+
+
+def _classify_tool_error(tool_name: str, error_msg: str) -> Optional[str]:
+    """Classifica erro de tool e retorna instrução corretiva (first match wins)."""
+    import re
+    error_lower = error_msg.lower()
+    tool_lower = tool_name.lower()
+
+    for tool_pattern, error_pattern, correction in ERROR_CLASSIFICATIONS:
+        # Filtrar por tool (None = qualquer tool)
+        if tool_pattern and not re.search(tool_pattern, tool_lower):
+            continue
+        # Match no error message
+        if re.search(error_pattern, error_lower):
+            return correction
+
+    return None
+
+
 class AgentClient:
     """
     Cliente do Claude Agent SDK oficial.
@@ -867,6 +945,9 @@ class AgentClient:
 
         # IDs de memórias injetadas no último turno (para effectiveness tracking)
         self._last_injected_memory_ids: list[int] = []
+
+        # Contador de falhas por tool na sessão (para detecção de repetição)
+        self._tool_failure_counts: dict[str, int] = {}
 
         logger.info(
             f"[AGENT_CLIENT] Inicializado | "
@@ -1545,6 +1626,9 @@ Nunca invente informações."""
         """
         from ..config.feature_flags import USE_PERSISTENT_SDK_CLIENT
 
+        # Reset contador de falhas por turno (cada turno começa limpo)
+        self._tool_failure_counts.clear()
+
         if USE_PERSISTENT_SDK_CLIENT:
             # Path v3: ClaudeSDKClient persistente (daemon thread pool)
             async for event in self._stream_response_persistent(
@@ -1835,6 +1919,12 @@ Nunca invente informações."""
                         "fretes: transportadora_id (JOIN transportadoras.razao_social, nao nome_transportadora). "
                         "FIDELIDADE: valores EXATOS do resultado, nao arredondar nem inventar dados."
                     )
+                elif tool_name == 'Bash' and 'python' in str(hook_input.get('tool_input', '')).lower():
+                    additional = (
+                        "Se o script usa campos de tabela, valide nomes via consultar_schema ANTES. "
+                        "Campos comuns errados: qtd_saldo vs qtd_saldo_produto_pedido, "
+                        "codigo_produto vs cod_produto."
+                    )
 
                 if additional:
                     return {
@@ -1901,25 +1991,26 @@ Nunca invente informações."""
                         f"input={str(tool_input_data)[:200]}"
                     )
 
-                    # Contexto corretivo por categoria de tool
-                    additional = None
+                    # Classificação por tabela de lookup (ERROR_CLASSIFICATIONS)
+                    additional = _classify_tool_error(tool_name, error_msg)
 
-                    if 'sql' in tool_name.lower() or 'consultar' in tool_name.lower():
-                        if 'timeout' in error_msg.lower():
+                    # Fallback: detecção de erro repetido na sessão
+                    if not additional:
+                        count = self._tool_failure_counts.get(tool_name, 0) + 1
+                        self._tool_failure_counts[tool_name] = count
+                        if count >= 2:
                             additional = (
-                                "A consulta SQL excedeu o timeout. Simplifique: "
-                                "use LIMIT, reduza JOINs, ou filtre por período menor."
+                                f"{tool_name} já falhou {count}x nesta sessão. "
+                                "Tente abordagem diferente ou use outra tool."
                             )
-                        elif 'permission' in error_msg.lower() or 'read only' in error_msg.lower():
-                            additional = "Apenas consultas SELECT são permitidas no banco de dados."
-
-                    elif tool_name == 'Bash':
-                        if 'permission denied' in error_msg.lower():
-                            additional = "Comando sem permissão. Verifique o caminho e permissões."
-                        elif 'not found' in error_msg.lower():
-                            additional = "Comando ou arquivo não encontrado. Verifique se existe."
+                    else:
+                        # Incrementar contador mesmo quando classificação é encontrada
+                        self._tool_failure_counts[tool_name] = (
+                            self._tool_failure_counts.get(tool_name, 0) + 1
+                        )
 
                     if additional:
+                        logger.info(f"{log_prefix} Correção injetada: {additional[:100]}")
                         return {
                             "hookSpecificOutput": {
                                 "hookEventName": "PostToolUseFailure",
