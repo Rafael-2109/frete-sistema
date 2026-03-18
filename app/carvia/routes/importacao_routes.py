@@ -584,6 +584,9 @@ def register_importacao_routes(bp):
             nfs_sem_cte = resultado_salvo.get('nfs_sem_cte', 0)
             if nfs_sem_cte:
                 partes.append(f'{nfs_sem_cte} NFs aguardando CTe')
+            nfs_reut = resultado_salvo.get('nfs_reutilizadas', 0)
+            if nfs_reut:
+                partes.append(f'{nfs_reut} NFs ja existentes')
             flash(
                 f'Importacao concluida: {", ".join(partes)}.',
                 'success'

@@ -127,7 +127,10 @@ class ImportacaoService:
         Ordem de verificacao:
         1. DACTE: texto "DACTE"/"Conhecimento de Transporte" ou modelo 57 na chave
         2. DANFE: chave 44 digitos com modelo != 57
-        3. Fatura: fallback
+        3. DANFE (fallback): marcadores textuais "DANFE"/"NOTA FISCAL ELETRONICA"
+           — protege contra falha na extracao de chave (ex: PDFs de 2+ paginas
+           onde pdfplumber quebra a chave em linhas diferentes)
+        4. Fatura: fallback final
         """
         # 1. DACTE primeiro — DACTEs tambem tem chaves de 44 digitos
         if self._is_dacte_pdf(conteudo):
@@ -140,7 +143,23 @@ class ImportacaoService:
             if chave and len(chave) == 44:
                 return 'PDF_DANFE'
 
-        # 3. Fallback: Fatura
+            # 3. DANFE (fallback textual): se chave nao foi extraida, verificar
+            #    marcadores textuais que identificam inequivocamente um DANFE.
+            #    Isso cobre PDFs multi-pagina onde pdfplumber fragmenta a chave.
+            upper = danfe.texto_completo.upper()
+            danfe_markers = (
+                'DANFE' in upper
+                and 'DOCUMENTO AUXILIAR' in upper
+                and 'NOTA FISCAL' in upper
+            )
+            if danfe_markers:
+                logger.info(
+                    "PDF classificado como DANFE via marcadores textuais "
+                    "(chave nao extraida)"
+                )
+                return 'PDF_DANFE'
+
+        # 4. Fallback final: Fatura
         return 'PDF_FATURA'
 
     def _classificar_xml(self, conteudo: bytes) -> str:
@@ -357,6 +376,7 @@ class ImportacaoService:
             Dict com ids criados e estatisticas
         """
         nfs_criadas = []
+        nfs_reutilizadas = []
         operacoes_criadas = []
         subcontratos_criados = []
         faturas_criadas = []
@@ -386,7 +406,25 @@ class ImportacaoService:
                         )
 
                     if nf_existente:
-                        if nf_existente.tipo_fonte == 'FATURA_REFERENCIA':
+                        if nf_existente.status == 'CANCELADA':
+                            # NF cancelada com mesma chave — reativar e
+                            # atualizar com dados corretos do novo parse.
+                            # Sem isso, NF cancelada com dados errados
+                            # bloqueia re-importacao permanentemente.
+                            self._atualizar_nf_existente(
+                                nf_existente, nf_data, criado_por
+                            )
+                            nf_existente.status = 'ATIVA'
+                            nf_existente.cancelado_em = None
+                            nf_existente.cancelado_por = None
+                            nf_existente.motivo_cancelamento = None
+                            nf = nf_existente
+                            nfs_criadas.append(nf)
+                            logger.info(
+                                f"NF cancelada reativada e atualizada: "
+                                f"nf_id={nf.id} chave={chave}"
+                            )
+                        elif nf_existente.tipo_fonte == 'FATURA_REFERENCIA':
                             # MERGE: promover stub com dados reais da NF
                             nf = self._merge_nf_sobre_stub(
                                 nf_existente, nf_data, criado_por
@@ -417,6 +455,7 @@ class ImportacaoService:
                                 f"nf_id={nf_existente.id} chave={chave}"
                             )
                             nf = nf_existente
+                            nfs_reutilizadas.append(nf)
                     else:
                         nf = self._criar_nf(nf_data, criado_por)
                         with db.session.begin_nested():
@@ -760,6 +799,7 @@ class ImportacaoService:
             return {
                 'sucesso': True,
                 'nfs_criadas': len(nfs_criadas),
+                'nfs_reutilizadas': len(nfs_reutilizadas),
                 'operacoes_criadas': len(operacoes_criadas),
                 'subcontratos_criados': len(subcontratos_criados),
                 'faturas_criadas': len(faturas_criadas),
@@ -1126,6 +1166,38 @@ class ImportacaoService:
         )
 
         return stub
+
+    def _atualizar_nf_existente(self, nf: 'CarviaNf', data: Dict,
+                               criado_por: str) -> None:
+        """Atualiza campos de uma NF existente com dados de novo parse.
+
+        Usado quando NF cancelada e reimportada — os dados do parse anterior
+        podem estar incorretos (ex: parser antigo extraiu campos errados).
+        """
+        data_emissao = data.get('data_emissao')
+        if data_emissao and hasattr(data_emissao, 'date'):
+            data_emissao = data_emissao.date()
+
+        nf.numero_nf = data.get('numero_nf') or nf.numero_nf
+        nf.serie_nf = data.get('serie_nf') or nf.serie_nf
+        nf.data_emissao = data_emissao or nf.data_emissao
+        nf.cnpj_emitente = data.get('cnpj_emitente') or nf.cnpj_emitente
+        nf.nome_emitente = data.get('nome_emitente') or nf.nome_emitente
+        nf.uf_emitente = data.get('uf_emitente') or nf.uf_emitente
+        nf.cidade_emitente = data.get('cidade_emitente') or nf.cidade_emitente
+        nf.cnpj_destinatario = data.get('cnpj_destinatario') or nf.cnpj_destinatario
+        nf.nome_destinatario = data.get('nome_destinatario') or nf.nome_destinatario
+        nf.uf_destinatario = data.get('uf_destinatario') or nf.uf_destinatario
+        nf.cidade_destinatario = data.get('cidade_destinatario') or nf.cidade_destinatario
+        nf.valor_total = data.get('valor_total') or nf.valor_total
+        nf.peso_bruto = data.get('peso_bruto') or nf.peso_bruto
+        nf.peso_liquido = data.get('peso_liquido') or nf.peso_liquido
+        nf.quantidade_volumes = data.get('quantidade_volumes') or nf.quantidade_volumes
+        nf.arquivo_nome_original = data.get('arquivo_nome_original') or nf.arquivo_nome_original
+        nf.arquivo_pdf_path = data.get('arquivo_pdf_path') or nf.arquivo_pdf_path
+        nf.arquivo_xml_path = data.get('arquivo_xml_path') or nf.arquivo_xml_path
+        nf.tipo_fonte = data.get('tipo_fonte') or nf.tipo_fonte
+        nf.criado_por = criado_por
 
     def _criar_nf(self, data: Dict, criado_por: str) -> CarviaNf:
         """Cria registro CarviaNf a partir de dados parseados"""
