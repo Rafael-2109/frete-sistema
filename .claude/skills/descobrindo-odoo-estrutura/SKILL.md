@@ -1,7 +1,7 @@
 ---
 name: descobrindo-odoo-estrutura
 description: >-
-  Esta skill deve ser usada como ULTIMO RECURSO quando nenhuma skill Odoo
+  Esta skill deve ser usada como recurso complementar quando nenhuma skill Odoo
   especializada cobre o modelo: "quais campos tem stock.picking?",
   "campo de CNPJ no res.partner", "mostra todos os campos do registro 12345",
   ou precisa explorar estrutura de modelo Odoo desconhecido.

@@ -4,7 +4,7 @@ description: >-
   Esta skill deve ser usada quando o usuario pede "exporte para Excel",
   "gere planilha", "relatorio em CSV", "quero baixar esses dados",
   "salve screenshot para download", ou precisa gerar arquivos para download.
-  SEMPRE usar esta skill em vez de Write para criar arquivos de download.
+  Use esta skill em vez de Write para criar arquivos de download.
   Nao usar para ler arquivos enviados pelo usuario (usar lendo-arquivos),
   consultar dados sem exportar (usar consultando-sql), ou exportar razao
   geral do Odoo (usar razao-geral-odoo que ja gera Excel).

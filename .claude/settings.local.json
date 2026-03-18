@@ -158,7 +158,8 @@
       "Bash(find /home/rafaelnascimento/projetos/frete_sistema -name \"*.py\" -exec grep -l \"redis\\\\|Redis\\\\|rq\\\\|Queue\\\\|enqueue\" {} \\\\; 2>/dev/null | wc -l)",
       "mcp__sentry__search_events",
       "Bash(for file:*)",
-      "WebFetch(domain:www.promptfoo.dev)"
+      "WebFetch(domain:www.promptfoo.dev)",
+      "Bash(jq -r \"select\\(.type==\"\"assistant\"\"\\) | .message.content[] | select\\(.type==\"\"tool_use\"\"\\) | .name\")"
     ],
     "deny": []
   },

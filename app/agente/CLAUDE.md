@@ -73,8 +73,8 @@ app/agente/                          # Root — 5 arquivos
 
 | Flag | System Prompt | Identidade | Tokens |
 |------|--------------|------------|--------|
-| `false` (default) | `{preset: "claude_code", append: system_prompt.md}` | Claude Code + Agente (conflito) | ~7K |
-| `true` | `preset_operacional.md + system_prompt.md` (string) | Apenas Agente (coerente) | ~4K |
+| `false` | `{preset: "claude_code", append: system_prompt.md}` | Claude Code + Agente (conflito) | ~7K |
+| `true` (default) | `preset_operacional.md + system_prompt.md` (string) | Apenas Agente (coerente) | ~4K |
 
 ### Camadas (com flag true)
 

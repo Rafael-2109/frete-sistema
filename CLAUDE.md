@@ -19,7 +19,7 @@
 ### SEMPRE:
 1. **AMBIENTE VIRTUAL**: `source .venv/bin/activate` quando executar scripts Python
 2. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
-3. **OBRIGATORIO — TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`. Hook `ban_datetime_now.py` bloqueia violacoes (exit 1).
+3. **TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`.
 
 ---
 
@@ -104,17 +104,6 @@ Documentos adicionais:
 | **OBSOLETO** | `app/carteira/main_routes.py` — NAO usar |
 
 > Para lista completa de modulos e rotas: `.claude/references/INDEX.md`
-
----
-
-## AGENTE LOGISTICO WEB
-
-| Arquivo | Publico-Alvo |
-|---------|--------------|
-| **CLAUDE.md** | Claude Code (dev) |
-| **system_prompt.md** | Agente Web (usuarios finais) |
-
-**NAO MISTURAR**: Regras P1-P7 pertencem ao `system_prompt.md`, nao ao CLAUDE.md.
 
 ---
 

@@ -386,7 +386,10 @@ try:
         "comparações, totais por período, etc. "
         "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
         "'Valor médio de frete por transportadora'. "
-        "A query é validada em 3 camadas de segurança (apenas SELECT permitido).",
+        "A query é validada em 3 camadas de segurança (apenas SELECT permitido). "
+        "FIDELIDADE: apresente valores EXATOS do resultado — não arredonde, não invente dados, "
+        "não adicione métricas não solicitadas. Se resultado vazio, informe claramente. "
+        "Se campo 'aviso' presente, mencione que houve correção automática.",
         {"pergunta": str},
         annotations=ToolAnnotations(
             readOnlyHint=True,

@@ -2,7 +2,7 @@
 name: consultando-sentry
 description: >
   Consulta issues, eventos e metricas do Sentry via MCP Server (20 tools).
-  Usar SEMPRE que o usuario mencionar "Sentry", "issues do Sentry", "erros em producao",
+  Use quando o usuario mencionar "Sentry", "issues do Sentry", "erros em producao",
   "bugs no Sentry", "exceptions nao tratadas", "500 errors no Sentry", "resolver issue",
   "marcar resolvido no Sentry", ou qualquer variacao que envolva monitoramento de erros.
   Tambem usar quando o usuario pedir para "ver erros", "checar exceptions",

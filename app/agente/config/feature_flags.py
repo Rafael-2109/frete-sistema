@@ -263,9 +263,9 @@ PERSISTENT_CLIENT_CLEANUP_INTERVAL = int(os.getenv("AGENT_CLIENT_CLEANUP_INTERVA
 # Substitui preset claude_code por preset_operacional.md + system_prompt.md
 # Quando true: system_prompt = preset_operacional.md + system_prompt.md (string pura)
 # Quando false: system_prompt = {preset: claude_code, append: system_prompt.md} (original)
-# ATIVAR GRADUALMENTE: false → true apos validacao em producao
+# ATIVO: preset_operacional.md substitui claude_code preset
 # Rollback instantaneo: AGENT_CUSTOM_SYSTEM_PROMPT=false
-USE_CUSTOM_SYSTEM_PROMPT = os.getenv("AGENT_CUSTOM_SYSTEM_PROMPT", "false").lower() == "true"
+USE_CUSTOM_SYSTEM_PROMPT = os.getenv("AGENT_CUSTOM_SYSTEM_PROMPT", "true").lower() == "true"
 
 # ====================================================================
 # Debug Mode (Admin)

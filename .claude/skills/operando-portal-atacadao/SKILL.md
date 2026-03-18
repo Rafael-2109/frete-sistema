@@ -2,15 +2,15 @@
 name: operando-portal-atacadao
 description: >-
   Automacao do PORTAL WEB Atacadao (Hodie Booking, hodiebooking.com.br) via
-  Playwright. Usar SOMENTE quando o usuario mencionar EXPLICITAMENTE o portal,
-  site, ou Hodie Booking do Atacadao. A solicitacao DEVE conter "Atacadao"
+  Playwright. Use apenas quando o usuario mencionar explicitamente o portal,
+  site, ou Hodie Booking do Atacadao. A solicitacao precisa conter "Atacadao"
   combinado com "portal", "site", "Hodie", "hodiebooking", ou verbo que
   implique navegacao web ("abrir", "navegar", "acessar", "entrar no").
-  Exemplos que DEVEM trigar: "imprimir protocolo no portal Atacadao",
+  Exemplos que trigam: "imprimir protocolo no portal Atacadao",
   "ver agendamentos no site do Atacadao", "agendar entrega no portal
   Atacadao", "abrir portal do Atacadao", "navegar no Hodie Booking",
   "entrar no site Atacadao e ver pedidos", "acessar o portal pra imprimir".
-  Exemplos que NAO DEVEM trigar (sem mencao ao portal): "consultar saldo
+  Exemplos que nao trigam (sem mencao ao portal): "consultar saldo
   Atacadao", "verificar agendamento Atacadao", "pedidos do Atacadao" —
   resolvidas localmente por gerindo-expedicao, monitorando-entregas ou
   consultando-sql. NAO USAR para CarVia (gerindo-carvia), SSW

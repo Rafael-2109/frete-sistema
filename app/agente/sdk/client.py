@@ -221,7 +221,7 @@ def _build_session_window(user_id: int) -> Optional[str]:
         from datetime import timedelta
         import os
 
-        ttl_days = int(os.getenv('PENDENCIA_TTL_DAYS', '7'))
+        ttl_days = int(os.getenv('PENDENCIA_TTL_DAYS', '2'))
         cutoff = agora_utc_naive() - timedelta(days=ttl_days)
 
         sessions = AgentSession.query.filter(
@@ -275,10 +275,11 @@ def _build_session_window(user_id: int) -> Optional[str]:
 
             if unique_pend:
                 parts.append('<pendencias_acumuladas>')
-                parts.append('  <instruction>Verifique SILENCIOSAMENTE cada item contra '
-                             'evidencias (commits recentes, sessoes anteriores, memorias). '
-                             'Se resolvido, chame resolve_pendencia com o texto EXATO do item. '
-                             'Mencione ao usuario apenas pendencias REALMENTE pendentes.</instruction>')
+                parts.append('  <instruction>Para cada item: '
+                             '1) Verifique se ja foi resolvido (consulte dados, verifique status). '
+                             '2) Se resolvido: chame resolve_pendencia com o texto EXATO do item. '
+                             '3) Se pode resolver agora: resolva e chame resolve_pendencia. '
+                             '4) Se nao pode resolver: pergunte ao usuario como proceder.</instruction>')
                 for p in unique_pend:
                     parts.append(f'  <item>{p}</item>')
                 parts.append('</pendencias_acumuladas>')
@@ -353,15 +354,15 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
     """
     Carrega memórias do usuário e formata como contexto para injeção.
 
-    Memory System v2 — Arquitetura em 4 tiers:
-    - Tier 0 (SEMPRE): Contexto operacional do dia + rolling window de sessões
+    Memory System v2 — Arquitetura em 3 tiers:
+    - Tier 0 (SEMPRE): Rolling window de sessões + briefing inter-sessão
     - Tier 1 (SEMPRE): user.xml e preferences.xml — garante identidade/preferências
     - Tier 2 (semântica): memórias relevantes ao prompt, excluindo Tier 1
     - Tier 2b (KG): complementar via Knowledge Graph
     - Fallback: memórias mais recentes se semântica não retornar nada
 
     v2 changes:
-    - Tier 0: operational context + session window (1B + 1C)
+    - Tier 0: session window (operational context removido — P9)
     - Two-pass budget selection by composite score (1D)
     - Category-aware decay rates
     - Exclude cold memories from retrieval
@@ -369,9 +370,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
     - Increment usage_count on injection
 
     Budget adaptativo (T2-2):
-    - Opus: 8000 chars (~2000 tokens)
-    - Sonnet: 4000 chars (~1000 tokens)
-    - Haiku: 2000 chars (~500 tokens)
+    - Opus: sem limite (1M context) — injetar todas as memórias retornadas
+    - Sonnet: 6000 chars (~1500 tokens)
+    - Haiku: 3000 chars (~750 tokens)
     - Ajustado pelo tamanho do prompt (prompts longos = budget menor)
 
     Args:
@@ -400,14 +401,11 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             from ..models import AgentMemory
             from ..config.feature_flags import MEMORY_INJECTION_MIN_SIMILARITY
 
-            # ── Tier 0: Contexto operacional + Rolling window (Memory v2) ──
+            # ── Tier 0: Rolling window de sessões (Memory v2) ──
+            # Nota: _build_operational_context() removido (P9 — desconectado, só ruído).
+            # Mantida como função para uso futuro como skill, mas não injetada no contexto.
             tier0_parts = []
             tier0_chars = 0
-
-            op_ctx = _build_operational_context(user_id)
-            if op_ctx:
-                tier0_parts.append(op_ctx)
-                tier0_chars += len(op_ctx)
 
             session_window = _build_session_window(user_id)
             if session_window:
@@ -594,18 +592,23 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
             # ── QW-4 + T2-2 + v2: Budget adaptativo com two-pass selection ──
             # Budget base por modelo
+            # Opus: sem limite (1M context) — injetar todas as memórias retornadas
+            # Sonnet/Haiku: budget para manter conciso
             _model = (model_name or "").lower()
             if "opus" in _model:
-                base_budget = 8000
+                base_budget = None  # sem limite — 1M context
             elif "haiku" in _model:
-                base_budget = 2000
+                base_budget = 3000
             else:
-                base_budget = 4000  # Sonnet ou desconhecido
+                base_budget = 6000  # Sonnet ou desconhecido
 
             # Fator de ajuste: prompts longos consomem context window, reduzir budget
             prompt_len = len(prompt) if prompt else 0
-            prompt_factor = max(0.5, 1.0 - prompt_len / 10000)
-            budget = int(base_budget * prompt_factor)
+            if base_budget is not None:
+                prompt_factor = max(0.5, 1.0 - prompt_len / 10000)
+                budget = int(base_budget * prompt_factor)
+            else:
+                budget = None  # Opus: sem budget
 
             # ── PASS 1: Calcular tamanhos de todos os candidatos ──
             header = (
@@ -631,8 +634,8 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 tier1_texts.append((mem, mem_text))
                 tier1_chars += len(mem_text)
 
-            # Budget restante para Tier 2 + 2b
-            budget_remaining = budget - overhead - tier1_chars
+            # Budget restante para Tier 2 + 2b (None = sem limite para Opus)
+            budget_remaining = (budget - overhead - tier1_chars) if budget is not None else None
 
             # Tier 2/2b: calcular tamanho de cada candidato e ordenar por composite
             tier2_candidates = []
@@ -665,7 +668,8 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             tier2_chars = 0
             tier2b_chars = 0
             for mem, mem_text, mem_len, _ in tier2_candidates:
-                if tier2_chars + tier2b_chars + mem_len > budget_remaining:
+                # Opus (budget_remaining=None): incluir todas as memórias sem corte
+                if budget_remaining is not None and tier2_chars + tier2b_chars + mem_len > budget_remaining:
                     continue  # v2: SKIP em vez de BREAK — permite menor caber depois
                 selected_tier2.append((mem, mem_text))
                 # Distinguir tier2 vs tier2b para logging
@@ -718,7 +722,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
             # ── v2: Log detalhado de injeção com per-tier chars ──
             penalized_count = sum(1 for m in injected_mems if (m.correction_count or 0) > 0)  # S2
-            budget_pct = round(total_chars / budget * 100) if budget > 0 else 0
+            budget_pct = round(total_chars / budget * 100) if budget and budget > 0 else 0
             skipped_budget = len(tier2_candidates) - len(selected_tier2)
             logger.info(
                 f"[MEMORY_INJECT] "
@@ -730,7 +734,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"total_injected={injected_count} | "
                 f"penalized={penalized_count} | "
                 f"total_chars={total_chars} | "
-                f"budget={budget} | "
+                f"budget={budget or 'unlimited'} | "
                 f"budget_pct={budget_pct}% | "
                 f"skipped_budget={skipped_budget} | "
                 f"candidates_total={len(tier2_candidates)} | "
@@ -741,7 +745,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"tier1_chars={tier1_chars} | "
                 f"tier2_chars={tier2_chars} | "
                 f"tier2b_chars={tier2b_chars} | "
-                f"budget_remaining={max(0, budget_remaining - tier2_chars - tier2b_chars)} | "
+                f"budget_remaining={max(0, budget_remaining - tier2_chars - tier2b_chars) if budget_remaining is not None else 'unlimited'} | "
                 f"min_similarity_threshold={MEMORY_INJECTION_MIN_SIMILARITY} | "
                 f"prompt_preview={prompt[:50] if prompt else 'None'}"
             )
@@ -1821,9 +1825,15 @@ Nunca invente informações."""
                 # Injetar lembrete de campos corretos antes de queries SQL
                 if tool_name == 'mcp__sql__consultar_sql':
                     additional = (
-                        "LEMBRETE: carteira_principal NÃO tem codigo_ibge (usar nome_cidade+cod_uf). "
-                        "faturamento_produto usa cnpj_cliente/nome_cliente (NÃO cnpj_cpf/razao_social). "
-                        "separacao tem cnpj_cpf, raz_social_red, cidade_normalizada, uf_normalizada, codigo_ibge."
+                        "CAMPOS CORRETOS: "
+                        "carteira_principal: cnpj_cpf/raz_social (nao cnpj_cliente/nome_cliente), "
+                        "qtd_saldo_produto_pedido (nao qtd_saldo), cod_uf (nao uf/estado_destino), "
+                        "nao tem codigo_ibge (usar nome_cidade+cod_uf). "
+                        "faturamento_produto: cnpj_cliente/nome_cliente (nao cnpj_cpf/razao_social). "
+                        "despesas_extras: valor_despesa (nao valor), criado_em (nao data_lancamento). "
+                        "separacao: cnpj_cpf, raz_social_red, codigo_ibge, uf_normalizada. "
+                        "fretes: transportadora_id (JOIN transportadoras.razao_social, nao nome_transportadora). "
+                        "FIDELIDADE: valores EXATOS do resultado, nao arredondar nem inventar dados."
                     )
 
                 if additional:
