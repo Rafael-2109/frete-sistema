@@ -65,7 +65,7 @@ _op_context_cache: Dict[int, tuple] = {}  # user_id -> (context_str, timestamp)
 _OP_CONTEXT_TTL = 180  # 3 minutos — dados urgentes mudam na escala de horas
 
 
-def _build_operational_context(user_id: int) -> Optional[str]:
+def _build_operational_context(user_id: int) -> Optional[str]: # type: ignore
     """
     Memory v2 — Tier 0: Contexto operacional do dia.
 
@@ -1884,7 +1884,7 @@ Nunca invente informações."""
             # SDK 0.1.48+: Subagent lifecycle hooks
             _has_subagent_hooks = False
             try:
-                from claude_agent_sdk import SubagentStartHookInput, SubagentStopHookInput  # noqa: F811
+                from claude_agent_sdk import SubagentStartHookInput, SubagentStopHookInput  # type: ignore
                 _has_subagent_hooks = True
             except ImportError:
                 pass
