@@ -10,7 +10,7 @@ import io
 from sqlalchemy import func
 from app import db
 from app.carteira.main_routes import carteira_bp
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
 import logging
@@ -232,9 +232,13 @@ def exportar_carteira_detalhada():
         data_inicio = data.get('data_inicio') if data else None
         data_fim = data.get('data_fim') if data else None
         
-        # Query base para pedidos
+        # Query base para pedidos (excluindo itens em standby ativo)
         query_pedidos = CarteiraPrincipal.query.filter(
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
+            ~db.session.query(SaldoStandby.id).filter(
+                SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
+                SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+            ).exists()
         )
         
         # Aplicar filtro de datas se fornecido

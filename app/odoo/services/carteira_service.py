@@ -130,6 +130,14 @@ class CarteiraService:
             if itens_excluidos > 0:
                 logger.info(f"   ✅ {itens_excluidos} itens da carteira EXCLUÍDOS")
 
+            # 4.5 EXCLUIR SaldoStandby do pedido
+            from app.carteira.models import SaldoStandby
+            standby_excluidos = SaldoStandby.query.filter_by(
+                num_pedido=num_pedido
+            ).delete(synchronize_session=False)
+            if standby_excluidos > 0:
+                logger.info(f"   ✅ {standby_excluidos} itens de SaldoStandby EXCLUÍDOS")
+
             # 5. Remover PreSeparacaoItem se existirem (modelo deprecated mas pode ter dados antigos)
             try:
                 from app.carteira.models import PreSeparacaoItem
@@ -410,6 +418,28 @@ class CarteiraService:
                     logger.info(f"🔄 MODO INCREMENTAL: buscando alterações dos últimos {minutos_janela} minutos")
                     logger.info(f"📅 Data corte UTC: {data_corte.isoformat()}")
                     logger.info("   🆕 INCLUINDO pedidos cancelados para detectar cancelamentos")
+
+                    # Incluir pedidos em SaldoStandby ativo para garantir atualização
+                    # mesmo fora da janela de write_date (bug: pedidos cancelados no Odoo
+                    # mas com standby ativo nunca eram re-consultados)
+                    try:
+                        from app.utils.database_helpers import ensure_connection
+                        ensure_connection()
+                        from app.carteira.models import SaldoStandby
+                        pedidos_standby = db.session.query(
+                            SaldoStandby.num_pedido
+                        ).filter(
+                            SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
+                        ).distinct().all()
+
+                        if pedidos_standby:
+                            nomes_standby = [p.num_pedido for p in pedidos_standby]
+                            # OR: pedidos na janela temporal OU pedidos em standby ativo
+                            domain = ['|'] + domain + [('order_id.name', 'in', nomes_standby)]
+                            logger.info(f"   📋 Incluindo {len(nomes_standby)} pedidos em SaldoStandby na busca")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Não foi possível incluir pedidos standby: {e}")
+                        # Degradação graceful — sync continua sem os standby
             elif pedidos_na_carteira:
                 # MODO TRADICIONAL com pedidos existentes: usar filtro OR
                 domain = [
