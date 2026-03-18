@@ -10,11 +10,21 @@ from app.portal.models import PortalIntegracao, PortalLog
 from app.portal.workers import enqueue_job
 from app.portal.workers.atacadao_jobs import processar_agendamento_atacadao
 from app import db
-from datetime import datetime
+from datetime import datetime, date
 from app.utils.timezone import agora_utc_naive
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_data_agendamento(valor: str) -> date:
+    """Converte string de data para objeto date.
+    Aceita DD/MM/YYYY e YYYY-MM-DD."""
+    if not valor or not isinstance(valor, str):
+        return valor
+    if '/' in valor:
+        return datetime.strptime(valor, '%d/%m/%Y').date()
+    return datetime.strptime(valor, '%Y-%m-%d').date()
 
 @portal_bp.route('/api/solicitar-agendamento-nf-async', methods=['POST'])
 @login_required
@@ -163,12 +173,15 @@ def solicitar_agendamento_nf_async():
             
             peso_total += float(produto.peso_total or 0)
         
+        # Converter data para objeto date (evita DatetimeFieldOverflow com DD/MM/YYYY)
+        data_agendamento_date = _parse_data_agendamento(data_agendamento)
+
         # Criar integração
         integracao = PortalIntegracao(
             lote_id=f'NF-{numero_nf}',
             portal=portal,
             tipo_lote='agendamento_nf',  # Campo correto: tipo_lote
-            data_agendamento=data_agendamento,
+            data_agendamento=data_agendamento_date,
             hora_agendamento=hora_agendamento,
             status='enfileirado',
             dados_enviados={
@@ -331,12 +344,15 @@ def solicitar_agendamento_async():
             'tipo_veiculo': tipo_veiculo
         }
         
+        # Converter data para objeto date (evita DatetimeFieldOverflow com DD/MM/YYYY)
+        data_agendamento_date = _parse_data_agendamento(data_agendamento)
+
         # Criar integração no banco (status: enfileirado)
         integracao = PortalIntegracao(
             lote_id=lote_id,
             portal=portal,
             tipo_lote='agendamento',  # Campo correto: tipo_lote
-            data_agendamento=data_agendamento,
+            data_agendamento=data_agendamento_date,
             hora_agendamento=hora_agendamento,
             status='enfileirado',  # Novo status
             dados_enviados=dados_agendamento,

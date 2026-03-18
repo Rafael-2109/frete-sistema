@@ -1916,7 +1916,7 @@ Nunca invente informações."""
                         "faturamento_produto: cnpj_cliente/nome_cliente (nao cnpj_cpf/razao_social). "
                         "despesas_extras: valor_despesa (nao valor), criado_em (nao data_lancamento). "
                         "separacao: cnpj_cpf, raz_social_red, codigo_ibge, uf_normalizada. "
-                        "fretes: transportadora_id (JOIN transportadoras.razao_social, nao nome_transportadora). "
+                        "tabela fretes: transportadora_id (JOIN transportadoras.razao_social, nao nome_transportadora). "
                         "FIDELIDADE: valores EXATOS do resultado, nao arredondar nem inventar dados."
                     )
                 elif tool_name == 'Bash' and 'python' in str(hook_input.get('tool_input', '')).lower():

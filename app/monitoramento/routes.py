@@ -880,7 +880,7 @@ def listar_entregas():
         query = query.filter(EntregaMonitorada.uf.ilike(f"%{uf}%"))
 
     if protocolo := request.args.get('protocolo'):
-        query = query.join(EntregaMonitorada.agendamentos).filter(
+        query = query.filter(
             EntregaMonitorada.agendamentos.any(
                 AgendamentoEntrega.protocolo_agendamento.ilike(f"%{protocolo}%")
             )

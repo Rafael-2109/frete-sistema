@@ -456,7 +456,7 @@ class OdooIntegrationService:
                 try:
                     # _execute reconecta automaticamente após erro de conexão
                     orders = self._execute(
-                        'sale.order', 'search_read', [filtros],
+                        'sale.order', 'search_read', filtros,
                         fields=['id', 'name'], limit=1, order='id desc',
                         timeout_override=30  # Poll com timeout curto
                     )

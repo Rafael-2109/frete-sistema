@@ -1177,6 +1177,25 @@ def process_teams_task_async(
             set_current_session_id(teams_session_id)
             set_teams_task_context(teams_session_id, task_id)
 
+            # Configurar user_id nos ContextVars de MCP tools
+            # (espelha app/agente/routes.py:310-312 e bot_routes.py:197-211)
+            if teams_user_id:
+                try:
+                    from app.agente.tools.memory_mcp_tool import set_current_user_id as set_memory_user_id
+                    set_memory_user_id(teams_user_id)
+                except ImportError:
+                    pass
+                try:
+                    from app.agente.tools.session_search_tool import set_current_user_id as set_session_user_id
+                    set_session_user_id(teams_user_id)
+                except ImportError:
+                    pass
+                try:
+                    from app.agente.tools.text_to_sql_tool import set_current_user_id as set_sql_user_id
+                    set_sql_user_id(teams_user_id)
+                except ImportError:
+                    pass
+
             # Fix 3b: Retry na chamada do agente (max 2 tentativas)
             resposta_texto = None
             new_sdk_session_id = None
