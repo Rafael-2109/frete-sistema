@@ -61,7 +61,10 @@ class ConferenciaService:
         if not operacao:
             return {'sucesso': False, 'erro': 'Operacao nao encontrada'}
 
-        peso = float(operacao.peso_utilizado or operacao.peso_bruto or 0)
+        # Fallback defensivo: max(bruto, cubado) — consistente com CotacaoService
+        peso_bruto = float(operacao.peso_bruto or 0)
+        peso_cubado = float(operacao.peso_cubado or 0)
+        peso = max(peso_bruto, peso_cubado)
         valor_mercadoria = float(operacao.valor_mercadoria or 0)
         uf_destino = operacao.uf_destino
         uf_origem = operacao.uf_origem

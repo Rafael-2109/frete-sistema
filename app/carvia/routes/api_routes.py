@@ -663,6 +663,15 @@ def register_api_routes(bp):
         except ValueError as e:
             return jsonify({'erro': str(e)}), 404
         except Exception as e:
+            import xml.etree.ElementTree as ET
+            if isinstance(e, ET.ParseError) or 'not well-formed' in str(e):
+                logger.warning(
+                    f"XML invalido para DACTE operacao {operacao_id}: {e}"
+                )
+                return jsonify({
+                    'erro': 'XML do CTe invalido ou corrompido. '
+                            'Use o PDF Original.'
+                }), 422
             logger.error(f"Erro ao gerar DACTE para operacao {operacao_id}: {e}")
             return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
 
@@ -697,6 +706,15 @@ def register_api_routes(bp):
         except ValueError as e:
             return jsonify({'erro': str(e)}), 404
         except Exception as e:
+            import xml.etree.ElementTree as ET
+            if isinstance(e, ET.ParseError) or 'not well-formed' in str(e):
+                logger.warning(
+                    f"XML invalido para DACTE subcontrato {subcontrato_id}: {e}"
+                )
+                return jsonify({
+                    'erro': 'XML do CTe invalido ou corrompido. '
+                            'Use o PDF Original.'
+                }), 422
             logger.error(f"Erro ao gerar DACTE para subcontrato {subcontrato_id}: {e}")
             return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
 
@@ -916,4 +934,77 @@ def register_api_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao atualizar cubagem: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ------------------------------------------------------------------
+    # Registrar cotacao via modal unificado
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/subcontrato/<int:sub_id>/registrar-cotacao', methods=['POST'])
+    @login_required
+    def api_registrar_cotacao(sub_id):
+        """Registra valor cotado no subcontrato via modal unificado.
+
+        Aceita:
+            valor_cotado: float (obrigatorio)
+            tabela_frete_id: int (opcional, se veio de opcao de tabela)
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaSubcontrato
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            return jsonify({'erro': 'Subcontrato nao encontrado'}), 404
+
+        if sub.status in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
+            return jsonify({
+                'erro': f'Subcontrato com status {sub.status} nao pode ser cotado.'
+            }), 400
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        valor_cotado_raw = data.get('valor_cotado')
+        if valor_cotado_raw is None:
+            return jsonify({'erro': 'valor_cotado e obrigatorio'}), 400
+
+        try:
+            valor_cotado = float(valor_cotado_raw)
+        except (ValueError, TypeError):
+            return jsonify({'erro': 'valor_cotado deve ser numerico'}), 400
+
+        if valor_cotado <= 0:
+            return jsonify({'erro': 'valor_cotado deve ser maior que zero'}), 400
+
+        try:
+            valor_anterior = float(sub.valor_cotado) if sub.valor_cotado else None
+            sub.valor_cotado = valor_cotado
+
+            tabela_frete_id = data.get('tabela_frete_id')
+            if tabela_frete_id:
+                sub.tabela_frete_id = int(tabela_frete_id)
+
+            if sub.status == 'PENDENTE':
+                sub.status = 'COTADO'
+
+            db.session.commit()
+
+            logger.info(
+                f"Cotacao registrada via modal | sub_id={sub.id} | "
+                f"usuario={current_user.email} | "
+                f"valor: {valor_anterior} -> {valor_cotado}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'valor_cotado': valor_cotado,
+                'status': sub.status,
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao registrar cotacao sub {sub_id}: {e}")
             return jsonify({'erro': str(e)}), 500

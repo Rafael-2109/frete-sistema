@@ -646,6 +646,14 @@ class ImportacaoService:
                     )
                     if sub:
                         subcontratos_criados.append(sub)
+                except IntegrityError as e:
+                    db.session.rollback()
+                    logger.warning(
+                        f"CTe Subcontrato duplicado (IntegrityError): {e}"
+                    )
+                    erros.append(
+                        f"CTe Sub {cte_data.get('cte_numero')} ignorado (duplicata)"
+                    )
                 except Exception as e:
                     logger.warning(f"CTe Subcontrato ignorado: {e}")
                     erros.append(
@@ -1421,14 +1429,27 @@ class ImportacaoService:
                 f"transportadora CNPJ {cnpj_emit} nao cadastrada"
             )
 
-        # 3. Gerar numero sequencial por transportadora
+        # 3. Verificar se subcontrato ja existe (dedup)
+        cte_chave = cte_data.get('cte_chave_acesso')
+        if cte_chave:
+            sub_existente = CarviaSubcontrato.query.filter_by(
+                cte_chave_acesso=cte_chave
+            ).first()
+            if sub_existente:
+                logger.info(
+                    f"CTe Subcontrato ja importado (reutilizando): "
+                    f"sub_id={sub_existente.id} cte={cte_chave}"
+                )
+                return sub_existente
+
+        # 4. Gerar numero sequencial por transportadora
         max_seq = db.session.query(
             db.func.max(CarviaSubcontrato.numero_sequencial_transportadora)
         ).filter(
             CarviaSubcontrato.transportadora_id == transportadora.id,
         ).scalar() or 0
 
-        # 4. Criar subcontrato
+        # 5. Criar subcontrato
         sub = CarviaSubcontrato(
             operacao_id=operacao.id,
             transportadora_id=transportadora.id,

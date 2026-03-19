@@ -406,6 +406,30 @@ class CotacaoService:
                 'resultado': cte_val,
             })
 
+        # --- Peso Minimo (se aplicado) ---
+        frete_minimo_peso = tabela_dados.get('frete_minimo_peso', 0) or 0
+        peso_real = d.get('peso_real', peso)
+        if frete_minimo_peso and peso_calculo > peso_real:
+            linhas.append({
+                'componente': 'Peso Minimo',
+                'fator': f'{frete_minimo_peso:,.1f} kg',
+                'base': f'Real: {peso_real:,.1f} kg',
+                'resultado': 0,
+                'is_info': True,
+            })
+
+        # --- Frete Minimo Valor (se aplicado) ---
+        frete_minimo_aplicado = d.get('frete_minimo_aplicado', False)
+        frete_minimo_valor = tabela_dados.get('frete_minimo_valor', 0) or 0
+        if frete_minimo_aplicado and frete_minimo_valor:
+            linhas.append({
+                'componente': 'Frete Minimo Aplicado',
+                'fator': f'R$ {frete_minimo_valor:,.2f}',
+                'base': 'Valor minimo da tabela',
+                'resultado': frete_minimo_valor,
+                'is_info': True,
+            })
+
         # --- Subtotal (valor bruto) ---
         valor_bruto = float(detalhes.get('valor_bruto', 0) or 0)
         linhas.append({

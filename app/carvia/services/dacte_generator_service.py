@@ -102,7 +102,10 @@ class DacteGeneratorService:
             return dados
 
         except Exception as e:
-            logger.error(f"Erro ao parsear XML do {tipo} {entity_id}: {e}")
+            logger.error(
+                f"Erro ao parsear XML do {tipo} {entity_id}: "
+                f"{type(e).__name__}: {e}"
+            )
             return None
 
     def _extrair_dados_banco(self, tipo: str, entity_id: int) -> dict:
