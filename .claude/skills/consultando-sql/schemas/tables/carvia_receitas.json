@@ -1,0 +1,26 @@
+{
+  "table_name": "carvia_receitas",
+  "columns": [
+    {"name": "id", "type": "integer", "nullable": false, "primary_key": true},
+    {"name": "tipo_receita", "type": "character varying(50)", "nullable": false},
+    {"name": "descricao", "type": "character varying(500)", "nullable": true},
+    {"name": "valor", "type": "numeric(15,2)", "nullable": false},
+    {"name": "data_receita", "type": "date", "nullable": false},
+    {"name": "data_vencimento", "type": "date", "nullable": true},
+    {"name": "status", "type": "character varying(20)", "nullable": false, "default": "'PENDENTE'"},
+    {"name": "recebido_por", "type": "character varying(100)", "nullable": true},
+    {"name": "recebido_em", "type": "timestamp without time zone", "nullable": true},
+    {"name": "total_conciliado", "type": "numeric(15,2)", "nullable": false, "default": "0"},
+    {"name": "conciliado", "type": "boolean", "nullable": false, "default": "false"},
+    {"name": "observacoes", "type": "text", "nullable": true},
+    {"name": "criado_por", "type": "character varying(150)", "nullable": true},
+    {"name": "criado_em", "type": "timestamp without time zone", "nullable": true},
+    {"name": "atualizado_em", "type": "timestamp without time zone", "nullable": true}
+  ],
+  "indexes": [
+    {"name": "ix_carvia_receitas_tipo_receita", "columns": ["tipo_receita"]},
+    {"name": "ix_carvia_receitas_status", "columns": ["status"]}
+  ],
+  "foreign_keys": [],
+  "note": "Receitas operacionais diversas do modulo CarVia (comissoes, reembolsos, bonificacoes). Espelho de carvia_despesas com semantica CREDITO."
+}
