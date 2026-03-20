@@ -116,6 +116,17 @@
                 </div>
             </div>
         </div>
+        <div class="col">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value text-success">{{ stats.receitas_pendentes }}</div>
+                    <div class="stat-label text-muted">Rec. Pendentes</div>
+                    {% if stats.receitas_valor_pendente %}
+                    <div class="small text-muted">{{ stats.receitas_valor_pendente|valor_br }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Quick Actions -->

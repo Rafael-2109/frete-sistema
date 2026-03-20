@@ -12,6 +12,7 @@ Tela 1 - Conciliacao Ativa:
 Tela 2 - Extrato Bancario:
   GET  /carvia/extrato-bancario                     - Visao extrato full-width
   GET  /carvia/api/conciliacao/matches/<linha_id>   - Docs elegiveis para modal inline
+  GET  /carvia/api/conciliacao/detalhe-documento/<tipo>/<doc_id> - Detalhes de doc conciliado
 
 CSV Razao Social:
   POST /carvia/api/conciliacao/importar-csv         - Upload CSV bancario
@@ -545,6 +546,127 @@ def register_conciliacao_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao aplicar match CSV manual: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # API: Detalhe de Documento Conciliado
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/detalhe-documento/<tipo>/<int:doc_id>')
+    @login_required
+    def api_detalhe_documento(tipo, doc_id):
+        """Retorna detalhes de um documento conciliado para exibicao em modal."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        tipos_validos = ('fatura_cliente', 'fatura_transportadora', 'despesa', 'custo_entrega')
+        if tipo not in tipos_validos:
+            return jsonify({'erro': f'Tipo invalido: {tipo}'}), 400
+
+        def _fmt_valor(v):
+            if v is None:
+                return '-'
+            return f'R$ {float(v):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+        def _fmt_data(d):
+            if d is None:
+                return '-'
+            return d.strftime('%d/%m/%Y')
+
+        def _calc_saldo(valor_total, total_conciliado):
+            vt = float(valor_total or 0)
+            tc = float(total_conciliado or 0)
+            return _fmt_valor(vt - tc)
+
+        try:
+            if tipo == 'fatura_cliente':
+                from app.carvia.models import CarviaFaturaCliente
+                doc = db.session.get(CarviaFaturaCliente, doc_id)
+                if not doc:
+                    return jsonify({'erro': 'Fatura cliente nao encontrada'}), 404
+                return jsonify({
+                    'titulo': 'Fatura Cliente',
+                    'numero': doc.numero_fatura,
+                    'url': f'/carvia/faturas-cliente/{doc.id}',
+                    'campos': [
+                        {'label': 'Cliente', 'valor': doc.nome_cliente or '-'},
+                        {'label': 'CNPJ', 'valor': doc.cnpj_cliente or '-'},
+                        {'label': 'Data Emissao', 'valor': _fmt_data(doc.data_emissao)},
+                        {'label': 'Vencimento', 'valor': _fmt_data(doc.vencimento)},
+                        {'label': 'Valor Total', 'valor': _fmt_valor(doc.valor_total)},
+                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor_total, doc.total_conciliado)},
+                        {'label': 'Status', 'valor': doc.status or '-'},
+                    ],
+                })
+
+            elif tipo == 'fatura_transportadora':
+                from app.carvia.models import CarviaFaturaTransportadora
+                doc = db.session.get(CarviaFaturaTransportadora, doc_id)
+                if not doc:
+                    return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
+                nome_transp = doc.transportadora.razao_social if doc.transportadora else '-'
+                return jsonify({
+                    'titulo': 'Fatura Transportadora',
+                    'numero': doc.numero_fatura,
+                    'url': f'/carvia/faturas-transportadora/{doc.id}',
+                    'campos': [
+                        {'label': 'Transportadora', 'valor': nome_transp},
+                        {'label': 'Data Emissao', 'valor': _fmt_data(doc.data_emissao)},
+                        {'label': 'Vencimento', 'valor': _fmt_data(doc.vencimento)},
+                        {'label': 'Valor Total', 'valor': _fmt_valor(doc.valor_total)},
+                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor_total, doc.total_conciliado)},
+                        {'label': 'Status Pagamento', 'valor': doc.status_pagamento or '-'},
+                    ],
+                })
+
+            elif tipo == 'despesa':
+                from app.carvia.models import CarviaDespesa
+                doc = db.session.get(CarviaDespesa, doc_id)
+                if not doc:
+                    return jsonify({'erro': 'Despesa nao encontrada'}), 404
+                return jsonify({
+                    'titulo': 'Despesa',
+                    'numero': f'DESP-{doc.id:03d}',
+                    'url': f'/carvia/despesas/{doc.id}',
+                    'campos': [
+                        {'label': 'Tipo', 'valor': doc.tipo_despesa or '-'},
+                        {'label': 'Descricao', 'valor': doc.descricao or '-'},
+                        {'label': 'Data Despesa', 'valor': _fmt_data(doc.data_despesa)},
+                        {'label': 'Vencimento', 'valor': _fmt_data(doc.data_vencimento)},
+                        {'label': 'Valor', 'valor': _fmt_valor(doc.valor)},
+                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor, doc.total_conciliado)},
+                        {'label': 'Status', 'valor': doc.status or '-'},
+                    ],
+                })
+
+            elif tipo == 'custo_entrega':
+                from app.carvia.models import CarviaCustoEntrega
+                doc = db.session.get(CarviaCustoEntrega, doc_id)
+                if not doc:
+                    return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
+                return jsonify({
+                    'titulo': 'Custo de Entrega',
+                    'numero': doc.numero_custo,
+                    'url': f'/carvia/custos-entrega/{doc.id}',
+                    'campos': [
+                        {'label': 'Tipo', 'valor': doc.tipo_custo or '-'},
+                        {'label': 'Descricao', 'valor': doc.descricao or '-'},
+                        {'label': 'Fornecedor', 'valor': doc.fornecedor_nome or '-'},
+                        {'label': 'CNPJ Fornecedor', 'valor': doc.fornecedor_cnpj or '-'},
+                        {'label': 'Data Custo', 'valor': _fmt_data(doc.data_custo)},
+                        {'label': 'Vencimento', 'valor': _fmt_data(doc.data_vencimento)},
+                        {'label': 'Valor', 'valor': _fmt_valor(doc.valor)},
+                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor, doc.total_conciliado)},
+                        {'label': 'Status', 'valor': doc.status or '-'},
+                    ],
+                })
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar detalhe documento {tipo}/{doc_id}: {e}")
             return jsonify({'erro': str(e)}), 500
 
     # ===================================================================

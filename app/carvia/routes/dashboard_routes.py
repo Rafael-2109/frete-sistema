@@ -11,7 +11,7 @@ from app import db
 from app.carvia.models import (
     CarviaNf, CarviaOperacao, CarviaSubcontrato,
     CarviaFaturaCliente, CarviaFaturaTransportadora,
-    CarviaDespesa,
+    CarviaDespesa, CarviaReceita,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,6 +85,15 @@ def register_dashboard_routes(bp):
                 func.coalesce(func.sum(CarviaDespesa.valor), 0)
             ).filter(CarviaDespesa.status == 'PENDENTE').scalar() or 0
 
+            # Receitas
+            stats['receitas_pendentes'] = db.session.query(
+                func.count(CarviaReceita.id)
+            ).filter(CarviaReceita.status == 'PENDENTE').scalar() or 0
+
+            stats['receitas_valor_pendente'] = db.session.query(
+                func.coalesce(func.sum(CarviaReceita.valor), 0)
+            ).filter(CarviaReceita.status == 'PENDENTE').scalar() or 0
+
             # Ultimas operacoes
             stats['ultimas_operacoes'] = db.session.query(CarviaOperacao).order_by(
                 CarviaOperacao.criado_em.desc()
@@ -105,6 +114,8 @@ def register_dashboard_routes(bp):
                 'faturas_sub_pendentes': 0,
                 'despesas_pendentes': 0,
                 'despesas_valor_pendente': 0,
+                'receitas_pendentes': 0,
+                'receitas_valor_pendente': 0,
                 'ultimas_operacoes': [],
             }
 

@@ -154,13 +154,15 @@
                         </td>
                         <td>
                             {% for conc in linha.conciliacoes.all() %}
-                                <span class="badge bg-secondary" style="font-size:0.65rem">
-                                    {% if conc.tipo_documento == 'fatura_cliente' %}FAT
-                                    {% elif conc.tipo_documento == 'fatura_transportadora' %}FTRANSP
-                                    {% else %}DESP
-                                    {% endif %}-{{ conc.documento_id }}
+                                <button type="button"
+                                        class="badge bg-secondary border-0 btn-detalhe-doc"
+                                        style="font-size:0.65rem; cursor:pointer"
+                                        data-tipo="{{ conc.tipo_documento }}"
+                                        data-doc-id="{{ conc.documento_id }}"
+                                        title="Clique para ver detalhes">
+                                    {{ conc.numero_documento }}
                                     ({{ conc.valor_alocado|valor_br }})
-                                </span>
+                                </button>
                             {% else %}
                                 <span class="text-muted small">—</span>
                             {% endfor %}
@@ -221,6 +223,7 @@
 {% include 'carvia/_modal_importar_ofx.html' %}
 {% include 'carvia/_modal_importar_csv.html' %}
 {% include 'carvia/_modal_conciliar_inline.html' %}
+{% include 'carvia/_modal_detalhe_doc_conciliado.html' %}
 
 <script>
 (function() {
@@ -252,6 +255,64 @@
                 alert('Erro: ' + err.message);
                 this.disabled = false;
                 this.innerHTML = '<i class="fas fa-unlink"></i>';
+            });
+        });
+    });
+
+    // Detalhe de documento conciliado
+    document.querySelectorAll('.btn-detalhe-doc').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tipo = this.dataset.tipo;
+            const docId = this.dataset.docId;
+
+            const modal = new bootstrap.Modal(document.getElementById('modalDetalheDoc'));
+            const loading = document.getElementById('detalheDocLoading');
+            const conteudo = document.getElementById('detalheDocConteudo');
+            const erro = document.getElementById('detalheDocErro');
+            const btnAbrir = document.getElementById('btnAbrirDocumento');
+
+            loading.classList.remove('d-none');
+            conteudo.classList.add('d-none');
+            erro.classList.add('d-none');
+            btnAbrir.classList.add('d-none');
+
+            modal.show();
+
+            fetch(`/carvia/api/conciliacao/detalhe-documento/${tipo}/${docId}`)
+            .then(r => r.json())
+            .then(data => {
+                loading.classList.add('d-none');
+
+                if (data.erro) {
+                    erro.textContent = data.erro;
+                    erro.classList.remove('d-none');
+                    return;
+                }
+
+                document.getElementById('detalheDocTitulo').textContent = data.titulo;
+                document.getElementById('detalheDocNumero').textContent = data.numero || '-';
+
+                // Popular campos dinamicos
+                const tbody = document.getElementById('detalheDocCampos');
+                tbody.innerHTML = '';
+                (data.campos || []).forEach(c => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td class="text-muted" style="width:40%">${c.label}</td><td><strong>${c.valor}</strong></td>`;
+                    tbody.appendChild(tr);
+                });
+
+                // Botao abrir
+                if (data.url) {
+                    btnAbrir.href = data.url;
+                    btnAbrir.classList.remove('d-none');
+                }
+
+                conteudo.classList.remove('d-none');
+            })
+            .catch(err => {
+                loading.classList.add('d-none');
+                erro.textContent = 'Erro ao carregar detalhes: ' + err.message;
+                erro.classList.remove('d-none');
             });
         });
     });

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-hand-holding-usd"></i> Receita #{{ receita.id }}
+                <span class="badge carvia-badge-{{ receita.status|lower }}">{{ receita.status }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                Criada em {{ receita.criado_em|formatar_data_hora_brasil if receita.criado_em else '-' }}
+                por {{ receita.criado_por or '-' }}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if receita.status != 'CANCELADO' %}
+            <a href="{{ url_for('carvia.editar_receita', receita_id=receita.id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            {% endif %}
+            {% if current_user.perfil == 'administrador' %}
+            <a href="{{ url_for('carvia.admin_editar', tipo='receita', id=receita.id) }}" class="btn carvia-admin-btn"
+               title="Edicao completa (admin)">
+                <i class="fas fa-shield-alt"></i> Editar
+            </a>
+            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+                    title="Exclusao permanente (admin)">
+                <i class="fas fa-shield-alt"></i> Excluir
+            </button>
+            {% endif %}
+            <a href="{{ url_for('carvia.listar_receitas') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'receitas' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row g-4">
+        <!-- Dados da Receita -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Receita</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Tipo</small>
+                            <span class="badge bg-secondary">{{ receita.tipo_receita }}</span>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor</small>
+                            <h4 class="mb-0">{{ receita.valor|valor_br }}</h4>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted d-block">Descricao</small>
+                            <strong>{{ receita.descricao or '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data da Receita</small>
+                            <strong>{{ receita.data_receita.strftime('%d/%m/%Y') if receita.data_receita else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Vencimento</small>
+                            <strong>{{ receita.data_vencimento.strftime('%d/%m/%Y') if receita.data_vencimento else '-' }}</strong>
+                        </div>
+                    </div>
+                    {% if receita.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ receita.observacoes }}</p>
+                    {% endif %}
+                    {% if receita.atualizado_em and receita.atualizado_em != receita.criado_em %}
+                    <hr>
+                    <small class="text-muted">
+                        Ultima atualizacao: {{ receita.atualizado_em|formatar_data_hora_brasil }}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Acoes de Status -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tasks"></i> Status e Acoes</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Alterar Status:</h6>
+                    <div class="d-flex gap-2 flex-wrap">
+                        {% for status in ['PENDENTE', 'RECEBIDO', 'CANCELADO'] %}
+                        {% if status != receita.status %}
+                            {% if status == 'RECEBIDO' %}
+                            {# RECEBIDO abre modal para informar data de recebimento #}
+                            <button type="button" class="btn btn-sm btn-success"
+                                    data-bs-toggle="modal" data-bs-target="#modalDataRecebimento">
+                                <i class="fas fa-check"></i> RECEBIDO
+                            </button>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_receita', receita_id=receita.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <button type="submit" class="btn btn-sm
+                                    {% if status == 'CANCELADO' %}btn-danger
+                                    {% else %}btn-warning{% endif %}"
+                                    {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar esta receita?')"{% endif %}>
+                                    <i class="fas
+                                        {% if status == 'CANCELADO' %}fa-times
+                                        {% else %}fa-clock{% endif %}"></i>
+                                    {{ status }}
+                                </button>
+                            </form>
+                            {% endif %}
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal de data de recebimento (modo Form POST) #}
+{% with form_action=url_for('carvia.atualizar_status_receita', receita_id=receita.id), form_status='RECEBIDO' %}
+    {% include 'carvia/_modal_data_recebimento.html' %}
+{% endwith %}
+
+{{ modal_admin_excluir(
+    entidade_tipo='receita',
+    entidade_id=receita.id,
+    entidade_label='Receita #' ~ receita.id,
+    impacto_cascade=[
+        'Movimentacao financeira e conciliacoes serao removidas',
+    ],
+    bloqueios=(['Status RECEBIDO. Desfaca o recebimento primeiro.'] if receita.status == 'RECEBIDO' else [])
+) }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+    // Setar data de hoje como default ao abrir o modal
+    var modalEl = document.getElementById('modalDataRecebimento');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function() {
+            var input = document.getElementById('dataRecebimentoInput');
+            if (input && !input.value) {
+                input.value = new Date().toISOString().slice(0, 10);
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

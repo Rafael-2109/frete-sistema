@@ -27,6 +27,7 @@ TIPO_MOVIMENTO_MAP = {
     'fatura_transportadora': 'DEBITO',
     'despesa': 'DEBITO',
     'custo_entrega': 'DEBITO',
+    'receita': 'CREDITO',
 }
 
 
@@ -99,6 +100,10 @@ def _gerar_descricao(tipo_doc, doc):
     elif tipo_doc == 'custo_entrega':
         desc = doc.descricao or doc.tipo_custo
         return f"Custo Entrega #{doc.numero_custo} - {desc}".strip(' -')
+    elif tipo_doc == 'receita':
+        tipo = doc.tipo_receita or 'Receita'
+        desc = doc.descricao or ''
+        return f"{tipo} #{doc.id} - {desc}".strip(' -')
     return ''
 
 
@@ -205,6 +210,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
                 CarviaCustoEntrega,
+                CarviaReceita,
             )
 
             usuario = current_user.email
@@ -267,6 +273,20 @@ def register_fluxo_caixa_routes(bp):
                 novo_status = 'PAGO'
                 valor_mov = float(doc.valor or 0)
 
+            elif tipo_doc == 'receita':
+                doc = db.session.get(CarviaReceita, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Receita nao encontrada'}), 404
+                if doc.status == 'CANCELADO':
+                    return jsonify({'erro': 'Receita cancelada nao pode ser recebida'}), 400
+                if doc.status == 'RECEBIDO':
+                    return jsonify({'erro': 'Receita ja foi recebida'}), 409
+                doc.status = 'RECEBIDO'
+                doc.recebido_por = usuario
+                doc.recebido_em = pago_em_dt
+                novo_status = 'RECEBIDO'
+                valor_mov = float(doc.valor or 0)
+
             else:
                 return jsonify({'erro': f'Tipo de documento invalido: {tipo_doc}'}), 400
 
@@ -321,6 +341,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
                 CarviaCustoEntrega,
+                CarviaReceita,
             )
 
             if tipo_doc == 'fatura_cliente':
@@ -357,6 +378,15 @@ def register_fluxo_caixa_routes(bp):
                 doc.status = 'PENDENTE'
                 doc.pago_por = None
                 doc.pago_em = None
+                novo_status = 'PENDENTE'
+
+            elif tipo_doc == 'receita':
+                doc = db.session.get(CarviaReceita, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Receita nao encontrada'}), 404
+                doc.status = 'PENDENTE'
+                doc.recebido_por = None
+                doc.recebido_em = None
                 novo_status = 'PENDENTE'
 
             else:
@@ -421,6 +451,7 @@ def register_fluxo_caixa_routes(bp):
                 CarviaFaturaTransportadora,
                 CarviaDespesa,
                 CarviaCustoEntrega,
+                CarviaReceita,
             )
 
             if tipo_doc == 'fatura_cliente':
@@ -453,6 +484,14 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
                 if doc.status in ('PAGO', 'CANCELADO'):
                     return jsonify({'erro': f'Custo com status {doc.status} nao pode ter vencimento alterado'}), 400
+                doc.data_vencimento = novo_vencimento
+
+            elif tipo_doc == 'receita':
+                doc = db.session.get(CarviaReceita, int(doc_id))
+                if not doc:
+                    return jsonify({'erro': 'Receita nao encontrada'}), 404
+                if doc.status in ('RECEBIDO', 'CANCELADO'):
+                    return jsonify({'erro': f'Receita com status {doc.status} nao pode ter vencimento alterado'}), 400
                 doc.data_vencimento = novo_vencimento
 
             else:

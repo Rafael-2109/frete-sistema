@@ -1,0 +1,40 @@
+{# Modal de detalhes do documento conciliado — usado na Tela 2 (Extrato Bancario) #}
+<div class="modal fade" id="modalDetalheDoc" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-alt"></i>
+                    <span id="detalheDocTitulo">Documento</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {# Loading #}
+                <div id="detalheDocLoading" class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm"></div>
+                    <span class="ms-2">Carregando detalhes...</span>
+                </div>
+
+                {# Erro #}
+                <div id="detalheDocErro" class="alert alert-warning d-none"></div>
+
+                {# Conteudo #}
+                <div id="detalheDocConteudo" class="d-none">
+                    <div class="alert alert-light mb-3 text-center">
+                        <strong id="detalheDocNumero" style="font-size:1.1rem">-</strong>
+                    </div>
+                    <table class="table table-sm mb-0">
+                        <tbody id="detalheDocCampos"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                <a id="btnAbrirDocumento" href="#" class="btn btn-primary btn-sm d-none" target="_blank">
+                    <i class="fas fa-external-link-alt"></i> Abrir Documento
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,49 @@
+{#
+  Modal de Data de Recebimento — CarVia
+  ======================================
+  Dois modos de uso:
+
+  1. Form POST (Receita detalhe):
+     {% with form_action=url_for(...), form_status='RECEBIDO' %}
+       {% include 'carvia/_modal_data_recebimento.html' %}
+     {% endwith %}
+
+  2. AJAX (Fluxo de Caixa):
+     {% include 'carvia/_modal_data_recebimento.html' %}
+     (sem form_action — JS cuida do fetch)
+#}
+<div class="modal fade" id="modalDataRecebimento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            {% if form_action is defined and form_action %}
+            <form method="POST" action="{{ form_action }}" id="formRecebimento">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="{{ form_status }}">
+            {% endif %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Data do Recebimento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="dataRecebimentoInput" class="form-label">Informe a data do recebimento</label>
+                    <input type="date" class="form-control" id="dataRecebimentoInput"
+                           name="data_recebimento" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    {% if form_action is defined and form_action %}
+                    <button type="submit" class="btn btn-success btn-sm" id="btnConfirmarRecebimento">
+                        <i class="fas fa-check"></i> Confirmar
+                    </button>
+                    {% else %}
+                    <button type="button" class="btn btn-success btn-sm" id="btnConfirmarRecebimento">
+                        <i class="fas fa-check"></i> Confirmar
+                    </button>
+                    {% endif %}
+                </div>
+            {% if form_action is defined and form_action %}
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>

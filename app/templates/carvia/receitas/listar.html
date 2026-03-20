@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% from "carvia/_macros.html" import th_sort %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-hand-holding-usd"></i> Receitas CarVia</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_receitas', tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}"
+               class="btn btn-outline-success btn-sm" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
+            <a href="{{ url_for('carvia.criar_receita') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Nova Receita
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'receitas' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Tipo</label>
+                    <select name="tipo" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for tipo in tipos_receita %}
+                        <option value="{{ tipo }}" {{ 'selected' if tipo_filtro == tipo }}>{{ tipo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
+                        <option value="RECEBIDO" {{ 'selected' if status_filtro == 'RECEBIDO' }}>Recebido</option>
+                        <option value="CANCELADO" {{ 'selected' if status_filtro == 'CANCELADO' }}>Cancelado</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Busca</label>
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Descricao, observacoes..." value="{{ busca }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+                {% if tipo_filtro or status_filtro or busca %}
+                <div class="col-md-2">
+                    <a href="{{ url_for('carvia.listar_receitas') }}" class="btn btn-sm btn-outline-secondary w-100">
+                        <i class="fas fa-times"></i> Limpar
+                    </a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            {% if receitas %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            {{ th_sort('tipo_receita', 'Tipo', sort, direction) }}
+                            <th>Descricao</th>
+                            {{ th_sort('valor', 'Valor', sort, direction, 'text-end') }}
+                            {{ th_sort('data_receita', 'Data', sort, direction) }}
+                            {{ th_sort('data_vencimento', 'Vencimento', sort, direction) }}
+                            {{ th_sort('status', 'Status', sort, direction) }}
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in receitas %}
+                        <tr>
+                            <td><strong>{{ r.id }}</strong></td>
+                            <td><span class="badge bg-secondary">{{ r.tipo_receita }}</span></td>
+                            <td>{{ r.descricao or '-' }}</td>
+                            <td class="valor-col">{{ r.valor|valor_br }}</td>
+                            <td>{{ r.data_receita.strftime('%d/%m/%Y') if r.data_receita else '-' }}</td>
+                            <td{% if r.data_vencimento and r.status == 'PENDENTE' and r.data_vencimento < today %} class="carvia-vencido"{% endif %}>{{ r.data_vencimento.strftime('%d/%m/%Y') if r.data_vencimento else '-' }}</td>
+                            <td>
+                                <span class="badge carvia-badge-{{ r.status|lower }}">
+                                    {{ r.status }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_receita', receita_id=r.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginacao -->
+            {% if paginacao.pages > 1 %}
+            <nav class="d-flex justify-content-center py-3">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if paginacao.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carvia.listar_receitas', page=paginacao.prev_num, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                        <li class="page-item {{ 'active' if p == paginacao.page }}">
+                            <a class="page-link" href="{{ url_for('carvia.listar_receitas', page=p, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if paginacao.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carvia.listar_receitas', page=paginacao.next_num, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-hand-holding-usd fa-3x mb-3 d-block opacity-50"></i>
+                <p>Nenhuma receita encontrada.</p>
+                <a href="{{ url_for('carvia.criar_receita') }}" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus"></i> Nova Receita
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

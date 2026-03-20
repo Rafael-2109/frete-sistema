@@ -721,6 +721,56 @@ class AdminService:
         }
 
     # ------------------------------------------------------------------ #
+    #  Excluir Receita
+    # ------------------------------------------------------------------ #
+
+    def excluir_receita(self, receita_id, motivo, executado_por):
+        """Hard delete de CarviaReceita.
+
+        Bloqueio: status=RECEBIDO
+        Limpar: ContaMovimentacao + Conciliacao
+        """
+        from app.carvia.models import CarviaReceita
+
+        receita = CarviaReceita.query.get(receita_id)
+        if not receita:
+            return {'sucesso': False, 'mensagem': f'Receita {receita_id} nao encontrada.'}
+
+        if receita.status == 'RECEBIDO':
+            return {
+                'sucesso': False,
+                'mensagem': 'Receita bloqueada: status RECEBIDO. Desfaca o recebimento primeiro.',
+            }
+
+        snapshot = self.serializar_entidade(receita)
+
+        # Limpeza financeira
+        self._limpar_movimentacao_financeira('receita', receita_id)
+
+        db.session.delete(receita)
+
+        audit = self.registrar_auditoria(
+            acao='HARD_DELETE',
+            entidade_tipo='CarviaReceita',
+            entidade_id=receita_id,
+            dados_snapshot=snapshot,
+            motivo=motivo,
+            executado_por=executado_por,
+        )
+
+        db.session.commit()
+        logger.info(
+            f"[ADMIN] Receita {receita_id} excluida por {executado_por}. "
+            f"Audit #{audit.id}"
+        )
+
+        return {
+            'sucesso': True,
+            'mensagem': f'Receita #{receita_id} excluida permanentemente.',
+            'auditoria_id': audit.id,
+        }
+
+    # ------------------------------------------------------------------ #
     #  Listar Auditoria
     # ------------------------------------------------------------------ #
 
@@ -738,6 +788,7 @@ class AdminService:
         'cte-complementar': 'CarviaCteComplementar',
         'custo-entrega': 'CarviaCustoEntrega',
         'despesa': 'CarviaDespesa',
+        'receita': 'CarviaReceita',
     }
 
     def _get_model_class(self, tipo):

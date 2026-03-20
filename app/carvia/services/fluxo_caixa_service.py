@@ -2,8 +2,8 @@
 Fluxo de Caixa CarVia — Service
 ================================
 
-Consolida 3 fontes de dados financeiros em visao diaria:
-- A Receber: carvia_faturas_cliente (status != CANCELADA)
+Consolida fontes de dados financeiros em visao diaria:
+- A Receber: carvia_faturas_cliente (status != CANCELADA) + carvia_receitas (status != CANCELADO)
 - A Pagar: carvia_faturas_transportadora (todas) + carvia_despesas (status != CANCELADO)
 
 Agrupamento por data de vencimento com saldo acumulado progressivo.
@@ -53,11 +53,15 @@ class FluxoCaixaService:
             CarviaFaturaTransportadora,
             CarviaDespesa,
             CarviaCustoEntrega,
+            CarviaReceita,
         )
 
         # Coletar lancamentos de cada fonte
         lancamentos_receber = self._buscar_faturas_cliente(
             CarviaFaturaCliente, data_inicio, data_fim, filtro_status
+        )
+        lancamentos_receber_receitas = self._buscar_receitas(
+            CarviaReceita, data_inicio, data_fim, filtro_status
         )
         lancamentos_pagar_transp = self._buscar_faturas_transportadora(
             CarviaFaturaTransportadora, data_inicio, data_fim, filtro_status
@@ -73,7 +77,7 @@ class FluxoCaixaService:
         dias_receber = defaultdict(list)
         dias_pagar = defaultdict(list)
 
-        for lanc in lancamentos_receber:
+        for lanc in lancamentos_receber + lancamentos_receber_receitas:
             dias_receber[lanc['vencimento']].append(lanc)
 
         for lanc in lancamentos_pagar_transp + lancamentos_pagar_desp + lancamentos_pagar_custos:
@@ -227,6 +231,39 @@ class FluxoCaixaService:
 
         return resultado
 
+    def _buscar_receitas(self, model, data_inicio, data_fim, filtro_status):
+        """Busca receitas (a receber) no periodo."""
+        query = db.session.query(model).filter(
+            model.data_vencimento >= data_inicio,
+            model.data_vencimento <= data_fim,
+            model.status != 'CANCELADO',
+        )
+
+        if filtro_status == 'pago':
+            query = query.filter(model.status == 'RECEBIDO')
+        elif filtro_status == 'pendente':
+            query = query.filter(model.status == 'PENDENTE')
+
+        receitas = query.order_by(model.data_vencimento, model.id).all()
+
+        resultado = []
+        for r in receitas:
+            resultado.append({
+                'tipo_doc': 'receita',
+                'tipo_label': r.tipo_receita or 'Receita',
+                'id': r.id,
+                'vencimento': r.data_vencimento,
+                'emissao': r.data_receita,
+                'fornecedor': r.descricao or '-',
+                'documento': str(r.id),
+                'valor': float(r.valor or 0),
+                'pago': r.status == 'RECEBIDO',
+                'status': r.status,
+                'url_detalhe': f'/carvia/receitas/{r.id}',
+            })
+
+        return resultado
+
     def _buscar_custos_entrega(self, model, data_inicio, data_fim, filtro_status):
         """Busca custos de entrega (a pagar) no periodo."""
         query = db.session.query(model).filter(
@@ -278,6 +315,7 @@ class FluxoCaixaService:
             CarviaFaturaTransportadora,
             CarviaDespesa,
             CarviaCustoEntrega,
+            CarviaReceita,
         )
 
         lancamentos = []
@@ -289,7 +327,10 @@ class FluxoCaixaService:
             receber = self._buscar_faturas_cliente(
                 CarviaFaturaCliente, data_inicio, data_fim, filtro_status
             )
-            for l in receber:
+            receber_receitas = self._buscar_receitas(
+                CarviaReceita, data_inicio, data_fim, filtro_status
+            )
+            for l in receber + receber_receitas:
                 l['direcao'] = 'A Receber'
                 lancamentos.append(l)
                 total_receber += l['valor']

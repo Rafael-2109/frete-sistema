@@ -624,6 +624,38 @@ class CarviaDespesa(db.Model):
         return f'<CarviaDespesa {self.id} {self.tipo_despesa} ({self.status})>'
 
 
+class CarviaReceita(db.Model):
+    """Receitas operacionais diversas da empresa no modulo CarVia (espelho de despesas)"""
+    __tablename__ = 'carvia_receitas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo_receita = db.Column(db.String(50), nullable=False, index=True)
+    # Campo texto livre (comissoes, reembolsos, bonificacoes, etc.)
+    descricao = db.Column(db.String(500))
+    valor = db.Column(db.Numeric(15, 2), nullable=False)
+
+    data_receita = db.Column(db.Date, nullable=False)
+    data_vencimento = db.Column(db.Date)
+    status = db.Column(db.String(20), default='PENDENTE', index=True)
+    # PENDENTE, RECEBIDO, CANCELADO
+
+    # Auditoria de recebimento
+    recebido_por = db.Column(db.String(100))
+    recebido_em = db.Column(db.DateTime)
+
+    # Conciliacao bancaria
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    conciliado = db.Column(db.Boolean, nullable=False, default=False)
+
+    observacoes = db.Column(db.Text)
+    criado_por = db.Column(db.String(150))
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    def __repr__(self):
+        return f'<CarviaReceita {self.id} {self.tipo_receita} ({self.status})>'
+
+
 class CarviaFaturaTransportadora(db.Model):
     """Faturas recebidas dos subcontratados — agrupa N CTes de 1 transportadora"""
     __tablename__ = 'carvia_faturas_transportadora'
@@ -1196,6 +1228,48 @@ class CarviaConciliacao(db.Model):
         db.CheckConstraint('valor_alocado > 0', name='ck_carvia_conc_valor'),
         db.Index('ix_carvia_conc_doc', 'tipo_documento', 'documento_id'),
     )
+
+    @property
+    def numero_documento(self):
+        """Numero human-readable do documento conciliado."""
+        _PREFIXOS = {
+            'fatura_cliente': 'FAT',
+            'fatura_transportadora': 'FTRANSP',
+            'despesa': 'DESP',
+            'custo_entrega': 'CE',
+        }
+        prefixo = _PREFIXOS.get(self.tipo_documento, 'DOC')
+        fallback = f'{prefixo}-{self.documento_id}'
+
+        if self.tipo_documento == 'fatura_cliente':
+            from app.carvia.models import CarviaFaturaCliente
+            doc = db.session.get(CarviaFaturaCliente, self.documento_id)
+            return doc.numero_fatura if doc else fallback
+        elif self.tipo_documento == 'fatura_transportadora':
+            from app.carvia.models import CarviaFaturaTransportadora
+            doc = db.session.get(CarviaFaturaTransportadora, self.documento_id)
+            return doc.numero_fatura if doc else fallback
+        elif self.tipo_documento == 'despesa':
+            return f'DESP-{self.documento_id:03d}'
+        elif self.tipo_documento == 'custo_entrega':
+            from app.carvia.models import CarviaCustoEntrega
+            doc = db.session.get(CarviaCustoEntrega, self.documento_id)
+            return doc.numero_custo if doc else fallback
+        return fallback
+
+    @property
+    def url_documento(self):
+        """URL da pagina de detalhe do documento."""
+        _URLS = {
+            'fatura_cliente': '/carvia/faturas-cliente/{}',
+            'fatura_transportadora': '/carvia/faturas-transportadora/{}',
+            'despesa': '/carvia/despesas/{}',
+            'custo_entrega': '/carvia/custos-entrega/{}',
+        }
+        template = _URLS.get(self.tipo_documento)
+        if template:
+            return template.format(self.documento_id)
+        return None
 
     def __repr__(self):
         return (

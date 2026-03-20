@@ -94,6 +94,11 @@
     --_badge-color: hsl(0 0% 100%);
 }
 
+.carvia-badge-recebido {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+}
+
 .carvia-badge-cancelada {
     --_badge-bg: var(--semantic-danger);
     --_badge-color: hsl(0 0% 100%);
@@ -129,6 +134,7 @@
 [data-bs-theme="light"] .carvia-badge-conferido,
 [data-bs-theme="light"] .carvia-badge-paga,
 [data-bs-theme="light"] .carvia-badge-pago,
+[data-bs-theme="light"] .carvia-badge-recebido,
 [data-bs-theme="light"] .carvia-badge-ativa,
 [data-bs-theme="light"] .carvia-badge-aprovado {
     --_badge-bg: hsl(145 65% 35%);

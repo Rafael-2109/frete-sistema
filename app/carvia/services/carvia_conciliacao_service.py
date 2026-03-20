@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # Tipos de documento validos por direcao
-DOCS_CREDITO = {'fatura_cliente'}
+DOCS_CREDITO = {'fatura_cliente', 'receita'}
 DOCS_DEBITO = {'fatura_transportadora', 'despesa', 'custo_entrega'}
 
 
@@ -81,6 +81,7 @@ class CarviaConciliacaoService:
             CarviaFaturaTransportadora,
             CarviaDespesa,
             CarviaCustoEntrega,
+            CarviaReceita,
         )
 
         docs = []
@@ -105,6 +106,28 @@ class CarviaConciliacaoService:
                     'nome': f.nome_cliente or f.cnpj_cliente or '',
                     'data': f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '',
                     'vencimento': f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '',
+                })
+
+            # Receitas
+            receitas = CarviaReceita.query.filter(
+                CarviaReceita.conciliado.is_(False),
+                CarviaReceita.status != 'CANCELADO',
+            ).order_by(CarviaReceita.data_receita.desc()).all()
+
+            for r in receitas:
+                saldo = float(r.valor or 0) - float(r.total_conciliado or 0)
+                if saldo <= 0:
+                    continue
+                docs.append({
+                    'tipo_documento': 'receita',
+                    'id': r.id,
+                    'numero': f'REC-{r.id:03d}',
+                    'valor_total': float(r.valor or 0),
+                    'total_conciliado': float(r.total_conciliado or 0),
+                    'saldo': saldo,
+                    'nome': r.tipo_receita or '',
+                    'data': r.data_receita.strftime('%d/%m/%Y') if r.data_receita else '',
+                    'vencimento': r.data_vencimento.strftime('%d/%m/%Y') if r.data_vencimento else '',
                 })
 
         elif tipo_match == 'pagar':
@@ -200,6 +223,7 @@ class CarviaConciliacaoService:
             CarviaFaturaTransportadora,
             CarviaDespesa,
             CarviaCustoEntrega,
+            CarviaReceita,
         )
 
         linha = db.session.get(CarviaExtratoLinha, extrato_linha_id)
@@ -252,6 +276,12 @@ class CarviaConciliacaoService:
                 doc = db.session.get(CarviaCustoEntrega, doc_id)
                 if not doc:
                     raise ValueError(f'Custo de entrega {doc_id} nao encontrado')
+                doc_valor_total = float(doc.valor or 0)
+                doc_total_conciliado = float(doc.total_conciliado or 0)
+            elif tipo_doc == 'receita':
+                doc = db.session.get(CarviaReceita, doc_id)
+                if not doc:
+                    raise ValueError(f'Receita {doc_id} nao encontrada')
                 doc_valor_total = float(doc.valor or 0)
                 doc_total_conciliado = float(doc.total_conciliado or 0)
             else:
@@ -405,6 +435,7 @@ class CarviaConciliacaoService:
             CarviaFaturaTransportadora,
             CarviaDespesa,
             CarviaCustoEntrega,
+            CarviaReceita,
         )
         from sqlalchemy import func as sqlfunc
 
@@ -434,6 +465,11 @@ class CarviaConciliacaoService:
                 doc.conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
         elif tipo_documento == 'custo_entrega':
             doc = db.session.get(CarviaCustoEntrega, documento_id)
+            if doc:
+                doc.total_conciliado = total_dec
+                doc.conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+        elif tipo_documento == 'receita':
+            doc = db.session.get(CarviaReceita, documento_id)
             if doc:
                 doc.total_conciliado = total_dec
                 doc.conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01

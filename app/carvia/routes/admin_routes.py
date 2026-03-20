@@ -56,6 +56,11 @@ _TIPO_CONFIG = {
         'redirect': 'carvia.listar_despesas',
         'label': 'Despesa',
     },
+    'receita': {
+        'metodo': 'excluir_receita',
+        'redirect': 'carvia.listar_receitas',
+        'label': 'Receita',
+    },
 }
 
 

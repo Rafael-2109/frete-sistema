@@ -2,7 +2,7 @@
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, importar, nfs, operacoes, subcontratos,
    ctes_complementares, custos_entrega, faturas_cliente, faturas_transportadora,
-   despesas, sessoes_cotacao, fluxo_caixa, conciliacao, extrato_bancario, configuracoes
+   despesas, receitas, sessoes_cotacao, fluxo_caixa, conciliacao, extrato_bancario, configuracoes
 #}
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
     {# --- Visao Geral --- #}
@@ -51,6 +51,10 @@
     <a href="{{ url_for('carvia.listar_despesas') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'despesas' else 'btn-outline-secondary' }}">
         Despesas
+    </a>
+    <a href="{{ url_for('carvia.listar_receitas') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'receitas' else 'btn-outline-secondary' }}">
+        Receitas
     </a>
 
     {# --- Comercial --- #}

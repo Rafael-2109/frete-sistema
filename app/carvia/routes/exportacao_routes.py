@@ -16,7 +16,7 @@ from app.carvia.models import (
     CarviaSubcontrato, CarviaCteComplementar,
     CarviaCustoEntrega, CarviaFaturaCliente,
     CarviaFaturaTransportadora, CarviaDespesa,
-    CarviaSessaoCotacao, CarviaSessaoDemanda,
+    CarviaReceita, CarviaSessaoCotacao, CarviaSessaoDemanda,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -753,7 +753,78 @@ def register_exportacao_routes(bp):
         return _gerar_excel(df, 'Despesas', 'despesas')
 
     # =====================================================================
-    # 9. Sessoes Cotacao
+    # 9. Receitas
+    # =====================================================================
+    @bp.route('/api/exportar/receitas')
+    @login_required
+    def exportar_receitas():
+        """Exporta receitas para Excel com mesmos filtros da listagem"""
+        if _check_access():
+            return redirect(url_for('main.dashboard'))
+
+        tipo_filtro = request.args.get('tipo', '')
+        status_filtro = request.args.get('status', '')
+        busca = request.args.get('busca', '')
+        sort = request.args.get('sort', 'criado_em')
+        direction = request.args.get('direction', 'desc')
+
+        query = db.session.query(CarviaReceita)
+
+        if tipo_filtro:
+            query = query.filter(CarviaReceita.tipo_receita == tipo_filtro)
+        if status_filtro:
+            query = query.filter(CarviaReceita.status == status_filtro)
+        if busca:
+            busca_like = f'%{busca}%'
+            query = query.filter(
+                db.or_(
+                    CarviaReceita.descricao.ilike(busca_like),
+                    CarviaReceita.observacoes.ilike(busca_like),
+                )
+            )
+
+        sortable_columns = {
+            'tipo_receita': CarviaReceita.tipo_receita,
+            'valor': CarviaReceita.valor,
+            'data_receita': CarviaReceita.data_receita,
+            'data_vencimento': CarviaReceita.data_vencimento,
+            'status': CarviaReceita.status,
+            'criado_em': CarviaReceita.criado_em,
+        }
+        sort_col = sortable_columns.get(sort, CarviaReceita.criado_em)
+        if direction == 'asc':
+            query = query.order_by(sort_col.asc().nullslast())
+        else:
+            query = query.order_by(sort_col.desc().nullslast())
+
+        items = query.all()
+
+        if not items:
+            flash('Nenhum dado para exportar.', 'warning')
+            return redirect(url_for('carvia.listar_receitas'))
+
+        data = []
+        for r in items:
+            data.append({
+                'ID': r.id,
+                'Tipo Receita': r.tipo_receita or '',
+                'Descricao': r.descricao or '',
+                'Valor': float(r.valor or 0),
+                'Data Receita': _fmt_date(r.data_receita),
+                'Data Vencimento': _fmt_date(r.data_vencimento),
+                'Status': r.status or '',
+                'Recebido Em': _fmt_datetime(r.recebido_em),
+                'Recebido Por': r.recebido_por or '',
+                'Conciliado': _fmt_bool(r.conciliado),
+                'Total Conciliado': float(r.total_conciliado or 0),
+                'Criado Em': _fmt_datetime(r.criado_em),
+            })
+
+        df = pd.DataFrame(data)
+        return _gerar_excel(df, 'Receitas', 'receitas')
+
+    # =====================================================================
+    # 10. Sessoes Cotacao
     # =====================================================================
     @bp.route('/api/exportar/sessoes-cotacao')
     @login_required
