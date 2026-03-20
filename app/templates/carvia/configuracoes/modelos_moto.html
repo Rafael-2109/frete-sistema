@@ -22,9 +22,9 @@
                             <tr>
                                 <th>Nome</th>
                                 <th>Categoria</th>
-                                <th class="text-end">Comprimento (m)</th>
-                                <th class="text-end">Largura (m)</th>
-                                <th class="text-end">Altura (m)</th>
+                                <th class="text-end">Comprimento (cm)</th>
+                                <th class="text-end">Largura (cm)</th>
+                                <th class="text-end">Altura (cm)</th>
                                 <th class="text-end">Peso Medio (kg)</th>
                                 <th class="text-end">Cubagem Min (kg/m3)</th>
                                 <th>Regex</th>
@@ -43,9 +43,9 @@
                                     <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end">{{ modelo.comprimento|numero_br(2) }}</td>
-                                <td class="text-end">{{ modelo.largura|numero_br(2) }}</td>
-                                <td class="text-end">{{ modelo.altura|numero_br(2) }}</td>
+                                <td class="text-end">{{ modelo.comprimento|numero_br(0) }}</td>
+                                <td class="text-end">{{ modelo.largura|numero_br(0) }}</td>
+                                <td class="text-end">{{ modelo.altura|numero_br(0) }}</td>
                                 <td class="text-end">{{ modelo.peso_medio|numero_br(1) if modelo.peso_medio else '-' }}</td>
                                 <td class="text-end">{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '-' }}</td>
                                 <td>
@@ -116,19 +116,19 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label for="novo_comprimento" class="form-label">Comprimento (m) *</label>
+                            <label for="novo_comprimento" class="form-label">Comprimento (cm) *</label>
                             <input type="text" class="form-control" id="novo_comprimento" name="comprimento"
-                                   inputmode="decimal" required placeholder="0,00">
+                                   inputmode="decimal" required placeholder="0">
                         </div>
                         <div class="col-md-4">
-                            <label for="novo_largura" class="form-label">Largura (m) *</label>
+                            <label for="novo_largura" class="form-label">Largura (cm) *</label>
                             <input type="text" class="form-control" id="novo_largura" name="largura"
-                                   inputmode="decimal" required placeholder="0,00">
+                                   inputmode="decimal" required placeholder="0">
                         </div>
                         <div class="col-md-4">
-                            <label for="novo_altura" class="form-label">Altura (m) *</label>
+                            <label for="novo_altura" class="form-label">Altura (cm) *</label>
                             <input type="text" class="form-control" id="novo_altura" name="altura"
-                                   inputmode="decimal" required placeholder="0,00">
+                                   inputmode="decimal" required placeholder="0">
                         </div>
                         <div class="col-md-6">
                             <label for="novo_peso_medio" class="form-label">Peso Medio (kg)</label>
@@ -217,22 +217,22 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Comprimento (m) *</label>
+                            <label class="form-label">Comprimento (cm) *</label>
                             <input type="text" class="form-control" name="comprimento"
                                    inputmode="decimal" required
-                                   value="{{ modelo.comprimento|numero_br(2) }}">
+                                   value="{{ modelo.comprimento|numero_br(0) }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Largura (m) *</label>
+                            <label class="form-label">Largura (cm) *</label>
                             <input type="text" class="form-control" name="largura"
                                    inputmode="decimal" required
-                                   value="{{ modelo.largura|numero_br(2) }}">
+                                   value="{{ modelo.largura|numero_br(0) }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Altura (m) *</label>
+                            <label class="form-label">Altura (cm) *</label>
                             <input type="text" class="form-control" name="altura"
                                    inputmode="decimal" required
-                                   value="{{ modelo.altura|numero_br(2) }}">
+                                   value="{{ modelo.altura|numero_br(0) }}">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Peso Medio (kg)</label>

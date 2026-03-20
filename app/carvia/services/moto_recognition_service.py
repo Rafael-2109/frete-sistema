@@ -12,8 +12,8 @@ Fluxo:
 
 IMPORTANTE — Dimensoes em CENTIMETROS:
 As colunas comprimento/largura/altura de CarviaModeloMoto armazenam valores
-em centimetros (ex: 137 = 137cm = 1.37m). O calculo converte cm -> m antes
-de multiplicar pela cubagem_minima (kg/m3).
+em centimetros (ex: 137 = 137cm = 1.37m).
+Formula: C(cm) × L(cm) × A(cm) / 1.000.000 = volume(m3) × cubagem_minima(kg/m3)
 """
 
 import logging
@@ -63,17 +63,17 @@ class MotoRecognitionService:
         """Calcula peso cubado de um modelo * quantidade.
 
         Usa peso_medio se disponivel (ja pre-calculado em kg).
-        Fallback: converte dimensoes cm -> m, calcula volume * cubagem_minima.
+        Fallback: C(cm) × L(cm) × A(cm) / 1.000.000 × cubagem_minima(kg/m3).
         """
         if modelo.peso_medio:
             return float(modelo.peso_medio) * qtd
 
-        # Dimensoes em centimetros — converter para metros
-        comp_m = float(modelo.comprimento) / 100.0
-        larg_m = float(modelo.largura) / 100.0
-        alt_m = float(modelo.altura) / 100.0
+        # Dimensoes em centimetros — converter para m3 dividindo por 1.000.000
+        comp_cm = float(modelo.comprimento)
+        larg_cm = float(modelo.largura)
+        alt_cm = float(modelo.altura)
         cubagem = float(modelo.cubagem_minima)
-        volume_m3 = comp_m * larg_m * alt_m
+        volume_m3 = comp_cm * larg_cm * alt_cm / 1_000_000
         return volume_m3 * cubagem * qtd
 
     @staticmethod
@@ -207,7 +207,7 @@ class MotoRecognitionService:
 
         Para cada item matcheado com modelo cadastrado:
             Se peso_medio disponivel: peso_cubado = peso_medio * quantidade
-            Senao: volume (cm->m) * cubagem_minima * quantidade
+            Senao: C×L×A / 1.000.000 * cubagem_minima * quantidade
 
         Args:
             operacao_id: ID da CarviaOperacao
@@ -238,18 +238,18 @@ class MotoRecognitionService:
             qtd = item['quantidade']
             peso_cubado_item = self._calcular_peso_modelo(modelo, qtd)
 
-            # Detalhes para exibicao
-            comp_m = float(modelo.comprimento) / 100.0
-            larg_m = float(modelo.largura) / 100.0
-            alt_m = float(modelo.altura) / 100.0
+            # Detalhes para exibicao (dimensoes em CM)
+            comp_cm = float(modelo.comprimento)
+            larg_cm = float(modelo.largura)
+            alt_cm = float(modelo.altura)
             cubagem = float(modelo.cubagem_minima)
-            volume_m3 = comp_m * larg_m * alt_m
+            volume_m3 = comp_cm * larg_cm * alt_cm / 1_000_000
             peso_cubado_unitario = self._calcular_peso_modelo(modelo, 1)
 
             itens_calculados.append({
                 'item_id': item['item_id'],
                 'modelo': modelo.nome,
-                'dimensoes': f'{comp_m:.2f}x{larg_m:.2f}x{alt_m:.2f}m',
+                'dimensoes': f'{comp_cm:.0f}x{larg_cm:.0f}x{alt_cm:.0f}cm',
                 'volume_m3': round(volume_m3, 4),
                 'cubagem_minima': cubagem,
                 'peso_cubado_unitario': round(peso_cubado_unitario, 2),
@@ -260,7 +260,7 @@ class MotoRecognitionService:
             peso_cubado_total += peso_cubado_item
 
             detalhes_parts.append(
-                f'{modelo.nome}: {comp_m:.2f}x{larg_m:.2f}x{alt_m:.2f}m = '
+                f'{modelo.nome}: {comp_cm:.0f}x{larg_cm:.0f}x{alt_cm:.0f}cm = '
                 f'{volume_m3:.4f}m3 x {cubagem}kg/m3 = '
                 f'{peso_cubado_unitario:.2f}kg x {int(qtd)} = '
                 f'{peso_cubado_item:.2f}kg'
