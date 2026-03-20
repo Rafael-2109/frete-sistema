@@ -216,6 +216,12 @@ def register_nf_routes(bp):
             resultado_cubagem['peso_cubado_total']
             if resultado_cubagem else None
         )
+        # Mapa item_id -> dados cubagem (peso, modelo, dimensoes) para exibir por linha
+        cubagem_por_item = {}
+        if resultado_cubagem and resultado_cubagem.get('itens'):
+            for ic in resultado_cubagem['itens']:
+                cubagem_por_item[ic['item_id']] = ic
+
         # Peso para cotacao: max(bruto, cubado)
         peso_para_cotacao = max(
             float(nf.peso_bruto or 0),
@@ -231,6 +237,7 @@ def register_nf_routes(bp):
             faturas_cliente=faturas_cliente,
             faturas_transportadora=faturas_transportadora,
             peso_cubado=peso_cubado,
+            cubagem_por_item=cubagem_por_item,
             peso_para_cotacao=peso_para_cotacao,
         )
 

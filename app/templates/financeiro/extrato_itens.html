@@ -880,7 +880,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (checked) selectedIds.add(data.id);
                 else selectedIds.delete(data.id);
             });
-            dataTable.draw(false);
+            document.querySelectorAll('#tabela-itens .row-check').forEach(cb => { cb.checked = checked; });
             atualizarBulkBar();
         });
 

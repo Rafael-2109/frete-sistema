@@ -312,6 +312,11 @@ class MotoRecognitionService:
                 'modelo': modelo.nome,
                 'quantidade': qtd,
                 'peso_cubado_item': round(peso_item, 2),
+                'comprimento_cm': float(modelo.comprimento or 0),
+                'largura_cm': float(modelo.largura or 0),
+                'altura_cm': float(modelo.altura or 0),
+                'cubagem_minima': float(modelo.cubagem_minima or 0),
+                'peso_medio': float(modelo.peso_medio) if modelo.peso_medio else None,
             })
             peso_cubado_total += peso_item
 

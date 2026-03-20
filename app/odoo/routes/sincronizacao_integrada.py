@@ -18,7 +18,7 @@ import logging
 from app import db
 from app.odoo.services.sincronizacao_integrada_service import SincronizacaoIntegradaService
 from app.odoo.services.pedido_sync_service import PedidoSyncService
-from app.separacao.models import Separacao
+from app.separacao.models import Separacao # type: ignore
 from app.carteira.models import CarteiraPrincipal
 from sqlalchemy import func
 

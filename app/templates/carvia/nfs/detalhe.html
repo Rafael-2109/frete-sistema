@@ -282,6 +282,7 @@
                 <table class="table table-sm table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
+                            <th>Cubagem</th>
                             <th>Codigo</th>
                             <th>Descricao</th>
                             <th>NCM</th>
@@ -294,7 +295,23 @@
                     </thead>
                     <tbody>
                         {% for item in itens %}
+                        {% set cub = cubagem_por_item.get(item.id) %}
                         <tr>
+                            <td>
+                                {% if cub %}
+                                <span class="text-info fw-semibold">{{ cub.peso_cubado_item|numero_br(1) }} kg</span>
+                                <div class="small text-muted" style="white-space: nowrap;">
+                                    {{ cub.modelo }} — {{ cub.comprimento_cm|numero_br(0) }}x{{ cub.largura_cm|numero_br(0) }}x{{ cub.altura_cm|numero_br(0) }} cm
+                                    {% if cub.peso_medio %}
+                                    | {{ cub.peso_medio|numero_br(1) }} kg/un
+                                    {% else %}
+                                    | {{ cub.cubagem_minima|numero_br(0) }} kg/m3
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td><code>{{ item.codigo_produto or '-' }}</code></td>
                             <td>{{ item.descricao or '-' }}</td>
                             <td><small>{{ item.ncm or '-' }}</small></td>
