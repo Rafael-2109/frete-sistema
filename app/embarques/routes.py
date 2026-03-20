@@ -184,6 +184,8 @@ def visualizar_embarque(id):
                 # 🔍 DEBUG: Log para verificar mapeamento correto
                 print(f"[DEBUG EMBARQUE POST] form.itens tem {len(form.itens.entries)} entries")
 
+                itens_nf_removida = set()
+
                 for idx, entry in enumerate(form.itens.entries):
                     # Acessar o subformulário dentro do FormField
                     item_form = entry.form
@@ -212,7 +214,11 @@ def visualizar_embarque(id):
                     print(f"[DEBUG EMBARQUE POST] ✅ Atualizando item {item_id} ({item_existente.cliente}) com NF={item_form.nota_fiscal.data}")
 
                     # ✅ ATUALIZA apenas campos editáveis pelo usuário
-                    item_existente.nota_fiscal = item_form.nota_fiscal.data.strip() if item_form.nota_fiscal.data else None
+                    old_nf = item_existente.nota_fiscal
+                    new_nf = item_form.nota_fiscal.data.strip() if item_form.nota_fiscal.data else None
+                    if old_nf and not new_nf:
+                        itens_nf_removida.add(item_existente.id)
+                    item_existente.nota_fiscal = new_nf
                     item_existente.volumes = int(item_form.volumes.data or 0)
                     item_existente.protocolo_agendamento = item_form.protocolo_agendamento.data.strip() if item_form.protocolo_agendamento.data else None
                     item_existente.data_agenda = item_form.data_agenda.data.strip() if item_form.data_agenda.data else None
@@ -306,7 +312,7 @@ def visualizar_embarque(id):
 
                 # ✅ SINCRONIZAÇÃO SEMPRE: Executa toda vez que salvar o embarque
                 try:
-                    sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id)
+                    sucesso_sync, resultado_sync = sincronizar_nf_embarque_pedido_completa(embarque.id, itens_nf_removida=itens_nf_removida)
                     if sucesso_sync:
                         messages_sync.append(f"🔄 {resultado_sync}")
                     else:
@@ -1494,24 +1500,31 @@ def validar_nf_cliente(item_embarque):
     item_embarque.erro_validacao = None
     return True, None
 
-def sincronizar_nf_embarque_pedido_completa(embarque_id):
+def sincronizar_nf_embarque_pedido_completa(embarque_id, itens_nf_removida=None):
     """
     ✅ FUNÇÃO OTIMIZADA: Sincronização bidirecional entre embarque e pedidos
-    
+
     1. ADICIONA NF no pedido quando preenchida no embarque
-    2. REMOVE NF do pedido quando apagada no embarque  
+    2. REMOVE NF do pedido quando apagada no embarque
     3. ATUALIZA status do pedido conforme situação
     4. TRATAMENTO ESPECIAL para embarques FOB
+
+    Args:
+        embarque_id: ID do embarque a sincronizar
+        itens_nf_removida: set de IDs de EmbarqueItem cuja NF foi removida
+            intencionalmente pelo usuário (evita re-propagação)
     
     Versão otimizada com menos logs e melhor performance.
     """
     
+    itens_nf_removida = itens_nf_removida or set()
+
     try:
         from app import db
         embarque = db.session.get(Embarque,embarque_id) if embarque_id else None
         if not embarque:
             return False, "Embarque não encontrado"
-        
+
         # Detectar se é embarque FOB
         is_embarque_fob = (
             embarque.tipo_carga == 'FOB' or 
@@ -1717,7 +1730,7 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                         sincronizado_nf=True
                     ).first()
 
-                    if sep_sincronizada:
+                    if sep_sincronizada and item.id not in itens_nf_removida:
                         # NF faturada legítima → propagar para EmbarqueItem (não apagar!)
                         item.nota_fiscal = pedido.nf
                         # Limpar nf_cd pois a NF agora está em embarque ativo
@@ -1726,6 +1739,17 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id):
                         ).update({'nf_cd': False})
                         print(f"[SYNC] NF {pedido.nf} propagada para EmbarqueItem (pedido {pedido.num_pedido})")
                         itens_sincronizados += 1
+                    elif item.id in itens_nf_removida:
+                        # NF removida intencionalmente pelo usuário → limpar Separação
+                        Separacao.query.filter_by(
+                            separacao_lote_id=item.separacao_lote_id
+                        ).update({
+                            'numero_nf': None,
+                            'sincronizado_nf': False,
+                            'nf_cd': False
+                        })
+                        print(f"[SYNC] NF removida intencionalmente do EmbarqueItem {item.id} (pedido {pedido.num_pedido})")
+                        itens_removidos += 1
                     else:
                         # NF manual (sincronizado_nf=False) → limpar (comportamento original)
                         Separacao.query.filter_by(
