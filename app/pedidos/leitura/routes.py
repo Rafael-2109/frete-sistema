@@ -805,7 +805,7 @@ def inserir_lote():
             numero_doc,
             s3_path,
             usuario,
-            queue_name='impostos',  # Fila dedicada para não competir com outros jobs
+            queue_name='high',  # Cria pedidos na fila high; impostos enfileirados separadamente
             timeout='60m'  # 60 min — suficiente para ~100 filiais
         )
 

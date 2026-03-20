@@ -1,15 +1,16 @@
 """
 Job RQ para inserção sequencial de pedidos no Odoo.
 
-Processa filiais UMA A UMA: criar pedido → calcular impostos → próxima.
-Garante que nunca há >1 cálculo de impostos rodando no Odoo simultaneamente.
+Processa filiais UMA A UMA: criar pedido → enfileirar impostos → próxima.
+O cálculo de impostos é delegado à fila 'impostos' (1 worker exclusivo),
+garantindo serialização sem bloquear o job de inserção.
 
 Sem este controle, N jobs de impostos rodam em paralelo, acumulam RAM
 e derrubam o Odoo.
 
 Padrão: Fire-and-Poll (P2 do Odoo CLAUDE.md)
 - Criar pedido: fire com timeout 90s, poll por (partner_id + pedido_compra)
-- Calcular impostos: fire com timeout 90s, poll verificando l10n_br_total_tributos > 0
+- Impostos: enfileirados na fila 'impostos' (processados 1 a 1 pelo worker 0)
 - Progresso: atualiza Redis a cada etapa, frontend polla via AJAX
 
 Fonte do padrão: app/recebimento/workers/recebimento_lf_jobs.py
@@ -59,6 +60,7 @@ def inserir_pedidos_lote_job(session_key: str, filiais_dados: list,
         from app.pedidos.integracao_odoo import get_odoo_service
         from app.pedidos.integracao_odoo.models import PedidoImportacaoTemp
         from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+        from app.portal.workers import enqueue_job
         from app import db
 
         total = len(filiais_dados)
@@ -155,29 +157,20 @@ def inserir_pedidos_lote_job(session_key: str, filiais_dados: list,
                 })
                 continue
 
-            # --- Etapa B: Calcular impostos (serializado — 1 por vez) ---
-            _atualizar_progresso(redis_conn, session_key, {
-                'status': 'processando',
-                'total': total,
-                'atual': i + 1,
-                'percentual': percentual,
-                'mensagem': f'Calculando impostos {i + 1}/{total}: {order_name}',
-                'etapa': 'calculando_impostos',
-                'cnpj_atual': cnpj,
-                'resultados': resultados,
-            })
-
+            # --- Etapa B: Enfileirar cálculo de impostos (async) ---
             impostos_msg = ""
             try:
-                impostos_result = calcular_impostos_odoo(order_id, order_name)
-                if impostos_result.get('success'):
-                    tempo_imp = impostos_result.get('tempo_segundos', 0)
-                    impostos_msg = f" | Impostos OK ({tempo_imp:.0f}s)"
-                else:
-                    impostos_msg = f" | Impostos: {impostos_result.get('message', 'falha')}"
+                enqueue_job(
+                    calcular_impostos_odoo,
+                    order_id,
+                    order_name,
+                    queue_name='impostos',
+                    timeout='15m'
+                )
+                impostos_msg = " | Impostos enfileirados"
             except Exception as e:
-                logger.warning(f"[Inserir Lote] Impostos {order_name}: {e}")
-                impostos_msg = f" | Impostos: erro ({e})"
+                logger.warning(f"[Inserir Lote] Erro ao enfileirar impostos {order_name}: {e}")
+                impostos_msg = f" | Impostos: erro ao enfileirar ({e})"
 
             logger.info(
                 f"[Inserir Lote] Filial {i + 1}/{total} ({cnpj}): "

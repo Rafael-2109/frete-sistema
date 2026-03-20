@@ -496,10 +496,9 @@ class OdooIntegrationService:
                 )
 
             # 6. Impostos — NÃO calcular aqui (parâmetro calcular_impostos ignorado)
-            # O cálculo é feito pelo job inserir_pedidos_lote_job que processa
-            # filiais sequencialmente: criar pedido → calcular impostos → próxima.
-            # Se calcular aqui ou em RQ separado, N jobs rodam em paralelo no
-            # Odoo e derrubam o servidor por acúmulo de RAM.
+            # Tanto inserção individual quanto lote ENFILEIRAM calcular_impostos_odoo
+            # na fila 'impostos' (1 worker exclusivo). Isso garante serialização
+            # sem risco de N cálculos paralelos derrubarem o Odoo.
 
             return ResultadoCriacaoPedido(
                 sucesso=True,
