@@ -385,12 +385,11 @@ class ProcessadorFaturamento:
                 mov_criadas = self._criar_movimentacao_sem_separacao(nf, usuario, produtos_por_nf)
                 return True, mov_criadas, 0
         else:
-            # Múltiplos EmbarqueItems - verificar tipo_envio das Separações
-            logger.info(f"🔍 {len(embarque_items)} EmbarqueItems encontrados - analisando tipo_envio")
+            # Múltiplos EmbarqueItems - usar scoring para selecionar melhor lote
+            logger.info(f"🔍 {len(embarque_items)} EmbarqueItems encontrados - calculando score")
 
-            # Coletar lotes e verificar tipo_envio
-            lotes_parciais = []
-            lote_total = None
+            # Coletar todos os lotes candidatos com separações pendentes
+            lotes_candidatos = []
 
             for item in embarque_items:
                 if not item.separacao_lote_id:
@@ -399,41 +398,26 @@ class ProcessadorFaturamento:
                 # Usar cache ou buscar Separações do lote
                 cache_key = f"{item.separacao_lote_id}_{nf.origem}"
                 if cache_key not in cache_separacoes:
-                    # Buscar apenas não sincronizadas
                     cache_separacoes[cache_key] = Separacao.query.filter_by(
                         separacao_lote_id=item.separacao_lote_id,
                         num_pedido=nf.origem,
-                        sincronizado_nf=False,  # IMPORTANTE: apenas não sincronizadas
+                        sincronizado_nf=False,
                     ).all()
 
                 separacoes_lote = cache_separacoes[cache_key]
 
-                # Verificar tipo_envio da primeira Separação
-                separacao = separacoes_lote[0] if separacoes_lote else None
+                if separacoes_lote:
+                    lotes_candidatos.append(item.separacao_lote_id)
+                    logger.info(f"  • Lote {item.separacao_lote_id}: {len(separacoes_lote)} separações pendentes")
 
-                if separacao:
-                    if separacao.tipo_envio == "total":
-                        lote_total = item.separacao_lote_id
-                        logger.info(f"  • Lote {item.separacao_lote_id}: tipo_envio=TOTAL")
-                        break  # Se encontrou total, usar este
-                    else:
-                        lotes_parciais.append(item.separacao_lote_id)
-                        logger.info(f"  • Lote {item.separacao_lote_id}: tipo_envio=PARCIAL")
-
-            # Decisão baseada no tipo_envio
-            if lote_total:
-                # 4.1 da especificação - Separação completa
-                separacao_lote_id = lote_total
-                logger.info(f"✅ Usando lote TOTAL {separacao_lote_id}")
-            elif len(lotes_parciais) == 1:
-                # 4.2 da especificação - Parcial único
-                separacao_lote_id = lotes_parciais[0]
-                logger.info(f"✅ Único lote PARCIAL {separacao_lote_id}")
-            elif len(lotes_parciais) > 1:
-                # 4.3 da especificação - Múltiplos parciais, calcular score
-                logger.info(f"📊 Calculando score para {len(lotes_parciais)} lotes parciais")
+            # Decisão baseada em scoring de produtos
+            if len(lotes_candidatos) == 1:
+                separacao_lote_id = lotes_candidatos[0]
+                logger.info(f"✅ Único lote candidato {separacao_lote_id}")
+            elif len(lotes_candidatos) > 1:
+                logger.info(f"📊 Calculando score para {len(lotes_candidatos)} lotes candidatos")
                 separacao_lote_id = self._calcular_melhor_lote_por_score_simples(
-                    nf, lotes_parciais, cache_separacoes, usuario, produtos_por_nf
+                    nf, lotes_candidatos, cache_separacoes, usuario, produtos_por_nf
                 )
             else:
                 # Nenhum lote válido encontrado
