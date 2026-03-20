@@ -329,7 +329,7 @@ class CarteiraService:
             }
 
     def obter_carteira_pendente(self, data_inicio=None, data_fim=None, pedidos_especificos=None,
-                               modo_incremental=False, minutos_janela=40):
+                               modo_incremental=False, minutos_janela=70):
         """
         Obter carteira pendente do Odoo com filtro combinado inteligente
 
@@ -1759,7 +1759,7 @@ class CarteiraService:
         self,
         usar_filtro_pendente=True,
         modo_incremental=False,
-        minutos_janela=40,
+        minutos_janela=70,
         primeira_execucao=False,
         pedidos_especificos=None
     ):

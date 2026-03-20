@@ -104,7 +104,7 @@ if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
     mkdir -p logs
 
     # Usar versão DEFINITIVA: tempos corretos + services fora do contexto
-    python -m app.scheduler.sincronizacao_incremental_definitiva > logs/sincronizacao_incremental.log 2>&1 &
+    python -m app.scheduler.sincronizacao_incremental_definitiva &
     SYNC_PID=$!
 
     # Aguardar um pouco para verificar se o processo sobreviveu

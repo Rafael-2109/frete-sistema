@@ -11,7 +11,7 @@ VERSÃO FINAL com TODAS as correções:
 Valores CORRETOS:
 - Execução: A cada 30 minutos
 - Faturamento: minutos_status=5760 (96 horas) para verificar status
-- Carteira: minutos_janela=40 (40 minutos)
+- Carteira: minutos_janela=70 (70 minutos = 2×intervalo + 10min gordura)
 
 Autor: Sistema de Fretes
 Data: 2025-09-22
@@ -21,21 +21,30 @@ import logging
 import signal
 import sys
 import os
+import time
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from time import sleep
 from app.utils.timezone import agora_utc_naive
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Dual handler: arquivo (debug in-session) + stderr (capturado pelo Render)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+os.makedirs('logs', exist_ok=True)
+_file_handler = logging.FileHandler('logs/sincronizacao_incremental.log')
+_file_handler.setFormatter(_formatter)
+logger.addHandler(_file_handler)
+
+_stderr_handler = logging.StreamHandler(sys.stderr)
+_stderr_handler.setFormatter(_formatter)
+logger.addHandler(_stderr_handler)
 
 # 🔧 CONFIGURAÇÕES DEFINITIVAS E CORRETAS
 INTERVALO_MINUTOS = int(os.environ.get('SYNC_INTERVAL_MINUTES', 30))
-JANELA_CARTEIRA = int(os.environ.get('JANELA_CARTEIRA', 40))
+JANELA_CARTEIRA = int(os.environ.get('JANELA_CARTEIRA', 70))  # 70min = 2×30min intervalo + 10min gordura
 STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 5760))
 JANELA_REQUISICOES = int(os.environ.get('JANELA_REQUISICOES', 90))  # 90 minutos
 JANELA_PEDIDOS = int(os.environ.get('JANELA_PEDIDOS', 90))  # 90 minutos (mesma janela)
@@ -156,6 +165,7 @@ def executar_sincronizacao():
     """
     global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup
 
+    _t_inicio = time.time()
     logger.info("=" * 60)
     logger.info(f"🔄 SINCRONIZAÇÃO DEFINITIVA - {agora_utc_naive().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 60)
@@ -204,6 +214,7 @@ def executar_sincronizacao():
         sucesso_carteira = False
 
         # 1️⃣ FATURAMENTO - com retry
+        _t_step = time.time()
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"💰 Sincronizando Faturamento (tentativa {tentativa}/{MAX_RETRIES})...")
@@ -257,6 +268,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 1 (Faturamento): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre os services
         try:
             db.session.remove()
@@ -266,6 +279,7 @@ def executar_sincronizacao():
             pass
 
         # 2️⃣ CARTEIRA - com retry
+        _t_step = time.time()
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"📦 Sincronizando Carteira (tentativa {tentativa}/{MAX_RETRIES})...")
@@ -323,6 +337,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 2 (Carteira): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -332,6 +348,7 @@ def executar_sincronizacao():
             pass
 
         # 2.5️⃣ VERIFICAÇÃO DE PEDIDOS EXCLUÍDOS DO ODOO - com retry
+        _t_step = time.time()
         sucesso_verificacao = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -379,6 +396,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 2.5 (Verificação Exclusões): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -388,6 +407,7 @@ def executar_sincronizacao():
             pass
 
         # 3️⃣ REQUISIÇÕES DE COMPRAS - com retry
+        _t_step = time.time()
         sucesso_requisicoes = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -439,6 +459,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 3 (Requisições): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -448,6 +470,7 @@ def executar_sincronizacao():
             pass
 
         # 4️⃣ PEDIDOS DE COMPRAS - com retry
+        _t_step = time.time()
         sucesso_pedidos = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -520,6 +543,8 @@ def executar_sincronizacao():
             except Exception:
                 pass
 
+        logger.info(f"   [TIMER] Step 4 (Pedidos + PO Changes): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -529,6 +554,7 @@ def executar_sincronizacao():
             pass
 
         # 5️⃣ ALOCAÇÕES DE COMPRAS - com retry
+        _t_step = time.time()
         sucesso_alocacoes = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -577,6 +603,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 5 (Alocações): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões antes de Entradas
         try:
             db.session.remove()
@@ -586,6 +614,7 @@ def executar_sincronizacao():
             pass
 
         # 7️⃣ ENTRADAS DE MATERIAIS - com retry
+        _t_step = time.time()
         sucesso_entradas = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -636,6 +665,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 6 (Entradas Materiais): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -645,6 +676,7 @@ def executar_sincronizacao():
             pass
 
         # 7️⃣ CTes - com retry
+        _t_step = time.time()
         sucesso_ctes = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -694,6 +726,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 7 (CTes): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -703,6 +737,7 @@ def executar_sincronizacao():
             pass
 
         # 8️⃣ CONTAS A RECEBER - com retry
+        _t_step = time.time()
         sucesso_contas_receber = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -752,6 +787,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 8 (Contas a Receber): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -761,6 +798,7 @@ def executar_sincronizacao():
             pass
 
         # 9️⃣ BAIXAS/RECONCILIAÇÕES - com retry
+        _t_step = time.time()
         sucesso_baixas = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -810,6 +848,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 9 (Baixas/Reconciliações): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -819,6 +859,7 @@ def executar_sincronizacao():
             pass
 
         # 9️⃣.5️⃣ SINCRONIZAÇÃO COMPLETA DE EXTRATOS - IMPORTAÇÃO + SYNC + VINCULAÇÃO CNAB
+        _t_step = time.time()
         sucesso_extratos = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -890,6 +931,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 9.5 (Extratos): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -899,6 +942,7 @@ def executar_sincronizacao():
             pass
 
         # 🔟 CONTAS A PAGAR - com retry
+        _t_step = time.time()
         sucesso_contas_pagar = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -947,6 +991,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 10 (Contas a Pagar): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -956,6 +1002,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣1️⃣ NFDs DE DEVOLUÇÃO - com retry
+        _t_step = time.time()
         sucesso_nfds = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1007,6 +1054,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 11 (NFDs Devolução): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -1016,6 +1065,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣2️⃣ PALLETS - com retry
+        _t_step = time.time()
         sucesso_pallets = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1072,6 +1122,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 12 (Pallets): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -1081,6 +1133,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣3️⃣ REVERSÕES DE NF - com retry
+        _t_step = time.time()
         sucesso_reversoes = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1130,6 +1183,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 13 (Reversões NF): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -1139,6 +1194,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣4️⃣ SYNC MONITORAMENTO - com retry
+        _t_step = time.time()
         sucesso_monitoramento = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1184,6 +1240,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 14 (Sync Monitoramento): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -1193,6 +1251,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣5️⃣ VALIDAÇÃO DE RECEBIMENTO (FASE 1 + FASE 2) - com retry
+        _t_step = time.time()
         sucesso_validacao_recebimento = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1252,6 +1311,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 15 (Validação Recebimento): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre jobs
         try:
             db.session.remove()
@@ -1261,6 +1322,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣6️⃣ VALIDAÇÃO IBS/CBS (CTes + NF-es) - com retry
+        _t_step = time.time()
         sucesso_validacao_ibscbs = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1309,6 +1371,8 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 16 (Validação IBS/CBS): {time.time() - _t_step:.1f}s")
+
         # Limpar sessão entre services
         try:
             db.session.remove()
@@ -1318,6 +1382,7 @@ def executar_sincronizacao():
             pass
 
         # 1️⃣7️⃣ PICKINGS RECEBIMENTO (Fase 4) - com retry
+        _t_step = time.time()
         sucesso_pickings_recebimento = False
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
@@ -1364,7 +1429,10 @@ def executar_sincronizacao():
                 else:
                     break
 
+        logger.info(f"   [TIMER] Step 17 (Pickings Recebimento): {time.time() - _t_step:.1f}s")
+
         # ── 2️⃣0️⃣ EMBEDDINGS REINDEXAÇÃO (diário, 20º módulo) ──
+        _t_step = time.time()
         sucesso_embeddings = False
         embeddings_executou = False  # True = tentou rodar (hora certa + >24h)
 
@@ -1419,7 +1487,10 @@ def executar_sincronizacao():
                     except Exception:
                         pass
 
+        logger.info(f"   [TIMER] Step 20 (Embeddings): {time.time() - _t_step:.1f}s")
+
         # ── 2️⃣1️⃣ VARREDURA DE SEGURANÇA (diário, 21º módulo) ──
+        _t_step = time.time()
         sucesso_seguranca = False
         seguranca_executou = False  # True = tentou rodar (hora certa + >24h)
 
@@ -1486,7 +1557,10 @@ def executar_sincronizacao():
                     sucesso_seguranca = True  # Desabilitado não é falha
                     _ultima_varredura_seguranca = agora_utc_naive()
 
+        logger.info(f"   [TIMER] Step 21 (Segurança): {time.time() - _t_step:.1f}s")
+
         # ── 2️⃣2️⃣ LIMPEZA KG ENTIDADES ÓRFÃS (semanal, 22º módulo) ──
+        _t_step = time.time()
         sucesso_kg_cleanup = False
         kg_cleanup_executou = False
 
@@ -1529,6 +1603,8 @@ def executar_sincronizacao():
                     except Exception:
                         pass
 
+        logger.info(f"   [TIMER] Step 22 (KG Cleanup): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1537,6 +1613,7 @@ def executar_sincronizacao():
             pass
 
         # Resumo final
+        logger.info(f"   [TIMER] Duração TOTAL: {time.time() - _t_inicio:.1f}s ({(time.time() - _t_inicio)/60:.1f}min)")
         logger.info("=" * 60)
 
         modulos_sync = [sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs, sucesso_pickings_recebimento]
@@ -1610,7 +1687,7 @@ def executar_inicial():
     """
     Execução inicial com janelas maiores para recuperação pós-deploy
     """
-    global JANELA_CARTEIRA, JANELA_FATURAMENTO
+    global JANELA_CARTEIRA
 
     logger.info("🚀 SINCRONIZAÇÃO INICIAL (recuperação pós-deploy)")
     logger.info("   Usando janelas maiores para primeira execução...")
