@@ -518,7 +518,11 @@ class ProcessadorFaturamento:
         # Criar dict para fácil acesso
         nf_produtos_dict = {}
         for prod in produtos_nf:
-            nf_produtos_dict[prod.cod_produto] = float(prod.qtd_produto_faturado)
+            cod = prod.cod_produto
+            if cod in nf_produtos_dict:
+                nf_produtos_dict[cod] += float(prod.qtd_produto_faturado)
+            else:
+                nf_produtos_dict[cod] = float(prod.qtd_produto_faturado)
 
         melhor_score = 0
         melhor_lote = None
@@ -541,36 +545,56 @@ class ProcessadorFaturamento:
             if not separacoes:
                 continue
 
-            # Calcular score e guardar detalhes
+            # Agregar separacoes por cod_produto antes de calcular score
+            sep_produtos_dict = {}
+            for sep in separacoes:
+                cod = sep.cod_produto
+                qtd = float(sep.qtd_saldo or 0)
+                if cod in sep_produtos_dict:
+                    sep_produtos_dict[cod] += qtd
+                else:
+                    sep_produtos_dict[cod] = qtd
+
+            # Calcular score sobre produtos unicos agregados
             score_total = 0
             produtos_matched = 0
+            produtos_extras = 0
             detalhes_produtos = {}
 
-            for sep in separacoes:
-                if sep.cod_produto in nf_produtos_dict:
-                    qtd_nf = nf_produtos_dict[sep.cod_produto]
-                    qtd_sep = float(sep.qtd_saldo or 0)
-
+            for cod, qtd_sep in sep_produtos_dict.items():
+                if cod in nf_produtos_dict:
+                    qtd_nf = nf_produtos_dict[cod]
                     if qtd_sep > 0 and qtd_nf > 0:
-                        # Score baseado na proximidade das quantidades
-                        # 1.0 = quantidades idênticas, 0.0 = completamente diferentes
                         ratio = min(qtd_nf, qtd_sep) / max(qtd_nf, qtd_sep)
                         score_total += ratio
                         produtos_matched += 1
-
-                        # Guardar detalhes para possível justificativa
-                        detalhes_produtos[sep.cod_produto] = {
+                        detalhes_produtos[cod] = {
                             "qtd_separada": qtd_sep,
                             "qtd_faturada": qtd_nf,
                             "qtd_saldo": qtd_sep - qtd_nf if qtd_sep > qtd_nf else 0,
                             "ratio": ratio,
                         }
+                else:
+                    produtos_extras += 1
 
-            # Score médio do lote
+            # Score do lote: coverage * precisao * (1 - penalidade por extras)
             if produtos_matched > 0:
-                score_lote = score_total / len(nf_produtos_dict)  # Normalizar pelo total de produtos na NF
+                coverage = produtos_matched / len(nf_produtos_dict)
+                avg_ratio = score_total / produtos_matched
+                total_sep_produtos = len(sep_produtos_dict)
+
+                # Penalidade por produtos extras (max 20% de reducao)
+                if total_sep_produtos > 0 and produtos_extras > 0:
+                    penalty = 0.2 * (produtos_extras / total_sep_produtos)
+                else:
+                    penalty = 0
+
+                score_lote = coverage * avg_ratio * (1 - penalty)
+
                 logger.info(
-                    f"  Lote {lote_id}: score {score_lote:.2%} ({produtos_matched}/{len(nf_produtos_dict)} produtos)"
+                    f"  Lote {lote_id}: score {score_lote:.2%} "
+                    f"(coverage={produtos_matched}/{len(nf_produtos_dict)}, "
+                    f"avg_ratio={avg_ratio:.2%}, extras={produtos_extras})"
                 )
 
                 if score_lote > melhor_score:
