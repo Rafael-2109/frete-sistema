@@ -127,6 +127,62 @@ PERGUNTA DO USUÁRIO:
 TEAMS_SESSION_TTL_HOURS = 4
 
 
+# ═══════════════════════════════════════════════════════════════
+# HELPERS UX — Model routing e feedback visual
+# ═══════════════════════════════════════════════════════════════
+
+_TOOL_DISPLAY_NAMES = {
+    'mcp__sql__consultar_sql': 'Consultando dados...',
+    'ToolSearch': 'Preparando ferramentas...',
+    'Bash': 'Executando operação...',
+    'Skill': 'Executando skill...',
+    'mcp__render__query_render_postgres': 'Consultando banco...',
+}
+
+
+def _tool_display_name(tool_name: str) -> str:
+    """Retorna label amigável para exibir durante tool call."""
+    if not tool_name:
+        return 'Processando...'
+    for key, label in _TOOL_DISPLAY_NAMES.items():
+        if key in tool_name:
+            return label
+    if 'mcp__' in tool_name:
+        return 'Consultando dados...'
+    return 'Processando...'
+
+
+def _select_model_for_message(mensagem: str) -> str:
+    """Seleciona modelo com base na complexidade da mensagem."""
+    from app.agente.config.feature_flags import (
+        TEAMS_SMART_MODEL_ROUTING, TEAMS_DEFAULT_MODEL, TEAMS_FAST_MODEL,
+    )
+    if not TEAMS_SMART_MODEL_ROUTING:
+        return TEAMS_DEFAULT_MODEL
+
+    msg_lower = mensagem.lower().strip()
+    msg_words = len(msg_lower.split())
+
+    # Padrões que REQUEREM Opus (análise complexa)
+    opus_patterns = [
+        'analisa', 'analise', 'encontre', 'case a rota', 'case com',
+        'crie separação', 'cria separação', 'criar separação',
+        'pedidos na mesma rota', 'quanto custa', 'cotação',
+        'programação', 'produção vs', 'disponibilidade',
+        'rastreie', 'rastrear', 'auditoria',
+    ]
+    for pattern in opus_patterns:
+        if pattern in msg_lower:
+            return TEAMS_DEFAULT_MODEL
+
+    # Mensagens curtas sem complexidade → modelo rápido
+    if msg_words <= 12:
+        return TEAMS_FAST_MODEL
+
+    # Default: modelo principal para mensagens longas/incertas
+    return TEAMS_DEFAULT_MODEL
+
+
 def _commit_with_retry(log_prefix: str = "[TEAMS]") -> bool:
     """
     Commit com retry para conexoes PostgreSQL stale (SSL dropped pelo Render).
@@ -231,6 +287,13 @@ def processar_mensagem_bot(
             pass
 
     try:
+        # C1: Smart model routing
+        selected_model = _select_model_for_message(mensagem)
+        logger.info(
+            f"[TEAMS-BOT] Model routing: {selected_model} "
+            f"para msg ({len(mensagem.split())} palavras)"
+        )
+
         # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
         resposta_texto, new_sdk_session_id, _, _, _, _ = _obter_resposta_agente(
             mensagem=mensagem,
@@ -239,6 +302,7 @@ def processar_mensagem_bot(
             user_id=teams_user_id,
             can_use_tool=agent_can_use_tool,
             session=session,
+            model=selected_model,
         )
 
         # Salvar mensagens e atualizar sdk_session_id
@@ -473,6 +537,7 @@ def _obter_resposta_agente(
     user_id: int = None,
     can_use_tool=None,
     session=None,
+    model: str = None,
 ) -> Tuple[Optional[str], Optional[str], int, int, List[str], float]:
     """
     Obtem resposta do Agente Claude SDK.
@@ -514,8 +579,10 @@ def _obter_resposta_agente(
     contexto_teams = _get_teams_context()
     prompt_completo = contexto_teams + mensagem
 
-    # Modelo padrão para Teams (Sonnet por velocidade)
-    from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
+    # Modelo: usar override se fornecido, senão padrão
+    if not model:
+        from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
+        model = TEAMS_DEFAULT_MODEL
 
     # Pool key para path persistente (ClaudeSDKClient por sessão)
     our_session_id = session.session_id if session else None
@@ -533,7 +600,7 @@ def _obter_resposta_agente(
                     user_name=usuario,
                     sdk_session_id=sdk_session_id,
                     user_id=user_id,
-                    model=TEAMS_DEFAULT_MODEL,
+                    model=model,
                     can_use_tool=can_use_tool,
                     our_session_id=our_session_id,
                 ),
@@ -833,6 +900,7 @@ def _obter_resposta_agente_streaming(
     can_use_tool=None,
     session=None,
     app=None,
+    model: str = None,
 ) -> Tuple[Optional[str], Optional[str], int, int, List[str], float]:
     """
     Obtem resposta do Agente Claude SDK com flush parcial progressivo ao DB.
@@ -855,9 +923,12 @@ def _obter_resposta_agente_streaming(
         Tuple[resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd]
     """
     from app.agente.config.feature_flags import (
-        TEAMS_DEFAULT_MODEL,
         TEAMS_STREAM_FLUSH_INTERVAL,
+        TEAMS_TOOL_STATUS_FEEDBACK,
     )
+    if not model:
+        from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
+        model = TEAMS_DEFAULT_MODEL
 
     try:
         from app.agente.sdk import get_client
@@ -898,6 +969,7 @@ def _obter_resposta_agente_streaming(
             result_session_id = sdk_session_id
             errors = []
             tools_used = []
+            tool_status_shown = False
             input_tokens = 0
             output_tokens = 0
             cost_usd = 0.0
@@ -932,7 +1004,7 @@ def _obter_resposta_agente_streaming(
             stream_iter = client.stream_response(
                 prompt=prompt_completo,
                 user_name=usuario,
-                model=TEAMS_DEFAULT_MODEL,
+                model=model,
                 sdk_session_id=sdk_session_id,
                 can_use_tool=can_use_tool,
                 user_id=user_id,
@@ -985,6 +1057,9 @@ def _obter_resposta_agente_streaming(
                     result_session_id = event.content.get('session_id')
 
                 elif event.type == 'text':
+                    # D1: Se tinha status de tool, texto real substitui
+                    if tool_status_shown and not full_text:
+                        tool_status_shown = False
                     full_text += event.content
 
                     # Flush periodico ao DB
@@ -1003,15 +1078,22 @@ def _obter_resposta_agente_streaming(
                     if tool_name and tool_name not in tools_used:
                         tools_used.append(tool_name)
 
-                    # Flush imediato antes de tool_call — texto fica visivel
-                    # enquanto tool executa (pode levar 5-30s)
-                    if full_text:
+                    # A1: Status visual durante tool calls (quando texto ainda não gerado)
+                    if TEAMS_TOOL_STATUS_FEEDBACK and not full_text:
+                        tool_label = _tool_display_name(tool_name)
+                        _safe_flush(f"_{tool_label}_")
+                        tool_status_shown = True
+                        logger.debug(
+                            f"[TEAMS-STREAM] Tool status: "
+                            f"task={task_id[:8]}... tool={tool_name}"
+                        )
+                    elif full_text:
                         _safe_flush(full_text)
-                        last_flush_time = time.monotonic()
                         logger.debug(
                             f"[TEAMS-STREAM] Flush pre-tool: "
                             f"task={task_id[:8]}... tool={event.content}"
                         )
+                    last_flush_time = time.monotonic()
 
                 elif event.type == 'error':
                     error_content = event.content if isinstance(event.content, str) else str(event.content)
@@ -1209,6 +1291,13 @@ def process_teams_task_async(
             tools_used: List[str] = []
             cost_usd = 0.0
 
+            # C1: Smart model routing
+            selected_model = _select_model_for_message(mensagem)
+            logger.info(
+                f"[TEAMS-ASYNC] Model routing: {selected_model} "
+                f"para msg ({len(mensagem.split())} palavras)"
+            )
+
             for attempt in range(max_retries):
                 try:
                     if TEAMS_PROGRESSIVE_STREAMING:
@@ -1221,6 +1310,7 @@ def process_teams_task_async(
                             can_use_tool=agent_can_use_tool,
                             session=session,
                             app=app,
+                            model=selected_model,
                         )
                     else:
                         resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd = _obter_resposta_agente(
@@ -1230,6 +1320,7 @@ def process_teams_task_async(
                             user_id=teams_user_id,
                             can_use_tool=agent_can_use_tool,
                             session=session,
+                            model=selected_model,
                         )
                     if resposta_texto:
                         break
@@ -1270,14 +1361,13 @@ def process_teams_task_async(
 
                     # GAP 2: Custo — SDK prioritário, fallback cálculo local
                     from app.agente.routes import _calculate_cost
-                    from app.agente.config.feature_flags import TEAMS_DEFAULT_MODEL
                     sdk_cost = cost_usd
-                    calc_cost = _calculate_cost(TEAMS_DEFAULT_MODEL, input_tokens, output_tokens)
+                    calc_cost = _calculate_cost(selected_model, input_tokens, output_tokens)
                     final_cost = sdk_cost if sdk_cost and sdk_cost > 0 else calc_cost
                     session.total_cost_usd = float(session.total_cost_usd or 0) + final_cost
 
-                    # GAP 6: Model
-                    session.model = TEAMS_DEFAULT_MODEL
+                    # GAP 6: Model (registra modelo efetivamente usado)
+                    session.model = selected_model
 
                     logger.info(
                         f"[TEAMS-ASYNC] Custo sessão {teams_session_id[:8]}: "

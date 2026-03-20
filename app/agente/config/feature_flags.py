@@ -221,6 +221,17 @@ TEAMS_PROGRESSIVE_STREAMING = os.getenv("TEAMS_PROGRESSIVE_STREAMING", "true").l
 # Intervalo em segundos entre flushes de texto parcial ao DB
 TEAMS_STREAM_FLUSH_INTERVAL = float(os.getenv("TEAMS_STREAM_FLUSH_INTERVAL", "4.0"))
 
+# Smart model routing: mensagens simples usam Sonnet (15-25s), complexas Opus (60-90s)
+# Desativar para voltar ao comportamento anterior (tudo Opus)
+TEAMS_SMART_MODEL_ROUTING = os.getenv("TEAMS_SMART_MODEL_ROUTING", "true").lower() == "true"
+
+# Modelo rápido para mensagens simples (usado quando SMART_MODEL_ROUTING=true)
+TEAMS_FAST_MODEL = os.getenv("TEAMS_FAST_MODEL", "claude-sonnet-4-6")
+
+# Feedback visual de tool calls: mostra "Consultando dados..." durante execução de tools
+# Desativar se causar flickering ou problemas visuais no Teams
+TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").lower() == "true"
+
 # ====================================================================
 # Hooks Expandidos (P3)
 # ====================================================================

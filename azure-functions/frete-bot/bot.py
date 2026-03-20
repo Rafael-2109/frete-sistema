@@ -56,9 +56,9 @@ BACKEND_API_KEY = os.environ.get("BACKEND_API_KEY", "")
 REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "300"))
 
 # Polling config
-POLL_INTERVAL_PROCESSING = float(os.environ.get("POLL_INTERVAL_PROCESSING", "3"))
+POLL_INTERVAL_PROCESSING = float(os.environ.get("POLL_INTERVAL_PROCESSING", "1.5"))
 POLL_INTERVAL_AWAITING = float(os.environ.get("POLL_INTERVAL_AWAITING", "5"))
-POLL_MAX_ATTEMPTS = int(os.environ.get("POLL_MAX_ATTEMPTS", "100"))  # 100 × 3s = 5 min
+POLL_MAX_ATTEMPTS = int(os.environ.get("POLL_MAX_ATTEMPTS", "200"))  # 200 × 1.5s = 5 min
 
 # Split config
 MAX_MESSAGE_LENGTH = int(os.environ.get("MAX_MESSAGE_LENGTH", "3500"))
@@ -566,7 +566,7 @@ async def _poll_and_respond(
                             )
                 elif not partial_text:
                     # Sem texto parcial: typing indicator classico a cada 3 polls (~9s)
-                    if poll_count % 3 == 0:
+                    if True:  # Typing a cada poll
                         try:
                             await turn_context.send_activity(
                                 Activity(type=ActivityTypes.typing)
