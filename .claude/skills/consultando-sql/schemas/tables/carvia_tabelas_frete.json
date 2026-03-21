@@ -135,17 +135,17 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_tf_uf",
+      "name": "ix_carvia_tabelas_frete_grupo_cliente_id",
       "columns": [
-        "uf_origem",
-        "uf_destino"
+        "grupo_cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_tabelas_frete_grupo_cliente_id",
+      "name": "ix_carvia_tf_uf",
       "columns": [
-        "grupo_cliente_id"
+        "uf_origem",
+        "uf_destino"
       ],
       "unique": false
     }

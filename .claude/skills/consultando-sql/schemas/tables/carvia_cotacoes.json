@@ -162,9 +162,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cotacoes_cliente_id",
+      "name": "ix_carvia_cotacoes_numero_cotacao",
       "columns": [
-        "cliente_id"
+        "numero_cotacao"
       ],
       "unique": false
     },
@@ -176,9 +176,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_numero_cotacao",
+      "name": "ix_carvia_cotacoes_cliente_id",
       "columns": [
-        "numero_cotacao"
+        "cliente_id"
       ],
       "unique": false
     }

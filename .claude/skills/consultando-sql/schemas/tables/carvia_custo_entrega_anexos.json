@@ -67,16 +67,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_custo_entrega_anexos_custo_entrega_id",
+      "name": "ix_carvia_custo_entrega_anexos_ativo",
       "columns": [
-        "custo_entrega_id"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custo_entrega_anexos_ativo",
+      "name": "ix_carvia_custo_entrega_anexos_custo_entrega_id",
       "columns": [
-        "ativo"
+        "custo_entrega_id"
       ],
       "unique": false
     }

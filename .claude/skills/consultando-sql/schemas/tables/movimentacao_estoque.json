@@ -246,20 +246,6 @@
   ],
   "indices": [
     {
-      "name": "ix_movimentacao_estoque_ordem_producao",
-      "columns": [
-        "ordem_producao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_movimentacao_tipo_data",
       "columns": [
         "tipo_movimentacao",
@@ -482,6 +468,20 @@
       "name": "ix_movimentacao_estoque_odoo_picking_id",
       "columns": [
         "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_ordem_producao",
+      "columns": [
+        "ordem_producao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
       ],
       "unique": false
     }

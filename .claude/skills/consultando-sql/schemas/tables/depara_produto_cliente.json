@@ -87,9 +87,9 @@
   ],
   "indices": [
     {
-      "name": "ix_depara_produto_cliente_prefixo_cnpj",
+      "name": "idx_depara_nosso_codigo",
       "columns": [
-        "prefixo_cnpj"
+        "nosso_codigo"
       ],
       "unique": false
     },
@@ -108,14 +108,14 @@
       "unique": false
     },
     {
-      "name": "ix_depara_produto_cliente_nosso_codigo",
+      "name": "ix_depara_produto_cliente_prefixo_cnpj",
       "columns": [
-        "nosso_codigo"
+        "prefixo_cnpj"
       ],
       "unique": false
     },
     {
-      "name": "idx_depara_nosso_codigo",
+      "name": "ix_depara_produto_cliente_nosso_codigo",
       "columns": [
         "nosso_codigo"
       ],

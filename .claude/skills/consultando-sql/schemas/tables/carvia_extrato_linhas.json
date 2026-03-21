@@ -90,9 +90,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
+      "name": "ix_carvia_extrato_linhas_status_conciliacao",
       "columns": [
-        "arquivo_ofx"
+        "status_conciliacao"
       ],
       "unique": false
     },
@@ -104,9 +104,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_status_conciliacao",
+      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
       "columns": [
-        "status_conciliacao"
+        "arquivo_ofx"
       ],
       "unique": false
     }

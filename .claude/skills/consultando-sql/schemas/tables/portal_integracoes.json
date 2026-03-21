@@ -112,16 +112,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_job_id",
+      "name": "ix_portal_integracoes_lote_id",
       "columns": [
-        "job_id"
+        "lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_lote_id",
+      "name": "ix_portal_integracoes_job_id",
       "columns": [
-        "lote_id"
+        "job_id"
       ],
       "unique": false
     }
