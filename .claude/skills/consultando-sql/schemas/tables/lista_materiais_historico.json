@@ -78,17 +78,30 @@
   ],
   "indices": [
     {
-      "name": "idx_historico_operacao_data",
+      "name": "ix_lista_materiais_historico_cod_produto_produzido",
       "columns": [
-        "operacao",
+        "cod_produto_produzido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_operacao",
+      "columns": [
+        "operacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_alterado_em",
+      "columns": [
         "alterado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_por",
+      "name": "ix_lista_materiais_historico_lista_materiais_id",
       "columns": [
-        "alterado_por"
+        "lista_materiais_id"
       ],
       "unique": false
     },
@@ -101,37 +114,24 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_cod_produto_produzido",
+      "name": "ix_lista_materiais_historico_cod_produto_componente",
       "columns": [
-        "cod_produto_produzido"
+        "cod_produto_componente"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_em",
+      "name": "idx_historico_operacao_data",
       "columns": [
+        "operacao",
         "alterado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_operacao",
+      "name": "ix_lista_materiais_historico_alterado_por",
       "columns": [
-        "operacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lista_materiais_historico_lista_materiais_id",
-      "columns": [
-        "lista_materiais_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lista_materiais_historico_cod_produto_componente",
-      "columns": [
-        "cod_produto_componente"
+        "alterado_por"
       ],
       "unique": false
     }

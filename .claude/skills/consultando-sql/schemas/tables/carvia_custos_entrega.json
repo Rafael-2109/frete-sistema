@@ -69,6 +69,11 @@
       "type": "timestamp"
     },
     {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → carvia_fretes.id"
+    },
+    {
       "name": "total_conciliado",
       "type": "numeric(15,2)",
       "nullable": false,
@@ -108,23 +113,13 @@
     {
       "column": "cte_complementar_id",
       "references": "carvia_cte_complementares.id"
+    },
+    {
+      "column": "frete_id",
+      "references": "carvia_fretes.id"
     }
   ],
   "indices": [
-    {
-      "name": "ix_carvia_custos_entrega_operacao_id",
-      "columns": [
-        "operacao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_cte_complementar_id",
-      "columns": [
-        "cte_complementar_id"
-      ],
-      "unique": false
-    },
     {
       "name": "ix_carvia_custos_entrega_numero_custo",
       "columns": [
@@ -143,6 +138,27 @@
       "name": "ix_carvia_custos_entrega_tipo_custo",
       "columns": [
         "tipo_custo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "columns": [
+        "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     }

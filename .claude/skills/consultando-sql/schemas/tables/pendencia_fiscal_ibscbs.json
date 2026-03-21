@@ -186,16 +186,9 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_ncm_prefixo",
+      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
       "columns": [
-        "ncm_prefixo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
-      "columns": [
-        "cte_id"
+        "tipo_documento"
       ],
       "unique": false
     },
@@ -207,9 +200,9 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
+      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
       "columns": [
-        "tipo_documento"
+        "cte_id"
       ],
       "unique": false
     },
@@ -217,6 +210,13 @@
       "name": "ix_pendencia_fiscal_ibscbs_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_ncm_prefixo",
+      "columns": [
+        "ncm_prefixo"
       ],
       "unique": false
     }

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 234,
+  "total_relationships": 242,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -153,6 +153,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_cte_complementares",
+      "from_column": "frete_id",
+      "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_custo_entrega_anexos",
       "from_column": "custo_entrega_id",
       "to_table": "carvia_custos_entrega",
@@ -168,6 +174,12 @@
       "from_table": "carvia_custos_entrega",
       "from_column": "cte_complementar_id",
       "to_table": "carvia_cte_complementares",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "frete_id",
+      "to_table": "carvia_fretes",
       "to_column": "id"
     },
     {
@@ -216,6 +228,42 @@
       "from_table": "carvia_faturas_transportadora",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "fatura_cliente_id",
+      "to_table": "carvia_faturas_cliente",
       "to_column": "id"
     },
     {

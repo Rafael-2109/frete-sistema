@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 163,
+  "total_tabelas": 164,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -400,6 +400,15 @@
         "transportadora_id",
         "numero_fatura",
         "data_emissao"
+      ]
+    },
+    {
+      "name": "carvia_fretes",
+      "description": "Tabela carvia_fretes",
+      "key_fields": [
+        "embarque_id",
+        "transportadora_id",
+        "cnpj_emitente"
       ]
     },
     {
