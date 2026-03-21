@@ -91,9 +91,9 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_cnpj",
+      "name": "ix_fila_agendamento_sendas_data_agendamento",
       "columns": [
-        "cnpj"
+        "data_agendamento"
       ],
       "unique": false
     },
@@ -107,9 +107,9 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_data_agendamento",
+      "name": "ix_fila_agendamento_sendas_cnpj",
       "columns": [
-        "data_agendamento"
+        "cnpj"
       ],
       "unique": false
     }

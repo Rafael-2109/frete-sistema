@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 223,
+  "total_relationships": 234,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -87,9 +87,57 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_cliente_enderecos",
+      "from_column": "cliente_id",
+      "to_table": "carvia_clientes",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_conciliacoes",
       "from_column": "extrato_linha_id",
       "to_table": "carvia_extrato_linhas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacao_motos",
+      "from_column": "cotacao_id",
+      "to_table": "carvia_cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacao_motos",
+      "from_column": "modelo_moto_id",
+      "to_table": "carvia_modelos_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacao_motos",
+      "from_column": "categoria_moto_id",
+      "to_table": "carvia_categorias_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacoes",
+      "from_column": "cliente_id",
+      "to_table": "carvia_clientes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacoes",
+      "from_column": "endereco_origem_id",
+      "to_table": "carvia_cliente_enderecos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacoes",
+      "from_column": "endereco_destino_id",
+      "to_table": "carvia_cliente_enderecos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacoes",
+      "from_column": "tabela_carvia_id",
+      "to_table": "carvia_tabelas_frete",
       "to_column": "id"
     },
     {
@@ -204,6 +252,24 @@
       "from_table": "carvia_operacoes",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_pedido_itens",
+      "from_column": "pedido_id",
+      "to_table": "carvia_pedidos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_pedido_itens",
+      "from_column": "modelo_moto_id",
+      "to_table": "carvia_modelos_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_pedidos",
+      "from_column": "cotacao_id",
+      "to_table": "carvia_cotacoes",
       "to_column": "id"
     },
     {

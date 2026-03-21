@@ -53,9 +53,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_audit_executado_em",
+      "name": "ix_carvia_audit_acao",
       "columns": [
-        "executado_em"
+        "acao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_audit_executado_por",
+      "columns": [
+        "executado_por"
       ],
       "unique": false
     },
@@ -68,16 +75,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_audit_executado_por",
+      "name": "ix_carvia_audit_executado_em",
       "columns": [
-        "executado_por"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_audit_acao",
-      "columns": [
-        "acao"
+        "executado_em"
       ],
       "unique": false
     }

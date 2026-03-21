@@ -1,0 +1,140 @@
+{
+  "name": "carvia_cliente_enderecos",
+  "description": "Tabela carvia_cliente_enderecos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "cliente_id",
+      "type": "integer",
+      "description": "FK → carvia_clientes.id",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "razao_social",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "receita_uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "receita_cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "receita_logradouro",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "receita_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "receita_bairro",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "receita_cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "receita_complemento",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "fisico_uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "fisico_cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "fisico_logradouro",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "fisico_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "fisico_bairro",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "fisico_cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "fisico_complemento",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "principal",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cliente_id",
+      "references": "carvia_clientes.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "cliente_id",
+      "cnpj",
+      "tipo"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_cliente_enderecos_cliente_id",
+      "columns": [
+        "cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cliente_enderecos_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_endereco_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    }
+  ]
+}

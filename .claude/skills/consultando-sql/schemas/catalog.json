@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 155,
+  "total_tabelas": 163,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -250,6 +250,24 @@
       ]
     },
     {
+      "name": "carvia_cliente_enderecos",
+      "description": "Tabela carvia_cliente_enderecos",
+      "key_fields": [
+        "cliente_id",
+        "cnpj",
+        "razao_social"
+      ]
+    },
+    {
+      "name": "carvia_clientes",
+      "description": "Tabela carvia_clientes",
+      "key_fields": [
+        "nome_comercial",
+        "observacoes",
+        "criado_por"
+      ]
+    },
+    {
       "name": "carvia_conciliacoes",
       "description": "Tabela carvia_conciliacoes",
       "key_fields": [
@@ -259,12 +277,39 @@
       ]
     },
     {
+      "name": "carvia_config",
+      "description": "Tabela carvia_config",
+      "key_fields": [
+        "chave",
+        "valor",
+        "descricao"
+      ]
+    },
+    {
       "name": "carvia_conta_movimentacoes",
       "description": "Tabela carvia_conta_movimentacoes",
       "key_fields": [
         "tipo_doc",
         "doc_id",
         "tipo_movimento"
+      ]
+    },
+    {
+      "name": "carvia_cotacao_motos",
+      "description": "Tabela carvia_cotacao_motos",
+      "key_fields": [
+        "cotacao_id",
+        "modelo_moto_id",
+        "categoria_moto_id"
+      ]
+    },
+    {
+      "name": "carvia_cotacoes",
+      "description": "Tabela carvia_cotacoes",
+      "key_fields": [
+        "numero_cotacao",
+        "cliente_id",
+        "endereco_origem_id"
       ]
     },
     {
@@ -420,12 +465,39 @@
       ]
     },
     {
+      "name": "carvia_pedido_itens",
+      "description": "Tabela carvia_pedido_itens",
+      "key_fields": [
+        "pedido_id",
+        "modelo_moto_id",
+        "descricao"
+      ]
+    },
+    {
+      "name": "carvia_pedidos",
+      "description": "Tabela carvia_pedidos",
+      "key_fields": [
+        "numero_pedido",
+        "cotacao_id",
+        "filial"
+      ]
+    },
+    {
       "name": "carvia_precos_categoria_moto",
       "description": "Tabela carvia_precos_categoria_moto",
       "key_fields": [
         "tabela_frete_id",
         "categoria_moto_id",
         "valor_unitario"
+      ]
+    },
+    {
+      "name": "carvia_receitas",
+      "description": "Tabela carvia_receitas",
+      "key_fields": [
+        "tipo_receita",
+        "descricao",
+        "valor"
       ]
     },
     {

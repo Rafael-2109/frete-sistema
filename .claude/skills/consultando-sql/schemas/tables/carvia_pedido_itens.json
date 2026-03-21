@@ -1,0 +1,66 @@
+{
+  "name": "carvia_pedido_itens",
+  "description": "Tabela carvia_pedido_itens",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pedido_id",
+      "type": "integer",
+      "description": "FK → carvia_pedidos.id",
+      "nullable": false
+    },
+    {
+      "name": "modelo_moto_id",
+      "type": "integer",
+      "description": "FK → carvia_modelos_moto.id"
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "quantidade",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "valor_unitario",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pedido_id",
+      "references": "carvia_pedidos.id"
+    },
+    {
+      "column": "modelo_moto_id",
+      "references": "carvia_modelos_moto.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_pedido_itens_pedido_id",
+      "columns": [
+        "pedido_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "carvia_config",
+  "description": "Tabela carvia_config",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "chave",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ]
+}

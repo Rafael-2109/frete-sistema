@@ -1,0 +1,186 @@
+{
+  "name": "carvia_cotacoes",
+  "description": "Tabela carvia_cotacoes",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_cotacao",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "cliente_id",
+      "type": "integer",
+      "description": "FK → carvia_clientes.id",
+      "nullable": false
+    },
+    {
+      "name": "endereco_origem_id",
+      "type": "integer",
+      "description": "FK → carvia_cliente_enderecos.id",
+      "nullable": false
+    },
+    {
+      "name": "endereco_destino_id",
+      "type": "integer",
+      "description": "FK → carvia_cliente_enderecos.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo_material",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "peso",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "valor_mercadoria",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "dimensao_c",
+      "type": "numeric(10,4)"
+    },
+    {
+      "name": "dimensao_l",
+      "type": "numeric(10,4)"
+    },
+    {
+      "name": "dimensao_a",
+      "type": "numeric(10,4)"
+    },
+    {
+      "name": "peso_cubado",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "volumes",
+      "type": "integer"
+    },
+    {
+      "name": "valor_tabela",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "percentual_desconto",
+      "type": "numeric(5,2)",
+      "default": 0
+    },
+    {
+      "name": "valor_descontado",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_final_aprovado",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "tabela_carvia_id",
+      "type": "integer",
+      "description": "FK → carvia_tabelas_frete.id"
+    },
+    {
+      "name": "dentro_tabela",
+      "type": "boolean"
+    },
+    {
+      "name": "detalhes_calculo",
+      "type": "json"
+    },
+    {
+      "name": "data_cotacao",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "data_expedicao",
+      "type": "date"
+    },
+    {
+      "name": "data_agenda",
+      "type": "date"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "RASCUNHO"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cliente_id",
+      "references": "carvia_clientes.id"
+    },
+    {
+      "column": "endereco_origem_id",
+      "references": "carvia_cliente_enderecos.id"
+    },
+    {
+      "column": "endereco_destino_id",
+      "references": "carvia_cliente_enderecos.id"
+    },
+    {
+      "column": "tabela_carvia_id",
+      "references": "carvia_tabelas_frete.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_cotacoes_cliente_id",
+      "columns": [
+        "cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cotacoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cotacoes_numero_cotacao",
+      "columns": [
+        "numero_cotacao"
+      ],
+      "unique": false
+    }
+  ]
+}
