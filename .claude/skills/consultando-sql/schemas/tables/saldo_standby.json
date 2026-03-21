@@ -119,16 +119,16 @@
   ],
   "indices": [
     {
-      "name": "ix_saldo_standby_status_standby",
+      "name": "ix_saldo_standby_origem_separacao_lote_id",
       "columns": [
-        "status_standby"
+        "origem_separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cod_produto",
+      "name": "ix_saldo_standby_num_pedido",
       "columns": [
-        "cod_produto"
+        "num_pedido"
       ],
       "unique": false
     },
@@ -147,16 +147,16 @@
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_num_pedido",
+      "name": "ix_saldo_standby_cod_produto",
       "columns": [
-        "num_pedido"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_origem_separacao_lote_id",
+      "name": "ix_saldo_standby_status_standby",
       "columns": [
-        "origem_separacao_lote_id"
+        "status_standby"
       ],
       "unique": false
     }

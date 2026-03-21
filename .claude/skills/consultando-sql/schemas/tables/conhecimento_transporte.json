@@ -298,13 +298,6 @@
       "unique": false
     },
     {
-      "name": "idx_cte_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_conhecimento_transporte_numero_cte",
       "columns": [
         "numero_cte"
@@ -319,6 +312,13 @@
       "unique": false
     },
     {
+      "name": "idx_cte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cte_cnpj_remetente",
       "columns": [
         "cnpj_remetente"
@@ -326,16 +326,16 @@
       "unique": false
     },
     {
-      "name": "idx_cte_cnpj_destinatario",
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
       "columns": [
-        "cnpj_destinatario"
+        "cte_complementa_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "name": "idx_cte_cnpj_destinatario",
       "columns": [
-        "cte_complementa_id"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -354,16 +354,16 @@
       "unique": false
     },
     {
-      "name": "idx_cte_status",
+      "name": "ix_conhecimento_transporte_data_emissao",
       "columns": [
-        "odoo_status_codigo"
+        "data_emissao"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_data_emissao",
+      "name": "idx_cte_status",
       "columns": [
-        "data_emissao"
+        "odoo_status_codigo"
       ],
       "unique": false
     },

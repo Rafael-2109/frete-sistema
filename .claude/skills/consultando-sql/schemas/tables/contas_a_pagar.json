@@ -165,9 +165,16 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_pagar_odoo_move_id",
+      "name": "ix_contas_a_pagar_empresa",
       "columns": [
-        "odoo_move_id"
+        "empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_vencimento",
+      "columns": [
+        "vencimento"
       ],
       "unique": false
     },
@@ -186,6 +193,13 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_pagar_odoo_move_id",
+      "columns": [
+        "odoo_move_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -200,16 +214,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_vencimento",
+      "name": "ix_contas_a_pagar_parcela",
       "columns": [
-        "vencimento"
+        "parcela"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_parcela",
+      "name": "ix_contas_a_pagar_vencimento",
       "columns": [
-        "parcela"
+        "vencimento"
       ],
       "unique": false
     },
@@ -228,11 +242,11 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_vencimento",
+      "name": "ix_contas_a_pagar_odoo_line_id",
       "columns": [
-        "vencimento"
+        "odoo_line_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_contas_a_pagar_cnpj",
@@ -242,23 +256,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "idx_conta_pagar_cnpj",
       "columns": [
         "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_empresa",
-      "columns": [
-        "empresa"
       ],
       "unique": false
     }

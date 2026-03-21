@@ -122,13 +122,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_pendente_tagplus_origem",
-      "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_pendente_tagplus_numero_nf",
       "columns": [
         "numero_nf"
@@ -161,6 +154,13 @@
       "name": "ix_nf_pendente_tagplus_importado",
       "columns": [
         "importado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_origem",
+      "columns": [
+        "origem"
       ],
       "unique": false
     }

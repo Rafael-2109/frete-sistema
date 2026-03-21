@@ -179,6 +179,16 @@
       "description": "Armazena erros como \"CNPJ_DIFERENTE\", etc."
     },
     {
+      "name": "provisorio",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "carvia_cotacao_id",
+      "type": "integer"
+    },
+    {
       "name": "nf_pallet_cliente",
       "type": "varchar(20)",
       "description": "NF remessa para cliente"
@@ -215,6 +225,13 @@
       "name": "ix_embarque_itens_separacao_lote_id",
       "columns": [
         "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_embarque_itens_carvia_cotacao_id",
+      "columns": [
+        "carvia_cotacao_id"
       ],
       "unique": false
     }

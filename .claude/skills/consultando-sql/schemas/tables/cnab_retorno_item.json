@@ -172,6 +172,13 @@
       "unique": false
     },
     {
+      "name": "ix_cnab_retorno_item_conta_a_receber_id",
+      "columns": [
+        "conta_a_receber_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cnab_item_seu_numero",
       "columns": [
         "seu_numero"
@@ -218,13 +225,6 @@
       "name": "ix_cnab_retorno_item_extrato_item_id",
       "columns": [
         "extrato_item_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cnab_retorno_item_conta_a_receber_id",
-      "columns": [
-        "conta_a_receber_id"
       ],
       "unique": false
     },
