@@ -71,16 +71,16 @@
       "unique": false
     },
     {
-      "name": "ix_recursos_producao_linha_producao",
+      "name": "ix_recursos_producao_cod_produto",
       "columns": [
-        "linha_producao"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_recursos_producao_cod_produto",
+      "name": "ix_recursos_producao_linha_producao",
       "columns": [
-        "cod_produto"
+        "linha_producao"
       ],
       "unique": false
     }

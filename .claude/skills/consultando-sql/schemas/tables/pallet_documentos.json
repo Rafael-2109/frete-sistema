@@ -121,17 +121,17 @@
   ],
   "indices": [
     {
-      "name": "idx_documento_tipo_recebido",
+      "name": "ix_pallet_documentos_cnpj_emissor",
       "columns": [
-        "tipo",
-        "recebido"
+        "cnpj_emissor"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_documentos_cnpj_emissor",
+      "name": "idx_documento_emissor",
       "columns": [
-        "cnpj_emissor"
+        "cnpj_emissor",
+        "tipo"
       ],
       "unique": false
     },
@@ -143,17 +143,17 @@
       "unique": false
     },
     {
-      "name": "idx_documento_validade",
+      "name": "idx_documento_tipo_recebido",
       "columns": [
-        "data_validade"
+        "tipo",
+        "recebido"
       ],
       "unique": false
     },
     {
-      "name": "idx_documento_emissor",
+      "name": "idx_documento_validade",
       "columns": [
-        "cnpj_emissor",
-        "tipo"
+        "data_validade"
       ],
       "unique": false
     }

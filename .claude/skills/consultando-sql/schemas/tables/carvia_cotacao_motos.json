@@ -37,6 +37,14 @@
     {
       "name": "peso_cubado_total",
       "type": "numeric(15,3)"
+    },
+    {
+      "name": "valor_unitario",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
     }
   ],
   "foreign_keys": [

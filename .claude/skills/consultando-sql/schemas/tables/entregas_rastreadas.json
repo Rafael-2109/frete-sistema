@@ -117,16 +117,16 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_rastreadas_embarque_item_id",
+      "name": "ix_entregas_rastreadas_rastreamento_id",
       "columns": [
-        "embarque_item_id"
+        "rastreamento_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_rastreadas_rastreamento_id",
+      "name": "ix_entregas_rastreadas_embarque_item_id",
       "columns": [
-        "rastreamento_id"
+        "embarque_item_id"
       ],
       "unique": false
     },

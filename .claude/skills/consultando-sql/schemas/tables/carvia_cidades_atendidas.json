@@ -58,16 +58,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cidade_uf",
+      "name": "ix_carvia_cidade_ibge",
       "columns": [
-        "uf"
+        "codigo_ibge"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_ibge",
+      "name": "ix_carvia_cidade_uf",
       "columns": [
-        "codigo_ibge"
+        "uf"
       ],
       "unique": false
     }

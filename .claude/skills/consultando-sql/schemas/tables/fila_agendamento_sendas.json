@@ -84,9 +84,9 @@
   ],
   "indices": [
     {
-      "name": "ix_fila_agendamento_sendas_status",
+      "name": "ix_fila_agendamento_sendas_cnpj",
       "columns": [
-        "status"
+        "cnpj"
       ],
       "unique": false
     },
@@ -107,9 +107,9 @@
       "unique": false
     },
     {
-      "name": "ix_fila_agendamento_sendas_cnpj",
+      "name": "ix_fila_agendamento_sendas_status",
       "columns": [
-        "cnpj"
+        "status"
       ],
       "unique": false
     }
