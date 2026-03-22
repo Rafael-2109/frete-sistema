@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 242,
+  "total_relationships": 239,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -330,24 +330,6 @@
       "from_table": "carvia_precos_categoria_moto",
       "from_column": "categoria_moto_id",
       "to_table": "carvia_categorias_moto",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_sessao_demandas",
-      "from_column": "sessao_id",
-      "to_table": "carvia_sessoes_cotacao",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_sessao_demandas",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_sessao_demandas",
-      "from_column": "tabela_frete_id",
-      "to_table": "tabelas_frete",
       "to_column": "id"
     },
     {

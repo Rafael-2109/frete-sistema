@@ -76,7 +76,7 @@
       "name": "status",
       "type": "varchar(30)",
       "nullable": false,
-      "default": "ABERTA"
+      "default": "PENDENTE"
     },
     {
       "name": "origem",
@@ -188,20 +188,6 @@
       "unique": false
     },
     {
-      "name": "ix_ocorrencia_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_origem_id",
-      "columns": [
-        "origem_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_ocorrencia_categoria",
       "columns": [
         "categoria",
@@ -217,6 +203,13 @@
       "unique": true
     },
     {
+      "name": "ix_ocorrencia_devolucao_responsavel_id",
+      "columns": [
+        "responsavel_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_ocorrencia_responsavel",
       "columns": [
         "responsavel",
@@ -228,13 +221,6 @@
       "name": "idx_ocorrencia_data_abertura",
       "columns": [
         "data_abertura"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_responsavel_id",
-      "columns": [
-        "responsavel_id"
       ],
       "unique": false
     },
@@ -258,6 +244,20 @@
         "numero_ocorrencia"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_origem_id",
+      "columns": [
+        "origem_id"
+      ],
+      "unique": false
     }
   ]
 }

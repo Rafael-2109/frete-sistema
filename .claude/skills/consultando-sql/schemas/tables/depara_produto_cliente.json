@@ -94,10 +94,9 @@
       "unique": false
     },
     {
-      "name": "idx_depara_prefixo_ativo",
+      "name": "ix_depara_produto_cliente_prefixo_cnpj",
       "columns": [
-        "prefixo_cnpj",
-        "ativo"
+        "prefixo_cnpj"
       ],
       "unique": false
     },
@@ -116,9 +115,10 @@
       "unique": false
     },
     {
-      "name": "ix_depara_produto_cliente_prefixo_cnpj",
+      "name": "idx_depara_prefixo_ativo",
       "columns": [
-        "prefixo_cnpj"
+        "prefixo_cnpj",
+        "ativo"
       ],
       "unique": false
     },

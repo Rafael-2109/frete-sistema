@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 164,
+  "total_tabelas": 162,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -507,24 +507,6 @@
         "tipo_receita",
         "descricao",
         "valor"
-      ]
-    },
-    {
-      "name": "carvia_sessao_demandas",
-      "description": "Tabela carvia_sessao_demandas",
-      "key_fields": [
-        "sessao_id",
-        "ordem",
-        "origem_empresa"
-      ]
-    },
-    {
-      "name": "carvia_sessoes_cotacao",
-      "description": "Tabela carvia_sessoes_cotacao",
-      "key_fields": [
-        "numero_sessao",
-        "nome_sessao",
-        "status"
       ]
     },
     {

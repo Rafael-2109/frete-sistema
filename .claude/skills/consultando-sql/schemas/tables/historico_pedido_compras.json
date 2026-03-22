@@ -181,16 +181,9 @@
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_alterado_em",
+      "name": "ix_historico_pedido_compras_operacao",
       "columns": [
-        "alterado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_historico_pedido_compras_pedido_compra_id",
-      "columns": [
-        "pedido_compra_id"
+        "operacao"
       ],
       "unique": false
     },
@@ -202,6 +195,13 @@
       "unique": false
     },
     {
+      "name": "ix_historico_pedido_compras_pedido_compra_id",
+      "columns": [
+        "pedido_compra_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_historico_pedido_compras_alterado_por",
       "columns": [
         "alterado_por"
@@ -209,9 +209,9 @@
       "unique": false
     },
     {
-      "name": "ix_historico_pedido_compras_operacao",
+      "name": "ix_historico_pedido_compras_alterado_em",
       "columns": [
-        "operacao"
+        "alterado_em"
       ],
       "unique": false
     }

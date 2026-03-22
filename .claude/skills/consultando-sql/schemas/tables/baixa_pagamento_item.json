@@ -236,9 +236,16 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status_match",
+      "name": "ix_baixa_pagamento_item_statement_line_id",
       "columns": [
-        "status_match"
+        "statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_lote_id",
+      "columns": [
+        "lote_id"
       ],
       "unique": false
     },
@@ -257,16 +264,16 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_statement_line_id",
+      "name": "idx_baixa_pag_item_status",
       "columns": [
-        "statement_line_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status",
+      "name": "idx_baixa_pag_item_status_match",
       "columns": [
-        "status"
+        "status_match"
       ],
       "unique": false
     },
@@ -278,13 +285,6 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_lote_id",
-      "columns": [
-        "lote_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_baixa_pag_item_cnpj",
       "columns": [
         "cnpj_beneficiario"
@@ -292,14 +292,14 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_titulo_id",
+      "name": "idx_baixa_pag_item_titulo",
       "columns": [
         "titulo_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_titulo",
+      "name": "ix_baixa_pagamento_item_titulo_id",
       "columns": [
         "titulo_id"
       ],
