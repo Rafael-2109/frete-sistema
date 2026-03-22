@@ -888,16 +888,13 @@ class OcorrenciaDevolucao(db.Model):
     ]
     responsavel = db.Column(db.String(30), default='INDEFINIDO', nullable=True)
 
-    # Status da tratativa
+    # Status da tratativa (auto-computado)
     STATUS_OCORRENCIA = [
-        ('ABERTA', 'Aberta'),
-        ('EM_ANALISE', 'Em Analise'),
-        ('AGUARDANDO_RETORNO', 'Aguardando Retorno'),
-        ('RETORNADA', 'Retornada'),
-        ('RESOLVIDA', 'Resolvida'),
-        ('CANCELADA', 'Cancelada'),
+        ('PENDENTE', 'Pendente'),
+        ('EM_ANDAMENTO', 'Em Andamento'),
+        ('RESOLVIDO', 'Resolvido'),
     ]
-    status = db.Column(db.String(30), default='ABERTA', nullable=False, index=True)
+    status = db.Column(db.String(30), default='PENDENTE', nullable=False, index=True)
 
     # Origem do problema (para KPI)
     ORIGENS = [
@@ -1019,29 +1016,76 @@ class OcorrenciaDevolucao(db.Model):
     def __repr__(self):
         return f'<OcorrenciaDevolucao {self.numero_ocorrencia} - {self.status}>'
 
+    def _campos_comerciais_preenchidos(self):
+        """Verifica se todos os 7 campos comerciais obrigatorios estao preenchidos.
+
+        Campos: categorias (N:M), subcategorias (N:M), responsavel_id,
+        origem_id, autorizado_por_id, momento_devolucao, desfecho.
+        """
+        # 1. categorias (N:M - ao menos 1)
+        if not self.categorias or len(self.categorias) == 0:
+            return False
+        # 2. subcategorias (N:M - ao menos 1)
+        if not self.subcategorias or len(self.subcategorias) == 0:
+            return False
+        # 3. responsavel_id (FK)
+        if not self.responsavel_id:
+            return False
+        # 4. origem_id (FK)
+        if not self.origem_id:
+            return False
+        # 5. autorizado_por_id (FK)
+        if not self.autorizado_por_id:
+            return False
+        # 6. momento_devolucao (nao nulo e nao INDEFINIDO)
+        if not self.momento_devolucao or self.momento_devolucao == 'INDEFINIDO':
+            return False
+        # 7. desfecho (nao nulo e nao vazio)
+        if not self.desfecho or not self.desfecho.strip():
+            return False
+        return True
+
+    def calcular_status(self):
+        """Auto-computa status baseado nos campos comerciais e entrada da NF.
+
+        - RESOLVIDO: todos 7 campos comerciais preenchidos E NF com entrada (odoo_status_codigo='06')
+        - EM_ANDAMENTO: todos 7 campos comerciais preenchidos MAS sem entrada
+        - PENDENTE: campos comerciais incompletos
+        """
+        if not self._campos_comerciais_preenchidos():
+            return 'PENDENTE'
+
+        nfd = self.nf_devolucao
+        if nfd and nfd.odoo_status_codigo == '06':
+            return 'RESOLVIDO'
+
+        return 'EM_ANDAMENTO'
+
     @classmethod
     def gerar_numero_ocorrencia(cls):
-        """Gera proximo numero de ocorrencia no formato YYYYMM-XXXX"""
-        from sqlalchemy import func
+        """Gera proximo numero de ocorrencia no formato #####/{AA}
 
+        Sequencia global (nao reinicia por mes/ano), inicio em 17500.
+        Exemplo: 17500/26, 17501/26, 17502/26...
+        """
         agora = agora_utc_naive()
-        prefixo = f"{agora.strftime('%Y%m')}-"
+        ano_2d = agora.strftime('%y')  # ex: '26'
 
-        # Busca ultimo numero do mes
+        # Buscar ultimo registro com formato novo (contem '/')
         ultimo = cls.query.filter(
-            cls.numero_ocorrencia.like(f'{prefixo}%')
-        ).order_by(cls.numero_ocorrencia.desc()).first()
+            cls.numero_ocorrencia.contains('/')
+        ).order_by(cls.id.desc()).first()
 
         if ultimo:
-            # Extrai sequencial e incrementa
             try:
-                seq = int(ultimo.numero_ocorrencia.split('-')[-1]) + 1
+                seq = int(ultimo.numero_ocorrencia.split('/')[0]) + 1
             except (ValueError, IndexError):
-                seq = 1
+                seq = 17500
         else:
-            seq = 1
+            # Primeira geracao no formato novo
+            seq = 17500
 
-        return f"{prefixo}{seq:04d}"
+        return f"{seq:05d}/{ano_2d}"
 
     def to_dict(self):
         """Serializa para JSON"""

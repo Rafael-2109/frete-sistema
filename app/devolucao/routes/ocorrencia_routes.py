@@ -255,13 +255,23 @@ def index():
     # =====================================================================
     # Enriquecer com Vendedor/Equipe (Bloco 6)
     # =====================================================================
+    # Enriquecer com Vendedor/Equipe (Bloco 6)
+    # NOTA: cnpj_emitente esta em formato raw (12345678000190) mas
+    # FaturamentoProduto.cnpj_cliente esta formatado (12.345.678/0001-90).
+    # Necessario formatar antes de buscar.
+    from app.utils.cnpj_utils import formatar_cnpj as _fmt_cnpj
+
     nfs_para_busca = set()
     cnpjs_para_busca = set()
+    cnpj_raw_to_fmt = {}  # raw -> formatado (para lookup reverso)
     for oc in ocorrencias:
         if oc.nfs_referenciadas:
             nfs_para_busca.update(ref.numero_nf for ref in oc.nfs_referenciadas if ref.numero_nf)
         if oc.nf_devolucao and oc.nf_devolucao.cnpj_emitente:
-            cnpjs_para_busca.add(oc.nf_devolucao.cnpj_emitente)
+            cnpj_raw = oc.nf_devolucao.cnpj_emitente
+            cnpj_fmt = _fmt_cnpj(cnpj_raw)
+            cnpjs_para_busca.add(cnpj_fmt)
+            cnpj_raw_to_fmt[cnpj_raw] = cnpj_fmt
 
     vendedor_por_nf = {}
     if nfs_para_busca:
@@ -301,15 +311,17 @@ def index():
                     info = vendedor_por_nf[ref.numero_nf]
                     break
         if not info and oc.nf_devolucao and oc.nf_devolucao.cnpj_emitente:
-            info = vendedor_por_cnpj.get(oc.nf_devolucao.cnpj_emitente)
+            cnpj_fmt = cnpj_raw_to_fmt.get(oc.nf_devolucao.cnpj_emitente)
+            if cnpj_fmt:
+                info = vendedor_por_cnpj.get(cnpj_fmt)
         oc.vendedor_info = info or {}
 
     # Estatisticas
     stats = {
         'total': OcorrenciaDevolucao.query.filter_by(ativo=True).count(),
-        'abertas': OcorrenciaDevolucao.query.filter_by(ativo=True, status='ABERTA').count(),
-        'em_analise': OcorrenciaDevolucao.query.filter_by(ativo=True, status='EM_ANALISE').count(),
-        'resolvidas': OcorrenciaDevolucao.query.filter_by(ativo=True, status='RESOLVIDA').count(),
+        'pendentes': OcorrenciaDevolucao.query.filter_by(ativo=True, status='PENDENTE').count(),
+        'em_andamento': OcorrenciaDevolucao.query.filter_by(ativo=True, status='EM_ANDAMENTO').count(),
+        'resolvidos': OcorrenciaDevolucao.query.filter_by(ativo=True, status='RESOLVIDO').count(),
     }
 
     # Buscar transportadoras unicas para o filtro (entrega)
@@ -335,6 +347,23 @@ def index():
 
     lista_transportadoras_retorno = [t[0] for t in transportadoras_retorno_query if t[0]]
 
+    # Listas para modal de exportacao
+    equipes_query = db.session.query(
+        FaturamentoProduto.equipe_vendas
+    ).filter(
+        FaturamentoProduto.equipe_vendas.isnot(None),
+        FaturamentoProduto.equipe_vendas != ''
+    ).distinct().order_by(FaturamentoProduto.equipe_vendas).all()
+    lista_equipes = [e[0] for e in equipes_query if e[0]]
+
+    vendedores_query = db.session.query(
+        FaturamentoProduto.vendedor
+    ).filter(
+        FaturamentoProduto.vendedor.isnot(None),
+        FaturamentoProduto.vendedor != ''
+    ).distinct().order_by(FaturamentoProduto.vendedor).all()
+    lista_vendedores = [v[0] for v in vendedores_query if v[0]]
+
     return render_template(
         'devolucao/ocorrencias/index.html',
         ocorrencias=ocorrencias,
@@ -358,7 +387,9 @@ def index():
         opcoes_categoria=OcorrenciaCategoria.query.filter_by(ativo=True).order_by(OcorrenciaCategoria.descricao).all(),
         opcoes_responsavel=OcorrenciaResponsavel.query.filter_by(ativo=True).order_by(OcorrenciaResponsavel.descricao).all(),
         lista_transportadoras=lista_transportadoras,
-        lista_transportadoras_retorno=lista_transportadoras_retorno
+        lista_transportadoras_retorno=lista_transportadoras_retorno,
+        lista_equipes=lista_equipes,
+        lista_vendedores=lista_vendedores,
     )
 
 
@@ -442,6 +473,28 @@ def detalhe(ocorrencia_id):
     # Lista de transportadoras únicas
     transportadoras = list(transportadoras_set)
 
+    # =====================================================================
+    # Enriquecer NFs referenciadas com valor (Bloco NF Valor)
+    # =====================================================================
+    nf_numeros = [ref['numero_nf'] for ref in nfs_referenciadas if ref.get('numero_nf')]
+    if nf_numeros:
+        valores_query = db.session.query(
+            FaturamentoProduto.numero_nf,
+            func.sum(FaturamentoProduto.valor_produto_faturado).label('valor_total_nf')
+        ).filter(
+            FaturamentoProduto.numero_nf.in_(nf_numeros)
+        ).group_by(
+            FaturamentoProduto.numero_nf
+        ).all()
+
+        valor_por_nf = {r.numero_nf: float(r.valor_total_nf) if r.valor_total_nf else None for r in valores_query}
+
+        for ref in nfs_referenciadas:
+            ref['valor_nf'] = valor_por_nf.get(ref.get('numero_nf'))
+    else:
+        for ref in nfs_referenciadas:
+            ref['valor_nf'] = None
+
     # Fretes de retorno
     fretes = FreteDevolucao.query.filter_by(
         ocorrencia_devolucao_id=ocorrencia_id,
@@ -461,16 +514,18 @@ def detalhe(ocorrencia_id):
     ).order_by(AnexoOcorrencia.criado_em.desc()).all()
 
     # =====================================================================
-    # Enriquecer com raz_social_red (Bloco 1)
+    # Enriquecer com raz_social e raz_social_red (Bloco 1)
     # =====================================================================
     raz_social_red = None
+    raz_social = None
     if nfd and nfd.cnpj_emitente:
         prefixo = nfd.cnpj_emitente[:8]
         cp = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.cnpj_cpf.like(f'{prefixo}%')
         ).first()
-        if cp and cp.raz_social_red:
+        if cp:
             raz_social_red = cp.raz_social_red
+            raz_social = cp.raz_social
 
     # =====================================================================
     # Enriquecer com Vendedor/Equipe (Bloco 7)
@@ -486,10 +541,12 @@ def detalhe(ocorrencia_id):
                 if fat and fat.vendedor:
                     vendedor_info = {'vendedor': fat.vendedor, 'equipe': fat.equipe_vendas}
                     break
-    # Fallback por CNPJ
+    # Fallback por CNPJ (formatar para match com FaturamentoProduto.cnpj_cliente)
     if not vendedor_info and nfd and nfd.cnpj_emitente:
+        from app.utils.cnpj_utils import formatar_cnpj as _fmt_cnpj
+        cnpj_fmt = _fmt_cnpj(nfd.cnpj_emitente)
         fat = FaturamentoProduto.query.filter_by(
-            cnpj_cliente=nfd.cnpj_emitente
+            cnpj_cliente=cnpj_fmt
         ).order_by(FaturamentoProduto.data_fatura.desc()).first()
         if fat and fat.vendedor:
             vendedor_info = {'vendedor': fat.vendedor, 'equipe': fat.equipe_vendas}
@@ -507,6 +564,7 @@ def detalhe(ocorrencia_id):
         descartes=descartes,
         anexos=anexos,
         raz_social_red=raz_social_red,
+        raz_social=raz_social,
         vendedor_info=vendedor_info,
         opcoes_status=OcorrenciaDevolucao.STATUS_OCORRENCIA,
         opcoes_destino=OcorrenciaDevolucao.DESTINOS,
@@ -724,28 +782,6 @@ def api_atualizar_comercial(ocorrencia_id):
         if 'descricao_comercial' in data:
             ocorrencia.descricao_comercial = data['descricao_comercial']
 
-        if 'status' in data:
-            status_anterior = ocorrencia.status
-            ocorrencia.status = data['status']
-
-            # Marcar data de resolucao se mudou para RESOLVIDA
-            # Usar data_entrada da NFD (data real de entrada no Odoo) quando disponivel
-            if data['status'] == 'RESOLVIDA' and status_anterior != 'RESOLVIDA':
-                nfd = ocorrencia.nf_devolucao
-                if nfd and nfd.data_entrada:
-                    # Converter date para datetime naive se necessario
-                    if isinstance(nfd.data_entrada, date) and not isinstance(nfd.data_entrada, datetime):
-                        ocorrencia.data_resolucao = datetime.combine(nfd.data_entrada, datetime.min.time())
-                    else:
-                        ocorrencia.data_resolucao = nfd.data_entrada
-                else:
-                    ocorrencia.data_resolucao = agora_utc_naive()  # fallback
-                ocorrencia.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
-
-            # Marcar data de acao comercial se mudou para EM_ANALISE
-            if data['status'] == 'EM_ANALISE' and status_anterior == 'ABERTA':
-                ocorrencia.data_acao_comercial = agora_utc_naive()
-
         if 'momento_devolucao' in data:
             ocorrencia.momento_devolucao = data['momento_devolucao']
 
@@ -756,11 +792,35 @@ def api_atualizar_comercial(ocorrencia_id):
         ocorrencia.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
         ocorrencia.atualizado_em = agora_utc_naive()
 
+        # =====================================================================
+        # Auto-computar status (PENDENTE / EM_ANDAMENTO / RESOLVIDO)
+        # =====================================================================
+        status_anterior = ocorrencia.status
+        novo_status = ocorrencia.calcular_status()
+        ocorrencia.status = novo_status
+
+        # Transicao para RESOLVIDO: marcar data_resolucao
+        if novo_status == 'RESOLVIDO' and status_anterior != 'RESOLVIDO':
+            nfd = ocorrencia.nf_devolucao
+            if nfd and nfd.data_entrada:
+                if isinstance(nfd.data_entrada, date) and not isinstance(nfd.data_entrada, datetime):
+                    ocorrencia.data_resolucao = datetime.combine(nfd.data_entrada, datetime.min.time())
+                else:
+                    ocorrencia.data_resolucao = nfd.data_entrada
+            else:
+                ocorrencia.data_resolucao = agora_utc_naive()
+            ocorrencia.resolvido_por = current_user.nome if hasattr(current_user, 'nome') else current_user.username
+
+        # Transicao para EM_ANDAMENTO: marcar data_acao_comercial
+        if novo_status == 'EM_ANDAMENTO' and status_anterior == 'PENDENTE':
+            ocorrencia.data_acao_comercial = agora_utc_naive()
+
         db.session.commit()
 
         return jsonify({
             'sucesso': True,
-            'mensagem': 'Dados comerciais atualizados!'
+            'mensagem': 'Dados comerciais atualizados!',
+            'novo_status': novo_status,
         })
 
     except Exception as e:
@@ -1359,6 +1419,273 @@ def api_comparar_nf_venda(ocorrencia_id):
         import traceback
         traceback.print_exc()
         return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+
+# =============================================================================
+# Exportacao de Relatorio
+# =============================================================================
+
+@ocorrencia_bp.route('/api/exportar')
+@login_required
+def exportar_relatorio():
+    """
+    Exporta relatorio de devolucoes em Excel.
+
+    Filtros via query params: equipe, vendedor, mes, ano, cnpj, cliente
+    Cada linha = 1 NFDevolucao expandida por NF referenciada.
+    """
+    import re
+    from io import BytesIO
+    import pandas as pd
+    from flask import send_file
+
+    # Parse filtros
+    equipe = request.args.get('equipe', '').strip()
+    vendedor = request.args.get('vendedor', '').strip()
+    mes = request.args.get('mes', '', type=str).strip()
+    ano = request.args.get('ano', '', type=str).strip()
+    cnpj_filtro = request.args.get('cnpj', '').strip()
+    cliente_filtro = request.args.get('cliente', '').strip()
+
+    # Query base: OcorrenciaDevolucao + NFDevolucao
+    query = db.session.query(
+        OcorrenciaDevolucao, NFDevolucao
+    ).join(
+        NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
+    ).filter(
+        OcorrenciaDevolucao.ativo == True
+    )
+
+    # Excluir CNPJs de empresas internas
+    for cnpj_prefixo in CNPJS_EXCLUIDOS:
+        query = query.filter(
+            db.or_(
+                NFDevolucao.cnpj_emitente.is_(None),
+                ~NFDevolucao.cnpj_emitente.like(f'{cnpj_prefixo}%')
+            )
+        )
+
+    # Filtro mes/ano sobre data_emissao da NFD
+    if ano:
+        try:
+            ano_int = int(ano)
+            query = query.filter(db.extract('year', NFDevolucao.data_emissao) == ano_int)
+        except ValueError:
+            pass
+
+    if mes:
+        try:
+            mes_int = int(mes)
+            query = query.filter(db.extract('month', NFDevolucao.data_emissao) == mes_int)
+        except ValueError:
+            pass
+
+    # Filtro CNPJ (normalizar ambos lados)
+    if cnpj_filtro:
+        cnpj_limpo = re.sub(r'\D', '', cnpj_filtro)
+        if cnpj_limpo:
+            query = query.filter(
+                func.regexp_replace(NFDevolucao.cnpj_emitente, r'\D', '', 'g').like(f'%{cnpj_limpo}%')
+            )
+
+    # Filtro cliente (accent-insensitive via unaccent)
+    if cliente_filtro:
+        query = query.filter(
+            func.f_unaccent(NFDevolucao.nome_emitente).ilike(
+                func.f_unaccent(f'%{cliente_filtro}%')
+            )
+        )
+
+    # Filtros vendedor/equipe requerem subquery via FaturamentoProduto
+    if vendedor or equipe:
+        # Buscar NFs que matcham vendedor/equipe
+        fat_subq = db.session.query(
+            FaturamentoProduto.numero_nf
+        ).filter(FaturamentoProduto.numero_nf.isnot(None))
+
+        if vendedor:
+            fat_subq = fat_subq.filter(FaturamentoProduto.vendedor.ilike(f'%{vendedor}%'))
+        if equipe:
+            fat_subq = fat_subq.filter(FaturamentoProduto.equipe_vendas.ilike(f'%{equipe}%'))
+
+        fat_nfs = set(r[0] for r in fat_subq.distinct().all())
+
+        if fat_nfs:
+            # Filtrar ocorrencias cujas NFs referenciadas estejam no set
+            nfd_ids_subq = db.session.query(
+                NFDevolucaoNFReferenciada.nf_devolucao_id
+            ).filter(
+                NFDevolucaoNFReferenciada.numero_nf.in_(fat_nfs)
+            ).distinct()
+
+            query = query.filter(NFDevolucao.id.in_(nfd_ids_subq))
+        else:
+            # Nenhum match: retornar vazio
+            query = query.filter(db.literal(False))
+
+    results = query.order_by(NFDevolucao.data_emissao.desc().nullslast()).all()
+
+    # =====================================================================
+    # Enriquecer em batch
+    # =====================================================================
+
+    # Coletar dados
+    nfd_ids = [nfd.id for _, nfd in results]
+    cnpjs_prefixo = set()
+    for _, nfd in results:
+        if nfd.cnpj_emitente:
+            cnpjs_prefixo.add(nfd.cnpj_emitente[:8])
+
+    # Batch: raz_social por CNPJ prefixo
+    raz_social_map = {}
+    if cnpjs_prefixo:
+        for prefixo in cnpjs_prefixo:
+            cp = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.cnpj_cpf.like(f'{prefixo}%')
+            ).first()
+            if cp:
+                raz_social_map[prefixo] = {
+                    'raz_social': cp.raz_social,
+                    'raz_social_red': cp.raz_social_red,
+                }
+
+    # Batch: NFs referenciadas
+    refs_por_nfd = {}
+    if nfd_ids:
+        all_refs = NFDevolucaoNFReferenciada.query.filter(
+            NFDevolucaoNFReferenciada.nf_devolucao_id.in_(nfd_ids)
+        ).all()
+        for ref in all_refs:
+            refs_por_nfd.setdefault(ref.nf_devolucao_id, []).append(ref)
+
+    # Batch: FaturamentoProduto por NF referenciada
+    all_nf_numeros = set()
+    for refs in refs_por_nfd.values():
+        for ref in refs:
+            if ref.numero_nf:
+                all_nf_numeros.add(ref.numero_nf)
+
+    fat_por_nf = {}
+    valor_por_nf = {}
+    if all_nf_numeros:
+        fat_results = db.session.query(
+            FaturamentoProduto.numero_nf,
+            FaturamentoProduto.vendedor,
+            FaturamentoProduto.equipe_vendas,
+            FaturamentoProduto.incoterm,
+            FaturamentoProduto.municipio,
+            FaturamentoProduto.estado,
+            FaturamentoProduto.data_fatura,
+            func.sum(FaturamentoProduto.valor_produto_faturado).label('valor_total_nf')
+        ).filter(
+            FaturamentoProduto.numero_nf.in_(all_nf_numeros)
+        ).group_by(
+            FaturamentoProduto.numero_nf,
+            FaturamentoProduto.vendedor,
+            FaturamentoProduto.equipe_vendas,
+            FaturamentoProduto.incoterm,
+            FaturamentoProduto.municipio,
+            FaturamentoProduto.estado,
+            FaturamentoProduto.data_fatura,
+        ).all()
+
+        for r in fat_results:
+            if r.numero_nf not in fat_por_nf:
+                fat_por_nf[r.numero_nf] = r
+            valor_por_nf[r.numero_nf] = float(r.valor_total_nf) if r.valor_total_nf else None
+
+    # =====================================================================
+    # Montar linhas do relatorio
+    # =====================================================================
+    rows = []
+    for oc, nfd in results:
+        prefixo = nfd.cnpj_emitente[:8] if nfd.cnpj_emitente else None
+        rs_info = raz_social_map.get(prefixo, {}) if prefixo else {}
+
+        refs = refs_por_nfd.get(nfd.id, [])
+
+        # Determinar NFD/NC
+        nfd_nc = nfd.numero_nota_credito or nfd.numero_nfd
+
+        if refs:
+            for ref in refs:
+                fat = fat_por_nf.get(ref.numero_nf, None)
+                rows.append({
+                    'CNPJ': nfd.cnpj_emitente or '',
+                    'Razao Social': rs_info.get('raz_social') or nfd.nome_emitente or '',
+                    'Razao Social Reduzida': rs_info.get('raz_social_red') or '',
+                    'Cidade': (fat.municipio if fat else None) or nfd.municipio_emitente or '',
+                    'UF': (fat.estado if fat else None) or nfd.uf_emitente or '',
+                    'Incoterm': fat.incoterm if fat else '',
+                    'Vendedor': fat.vendedor if fat else '',
+                    'Equipe de Vendas': fat.equipe_vendas if fat else '',
+                    'NF': ref.numero_nf or '',
+                    'NFD/NC': nfd_nc or '',
+                    'Valor NF': valor_por_nf.get(ref.numero_nf),
+                    'Valor NFD/NC': float(nfd.valor_total) if nfd.valor_total else None,
+                    'Data NF': fat.data_fatura.strftime('%d/%m/%Y') if fat and fat.data_fatura else '',
+                    'Data NFD': nfd.data_emissao.strftime('%d/%m/%Y') if nfd.data_emissao else '',
+                })
+        else:
+            # Sem NF referenciada — enriquecer por CNPJ (formatar para match)
+            fat_cnpj = None
+            if nfd.cnpj_emitente:
+                from app.utils.cnpj_utils import formatar_cnpj as _fmt_cnpj_export
+                cnpj_fmt_export = _fmt_cnpj_export(nfd.cnpj_emitente)
+                fat_cnpj = FaturamentoProduto.query.filter_by(
+                    cnpj_cliente=cnpj_fmt_export
+                ).order_by(FaturamentoProduto.data_fatura.desc()).first()
+
+            rows.append({
+                'CNPJ': nfd.cnpj_emitente or '',
+                'Razao Social': rs_info.get('raz_social') or nfd.nome_emitente or '',
+                'Razao Social Reduzida': rs_info.get('raz_social_red') or '',
+                'Cidade': (fat_cnpj.municipio if fat_cnpj else None) or nfd.municipio_emitente or '',
+                'UF': (fat_cnpj.estado if fat_cnpj else None) or nfd.uf_emitente or '',
+                'Incoterm': fat_cnpj.incoterm if fat_cnpj else '',
+                'Vendedor': fat_cnpj.vendedor if fat_cnpj else '',
+                'Equipe de Vendas': fat_cnpj.equipe_vendas if fat_cnpj else '',
+                'NF': '',
+                'NFD/NC': nfd_nc or '',
+                'Valor NF': None,
+                'Valor NFD/NC': float(nfd.valor_total) if nfd.valor_total else None,
+                'Data NF': '',
+                'Data NFD': nfd.data_emissao.strftime('%d/%m/%Y') if nfd.data_emissao else '',
+            })
+
+    # =====================================================================
+    # Gerar Excel
+    # =====================================================================
+    df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=[
+        'CNPJ', 'Razao Social', 'Razao Social Reduzida', 'Cidade', 'UF',
+        'Incoterm', 'Vendedor', 'Equipe de Vendas', 'NF', 'NFD/NC',
+        'Valor NF', 'Valor NFD/NC', 'Data NF', 'Data NFD'
+    ])
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Devolucoes')
+        worksheet = writer.sheets['Devolucoes']
+        # Ajustar largura das colunas
+        for idx, col in enumerate(df.columns):
+            max_len = max(
+                df[col].fillna('').astype(str).map(len).max() if len(df) > 0 else 0,
+                len(str(col))
+            )
+            col_letter = chr(65 + idx) if idx < 26 else chr(64 + idx // 26) + chr(65 + idx % 26)
+            worksheet.column_dimensions[col_letter].width = min(max_len + 2, 50)
+
+    output.seek(0)
+    from app.utils.timezone import agora_utc_naive as _agora
+    timestamp = _agora().strftime('%Y%m%d_%H%M')
+    filename = f'relatorio_devolucoes_{timestamp}.xlsx'
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 # =============================================================================

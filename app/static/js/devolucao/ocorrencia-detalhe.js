@@ -516,9 +516,8 @@ function salvarComercial() {
     const form = document.getElementById('form-comercial');
     const formData = new FormData(form);
 
-    // Campos simples (exceto arrays)
+    // Campos simples (exceto arrays — status e auto-computado, nao enviado)
     const data = {};
-    data.status = formData.get('status') || '';
     data.momento_devolucao = formData.get('momento_devolucao') || '';
     data.descricao_comercial = formData.get('descricao_comercial') || '';
     data.desfecho = formData.get('desfecho') || '';
@@ -556,6 +555,27 @@ function salvarComercial() {
         if (result.sucesso) {
             feedback.className = 'alert alert-success';
             feedback.textContent = result.mensagem || 'Salvo com sucesso';
+            // Atualizar badge de status no header e na aba comercial
+            if (result.novo_status) {
+                const statusMap = {
+                    'PENDENTE': { label: 'Pendente', bg: 'warning' },
+                    'EM_ANDAMENTO': { label: 'Em Andamento', bg: 'info' },
+                    'RESOLVIDO': { label: 'Resolvido', bg: 'success' }
+                };
+                const info = statusMap[result.novo_status] || { label: result.novo_status, bg: 'secondary' };
+                // Header badge
+                const headerBadge = document.getElementById('badge-status-ocorrencia');
+                if (headerBadge) {
+                    headerBadge.className = `badge bg-${info.bg}`;
+                    headerBadge.textContent = info.label;
+                }
+                // Comercial badge
+                const comercialBadge = document.getElementById('badge-status-comercial');
+                if (comercialBadge) {
+                    comercialBadge.className = `badge bg-${info.bg}`;
+                    comercialBadge.textContent = info.label;
+                }
+            }
         } else {
             feedback.className = 'alert alert-danger';
             feedback.textContent = result.erro || 'Erro ao salvar';

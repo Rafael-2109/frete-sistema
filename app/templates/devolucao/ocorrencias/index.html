@@ -41,6 +41,9 @@
             <a href="{{ url_for('devolucao.devolucao_ai.pagina_depara') }}" class="btn btn-info me-2">
                 De-Para de Produtos
             </a>
+            <button type="button" class="btn btn-outline-success me-2" data-bs-toggle="modal" data-bs-target="#modalExportarRelatorio">
+                <i class="bi bi-file-earmark-excel"></i> Exportar
+            </button>
             <button type="button" class="btn btn-outline-primary me-2" onclick="abrirCadastrosCom('categorias')">
                 <i class="bi bi-gear"></i> Cadastros
             </button>
@@ -63,24 +66,24 @@
         <div class="col-md-3">
             <div class="card border-left-warning">
                 <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Abertas</h6>
-                    <h2 class="mb-0">{{ stats.abertas }}</h2>
+                    <h6 class="text-muted text-uppercase small">Pendentes</h6>
+                    <h2 class="mb-0">{{ stats.pendentes }}</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card border-left-info">
                 <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Em Analise</h6>
-                    <h2 class="mb-0">{{ stats.em_analise }}</h2>
+                    <h6 class="text-muted text-uppercase small">Em Andamento</h6>
+                    <h2 class="mb-0">{{ stats.em_andamento }}</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card border-left-success">
                 <div class="card-body">
-                    <h6 class="text-muted text-uppercase small">Resolvidas</h6>
-                    <h2 class="mb-0">{{ stats.resolvidas }}</h2>
+                    <h6 class="text-muted text-uppercase small">Resolvidos</h6>
+                    <h2 class="mb-0">{{ stats.resolvidos }}</h2>
                 </div>
             </div>
         </div>
@@ -388,8 +391,8 @@
                                     </button>
                                 </div>
                                 {# Linha 3: Status #}
-                                <span class="badge bg-{{ 'warning' if oc.status == 'ABERTA' else 'info' if oc.status == 'EM_ANALISE' else 'success' }}">
-                                    {{ 'Pendente' if oc.status in ['ABERTA', 'EM_ANALISE'] else 'Resolvida' }}
+                                <span class="badge bg-{{ 'warning' if oc.status == 'PENDENTE' else 'info' if oc.status == 'EM_ANDAMENTO' else 'success' if oc.status == 'RESOLVIDO' else 'secondary' }}">
+                                    {{ 'Pendente' if oc.status == 'PENDENTE' else 'Em Andamento' if oc.status == 'EM_ANDAMENTO' else 'Resolvido' if oc.status == 'RESOLVIDO' else oc.status }}
                                 </span>
                                 {% if oc.destino and oc.destino != 'INDEFINIDO' %}
                                 <small class="text-muted ms-1">{{ oc.destino }}</small>
@@ -601,10 +604,128 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Exportar Relatorio -->
+<div class="modal fade" id="modalExportarRelatorio" tabindex="-1" aria-labelledby="modalExportarRelatorioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExportarRelatorioLabel">Exportar Relatorio de Devolucoes</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-exportar-relatorio">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Equipe de Vendas</label>
+                            <select class="form-select" name="equipe" id="export-equipe">
+                                <option value="">Todas</option>
+                                {% for eq in lista_equipes %}
+                                <option value="{{ eq }}">{{ eq }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Vendedor</label>
+                            <select class="form-select" name="vendedor" id="export-vendedor">
+                                <option value="">Todos</option>
+                                {% for v in lista_vendedores %}
+                                <option value="{{ v }}">{{ v }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Mes</label>
+                            <select class="form-select" name="mes" id="export-mes">
+                                <option value="">Todos</option>
+                                <option value="1">Janeiro</option>
+                                <option value="2">Fevereiro</option>
+                                <option value="3">Marco</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Maio</option>
+                                <option value="6">Junho</option>
+                                <option value="7">Julho</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Ano</label>
+                            <select class="form-select" name="ano" id="export-ano">
+                                <option value="">Todos</option>
+                            </select>
+                            <script>
+                                (function() {
+                                    const sel = document.getElementById('export-ano');
+                                    const anoAtual = new Date().getFullYear();
+                                    for (let i = 0; i <= 2; i++) {
+                                        const opt = document.createElement('option');
+                                        opt.value = anoAtual - i;
+                                        opt.textContent = anoAtual - i;
+                                        sel.appendChild(opt);
+                                    }
+                                })();
+                            </script>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">CNPJ</label>
+                            <input type="text" class="form-control" name="cnpj" id="export-cnpj" placeholder="Parte do CNPJ">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Cliente</label>
+                            <input type="text" class="form-control" name="cliente" id="export-cliente" placeholder="Nome do cliente">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="exportarRelatorio()">
+                    <i class="bi bi-download"></i> Exportar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// =========================================================================
+// EXPORTACAO DE RELATORIO
+// =========================================================================
+function exportarRelatorio() {
+    const params = new URLSearchParams();
+    const equipe = document.getElementById('export-equipe').value;
+    const vendedor = document.getElementById('export-vendedor').value;
+    const mes = document.getElementById('export-mes').value;
+    const ano = document.getElementById('export-ano').value;
+    const cnpj = document.getElementById('export-cnpj').value.trim();
+    const cliente = document.getElementById('export-cliente').value.trim();
+
+    if (equipe) params.set('equipe', equipe);
+    if (vendedor) params.set('vendedor', vendedor);
+    if (mes) params.set('mes', mes);
+    if (ano) params.set('ano', ano);
+    if (cnpj) params.set('cnpj', cnpj);
+    if (cliente) params.set('cliente', cliente);
+
+    const url = '/devolucao/ocorrencias/api/exportar' + (params.toString() ? '?' + params.toString() : '');
+
+    // Fechar modal e disparar download
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalExportarRelatorio'));
+    if (modal) modal.hide();
+
+    window.location.href = url;
+}
+
 const API_SINC = '/devolucao/vinculacao/api';
 
 // =========================================================================

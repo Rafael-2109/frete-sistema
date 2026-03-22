@@ -69,8 +69,8 @@
 
                     <small class="text-muted">|</small>
                     <small class="text-muted">Ocorrencia:</small>
-                    <span class="badge bg-{{ 'warning' if ocorrencia.status == 'ABERTA' else 'info' if ocorrencia.status == 'EM_ANALISE' else 'success' }}">
-                        {{ ocorrencia.status }}
+                    <span id="badge-status-ocorrencia" class="badge bg-{{ 'warning' if ocorrencia.status == 'PENDENTE' else 'info' if ocorrencia.status == 'EM_ANDAMENTO' else 'success' if ocorrencia.status == 'RESOLVIDO' else 'secondary' }}">
+                        {{ 'Pendente' if ocorrencia.status == 'PENDENTE' else 'Em Andamento' if ocorrencia.status == 'EM_ANDAMENTO' else 'Resolvido' if ocorrencia.status == 'RESOLVIDO' else ocorrencia.status }}
                     </span>
                     <small class="text-muted">Destino:</small>
                     <span class="badge bg-{{ 'secondary' if ocorrencia.destino == 'INDEFINIDO' else 'primary' if ocorrencia.destino == 'RETORNO' else 'info' }}">
@@ -159,9 +159,14 @@
             <div class="row mb-2">
                 <div class="col-md-4">
                     <small class="text-muted">Cliente/Emitente</small><br>
+                    {% if raz_social %}
+                    <strong>{{ raz_social }}</strong>
                     {% if raz_social_red %}
-                    <strong>{{ raz_social_red[:40] }}{% if raz_social_red|length > 40 %}...{% endif %}</strong>
-                    <br><small class="text-muted">{{ nfd.nome_emitente or (entrega.cliente if entrega else '-') }}</small>
+                    <br><small class="text-muted">{{ raz_social_red }}</small>
+                    {% endif %}
+                    {% elif raz_social_red %}
+                    <strong>{{ raz_social_red }}</strong>
+                    <br><small class="text-muted">{{ nfd.nome_emitente or '-' }}</small>
                     {% else %}
                     {{ nfd.nome_emitente or (entrega.cliente if entrega else '-') }}
                     {% endif %}
@@ -223,11 +228,11 @@
                                 <a href="{{ url_for('monitoramento.visualizar_entrega', id=nf_ref.entrega_id) }}"
                                    class="btn btn-sm btn-outline-primary me-1 mb-1"
                                    title="Ver entrega no monitoramento">
-                                    NF {{ nf_ref.numero_nf }}{% if nf_ref.data_entrega %} - Ent: {{ nf_ref.data_entrega|formatar_data_segura }}{% endif %}
+                                    NF {{ nf_ref.numero_nf }}{% if nf_ref.valor_nf %} [{{ nf_ref.valor_nf|valor_br }}]{% endif %}{% if nf_ref.data_entrega %} - Ent: {{ nf_ref.data_entrega|formatar_data_segura }}{% endif %}
                                 </a>
                             {% else %}
                                 <span class="badge bg-secondary me-1 mb-1">
-                                    NF {{ nf_ref.numero_nf }}
+                                    NF {{ nf_ref.numero_nf }}{% if nf_ref.valor_nf %} [{{ nf_ref.valor_nf|valor_br }}]{% endif %}
                                     <small>(sem entrega)</small>
                                 </span>
                             {% endif %}
@@ -369,16 +374,15 @@
                 <div class="card-body">
                     <form id="form-comercial">
                         <div class="row">
-                            <!-- Status -->
+                            <!-- Status (auto-computado, read-only) -->
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Status</label>
-                                <select class="form-select" name="status" id="status_comercial">
-                                    {% for valor, descricao in opcoes_status %}
-                                    <option value="{{ valor }}" {% if ocorrencia.status == valor %}selected{% endif %}>
-                                        {{ descricao }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
+                                <div class="mt-1">
+                                    <span id="badge-status-comercial" class="badge bg-{{ 'warning' if ocorrencia.status == 'PENDENTE' else 'info' if ocorrencia.status == 'EM_ANDAMENTO' else 'success' if ocorrencia.status == 'RESOLVIDO' else 'secondary' }}" style="font-size: 0.9rem;">
+                                        {{ 'Pendente' if ocorrencia.status == 'PENDENTE' else 'Em Andamento' if ocorrencia.status == 'EM_ANDAMENTO' else 'Resolvido' if ocorrencia.status == 'RESOLVIDO' else ocorrencia.status }}
+                                    </span>
+                                    <small class="text-muted d-block mt-1">Calculado automaticamente</small>
+                                </div>
                             </div>
 
                             <!-- Momento da Devolucao -->

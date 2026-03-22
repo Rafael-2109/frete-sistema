@@ -286,7 +286,7 @@ class MonitoramentoSyncService:
             localizacao_atual=localizacao,
 
             # Secao Comercial
-            status='ABERTA',
+            status='PENDENTE',
             responsavel='INDEFINIDO',
             origem='INDEFINIDO',
 

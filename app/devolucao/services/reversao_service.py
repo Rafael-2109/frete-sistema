@@ -726,7 +726,7 @@ class ReversaoService:
             localizacao_atual='CLIENTE',
 
             # Secao Comercial
-            status='ABERTA',
+            status='PENDENTE',
             responsavel='INDEFINIDO',
             origem='INDEFINIDO',
 

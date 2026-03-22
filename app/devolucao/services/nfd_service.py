@@ -571,12 +571,26 @@ class NFDService:
         nfd.sincronizado_odoo = True
         nfd.data_sincronizacao = agora_utc()
 
-        # Se estava REGISTRADA, avança para VINCULADA_DFE
-        if nfd.status == 'REGISTRADA':
-            nfd.status = 'VINCULADA_DFE'
-
         nfd.atualizado_em = agora_utc_naive()
         nfd.atualizado_por = 'Sistema Odoo'
+
+        # Recalcular status da ocorrencia vinculada (auto-computado)
+        if nfd.ocorrencia:
+            novo_status = nfd.ocorrencia.calcular_status()
+            if nfd.ocorrencia.status != novo_status:
+                status_anterior = nfd.ocorrencia.status
+                nfd.ocorrencia.status = novo_status
+                # Transicao para RESOLVIDO: marcar data_resolucao
+                if novo_status == 'RESOLVIDO' and status_anterior != 'RESOLVIDO':
+                    if nfd.data_entrada:
+                        from datetime import date as date_type, datetime as dt_type
+                        if isinstance(nfd.data_entrada, date_type) and not isinstance(nfd.data_entrada, dt_type):
+                            nfd.ocorrencia.data_resolucao = dt_type.combine(nfd.data_entrada, dt_type.min.time())
+                        else:
+                            nfd.ocorrencia.data_resolucao = nfd.data_entrada
+                    else:
+                        nfd.ocorrencia.data_resolucao = agora_utc_naive()
+                    nfd.ocorrencia.resolvido_por = 'Sistema Odoo'
 
     def _criar_nfd_orfa(self, nfd_data: Dict) -> NFDevolucao:
         """
@@ -672,7 +686,7 @@ class NFDService:
             localizacao_atual='CLIENTE',
 
             # Seção Comercial
-            status='ABERTA',
+            status='PENDENTE',
             responsavel='INDEFINIDO',
             origem='INDEFINIDO',
 
