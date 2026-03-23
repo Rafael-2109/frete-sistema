@@ -994,6 +994,21 @@ function processSSEEvent(eventType, data, state) {
                 break;
             }
 
+            case 'rate_limit': {
+                // SDK 0.1.50: Rate limit event
+                const rlStatus = data.status || '';
+                if (rlStatus === 'allowed_warning') {
+                    showToast('⚠️ Uso elevado da API — respostas podem demorar', 8000);
+                    console.log(`[SSE] Rate limit warning: ${(data.utilization * 100).toFixed(0)}% utilizado`);
+                } else if (rlStatus === 'rejected') {
+                    const resetDate = data.resets_at ? new Date(data.resets_at) : null;
+                    const resetStr = resetDate ? resetDate.toLocaleTimeString() : 'em breve';
+                    showToast(`🛑 Limite de uso atingido — aguarde até ${resetStr}`, 15000);
+                    console.warn(`[SSE] Rate limit REJECTED: type=${data.rate_limit_type}, resets_at=${data.resets_at}`);
+                }
+                break;
+            }
+
             case 'error':
                 hideTyping();
                 hideThinkingPanel();
