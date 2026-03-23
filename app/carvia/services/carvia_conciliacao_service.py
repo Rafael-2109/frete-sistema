@@ -319,12 +319,13 @@ class CarviaConciliacaoService:
 
         db.session.flush()
 
-        # Atualizar totais
+        # Atualizar totais e quitar documentos 100% conciliados
         CarviaConciliacaoService._atualizar_totais_linha(linha)
         for doc_info in documentos:
             CarviaConciliacaoService._atualizar_totais_documento(
                 doc_info['tipo_documento'],
-                int(doc_info['documento_id'])
+                int(doc_info['documento_id']),
+                usuario=usuario,
             )
 
         logger.info(
@@ -355,7 +356,9 @@ class CarviaConciliacaoService:
         db.session.flush()
 
         CarviaConciliacaoService._atualizar_totais_linha(linha)
-        CarviaConciliacaoService._atualizar_totais_documento(tipo_doc, doc_id)
+        CarviaConciliacaoService._atualizar_totais_documento(
+            tipo_doc, doc_id, usuario=usuario
+        )
 
         logger.info(
             f"Desconciliacao: conciliacao {conciliacao_id} removida por {usuario}"
@@ -391,7 +394,9 @@ class CarviaConciliacaoService:
 
         CarviaConciliacaoService._atualizar_totais_linha(linha)
         for tipo_doc, doc_id in docs_afetados:
-            CarviaConciliacaoService._atualizar_totais_documento(tipo_doc, doc_id)
+            CarviaConciliacaoService._atualizar_totais_documento(
+                tipo_doc, doc_id, usuario=usuario
+            )
 
         logger.info(
             f"Desconciliar linha: {len(conciliacoes)} conciliacoes removidas "
@@ -427,8 +432,12 @@ class CarviaConciliacaoService:
             linha.status_conciliacao = 'PARCIAL'
 
     @staticmethod
-    def _atualizar_totais_documento(tipo_documento, documento_id):
-        """Recalcula total_conciliado e conciliado flag de um documento."""
+    def _atualizar_totais_documento(tipo_documento, documento_id, usuario=None):
+        """Recalcula total_conciliado, conciliado flag e status de pagamento.
+
+        Quando 100% conciliado: marca status como PAGA/PAGO/RECEBIDO + pago_em/pago_por.
+        Quando desconciliado (nao mais 100%): reverte status para PENDENTE + limpa pago_em/pago_por.
+        """
         from app.carvia.models import (
             CarviaConciliacao,
             CarviaFaturaCliente,
@@ -437,6 +446,7 @@ class CarviaConciliacaoService:
             CarviaCustoEntrega,
             CarviaReceita,
         )
+        from app.utils.timezone import agora_utc_naive
         from sqlalchemy import func as sqlfunc
 
         total = db.session.query(
@@ -452,27 +462,86 @@ class CarviaConciliacaoService:
             doc = db.session.get(CarviaFaturaCliente, documento_id)
             if doc:
                 doc.total_conciliado = total_dec
-                doc.conciliado = float(total_dec) >= float(doc.valor_total or 0) - 0.01
+                agora_conciliado = float(total_dec) >= float(doc.valor_total or 0) - 0.01
+                doc.conciliado = agora_conciliado
+                if agora_conciliado and doc.status != 'PAGA':
+                    doc.status = 'PAGA'
+                    doc.pago_em = agora_utc_naive()
+                    doc.pago_por = usuario
+                    logger.info("Fatura cliente %s quitada via conciliacao por %s", doc.numero_fatura, usuario)
+                elif not agora_conciliado and doc.status == 'PAGA':
+                    doc.status = 'PENDENTE'
+                    doc.pago_em = None
+                    doc.pago_por = None
+                    logger.info("Fatura cliente %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+
         elif tipo_documento == 'fatura_transportadora':
             doc = db.session.get(CarviaFaturaTransportadora, documento_id)
             if doc:
                 doc.total_conciliado = total_dec
-                doc.conciliado = float(total_dec) >= float(doc.valor_total or 0) - 0.01
+                agora_conciliado = float(total_dec) >= float(doc.valor_total or 0) - 0.01
+                doc.conciliado = agora_conciliado
+                if agora_conciliado and doc.status_pagamento != 'PAGO':
+                    doc.status_pagamento = 'PAGO'
+                    doc.pago_em = agora_utc_naive()
+                    doc.pago_por = usuario
+                    logger.info("Fatura transportadora %s quitada via conciliacao por %s", doc.numero_fatura, usuario)
+                elif not agora_conciliado and doc.status_pagamento == 'PAGO':
+                    doc.status_pagamento = 'PENDENTE'
+                    doc.pago_em = None
+                    doc.pago_por = None
+                    logger.info("Fatura transportadora %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+
         elif tipo_documento == 'despesa':
             doc = db.session.get(CarviaDespesa, documento_id)
             if doc:
                 doc.total_conciliado = total_dec
-                doc.conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+                agora_conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+                doc.conciliado = agora_conciliado
+                if agora_conciliado and doc.status != 'PAGO':
+                    doc.status = 'PAGO'
+                    doc.pago_em = agora_utc_naive()
+                    doc.pago_por = usuario
+                    logger.info("Despesa %s quitada via conciliacao por %s", doc.id, usuario)
+                elif not agora_conciliado and doc.status == 'PAGO':
+                    doc.status = 'PENDENTE'
+                    doc.pago_em = None
+                    doc.pago_por = None
+                    logger.info("Despesa %s revertida para PENDENTE (desconciliacao)", doc.id)
+
         elif tipo_documento == 'custo_entrega':
             doc = db.session.get(CarviaCustoEntrega, documento_id)
             if doc:
                 doc.total_conciliado = total_dec
-                doc.conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+                agora_conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+                doc.conciliado = agora_conciliado
+                if agora_conciliado and doc.status != 'PAGO':
+                    doc.status = 'PAGO'
+                    doc.pago_em = agora_utc_naive()
+                    doc.pago_por = usuario
+                    logger.info("Custo entrega %s quitado via conciliacao por %s", doc.numero_custo, usuario)
+                elif not agora_conciliado and doc.status == 'PAGO':
+                    doc.status = 'PENDENTE'
+                    doc.pago_em = None
+                    doc.pago_por = None
+                    logger.info("Custo entrega %s revertido para PENDENTE (desconciliacao)", doc.numero_custo)
+
         elif tipo_documento == 'receita':
             doc = db.session.get(CarviaReceita, documento_id)
             if doc:
                 doc.total_conciliado = total_dec
-                doc.conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+                agora_conciliado = float(total_dec) >= float(doc.valor or 0) - 0.01
+                doc.conciliado = agora_conciliado
+                if agora_conciliado and doc.status != 'RECEBIDO':
+                    doc.status = 'RECEBIDO'
+                    doc.recebido_em = agora_utc_naive()
+                    doc.recebido_por = usuario
+                    logger.info("Receita %s marcada como RECEBIDO via conciliacao por %s", doc.id, usuario)
+                elif not agora_conciliado and doc.status == 'RECEBIDO':
+                    doc.status = 'PENDENTE'
+                    doc.recebido_em = None
+                    doc.recebido_por = None
+                    logger.info("Receita %s revertida para PENDENTE (desconciliacao)", doc.id)
 
     @staticmethod
     def obter_resumo():

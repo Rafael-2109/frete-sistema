@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-file-invoice-dollar"></i> Cotacoes Comerciais</h2>
+        <a href="{{ url_for('carvia.criar_cotacao_v2') }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Nova Cotacao
+        </a>
+    </div>
+
+    {% set carvia_active = 'cotacoes_v2' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# Contadores #}
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}"
+           class="btn btn-sm {{ 'btn-primary' if not status_filtro else 'btn-outline-secondary' }}">
+            Todas ({{ contadores.values()|sum }})
+        </a>
+        {% for st, cnt in contadores.items()|sort %}
+        <a href="{{ url_for('carvia.listar_cotacoes_v2', status=st) }}"
+           class="btn btn-sm {{ 'btn-primary' if status_filtro == st else 'btn-outline-secondary' }}">
+            {{ st }} ({{ cnt }})
+        </a>
+        {% endfor %}
+    </div>
+
+    {# Tabela #}
+    <div class="card">
+        <div class="card-body p-0">
+            {% if cotacoes %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Cliente</th>
+                            <th>Destino</th>
+                            <th>Material</th>
+                            <th class="text-end">Valor</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cot in cotacoes %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cot.id) }}">
+                                    <strong>{{ cot.numero_cotacao }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ cot.cliente.nome_comercial if cot.cliente else '-' }}</td>
+                            <td>
+                                {% if cot.endereco_destino %}
+                                {{ cot.endereco_destino.fisico_cidade }}/{{ cot.endereco_destino.fisico_uf }}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% if cot.tipo_material == 'MOTO' %}
+                                <span class="badge bg-info">Moto</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Carga Geral</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if cot.valor_final_aprovado %}
+                                {{ cot.valor_final_aprovado|valor_br }}
+                                {% elif cot.valor_tabela %}
+                                {{ cot.valor_tabela|valor_br }}
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if cot.status == 'RASCUNHO' %}
+                                <span class="badge bg-secondary">Rascunho</span>
+                                {% elif cot.status == 'PENDENTE_ADMIN' %}
+                                <span class="badge bg-warning">Pendente Admin</span>
+                                {% elif cot.status == 'ENVIADO' %}
+                                <span class="badge bg-info">Enviado</span>
+                                {% elif cot.status == 'APROVADO' %}
+                                <span class="badge bg-success">Aprovado</span>
+                                {% elif cot.status == 'RECUSADO' %}
+                                <span class="badge bg-danger">Recusado</span>
+                                {% elif cot.status == 'CANCELADO' %}
+                                <span class="badge bg-dark">Cancelado</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center small text-muted">
+                                {{ cot.criado_em.strftime('%d/%m/%Y') if cot.criado_em else '-' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-file-invoice-dollar fa-3x mb-3"></i>
+                <p>Nenhuma cotacao encontrada.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

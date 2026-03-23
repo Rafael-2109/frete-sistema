@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-building"></i> Clientes CarVia</h2>
+        <a href="{{ url_for('carvia.criar_cliente') }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Novo Cliente
+        </a>
+    </div>
+
+    {% set carvia_active = 'clientes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# Filtros #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Buscar por nome..." value="{{ busca }}">
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" name="ativos" value="1"
+                               id="chkAtivos" {{ 'checked' if apenas_ativos }}>
+                        <label class="form-check-label" for="chkAtivos">Apenas ativos</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-secondary btn-sm w-100">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Tabela #}
+    <div class="card">
+        <div class="card-body p-0">
+            {% if clientes %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Nome Comercial</th>
+                            <th class="text-center">Enderecos</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Criado em</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cli in clientes %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}">
+                                    <strong>{{ cli.nome_comercial }}</strong>
+                                </a>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ cli.enderecos.count() }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if cli.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center small text-muted">
+                                {{ cli.criado_em.strftime('%d/%m/%Y') if cli.criado_em else '-' }}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
+                                   class="btn btn-outline-primary btn-sm" title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('carvia.editar_cliente', cliente_id=cli.id) }}"
+                                   class="btn btn-outline-secondary btn-sm" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-building fa-3x mb-3"></i>
+                <p>Nenhum cliente encontrado.</p>
+                <a href="{{ url_for('carvia.criar_cliente') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Cadastrar Primeiro Cliente
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mt-2 small text-muted">
+        {{ clientes|length }} cliente(s) encontrado(s)
+    </div>
+</div>
+{% endblock %}

@@ -162,7 +162,6 @@ function _csToggleDetalhes(detailId) {
     if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
-// Parametros armazenados para redirecionar para nova sessao
 var _csParamsAtual = {};
 
 /**
@@ -283,9 +282,6 @@ function _csExecutarCotacao() {
                     '<button class="btn btn-xs btn-outline-info me-1" onclick="_csToggleDetalhes(\'' + detailId + '\')" title="Detalhes">' +
                         '<i class="fas fa-info-circle"></i>' +
                     '</button>' +
-                    '<button class="btn btn-xs btn-success" onclick="_csCriarSessao(' + idx + ')" title="Criar Sessao de Cotacao">' +
-                        '<i class="fas fa-external-link-alt"></i> Sessao' +
-                    '</button>' +
                 '</td>';
             body.appendChild(tr);
 
@@ -319,21 +315,5 @@ function _csVoltarFormulario() {
     document.getElementById('csVoltarBtn').style.display = 'none';
 }
 
-function _csCriarSessao(idx) {
-    var op = window._csOpcoes[idx];
-    var p = _csParamsAtual;
-    var params = new URLSearchParams({
-        prefill: '1',
-        peso: p.peso || '',
-        valor_mercadoria: p.valor_mercadoria || '',
-        uf_destino: p.uf_destino || '',
-        cidade_destino: p.cidade_destino || '',
-        uf_origem: p.uf_origem || '',
-        cliente_nome: p.cliente_nome || '',
-        transportadora_id: op.transportadora_id || '',
-        valor_frete: op.valor_frete || '',
-        transportadora_nome: op.transportadora_nome || '',
-    });
-    window.location.href = '/carvia/sessoes-cotacao/nova?' + params.toString();
-}
+
 </script>

@@ -259,6 +259,11 @@
                 <i class="fas fa-pallet"></i> {{ embarque.saldo_pallets_pendentes }}
               </span>
             {% endif %}
+            {% if embarque.precisa_reimprimir %}
+              <span class="badge bg-warning text-dark" title="Embarque modificado apos impressao - reimprimir">
+                <i class="fas fa-print"></i> Reimprimir
+              </span>
+            {% endif %}
           </td>
           <td>
             {% set dados_portaria = embarque.registros_portaria %}

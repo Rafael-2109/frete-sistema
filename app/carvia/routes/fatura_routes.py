@@ -15,7 +15,7 @@ from app.carvia.models import (
     CarviaFaturaCliente, CarviaFaturaTransportadora,
     CarviaFaturaTransportadoraItem,
     CarviaOperacao, CarviaSubcontrato,
-    CarviaCteComplementar,
+    CarviaCteComplementar, CarviaFrete,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,10 +182,14 @@ def register_fatura_routes(bp):
                 db.session.add(fatura)
                 db.session.flush()
 
-                # Vincular operacoes
+                # Vincular operacoes + propagar para CarviaFrete
                 for op in operacoes:
                     op.fatura_cliente_id = fatura.id
                     op.status = 'FATURADO'
+                    # Retroativo: vincular CarviaFrete pela operacao_id
+                    CarviaFrete.query.filter_by(operacao_id=op.id).update(
+                        {'fatura_cliente_id': fatura.id}
+                    )
 
                 # Vincular CTe Complementares
                 for comp in ctes_comp:
@@ -579,9 +583,12 @@ def register_fatura_routes(bp):
             db.session.add(fatura)
             db.session.flush()
 
-            # Vincular operacao
+            # Vincular operacao + propagar para CarviaFrete
             operacao.fatura_cliente_id = fatura.id
             operacao.status = 'FATURADO'
+            CarviaFrete.query.filter_by(operacao_id=operacao.id).update(
+                {'fatura_cliente_id': fatura.id}
+            )
 
             # Gerar itens de detalhe
             from app.carvia.services.linking_service import LinkingService
@@ -814,7 +821,11 @@ def register_fatura_routes(bp):
 
         try:
             # FOR UPDATE para evitar vinculacao concorrente
-            subcontratos = db.session.query(CarviaSubcontrato).filter(
+            # lazyload('*') evita LEFT OUTER JOINs que conflitam com FOR UPDATE no PostgreSQL
+            from sqlalchemy.orm import lazyload
+            subcontratos = db.session.query(CarviaSubcontrato).options(
+                lazyload('*')
+            ).filter(
                 CarviaSubcontrato.id.in_(subcontrato_ids),
                 CarviaSubcontrato.transportadora_id == fatura.transportadora_id,
                 CarviaSubcontrato.status.in_(['COTADO', 'CONFIRMADO']),
@@ -828,10 +839,14 @@ def register_fatura_routes(bp):
                             'Verifique se estao COTADOS ou CONFIRMADOS e sem fatura vinculada.'
                 }), 400
 
-            # Vincular subcontratos
+            # Vincular subcontratos + propagar para CarviaFrete
             for sub in subcontratos:
                 sub.fatura_transportadora_id = fatura.id
                 sub.status = 'FATURADO'
+                # Retroativo: vincular CarviaFrete pelo subcontrato_id
+                CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
+                    {'fatura_transportadora_id': fatura.id}
+                )
 
             # Gerar itens de detalhe incrementalmente
             from app.carvia.services.linking_service import LinkingService
@@ -893,9 +908,12 @@ def register_fatura_routes(bp):
                     'erro': 'Subcontrato nao encontrado nesta fatura.'
                 }), 404
 
-            # Reverter subcontrato
+            # Reverter subcontrato + limpar CarviaFrete
             sub.fatura_transportadora_id = None
             sub.status = 'CONFIRMADO'
+            CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
+                {'fatura_transportadora_id': None}
+            )
 
             # Remover item de detalhe
             CarviaFaturaTransportadoraItem.query.filter_by(
@@ -1220,6 +1238,10 @@ def register_fatura_routes(bp):
 
             operacao.fatura_cliente_id = fatura.id
             operacao.status = 'FATURADO'
+            # Retroativo: vincular CarviaFrete pela operacao_id
+            CarviaFrete.query.filter_by(operacao_id=operacao.id).update(
+                {'fatura_cliente_id': fatura.id}
+            )
 
             # Recalcular valor_total da fatura
             soma = db.session.query(
@@ -1269,6 +1291,10 @@ def register_fatura_routes(bp):
 
             operacao.fatura_cliente_id = None
             operacao.status = 'CONFIRMADO'
+            # Retroativo: limpar CarviaFrete.fatura_cliente_id
+            CarviaFrete.query.filter_by(operacao_id=operacao.id).update(
+                {'fatura_cliente_id': None}
+            )
 
             # Recalcular valor_total
             soma = db.session.query(

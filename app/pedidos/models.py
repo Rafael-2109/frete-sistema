@@ -78,16 +78,31 @@ class Pedido(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     
     @property
+    def eh_carvia(self):
+        """Detecta item CarVia pelo prefixo do separacao_lote_id (CARVIA- ou CARVIA-PED-)."""
+        lote = getattr(self, 'separacao_lote_id', None) or ''
+        return lote.startswith('CARVIA-')
+
+    @property
     def status_calculado(self):
         """
         Calcula o status do pedido baseado no estado atual:
+        - CARVIA: Item CarVia (cotacao ou pedido) — detectado por prefixo separacao_lote_id
         - NF no CD: Flag nf_cd é True (NF voltou para o CD)
         - FATURADO: Tem NF preenchida e não está no CD
-        - EMBARCADO: Tem data de embarque mas não tem NF
         - COTADO: Tem cotação_id mas não está embarcado
         - ABERTO: Não tem cotação
         """
-        # NOVO: Primeiro verifica se a NF está no CD
+        # CarVia: detectado pelo prefixo CARVIA- no separacao_lote_id
+        if self.eh_carvia:
+            status_view = getattr(self, 'status', '') or ''
+            if status_view in ('FATURADO',):
+                return 'FATURADO'
+            if status_view in ('EMBARCADO',):
+                return 'EMBARCADO'
+            return 'CARVIA'
+
+        # Nacom (logica existente, inalterada)
         if getattr(self, 'nf_cd', False):
             return 'NF no CD'
         elif self.nf and self.nf.strip():

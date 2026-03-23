@@ -147,10 +147,20 @@
         {% endif %}
     </div>
 
-    <!-- Cabeçalho dos Itens -->
+    {# Separar itens Nacom e CarVia #}
+    {% set itens_nacom = [] %}
+    {% set itens_carvia = [] %}
+    {% for item in embarque.itens_ativos %}
+      {% if item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-') %}
+        {% if itens_carvia.append(item) %}{% endif %}
+      {% else %}
+        {% if itens_nacom.append(item) %}{% endif %}
+      {% endif %}
+    {% endfor %}
+
+    <!-- Itens Nacom -->
+    {% if itens_nacom %}
     <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Itens do Embarque</h3>
-    
-    <!-- Tabela de Itens do Embarque -->
     <table class="table-embarque">
         <thead>
             <tr>
@@ -165,7 +175,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in embarque.itens_ativos %}
+            {% for item in itens_nacom %}
             <tr>
                 <td>{{ item.cliente }}</td>
                 <td>{{ item.pedido }}</td>
@@ -179,6 +189,52 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
+
+    <!-- Itens CarVia (secao separada, logo abaixo) -->
+    {% if itens_carvia %}
+    <h3 style="border-bottom: 2px solid #17a2b8; padding-bottom: 3px; margin-bottom: 8px; margin-top: 10px;">
+        CarVia ({{ itens_carvia|length }})
+    </h3>
+    <table class="table-embarque">
+        <thead>
+            <tr>
+                <th>Cliente</th>
+                <th>Pedido/Cotacao</th>
+                <th>NF</th>
+                <th>Status</th>
+                <th>UF</th>
+                <th>Cidade</th>
+                <th>Peso</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in itens_carvia %}
+            <tr{% if item.provisorio %} style="background-color: #fff3cd;"{% endif %}>
+                <td>{{ item.cliente }}</td>
+                <td>{{ item.pedido }}</td>
+                <td>{{ item.nota_fiscal or '-' }}</td>
+                <td>
+                  {% if item.provisorio %}
+                    <strong>PROVISORIO</strong>
+                  {% else %}
+                    OK
+                  {% endif %}
+                </td>
+                <td>{{ item.uf_destino }}</td>
+                <td>{{ item.cidade_destino }}</td>
+                <td>{{ "%.0f"|format(item.peso or 0) }} kg</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if itens_carvia | selectattr('provisorio') | list %}
+    <p style="font-size: 11px; color: #856404; margin-top: 4px;">
+        <strong>ATENCAO:</strong> Itens PROVISORIOS serao substituidos quando pedidos/NF forem anexados.
+        Reimprimir embarque apos resolucao.
+    </p>
+    {% endif %}
+    {% endif %}
 
     <!-- Totalizadores do Embarque -->
     <div style="margin-top: 20px; text-align: center; font-weight: bold; font-size: 14px;">

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Separacao CarVia - Embarque #{{ embarque.numero }}</title>
+    <style>
+        @page { size: A4; margin: 10mm; }
+        body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 10px; }
+        .header { text-align: center; border-bottom: 2px solid #17a2b8; padding-bottom: 5px; margin-bottom: 10px; }
+        .header h1 { margin: 0; font-size: 18px; }
+        .header h2 { margin: 2px 0; font-size: 14px; color: #555; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; }
+        .info-item { font-size: 11px; }
+        .info-item strong { display: inline-block; min-width: 100px; }
+        table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+        th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; font-size: 11px; }
+        th { background-color: #17a2b8; color: white; font-weight: bold; }
+        .provisorio-alert { background: #fff3cd; border: 2px solid #ffc107; padding: 10px; margin: 10px 0; text-align: center; }
+        .provisorio-alert strong { font-size: 14px; }
+        .total-row { font-weight: bold; background-color: #f8f9fa; }
+        .assinatura { margin-top: 30px; display: flex; justify-content: space-around; }
+        .assinatura div { text-align: center; width: 40%; }
+        .assinatura .linha { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; }
+        @media print { body { margin: 0; } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    {% if eh_pedido %}
+    <h1>SEPARACAO CARVIA — {{ pedido.numero_pedido }}</h1>
+    <h2>Filial: {{ pedido.filial }} ({{ 'Estoque' if pedido.tipo_separacao == 'ESTOQUE' else 'Cross-Docking' }})</h2>
+    {% else %}
+    <h1>SEPARACAO CARVIA — {{ cotacao.numero_cotacao }} (PROVISORIO)</h1>
+    <h2>Aguardando pedidos/NF</h2>
+    {% endif %}
+    <h2>Embarque #{{ embarque.numero }}
+        {% if embarque.transportadora %} | {{ embarque.transportadora.razao_social }}{% endif %}
+    </h2>
+</div>
+
+<!-- Dados da cotacao -->
+<div class="info-grid">
+    <div class="info-item"><strong>Cliente:</strong> {{ cotacao.cliente.nome_comercial if cotacao.cliente else '-' }}</div>
+    <div class="info-item"><strong>Cotacao:</strong> {{ cotacao.numero_cotacao }}</div>
+    <div class="info-item"><strong>Destino:</strong>
+        {% if cotacao.endereco_destino %}
+            {{ cotacao.endereco_destino.fisico_cidade }}/{{ cotacao.endereco_destino.fisico_uf }}
+        {% else %}-{% endif %}
+    </div>
+    <div class="info-item"><strong>CNPJ Destino:</strong>
+        {% if cotacao.endereco_destino %}{{ cotacao.endereco_destino.cnpj }}{% else %}-{% endif %}
+    </div>
+    <div class="info-item"><strong>Material:</strong> {{ cotacao.tipo_material }}</div>
+    <div class="info-item"><strong>Peso:</strong> {{ "%.0f"|format(cotacao.peso or 0) }} kg</div>
+    <div class="info-item"><strong>Valor Mercadoria:</strong> R$ {{ "%.2f"|format(cotacao.valor_mercadoria or 0) }}</div>
+    <div class="info-item"><strong>Data Expedicao:</strong>
+        {{ cotacao.data_expedicao.strftime('%d/%m/%Y') if cotacao.data_expedicao else '-' }}
+    </div>
+</div>
+
+{% if not eh_pedido %}
+<!-- PROVISORIO: alerta grande -->
+<div class="provisorio-alert">
+    <strong>ESTE DOCUMENTO E PROVISORIO</strong><br>
+    Sera substituido quando os pedidos e NFs da CarVia forem anexados a cotacao.<br>
+    <small>Reimprimir o embarque apos a resolucao dos pedidos.</small>
+</div>
+{% endif %}
+
+{% if eh_pedido and itens_pedido %}
+<!-- Pedido com itens detalhados -->
+<h3 style="border-bottom: 1px solid #17a2b8; padding-bottom: 3px;">Itens do Pedido</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Modelo</th>
+            <th>Descricao</th>
+            <th>Cor</th>
+            <th>Qtd</th>
+            <th>Valor Unit.</th>
+            <th>Valor Total</th>
+            <th>NF</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in itens_pedido %}
+        <tr>
+            <td>{{ item.modelo_moto.nome if item.modelo_moto else '-' }}</td>
+            <td>{{ item.descricao or '-' }}</td>
+            <td>{{ item.cor or '-' }}</td>
+            <td style="text-align: center;">{{ item.quantidade }}</td>
+            <td style="text-align: right;">{{ "%.2f"|format(item.valor_unitario or 0) }}</td>
+            <td style="text-align: right;">{{ "%.2f"|format(item.valor_total or 0) }}</td>
+            <td>{{ item.numero_nf or '-' }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+            <td colspan="3">TOTAL</td>
+            <td style="text-align: center;">{{ itens_pedido | sum(attribute='quantidade') }}</td>
+            <td></td>
+            <td style="text-align: right;">{{ "%.2f"|format(itens_pedido | sum(attribute='valor_total') or 0) }}</td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+{% endif %}
+
+{% if motos and not eh_pedido %}
+<!-- Cotacao provisoria com motos (sem pedido ainda) -->
+<h3 style="border-bottom: 1px solid #17a2b8; padding-bottom: 3px;">Modelos Cotados</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Modelo</th>
+            <th>Categoria</th>
+            <th>Qtd</th>
+            <th>Peso Cubado Unit.</th>
+            <th>Peso Cubado Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for moto in motos %}
+        <tr>
+            <td>{{ moto.modelo_moto.nome if moto.modelo_moto else '-' }}</td>
+            <td>{{ moto.categoria_moto.nome if moto.categoria_moto else '-' }}</td>
+            <td style="text-align: center;">{{ moto.quantidade }}</td>
+            <td style="text-align: right;">{{ "%.2f"|format(moto.peso_cubado_unitario or 0) }} kg</td>
+            <td style="text-align: right;">{{ "%.2f"|format(moto.peso_cubado_total or 0) }} kg</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Secao de Separacao e Conferencia -->
+<div style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+    <div class="assinatura">
+        <div>
+            <div class="linha">Separacao</div>
+        </div>
+        <div>
+            <div class="linha">Conferencia</div>
+        </div>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 10px; font-size: 10px; color: #999;">
+    Impresso em {{ data_impressao.strftime('%d/%m/%Y %H:%M') }} por {{ current_user.nome if current_user.nome else current_user.email }}
+</div>
+
+</body>
+</html>

@@ -1352,21 +1352,19 @@ def fechar_frete():
                         
                         print(f"[DEBUG] 🔄 CARGA FRACIONADA: Dados da tabela atualizados no ITEM {item.pedido}")
             
-            # Atualiza Separacao COM ID DA COTAÇÃO VÁLIDO
+            # Atualiza Separacao — apenas Nacom (CarVia nao tem Separacao)
             for pedido_data in pedidos_data:
-                # Usa separacao_lote_id em vez de id
-                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                lote_id = pedido_data.get('id')
+                if lote_id and str(lote_id).startswith('CARVIA-'):
+                    continue  # Skip itens CarVia
                 pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido and pedido.separacao_lote_id:
-                    # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
-                    # Usa método que dispara event listeners para atualizar status automaticamente
                     Separacao.atualizar_cotacao(
                         separacao_lote_id=pedido.separacao_lote_id,
                         cotacao_id=cotacao.id,
-                        nf_cd=False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                        nf_cd=False
                     )
-                    # O status será calculado automaticamente como COTADO pelo trigger
-            
+
             # Remove cotação antiga se existir
             if cotacao_antiga:
                 db.session.delete(cotacao_antiga)
@@ -1427,8 +1425,11 @@ def fechar_frete():
                 print(f"[DEBUG] ⚠️ Erro ao recriar fretes: {str(e)}")
                 # Não falha a operação principal se a recriação de fretes falhar
 
+            # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
+            embarque_existente.marcar_alterado_apos_impressao()
+
             embarque = embarque_existente  # Para usar nas próximas etapas
-            
+
         else:
             # ✅ CRIAÇÃO NORMAL: Cria novo embarque
             print(f"[DEBUG] ✅ CRIANDO novo embarque")
@@ -1446,20 +1447,18 @@ def fechar_frete():
             db.session.add(cotacao)
             db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
 
-            # Atualiza Separacao COM ID DA COTAÇÃO VÁLIDO
+            # Atualiza Separacao — apenas Nacom (CarVia nao tem Separacao)
             for pedido_data in pedidos_data:
-                # Usa separacao_lote_id em vez de id
-                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                lote_id = pedido_data.get('id')
+                if lote_id and str(lote_id).startswith('CARVIA-'):
+                    continue  # Skip itens CarVia
                 pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if pedido and pedido.separacao_lote_id:
-                    # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
-                    # Usa método que dispara event listeners para atualizar status automaticamente
                     Separacao.atualizar_cotacao(
                         separacao_lote_id=pedido.separacao_lote_id,
                         cotacao_id=cotacao.id,
-                        nf_cd=False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete
+                        nf_cd=False
                     )
-                    # O status será calculado automaticamente como COTADO pelo trigger
 
             # ✅ CRIA EMBARQUE
             # CORREÇÃO: Garante número único de embarque
@@ -1514,72 +1513,99 @@ def fechar_frete():
             else:
                 print(f"[DEBUG] ⚠️ Rastreamento GPS NÃO criado - embarque é FRACIONADA")
 
-            # Cria EmbarqueItems apenas para criação nova
+            # Cria EmbarqueItems — separando Nacom de CarVia
             for pedido_data in pedidos_data:
-                # Usa separacao_lote_id em vez de id
-                lote_id = pedido_data.get('id')  # Na verdade é o separacao_lote_id
+                lote_id = pedido_data.get('id')
                 pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
                 if not pedido:
                     continue
 
-                # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
-                cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
-                
-                protocolo_formatado = formatar_protocolo(pedido.protocolo)
-                data_formatada = formatar_data_brasileira(pedido.agendamento)
+                eh_carvia = str(lote_id or '').startswith('CARVIA-')
 
-                # ✅ BUSCAR numero_nf da Separacao correspondente
-                nota_fiscal = None
-                if pedido.separacao_lote_id and pedido.num_pedido:
-                    separacao_com_nf = Separacao.query.filter_by(
+                if eh_carvia:
+                    # --- CarVia: EmbarqueItem PROVISORIO ---
+                    uf_cv = (pedido.cod_uf or '').strip()
+                    cidade_cv = (pedido.nome_cidade or '').strip()
+
+                    carvia_cot_id = None
+                    try:
+                        if str(lote_id).startswith('CARVIA-PED-'):
+                            ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+                            from app.carvia.models import CarviaPedido as _CP
+                            _ped = db.session.get(_CP, ped_id)
+                            carvia_cot_id = _ped.cotacao_id if _ped else None
+                        elif str(lote_id).startswith('CARVIA-'):
+                            carvia_cot_id = int(str(lote_id).replace('CARVIA-', ''))
+                    except (ValueError, TypeError):
+                        pass
+
+                    item = EmbarqueItem(
+                        embarque_id=embarque.id,
                         separacao_lote_id=pedido.separacao_lote_id,
-                        num_pedido=pedido.num_pedido
-                    ).filter(Separacao.numero_nf.isnot(None)).first()
+                        cnpj_cliente=pedido.cnpj_cpf,
+                        cliente=pedido.raz_social_red,
+                        pedido=pedido.num_pedido,
+                        peso=pedido.peso_total or 0,
+                        valor=pedido.valor_saldo_total or 0,
+                        pallets=0,
+                        uf_destino=uf_cv,
+                        cidade_destino=cidade_cv,
+                        volumes=None,
+                        provisorio=True,
+                        carvia_cotacao_id=carvia_cot_id,
+                    )
+                    if tipo == 'FRACIONADA':
+                        TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                        item.icms_destino = dados_tabela.get('icms_destino')
+                    db.session.add(item)
+                    print(f"[DEBUG] ✅ CarVia PROVISORIO: {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
 
-                    if separacao_com_nf:
-                        nota_fiscal = separacao_com_nf.numero_nf
-                        print(f"[DEBUG] 📄 NF encontrada para pedido {pedido.num_pedido}: {nota_fiscal}")
+                else:
+                    # --- Nacom: fluxo existente ---
+                    cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
 
-                item = EmbarqueItem(
-                    embarque_id=embarque.id,
-                    separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
-                    cnpj_cliente=pedido.cnpj_cpf,  # ✅ CORREÇÃO: Usa CNPJ do banco, não do frontend
-                    cliente=pedido.raz_social_red,
-                    pedido=pedido.num_pedido,
-                    nota_fiscal=nota_fiscal,  # ✅ PREENCHE com numero_nf da Separacao se houver
-                    peso=pedido.peso_total,
-                    valor=pedido.valor_saldo_total,
-                    pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
-                    uf_destino=uf_correto,
-                    cidade_destino=cidade_formatada,
-                    volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação normal
-                    protocolo_agendamento=protocolo_formatado,
-                    data_agenda=data_formatada
-                )
-                
-                
-                # ✅ CORREÇÃO: CARGA FRACIONADA - Dados da tabela vão para os EMBARQUE_ITENS
-                if tipo == 'FRACIONADA':
-                    # Usa TabelaFreteManager para atribuir campos da tabela de frete
-                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
-                    # icms_destino é atribuído separadamente (vem de localidades)
-                    item.icms_destino = dados_tabela.get('icms_destino')
-                    
-                    print(f"[DEBUG] ✅ CARGA FRACIONADA: Dados da tabela salvos no EMBARQUE_ITEM {pedido.num_pedido}")
-                    print(f"[DEBUG]   📋 Nome tabela: {item.tabela_nome_tabela}")
-                    print(f"[DEBUG]   📋 Modalidade: {item.modalidade}")
-                    print(f"[DEBUG]   📋 Valor/kg: R${item.tabela_valor_kg}")
-                    print(f"[DEBUG]   📋 ICMS destino: {item.icms_destino}%")
-                
-                db.session.add(item)
+                    protocolo_formatado = formatar_protocolo(pedido.protocolo)
+                    data_formatada = formatar_data_brasileira(pedido.agendamento)
+
+                    nota_fiscal = None
+                    if pedido.separacao_lote_id and pedido.num_pedido:
+                        separacao_com_nf = Separacao.query.filter_by(
+                            separacao_lote_id=pedido.separacao_lote_id,
+                            num_pedido=pedido.num_pedido
+                        ).filter(Separacao.numero_nf.isnot(None)).first()
+                        if separacao_com_nf:
+                            nota_fiscal = separacao_com_nf.numero_nf
+                            print(f"[DEBUG] 📄 NF encontrada para pedido {pedido.num_pedido}: {nota_fiscal}")
+
+                    item = EmbarqueItem(
+                        embarque_id=embarque.id,
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        cnpj_cliente=pedido.cnpj_cpf,
+                        cliente=pedido.raz_social_red,
+                        pedido=pedido.num_pedido,
+                        nota_fiscal=nota_fiscal,
+                        peso=pedido.peso_total,
+                        valor=pedido.valor_saldo_total,
+                        pallets=pedido.pallet_total,
+                        uf_destino=uf_correto,
+                        cidade_destino=cidade_formatada,
+                        volumes=None,
+                        protocolo_agendamento=protocolo_formatado,
+                        data_agenda=data_formatada
+                    )
+                    if tipo == 'FRACIONADA':
+                        TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                        item.icms_destino = dados_tabela.get('icms_destino')
+                        print(f"[DEBUG] ✅ CARGA FRACIONADA: tabela salvos no EMBARQUE_ITEM {pedido.num_pedido}")
+                    db.session.add(item)
 
         db.session.commit()
         
-        # ✅ PROPAGAR cotacao_id para Separacao usando separacao_lote_id dos EmbarqueItems
-        # Isso garante que TODOS os itens que foram adicionados ao embarque tenham cotacao_id
+        # Propagar cotacao_id para Separacao — apenas Nacom (CarVia nao tem Separacao)
         for item in embarque.itens:
             if item.separacao_lote_id and item.status == 'ativo':
-                # Usa método que dispara event listeners para atualizar status automaticamente
+                if str(item.separacao_lote_id).startswith('CARVIA-'):
+                    continue  # Skip itens CarVia provisorios
                 Separacao.atualizar_cotacao(
                     separacao_lote_id=item.separacao_lote_id,
                     cotacao_id=cotacao.id,
@@ -1759,17 +1785,15 @@ def fechar_frete_grupo():
         db.session.add(cotacao)
         db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
 
-        # Atualiza todos os pedidos com a cotação
+        # Atualiza Separacao — apenas Nacom (CarVia nao tem Separacao)
         for pedido in todos_pedidos:
-            if pedido.separacao_lote_id:
-                # Atualiza diretamente na tabela Separacao (transportadora ignorado conforme orientação)
+            if pedido.separacao_lote_id and not str(pedido.separacao_lote_id).startswith('CARVIA-'):
                 Separacao.query.filter_by(
                     separacao_lote_id=pedido.separacao_lote_id
                 ).update({
                     'cotacao_id': cotacao.id,
-                    'nf_cd': False  # ✅ NOVO: Reseta flag NF no CD ao fechar frete grupo
+                    'nf_cd': False
                 })
-                # O status será calculado automaticamente como COTADO pelo trigger
 
         # ✅ NOVA LÓGICA: Recebe dados COMPLETOS das tabelas do frontend (payload)
         tabelas_por_cnpj = data.get('tabelas_por_cnpj', {})
@@ -1861,61 +1885,92 @@ def fechar_frete_grupo():
             print(f"[DEBUG] ⚠️ Erro ao criar rastreamento GPS: {str(e)}")
             # Não falha a criação do embarque se rastreamento falhar
 
-        # Cria EmbarqueItems
+        # Cria EmbarqueItems — separando Nacom de CarVia
         for pedido in todos_pedidos:
-            # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
-            cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
+            eh_carvia = str(pedido.separacao_lote_id or '').startswith('CARVIA-')
 
-            # ✅ BUSCAR numero_nf da Separacao correspondente
-            nota_fiscal = None
-            if pedido.separacao_lote_id and pedido.num_pedido:
-                separacao_com_nf = Separacao.query.filter_by(
+            if eh_carvia:
+                # --- CarVia: EmbarqueItem PROVISORIO ---
+                uf_cv = (pedido.cod_uf or '').strip()
+                cidade_cv = (pedido.nome_cidade or '').strip()
+
+                carvia_cot_id = None
+                try:
+                    lote_id = str(pedido.separacao_lote_id)
+                    if lote_id.startswith('CARVIA-PED-'):
+                        ped_id = int(lote_id.replace('CARVIA-PED-', ''))
+                        from app.carvia.models import CarviaPedido as _CP
+                        _ped = db.session.get(_CP, ped_id)
+                        carvia_cot_id = _ped.cotacao_id if _ped else None
+                    elif lote_id.startswith('CARVIA-'):
+                        carvia_cot_id = int(lote_id.replace('CARVIA-', ''))
+                except (ValueError, TypeError):
+                    pass
+
+                item = EmbarqueItem(
+                    embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,
-                    num_pedido=pedido.num_pedido
-                ).filter(Separacao.numero_nf.isnot(None)).first()
+                    cnpj_cliente=pedido.cnpj_cpf,
+                    cliente=pedido.raz_social_red,
+                    pedido=pedido.num_pedido,
+                    peso=pedido.peso_total or 0,
+                    valor=pedido.valor_saldo_total or 0,
+                    pallets=0,
+                    uf_destino=uf_cv,
+                    cidade_destino=cidade_cv,
+                    volumes=None,
+                    provisorio=True,
+                    carvia_cotacao_id=carvia_cot_id,
+                )
+                if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
+                    dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
+                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                    item.icms_destino = dados_tabela.get('icms_destino', 0)
+                db.session.add(item)
+                print(f"[DEBUG] CarVia PROVISORIO (grupo): {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
 
-                if separacao_com_nf:
-                    nota_fiscal = separacao_com_nf.numero_nf
-                    print(f"[DEBUG] 📄 NF encontrada para pedido {pedido.num_pedido}: {nota_fiscal}")
+            else:
+                # --- Nacom: fluxo existente ---
+                cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
 
-            item = EmbarqueItem(
-                embarque_id=embarque.id,
-                separacao_lote_id=pedido.separacao_lote_id,  # ✅ CORRIGE: copia separacao_lote_id do pedido
-                cnpj_cliente=pedido.cnpj_cpf,
-                cliente=pedido.raz_social_red,
-                pedido=pedido.num_pedido,
-                nota_fiscal=nota_fiscal,  # ✅ PREENCHE com numero_nf da Separacao se houver
-                peso=pedido.peso_total,
-                valor=pedido.valor_saldo_total,
-                pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
-                uf_destino=uf_correto,
-                cidade_destino=cidade_formatada,
-                volumes=None,  # ✅ ALTERADO: Deixa volumes em branco também na cotação por grupo
-                protocolo_agendamento=formatar_protocolo(pedido.protocolo),
-                data_agenda=formatar_data_brasileira(pedido.agendamento)
-            )
-            
-            # ✅ REFATORADO: Usa TabelaFreteManager - 1 linha substitui 16!
-            if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
-                dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
-                
-                # Atribui campos da TABELA DE FRETE
-                TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
-                
-                # icms_destino vem de CIDADE, não da tabela de frete
-                item.icms_destino = dados_tabela.get('icms_destino', 0)
-                
-                print(f"[DEBUG] ✅ CARGA FRACIONADA: Dados COMPLETOS da tabela salvos no EMBARQUE_ITEM {pedido.num_pedido} (CNPJ: {pedido.cnpj_cpf})")
-            
-            db.session.add(item)
+                nota_fiscal = None
+                if pedido.separacao_lote_id and pedido.num_pedido:
+                    separacao_com_nf = Separacao.query.filter_by(
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        num_pedido=pedido.num_pedido
+                    ).filter(Separacao.numero_nf.isnot(None)).first()
+                    if separacao_com_nf:
+                        nota_fiscal = separacao_com_nf.numero_nf
+
+                item = EmbarqueItem(
+                    embarque_id=embarque.id,
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    cnpj_cliente=pedido.cnpj_cpf,
+                    cliente=pedido.raz_social_red,
+                    pedido=pedido.num_pedido,
+                    nota_fiscal=nota_fiscal,
+                    peso=pedido.peso_total,
+                    valor=pedido.valor_saldo_total,
+                    pallets=pedido.pallet_total,
+                    uf_destino=uf_correto,
+                    cidade_destino=cidade_formatada,
+                    volumes=None,
+                    protocolo_agendamento=formatar_protocolo(pedido.protocolo),
+                    data_agenda=formatar_data_brasileira(pedido.agendamento)
+                )
+                if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
+                    dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
+                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                    item.icms_destino = dados_tabela.get('icms_destino', 0)
+                db.session.add(item)
 
         db.session.commit()
         
-        # ✅ PROPAGAR cotacao_id para Separacao usando separacao_lote_id dos EmbarqueItems
-        # Isso garante que TODOS os itens que foram adicionados ao embarque tenham cotacao_id
+        # Propagar cotacao_id para Separacao — apenas Nacom (CarVia nao tem Separacao)
         for item in embarque.itens:
             if item.separacao_lote_id and item.status == 'ativo':
-                # Usa método que dispara event listeners para atualizar status automaticamente
+                if str(item.separacao_lote_id).startswith('CARVIA-'):
+                    continue  # Skip itens CarVia provisorios
                 Separacao.atualizar_cotacao(
                     separacao_lote_id=item.separacao_lote_id,
                     cotacao_id=cotacao.id,
@@ -3653,17 +3708,15 @@ def incluir_em_embarque():
             
             db.session.add(novo_item)
             
-            # ✅ CORRIGIDO: Atualizar Separacao com cotação do embarque
-            if pedido.separacao_lote_id:
-                # Usa método que dispara event listeners para atualizar status automaticamente
+            # Atualizar Separacao — apenas Nacom (CarVia nao tem Separacao)
+            if pedido.separacao_lote_id and not str(pedido.separacao_lote_id).startswith('CARVIA-'):
                 if embarque.cotacao_id:
                     Separacao.atualizar_cotacao(
                         separacao_lote_id=pedido.separacao_lote_id,
                         cotacao_id=embarque.cotacao_id,
-                        nf_cd=False  # Reseta flag NF no CD
+                        nf_cd=False
                     )
                 else:
-                    # Se não tem cotacao_id, apenas atualiza nf_cd
                     Separacao.atualizar_nf_cd(
                         separacao_lote_id=pedido.separacao_lote_id,
                         nf_cd=False
@@ -3672,7 +3725,11 @@ def incluir_em_embarque():
                 # O status será calculado automaticamente como COTADO pelo trigger
             
             pedidos_adicionados += 1
-        
+
+        # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
+        if pedidos_adicionados > 0:
+            embarque.marcar_alterado_apos_impressao()
+
         db.session.commit()
 
         # ✅ RECÁLCULO DA TABELA PARA CARGA DIRETA — "cidade mais cara"

@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="fas fa-building"></i> {{ cliente.nome_comercial }}
+            {% if not cliente.ativo %}
+            <span class="badge bg-danger">Inativo</span>
+            {% endif %}
+        </h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.editar_cliente', cliente_id=cliente.id) }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            <a href="{{ url_for('carvia.listar_clientes') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'clientes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# Dados do cliente #}
+    <div class="card mb-4">
+        <div class="card-header"><strong>Dados do Cliente</strong></div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Nome Comercial:</strong> {{ cliente.nome_comercial }}</p>
+                    <p><strong>Status:</strong>
+                        {% if cliente.ativo %}
+                        <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                        <span class="badge bg-danger">Inativo</span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Criado em:</strong> {{ cliente.criado_em.strftime('%d/%m/%Y %H:%M') if cliente.criado_em else '-' }}</p>
+                    <p><strong>Criado por:</strong> {{ cliente.criado_por }}</p>
+                    {% if cliente.observacoes %}
+                    <p><strong>Obs:</strong> {{ cliente.observacoes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Enderecos #}
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="fas fa-map-marker-alt"></i> Enderecos ({{ enderecos|length }})</strong>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoEndereco">
+                <i class="fas fa-plus"></i> Novo Endereco
+            </button>
+        </div>
+        <div class="card-body p-0">
+            {% if enderecos %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>CNPJ</th>
+                            <th>Razao Social</th>
+                            <th>Endereco Fisico</th>
+                            <th class="text-center">Principal</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for end in enderecos %}
+                        <tr>
+                            <td>
+                                {% if end.tipo == 'ORIGEM' %}
+                                <span class="badge bg-info">Origem</span>
+                                {% else %}
+                                <span class="badge bg-warning">Destino</span>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ end.cnpj }}</code></td>
+                            <td>{{ end.razao_social or '-' }}</td>
+                            <td class="small">
+                                {% if end.fisico_logradouro %}
+                                {{ end.fisico_logradouro }}{% if end.fisico_numero %}, {{ end.fisico_numero }}{% endif %}
+                                {% if end.fisico_bairro %} - {{ end.fisico_bairro }}{% endif %}
+                                <br>{{ end.fisico_cidade or '' }}/{{ end.fisico_uf or '' }}
+                                {% if end.fisico_cep %} - CEP {{ end.fisico_cep }}{% endif %}
+                                {% else %}
+                                <span class="text-muted">Sem endereco fisico</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if end.principal %}
+                                <i class="fas fa-star text-warning"></i>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                        onclick="editarEndereco({{ end.id }}, {{ end|tojson }})"
+                                        title="Editar endereco fisico">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="removerEndereco({{ end.id }})"
+                                        title="Remover">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">
+                <p>Nenhum endereco cadastrado.</p>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoEndereco">
+                    <i class="fas fa-plus"></i> Adicionar Endereco
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Modal Novo Endereco #}
+<div class="modal fade" id="modalNovoEndereco" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Endereco</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {# Step 1: CNPJ + Tipo #}
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="endCnpj" placeholder="00.000.000/0000-00">
+                            <button type="button" class="btn btn-outline-primary" id="btnBuscarCnpj" onclick="buscarCnpj()">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="endTipo">
+                            <option value="ORIGEM">Origem</option>
+                            <option value="DESTINO">Destino</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Principal?</label>
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input" id="endPrincipal">
+                            <label class="form-check-label" for="endPrincipal">Endereco principal</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cnpjAviso" class="alert alert-warning py-1 small d-none mb-3"></div>
+                <div id="cnpjErro" class="alert alert-danger py-1 small d-none mb-3"></div>
+
+                {# Dados Receita (readonly) #}
+                <div id="secaoReceita" class="d-none">
+                    <h6 class="text-muted mb-2"><i class="fas fa-university"></i> Dados da Receita Federal</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small">Razao Social</label>
+                            <input type="text" class="form-control form-control-sm" id="endRazaoSocial" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Situacao</label>
+                            <input type="text" class="form-control form-control-sm" id="endSituacao" readonly>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small">Logradouro</label>
+                            <input type="text" class="form-control form-control-sm" id="recLogradouro" readonly>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Numero</label>
+                            <input type="text" class="form-control form-control-sm" id="recNumero" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Bairro</label>
+                            <input type="text" class="form-control form-control-sm" id="recBairro" readonly>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label small">Cidade</label>
+                            <input type="text" class="form-control form-control-sm" id="recCidade" readonly>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">UF</label>
+                            <input type="text" class="form-control form-control-sm" id="recUf" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">CEP</label>
+                            <input type="text" class="form-control form-control-sm" id="recCep" readonly>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Complemento</label>
+                            <input type="text" class="form-control form-control-sm" id="recComplemento" readonly>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    {# Endereco Fisico (editavel) #}
+                    <h6 class="text-muted mb-2"><i class="fas fa-map-marker-alt"></i> Endereco Fisico (editavel)</h6>
+                    <div class="alert alert-info py-1 small mb-2">
+                        Pre-preenchido da Receita. Edite se o endereco fisico for diferente.
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small">Logradouro</label>
+                            <input type="text" class="form-control form-control-sm" id="fisLogradouro">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Numero</label>
+                            <input type="text" class="form-control form-control-sm" id="fisNumero">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Bairro</label>
+                            <input type="text" class="form-control form-control-sm" id="fisBairro">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label small">Cidade</label>
+                            <input type="text" class="form-control form-control-sm" id="fisCidade">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">UF</label>
+                            <input type="text" class="form-control form-control-sm" id="fisUf" maxlength="2">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">CEP</label>
+                            <input type="text" class="form-control form-control-sm" id="fisCep">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Complemento</label>
+                            <input type="text" class="form-control form-control-sm" id="fisComplemento">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSalvarEndereco" onclick="salvarEndereco()" disabled>
+                    <i class="fas fa-save"></i> Salvar Endereco
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Editar Endereco Fisico #}
+<div class="modal fade" id="modalEditarEndereco" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Endereco Fisico</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editEndId">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Logradouro</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisLogradouro">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Numero</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisNumero">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Bairro</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisBairro">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label small">Cidade</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisCidade">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">UF</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisUf" maxlength="2">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">CEP</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisCep">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Complemento</label>
+                        <input type="text" class="form-control form-control-sm" id="editFisComplemento">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="atualizarEndereco()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const clienteId = {{ cliente.id }};
+
+/* ===== Buscar CNPJ na Receita ===== */
+let dadosReceita = null;
+
+function buscarCnpj() {
+    const cnpj = document.getElementById('endCnpj').value.trim();
+    if (!cnpj) return alert('Informe o CNPJ.');
+
+    const btn = document.getElementById('btnBuscarCnpj');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    document.getElementById('cnpjAviso').classList.add('d-none');
+    document.getElementById('cnpjErro').classList.add('d-none');
+
+    fetch('{{ url_for("carvia.api_buscar_cnpj") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cnpj})
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+
+        if (data.erro) {
+            document.getElementById('cnpjErro').textContent = data.erro;
+            document.getElementById('cnpjErro').classList.remove('d-none');
+            return;
+        }
+
+        if (data.aviso) {
+            document.getElementById('cnpjAviso').textContent = data.aviso;
+            document.getElementById('cnpjAviso').classList.remove('d-none');
+        }
+
+        dadosReceita = data.dados;
+        preencherReceita(dadosReceita);
+        preencherFisico(dadosReceita);
+        document.getElementById('secaoReceita').classList.remove('d-none');
+        document.getElementById('btnSalvarEndereco').disabled = false;
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+        alert('Erro: ' + err);
+    });
+}
+
+function preencherReceita(d) {
+    document.getElementById('endRazaoSocial').value = d.razao_social || '';
+    document.getElementById('endSituacao').value = d.situacao || '';
+    document.getElementById('recLogradouro').value = d.logradouro || '';
+    document.getElementById('recNumero').value = d.numero || '';
+    document.getElementById('recBairro').value = d.bairro || '';
+    document.getElementById('recCidade').value = d.cidade || '';
+    document.getElementById('recUf').value = d.uf || '';
+    document.getElementById('recCep').value = d.cep || '';
+    document.getElementById('recComplemento').value = d.complemento || '';
+}
+
+function preencherFisico(d) {
+    document.getElementById('fisLogradouro').value = d.logradouro || '';
+    document.getElementById('fisNumero').value = d.numero || '';
+    document.getElementById('fisBairro').value = d.bairro || '';
+    document.getElementById('fisCidade').value = d.cidade || '';
+    document.getElementById('fisUf').value = d.uf || '';
+    document.getElementById('fisCep').value = d.cep || '';
+    document.getElementById('fisComplemento').value = d.complemento || '';
+}
+
+/* ===== Salvar Endereco ===== */
+function salvarEndereco() {
+    if (!dadosReceita) return alert('Busque o CNPJ primeiro.');
+
+    const payload = {
+        cnpj: document.getElementById('endCnpj').value.trim(),
+        tipo: document.getElementById('endTipo').value,
+        principal: document.getElementById('endPrincipal').checked,
+        razao_social: document.getElementById('endRazaoSocial').value,
+        receita_uf: document.getElementById('recUf').value,
+        receita_cidade: document.getElementById('recCidade').value,
+        receita_logradouro: document.getElementById('recLogradouro').value,
+        receita_numero: document.getElementById('recNumero').value,
+        receita_bairro: document.getElementById('recBairro').value,
+        receita_cep: document.getElementById('recCep').value,
+        receita_complemento: document.getElementById('recComplemento').value,
+        fisico_uf: document.getElementById('fisUf').value,
+        fisico_cidade: document.getElementById('fisCidade').value,
+        fisico_logradouro: document.getElementById('fisLogradouro').value,
+        fisico_numero: document.getElementById('fisNumero').value,
+        fisico_bairro: document.getElementById('fisBairro').value,
+        fisico_cep: document.getElementById('fisCep').value,
+        fisico_complemento: document.getElementById('fisComplemento').value,
+    };
+
+    fetch(`/carvia/api/clientes/${clienteId}/enderecos`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao salvar endereco.');
+        }
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+/* ===== Editar Endereco Fisico ===== */
+function editarEndereco(id, end) {
+    document.getElementById('editEndId').value = id;
+    document.getElementById('editFisLogradouro').value = end.fisico_logradouro || '';
+    document.getElementById('editFisNumero').value = end.fisico_numero || '';
+    document.getElementById('editFisBairro').value = end.fisico_bairro || '';
+    document.getElementById('editFisCidade').value = end.fisico_cidade || '';
+    document.getElementById('editFisUf').value = end.fisico_uf || '';
+    document.getElementById('editFisCep').value = end.fisico_cep || '';
+    document.getElementById('editFisComplemento').value = end.fisico_complemento || '';
+    new bootstrap.Modal(document.getElementById('modalEditarEndereco')).show();
+}
+
+function atualizarEndereco() {
+    const id = document.getElementById('editEndId').value;
+    const payload = {
+        fisico_logradouro: document.getElementById('editFisLogradouro').value,
+        fisico_numero: document.getElementById('editFisNumero').value,
+        fisico_bairro: document.getElementById('editFisBairro').value,
+        fisico_cidade: document.getElementById('editFisCidade').value,
+        fisico_uf: document.getElementById('editFisUf').value,
+        fisico_cep: document.getElementById('editFisCep').value,
+        fisico_complemento: document.getElementById('editFisComplemento').value,
+    };
+
+    fetch(`/carvia/api/enderecos/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao atualizar.');
+        }
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+/* ===== Remover Endereco ===== */
+function removerEndereco(id) {
+    if (!confirm('Remover este endereco?')) return;
+
+    fetch(`/carvia/api/enderecos/${id}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao remover.');
+        }
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+</script>
+{% endblock %}

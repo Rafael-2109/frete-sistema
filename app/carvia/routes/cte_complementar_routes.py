@@ -18,9 +18,9 @@ STATUS_CTE_COMP = ['RASCUNHO', 'EMITIDO', 'FATURADO', 'CANCELADO']
 
 def register_cte_complementar_routes(bp):
 
-    @bp.route('/ctes-complementares')
+    @bp.route('/ctes-complementares') # type: ignore
     @login_required
-    def listar_ctes_complementares():
+    def listar_ctes_complementares(): # type: ignore
         """Lista CTes complementares com filtros"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -78,9 +78,9 @@ def register_cte_complementar_routes(bp):
             status_list=STATUS_CTE_COMP,
         )
 
-    @bp.route('/ctes-complementares/criar/<int:operacao_id>', methods=['GET', 'POST'])
+    @bp.route('/ctes-complementares/criar/<int:operacao_id>', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_cte_complementar(operacao_id):
+    def criar_cte_complementar(operacao_id): # type: ignore
         """Cria novo CTe complementar vinculado a uma operacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -134,6 +134,17 @@ def register_cte_complementar_routes(bp):
                     criado_por=current_user.email,
                 )
                 db.session.add(cte_comp)
+                db.session.flush()
+
+                # Vincular ao CarviaFrete pela operacao_id
+                if cte_comp.operacao_id:
+                    from app.carvia.models import CarviaFrete
+                    frete = CarviaFrete.query.filter_by(
+                        operacao_id=cte_comp.operacao_id
+                    ).first()
+                    if frete:
+                        cte_comp.frete_id = frete.id
+
                 db.session.commit()
 
                 flash(
@@ -156,9 +167,9 @@ def register_cte_complementar_routes(bp):
             operacao=operacao,
         )
 
-    @bp.route('/ctes-complementares/<int:cte_comp_id>')
+    @bp.route('/ctes-complementares/<int:cte_comp_id>') # type: ignore
     @login_required
-    def detalhe_cte_complementar(cte_comp_id):
+    def detalhe_cte_complementar(cte_comp_id): # type: ignore
         """Detalhe de um CTe complementar com custos vinculados"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -180,9 +191,9 @@ def register_cte_complementar_routes(bp):
             custos_vinculados=custos_vinculados,
         )
 
-    @bp.route('/ctes-complementares/<int:cte_comp_id>/editar', methods=['GET', 'POST'])
+    @bp.route('/ctes-complementares/<int:cte_comp_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def editar_cte_complementar(cte_comp_id):
+    def editar_cte_complementar(cte_comp_id): # type: ignore
         """Edita um CTe complementar existente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -254,9 +265,9 @@ def register_cte_complementar_routes(bp):
             cte_comp=cte_comp,
         )
 
-    @bp.route('/ctes-complementares/<int:cte_comp_id>/status', methods=['POST'])
+    @bp.route('/ctes-complementares/<int:cte_comp_id>/status', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_status_cte_complementar(cte_comp_id):
+    def atualizar_status_cte_complementar(cte_comp_id): # type: ignore
         """Atualiza status de um CTe complementar"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex align-items-center gap-2">
+            <h2 class="mb-0">
+                <i class="fas fa-motorcycle"></i> {{ pedido.numero_pedido }}
+                {# Badge semantico por status #}
+                {% set status_map = {
+                    'PENDENTE': 'carvia-badge-pendente',
+                    'SEPARADO': 'carvia-badge-separado',
+                    'FATURADO': 'carvia-badge-faturado',
+                    'EMBARCADO': 'carvia-badge-embarcado',
+                    'CANCELADO': 'carvia-badge-cancelado'
+                } %}
+                <span class="badge {{ status_map.get(pedido.status_calculado, 'bg-secondary') }}">{{ pedido.status_calculado }}</span>
+            </h2>
+            {% if pedido.status_calculado == 'PENDENTE' %}
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAnexarNF">
+                <i class="fas fa-file-invoice"></i> Anexar NF
+            </button>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=pedido.cotacao_id) }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar a Cotacao
+        </a>
+    </div>
+
+    {% set carvia_active = 'pedidos_carvia' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header"><strong>Dados do Pedido</strong></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Cotacao:</strong>
+                                <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=pedido.cotacao_id) }}">
+                                    {{ pedido.cotacao.numero_cotacao if pedido.cotacao else '-' }}
+                                </a>
+                            </p>
+                            <p><strong>Filial:</strong> {{ pedido.filial }}</p>
+                            <p><strong>Tipo Separacao:</strong> {{ pedido.tipo_separacao }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Criado em:</strong> {{ pedido.criado_em.strftime('%d/%m/%Y %H:%M') if pedido.criado_em else '-' }}</p>
+                            <p><strong>Criado por:</strong> {{ pedido.criado_por }}</p>
+                            {% if pedido.observacoes %}
+                            <p><strong>Obs:</strong> {{ pedido.observacoes }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Itens #}
+            <div class="card">
+                <div class="card-header"><strong>Itens ({{ itens|length }})</strong></div>
+                <div class="card-body p-0">
+                    {% if itens %}
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Descricao</th>
+                                <th>Cor</th>
+                                <th class="text-center">Qtd</th>
+                                <th class="text-end">Valor Unit.</th>
+                                <th class="text-end">Total</th>
+                                <th>NF</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in itens %}
+                            <tr>
+                                <td>{{ item.descricao or (item.modelo_moto.nome if item.modelo_moto else '-') }}</td>
+                                <td>{{ item.cor or '-' }}</td>
+                                <td class="text-center">{{ item.quantidade }}</td>
+                                <td class="text-end">{{ item.valor_unitario|valor_br if item.valor_unitario else '-' }}</td>
+                                <td class="text-end">{{ item.valor_total|valor_br if item.valor_total else '-' }}</td>
+                                <td>
+                                    {% if item.numero_nf %}
+                                        <span class="badge carvia-badge-faturado">{{ item.numero_nf }}</span>
+                                    {% else %}
+                                        <span class="badge carvia-badge-pendente">Pendente</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">Nenhum item.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Sidebar #}
+        <div class="col-md-4">
+            {# Status #}
+            <div class="card">
+                <div class="card-header"><strong>Status</strong></div>
+                <div class="card-body">
+                    <p class="fs-5">
+                        <span class="badge {{ status_map.get(pedido.status_calculado, 'bg-secondary') }}">{{ pedido.status_calculado }}</span>
+                    </p>
+                </div>
+            </div>
+
+            {# Nota Fiscal — sidebar card #}
+            {% if pedido.status_calculado == 'PENDENTE' %}
+            <div class="card mt-3">
+                <div class="card-header"><strong>Nota Fiscal</strong></div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">Informe o numero da NF para vincular a todos os itens deste pedido.</p>
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" id="inpNfSidebar"
+                               placeholder="Numero da NF" inputmode="numeric">
+                        <button class="btn btn-primary btn-sm" onclick="anexarNF('inpNfSidebar')">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Modal Anexar NF #}
+{% if pedido.status_calculado == 'PENDENTE' %}
+<div class="modal fade" id="modalAnexarNF" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-invoice"></i> Anexar Nota Fiscal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    O numero da NF sera preenchido em todos os {{ itens|length }} itens deste pedido.
+                    O status sera alterado para FATURADO.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label">Numero da NF <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="inpNumeroNF"
+                           placeholder="Ex: 123456" inputmode="numeric" autofocus>
+                </div>
+                <div id="nfFeedback" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnAnexarNF" onclick="anexarNF('inpNumeroNF')">
+                    <span class="spinner-border spinner-border-sm d-none" id="spinAnexarNF" role="status"></span>
+                    Anexar NF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function anexarNF(inputId) {
+    const inp = document.getElementById(inputId);
+    const nf = (inp.value || '').trim();
+    if (!nf) {
+        inp.classList.add('is-invalid');
+        return;
+    }
+    inp.classList.remove('is-invalid');
+
+    const btn = document.getElementById('btnAnexarNF');
+    const spin = document.getElementById('spinAnexarNF');
+    if (btn) btn.disabled = true;
+    if (spin) spin.classList.remove('d-none');
+
+    fetch(`/carvia/api/pedidos-carvia/{{ pedido.id }}/nf`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({numero_nf: nf})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.sucesso) {
+            const fb = document.getElementById('nfFeedback');
+            if (fb) {
+                let msg = '<div class="alert alert-success py-2 small">';
+                msg += '<i class="fas fa-check-circle"></i> ' + d.mensagem;
+                if (d.embarque && d.embarque.acao) {
+                    msg += '<br>Embarque #' + d.embarque.embarque_id + ' atualizado.';
+                }
+                msg += '</div>';
+                fb.innerHTML = msg;
+                fb.style.display = 'block';
+            }
+            setTimeout(function() { location.reload(); }, 1500);
+        } else {
+            alert(d.erro || 'Erro ao anexar NF.');
+            if (btn) btn.disabled = false;
+            if (spin) spin.classList.add('d-none');
+        }
+    })
+    .catch(function() {
+        alert('Erro de conexao.');
+        if (btn) btn.disabled = false;
+        if (spin) spin.classList.add('d-none');
+    });
+}
+</script>
+{% endblock %}

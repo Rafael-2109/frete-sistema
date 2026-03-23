@@ -327,6 +327,37 @@ def registrar_movimento():
                                 'warning'
                             )
 
+                    # Alerta CarVia provisorios (nao bloqueia saida)
+                    if registro.embarque_id:
+                        try:
+                            from app.embarques.models import EmbarqueItem as _EI
+                            _prov = _EI.query.filter_by(
+                                embarque_id=registro.embarque_id,
+                                provisorio=True, status='ativo',
+                            ).count()
+                            if _prov > 0:
+                                flash(
+                                    f'ATENCAO: Embarque tem {_prov} item(ns) CarVia PROVISORIO(S). '
+                                    'Verifique se pedidos/NF foram anexados.',
+                                    'warning'
+                                )
+                        except Exception:
+                            pass
+
+                    # Hook CarVia: gerar fretes (orquestrador unico)
+                    # CarviaFreteService cria CarviaOperacao + CarviaSubcontrato + CarviaFrete
+                    if registro.embarque_id:
+                        try:
+                            from app.carvia.services.carvia_frete_service import CarviaFreteService
+                            fretes = CarviaFreteService.lancar_frete_carvia(
+                                embarque_id=registro.embarque_id,
+                                usuario=current_user.email,
+                            )
+                            if fretes:
+                                flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
+                        except Exception as e:
+                            print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
+
                     db.session.commit()
                     flash('Saída registrada com sucesso!', 'success')
         

@@ -1,0 +1,259 @@
+"""
+CarviaClienteService — CRUD de clientes + enderecos + integracao CNPJ Receita
+"""
+
+import logging
+import re
+from typing import Optional, Dict, List, Tuple
+
+from app import db
+
+logger = logging.getLogger(__name__)
+
+
+class CarviaClienteService:
+    """Gerencia clientes CarVia e seus enderecos"""
+
+    # ==================== CLIENTES ====================
+
+    @staticmethod
+    def listar_clientes(apenas_ativos: bool = False, busca: Optional[str] = None):
+        """Lista clientes com filtros opcionais."""
+        from app.carvia.models import CarviaCliente
+
+        query = CarviaCliente.query
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        if busca:
+            busca_like = f'%{busca}%'
+            query = query.filter(
+                CarviaCliente.nome_comercial.ilike(busca_like)
+            )
+
+        return query.order_by(CarviaCliente.nome_comercial.asc()).all()
+
+    @staticmethod
+    def buscar_por_id(cliente_id: int):
+        """Busca cliente por ID com enderecos carregados."""
+        from app.carvia.models import CarviaCliente
+        return db.session.get(CarviaCliente, cliente_id)
+
+    @staticmethod
+    def criar_cliente(nome_comercial: str, criado_por: str,
+                      observacoes: Optional[str] = None):
+        """Cria novo cliente. Retorna (cliente, erro)."""
+        from app.carvia.models import CarviaCliente
+        from app.utils.timezone import agora_utc_naive
+
+        nome = nome_comercial.strip()
+        if not nome:
+            return None, 'Nome comercial e obrigatorio.'
+
+        cliente = CarviaCliente(
+            nome_comercial=nome,
+            observacoes=observacoes,
+            criado_por=criado_por,
+            criado_em=agora_utc_naive(),
+            atualizado_em=agora_utc_naive(),
+        )
+        db.session.add(cliente)
+        db.session.flush()  # Gera ID
+        return cliente, None
+
+    @staticmethod
+    def atualizar_cliente(cliente_id: int, dados: dict) -> Tuple[bool, Optional[str]]:
+        """Atualiza dados do cliente. Retorna (sucesso, erro)."""
+        from app.carvia.models import CarviaCliente
+
+        cliente = db.session.get(CarviaCliente, cliente_id)
+        if not cliente:
+            return False, 'Cliente nao encontrado.'
+
+        if 'nome_comercial' in dados:
+            nome = (dados['nome_comercial'] or '').strip()
+            if not nome:
+                return False, 'Nome comercial e obrigatorio.'
+            cliente.nome_comercial = nome
+
+        if 'observacoes' in dados:
+            cliente.observacoes = dados['observacoes']
+
+        if 'ativo' in dados:
+            cliente.ativo = dados['ativo']
+
+        db.session.flush()
+        return True, None
+
+    # ==================== ENDERECOS ====================
+
+    @staticmethod
+    def _limpar_cnpj(cnpj: str) -> str:
+        """Remove formatacao do CNPJ."""
+        return re.sub(r'\D', '', str(cnpj))
+
+    @staticmethod
+    def adicionar_endereco(
+        cliente_id: int,
+        cnpj: str,
+        tipo: str,
+        criado_por: str,
+        razao_social: Optional[str] = None,
+        dados_receita: Optional[Dict] = None,
+        dados_fisico: Optional[Dict] = None,
+        principal: bool = False,
+    ) -> Tuple[Optional[object], Optional[str]]:
+        """Adiciona endereco ao cliente. Retorna (endereco, erro).
+
+        Args:
+            dados_receita: dict com campos uf, cidade, logradouro, numero, bairro, cep, complemento
+            dados_fisico: dict com mesmos campos (editaveis). Se None, copia dados_receita.
+        """
+        from app.carvia.models import CarviaCliente, CarviaClienteEndereco
+        from app.utils.timezone import agora_utc_naive
+
+        cliente = db.session.get(CarviaCliente, cliente_id)
+        if not cliente:
+            return None, 'Cliente nao encontrado.'
+
+        cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj)
+        if not cnpj_limpo or len(cnpj_limpo) != 14:
+            return None, 'CNPJ invalido (deve ter 14 digitos).'
+
+        tipo = tipo.upper()
+        if tipo not in ('ORIGEM', 'DESTINO'):
+            return None, 'Tipo deve ser ORIGEM ou DESTINO.'
+
+        # Verificar duplicata
+        existente = CarviaClienteEndereco.query.filter_by(
+            cliente_id=cliente_id,
+            cnpj=cnpj_limpo,
+            tipo=tipo,
+        ).first()
+        if existente:
+            return None, f'Endereco com CNPJ {cnpj_limpo} ({tipo}) ja cadastrado para este cliente.'
+
+        # Montar dados Receita
+        receita = dados_receita or {}
+        # Se dados_fisico nao fornecido, copiar da Receita (pre-preenchido)
+        fisico = dados_fisico if dados_fisico else dict(receita)
+
+        endereco = CarviaClienteEndereco(
+            cliente_id=cliente_id,
+            cnpj=cnpj_limpo,
+            razao_social=razao_social,
+            tipo=tipo,
+            principal=principal,
+            criado_por=criado_por,
+            criado_em=agora_utc_naive(),
+            # Receita
+            receita_uf=receita.get('uf'),
+            receita_cidade=receita.get('cidade'),
+            receita_logradouro=receita.get('logradouro'),
+            receita_numero=receita.get('numero'),
+            receita_bairro=receita.get('bairro'),
+            receita_cep=receita.get('cep'),
+            receita_complemento=receita.get('complemento'),
+            # Fisico
+            fisico_uf=fisico.get('uf'),
+            fisico_cidade=fisico.get('cidade'),
+            fisico_logradouro=fisico.get('logradouro'),
+            fisico_numero=fisico.get('numero'),
+            fisico_bairro=fisico.get('bairro'),
+            fisico_cep=fisico.get('cep'),
+            fisico_complemento=fisico.get('complemento'),
+        )
+        db.session.add(endereco)
+        db.session.flush()
+        return endereco, None
+
+    @staticmethod
+    def atualizar_endereco(endereco_id: int, dados: dict) -> Tuple[bool, Optional[str]]:
+        """Atualiza endereco fisico (editavel). Retorna (sucesso, erro)."""
+        from app.carvia.models import CarviaClienteEndereco
+
+        endereco = db.session.get(CarviaClienteEndereco, endereco_id)
+        if not endereco:
+            return False, 'Endereco nao encontrado.'
+
+        # Campos fisicos editaveis
+        for campo in ('uf', 'cidade', 'logradouro', 'numero', 'bairro', 'cep', 'complemento'):
+            chave = f'fisico_{campo}'
+            if chave in dados:
+                setattr(endereco, chave, dados[chave])
+
+        if 'razao_social' in dados:
+            endereco.razao_social = dados['razao_social']
+        if 'principal' in dados:
+            endereco.principal = dados['principal']
+
+        db.session.flush()
+        return True, None
+
+    @staticmethod
+    def remover_endereco(endereco_id: int) -> Tuple[bool, Optional[str]]:
+        """Remove endereco. Retorna (sucesso, erro)."""
+        from app.carvia.models import CarviaClienteEndereco
+
+        endereco = db.session.get(CarviaClienteEndereco, endereco_id)
+        if not endereco:
+            return False, 'Endereco nao encontrado.'
+
+        db.session.delete(endereco)
+        db.session.flush()
+        return True, None
+
+    @staticmethod
+    def buscar_enderecos_por_cnpj(cnpj: str) -> List:
+        """Busca todos os enderecos cadastrados para um CNPJ (cross-cliente)."""
+        from app.carvia.models import CarviaClienteEndereco
+
+        cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj)
+        return CarviaClienteEndereco.query.filter_by(cnpj=cnpj_limpo).all()
+
+    # ==================== INTEGRACAO RECEITA ====================
+
+    @staticmethod
+    def buscar_cnpj_receita(cnpj: str) -> Tuple[Optional[Dict], Optional[str]]:
+        """Busca dados de CNPJ na API da Receita. Retorna (dados, erro).
+
+        Retorno formatado:
+        {
+            'cnpj': '12345678000199',
+            'razao_social': 'EMPRESA LTDA',
+            'nome_fantasia': 'EMPRESA',
+            'uf': 'SP',
+            'cidade': 'SAO PAULO',
+            'logradouro': 'RUA X',
+            'numero': '123',
+            'bairro': 'CENTRO',
+            'cep': '01234567',
+            'complemento': 'SALA 1',
+            'situacao': 'ATIVA',
+        }
+        """
+        from app.utils.api_receita import APIReceita
+
+        resultado = APIReceita.buscar_cnpj(cnpj)
+        if not resultado:
+            return None, 'CNPJ nao encontrado ou erro na API da Receita.'
+
+        if resultado.get('status') == 'ERROR':
+            return None, resultado.get('message', 'Erro na consulta do CNPJ.')
+
+        dados = {
+            'cnpj': APIReceita.limpar_cnpj(cnpj),
+            'razao_social': resultado.get('nome', ''),
+            'nome_fantasia': resultado.get('fantasia', ''),
+            'uf': resultado.get('uf', ''),
+            'cidade': resultado.get('municipio', ''),
+            'logradouro': resultado.get('logradouro', ''),
+            'numero': resultado.get('numero', ''),
+            'bairro': resultado.get('bairro', ''),
+            'cep': re.sub(r'\D', '', resultado.get('cep', '')),
+            'complemento': resultado.get('complemento', ''),
+            'situacao': resultado.get('situacao', ''),
+        }
+
+        return dados, None

@@ -1,12 +1,14 @@
 # CarVia — Guia de Desenvolvimento
 
-**37 arquivos** | **~21K LOC** | **54 templates** | **Atualizado**: 16/03/2026
+**50 arquivos** | **~30.5K LOC** | **75 templates** | **Atualizado**: 22/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
 
 > Campos de tabelas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
 > Revisao de gaps: `app/carvia/REVISAO_GAPS.md` — 37 gaps mapeados com fluxogramas (03/03/2026)
+> **Integracao Embarque**: `app/carvia/INTEGRACAO_EMBARQUE.md` — fluxo completo, decisoes, progresso
+> Fluxograma: `app/carvia/fluxograma_refatoracao.md` — Mermaid do processo E2E
 
 ---
 
@@ -25,7 +27,7 @@ subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas c
 | 9 | **Importacao** | `ImportacaoService` | `/carvia/importar` | Upload + Review + Confirmar |
 | 10 | **Fluxo de Caixa** | `FluxoCaixaService` | `/carvia/fluxo-de-caixa` | Accordions por dia + Pagar/Desfazer + Card Saldo |
 | 11 | **Extrato da Conta** | `FluxoCaixaService` | `/carvia/extrato-conta` | Movimentacoes com saldo acumulado + Saldo inicial |
-| 12 | **Sessao Cotacao** | `CarviaSessaoCotacao` | `/carvia/sessoes-cotacao` | Lista + Nova + Detalhe (cotar AJAX + selecionar opcao + enviar + resposta) |
+| ~~12~~ | ~~Sessao Cotacao~~ | REMOVIDO (22/03/2026) | — | Feature obsoleta — models, routes, templates deletados |
 | 13 | **Conciliacao** | `CarviaConciliacaoService` | `/carvia/conciliacao` | Painel duplo extrato/documentos + Match |
 | 14 | **Extrato Bancario** | `CarviaExtratoLinha` | `/carvia/extrato-bancario` | Importar OFX + CSV + Lista linhas |
 | 15 | **Configuracoes** | `CarviaModeloMoto` / `CarviaEmpresaCubagem` / `CarviaCategoriaMoto` | `/carvia/configuracoes/modelos-moto` | CRUD inline modelos moto + empresas cubagem + categorias moto |
@@ -62,14 +64,19 @@ CarviaCustoEntrega (Custo de Entrega)
 
 ```
 app/carvia/
-  ├── routes/          # 15 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
-  │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar, custo_entrega, admin)
-  ├── services/        # 13 services (parsers, matching, importacao, cotacao, conferencia, fatura_pdf_parser, linking,
-  │                    #   fluxo_caixa, carvia_conciliacao, dacte_pdf_parser, admin)
-  ├── models.py        # 23 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
-  │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao, SessaoCotacao,
-  │                    #   SessaoDemanda, CteComplementar, CustoEntrega, CustoEntregaAnexo,
-  │                    #   CategoriaMoto, ModeloMoto, PrecoCategoriaMoto, EmpresaCubagem, AdminAudit)
+  ├── routes/          # 21 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
+  │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar,
+  │                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, exportacao, tabela_carvia, receita)
+  ├── services/        # 24 services (parsers, matching, importacao, cotacao, cotacao_v2, conferencia,
+  │                    #   fatura_pdf_parser, linking, fluxo_caixa, carvia_conciliacao, dacte_pdf_parser,
+  │                    #   admin, carvia_frete, embarque_carvia, cliente, config, margem, carvia_tabela,
+  │                    #   carvia_csv_razao, carvia_ofx, dacte_generator, moto_recognition)
+  ├── models.py        # 36 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
+  │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao,
+  │                    #   CteComplementar, CustoEntrega, CustoEntregaAnexo,
+  │                    #   CategoriaMoto, ModeloMoto, PrecoCategoriaMoto, EmpresaCubagem, AdminAudit,
+  │                    #   Config, Cliente, ClienteEndereco, Cotacao, CotacaoMoto, Pedido, PedidoItem,
+  │                    #   GrupoCliente, GrupoClienteMembro, TabelaFrete, CidadeAtendida, Receita, Frete)
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/
@@ -83,8 +90,10 @@ app/templates/carvia/
   ├── faturas_cliente/         # listar.html, nova.html, detalhe.html
   ├── faturas_transportadora/  # listar.html, nova.html, detalhe.html
   ├── despesas/                # listar.html, criar.html, detalhe.html, editar.html
-  ├── sessoes_cotacao/         # listar.html, nova.html, detalhe.html
-  ├── configuracoes/           # modelos_moto.html, empresas_cubagem.html, categorias_moto.html
+  ├── clientes/                # listar.html, criar.html, detalhe.html, editar.html
+  ├── cotacoes/                # listar.html, nova.html, detalhe.html
+  ├── pedidos/                 # listar.html, detalhe.html (status_calculado, sem dropdown)
+  ├── configuracoes/           # modelos_moto.html, empresas_cubagem.html, categorias_moto.html, parametros.html
   └── admin/                   # auditoria.html, editar_completo.html, converter.html
 ```
 
@@ -158,6 +167,35 @@ Todo CarviaSubcontrato recebe `cte_numero = Sub-###` (ex: Sub-001, Sub-002).
 Gerado via `CarviaOperacao.gerar_numero_cte()` e `CarviaSubcontrato.gerar_numero_sub()` — metodos estaticos.
 Campo `cte_numero VARCHAR(20)` ja existia — sem DDL, apenas backfill.
 Backfill: `scripts/migrations/backfill_numeracao_sequencial_carvia.py`.
+
+### R10: Auto-geracao na saida da portaria (CarviaFreteService orquestrador)
+Hook em `portaria/routes.py` chama `CarviaFreteService.lancar_frete_carvia()` (orquestrador unico).
+Fluxo atomico por grupo (cnpj_emitente + cnpj_destino):
+  1. CarviaOperacao (CTe CarVia — VENDA)
+  2. CarviaOperacaoNf (junctions NF→Operacao)
+  3. CarviaSubcontrato (CUSTO)
+  4. CarviaFrete (com operacao_id + subcontrato_id JA populados)
+
+**Regra de ouro (tabelas)**:
+- TABELA CARVIA (preco VENDA) → `CarViaTabelaService.cotar_carvia()` → `CarviaOperacao.cte_valor`
+- TABELA NACOM (preco CUSTO) → `CotacaoService.cotar_subcontrato()` → `CarviaSubcontrato.valor_cotado`
+
+**Calculo custo**: DIRETA = rateio (frete_total × peso_grupo/peso_embarque). FRACIONADA = CotacaoService.
+**Dedup**: unique constraint `(embarque_id, cnpj_emitente, cnpj_destino)` no banco.
+**NF tardia**: se frete ja existe, ATUALIZA totais (nao duplica).
+**Nao-bloqueante**: try/except no hook — falha nao impede registro de saida da portaria.
+**Pedidos**: CarviaPedido.status atualizado para EMBARCADO apos processamento.
+**Vinculacao faturas**: retroativa — ao criar fatura, CarviaFrete.fatura_*_id e atualizado.
+
+### R11: Conciliacao quita titulo
+Conciliacao 100% de um documento automaticamente altera status de pagamento:
+- `CarviaFaturaCliente`: `status='PAGA'`, `pago_em`, `pago_por`
+- `CarviaFaturaTransportadora`: `status_pagamento='PAGO'`, `pago_em`, `pago_por`
+- `CarviaDespesa`: `status='PAGO'`, `pago_em`, `pago_por`
+- `CarviaCustoEntrega`: `status='PAGO'`, `pago_em`, `pago_por`
+- `CarviaReceita`: `status='RECEBIDO'`, `recebido_em`, `recebido_por`
+
+Desconciliacao reverte: status → PENDENTE, limpa campos pago_em/pago_por.
 
 ### R9: Admin — Hard Delete com Auditoria
 GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete com:
@@ -387,7 +425,16 @@ CarviaTabelaService.cotar_carvia(categorias_moto=[{categoria_id, quantidade}]):
 **ICMS**: Aplicado sobre o total por categoria (mesma logica de `icms_incluso`/`icms_proprio`).
 **Backward compat**: Tabelas sem `CarviaPrecoCategoriaMoto` continuam usando calculo por peso.
 
-### Sessao de Cotacao (Ferramenta Comercial)
+### Dois tipos de cotacao — coexistem, NAO deprecar
+
+| Feature | Modelo | Prefixo | Label UI | Uso |
+|---------|--------|---------|----------|-----|
+| Cotacao Comercial | `CarviaCotacao` | `COT-###` | "Cotacao Comercial" | Fluxo formal: cliente → pricing → desconto → aprovacao → pedido |
+| Cotacao de Rotas | `CarviaSessaoCotacao` | `COTACAO-###` | "Cotacao de Rotas" | Ferramenta pontual: cotar rota para cliente sob demanda |
+
+Ambos coexistem sem colisao de prefixo. NAO deprecar nenhum.
+
+### Cotacao de Rotas (Ferramenta Comercial)
 
 **Prefixo**: `COTACAO-###` (anteriormente SC-###, backfill aplicado)
 **Campos contato cliente**: `cliente_nome`, `cliente_email`, `cliente_telefone`, `cliente_responsavel` (opcionais)

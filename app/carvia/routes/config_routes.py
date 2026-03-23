@@ -1,5 +1,5 @@
 """
-Rotas de Configuracoes CarVia — CRUD modelos moto + empresas cubagem
+Rotas de Configuracoes CarVia — CRUD modelos moto + empresas cubagem + parametros globais
 """
 
 import logging
@@ -33,9 +33,9 @@ def register_config_routes(bp):
 
     # ==================== MODELOS MOTO ====================
 
-    @bp.route('/configuracoes/modelos-moto')
+    @bp.route('/configuracoes/modelos-moto') # type: ignore
     @login_required
-    def listar_modelos_moto():
+    def listar_modelos_moto(): # type: ignore
         """Lista modelos de moto cadastrados"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -51,9 +51,9 @@ def register_config_routes(bp):
             modelos=modelos,
         )
 
-    @bp.route('/api/modelos-moto', methods=['POST'])
+    @bp.route('/api/modelos-moto', methods=['POST']) # type: ignore
     @login_required
-    def criar_modelo_moto():
+    def criar_modelo_moto(): # type: ignore
         """Cria novo modelo de moto (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -108,9 +108,9 @@ def register_config_routes(bp):
             logger.error(f"Erro ao criar modelo moto: {e}")
             return jsonify({'erro': f'Erro ao criar modelo: {e}'}), 500
 
-    @bp.route('/api/modelos-moto/<int:modelo_id>', methods=['PUT'])
+    @bp.route('/api/modelos-moto/<int:modelo_id>', methods=['PUT']) # type: ignore
     @login_required
-    def atualizar_modelo_moto(modelo_id):
+    def atualizar_modelo_moto(modelo_id): # type: ignore
         """Atualiza modelo de moto existente (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -175,9 +175,9 @@ def register_config_routes(bp):
             logger.error(f"Erro ao atualizar modelo moto #{modelo_id}: {e}")
             return jsonify({'erro': f'Erro ao atualizar modelo: {e}'}), 500
 
-    @bp.route('/api/modelos-moto/<int:modelo_id>', methods=['DELETE'])
+    @bp.route('/api/modelos-moto/<int:modelo_id>', methods=['DELETE']) # type: ignore
     @login_required
-    def deletar_modelo_moto(modelo_id):
+    def deletar_modelo_moto(modelo_id): # type: ignore
         """Soft-delete modelo de moto (ativo=False)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -202,9 +202,9 @@ def register_config_routes(bp):
             logger.error(f"Erro ao desativar modelo moto #{modelo_id}: {e}")
             return jsonify({'erro': f'Erro ao desativar modelo: {e}'}), 500
 
-    @bp.route('/api/modelos-moto/testar-regex', methods=['POST'])
+    @bp.route('/api/modelos-moto/testar-regex', methods=['POST']) # type: ignore
     @login_required
-    def api_testar_regex_moto():
+    def api_testar_regex_moto(): # type: ignore
         """Testa regex e/ou match por nome contra texto de produto."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -256,9 +256,9 @@ def register_config_routes(bp):
 
     # ==================== CATEGORIAS MOTO ====================
 
-    @bp.route('/configuracoes/categorias-moto')
+    @bp.route('/configuracoes/categorias-moto') # type: ignore
     @login_required
-    def listar_categorias_moto():
+    def listar_categorias_moto(): # type: ignore
         """Lista categorias de moto cadastradas"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -275,9 +275,9 @@ def register_config_routes(bp):
             categorias=categorias,
         )
 
-    @bp.route('/api/categorias-moto', methods=['POST'])
+    @bp.route('/api/categorias-moto', methods=['POST']) # type: ignore
     @login_required
-    def criar_categoria_moto():
+    def criar_categoria_moto(): # type: ignore
         """Cria nova categoria de moto (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -320,9 +320,9 @@ def register_config_routes(bp):
             logger.error("Erro ao criar categoria moto: %s", e)
             return jsonify({'erro': f'Erro ao criar categoria: {e}'}), 500
 
-    @bp.route('/api/categorias-moto/<int:cat_id>', methods=['PUT'])
+    @bp.route('/api/categorias-moto/<int:cat_id>', methods=['PUT']) # type: ignore
     @login_required
-    def atualizar_categoria_moto(cat_id):
+    def atualizar_categoria_moto(cat_id): # type: ignore
         """Atualiza categoria de moto (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -371,9 +371,9 @@ def register_config_routes(bp):
             logger.error("Erro ao atualizar categoria moto #%s: %s", cat_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/categorias-moto/<int:cat_id>', methods=['DELETE'])
+    @bp.route('/api/categorias-moto/<int:cat_id>', methods=['DELETE']) # type: ignore
     @login_required
-    def desativar_categoria_moto(cat_id):
+    def desativar_categoria_moto(cat_id): # type: ignore
         """Soft-delete categoria de moto (ativo=False)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -396,9 +396,9 @@ def register_config_routes(bp):
             logger.error("Erro ao desativar categoria moto #%s: %s", cat_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/categorias-moto-lista')
+    @bp.route('/api/categorias-moto-lista') # type: ignore
     @login_required
-    def api_categorias_moto_lista():
+    def api_categorias_moto_lista(): # type: ignore
         """Lista categorias ativas (para dropdowns)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -418,9 +418,9 @@ def register_config_routes(bp):
 
     # ==================== PRECOS CATEGORIA MOTO (por Tabela) ====================
 
-    @bp.route('/api/tabela-carvia/<int:tid>/precos-moto')
+    @bp.route('/api/tabela-carvia/<int:tid>/precos-moto') # type: ignore
     @login_required
-    def listar_precos_moto(tid):
+    def listar_precos_moto(tid): # type: ignore
         """Lista precos por categoria de uma tabela"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -430,9 +430,9 @@ def register_config_routes(bp):
         precos = svc.buscar_precos_categoria(tid)
         return jsonify({'sucesso': True, 'precos': precos})
 
-    @bp.route('/api/tabela-carvia/<int:tid>/precos-moto', methods=['POST'])
+    @bp.route('/api/tabela-carvia/<int:tid>/precos-moto', methods=['POST']) # type: ignore
     @login_required
-    def criar_preco_moto(tid):
+    def criar_preco_moto(tid): # type: ignore
         """Define preco para categoria em tabela"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -491,9 +491,9 @@ def register_config_routes(bp):
             logger.error("Erro ao criar preco moto: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/precos-moto/<int:preco_id>', methods=['PUT'])
+    @bp.route('/api/precos-moto/<int:preco_id>', methods=['PUT']) # type: ignore    
     @login_required
-    def atualizar_preco_moto(preco_id):
+    def atualizar_preco_moto(preco_id): # type: ignore
         """Atualiza preco de categoria"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -529,9 +529,9 @@ def register_config_routes(bp):
             logger.error("Erro ao atualizar preco moto #%s: %s", preco_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/precos-moto/<int:preco_id>', methods=['DELETE'])
+    @bp.route('/api/precos-moto/<int:preco_id>', methods=['DELETE']) # type: ignore
     @login_required
-    def remover_preco_moto(preco_id):
+    def remover_preco_moto(preco_id): # type: ignore
         """Remove preco de categoria (soft-delete)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -556,9 +556,9 @@ def register_config_routes(bp):
 
     # ==================== EMPRESAS CUBAGEM ====================
 
-    @bp.route('/configuracoes/empresas-cubagem')
+    @bp.route('/configuracoes/empresas-cubagem') # type: ignore
     @login_required
-    def listar_empresas_cubagem():
+    def listar_empresas_cubagem(): # type: ignore
         """Lista empresas com configuracao de cubagem"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -574,9 +574,9 @@ def register_config_routes(bp):
             empresas=empresas,
         )
 
-    @bp.route('/api/empresas-cubagem', methods=['POST'])
+    @bp.route('/api/empresas-cubagem', methods=['POST']) # type: ignore
     @login_required
-    def criar_empresa_cubagem():
+    def criar_empresa_cubagem(): # type: ignore
         """Cria nova empresa cubagem (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -629,9 +629,9 @@ def register_config_routes(bp):
             logger.error(f"Erro ao criar empresa cubagem: {e}")
             return jsonify({'erro': f'Erro ao criar empresa: {e}'}), 500
 
-    @bp.route('/api/empresas-cubagem/<int:empresa_id>', methods=['PUT'])
+    @bp.route('/api/empresas-cubagem/<int:empresa_id>', methods=['PUT']) # type: ignore
     @login_required
-    def atualizar_empresa_cubagem(empresa_id):
+    def atualizar_empresa_cubagem(empresa_id): # type: ignore
         """Atualiza empresa cubagem existente (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -686,9 +686,9 @@ def register_config_routes(bp):
             logger.error(f"Erro ao atualizar empresa cubagem #{empresa_id}: {e}")
             return jsonify({'erro': f'Erro ao atualizar empresa: {e}'}), 500
 
-    @bp.route('/api/empresas-cubagem/<int:empresa_id>', methods=['DELETE'])
+    @bp.route('/api/empresas-cubagem/<int:empresa_id>', methods=['DELETE']) # type: ignore
     @login_required
-    def deletar_empresa_cubagem(empresa_id):
+    def deletar_empresa_cubagem(empresa_id): # type: ignore
         """Deleta empresa cubagem"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -716,9 +716,9 @@ def register_config_routes(bp):
 
     # ==================== TRANSPORTADORAS ATIVAS ====================
 
-    @bp.route('/api/transportadoras-ativas')
+    @bp.route('/api/transportadoras-ativas') # type: ignore 
     @login_required
-    def listar_transportadoras_ativas():
+    def listar_transportadoras_ativas(): # type: ignore
         """Lista todas transportadoras ativas (para dropdown cotacao manual)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -739,3 +739,141 @@ def register_config_routes(bp):
             }
             for t in transportadoras
         ])
+
+    # ==================== PARAMETROS GLOBAIS (CarviaConfig) ====================
+
+    @bp.route('/configuracoes/parametros') # type: ignore
+    @login_required
+    def listar_parametros(): # type: ignore
+        """Lista parametros globais do modulo CarVia"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.services.config_service import CarviaConfigService
+        configs = CarviaConfigService.listar_todas()
+
+        return render_template(
+            'carvia/configuracoes/parametros.html',
+            configs=configs,
+        )
+
+    @bp.route('/api/parametros', methods=['POST']) # type: ignore
+    @login_required
+    def criar_parametro(): # type: ignore
+        """Cria novo parametro (JSON API)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.config_service import CarviaConfigService
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        chave = (data.get('chave') or '').strip()
+        valor = (data.get('valor') or '').strip()
+
+        if not chave:
+            return jsonify({'erro': 'Chave e obrigatoria.'}), 400
+        if not valor:
+            return jsonify({'erro': 'Valor e obrigatorio.'}), 400
+
+        # Verificar se ja existe
+        from app.carvia.models import CarviaConfig
+        existente = CarviaConfig.query.filter_by(chave=chave).first()
+        if existente:
+            return jsonify({'erro': f'Parametro "{chave}" ja existe.'}), 409
+
+        try:
+            CarviaConfigService.set(
+                chave=chave,
+                valor=valor,
+                descricao=(data.get('descricao') or '').strip() or None,
+                atualizado_por=current_user.email,
+            )
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'chave': chave,
+                'mensagem': f'Parametro "{chave}" criado.',
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao criar parametro: %s", e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/parametros/<int:config_id>', methods=['PUT']) # type: ignore
+    @login_required
+    def atualizar_parametro(config_id): # type: ignore
+        """Atualiza parametro existente (JSON API)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaConfig
+        from app.utils.timezone import agora_utc_naive
+
+        config = db.session.get(CarviaConfig, config_id)
+        if not config:
+            return jsonify({'erro': 'Parametro nao encontrado.'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        try:
+            if 'valor' in data:
+                valor = (data['valor'] or '').strip()
+                if not valor:
+                    return jsonify({'erro': 'Valor e obrigatorio.'}), 400
+                config.valor = valor
+
+            if 'descricao' in data:
+                config.descricao = (data['descricao'] or '').strip() or None
+
+            config.atualizado_por = current_user.email
+            config.atualizado_em = agora_utc_naive()
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'chave': config.chave,
+                'mensagem': f'Parametro "{config.chave}" atualizado.',
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao atualizar parametro #%s: %s", config_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/parametros/<int:config_id>', methods=['DELETE']) # type: ignore
+    @login_required
+    def deletar_parametro(config_id): # type: ignore
+        """Remove parametro (hard delete)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        # Somente admin pode deletar parametros
+        if not getattr(current_user, 'perfil', '') == 'administrador':
+            return jsonify({'erro': 'Apenas administradores podem excluir parametros.'}), 403
+
+        from app.carvia.models import CarviaConfig
+
+        config = db.session.get(CarviaConfig, config_id)
+        if not config:
+            return jsonify({'erro': 'Parametro nao encontrado.'}), 404
+
+        try:
+            chave = config.chave
+            db.session.delete(config)
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'Parametro "{chave}" excluido.',
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao excluir parametro #%s: %s", config_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500

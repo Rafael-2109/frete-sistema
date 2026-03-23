@@ -16,7 +16,7 @@ from app.carvia.models import (
     CarviaSubcontrato, CarviaCteComplementar,
     CarviaCustoEntrega, CarviaFaturaCliente,
     CarviaFaturaTransportadora, CarviaDespesa,
-    CarviaReceita, CarviaSessaoCotacao, CarviaSessaoDemanda,
+    CarviaReceita,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -823,82 +823,4 @@ def register_exportacao_routes(bp):
         df = pd.DataFrame(data)
         return _gerar_excel(df, 'Receitas', 'receitas')
 
-    # =====================================================================
-    # 10. Sessoes Cotacao
-    # =====================================================================
-    @bp.route('/api/exportar/sessoes-cotacao')
-    @login_required
-    def exportar_sessoes_cotacao():
-        """Exporta sessoes de cotacao para Excel com mesmos filtros da listagem"""
-        if _check_access():
-            return redirect(url_for('main.dashboard'))
-
-        status_filtro = request.args.get('status', '')
-        busca = request.args.get('busca', '')
-        sort = request.args.get('sort', 'criado_em')
-        direction = request.args.get('direction', 'desc')
-
-        # Subquery: contar demandas e total frete por sessao
-        subq_demandas = db.session.query(
-            CarviaSessaoDemanda.sessao_id,
-            func.count(CarviaSessaoDemanda.id).label('qtd_demandas'),
-            func.coalesce(
-                func.sum(CarviaSessaoDemanda.valor_frete_calculado), 0
-            ).label('total_frete')
-        ).group_by(CarviaSessaoDemanda.sessao_id).subquery()
-
-        query = db.session.query(
-            CarviaSessaoCotacao,
-            subq_demandas.c.qtd_demandas,
-            subq_demandas.c.total_frete,
-        ).outerjoin(
-            subq_demandas,
-            CarviaSessaoCotacao.id == subq_demandas.c.sessao_id
-        )
-
-        if status_filtro:
-            query = query.filter(CarviaSessaoCotacao.status == status_filtro)
-        if busca:
-            busca_like = f'%{busca}%'
-            query = query.filter(
-                db.or_(
-                    CarviaSessaoCotacao.nome_sessao.ilike(busca_like),
-                    CarviaSessaoCotacao.numero_sessao.ilike(busca_like),
-                )
-            )
-
-        sort_map = {
-            'numero_sessao': CarviaSessaoCotacao.numero_sessao,
-            'nome_sessao': CarviaSessaoCotacao.nome_sessao,
-            'status': CarviaSessaoCotacao.status,
-            'criado_em': CarviaSessaoCotacao.criado_em,
-        }
-        sort_col = sort_map.get(sort, CarviaSessaoCotacao.criado_em)
-        if direction == 'asc':
-            query = query.order_by(sort_col.asc())
-        else:
-            query = query.order_by(sort_col.desc())
-
-        items = query.all()
-
-        if not items:
-            flash('Nenhum dado para exportar.', 'warning')
-            return redirect(url_for('carvia.listar_sessoes_cotacao'))
-
-        data = []
-        for sessao, qtd_demandas, total_frete in items:
-            data.append({
-                'Numero Sessao': sessao.numero_sessao or '',
-                'Nome': sessao.nome_sessao or '',
-                'Cliente': sessao.cliente_nome or '',
-                'Status': sessao.status or '',
-                'Qtd Demandas': qtd_demandas or 0,
-                'Valor Total Frete': float(total_frete or 0),
-                'Enviado Em': _fmt_datetime(sessao.enviado_em),
-                'Respondido Em': _fmt_datetime(sessao.respondido_em),
-                'Criado Em': _fmt_datetime(sessao.criado_em),
-                'Criado Por': sessao.criado_por or '',
-            })
-
-        df = pd.DataFrame(data)
-        return _gerar_excel(df, 'Sessoes Cotacao', 'sessoes_cotacao')
+    # Sessoes Cotacao: REMOVIDO (feature obsoleta, 22/03/2026)

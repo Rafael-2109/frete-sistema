@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-sliders-h"></i> Parametros Globais</h2>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoParametro">
+            <i class="fas fa-plus"></i> Novo Parametro
+        </button>
+    </div>
+
+    {% set carvia_active = 'configuracoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="alert alert-info py-2 small mb-3">
+        <i class="fas fa-info-circle"></i>
+        Parametros globais do modulo CarVia. Ex: limite de desconto, configs de integracao, etc.
+    </div>
+
+    <div class="carvia-config-crud">
+        <div class="card">
+            <div class="card-body p-0">
+                {% if configs %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th>Chave</th>
+                                <th>Valor</th>
+                                <th>Descricao</th>
+                                <th class="text-center">Atualizado</th>
+                                <th class="text-center">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cfg in configs %}
+                            <tr>
+                                <td><code>{{ cfg.chave }}</code></td>
+                                <td><strong>{{ cfg.valor }}</strong></td>
+                                <td class="small text-muted">{{ cfg.descricao or '-' }}</td>
+                                <td class="text-center small text-muted">
+                                    {{ cfg.atualizado_em.strftime('%d/%m/%Y %H:%M') if cfg.atualizado_em else '-' }}
+                                    <br>{{ cfg.atualizado_por }}
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            onclick="editarParametro({{ cfg.id }}, '{{ cfg.chave }}', '{{ cfg.valor }}', '{{ cfg.descricao or '' }}')"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            onclick="excluirParametro({{ cfg.id }}, '{{ cfg.chave }}')"
+                                            title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-sliders-h fa-3x mb-3"></i>
+                    <p>Nenhum parametro configurado.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Novo Parametro #}
+<div class="modal fade" id="modalNovoParametro" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Parametro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Chave <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="novaChave" placeholder="ex: limite_desconto_percentual">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="novoValor" placeholder="ex: 5.0">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descricao</label>
+                    <input type="text" class="form-control" id="novaDescricao" placeholder="Descricao opcional">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="salvarParametro()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Editar Parametro #}
+<div class="modal fade" id="modalEditarParametro" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Parametro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="mb-3">
+                    <label class="form-label">Chave</label>
+                    <input type="text" class="form-control" id="editChave" disabled>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="editValor">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descricao</label>
+                    <input type="text" class="form-control" id="editDescricao">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="atualizarParametro()">Atualizar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function salvarParametro() {
+    const chave = document.getElementById('novaChave').value.trim();
+    const valor = document.getElementById('novoValor').value.trim();
+    const descricao = document.getElementById('novaDescricao').value.trim();
+
+    if (!chave || !valor) {
+        alert('Chave e Valor sao obrigatorios.');
+        return;
+    }
+
+    fetch('{{ url_for("carvia.criar_parametro") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({chave, valor, descricao})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao criar parametro.');
+        }
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+function editarParametro(id, chave, valor, descricao) {
+    document.getElementById('editId').value = id;
+    document.getElementById('editChave').value = chave;
+    document.getElementById('editValor').value = valor;
+    document.getElementById('editDescricao').value = descricao;
+    new bootstrap.Modal(document.getElementById('modalEditarParametro')).show();
+}
+
+function atualizarParametro() {
+    const id = document.getElementById('editId').value;
+    const valor = document.getElementById('editValor').value.trim();
+    const descricao = document.getElementById('editDescricao').value.trim();
+
+    if (!valor) {
+        alert('Valor e obrigatorio.');
+        return;
+    }
+
+    fetch(`/carvia/api/parametros/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({valor, descricao})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao atualizar.');
+        }
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+function excluirParametro(id, chave) {
+    if (!confirm(`Excluir parametro "${chave}"?`)) return;
+
+    fetch(`/carvia/api/parametros/${id}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao excluir.');
+        }
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+</script>
+{% endblock %}

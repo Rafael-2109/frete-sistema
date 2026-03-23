@@ -1,0 +1,541 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="fas fa-file-invoice-dollar"></i> {{ cotacao.numero_cotacao }}
+            {% if cotacao.status == 'RASCUNHO' %}
+            <span class="badge bg-secondary">Rascunho</span>
+            {% elif cotacao.status == 'PENDENTE_ADMIN' %}
+            <span class="badge bg-warning">Pendente Admin</span>
+            {% elif cotacao.status == 'ENVIADO' %}
+            <span class="badge bg-info">Enviado</span>
+            {% elif cotacao.status == 'APROVADO' %}
+            <span class="badge bg-success">Aprovado</span>
+            {% elif cotacao.status == 'RECUSADO' %}
+            <span class="badge bg-danger">Recusado</span>
+            {% elif cotacao.status == 'CANCELADO' %}
+            <span class="badge bg-dark">Cancelado</span>
+            {% endif %}
+        </h2>
+        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'cotacoes_v2' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row">
+        {# Dados #}
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header"><strong>Dados da Cotacao</strong></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Cliente:</strong> {{ cotacao.cliente.nome_comercial if cotacao.cliente else '-' }}</p>
+                            <p><strong>Tipo:</strong>
+                                {% if cotacao.tipo_material == 'MOTO' %}Moto{% else %}Carga Geral{% endif %}
+                            </p>
+                            <p><strong>Origem:</strong>
+                                {% if cotacao.endereco_origem %}
+                                {{ cotacao.endereco_origem.fisico_cidade }}/{{ cotacao.endereco_origem.fisico_uf }}
+                                ({{ cotacao.endereco_origem.cnpj }})
+                                {% else %}-{% endif %}
+                            </p>
+                            <p><strong>Destino:</strong>
+                                {% if cotacao.endereco_destino %}
+                                {{ cotacao.endereco_destino.fisico_cidade }}/{{ cotacao.endereco_destino.fisico_uf }}
+                                ({{ cotacao.endereco_destino.cnpj }})
+                                {% else %}-{% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if cotacao.tipo_material == 'CARGA_GERAL' %}
+                            <p><strong>Peso:</strong> {{ cotacao.peso|numero_br(3) if cotacao.peso else '-' }} kg</p>
+                            <p><strong>Valor Merc.:</strong> {{ cotacao.valor_mercadoria|valor_br if cotacao.valor_mercadoria else '-' }}</p>
+                            {% if cotacao.peso_cubado %}
+                            <p><strong>Peso Cubado:</strong> {{ cotacao.peso_cubado|numero_br(3) }} kg</p>
+                            {% endif %}
+                            {% else %}
+                            <p><strong>Total Motos:</strong> {{ cotacao.qtd_total_motos }}</p>
+                            <p><strong>Peso Total Cubado:</strong> {{ cotacao.peso_total_motos|numero_br(3) }} kg</p>
+                            {% endif %}
+                            <p><strong>Data Expedicao:</strong> {{ cotacao.data_expedicao.strftime('%d/%m/%Y') if cotacao.data_expedicao else '-' }}</p>
+                            <p><strong>Data Agenda:</strong> {{ cotacao.data_agenda.strftime('%d/%m/%Y') if cotacao.data_agenda else '-' }}</p>
+                            <p><strong>Dentro Tabela:</strong>
+                                {% if cotacao.dentro_tabela is none %}-
+                                {% elif cotacao.dentro_tabela %}Sim
+                                {% else %}Nao{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Motos (se tipo MOTO) #}
+            {% if cotacao.tipo_material == 'MOTO' %}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Motos ({{ motos|length }})</strong>
+                    {% if cotacao.status == 'RASCUNHO' and modelos_moto %}
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddMoto">
+                        <i class="fas fa-plus"></i> Adicionar
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body p-0">
+                    {% if motos %}
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Modelo</th>
+                                <th>Categoria</th>
+                                <th class="text-center">Qtd</th>
+                                <th class="text-end">Valor Unit.</th>
+                                <th class="text-end">Valor Total</th>
+                                <th class="text-end">Peso Cub. Unit.</th>
+                                <th class="text-end">Peso Cub. Total</th>
+                                {% if cotacao.status == 'RASCUNHO' %}
+                                <th class="text-center">Acoes</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in motos %}
+                            <tr>
+                                <td>{{ m.modelo_moto.nome if m.modelo_moto else '-' }}</td>
+                                <td>{{ m.categoria_moto.nome if m.categoria_moto else '-' }}</td>
+                                <td class="text-center">{{ m.quantidade }}</td>
+                                <td class="text-end">{{ m.valor_unitario|valor_br if m.valor_unitario else '-' }}</td>
+                                <td class="text-end">{{ m.valor_total|valor_br if m.valor_total else '-' }}</td>
+                                <td class="text-end">{{ m.peso_cubado_unitario|numero_br(3) if m.peso_cubado_unitario else '-' }}</td>
+                                <td class="text-end">{{ m.peso_cubado_total|numero_br(3) if m.peso_cubado_total else '-' }}</td>
+                                {% if cotacao.status == 'RASCUNHO' %}
+                                <td class="text-center">
+                                    <button class="btn btn-outline-danger btn-sm" onclick="removerMoto({{ m.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">Nenhuma moto adicionada.</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Pedidos (se APROVADO) #}
+            {% if cotacao.status == 'APROVADO' %}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Pedidos ({{ pedidos|length }})</strong>
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoPedido">
+                        <i class="fas fa-plus"></i> Novo Pedido
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    {% if pedidos %}
+                    {% set ped_status_map = {
+                        'PENDENTE': 'carvia-badge-pendente',
+                        'SEPARADO': 'carvia-badge-separado',
+                        'FATURADO': 'carvia-badge-faturado',
+                        'EMBARCADO': 'carvia-badge-embarcado',
+                        'CANCELADO': 'carvia-badge-cancelado'
+                    } %}
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Numero</th>
+                                <th>Filial</th>
+                                <th>Tipo</th>
+                                <th class="text-center">Status</th>
+                                <th>NF</th>
+                                <th class="text-center">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ped in pedidos %}
+                            {% set primeiro_item = ped.itens.first() %}
+                            {% set nf_numero = primeiro_item.numero_nf if primeiro_item else None %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}">
+                                        {{ ped.numero_pedido }}
+                                    </a>
+                                </td>
+                                <td>{{ ped.filial }}</td>
+                                <td>{{ ped.tipo_separacao }}</td>
+                                <td class="text-center">
+                                    <span class="badge {{ ped_status_map.get(ped.status, 'bg-secondary') }}">{{ ped.status }}</span>
+                                </td>
+                                <td>
+                                    {% if nf_numero %}
+                                        <span class="badge carvia-badge-faturado">{{ nf_numero }}</span>
+                                    {% else %}
+                                        <span class="badge carvia-badge-pendente">Pendente</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}"
+                                       class="btn btn-outline-primary btn-sm" title="Ver detalhe"><i class="fas fa-eye"></i></a>
+                                    {% if ped.status in ('PENDENTE', 'SEPARADO') %}
+                                    <button class="btn btn-outline-primary btn-sm" title="Anexar NF"
+                                            onclick="abrirModalAnexarNF({{ ped.id }}, '{{ ped.numero_pedido }}')">
+                                        <i class="fas fa-file-invoice"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">Nenhum pedido criado.</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Sidebar: Pricing + Acoes #}
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header"><strong>Pricing</strong></div>
+                <div class="card-body">
+                    <p><strong>Valor Tabela:</strong> {{ cotacao.valor_tabela|valor_br if cotacao.valor_tabela else '-' }}</p>
+                    <p><strong>Desconto:</strong> {{ cotacao.percentual_desconto|numero_br(2) if cotacao.percentual_desconto else '0' }}%
+                        <small class="text-muted">(limite: {{ limite_desconto }}%)</small>
+                    </p>
+                    <p><strong>Valor Descontado:</strong> {{ cotacao.valor_descontado|valor_br if cotacao.valor_descontado else '-' }}</p>
+                    <hr>
+                    <p class="fs-5"><strong>Valor Final:</strong>
+                        <span class="text-success">{{ cotacao.valor_final_aprovado|valor_br if cotacao.valor_final_aprovado else '-' }}</span>
+                    </p>
+
+                    {% if cotacao.status == 'RASCUNHO' %}
+                    <hr>
+                    <button class="btn btn-primary btn-sm w-100 mb-2" onclick="calcularPreco()">
+                        <i class="fas fa-calculator"></i> Calcular Preco
+                    </button>
+                    {% if cotacao.valor_tabela %}
+                    <div class="input-group mb-2">
+                        <input type="number" class="form-control form-control-sm" id="inpDesconto"
+                               placeholder="% desconto" step="0.01" min="0" max="100"
+                               value="{{ cotacao.percentual_desconto or 0 }}">
+                        <button class="btn btn-outline-primary btn-sm" onclick="aplicarDesconto()">Aplicar</button>
+                    </div>
+                    {% endif %}
+                    {% if cotacao.valor_final_aprovado %}
+                    <button class="btn btn-success btn-sm w-100" onclick="enviarCotacao()">
+                        <i class="fas fa-paper-plane"></i> Enviar ao Cliente
+                    </button>
+                    {% endif %}
+                    {% endif %}
+
+                    {% if cotacao.status == 'PENDENTE_ADMIN' %}
+                    <hr>
+                    <div class="alert alert-warning py-1 small">
+                        Desconto de {{ cotacao.percentual_desconto|numero_br(2) }}% excede limite de {{ limite_desconto }}%.
+                        Aguardando aprovacao do admin.
+                    </div>
+                    {% if current_user.perfil == 'administrador' %}
+                    <button class="btn btn-success btn-sm w-100 mb-1" onclick="adminAprovar()">Aprovar Desconto</button>
+                    <button class="btn btn-danger btn-sm w-100" onclick="adminRejeitar()">Rejeitar</button>
+                    {% endif %}
+                    {% endif %}
+
+                    {% if cotacao.status == 'ENVIADO' %}
+                    <hr>
+                    <button class="btn btn-success btn-sm w-100 mb-1" onclick="aprovarCliente()">
+                        <i class="fas fa-check"></i> Cliente Aprovou
+                    </button>
+                    <button class="btn btn-warning btn-sm w-100 mb-1" onclick="contraProposta()">
+                        Contra-Proposta
+                    </button>
+                    <button class="btn btn-danger btn-sm w-100" onclick="recusarCliente()">
+                        <i class="fas fa-times"></i> Cliente Recusou
+                    </button>
+                    {% endif %}
+
+                    {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                    <hr>
+                    <button class="btn btn-outline-danger btn-sm w-100" onclick="cancelarCotacao()">
+                        Cancelar Cotacao
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if cotacao.observacoes %}
+            <div class="card mb-3">
+                <div class="card-header"><strong>Observacoes</strong></div>
+                <div class="card-body small">{{ cotacao.observacoes }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Modal Add Moto #}
+{% if cotacao.tipo_material == 'MOTO' and cotacao.status == 'RASCUNHO' %}
+<div class="modal fade" id="modalAddMoto" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Adicionar Moto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Modelo</label>
+                    <select class="form-select" id="selModeloMoto">
+                        {% for mod in modelos_moto %}
+                        <option value="{{ mod.id }}">{{ mod.nome }}{% if mod.categoria %} ({{ mod.categoria.nome }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Quantidade</label>
+                    <input type="number" class="form-control" id="inpQtdMoto" value="1" min="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor Unitario (R$) <small class="text-muted">valor do produto</small></label>
+                    <input type="number" class="form-control" id="inpValorUnitMoto" step="0.01" min="0" placeholder="Ex: 16500.00">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="adicionarMoto()">Adicionar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Modal Novo Pedido #}
+{% if cotacao.status == 'APROVADO' %}
+<div class="modal fade" id="modalNovoPedido" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Pedido</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Filial <span class="text-danger">*</span></label>
+                    <select class="form-select" id="selFilial">
+                        <option value="SP">SP (Estoque — Q.P.A.)</option>
+                        <option value="RJ">RJ (Cross-Dock)</option>
+                    </select>
+                    <div class="form-text">
+                        SP: separa do estoque, fatura. RJ: NFs chegam por carreta, desmembrar.
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observacoes</label>
+                    <textarea class="form-control" id="pedObs" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="criarPedido()">Criar Pedido</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Modal Anexar NF (atalho da tabela de pedidos) #}
+{% if cotacao.status == 'APROVADO' %}
+<div class="modal fade" id="modalAnexarNFAtalho" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-invoice"></i> Anexar NF</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small" id="atalhoNFDesc">Pedido: ...</p>
+                <div class="mb-3">
+                    <label class="form-label">Numero da NF <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="inpNFAtalho"
+                           placeholder="Ex: 123456" inputmode="numeric">
+                </div>
+                <div id="atalhoNFFeedback" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnAtalhoNF" onclick="atalhoAnexarNF()">
+                    <span class="spinner-border spinner-border-sm d-none" id="spinAtalhoNF" role="status"></span>
+                    Anexar NF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const cotacaoId = {{ cotacao.id }};
+
+function apiCall(url, method, body) {
+    return fetch(url, {
+        method: method || 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: body ? JSON.stringify(body) : undefined
+    }).then(r => r.json());
+}
+
+function calcularPreco() {
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/calcular-preco`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function aplicarDesconto() {
+    const pct = parseFloat(document.getElementById('inpDesconto').value || 0);
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/desconto`, 'POST', {percentual_desconto: pct}).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function enviarCotacao() {
+    if (!confirm('Enviar cotacao ao cliente?')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/enviar`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function aprovarCliente() {
+    if (!confirm('Confirmar que o cliente aprovou?')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/aprovar-cliente`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function recusarCliente() {
+    if (!confirm('Confirmar recusa do cliente?')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/recusar-cliente`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function contraProposta() {
+    const valor = prompt('Valor da contra-proposta (R$):');
+    if (!valor) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/contra-proposta`, 'POST', {novo_valor: parseFloat(valor)}).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function cancelarCotacao() {
+    if (!confirm('Cancelar esta cotacao?')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/cancelar`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function adminAprovar() {
+    if (!confirm('Aprovar desconto?')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-aprovar`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function adminRejeitar() {
+    if (!confirm('Rejeitar desconto?')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-rejeitar`).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function adicionarMoto() {
+    const modeloId = document.getElementById('selModeloMoto').value;
+    const qtd = parseInt(document.getElementById('inpQtdMoto').value || 1);
+    const vlrUnit = parseFloat(document.getElementById('inpValorUnitMoto').value) || null;
+    const body = {modelo_moto_id: modeloId, quantidade: qtd};
+    if (vlrUnit) body.valor_unitario = vlrUnit;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/motos`, 'POST', body).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function removerMoto(itemId) {
+    if (!confirm('Remover esta moto?')) return;
+    apiCall(`/carvia/api/cotacao-motos/${itemId}`, 'DELETE').then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+function criarPedido() {
+    const filial = document.getElementById('selFilial').value;
+    const obs = document.getElementById('pedObs').value;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/pedidos`, 'POST', {filial, observacoes: obs}).then(d => {
+        if (d.sucesso) location.reload();
+        else alert(d.erro);
+    });
+}
+
+// Atalho Anexar NF (modal parametrizado)
+let _pedidoIdNF = null;
+
+function abrirModalAnexarNF(pedidoId, numeroPedido) {
+    _pedidoIdNF = pedidoId;
+    document.getElementById('atalhoNFDesc').textContent = 'Pedido: ' + numeroPedido;
+    document.getElementById('inpNFAtalho').value = '';
+    document.getElementById('atalhoNFFeedback').style.display = 'none';
+    const btn = document.getElementById('btnAtalhoNF');
+    const spin = document.getElementById('spinAtalhoNF');
+    if (btn) btn.disabled = false;
+    if (spin) spin.classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('modalAnexarNFAtalho')).show();
+}
+
+function atalhoAnexarNF() {
+    const nf = (document.getElementById('inpNFAtalho').value || '').trim();
+    if (!nf || !_pedidoIdNF) return;
+    const btn = document.getElementById('btnAtalhoNF');
+    const spin = document.getElementById('spinAtalhoNF');
+    if (btn) btn.disabled = true;
+    if (spin) spin.classList.remove('d-none');
+
+    apiCall('/carvia/api/pedidos-carvia/' + _pedidoIdNF + '/nf', 'PUT', {numero_nf: nf}).then(function(d) {
+        if (d.sucesso) {
+            const fb = document.getElementById('atalhoNFFeedback');
+            fb.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle"></i> ' + d.mensagem + '</div>';
+            fb.style.display = 'block';
+            setTimeout(function() { location.reload(); }, 1500);
+        } else {
+            alert(d.erro || 'Erro ao anexar NF.');
+            if (btn) btn.disabled = false;
+            if (spin) spin.classList.add('d-none');
+        }
+    }).catch(function() {
+        alert('Erro de conexao.');
+        if (btn) btn.disabled = false;
+        if (spin) spin.classList.add('d-none');
+    });
+}
+</script>
+{% endblock %}

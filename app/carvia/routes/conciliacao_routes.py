@@ -57,9 +57,9 @@ def register_conciliacao_routes(bp):
     # Tela 1: Conciliacao Ativa (dual-panel)
     # ===================================================================
 
-    @bp.route('/conciliacao')
+    @bp.route('/conciliacao') # type: ignore
     @login_required
-    def conciliacao():
+    def conciliacao(): # type: ignore
         """Tela principal de conciliacao bancaria."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -73,15 +73,15 @@ def register_conciliacao_routes(bp):
         # Carregar todas as linhas para popular o painel esquerdo via JS
         linhas = CarviaConciliacaoService.obter_linhas_extrato()
         linhas_json = json.dumps([{
-            'id': l.id,
-            'data': l.data.strftime('%d/%m/%Y') if l.data else '',
-            'valor': float(l.valor),
-            'tipo': l.tipo,
-            'descricao': l.descricao or '',
-            'razao_social': l.razao_social or '',
-            'status': l.status_conciliacao,
-            'saldo_a_conciliar': l.saldo_a_conciliar,
-        } for l in linhas])
+            'id': linha.id,
+            'data': linha.data.strftime('%d/%m/%Y') if linha.data else '',
+            'valor': float(linha.valor),
+            'tipo': linha.tipo,
+            'descricao': linha.descricao or '',
+            'razao_social': linha.razao_social or '',
+            'status': linha.status_conciliacao,
+            'saldo_a_conciliar': linha.saldo_a_conciliar,
+        } for linha in linhas])
 
         return render_template(
             'carvia/conciliacao.html',
@@ -93,9 +93,9 @@ def register_conciliacao_routes(bp):
     # Tela 2: Extrato Bancario
     # ===================================================================
 
-    @bp.route('/extrato-bancario')
+    @bp.route('/extrato-bancario') # type: ignore
     @login_required
-    def extrato_bancario():
+    def extrato_bancario(): # type: ignore
         """Tela de extrato bancario com filtros."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -154,9 +154,9 @@ def register_conciliacao_routes(bp):
     # API: Importar OFX
     # ===================================================================
 
-    @bp.route('/api/conciliacao/importar-ofx', methods=['POST'])
+    @bp.route('/api/conciliacao/importar-ofx', methods=['POST']) # type: ignore
     @login_required
-    def api_importar_ofx():
+    def api_importar_ofx(): # type: ignore
         """Upload e importacao de arquivo OFX."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -204,9 +204,9 @@ def register_conciliacao_routes(bp):
     # API: Documentos elegiveis
     # ===================================================================
 
-    @bp.route('/api/conciliacao/documentos-elegiveis')
+    @bp.route('/api/conciliacao/documentos-elegiveis') # type: ignore
     @login_required
-    def api_documentos_elegiveis():
+    def api_documentos_elegiveis(): # type: ignore
         """Retorna documentos elegiveis para conciliacao."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -224,9 +224,9 @@ def register_conciliacao_routes(bp):
     # API: Conciliar
     # ===================================================================
 
-    @bp.route('/api/conciliacao/conciliar', methods=['POST'])
+    @bp.route('/api/conciliacao/conciliar', methods=['POST']) # type: ignore
     @login_required
-    def api_conciliar():
+    def api_conciliar(): # type: ignore
         """Cria vinculos de conciliacao."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -266,9 +266,9 @@ def register_conciliacao_routes(bp):
     # API: Desconciliar
     # ===================================================================
 
-    @bp.route('/api/conciliacao/desconciliar', methods=['POST'])
+    @bp.route('/api/conciliacao/desconciliar', methods=['POST']) # type: ignore
     @login_required
-    def api_desconciliar():
+    def api_desconciliar(): # type: ignore  
         """Remove conciliacoes."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -312,9 +312,9 @@ def register_conciliacao_routes(bp):
     # API: Matches para modal inline (Tela 2)
     # ===================================================================
 
-    @bp.route('/api/conciliacao/matches/<int:linha_id>')
+    @bp.route('/api/conciliacao/matches/<int:linha_id>') # type: ignore
     @login_required
-    def api_matches_linha(linha_id):
+    def api_matches_linha(linha_id): # type: ignore
         """Retorna docs elegiveis para conciliacao inline de uma linha."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -356,9 +356,9 @@ def register_conciliacao_routes(bp):
     # CSV Razao Social: Upload
     # ===================================================================
 
-    @bp.route('/api/conciliacao/importar-csv', methods=['POST'])
+    @bp.route('/api/conciliacao/importar-csv', methods=['POST']) # type: ignore
     @login_required
-    def api_importar_csv():
+    def api_importar_csv(): # type: ignore
         """Upload e processamento de CSV bancario para enriquecer razao social."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -418,9 +418,9 @@ def register_conciliacao_routes(bp):
     # CSV Razao Social: Pagina de Review
     # ===================================================================
 
-    @bp.route('/revisar-csv')
+    @bp.route('/revisar-csv') # type: ignore
     @login_required
-    def revisar_csv():
+    def revisar_csv(): # type: ignore
         """Pagina de review pos-importacao CSV."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -449,9 +449,9 @@ def register_conciliacao_routes(bp):
     # CSV Razao Social: Aplicar Auto-matches
     # ===================================================================
 
-    @bp.route('/api/conciliacao/aplicar-csv', methods=['POST'])
+    @bp.route('/api/conciliacao/aplicar-csv', methods=['POST']) # type: ignore
     @login_required
-    def api_aplicar_csv():
+    def api_aplicar_csv(): # type: ignore
         """Aplica todos auto-matches de um job CSV no banco."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -487,9 +487,9 @@ def register_conciliacao_routes(bp):
     # CSV Razao Social: Match Manual Individual
     # ===================================================================
 
-    @bp.route('/api/conciliacao/match-csv-manual', methods=['POST'])
+    @bp.route('/api/conciliacao/match-csv-manual', methods=['POST']) # type: ignore
     @login_required
-    def api_match_csv_manual():
+    def api_match_csv_manual(): # type: ignore
         """Aplica match manual individual de CSV para extrato."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -552,9 +552,9 @@ def register_conciliacao_routes(bp):
     # API: Detalhe de Documento Conciliado
     # ===================================================================
 
-    @bp.route('/api/conciliacao/detalhe-documento/<tipo>/<int:doc_id>')
+    @bp.route('/api/conciliacao/detalhe-documento/<tipo>/<int:doc_id>') # type: ignore
     @login_required
-    def api_detalhe_documento(tipo, doc_id):
+    def api_detalhe_documento(tipo, doc_id): # type: ignore 
         """Retorna detalhes de um documento conciliado para exibicao em modal."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -673,9 +673,9 @@ def register_conciliacao_routes(bp):
     # Editar Razao Social / Observacao
     # ===================================================================
 
-    @bp.route('/api/extrato/editar', methods=['POST'])
+    @bp.route('/api/extrato/editar', methods=['POST']) # type: ignore
     @login_required
-    def api_editar_extrato():
+    def api_editar_extrato(): # type: ignore
         """Edita razao_social ou observacao de uma linha do extrato."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403

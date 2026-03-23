@@ -124,6 +124,16 @@
     --_badge-color: hsl(0 0% 10%);
 }
 
+.carvia-badge-separado {
+    --_badge-bg: var(--semantic-info);
+    --_badge-color: hsl(0 0% 100%);
+}
+
+.carvia-badge-embarcado {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+}
+
 /* NF cancelada — opacidade reduzida na tabela */
 .carvia-nf-cancelada {
     opacity: 0.55;
@@ -140,8 +150,13 @@
     --_badge-bg: hsl(145 65% 35%);
 }
 
-[data-bs-theme="light"] .carvia-badge-enviado {
+[data-bs-theme="light"] .carvia-badge-enviado,
+[data-bs-theme="light"] .carvia-badge-separado {
     --_badge-bg: hsl(210 80% 45%);
+}
+
+[data-bs-theme="light"] .carvia-badge-embarcado {
+    --_badge-bg: hsl(145 65% 35%);
 }
 
 [data-bs-theme="light"] .carvia-badge-emitido {

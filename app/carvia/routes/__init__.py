@@ -15,7 +15,6 @@ def register_routes(bp):
     from app.carvia.routes.despesa_routes import register_despesa_routes
     from app.carvia.routes.receita_routes import register_receita_routes
     from app.carvia.routes.fluxo_caixa_routes import register_fluxo_caixa_routes
-    from app.carvia.routes.sessao_cotacao_routes import register_sessao_cotacao_routes
     from app.carvia.routes.conciliacao_routes import register_conciliacao_routes
     from app.carvia.routes.config_routes import register_config_routes
     from app.carvia.routes.cte_complementar_routes import register_cte_complementar_routes
@@ -23,6 +22,9 @@ def register_routes(bp):
     from app.carvia.routes.exportacao_routes import register_exportacao_routes
     from app.carvia.routes.tabela_carvia_routes import register_tabela_carvia_routes
     from app.carvia.routes.admin_routes import register_admin_routes
+    from app.carvia.routes.cliente_routes import register_cliente_routes
+    from app.carvia.routes.cotacao_v2_routes import register_cotacao_v2_routes
+    from app.carvia.routes.pedido_routes import register_pedido_routes
 
     register_dashboard_routes(bp)
     register_importacao_routes(bp)
@@ -34,7 +36,6 @@ def register_routes(bp):
     register_despesa_routes(bp)
     register_receita_routes(bp)
     register_fluxo_caixa_routes(bp)
-    register_sessao_cotacao_routes(bp)
     register_conciliacao_routes(bp)
     register_config_routes(bp)
     register_cte_complementar_routes(bp)
@@ -42,3 +43,6 @@ def register_routes(bp):
     register_exportacao_routes(bp)
     register_tabela_carvia_routes(bp)
     register_admin_routes(bp)
+    register_cliente_routes(bp)
+    register_cotacao_v2_routes(bp)
+    register_pedido_routes(bp)

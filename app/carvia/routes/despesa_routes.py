@@ -20,9 +20,9 @@ STATUS_DESPESA = ['PENDENTE', 'PAGO', 'CANCELADO']
 
 def register_despesa_routes(bp):
 
-    @bp.route('/despesas')
+    @bp.route('/despesas') # type: ignore
     @login_required
-    def listar_despesas():
+    def listar_despesas(): # type: ignore
         """Lista despesas CarVia com filtros"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -82,9 +82,9 @@ def register_despesa_routes(bp):
             today=today,
         )
 
-    @bp.route('/despesas/criar', methods=['GET', 'POST'])
+    @bp.route('/despesas/criar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_despesa():
+    def criar_despesa(): # type: ignore
         """Cria nova despesa"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -145,9 +145,9 @@ def register_despesa_routes(bp):
             tipos_despesa=TIPOS_DESPESA,
         )
 
-    @bp.route('/despesas/<int:despesa_id>')
+    @bp.route('/despesas/<int:despesa_id>') # type: ignore
     @login_required
-    def detalhe_despesa(despesa_id):
+    def detalhe_despesa(despesa_id): # type: ignore
         """Detalhe de uma despesa"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -163,9 +163,9 @@ def register_despesa_routes(bp):
             despesa=despesa,
         )
 
-    @bp.route('/despesas/<int:despesa_id>/editar', methods=['GET', 'POST'])
+    @bp.route('/despesas/<int:despesa_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def editar_despesa(despesa_id):
+    def editar_despesa(despesa_id): # type: ignore
         """Edita uma despesa existente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -226,9 +226,9 @@ def register_despesa_routes(bp):
             tipos_despesa=TIPOS_DESPESA,
         )
 
-    @bp.route('/despesas/<int:despesa_id>/status', methods=['POST'])
+    @bp.route('/despesas/<int:despesa_id>/status', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_status_despesa(despesa_id):
+    def atualizar_status_despesa(despesa_id): # type: ignore
         """Atualiza status de uma despesa"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')

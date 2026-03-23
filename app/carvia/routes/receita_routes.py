@@ -19,9 +19,9 @@ STATUS_RECEITA = ['PENDENTE', 'RECEBIDO', 'CANCELADO']
 
 def register_receita_routes(bp):
 
-    @bp.route('/receitas')
+    @bp.route('/receitas') # type: ignore
     @login_required
-    def listar_receitas():
+    def listar_receitas(): # type: ignore
         """Lista receitas CarVia com filtros"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -91,9 +91,9 @@ def register_receita_routes(bp):
             today=today,
         )
 
-    @bp.route('/receitas/criar', methods=['GET', 'POST'])
+    @bp.route('/receitas/criar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_receita():
+    def criar_receita(): # type: ignore
         """Cria nova receita"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -147,9 +147,9 @@ def register_receita_routes(bp):
 
         return render_template('carvia/receitas/criar.html')
 
-    @bp.route('/receitas/<int:receita_id>')
+    @bp.route('/receitas/<int:receita_id>') # type: ignore
     @login_required
-    def detalhe_receita(receita_id):
+    def detalhe_receita(receita_id): # type: ignore
         """Detalhe de uma receita"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -165,9 +165,9 @@ def register_receita_routes(bp):
             receita=receita,
         )
 
-    @bp.route('/receitas/<int:receita_id>/editar', methods=['GET', 'POST'])
+    @bp.route('/receitas/<int:receita_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def editar_receita(receita_id):
+    def editar_receita(receita_id): # type: ignore
         """Edita uma receita existente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -223,9 +223,9 @@ def register_receita_routes(bp):
             receita=receita,
         )
 
-    @bp.route('/receitas/<int:receita_id>/status', methods=['POST'])
+    @bp.route('/receitas/<int:receita_id>/status', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_status_receita(receita_id):
+    def atualizar_status_receita(receita_id): # type: ignore
         """Atualiza status de uma receita"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')

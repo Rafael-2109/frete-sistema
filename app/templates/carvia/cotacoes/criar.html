@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-file-invoice-dollar"></i> Nova Cotacao</h2>
+        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'cotacoes_v2' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" id="formCotacao">
+                {# Cliente #}
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Cliente <span class="text-danger">*</span></label>
+                        <select name="cliente_id" class="form-select" id="selCliente" required onchange="carregarEnderecos()">
+                            <option value="">Selecione...</option>
+                            {% for cli in clientes %}
+                            <option value="{{ cli.id }}">{{ cli.nome_comercial }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo Material <span class="text-danger">*</span></label>
+                        <select name="tipo_material" class="form-select" id="selTipoMaterial" required>
+                            <option value="CARGA_GERAL">Carga Geral</option>
+                            <option value="MOTO">Moto</option>
+                        </select>
+                    </div>
+                </div>
+
+                {# Enderecos #}
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Endereco Origem <span class="text-danger">*</span></label>
+                        <select name="endereco_origem_id" class="form-select" id="selOrigem" required>
+                            <option value="">Selecione o cliente primeiro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Endereco Destino <span class="text-danger">*</span></label>
+                        <select name="endereco_destino_id" class="form-select" id="selDestino" required>
+                            <option value="">Selecione o cliente primeiro</option>
+                        </select>
+                    </div>
+                </div>
+
+                {# Carga Geral #}
+                <div id="secaoCargaGeral">
+                    <h6 class="text-muted mb-2">Dados da Carga</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Peso (kg)</label>
+                            <input type="number" name="peso" class="form-control" step="0.001">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valor Mercadoria (R$)</label>
+                            <input type="number" name="valor_mercadoria" class="form-control" step="0.01">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Volumes</label>
+                            <input type="number" name="volumes" class="form-control">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Comp. (m)</label>
+                            <input type="number" name="dimensao_c" class="form-control" step="0.0001">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Larg. (m)</label>
+                            <input type="number" name="dimensao_l" class="form-control" step="0.0001">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Alt. (m)</label>
+                            <input type="number" name="dimensao_a" class="form-control" step="0.0001">
+                        </div>
+                    </div>
+                </div>
+
+                {# Datas #}
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Data Expedicao</label>
+                        <input type="date" name="data_expedicao" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Data Agenda</label>
+                        <input type="date" name="data_agenda" class="form-control">
+                    </div>
+                </div>
+
+                {# Observacoes #}
+                <div class="mb-3">
+                    <label class="form-label">Observacoes</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Criar Cotacao
+                    </button>
+                    <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function carregarEnderecos() {
+    const clienteId = document.getElementById('selCliente').value;
+    if (!clienteId) return;
+
+    fetch(`/carvia/api/cotacoes/enderecos-cliente/${clienteId}`)
+    .then(r => r.json())
+    .then(data => {
+        const origens = data.enderecos.filter(e => e.tipo === 'ORIGEM');
+        const destinos = data.enderecos.filter(e => e.tipo === 'DESTINO');
+
+        const selOrigem = document.getElementById('selOrigem');
+        const selDestino = document.getElementById('selDestino');
+
+        selOrigem.innerHTML = '<option value="">Selecione...</option>';
+        selDestino.innerHTML = '<option value="">Selecione...</option>';
+
+        // Se tem enderecos sem tipo ORIGEM/DESTINO, mostrar todos em ambos
+        const todosEnderecos = data.enderecos;
+        const listaOrigem = origens.length > 0 ? origens : todosEnderecos;
+        const listaDestino = destinos.length > 0 ? destinos : todosEnderecos;
+
+        listaOrigem.forEach(e => {
+            selOrigem.innerHTML += `<option value="${e.id}" ${e.principal ? 'selected' : ''}>${e.label}</option>`;
+        });
+        listaDestino.forEach(e => {
+            selDestino.innerHTML += `<option value="${e.id}" ${e.principal ? 'selected' : ''}>${e.label}</option>`;
+        });
+    });
+}
+</script>
+{% endblock %}

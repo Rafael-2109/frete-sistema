@@ -274,6 +274,9 @@ def visualizar_embarque(id):
                 # leiam os valores atualizados do banco, não os antigos
                 db.session.flush()
 
+                # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
+                embarque.marcar_alterado_apos_impressao()
+
                 # =====================================================================
                 # ✅ SALVAMENTO DOS CAMPOS DE PALLET DO EMBARQUE
                 # =====================================================================
@@ -1148,14 +1151,19 @@ def acessar_separacao(embarque_id, separacao_lote_id):
 @login_required 
 def imprimir_separacao(embarque_id, separacao_lote_id):
     """
-    Gera relatório de impressão da separação
+    Gera relatório de impressão da separação.
+    Detecta CarVia pelo prefixo CARVIA- e redireciona para template apropriado.
     """
+    # CarVia: usar template proprio (dados de CarViaCotacao/CarviaPedido)
+    if str(separacao_lote_id).startswith('CARVIA-'):
+        return _imprimir_separacao_carvia(embarque_id, separacao_lote_id)
+
     from app.separacao.models import Separacao
     from app.pedidos.models import Pedido
     from flask import make_response
-    
+
     embarque = Embarque.query.get_or_404(embarque_id)
-    
+
     # Marcar separação como impressa diretamente em Separacao
     pedido = Pedido.query.filter_by(separacao_lote_id=separacao_lote_id).first()
     if pedido and not pedido.separacao_impressa:
@@ -1170,7 +1178,7 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
 
     # Busca todos os itens da separação com este lote_id
     itens_separacao = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id).all()
-    
+
     if not itens_separacao:
         flash('Dados de separação não encontrados para este embarque.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
@@ -1260,9 +1268,11 @@ def imprimir_embarque_completo(embarque_id):
         flash('⚠️ A Data Prevista de Embarque deve ser preenchida antes de imprimir o relatório completo.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
     
-    # Marcar todos os pedidos dos itens ativos como impressos
+    # Marcar todos os pedidos dos itens ativos como impressos (skip CARVIA-*)
     for item in embarque.itens:
         if item.status == 'ativo' and item.separacao_lote_id:
+            if str(item.separacao_lote_id).startswith('CARVIA-'):
+                continue  # CarVia nao tem registros em Separacao
             pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
             if pedido and not pedido.separacao_impressa:
                 Separacao.query.filter_by(
@@ -1272,20 +1282,34 @@ def imprimir_embarque_completo(embarque_id):
                     'separacao_impressa_em': agora_utc_naive(),
                     'separacao_impressa_por': current_user.nome if hasattr(current_user, 'nome') else current_user.email
                 })
+
+    # Registrar impressao (auditoria G7)
+    usuario_impressao = current_user.nome if hasattr(current_user, 'nome') and current_user.nome else current_user.email
+    embarque.registrar_impressao(usuario_impressao)
+
     db.session.commit()
-    
+
     # Busca todos os lotes únicos de separação vinculados a este embarque
     lotes_separacao = db.session.query(EmbarqueItem.separacao_lote_id).filter(
         EmbarqueItem.embarque_id == embarque_id,
         EmbarqueItem.separacao_lote_id.isnot(None)
     ).distinct().all()
-    
-    # Prepara dados de cada separação
-    separacoes_data = []
+
+    # Particionar lotes: Nacom vs CarVia
+    lotes_nacom = []
+    lotes_carvia = []
     for (lote_id,) in lotes_separacao:
+        if lote_id and str(lote_id).startswith('CARVIA-'):
+            lotes_carvia.append(lote_id)
+        else:
+            lotes_nacom.append(lote_id)
+
+    # Prepara dados de cada separação NACOM
+    separacoes_data = []
+    for lote_id in lotes_nacom:
         # Busca itens da separação
         itens_separacao = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
-        
+
         if itens_separacao:
             # Agrupa informações da separação
             resumo_separacao = {
@@ -1303,11 +1327,50 @@ def imprimir_embarque_completo(embarque_id):
                 'pallet_total': sum(item.pallet or 0 for item in itens_separacao),
                 'qtd_total': sum(item.qtd_saldo or 0 for item in itens_separacao),
             }
-            
+
             separacoes_data.append({
                 'resumo': resumo_separacao,
                 'itens': itens_separacao
             })
+
+    # Prepara dados de cada separação CARVIA
+    from app.carvia.models import CarviaCotacao, CarviaPedido, CarviaPedidoItem, CarviaCotacaoMoto
+
+    carvia_separacoes_data = []
+    for lote_id in lotes_carvia:
+        eh_pedido = str(lote_id).startswith('CARVIA-PED-')
+        cotacao = None
+        pedido_cv = None
+        itens_pedido = []
+        motos = []
+
+        try:
+            if eh_pedido:
+                ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+                pedido_cv = db.session.get(CarviaPedido, ped_id)
+                if pedido_cv:
+                    cotacao = db.session.get(CarviaCotacao, pedido_cv.cotacao_id)
+                    itens_pedido = CarviaPedidoItem.query.filter_by(pedido_id=ped_id).all()
+            else:
+                cot_id = int(str(lote_id).replace('CARVIA-', ''))
+                cotacao = db.session.get(CarviaCotacao, cot_id)
+        except (ValueError, TypeError):
+            continue
+
+        if not cotacao:
+            continue
+
+        if cotacao.tipo_material == 'MOTO' and not eh_pedido:
+            motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all()
+
+        carvia_separacoes_data.append({
+            'lote_id': lote_id,
+            'eh_pedido': eh_pedido,
+            'cotacao': cotacao,
+            'pedido': pedido_cv,
+            'itens_pedido': itens_pedido,
+            'motos': motos,
+        })
     
     # 🚚 Gerar QR Code para rastreamento
     qrcode_base64 = None
@@ -1320,9 +1383,10 @@ def imprimir_embarque_completo(embarque_id):
         'embarques/imprimir_completo.html',
         embarque=embarque,
         separacoes_data=separacoes_data,
+        carvia_separacoes_data=carvia_separacoes_data,
         data_impressao=agora_utc_naive(),
         current_user=current_user,
-        qrcode_base64=qrcode_base64  # 🚚 QR Code
+        qrcode_base64=qrcode_base64
     )
     
     response = make_response(html)
@@ -1342,15 +1406,15 @@ def registrar_impressao(embarque_id):
     if not embarque.data_prevista_embarque:
         return jsonify({'success': False, 'message': 'A Data Prevista de Embarque deve ser preenchida antes de imprimir.'})
     
-    # Registrar a impressão (você pode criar uma tabela específica para isso ou usar um campo no embarque)
-    # Por enquanto, vamos apenas retornar os dados para exibir
+    # Registrar a impressao (persistir no banco)
     usuario_nome = current_user.nome if current_user.is_authenticated and hasattr(current_user, 'nome') and current_user.nome else (current_user.email if current_user.is_authenticated else 'Sistema')
-    data_impressao = agora_utc_naive()
-    
+    embarque.registrar_impressao(usuario_nome)
+    db.session.commit()
+
     return jsonify({
-        'success': True, 
+        'success': True,
         'usuario': usuario_nome,
-        'data_impressao': data_impressao.strftime('%d/%m/%Y às %H:%M:%S')
+        'data_impressao': embarque.impresso_em.strftime('%d/%m/%Y às %H:%M:%S')
     })
 
 @embarques_bp.route('/<int:embarque_id>/corrigir_cnpj', methods=['POST'])
@@ -1873,7 +1937,10 @@ def cancelar_item_embarque(item_id):
     try:
         # Cancelar o item (exclusão lógica)
         item.status = 'cancelado'
-        
+
+        # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
+        embarque.marcar_alterado_apos_impressao()
+
         # ✅ REVERSÃO SIMPLIFICADA: Como 1 lote = 1 NF = 1 unidade, podemos reverter com segurança
         if item.separacao_lote_id:
             
@@ -2839,3 +2906,61 @@ Sempre que possível, enviar os pallets para troca no ato da coleta. Na ausênci
             'success': False,
             'error': str(e)
         }), 500
+
+
+def _imprimir_separacao_carvia(embarque_id, separacao_lote_id):
+    """Impressao de separacao CarVia (cotacao provisoria ou pedido com NF).
+
+    Busca dados de CarViaCotacao/CarviaPedido em vez de Separacao.
+    Chamado por imprimir_separacao() quando separacao_lote_id comeca com CARVIA-.
+    """
+    from flask import make_response
+
+    embarque = Embarque.query.get_or_404(embarque_id)
+
+    eh_pedido = str(separacao_lote_id).startswith('CARVIA-PED-')
+
+    cotacao = None
+    pedido = None
+    itens_pedido = []
+
+    try:
+        if eh_pedido:
+            ped_id = int(str(separacao_lote_id).replace('CARVIA-PED-', ''))
+            from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaCotacao
+            pedido = db.session.get(CarviaPedido, ped_id)
+            if pedido:
+                cotacao = db.session.get(CarviaCotacao, pedido.cotacao_id)
+                itens_pedido = CarviaPedidoItem.query.filter_by(pedido_id=ped_id).all()
+        else:
+            cot_id = int(str(separacao_lote_id).replace('CARVIA-', ''))
+            from app.carvia.models import CarviaCotacao
+            cotacao = db.session.get(CarviaCotacao, cot_id)
+    except (ValueError, TypeError):
+        pass
+
+    if not cotacao:
+        flash('Cotacao CarVia nao encontrada.', 'warning')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+
+    motos = []
+    if cotacao.tipo_material == 'MOTO':
+        from app.carvia.models import CarviaCotacaoMoto
+        motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all()
+
+    html = render_template(
+        'embarques/imprimir_separacao_carvia.html',
+        embarque=embarque,
+        cotacao=cotacao,
+        pedido=pedido,
+        itens_pedido=itens_pedido,
+        motos=motos,
+        eh_pedido=eh_pedido,
+        separacao_lote_id=separacao_lote_id,
+        data_impressao=agora_utc_naive(),
+        current_user=current_user,
+    )
+
+    response = make_response(html)
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response

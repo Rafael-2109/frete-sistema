@@ -22,6 +22,12 @@ class Embarque(db.Model):
     motivo_cancelamento = db.Column(db.Text, nullable=True)  # Motivo do cancelamento
     cancelado_em = db.Column(db.DateTime, nullable=True)  # Data/hora do cancelamento
     cancelado_por = db.Column(db.String(100), nullable=True)  # Usuário que cancelou
+
+    # === IMPRESSAO: Auditoria de impressao ===
+    impresso_em = db.Column(db.DateTime, nullable=True)
+    impresso_por = db.Column(db.String(100), nullable=True)
+    alterado_apos_impressao = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+
     tipo_cotacao = db.Column(db.String(20), default='Automatica')  # 'Automatica' ou 'Manual'
     valor_total = db.Column(db.Float) #Somatória do valor dos itens do embarque
     peso_total = db.Column(db.Float) #Somatória do peso dos itens do embarque
@@ -151,6 +157,24 @@ class Embarque(db.Model):
     def itens_ativos(self):
         """Retorna apenas os itens ativos do embarque"""
         return [item for item in self.itens if item.status == 'ativo']
+
+    # === IMPRESSAO: helpers ===
+
+    @property
+    def precisa_reimprimir(self):
+        """True quando ja foi impresso mas teve alteracao posterior."""
+        return self.impresso_em is not None and self.alterado_apos_impressao
+
+    def registrar_impressao(self, usuario):
+        """Marca o embarque como impresso. Limpa flag de alteracao."""
+        self.impresso_em = agora_utc_naive()
+        self.impresso_por = usuario
+        self.alterado_apos_impressao = False
+
+    def marcar_alterado_apos_impressao(self):
+        """Se ja foi impresso, sinaliza que precisa reimprimir."""
+        if self.impresso_em is not None:
+            self.alterado_apos_impressao = True
 
     @property
     def transportadora_aceita_nf_pallet(self):
@@ -313,6 +337,12 @@ class EmbarqueItem(db.Model):
 
     # Campo para armazenar erros de validação
     erro_validacao = db.Column(db.String(500), nullable=True)  # Armazena erros como "CNPJ_DIFERENTE", etc.
+
+    # === CARVIA: Item Provisorio ===
+    # Quando True, este item e um placeholder de cotacao CarVia aguardando pedidos/NF.
+    # Sera substituido por itens reais quando NFs forem anexadas aos pedidos da cotacao.
+    provisorio = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    carvia_cotacao_id = db.Column(db.Integer, nullable=True, index=True)
 
     # === GRUPO 2: PALLETS FÍSICOS (Controle Real) ===
     # Para rastrear NF de pallet específica do cliente

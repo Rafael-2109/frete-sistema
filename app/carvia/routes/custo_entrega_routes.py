@@ -39,9 +39,9 @@ def _allowed_file(filename):
 
 def register_custo_entrega_routes(bp):
 
-    @bp.route('/custos-entrega')
+    @bp.route('/custos-entrega') # type: ignore
     @login_required
-    def listar_custos_entrega():
+    def listar_custos_entrega(): # type: ignore
         """Lista custos de entrega com filtros"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -108,9 +108,9 @@ def register_custo_entrega_routes(bp):
             today=today,
         )
 
-    @bp.route('/custos-entrega/criar', methods=['GET', 'POST'])
+    @bp.route('/custos-entrega/criar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_custo_entrega():
+    def criar_custo_entrega(): # type: ignore
         """Cria novo custo de entrega"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -180,6 +180,17 @@ def register_custo_entrega_routes(bp):
                     criado_por=current_user.email,
                 )
                 db.session.add(custo)
+                db.session.flush()
+
+                # Vincular ao CarviaFrete pela operacao_id
+                if custo.operacao_id:
+                    from app.carvia.models import CarviaFrete
+                    frete = CarviaFrete.query.filter_by(
+                        operacao_id=custo.operacao_id
+                    ).first()
+                    if frete:
+                        custo.frete_id = frete.id
+
                 db.session.commit()
 
                 flash(
@@ -213,9 +224,9 @@ def register_custo_entrega_routes(bp):
             ctes_complementares=ctes_complementares,
         )
 
-    @bp.route('/custos-entrega/<int:custo_id>')
+    @bp.route('/custos-entrega/<int:custo_id>') # type: ignore
     @login_required
-    def detalhe_custo_entrega(custo_id):
+    def detalhe_custo_entrega(custo_id): # type: ignore
         """Detalhe de um custo de entrega com anexos"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -238,9 +249,9 @@ def register_custo_entrega_routes(bp):
             anexos=anexos,
         )
 
-    @bp.route('/custos-entrega/<int:custo_id>/editar', methods=['GET', 'POST'])
+    @bp.route('/custos-entrega/<int:custo_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def editar_custo_entrega(custo_id):
+    def editar_custo_entrega(custo_id): # type: ignore
         """Edita um custo de entrega existente"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -329,9 +340,9 @@ def register_custo_entrega_routes(bp):
             ctes_complementares=ctes_complementares,
         )
 
-    @bp.route('/custos-entrega/<int:custo_id>/status', methods=['POST'])
+    @bp.route('/custos-entrega/<int:custo_id>/status', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_status_custo_entrega(custo_id):
+    def atualizar_status_custo_entrega(custo_id): # type: ignore
         """Atualiza status de um custo de entrega"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -416,9 +427,9 @@ def register_custo_entrega_routes(bp):
     # AJAX — Anexos
     # ========================================================================
 
-    @bp.route('/api/custo-entrega/<int:custo_id>/upload-anexo', methods=['POST'])
+    @bp.route('/api/custo-entrega/<int:custo_id>/upload-anexo', methods=['POST']) # type: ignore
     @login_required
-    def upload_anexo_custo_entrega(custo_id):
+    def upload_anexo_custo_entrega(custo_id): # type: ignore
         """Upload de anexo comprovatorio (multipart) via AJAX"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -486,9 +497,9 @@ def register_custo_entrega_routes(bp):
             logger.error(f"Erro ao fazer upload de anexo para custo {custo_id}: {e}")
             return jsonify({'erro': f'Erro ao salvar arquivo: {e}'}), 500
 
-    @bp.route('/api/custo-entrega/anexo/<int:anexo_id>/excluir', methods=['POST'])
+    @bp.route('/api/custo-entrega/anexo/<int:anexo_id>/excluir', methods=['POST']) # type: ignore
     @login_required
-    def excluir_anexo_custo_entrega(anexo_id):
+    def excluir_anexo_custo_entrega(anexo_id): # type: ignore
         """Soft-delete de anexo (ativo=False) via AJAX"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -506,9 +517,9 @@ def register_custo_entrega_routes(bp):
             logger.error(f"Erro ao excluir anexo {anexo_id}: {e}")
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/custo-entrega/anexo/<int:anexo_id>/download')
+    @bp.route('/api/custo-entrega/anexo/<int:anexo_id>/download') # type: ignore
     @login_required
-    def download_anexo_custo_entrega(anexo_id):
+    def download_anexo_custo_entrega(anexo_id): # type: ignore
         """Redirect para URL presigned S3 do anexo"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')

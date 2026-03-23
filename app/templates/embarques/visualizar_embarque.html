@@ -125,12 +125,33 @@
   </div>
   {% endif %}
 
+  {# Alerta CarVia Provisorios #}
+  {% set itens_provisorios = embarque.itens | selectattr('provisorio') | list %}
+  {% if itens_provisorios %}
+  <div class="alert alert-info border-info">
+    <div class="d-flex align-items-center">
+      <i class="fas fa-motorcycle fa-2x text-info me-3"></i>
+      <div>
+        <h5 class="alert-heading mb-1">
+          <i class="fas fa-clock"></i> {{ itens_provisorios|length }} item(ns) CarVia provisorio(s)
+        </h5>
+        <p class="mb-1">
+          Aguardando pedidos/NF da CarVia. O embarque esta <strong>incompleto</strong> para impressao final.
+        </p>
+        <small class="text-muted">
+          Quando os pedidos e NFs forem anexados, os itens provisorios serao substituidos automaticamente.
+        </small>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h2 class="card-title mb-0">
         Embarque #{{ embarque.numero }}
         <small class="text-muted">
-          | Peso: {{ "%.0f"|format(embarque.total_peso_pedidos()) }} kg 
+          | Peso: {{ "%.0f"|format(embarque.total_peso_pedidos()) }} kg
           | Valor: R$ {{ "%.2f"|format(embarque.total_valor_pedidos()) }} 
           | Pallet: {{ "%.2f"|format(embarque.total_pallet_pedidos()) }}
         </small>
@@ -464,7 +485,10 @@
                       {% endif %}
 
                       <!-- Badge de status -->
-                      {% if item and item.erro_validacao %}
+                      {% if item and item.provisorio %}
+                        <span class="badge bg-info"><i class="fas fa-motorcycle"></i> CarVia</span>
+                        <br><small class="text-warning"><i class="fas fa-clock"></i> Provisorio</small>
+                      {% elif item and item.erro_validacao %}
                          {% if 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
                            <span class="badge bg-warning text-dark">Pendente</span>
                          {% elif 'NF_DIVERGENTE' in item.erro_validacao %}
@@ -596,7 +620,26 @@
         </button>
       </div>
 
-      <!-- Registro de Impressão -->
+      <!-- Registro de Impressão (auditoria G7) -->
+      {% if embarque.impresso_em %}
+        {% if embarque.precisa_reimprimir %}
+          <div class="alert alert-warning py-2 mb-0 mt-2">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Embarque modificado apos impressao.</strong>
+            Impresso em {{ embarque.impresso_em.strftime('%d/%m/%Y as %H:%M') }}
+            por {{ embarque.impresso_por or 'Sistema' }}.
+            <strong>Reimprimir necessario.</strong>
+          </div>
+        {% else %}
+          <div class="mt-2">
+            <small class="text-muted">
+              <i class="fas fa-check-circle text-success"></i>
+              Impresso em {{ embarque.impresso_em.strftime('%d/%m/%Y as %H:%M') }}
+              por {{ embarque.impresso_por or 'Sistema' }}
+            </small>
+          </div>
+        {% endif %}
+      {% endif %}
       <div id="registro-impressao" class="mt-2" style="display: none;">
         <small class="text-muted">
           <strong>Impresso por:</strong> <span id="usuario-impressao"></span><br>

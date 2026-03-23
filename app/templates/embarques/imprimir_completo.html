@@ -23,6 +23,40 @@
         .page-break {
             page-break-before: always;
         }
+
+        /* CarVia provisorio watermark */
+        .carvia-provisorio-page {
+            position: relative;
+        }
+        .carvia-provisorio-page .watermark {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-35deg);
+            font-size: 72px;
+            font-weight: bold;
+            color: rgba(255, 193, 7, 0.15);
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+        }
+        .carvia-header {
+            text-align: center;
+            border-bottom: 2px solid #17a2b8;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .carvia-header h1 { margin: 0; font-size: 18px; }
+        .carvia-header h2 { margin: 2px 0; font-size: 14px; color: #555; }
+        .carvia-table th { background-color: #17a2b8; color: white; }
+        .provisorio-alert {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .provisorio-alert strong { font-size: 14px; }
         
         .header {
             text-align: center;
@@ -230,10 +264,20 @@
         {% endif %}
     </div>
 
-    <!-- Cabeçalho dos Itens -->
+    {# Separar itens Nacom / CarVia #}
+    {% set itens_nacom = [] %}
+    {% set itens_carvia = [] %}
+    {% for item in embarque.itens_ativos %}
+        {% if item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-') %}
+            {% if itens_carvia.append(item) %}{% endif %}
+        {% else %}
+            {% if itens_nacom.append(item) %}{% endif %}
+        {% endif %}
+    {% endfor %}
+
+    <!-- Itens Nacom -->
+    {% if itens_nacom %}
     <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Itens do Embarque</h3>
-    
-    <!-- Tabela de Itens do Embarque -->
     <table class="table-embarque">
         <thead>
             <tr>
@@ -248,7 +292,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in embarque.itens_ativos %}
+            {% for item in itens_nacom %}
             <tr>
                 <td>{{ item.cliente }}</td>
                 <td>{{ item.pedido }}</td>
@@ -262,6 +306,44 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
+
+    <!-- Itens CarVia -->
+    {% if itens_carvia %}
+    <h3 style="border-bottom: 2px solid #17a2b8; padding-bottom: 3px; margin-bottom: 8px; margin-top: 15px;">Itens CarVia</h3>
+    <table class="table-embarque">
+        <thead>
+            <tr style="background-color: #17a2b8; color: white;">
+                <th>Cliente</th>
+                <th>Pedido/Cotacao</th>
+                <th>NF</th>
+                <th>Status</th>
+                <th>UF</th>
+                <th>Cidade</th>
+                <th>Peso</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in itens_carvia %}
+            <tr{% if item.provisorio %} style="background-color: #fff3cd;"{% endif %}>
+                <td>{{ item.cliente }}</td>
+                <td>{{ item.separacao_lote_id }}</td>
+                <td>{{ item.nota_fiscal or '-' }}</td>
+                <td><strong>{% if item.provisorio %}PROVISORIO{% else %}OK{% endif %}</strong></td>
+                <td>{{ item.uf_destino }}</td>
+                <td>{{ item.cidade_destino }}</td>
+                <td>{{ "%.0f"|format(item.peso or 0) }} kg</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% set provisorios_count = itens_carvia|selectattr('provisorio')|list|length %}
+    {% if provisorios_count > 0 %}
+    <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 6px; margin-top: 5px; font-size: 11px; text-align: center;">
+        <strong>ATENCAO:</strong> {{ provisorios_count }} item(ns) PROVISORIO(S) aguardando pedido/NF da CarVia.
+    </div>
+    {% endif %}
+    {% endif %}
 
     <!-- Totalizadores do Embarque -->
     <div style="margin-top: 20px; text-align: center; font-weight: bold; font-size: 14px;">
@@ -426,6 +508,154 @@
                     <div style="font-size: 10px;">
                         <strong>Nome:</strong> _________________________<br><br>
                         <strong>Horário:</strong> ___________
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- PAGINAS CARVIA: SEPARACOES INDIVIDUAIS -->
+    {% for cv in carvia_separacoes_data %}
+    <div class="page-break{% if not cv.eh_pedido %} carvia-provisorio-page{% endif %}">
+        {% if not cv.eh_pedido %}
+        <div class="watermark">PROVISORIO</div>
+        {% endif %}
+
+        <!-- Header CarVia -->
+        <div class="carvia-header">
+            {% if cv.eh_pedido %}
+            <h1>SEPARACAO CARVIA — {{ cv.pedido.numero_pedido }}</h1>
+            <h2>Filial: {{ cv.pedido.filial }} | Tipo: {{ cv.pedido.tipo_separacao }}</h2>
+            {% else %}
+            <h1>SEPARACAO CARVIA — {{ cv.cotacao.numero_cotacao }} (PROVISORIO)</h1>
+            <h2>Aguardando pedidos/NF</h2>
+            {% endif %}
+            <h2>Embarque #{{ embarque.numero }} | {{ embarque.transportadora.razao_social if embarque.transportadora else 'N/A' }}</h2>
+        </div>
+
+        <!-- Alerta PROVISORIO -->
+        {% if not cv.eh_pedido %}
+        <div class="provisorio-alert">
+            <strong>ESTE DOCUMENTO E PROVISORIO</strong><br>
+            Sera substituido quando os pedidos e NFs da CarVia forem anexados a cotacao.
+        </div>
+        {% endif %}
+
+        <!-- Dados da cotacao -->
+        <div class="info-section">
+            <div class="info-left">
+                <div class="info-row">
+                    <span class="info-label">Cotacao:</span>
+                    <span class="text-bold">{{ cv.cotacao.numero_cotacao }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Cliente:</span>
+                    {{ cv.cotacao.cliente.razao_social if cv.cotacao.cliente else 'N/A' }}
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Material:</span>
+                    {{ cv.cotacao.tipo_material or 'N/A' }}
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Peso:</span>
+                    {{ "%.0f"|format(cv.cotacao.peso_total or 0) }} kg
+                </div>
+            </div>
+            <div class="info-right">
+                <div class="info-row">
+                    <span class="info-label">Destino:</span>
+                    {% if cv.cotacao.endereco_destino %}
+                        {{ cv.cotacao.endereco_destino.fisico_cidade or '' }}/{{ cv.cotacao.endereco_destino.fisico_uf or '' }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Valor Mercadoria:</span>
+                    R$ {{ "%.2f"|format(cv.cotacao.valor_mercadoria or 0) }}
+                </div>
+                {% if cv.eh_pedido %}
+                <div class="info-row">
+                    <span class="info-label">Pedido:</span>
+                    {{ cv.pedido.numero_pedido }}
+                </div>
+                {% endif %}
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    {{ cv.cotacao.status }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de itens (pedido) ou motos (cotacao) -->
+        {% if cv.eh_pedido and cv.itens_pedido %}
+        <h3 style="margin: 10px 0 5px; font-size: 14px;">ITENS DO PEDIDO</h3>
+        <table class="products-table">
+            <thead>
+                <tr>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 35%;">Descricao</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 15%;">Cor</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 10%;">Qtd</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 15%;">Valor Unit.</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 15%;">Valor Total</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 10%;">NF</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cv.itens_pedido %}
+                <tr>
+                    <td>{{ item.descricao or (item.modelo_moto.nome if item.modelo_moto else '-') }}</td>
+                    <td>{{ item.cor or '-' }}</td>
+                    <td class="text-center">{{ item.quantidade }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item.valor_unitario or 0) }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item.valor_total or 0) }}</td>
+                    <td>{{ item.numero_nf or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif cv.motos %}
+        <h3 style="margin: 10px 0 5px; font-size: 14px;">MOTOS COTADAS</h3>
+        <table class="products-table">
+            <thead>
+                <tr>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 30%;">Modelo</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 25%;">Categoria</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 15%;">Qtd</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 15%;">Peso Cubado Unit.</th>
+                    <th class="carvia-table" style="background-color: #17a2b8; color: white; width: 15%;">Peso Cubado Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for moto in cv.motos %}
+                <tr>
+                    <td>{{ moto.modelo_moto.nome if moto.modelo_moto else '-' }}</td>
+                    <td>{{ moto.categoria_moto.nome if moto.categoria_moto else '-' }}</td>
+                    <td class="text-center">{{ moto.quantidade }}</td>
+                    <td class="text-right">{{ "%.2f"|format(moto.peso_cubado_unitario or 0) }}</td>
+                    <td class="text-right">{{ "%.2f"|format(moto.peso_cubado_total or 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <!-- Controle de Atividades -->
+        <div style="margin-top: 20px; border: 1px solid #ddd; padding: 10px;">
+            <div style="display: flex; justify-content: space-between;">
+                <div style="width: 48%;">
+                    <h4 style="font-size: 11px; margin: 10px 0 10px 0;">SEPARACAO</h4>
+                    <div style="font-size: 10px;">
+                        <strong>Nome:</strong> _________________________<br><br>
+                        <strong>Hora Envio:</strong> ___________ <strong>Hora Retorno:</strong> ___________
+                    </div>
+                </div>
+                <div style="width: 48%;">
+                    <h4 style="font-size: 11px; margin: 10px 0 10px 0;">CONFERENCIA</h4>
+                    <div style="font-size: 10px;">
+                        <strong>Nome:</strong> _________________________<br><br>
+                        <strong>Horario:</strong> ___________
                     </div>
                 </div>
             </div>

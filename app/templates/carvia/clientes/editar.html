@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-edit"></i> Editar Cliente</h2>
+        <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cliente.id) }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'clientes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Nome Comercial <span class="text-danger">*</span></label>
+                    <input type="text" name="nome_comercial" class="form-control" required
+                           value="{{ cliente.nome_comercial }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observacoes</label>
+                    <textarea name="observacoes" class="form-control" rows="3">{{ cliente.observacoes or '' }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input type="hidden" name="ativo" value="0">
+                        <input type="checkbox" class="form-check-input" name="ativo" value="1"
+                               id="chkAtivo" {{ 'checked' if cliente.ativo }}>
+                        <label class="form-check-label" for="chkAtivo">Cliente ativo</label>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cliente.id) }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

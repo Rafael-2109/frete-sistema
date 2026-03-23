@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 def register_subcontrato_routes(bp):
 
-    @bp.route('/subcontratos')
+    @bp.route('/subcontratos') # type: ignore
     @login_required
-    def listar_subcontratos():
+    def listar_subcontratos(): # type: ignore
         """Lista subcontratos com filtros e paginacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -97,9 +97,9 @@ def register_subcontrato_routes(bp):
             direction=direction,
         )
 
-    @bp.route('/subcontratos/criar', methods=['GET', 'POST'])
+    @bp.route('/subcontratos/criar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_subcontrato():
+    def criar_subcontrato(): # type: ignore
         """Cria subcontrato standalone — Passo 1: selecionar operacao, Passo 2: transportadora"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -214,9 +214,9 @@ def register_subcontrato_routes(bp):
             operacoes_disponiveis=operacoes_disponiveis,
         )
 
-    @bp.route('/subcontratos/<int:sub_id>')
+    @bp.route('/subcontratos/<int:sub_id>') # type: ignore
     @login_required
-    def detalhe_subcontrato(sub_id):
+    def detalhe_subcontrato(sub_id): # type: ignore
         """Detalhe de um subcontrato com cross-links"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -260,9 +260,9 @@ def register_subcontrato_routes(bp):
             operacoes_disponiveis=operacoes_disponiveis,
         )
 
-    @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST'])
+    @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST']) # type: ignore
     @login_required
-    def vincular_operacao_subcontrato(sub_id):
+    def vincular_operacao_subcontrato(sub_id): # type: ignore
         """Re-vincula subcontrato a outra operacao (CTe CarVia)"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -360,9 +360,9 @@ def register_subcontrato_routes(bp):
 
     # ==================== COTAR SUBCONTRATO ====================
 
-    @bp.route('/subcontratos/<int:sub_id>/cotar', methods=['POST'])
+    @bp.route('/subcontratos/<int:sub_id>/cotar', methods=['POST']) # type: ignore
     @login_required
-    def cotar_subcontrato(sub_id):
+    def cotar_subcontrato(sub_id): # type: ignore
         """Aplica cotacao ao subcontrato (state-mutating: PENDENTE -> COTADO)."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -405,9 +405,9 @@ def register_subcontrato_routes(bp):
 
         return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
 
-    @bp.route('/subcontratos/<int:sub_id>/recotar', methods=['POST'])
+    @bp.route('/subcontratos/<int:sub_id>/recotar', methods=['POST']) # type: ignore
     @login_required
-    def recotar_subcontrato(sub_id):
+    def recotar_subcontrato(sub_id): # type: ignore
         """Recota subcontrato com valor override opcional."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -456,9 +456,9 @@ def register_subcontrato_routes(bp):
 
         return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
 
-    @bp.route('/api/subcontrato/<int:sub_id>/simular-recotacao')
+    @bp.route('/api/subcontrato/<int:sub_id>/simular-recotacao') # type: ignore
     @login_required
-    def api_simular_recotacao_subcontrato(sub_id):
+    def api_simular_recotacao_subcontrato(sub_id): # type: ignore
         """API read-only: simula cotacao para conferencia (card resultado)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return {'sucesso': False, 'erro': 'Acesso negado.'}, 403

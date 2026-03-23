@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 def register_dashboard_routes(bp):
 
-    @bp.route('/')
-    @bp.route('/dashboard')
+    @bp.route('/') # type: ignore   
+    @bp.route('/dashboard') # type: ignore
     @login_required
-    def dashboard():
+    def dashboard(): # type: ignore
         """Dashboard principal do CarVia"""
         if not getattr(current_user, 'sistema_carvia', False):
             from flask import flash, redirect, url_for

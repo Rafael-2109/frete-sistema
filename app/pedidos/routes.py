@@ -536,7 +536,11 @@ def editar_pedido(lote_id):
     Permite alterações apenas em pedidos com status "ABERTO".
     Suporta requisições AJAX para pop-up.
     """
-    
+    # Guard: pedidos CarVia nao sao editaveis por esta rota
+    if str(lote_id).startswith('CARVIA-'):
+        flash('Pedidos CarVia devem ser editados no modulo CarVia.', 'warning')
+        return redirect(url_for('pedidos.lista_pedidos'))
+
     pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
 
     # ✅ NOVO: Busca primeiro item de Separacao para obter sincronizado_nf e numero_nf
@@ -1045,6 +1049,10 @@ def salvar_obs_separacao(lote_id):
     API para salvar observações da separação
     Atualiza todos os itens do lote com a mesma observação
     """
+    # Guard: pedidos CarVia
+    if str(lote_id).startswith('CARVIA-'):
+        return jsonify({'success': False, 'message': 'Pedidos CarVia nao editaveis aqui.'}), 400
+
     try:
         data = request.get_json()
         obs_separacao = data.get('obs_separacao', '').strip()
@@ -1744,37 +1752,43 @@ def processar_cotacao_manual():
         valor_total = sum(p.valor_saldo_total or 0 for p in pedidos)
         pallet_total = sum(p.pallet_total or 0 for p in pedidos)
 
-        # Cria a cotação manual
-        from app.utils.tabela_frete_manager import TabelaFreteManager
-        
-        # Prepara dados da cotação manual
-        dados_cotacao = TabelaFreteManager.preparar_cotacao_manual(valor_frete, modalidade, icms_incluso=True)
-        
-        cotacao = Cotacao(
-            usuario_id=1,  # Ajustar conforme seu sistema de usuários
-            transportadora_id=transportadora_id,
-            status='Fechado',
-            data_criacao=agora_utc_naive(),
-            data_fechamento=agora_utc_naive(),
-            tipo_carga='DIRETA',  # ✅ CORRIGIDO: DIRETA ao invés de MANUAL
-            valor_total=valor_total,
-            peso_total=peso_total,
-            **dados_cotacao  # Desempacota todos os campos da tabela
-        )
-        db.session.add(cotacao)
-        db.session.flush()  # Para obter o ID da cotação
+        # Separar pedidos Nacom de CarVia (CarVia nao tem Separacao nem CotacaoItem)
+        pedidos_nacom = [p for p in pedidos if not (p.separacao_lote_id or '').startswith('CARVIA-')]
+        pedidos_carvia = [p for p in pedidos if (p.separacao_lote_id or '').startswith('CARVIA-')]
 
-        # Cria itens da cotação
-        for pedido in pedidos:
+        # Cria a cotação manual (para itens Nacom — ou para manter dados da tabela de frete)
+        from app.utils.tabela_frete_manager import TabelaFreteManager
+
+        dados_cotacao = TabelaFreteManager.preparar_cotacao_manual(valor_frete, modalidade, icms_incluso=True)
+
+        cotacao = None
+        if pedidos_nacom:
+            # Nacom presente: criar Cotacao normalmente
+            cotacao = Cotacao(
+                usuario_id=1,
+                transportadora_id=transportadora_id,
+                status='Fechado',
+                data_criacao=agora_utc_naive(),
+                data_fechamento=agora_utc_naive(),
+                tipo_carga='DIRETA',
+                valor_total=valor_total,
+                peso_total=peso_total,
+                **dados_cotacao
+            )
+            db.session.add(cotacao)
+            db.session.flush()
+
+        # Cria itens da cotação (apenas Nacom — CarVia nao precisa)
+        for pedido in pedidos_nacom:
             cotacao_item = CotacaoItem(
                 cotacao_id=cotacao.id,
-                separacao_lote_id=pedido.separacao_lote_id,  
-                pedido_id_old=pedido.id if hasattr(pedido, 'id') else 0,  # Adiciona pedido_id_old com fallback
+                separacao_lote_id=pedido.separacao_lote_id,
+                pedido_id_old=pedido.id if hasattr(pedido, 'id') else 0,
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 peso=pedido.peso_total or 0,
                 valor=pedido.valor_saldo_total or 0,
-                **dados_cotacao  # Reutiliza os mesmos dados da cotação
+                **dados_cotacao
             )
             db.session.add(cotacao_item)
 
@@ -1787,8 +1801,8 @@ def processar_cotacao_manual():
             valor_total=valor_total,
             pallet_total=pallet_total,
             peso_total=peso_total,
-            tipo_carga='DIRETA',  # ✅ CORRIGIDO: DIRETA para seguir lógica de carga direta
-            cotacao_id=cotacao.id,
+            tipo_carga='DIRETA',
+            cotacao_id=cotacao.id if cotacao else None,
             transportadora_optante=False,
             criado_por='Sistema'
         )
@@ -1798,14 +1812,11 @@ def processar_cotacao_manual():
         db.session.add(embarque)
         db.session.flush()  # Para obter o ID do embarque
 
-        # Cria itens do embarque
-        for pedido in pedidos:
-            # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
+        # Cria itens do embarque — Nacom (fluxo existente)
+        dados_vazio = TabelaFreteManager.preparar_cotacao_vazia()
+        for pedido in pedidos_nacom:
             nome_cidade_correto, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
-            
-            # Prepara dados vazios para EmbarqueItem (DIRETA não usa tabela nos itens)
-            dados_vazio = TabelaFreteManager.preparar_cotacao_vazia()
-            
+
             embarque_item = EmbarqueItem(
                 embarque_id=embarque.id,
                 separacao_lote_id=pedido.separacao_lote_id,
@@ -1816,15 +1827,55 @@ def processar_cotacao_manual():
                 data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 peso=pedido.peso_total or 0,
                 valor=pedido.valor_saldo_total or 0,
-                pallets=pedido.pallet_total,  # ✅ Adiciona pallets reais do pedido
+                pallets=pedido.pallet_total,
                 uf_destino=uf_correto,
                 cidade_destino=nome_cidade_correto,
-                cotacao_id=cotacao.id,
-                volumes=None  # Deixa volumes em branco para preenchimento manual
-                # ✅ CORRIGIDO: Cotação manual é DIRETA - dados da tabela ficam apenas no Embarque
-                # EmbarqueItem não precisa dos campos de tabela
+                cotacao_id=cotacao.id if cotacao else None,
+                volumes=None
             )
-            # Atribui campos vazios usando TabelaFreteManager
+            TabelaFreteManager.atribuir_campos_objeto(embarque_item, dados_vazio)
+            embarque_item.icms_destino = None
+            db.session.add(embarque_item)
+
+        # Cria itens do embarque — CarVia (provisorios)
+        for pedido in pedidos_carvia:
+            # CarVia usa cidade/UF do Pedido (VIEW) diretamente
+            uf_cv = (pedido.cod_uf or '').strip()
+            cidade_cv = (pedido.nome_cidade or '').strip()
+
+            # Extrair carvia_cotacao_id do prefixo
+            lote_id = pedido.separacao_lote_id or ''
+            carvia_cot_id = None
+            try:
+                if lote_id.startswith('CARVIA-PED-'):
+                    # Pedido CarVia — buscar cotacao_id via CarviaPedido
+                    ped_id = int(lote_id.replace('CARVIA-PED-', ''))
+                    from app.carvia.models import CarviaPedido as _CP
+                    _ped = db.session.get(_CP, ped_id)
+                    carvia_cot_id = _ped.cotacao_id if _ped else None
+                elif lote_id.startswith('CARVIA-'):
+                    carvia_cot_id = int(lote_id.replace('CARVIA-', ''))
+            except (ValueError, TypeError):
+                pass
+
+            embarque_item = EmbarqueItem(
+                embarque_id=embarque.id,
+                separacao_lote_id=pedido.separacao_lote_id,
+                cnpj_cliente=pedido.cnpj_cpf,
+                cliente=pedido.raz_social_red,
+                pedido=pedido.num_pedido,
+                protocolo_agendamento='',
+                data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                peso=pedido.peso_total or 0,
+                valor=pedido.valor_saldo_total or 0,
+                pallets=0,
+                uf_destino=uf_cv,
+                cidade_destino=cidade_cv,
+                volumes=None,
+                provisorio=True,
+                carvia_cotacao_id=carvia_cot_id,
+            )
+            # DIRETA: dados da tabela ficam no Embarque (campos vazio no item)
             TabelaFreteManager.atribuir_campos_objeto(embarque_item, dados_vazio)
             embarque_item.icms_destino = None
             db.session.add(embarque_item)
@@ -1832,17 +1883,14 @@ def processar_cotacao_manual():
         # Commit antes de atualizar separações (Embarque e itens já criados)
         db.session.commit()
 
-        # ✅ CORRIGIDO: Atualiza todos os pedidos após criar os itens
-        # Usa método Separacao.atualizar_cotacao() que já faz commit internamente
-        for pedido in pedidos:
+        # Atualiza separacoes — apenas Nacom (CarVia nao tem Separacao)
+        for pedido in pedidos_nacom:
             if pedido.separacao_lote_id:
-                # Usa método que dispara event listeners para atualizar status automaticamente
                 Separacao.atualizar_cotacao(
                     separacao_lote_id=pedido.separacao_lote_id,
                     cotacao_id=cotacao.id,
                     nf_cd=False
                 )
-                # Status será calculado automaticamente como COTADO pelo listener
 
         # Limpa a sessão
         if "cotacao_manual_pedidos" in session:

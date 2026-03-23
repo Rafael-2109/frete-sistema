@@ -29,9 +29,9 @@ def register_tabela_carvia_routes(bp):
     # GRUPOS DE CLIENTE
     # =================================================================
 
-    @bp.route('/configuracoes/grupos-cliente')
+    @bp.route('/configuracoes/grupos-cliente') # type: ignore
     @login_required
-    def listar_grupos_cliente():
+    def listar_grupos_cliente(): # type: ignore
         """Lista grupos de cliente com membros"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -47,9 +47,9 @@ def register_tabela_carvia_routes(bp):
             grupos=grupos,
         )
 
-    @bp.route('/api/grupos-cliente', methods=['POST'])
+    @bp.route('/api/grupos-cliente', methods=['POST']) # type: ignore
     @login_required
-    def criar_grupo_cliente():
+    def criar_grupo_cliente(): # type: ignore
         """Cria novo grupo de cliente (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -90,9 +90,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao criar grupo cliente: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/grupos-cliente/<int:gid>', methods=['PUT'])
+    @bp.route('/api/grupos-cliente/<int:gid>', methods=['PUT']) # type: ignore
     @login_required
-    def atualizar_grupo_cliente(gid):
+    def atualizar_grupo_cliente(gid): # type: ignore
         """Atualiza grupo de cliente (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -138,9 +138,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao atualizar grupo #%s: %s", gid, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/grupos-cliente/<int:gid>', methods=['DELETE'])
+    @bp.route('/api/grupos-cliente/<int:gid>', methods=['DELETE']) # type: ignore
     @login_required
-    def desativar_grupo_cliente(gid):
+    def desativar_grupo_cliente(gid): # type: ignore
         """Desativa grupo de cliente"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -165,9 +165,9 @@ def register_tabela_carvia_routes(bp):
 
     # --- Membros do grupo ---
 
-    @bp.route('/api/grupos-cliente/<int:gid>/membros', methods=['POST'])
+    @bp.route('/api/grupos-cliente/<int:gid>/membros', methods=['POST']) # type: ignore
     @login_required
-    def adicionar_membro_grupo(gid):
+    def adicionar_membro_grupo(gid): # type: ignore
         """Adiciona CNPJ membro ao grupo"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -218,9 +218,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao adicionar membro: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/grupos-cliente/<int:gid>/membros/<int:mid>', methods=['DELETE'])
+    @bp.route('/api/grupos-cliente/<int:gid>/membros/<int:mid>', methods=['DELETE']) # type: ignore
     @login_required
-    def remover_membro_grupo(gid, mid):
+    def remover_membro_grupo(gid, mid): # type: ignore
         """Remove membro do grupo"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -248,9 +248,9 @@ def register_tabela_carvia_routes(bp):
     # TABELAS DE FRETE CARVIA
     # =================================================================
 
-    @bp.route('/configuracoes/tabelas-frete')
+    @bp.route('/configuracoes/tabelas-frete') # type: ignore
     @login_required
-    def listar_tabelas_carvia():
+    def listar_tabelas_carvia(): # type: ignore
         """Lista tabelas de frete CarVia"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -292,9 +292,9 @@ def register_tabela_carvia_routes(bp):
             tipo_filtro=tipo_filtro,
         )
 
-    @bp.route('/api/tabelas-frete-carvia', methods=['POST'])
+    @bp.route('/api/tabelas-frete-carvia', methods=['POST']) # type: ignore
     @login_required
-    def criar_tabela_carvia():
+    def criar_tabela_carvia(): # type: ignore
         """Cria tabela de frete CarVia (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -359,9 +359,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao criar tabela CarVia: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/tabelas-frete-carvia/<int:tid>', methods=['PUT'])
+    @bp.route('/api/tabelas-frete-carvia/<int:tid>', methods=['PUT']) # type: ignore
     @login_required
-    def atualizar_tabela_carvia(tid):
+    def atualizar_tabela_carvia(tid): # type: ignore
         """Atualiza tabela de frete CarVia (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -419,9 +419,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao atualizar tabela #%s: %s", tid, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/tabelas-frete-carvia/<int:tid>', methods=['DELETE'])
+    @bp.route('/api/tabelas-frete-carvia/<int:tid>', methods=['DELETE']) # type: ignore
     @login_required
-    def desativar_tabela_carvia(tid):
+    def desativar_tabela_carvia(tid): # type: ignore
         """Desativa tabela de frete CarVia"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -448,9 +448,9 @@ def register_tabela_carvia_routes(bp):
     # CIDADES ATENDIDAS CARVIA
     # =================================================================
 
-    @bp.route('/configuracoes/cidades-atendidas')
+    @bp.route('/configuracoes/cidades-atendidas') # type: ignore
     @login_required
-    def listar_cidades_carvia():
+    def listar_cidades_carvia(): # type: ignore
         """Lista cidades atendidas CarVia"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -477,9 +477,9 @@ def register_tabela_carvia_routes(bp):
             uf_filtro=uf_filtro,
         )
 
-    @bp.route('/api/cidades-atendidas-carvia', methods=['POST'])
+    @bp.route('/api/cidades-atendidas-carvia', methods=['POST']) # type: ignore
     @login_required
-    def criar_cidade_carvia():
+    def criar_cidade_carvia(): # type: ignore
         """Cria cidade atendida CarVia (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -531,9 +531,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao criar cidade atendida: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/cidades-atendidas-carvia/<int:cid>', methods=['PUT'])
+    @bp.route('/api/cidades-atendidas-carvia/<int:cid>', methods=['PUT']) # type: ignore
     @login_required
-    def atualizar_cidade_carvia(cid):
+    def atualizar_cidade_carvia(cid): # type: ignore
         """Atualiza cidade atendida CarVia (JSON API)"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -568,9 +568,9 @@ def register_tabela_carvia_routes(bp):
             logger.error("Erro ao atualizar cidade #%s: %s", cid, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/cidades-atendidas-carvia/<int:cid>', methods=['DELETE'])
+    @bp.route('/api/cidades-atendidas-carvia/<int:cid>', methods=['DELETE']) # type: ignore
     @login_required
-    def desativar_cidade_carvia(cid):
+    def desativar_cidade_carvia(cid): # type: ignore
         """Desativa cidade atendida CarVia"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403

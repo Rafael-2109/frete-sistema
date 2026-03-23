@@ -2,7 +2,7 @@
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, importar, nfs, operacoes, subcontratos,
    ctes_complementares, custos_entrega, faturas_cliente, faturas_transportadora,
-   despesas, receitas, sessoes_cotacao, fluxo_caixa, conciliacao, extrato_bancario, configuracoes
+   despesas, receitas, fluxo_caixa, conciliacao, extrato_bancario, configuracoes
 #}
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
     {# --- Visao Geral --- #}
@@ -59,9 +59,17 @@
 
     {# --- Comercial --- #}
     <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.listar_sessoes_cotacao') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'sessoes_cotacao' else 'btn-outline-secondary' }}">
-        Cotacoes
+    <a href="{{ url_for('carvia.listar_clientes') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'clientes' else 'btn-outline-secondary' }}">
+        Clientes
+    </a>
+    <a href="{{ url_for('carvia.listar_cotacoes_v2') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'cotacoes_v2' else 'btn-outline-secondary' }}">
+        Cotacao Comercial
+    </a>
+    <a href="{{ url_for('carvia.listar_pedidos_carvia') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'pedidos_carvia' else 'btn-outline-secondary' }}">
+        Pedidos
     </a>
 
     {# --- Financeiro --- #}
@@ -96,6 +104,8 @@
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_grupos_cliente') }}">Grupos de Cliente</a></li>
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_tabelas_carvia') }}">Tabelas Frete CarVia</a></li>
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_cidades_carvia') }}">Cidades Atendidas</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_parametros') }}">Parametros Globais</a></li>
         </ul>
     </div>
 </nav>
