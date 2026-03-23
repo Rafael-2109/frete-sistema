@@ -584,6 +584,10 @@ def _stream_chat_response(
                         'status': event.metadata.get('status', ''),
                     }))
 
+                elif event.type == 'rate_limit':
+                    # SDK 0.1.50: Rate limit event
+                    event_queue.put(_sse_event('rate_limit', event.metadata or {}))
+
                 elif event.type == 'done':
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)

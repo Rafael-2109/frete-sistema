@@ -347,16 +347,19 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ---
 
-## SDK 0.1.48 (CLI 2.1.71)
+## SDK 0.1.50 (atualizado 2026-03-22)
 
-**Versao**: `claude-agent-sdk==0.1.48` (atualizado 2026-03-08)
+**Versao**: `claude-agent-sdk==0.1.50`
 
 ### Features adotadas:
 - **`ResultMessage.stop_reason`**: Populado automaticamente no StreamEvent `done` e logado. Valores: `"end_turn"`, `"max_turns"`, `"budget_exceeded"`, etc.
-- **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): Emitidos como SSE events `task_started`/`task_progress` para observabilidade de subagentes. Import com fallback (`_HAS_TASK_MESSAGES`).
+- **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): Emitidos como SSE events `task_started`/`task_progress` para observabilidade de subagentes. Import direto (sem fallback).
 - **`agent_id`/`agent_type` em hooks**: `PostToolUseHookInput` (opcionais). Logados no `[AUDIT] PostToolUse`. **NAO disponivel** em `StopHookInput`.
 - **`effort` field nativo**: `ClaudeAgentOptions.effort` (Literal["low"|"medium"|"high"|"max"]) — substituiu `max_thinking_tokens` (deprecated)
-- **Fix `input_json_delta` streaming** (#644): Corrige parsing de tool use delta events
+- **`RateLimitEvent`** (0.1.50): Detecta rate limits com status (`allowed_warning`, `rejected`), utilizacao e tempo de reset. Pipeline 3-layer: client.py → routes.py → chat.js (toast).
+- **`HookMatcher.timeout`** (0.1.50): Timeout granular por hook. `UserPromptSubmit` usa 120s (memorias + semantic search). Demais usam default SDK.
+- **Session Management APIs** (0.1.50, NAO usadas): `list_sessions()`, `get_session_info()`, `get_session_messages()`, `rename_session()`, `tag_session()` — operam em JSONL do CLI.
+- **MCP Runtime Control** (0.1.50, NAO usadas): `get_mcp_status()`, `reconnect_mcp_server()`, `toggle_mcp_server()` — requerem ClaudeSDKClient.
 
 ### Memory leak fixes do CLI 2.1.69+:
 - Fix: old message arrays acumulando (~35MB/1000 turns)
