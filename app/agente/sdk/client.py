@@ -38,18 +38,13 @@ from claude_agent_sdk import (
     ProcessError,
     CLIJSONDecodeError,
     CLIConnectionError,  # SIGTERM/process death — sibling of ProcessError
+    # SDK 0.1.46+: Task messages para observabilidade de subagentes
+    TaskStartedMessage,
+    TaskProgressMessage,
+    TaskNotificationMessage,
+    # SDK 0.1.50: Rate limit events
+    RateLimitEvent,
 )
-
-# SDK 0.1.46+: Task messages para observabilidade de subagentes
-try:
-    from claude_agent_sdk import (
-        TaskStartedMessage,
-        TaskProgressMessage,
-        TaskNotificationMessage,
-    )
-    _HAS_TASK_MESSAGES = True
-except ImportError:
-    _HAS_TASK_MESSAGES = False
 
 # Fallback para API direta (health check)
 import anthropic
@@ -1273,64 +1268,91 @@ Nunca invente informações."""
                 logger.info(f"[AGENT_SDK] SDK session_id from init: {sdk_sid[:12]}...")
             return events
 
-        # ─── SDK 0.1.46+: Task messages (subagentes) ───
-        if _HAS_TASK_MESSAGES:
-            if isinstance(message, TaskStartedMessage):
-                task_desc = getattr(message, 'description', '') or ''
-                task_id = getattr(message, 'task_id', '') or ''
-                task_type = getattr(message, 'task_type', '') or ''
-                logger.info(
-                    f"[AGENT_SDK] TaskStarted: {task_desc[:80]} | "
-                    f"task_id={task_id[:12]} | task_type={task_type}"
-                )
-                events.append(StreamEvent(
-                    type='task_started',
-                    content=task_desc,
-                    metadata={
-                        'task_id': task_id,
-                        'task_type': task_type,
-                    }
-                ))
-                return events
+        # ─── Task messages (subagentes) ───
+        if isinstance(message, TaskStartedMessage):
+            task_desc = getattr(message, 'description', '') or ''
+            task_id = getattr(message, 'task_id', '') or ''
+            task_type = getattr(message, 'task_type', '') or ''
+            logger.info(
+                f"[AGENT_SDK] TaskStarted: {task_desc[:80]} | "
+                f"task_id={task_id[:12]} | task_type={task_type}"
+            )
+            events.append(StreamEvent(
+                type='task_started',
+                content=task_desc,
+                metadata={
+                    'task_id': task_id,
+                    'task_type': task_type,
+                }
+            ))
+            return events
 
-            if isinstance(message, TaskProgressMessage):
-                task_desc = getattr(message, 'description', '') or ''
-                task_id = getattr(message, 'task_id', '') or ''
-                last_tool = getattr(message, 'last_tool_name', '') or ''
-                logger.debug(
-                    f"[AGENT_SDK] TaskProgress: {task_desc[:80]} | "
-                    f"task_id={task_id[:12]} | last_tool={last_tool}"
-                )
-                events.append(StreamEvent(
-                    type='task_progress',
-                    content=task_desc,
-                    metadata={
-                        'task_id': task_id,
-                        'last_tool_name': last_tool,
-                    }
-                ))
-                return events
+        if isinstance(message, TaskProgressMessage):
+            task_desc = getattr(message, 'description', '') or ''
+            task_id = getattr(message, 'task_id', '') or ''
+            last_tool = getattr(message, 'last_tool_name', '') or ''
+            logger.debug(
+                f"[AGENT_SDK] TaskProgress: {task_desc[:80]} | "
+                f"task_id={task_id[:12]} | last_tool={last_tool}"
+            )
+            events.append(StreamEvent(
+                type='task_progress',
+                content=task_desc,
+                metadata={
+                    'task_id': task_id,
+                    'last_tool_name': last_tool,
+                }
+            ))
+            return events
 
-            if isinstance(message, TaskNotificationMessage):
-                summary = getattr(message, 'summary', '') or ''
-                status = getattr(message, 'status', '') or ''
-                task_id = getattr(message, 'task_id', '') or ''
-                usage = getattr(message, 'usage', None)
-                logger.info(
-                    f"[AGENT_SDK] TaskNotification: {summary[:80]} | "
-                    f"status={status} | task_id={task_id[:12]} | "
-                    f"usage={usage}"
+        if isinstance(message, TaskNotificationMessage):
+            summary = getattr(message, 'summary', '') or ''
+            status = getattr(message, 'status', '') or ''
+            task_id = getattr(message, 'task_id', '') or ''
+            usage = getattr(message, 'usage', None)
+            logger.info(
+                f"[AGENT_SDK] TaskNotification: {summary[:80]} | "
+                f"status={status} | task_id={task_id[:12]} | "
+                f"usage={usage}"
+            )
+            events.append(StreamEvent(
+                type='task_notification',
+                content=summary,
+                metadata={
+                    'task_id': task_id,
+                    'status': status,
+                    'usage': usage if isinstance(usage, dict) else None,
+                }
+            ))
+            return events
+
+        # ─── RateLimitEvent (SDK 0.1.50) ───
+        if isinstance(message, RateLimitEvent):
+            rate_info = message.rate_limit_info
+            data = {
+                'status': rate_info.status,
+                'utilization': rate_info.utilization,
+                'resets_at': rate_info.resets_at,
+                'rate_limit_type': getattr(rate_info, 'rate_limit_type', None),
+            }
+            if rate_info.status == 'allowed_warning':
+                logger.warning(
+                    f"[RATE_LIMIT] Warning: "
+                    f"{rate_info.utilization:.0%} utilizado, "
+                    f"reseta em {rate_info.resets_at}"
                 )
-                events.append(StreamEvent(
-                    type='task_notification',
-                    content=summary,
-                    metadata={
-                        'task_id': task_id,
-                        'status': status,
-                        'usage': usage if isinstance(usage, dict) else None,
-                    }
-                ))
-                return events
+            elif rate_info.status == 'rejected':
+                logger.error(
+                    f"[RATE_LIMIT] REJEITADO: "
+                    f"tipo={getattr(rate_info, 'rate_limit_type', 'unknown')}, "
+                    f"reseta em {rate_info.resets_at}"
+                )
+            events.append(StreamEvent(
+                type='rate_limit',
+                content='',
+                metadata=data,
+            ))
+            return events
 
         # ─── AssistantMessage ───
         if isinstance(message, AssistantMessage):
@@ -1879,15 +1901,8 @@ Nunca invente informações."""
                 PostToolUseFailureHookInput,
                 PreCompactHookInput, StopHookInput, UserPromptSubmitHookInput,
                 HookContext,
+                SubagentStartHookInput, SubagentStopHookInput,
             )
-
-            # SDK 0.1.48+: Subagent lifecycle hooks
-            _has_subagent_hooks = False
-            try:
-                from claude_agent_sdk import SubagentStartHookInput, SubagentStopHookInput  # type: ignore
-                _has_subagent_hooks = True
-            except ImportError:
-                pass
 
             async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
                 """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
@@ -2436,18 +2451,18 @@ Nunca invente informações."""
                 "UserPromptSubmit": [
                     HookMatcher(
                         hooks=[_user_prompt_submit_hook],
+                        timeout=120.0,  # 2 min — memorias + semantic search + contexto operacional
                     ),
                 ],
             }
 
             # SDK 0.1.48+: Subagent lifecycle hooks
-            if _has_subagent_hooks:
-                options_dict["hooks"]["SubagentStart"] = [
-                    HookMatcher(hooks=[_subagent_start_hook]),
-                ]
-                options_dict["hooks"]["SubagentStop"] = [
-                    HookMatcher(hooks=[_subagent_stop_hook]),
-                ]
+            options_dict["hooks"]["SubagentStart"] = [
+                HookMatcher(hooks=[_subagent_start_hook]),
+            ]
+            options_dict["hooks"]["SubagentStop"] = [
+                HookMatcher(hooks=[_subagent_stop_hook]),
+            ]
 
             hooks_list = list(options_dict["hooks"].keys())
             logger.debug(
@@ -3351,6 +3366,7 @@ Nunca invente informações."""
         prompt: str,
         user_name: str = "Usuário",
         model: Optional[str] = None,
+        effort_level: str = "off",
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
         user_id: Optional[int] = None,
@@ -3365,6 +3381,7 @@ Nunca invente informações."""
             prompt: Mensagem do usuário
             user_name: Nome do usuário
             model: Modelo a usar
+            effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             sdk_session_id: Session ID do SDK para resume
             can_use_tool: Callback de permissão
             user_id: ID do usuário (para Memory Tool e hooks)
@@ -3386,6 +3403,7 @@ Nunca invente informações."""
             prompt=prompt,
             user_name=user_name,
             model=model,
+            effort_level=effort_level,
             sdk_session_id=sdk_session_id,
             can_use_tool=can_use_tool,
             user_id=user_id,

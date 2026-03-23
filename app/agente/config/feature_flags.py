@@ -19,8 +19,8 @@ import os
 USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
 
 # Controle de budget por request (disponivel desde SDK v0.1.6)
-USE_BUDGET_CONTROL = os.getenv("AGENT_BUDGET_CONTROL", "false").lower() == "true"
-MAX_BUDGET_USD = float(os.getenv("AGENT_MAX_BUDGET_USD", "2.0"))
+USE_BUDGET_CONTROL = os.getenv("AGENT_BUDGET_CONTROL", "true").lower() == "true"
+MAX_BUDGET_USD = float(os.getenv("AGENT_MAX_BUDGET_USD", "5.0"))
 
 # Context Clearing automatico — remove thinking/tool_uses antigos
 # ATIVO por default: a Anthropic recomenda habilitar para conversas longas.
@@ -43,8 +43,9 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
 # Self-correction — reescrito para Sonnet 4.6 (prompt específico para tabelas numéricas)
 # Histórico: Haiku gerava falsos positivos com escopo amplo. Prompt agora valida APENAS
 # inconsistências aritméticas em respostas com tabelas numéricas (threshold 500 chars).
-# Ativar: AGENT_SELF_CORRECTION=true (monitorar taxa de falsos positivos por 2 semanas)
-USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
+# ATIVO por default: Sonnet 4.6 com scope restrito reduz falsos positivos.
+# Para desativar: AGENT_SELF_CORRECTION=false
+USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "true").lower() == "true"
 
 # ====================================================================
 # Melhorias de Contexto e Memoria (P0)
@@ -72,8 +73,9 @@ SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "5"
 # Prompt Suggestions — gera 2-3 sugestoes contextuais apos cada resposta
 # Usa Sonnet para sugestoes relevantes ao dominio logistico
 # Custo: ~$0.003 por chamada (~500 tokens input, ~200 output)
-# Default false: ativar apos verificar que Sonnet esta respondendo rapido (<2s)
-USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "false").lower() == "true"
+# ATIVO por default: roda em background, nao bloqueia resposta.
+# Para desativar: AGENT_PROMPT_SUGGESTIONS=false
+USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "true").lower() == "true"
 
 # Sentiment Detection — detecta frustração do operador e ajusta tom da resposta
 # Heuristicas locais (sem chamada API): mensagens curtas, repetidas, marcadores explicitos
@@ -239,15 +241,16 @@ TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").low
 # Expanded Hooks — adiciona hooks Stop e UserPromptSubmit alem dos 3 existentes
 # Stop: loga metricas finais da sessao (tokens, custo, duracao, tools usadas)
 # UserPromptSubmit: pode enriquecer o prompt do usuario antes de processar
-# Default false: ativar apos validar que nao causa overhead excessivo
-USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "false").lower() == "true"
+# ATIVO por default: overhead minimo (apenas logging).
+# Para desativar: AGENT_EXPANDED_HOOKS=false
+USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "true").lower() == "true"
 
 # ====================================================================
 # Async Streaming (migração incremental)
 # ====================================================================
 # Quando true: usa implementação async nativa para streaming SSE
 # Quando false: usa bridge Thread+Queue+asyncio.run (legado)
-USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "false").lower() == "true"
+USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "true").lower() == "true"
 # ====================================================================
 # Persistent SDK Client (migração query() → ClaudeSDKClient)
 # ====================================================================
@@ -258,7 +261,7 @@ USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "false").lower() == "true"
 # Quando false: usa query() standalone (status quo — spawn + destroy por turno)
 # Rollback instantâneo: AGENT_PERSISTENT_SDK_CLIENT=false + restart
 # Ref: .claude/references/ROADMAP_SDK_CLIENT.md
-USE_PERSISTENT_SDK_CLIENT = os.getenv("AGENT_PERSISTENT_SDK_CLIENT", "false").lower() == "true"
+USE_PERSISTENT_SDK_CLIENT = os.getenv("AGENT_PERSISTENT_SDK_CLIENT", "true").lower() == "true"
 
 # Timeout em segundos para idle clients no pool (disconnect automático)
 # Libera recursos de clients sem atividade por este período

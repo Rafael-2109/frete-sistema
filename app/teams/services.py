@@ -598,6 +598,7 @@ def _obter_resposta_agente(
                 client.get_response(
                     prompt=prompt_completo,
                     user_name=usuario,
+                    effort_level="medium",
                     sdk_session_id=sdk_session_id,
                     user_id=user_id,
                     model=model,
@@ -1005,6 +1006,7 @@ def _obter_resposta_agente_streaming(
                 prompt=prompt_completo,
                 user_name=usuario,
                 model=model,
+                effort_level="medium",
                 sdk_session_id=sdk_session_id,
                 can_use_tool=can_use_tool,
                 user_id=user_id,
