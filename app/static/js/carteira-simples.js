@@ -1192,7 +1192,7 @@
                 </td>
 
                 <!-- Estoque atual e carteira -->
-                <td class="text-end">${Math.round(item.estoque_atual || 0)}</td>
+                <td class="text-end est-atual">${Math.round(item.estoque_atual || 0)}</td>
                 <td class="text-end">${Math.round(item.qtd_carteira || 0)}</td>
 
                 <!-- Projeção D0-D28 -->
@@ -1376,7 +1376,7 @@
                 </td>
 
                 <!-- Estoque atual e carteira -->
-                <td class="text-end">${Math.round(item.estoque_atual || 0)}</td>
+                <td class="text-end est-atual">${Math.round(item.estoque_atual || 0)}</td>
                 <td class="text-end">${Math.round(item.qtd_carteira || 0)}</td>
 
                 <!-- Projeção D0-D28 -->
@@ -1554,6 +1554,16 @@
     // ==============================================
     function handleTableClick(e) {
         const target = e.target;
+
+        // Projecao por Linha de Producao: click em Est. Atual
+        if (target.closest('.est-atual')) {
+            const row = target.closest('tr');
+            const codProduto = row?.dataset.codProduto;
+            if (codProduto && window.modalProjecaoLinha) {
+                window.modalProjecaoLinha.abrir(codProduto);
+                return;
+            }
+        }
 
         // 🆕 FUNCIONALIDADE 2: Clique em código de produto → Rastrear produto (PRIORIDADE MÁXIMA)
         if (target.classList.contains('cod-produto-clicavel')) {

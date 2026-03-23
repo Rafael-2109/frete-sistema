@@ -779,4 +779,69 @@
     color: var(--bs-body-color) !important;
     font-weight: bold !important;
 }
+/* ==========================================================================
+   PROJECAO POR LINHA DE PRODUCAO
+   ========================================================================== */
+
+/* Cursor pointer na celula Est. Atual */
+.table-carteira-simples tbody td.est-atual {
+    cursor: pointer;
+}
+
+/* Header do produto na projecao */
+tr.plinha-produto-header td {
+    font-weight: 700;
+    background-color: var(--bs-tertiary-bg);
+    padding: 3px 4px;
+    font-size: 10px;
+}
+
+/* Produto clicado - destaque via borda */
+tr.plinha-produto-header.plinha-clicado td:first-child {
+    border-left: 3px solid var(--bs-primary);
+}
+
+/* Label de tipo (Saida/Prod./Saldo) */
+.plinha-row-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+    min-width: 45px;
+}
+
+/* Celula base */
+.plinha-cell {
+    font-size: 10px;
+    text-align: right;
+    padding: 1px 3px;
+    min-width: 44px;
+}
+
+/* Linha de Saldo - destaque leve */
+tr.plinha-saldo td.plinha-cell {
+    background-color: var(--bs-secondary-bg);
+}
+
+/* Saldo negativo - danger leve */
+.plinha-cell.plinha-negativo {
+    background-color: rgba(var(--bs-danger-rgb), 0.15);
+    color: var(--bs-danger);
+    font-weight: 600;
+}
+
+/* Producao > 0 - success leve */
+.plinha-cell.plinha-producao-ativa {
+    background-color: rgba(var(--bs-success-rgb), 0.15);
+    color: var(--bs-success);
+    font-weight: 600;
+}
+
+/* Separador entre produtos */
+tr.plinha-separator td {
+    padding: 0;
+    height: 2px;
+    background-color: var(--bs-border-color);
+}
+
 } /* End @layer modules */

@@ -20,6 +20,7 @@ from .cardex_api import *
 from .detalhes_api import *
 from .separacoes_api import *
 from .estoque_api import *
+from .projecao_linha_api import *
 
 # APIs e Views de Carteira Não-Odoo
 from .cadastro_cliente_api import cadastro_cliente_api
