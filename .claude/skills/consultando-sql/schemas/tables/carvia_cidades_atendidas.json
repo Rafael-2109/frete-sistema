@@ -18,7 +18,12 @@
       "nullable": false
     },
     {
-      "name": "uf",
+      "name": "uf_origem",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "uf_destino",
       "type": "varchar(2)",
       "nullable": false
     },
@@ -53,7 +58,8 @@
   "unique_constraints": [
     [
       "codigo_ibge",
-      "nome_tabela"
+      "nome_tabela",
+      "uf_origem"
     ]
   ],
   "indices": [
@@ -65,9 +71,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_uf",
+      "name": "ix_carvia_cidade_uf_origem",
       "columns": [
-        "uf"
+        "uf_origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cidade_uf_destino",
+      "columns": [
+        "uf_destino"
       ],
       "unique": false
     }

@@ -159,7 +159,8 @@
       "mcp__sentry__search_events",
       "Bash(for file:*)",
       "WebFetch(domain:www.promptfoo.dev)",
-      "Bash(jq -r \"select\\(.type==\"\"assistant\"\"\\) | .message.content[] | select\\(.type==\"\"tool_use\"\"\\) | .name\")"
+      "Bash(jq -r \"select\\(.type==\"\"assistant\"\"\\) | .message.content[] | select\\(.type==\"\"tool_use\"\"\\) | .name\")",
+      "Skill(operando-portal-atacadao)"
     ],
     "deny": []
   },

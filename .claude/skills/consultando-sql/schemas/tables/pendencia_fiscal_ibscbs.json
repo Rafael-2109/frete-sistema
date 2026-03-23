@@ -207,16 +207,16 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
+      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
       "columns": [
-        "chave_acesso"
+        "cte_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
+      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
       "columns": [
-        "cte_id"
+        "chave_acesso"
       ],
       "unique": false
     }
