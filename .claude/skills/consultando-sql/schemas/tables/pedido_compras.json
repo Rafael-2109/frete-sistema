@@ -218,6 +218,13 @@
       "unique": false
     },
     {
+      "name": "ix_pedido_compras_nf_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pedido_empresa",
       "columns": [
         "company_id",
@@ -236,13 +243,6 @@
       "name": "ix_pedido_compras_cnpj_fornecedor",
       "columns": [
         "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_nf_chave_acesso",
-      "columns": [
-        "nf_chave_acesso"
       ],
       "unique": false
     },

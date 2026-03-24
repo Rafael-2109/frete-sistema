@@ -142,16 +142,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_operacao_id",
+      "name": "ix_carvia_custos_entrega_status",
       "columns": [
-        "operacao_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_status",
+      "name": "ix_carvia_custos_entrega_operacao_id",
       "columns": [
-        "status"
+        "operacao_id"
       ],
       "unique": false
     },

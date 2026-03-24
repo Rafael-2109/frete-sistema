@@ -246,7 +246,7 @@
       "key_fields": [
         "codigo_ibge",
         "nome_cidade",
-        "uf"
+        "uf_origem"
       ]
     },
     {

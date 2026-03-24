@@ -116,16 +116,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cliente_enderecos_cnpj",
+      "name": "ix_carvia_endereco_tipo",
       "columns": [
-        "cnpj"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_endereco_tipo",
+      "name": "ix_carvia_cliente_enderecos_cnpj",
       "columns": [
-        "tipo"
+        "cnpj"
       ],
       "unique": false
     },
