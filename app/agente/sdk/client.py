@@ -345,19 +345,188 @@ def _adjust_importance_for_corrections(importance: float, correction_count: int)
     return importance * factor
 
 
+# =====================================================================
+# ROUTING CONTEXT — Contexto de despacho para decisão de roteamento
+# =====================================================================
+
+# Mapeamento domínio → keywords para detecção em session summaries
+_DOMAIN_KEYWORDS = {
+    'expedicao': ['separação', 'separacao', 'embarque', 'carreta', 'pallet', 'expedição',
+                  'agrupamento de rota', 'casamento de rota', 'carga direta'],
+    'odoo_compras': ['pedido de compra', 'vinculação', 'vinculacao', 'conciliação', 'conciliacao',
+                     'validação nf', 'validacao nf', 'DFe', 'recebimento'],
+    'odoo_financeiro': ['pagamento', 'extrato', 'reconciliação', 'reconciliacao', 'título', 'titulo',
+                        'razão geral', 'razao geral', 'lançamento', 'lancamento'],
+    'frete': ['frete', 'cotação', 'cotacao', 'transportadora', 'custo frete', 'lead time'],
+    'ssw': ['ssw', 'romaneio', 'carvia', 'ctrc', 'mdf-e', 'ct-e'],
+    'admin': ['diagnóstico', 'diagnostico', 'auditoria', 'memórias', 'memorias', 'sessões',
+              'sessoes', 'health score', 'bug', 'investigar'],
+}
+
+# Mapeamento domínio → skills/subagentes relevantes
+_DOMAIN_SKILLS = {
+    'expedicao': ['gerindo-expedicao', 'cotando-frete', 'analista-carteira'],
+    'odoo_compras': ['validacao-nf-po', 'conciliando-odoo-po', 'recebimento-fisico-odoo', 'especialista-odoo'],
+    'odoo_financeiro': ['executando-odoo-financeiro', 'rastreando-odoo', 'razao-geral-odoo'],
+    'frete': ['cotando-frete', 'gerindo-carvia'],
+    'ssw': ['acessando-ssw', 'operando-ssw', 'gestor-ssw'],
+    'admin': ['gerindo-agente', 'diagnosticando-banco', 'consultando-sentry'],
+}
+
+# Mapeamento domínio → segmentos de path reais usados pelo pattern_analyzer
+# (pattern_analyzer usa domínio livre via Sonnet, ex: "financeiro", "recebimento")
+_DOMAIN_PATH_SEGMENTS = {
+    'expedicao': ['expedicao', 'logistica', 'agente'],
+    'odoo_compras': ['recebimento', 'compras', 'odoo', 'integracao'],
+    'odoo_financeiro': ['financeiro'],
+    'frete': ['frete', 'carvia'],
+    'ssw': ['ssw'],
+    'admin': ['geral', 'sistema', 'agente'],
+}
+
+
+def _compute_user_domain(user_id: int) -> Optional[str]:
+    """
+    Computa domínio predominante do usuário a partir das últimas sessões.
+    Zero-LLM: usa keyword matching nos summaries JSONB.
+
+    Returns:
+        Nome do domínio predominante ou None se insuficiente.
+    """
+    try:
+        from ..models import AgentSession
+        sessions = AgentSession.query.filter(
+            AgentSession.user_id == user_id,
+            AgentSession.summary.isnot(None),
+        ).order_by(AgentSession.created_at.desc()).limit(10).all()
+
+        if not sessions:
+            return None
+
+        domain_scores: dict = {}
+        for session in sessions:
+            summary = session.summary
+            if not summary or not isinstance(summary, dict):
+                continue
+            # Combinar resumo_geral + alertas para texto de análise
+            text_parts = []
+            if summary.get('resumo_geral'):
+                text_parts.append(summary['resumo_geral'])
+            for alerta in (summary.get('alertas') or []):
+                text_parts.append(str(alerta))
+            text = ' '.join(text_parts).lower()
+
+            for domain, keywords in _DOMAIN_KEYWORDS.items():
+                hits = sum(1 for kw in keywords if kw.lower() in text)
+                if hits > 0:
+                    domain_scores[domain] = domain_scores.get(domain, 0) + hits
+
+        if not domain_scores:
+            return None
+
+        # Domínio com mais hits
+        return max(domain_scores, key=domain_scores.get)
+
+    except Exception as e:
+        logger.debug(f"[ROUTING_CONTEXT] Domain computation failed: {e}")
+        return None
+
+
+def _build_routing_context(user_id: int) -> Optional[str]:
+    """
+    Constrói contexto de despacho para routing do agente principal.
+    Zero-LLM: SQL queries apenas. Max ~500 chars.
+
+    Conteúdo:
+    - Domínio predominante do usuário
+    - Top 3 armadilhas ativas do domínio (ou gerais se domínio indeterminado)
+    - Skills sugeridas para o domínio
+
+    Returns:
+        String XML para injeção ou None se vazio.
+    """
+    try:
+        from ..models import AgentMemory
+        import re
+
+        domain = _compute_user_domain(user_id)
+
+        parts = ['<routing_context>']
+
+        # Domínio predominante
+        if domain:
+            domain_display = domain.replace('_', '/').title()
+            skills = _DOMAIN_SKILLS.get(domain, [])
+            parts.append(f'  <user_domain>{domain_display}</user_domain>')
+            if skills:
+                parts.append(f'  <preferred_skills>{", ".join(skills[:3])}</preferred_skills>')
+
+        # Armadilhas ativas (filtradas por domínio se disponível)
+        armadilha_filter = AgentMemory.query.filter(
+            AgentMemory.user_id == 0,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == False,  # noqa: E712
+        )
+        if domain:
+            # Buscar armadilhas dos path segments reais do domínio
+            path_segments = _DOMAIN_PATH_SEGMENTS.get(domain, [domain])
+            from sqlalchemy import or_ as sql_or
+            armadilha_filter = armadilha_filter.filter(
+                sql_or(*[
+                    AgentMemory.path.like(f'/memories/empresa/armadilhas/{seg}%')
+                    for seg in path_segments
+                ])
+            )
+        else:
+            armadilha_filter = armadilha_filter.filter(
+                AgentMemory.path.like('/memories/empresa/armadilhas/%')
+            )
+
+        armadilhas = armadilha_filter.order_by(
+            AgentMemory.effective_count.desc()
+        ).limit(3).all()
+
+        if armadilhas:
+            parts.append('  <active_traps>')
+            for arm in armadilhas:
+                # Extrair título do XML content
+                title_match = re.search(r'<titulo>(.*?)</titulo>', arm.content or '', re.DOTALL)
+                title = title_match.group(1).strip() if title_match else arm.path.split('/')[-1].replace('.xml', '')
+                # Truncar título
+                if len(title) > 80:
+                    title = title[:77] + '...'
+                parts.append(f'    - {title}')
+            parts.append('  </active_traps>')
+
+        parts.append('</routing_context>')
+
+        # Só retornar se tem conteúdo útil (mais que tags vazias)
+        if len(parts) <= 2:  # Só tem abertura e fechamento
+            return None
+
+        result = '\n'.join(parts)
+        logger.debug(f"[ROUTING_CONTEXT] user_id={user_id} domain={domain} chars={len(result)}")
+        return result
+
+    except Exception as e:
+        logger.debug(f"[ROUTING_CONTEXT] Build failed: {e}")
+        return None
+
+
 def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> tuple[Optional[str], list[int]]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
 
-    Memory System v2 — Arquitetura em 3 tiers:
-    - Tier 0 (SEMPRE): Rolling window de sessões + briefing inter-sessão
+    Memory System v2 — Arquitetura em 4 tiers:
+    - Tier 0 (SEMPRE): Rolling window de sessões + briefing inter-sessão + routing context
     - Tier 1 (SEMPRE): user.xml e preferences.xml — garante identidade/preferências
+    - Tier 1.5 (SEMPRE): Perfil empresa do usuário — contexto de routing
     - Tier 2 (semântica): memórias relevantes ao prompt, excluindo Tier 1
     - Tier 2b (KG): complementar via Knowledge Graph
     - Fallback: memórias mais recentes se semântica não retornar nada
 
     v2 changes:
-    - Tier 0: session window (operational context removido — P9)
+    - Tier 0: session window + routing context (operational context removido — P9)
     - Two-pass budget selection by composite score (1D)
     - Category-aware decay rates
     - Exclude cold memories from retrieval
@@ -419,6 +588,15 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             except Exception as brief_err:
                 logger.debug(f"[MEMORY_INJECT] Briefing inter-sessão falhou (ignorado): {brief_err}")
 
+            # ── Tier 0c: Routing context (domínio + armadilhas) ──
+            try:
+                routing_ctx = _build_routing_context(user_id)
+                if routing_ctx:
+                    tier0_parts.append(routing_ctx)
+                    tier0_chars += len(routing_ctx)
+            except Exception as route_err:
+                logger.debug(f"[MEMORY_INJECT] Routing context falhou (ignorado): {route_err}")
+
             # ── Tier 1: SEMPRE injetar memórias protegidas ──
             PROTECTED_PATHS = ["/memories/user.xml", "/memories/preferences.xml"]
             protected_memories = AgentMemory.query.filter(
@@ -428,6 +606,31 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             ).all()
 
             protected_ids = {m.id for m in protected_memories}
+
+            # ── Tier 1.5: Perfil empresa do usuário (always-inject para routing) ──
+            # Se existe um perfil empresa para este user_id, injetá-lo
+            # (ex: /memories/empresa/usuarios/elaine.xml para user_id=67)
+            tier15_memories = []
+            try:
+                tier15_query = AgentMemory.query.filter(
+                    AgentMemory.user_id == 0,  # empresa
+                    AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.is_cold == False,  # noqa: E712
+                    AgentMemory.path.like('/memories/empresa/usuarios/%'),
+                ).all()
+                # Filtrar: injetar apenas se o perfil menciona o user_id atual
+                # ou se é perfil genérico útil para routing
+                for mem in tier15_query:
+                    content_lower = (mem.content or '').lower()
+                    user_id_str = str(user_id)
+                    # Injetar se o perfil contém o user_id do usuário atual
+                    if f'<user_id>{user_id_str}</user_id>' in content_lower or \
+                       f'user_id={user_id_str}' in content_lower or \
+                       f"user_id>{user_id_str}<" in content_lower:
+                        tier15_memories.append(mem)
+                        protected_ids.add(mem.id)
+            except Exception as t15_err:
+                logger.debug(f"[MEMORY_INJECT] Tier 1.5 falhou (ignorado): {t15_err}")
 
             # ── Tier 2: Busca semântica com composite scoring (QW-1 + v2 category decay) ──
             additional_memories = []
@@ -629,8 +832,22 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 tier1_texts.append((mem, mem_text))
                 tier1_chars += len(mem_text)
 
+            # Tier 1.5: perfis empresa (routing context, sempre incluídos)
+            tier15_texts = []
+            tier15_chars = 0
+            for mem in tier15_memories:
+                content = (mem.content or "").strip()
+                if not content:
+                    continue
+                # Truncar perfis longos a 400 chars para não sobrecarregar
+                if len(content) > 400:
+                    content = content[:400] + "..."
+                mem_text = f'<memory path="{mem.path}" tier="routing">\n{content}\n</memory>\n'
+                tier15_texts.append((mem, mem_text))
+                tier15_chars += len(mem_text)
+
             # Budget restante para Tier 2 + 2b (None = sem limite para Opus)
-            budget_remaining = (budget - overhead - tier1_chars) if budget is not None else None
+            budget_remaining = (budget - overhead - tier1_chars - tier15_chars) if budget is not None else None
 
             # Tier 2/2b: calcular tamanho de cada candidato e ordenar por composite
             tier2_candidates = []
@@ -679,6 +896,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             injected_mems = []
 
             for mem, mem_text in tier1_texts:
+                selected_parts.append(mem_text)
+                injected_mems.append(mem)
+
+            for mem, mem_text in tier15_texts:
                 selected_parts.append(mem_text)
                 injected_mems.append(mem)
 

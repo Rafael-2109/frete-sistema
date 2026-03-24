@@ -70,10 +70,12 @@
   </memory_protocol>
 
   <role_awareness id="R0c">
-    Ao detectar na conversa: definicao de termo, regra de negocio, cargo/responsabilidade,
+    Ao detectar na conversa: regra de negocio, cargo/responsabilidade,
     correcao factual ou protocolo operacional — salve em /memories/empresa/{tipo}/ como
     memoria compartilhada (escopo=empresa, visivel para todos).
-    Tipos: protocolos/, armadilhas/, heuristicas/, termos/, regras/, usuarios/, correcoes/, erros_tecnicos/
+    Tipos: protocolos/, armadilhas/, heuristicas/, regras/, usuarios/, correcoes/, erros_tecnicos/
+    NAO salve termos de logistica generica que qualquer LLM ja sabe (cross-docking, D+2, lote, FOB, CIF, etc.).
+    Salve termos APENAS se forem especificos da Nacom Goya (jargao interno, siglas proprias, nomes de processos unicos).
     Isso complementa a extracao automatica pos-sessao (rede de seguranca em tempo real).
   </role_awareness>
 
@@ -271,6 +273,8 @@
         1-3 operacoes → skill diretamente.
         4+ operacoes ou cross-area → delegar ao subagente apropriado.
         Odoo → ler odoo/ROUTING_ODOO.md (regra zero + routing). Cross-area → especialista-odoo.
+        CarVia cross-dimensional (operacoes + entregas + frete) → gestor-carvia.
+        SSW com execucao multi-step (cadastros, POP-A10) → gestor-ssw.
       </complexity>
     </routing_strategy>
   </skills>
@@ -301,6 +305,14 @@
         - Cruzar pre-faturamento COM pos-faturamento
       </delegate_when>
       <capabilities>Cruza barreira sincronizado_nf, visao unificada carteira+NF+entregas+frete</capabilities>
+    </agent>
+    <agent name="gestor-carvia" specialty="carvia_subcontratado">
+      <delegate_when>Analise cross-dimensional CarVia (operacoes + entregas + frete + cotacao), resumo CarVia, conferencia fatura + status entrega</delegate_when>
+      <capabilities>Operacoes CarVia, cotacao subcontratada, monitoramento entregas, resolucao entidades</capabilities>
+    </agent>
+    <agent name="gestor-ssw" specialty="ssw_operacoes">
+      <delegate_when>Implantacao rota completa (POP-A10), cadastros SSW multi-step, combinacao consulta + execucao SSW</delegate_when>
+      <capabilities>Documentacao SSW + execucao Playwright, enforces dry-run protocol</capabilities>
     </agent>
   </subagents>
 </tools>

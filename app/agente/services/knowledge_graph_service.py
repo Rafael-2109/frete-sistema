@@ -56,6 +56,91 @@ _HOP2_MAX_MEMORIES = 5
 _HOP2_SIMILARITY_FACTOR = 0.3
 _HOP2_SIMILARITY_CAP = 0.5
 
+# Vocabulário controlado de entity_types (auditoria 2026-03-23)
+_VALID_ENTITY_TYPES = frozenset({
+    'uf', 'pedido', 'cnpj', 'valor', 'transportadora', 'produto',
+    'cliente', 'fornecedor', 'usuario', 'processo', 'conceito',
+    'campo', 'termo',
+})
+
+# Vocabulário controlado de relation_types (auditoria 2026-03-23)
+_VALID_RELATION_TYPES = frozenset({
+    'pertence_a', 'depende_de', 'substitui', 'conflita_com',
+    'precede', 'bloqueia', 'usa', 'produz', 'fornece', 'consome',
+    'localizado_em', 'responsavel_por', 'corrige', 'requer',
+    'complementa', 'atrasa_para', 'co_occurs',
+    'resolves_to',  # Routing: termo ambíguo → domínio/skill resolvido
+})
+
+# Mapeamento de sinônimos para normalização de relation_types
+_RELATION_SYNONYMS = {
+    'pertence': 'pertence_a', 'parte_de': 'pertence_a', 'faz_parte_de': 'pertence_a',
+    'pertence_ao': 'pertence_a', 'pertence_ao_setor': 'pertence_a',
+    'depende': 'depende_de', 'requer_campo': 'requer', 'exige': 'requer',
+    'obrigatorio_para': 'requer', 'exige_correspondencia': 'requer',
+    'substitui_por': 'substitui', 'converte': 'substitui', 'converte_para': 'substitui',
+    'conflita': 'conflita_com', 'contradiz_escolha': 'conflita_com',
+    'nao_corresponde_a': 'conflita_com', 'distinto_de': 'conflita_com',
+    'precede_a': 'precede', 'antecede': 'precede', 'transiciona_para': 'precede',
+    'transita_para': 'precede', 'transita': 'precede', 'sequencia': 'precede',
+    'evolui_para': 'precede', 'transiciona_de': 'precede',
+    'bloqueia_sem': 'bloqueia', 'dificulta': 'bloqueia',
+    'usa_formato': 'usa', 'utiliza_formato': 'usa', 'usa_variacao': 'usa',
+    'le_de': 'usa', 'consulta': 'usa', 'referencia': 'usa',
+    'produz_resultado': 'produz', 'gera': 'produz', 'origina': 'produz',
+    'confirmacao_gera': 'produz', 'dispara': 'produz',
+    'fornece_a': 'fornece', 'entrega_em': 'fornece',
+    'consome_de': 'consome',
+    'localizado': 'localizado_em', 'localiza_em': 'localizado_em',
+    'presente_em': 'localizado_em', 'opera_em': 'localizado_em',
+    'responsavel': 'responsavel_por', 'executa': 'responsavel_por',
+    'realiza': 'responsavel_por', 'opera': 'responsavel_por',
+    'atua_em': 'responsavel_por', 'trabalha_em': 'responsavel_por',
+    'corrige_de': 'corrige', 'corrigido_de': 'corrige', 'resolve': 'corrige',
+    'complementa_a': 'complementa', 'relaciona_com': 'complementa',
+    'integra': 'complementa', 'vincula': 'complementa', 'vincula_a': 'complementa',
+    'relaciona': 'complementa', 'associada_a': 'complementa',
+    'atrasa': 'atrasa_para', 'demora_para': 'atrasa_para',
+    # Tipos sem mapeamento claro -> None (descartar)
+    'co_occurs': 'co_occurs',
+}
+
+
+def _normalize_relation_type(raw_type: str) -> Optional[str]:
+    """
+    Normaliza um tipo de relação para o vocabulário controlado.
+    Retorna None se não for mapeável (descarta a relação).
+    """
+    if not raw_type:
+        return None
+    normalized = raw_type.strip().lower()
+    if normalized in _VALID_RELATION_TYPES:
+        return normalized
+    if normalized in _RELATION_SYNONYMS:
+        return _RELATION_SYNONYMS[normalized]
+    return None
+
+
+def _validate_entity_type(raw_type: str) -> Optional[str]:
+    """
+    Valida tipo de entidade contra vocabulário controlado.
+    Retorna None se tipo inválido.
+    """
+    if not raw_type:
+        return None
+    normalized = raw_type.strip().lower()
+    if normalized in _VALID_ENTITY_TYPES:
+        return normalized
+    # Sinônimos comuns
+    _entity_synonyms = {
+        'regra': None,  # "regra" era catch-all, descartar
+        'regra_negocio': 'processo',
+        'sistema': 'conceito',
+        'setor': 'conceito',
+        'cargo': 'conceito',
+    }
+    return _entity_synonyms.get(normalized)
+
 
 def _normalize_name(name: str) -> str:
     """
@@ -483,10 +568,15 @@ def extract_and_link_entities(
 
         # === Layer 3: Merge com LLM output (parâmetros haiku_* são nomes históricos) ===
         # Converter haiku_entities para formato unificado (tipo, nome, key=None)
+        # Validar entity_type contra vocabulário controlado
         haiku_converted: List[Tuple[str, str, Optional[str]]] = []
         if haiku_entities:
             for etype, ename in haiku_entities:
-                haiku_converted.append((etype.lower(), ename, None))
+                validated_type = _validate_entity_type(etype)
+                if validated_type:
+                    haiku_converted.append((validated_type, ename, None))
+                else:
+                    logger.debug(f"[KG] Entidade descartada (tipo '{etype}' invalido): {ename}")
 
         # === Deduplicate por (tipo, nome_normalizado) ===
         seen: Set[Tuple[str, str]] = set()
@@ -522,25 +612,35 @@ def extract_and_link_entities(
             # Relações do LLM (parâmetros haiku_* são nomes históricos)
             if haiku_relations:
                 for source_name, rel_type, target_name in haiku_relations:
+                    # Normalizar relation_type contra vocabulário controlado
+                    normalized_rel = _normalize_relation_type(rel_type)
+                    if not normalized_rel:
+                        logger.debug(
+                            f"[KG] Relação descartada (tipo '{rel_type}' não mapeável): "
+                            f"{source_name}>{rel_type}>{target_name}"
+                        )
+                        continue
+
                     source_norm = _normalize_name(source_name)
                     target_norm = _normalize_name(target_name)
                     source_id = entity_id_map.get(source_norm)
                     target_id = entity_id_map.get(target_norm)
 
-                    # Se entidade não foi criada acima, tentar criar agora
+                    # Se entidade não foi criada acima, tentar criar com tipo 'conceito'
+                    # (antes: fallback 'regra' gerava 72% das entidades como genérico)
                     if not source_id:
-                        source_id = _upsert_entity(conn, user_id, 'regra', source_name)
+                        source_id = _upsert_entity(conn, user_id, 'conceito', source_name)
                         if source_id:
                             entity_id_map[source_norm] = source_id
                             _link_entity_to_memory(conn, source_id, memory_id, 'mentions')
                     if not target_id:
-                        target_id = _upsert_entity(conn, user_id, 'regra', target_name)
+                        target_id = _upsert_entity(conn, user_id, 'conceito', target_name)
                         if target_id:
                             entity_id_map[target_norm] = target_id
                             _link_entity_to_memory(conn, target_id, memory_id, 'mentions')
 
                     if source_id and target_id:
-                        _upsert_relation(conn, source_id, target_id, rel_type, 1.0, memory_id)
+                        _upsert_relation(conn, source_id, target_id, normalized_rel, 1.0, memory_id)
                         stats['relations_count'] += 1
 
             # Co-occurrence: pares de entidades na mesma memória

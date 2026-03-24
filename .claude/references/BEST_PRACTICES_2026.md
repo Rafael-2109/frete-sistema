@@ -1,6 +1,6 @@
 # Best Practices Anthropic 2026 — Plano de Otimizacao
 
-**Atualizado**: 08/03/2026
+**Atualizado**: 23/03/2026
 
 ---
 
@@ -9,8 +9,8 @@
 | Componente | Versao | Notas |
 |-----------|--------|-------|
 | `anthropic` SDK | **0.84.0** | Atualizado de 0.79.0. count_tokens, batches, cache_control disponiveis |
-| `claude-agent-sdk` | 0.1.48 | CLI 2.1.71. Independente do SDK anthropic |
-| `mcp` | 1.26.0+ | 6 servers, 26 tools |
+| `claude-agent-sdk` | **0.1.50** | CLI 2.1.81. Skills/memory/mcpServers nativos em AgentDefinition (0.1.49). RateLimitEvent, HookMatcher.timeout, effort nativo (0.1.50) |
+| `mcp` | 1.26.0+ | 7 servers, 35 tools |
 | pgvector | **0.8.1** (confirmado prod) | iterative_scan SUPORTADO, halfvec disponivel |
 
 ---
@@ -137,10 +137,20 @@
 - [ ] **Session History SDK**: `list_sessions()`, `get_session_messages()` (v0.1.46+)
 
 ### Fase 4 — Otimizacoes (4h estimadas)
-- [ ] **Runtime MCP Management**: `add_mcp_server()` em runtime (lazy-loading tools)
+- [ ] **Runtime MCP Management**: `toggle_mcp_server()` em runtime (lazy-loading tools). Disponivel SDK 0.1.50, requer ClaudeSDKClient
 - [ ] **halfvec pgvector**: 50% storage de embeddings (migration destrutiva, testar recall)
 - [ ] **HTTP Hooks**: POST JSON para Teams quando agente completa tarefa
-- [ ] **PreCompact Hook**: Salvar contexto antes de compaction
+- [x] **PreCompact Hook**: Salvar contexto antes de compaction (implementado `_pre_compact_hook`)
+
+### Fase 5 — Memoria e Routing (implementado 2026-03-23)
+- [x] **correction_count fix**: Gate broadened para PT-BR paths + keyword detection
+- [x] **KG normalization**: 120→13 relation types canonicos, fallback 'regra'→'conceito' eliminado
+- [x] **Tier 1.5 always-inject**: Perfis empresa/usuarios injetados para routing
+- [x] **tools_used enriched**: `Skill:nome` e `Agent:tipo` em vez de generico
+- [x] **importance_score fix**: empresa memories elegiveis para cold tier (0.7→0.5)
+- [x] **R0c tightened**: Termos genericos de logistica nao sao mais salvos
+- [ ] **Routing context**: Contexto de despacho com armadilhas + dominio por usuario
+- [ ] **Resolution records**: `resolves_to` no KG para pesos de ambiguidade
 
 ---
 

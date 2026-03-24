@@ -299,7 +299,9 @@ Dada uma memoria sendo salva e o contexto das memorias existentes do usuario, ge
 2. ENTIDADES: lista de entidades no formato tipo:nome separadas por | (ex: transportadora:RODONAVES|uf:AM|cliente:ATACADAO)
 3. RELACOES: lista de relacoes no formato origem>tipo>destino separadas por | (ex: RODONAVES>atrasa_para>AM)
 
-Tipos de entidade validos: uf, pedido, cnpj, valor, transportadora, produto, cliente, fornecedor, regra
+Tipos de entidade PERMITIDOS: uf, pedido, cnpj, valor, transportadora, produto, cliente, fornecedor, usuario, processo, conceito, campo, termo
+Tipos de relacao PERMITIDOS: pertence_a, depende_de, substitui, conflita_com, precede, bloqueia, usa, produz, fornece, consome, localizado_em, responsavel_por, corrige, requer, complementa, atrasa_para
+Use APENAS tipos das listas acima. Se nenhum tipo se aplica, NAO gere a entidade/relacao.
 Se nao houver entidades ou relacoes claras, escreva ENTIDADES: nenhuma e RELACOES: nenhuma
 
 Responda EXATAMENTE no formato abaixo. Cada secao eh obrigatoria.
@@ -1110,7 +1112,7 @@ def _track_correction_feedback(user_id: int, correction_path: str, correction_co
 
     Lógica: se o Agent acabou de salvar uma correção, algo nas memórias
     existentes pode estar errado. Incrementamos correction_count nas
-    memórias que foram injetadas nos últimos 5 minutos (mesmo turno).
+    memórias que foram injetadas nos últimos 30 minutos (sessão ativa).
 
     Best-effort: falhas silenciosas.
     """
@@ -1122,7 +1124,7 @@ def _track_correction_feedback(user_id: int, correction_path: str, correction_co
         from datetime import timedelta
 
         now = agora_utc_naive()
-        cutoff = now - timedelta(minutes=5)
+        cutoff = now - timedelta(minutes=30)
 
         # Buscar memórias injetadas recentemente (mesmo turno) que NÃO são a correção atual
         recent = AgentMemory.query.filter(
@@ -1541,7 +1543,20 @@ try:
             # incrementar correction_count nas memórias recentemente injetadas
             # (indica que memórias existentes podem estar incorretas/incompletas)
             try:
-                if '/corrections/' in path.lower():
+                _is_correction_path = (
+                    '/corrections/' in path.lower()
+                    or '/correcoes/' in path.lower()
+                )
+                # Keywords de correção — exigir 2+ matches para reduzir falsos positivos
+                # (ex: "na verdade" sozinho é conversação normal, mas "na verdade, o correto é" indica correção)
+                _correction_keywords = [
+                    'correto é', 'correto e', 'na verdade', 'errado',
+                    'não é', 'nao e', 'correção', 'correcao', 'corrigir',
+                ]
+                _content_lower = (content or '').lower()
+                _keyword_hits = sum(1 for kw in _correction_keywords if kw in _content_lower)
+                _is_correction_content = _keyword_hits >= 2  # Mínimo 2 keywords
+                if _is_correction_path or _is_correction_content:
                     _track_correction_feedback(user_id, path, content)
             except Exception as fb_err:
                 logger.debug(f"[MEMORY_MCP] Correction feedback falhou (ignorado): {fb_err}")

@@ -1158,7 +1158,13 @@ def _save_empresa_memory(
             mem = AgentMemory.create_file(0, path, content)
             mem.escopo = 'empresa'
             mem.created_by = created_by
-            mem.importance_score = 0.7  # Conhecimento organizacional = alta importancia
+            # Calcular importance pelo conteúdo (mesma lógica de save_memory)
+            # em vez de hardcodar — threshold de imunidade é >= 0.7
+            try:
+                from ..tools.memory_mcp_tool import _calculate_importance_score
+                mem.importance_score = _calculate_importance_score(path, content)
+            except Exception:
+                mem.importance_score = 0.5  # Fallback: base score (cold-eligible)
             mem.category = 'structural'  # Termos e regras mudam lentamente
 
         db.session.commit()

@@ -519,7 +519,24 @@ def _stream_chat_response(
 
                 elif event.type == 'tool_call':
                     tool_name = event.content
-                    if tool_name not in response_state['tools_used']:
+                    # Enriquecer com nome especifico para Skill/Agent (routing audit)
+                    tool_input = event.metadata.get('input') or {}
+                    enriched_name = tool_name
+                    if tool_name == 'Skill' and isinstance(tool_input, dict):
+                        skill_name = tool_input.get('skill', '')
+                        if skill_name:
+                            enriched_name = f"Skill:{skill_name}"
+                    elif tool_name == 'Agent' and isinstance(tool_input, dict):
+                        agent_desc = tool_input.get('description', '')[:50]
+                        agent_type = tool_input.get('subagent_type', '')
+                        if agent_type:
+                            enriched_name = f"Agent:{agent_type}"
+                        elif agent_desc:
+                            enriched_name = f"Agent:{agent_desc}"
+                    if enriched_name not in response_state['tools_used']:
+                        response_state['tools_used'].append(enriched_name)
+                    # Manter nome original tambem para backward compat
+                    if tool_name != enriched_name and tool_name not in response_state['tools_used']:
                         response_state['tools_used'].append(tool_name)
                     event_queue.put(_sse_event('tool_call', {
                         'tool_name': tool_name,

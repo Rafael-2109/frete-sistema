@@ -1,6 +1,6 @@
 # MCP Capabilities — Estado do Sistema (Mar/2026)
 
-**Atualizado**: 2026-03-07
+**Atualizado**: 2026-03-23
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.48 | Wrapper MCP (in-process). CLI 2.1.71, fix input_json_delta streaming #644 |
+| `claude-agent-sdk` | 0.1.50 | CLI 2.1.81. AgentDefinition.skills/memory/mcpServers (0.1.49), RateLimitEvent + HookMatcher.timeout (0.1.50) |
 | `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
 
 ---
@@ -53,18 +53,28 @@ Criado em 2026-02-17 para preencher gap entre SDK wrapper e MCP spec.
 
 ---
 
-## Servidores MCP Registrados (6)
+## Servidores MCP Registrados (7)
 
 | Server | Arquivo | Tools | Enhanced | Annotations |
 |---|---|---|---|---|
 | sql | `text_to_sql_tool.py` | 1 | **SIM** (v2.0.0) | readOnly, idempotent, openWorld=F |
-| memory | `memory_mcp_tool.py` | 6 | nao | readOnly/destructive, openWorld=F |
+| memory | `memory_mcp_tool.py` | 11 | nao | readOnly/destructive, openWorld=F |
 | schema | `schema_mcp_tool.py` | 2 | nao | readOnly, openWorld=F |
-| sessions | `session_search_tool.py` | 3 | nao | readOnly, openWorld=F |
+| sessions | `session_search_tool.py` | 4 | nao | readOnly, openWorld=F |
 | render | `render_logs_tool.py` | 3 | nao | readOnly, openWorld=T |
-| browser | `playwright_mcp_tool.py` | 11 | nao | variado, openWorld=T (SSW) |
+| browser | `playwright_mcp_tool.py` | 13 | nao | variado, openWorld=T (SSW) |
+| routes | `routes_search_tool.py` | 1 | nao | readOnly, openWorld=F |
 
-**Total**: 26 tools registradas, todas com `openWorldHint` configurado.
+**Total**: 35 tools registradas, todas com `openWorldHint` configurado.
+
+### SDK 0.1.49/0.1.50 — Features por AgentDefinition
+
+| Campo | Status | Nota |
+|---|---|---|
+| `AgentDefinition.skills` | **ADOTADO** | `agent_loader.py` passa skills nativas. Fallback texto para SDK < 0.1.49 |
+| `AgentDefinition.mcpServers` | N/A | Apenas para servers stdio/sse/http EXTERNOS. In-process herdados via tool inheritance |
+| `AgentDefinition.memory` | N/A | Conflita com sistema custom `mcp__memory__*` (PostgreSQL). Reservado |
+| MCP Runtime Control | Disponivel | `get_mcp_status()`, `toggle_mcp_server()`, `reconnect_mcp_server()` — requer ClaudeSDKClient |
 
 ---
 
