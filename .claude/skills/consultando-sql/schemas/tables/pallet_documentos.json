@@ -128,10 +128,9 @@
       "unique": false
     },
     {
-      "name": "idx_documento_emissor",
+      "name": "ix_pallet_documentos_cnpj_emissor",
       "columns": [
-        "cnpj_emissor",
-        "tipo"
+        "cnpj_emissor"
       ],
       "unique": false
     },
@@ -144,9 +143,10 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_documentos_cnpj_emissor",
+      "name": "idx_documento_emissor",
       "columns": [
-        "cnpj_emissor"
+        "cnpj_emissor",
+        "tipo"
       ],
       "unique": false
     },

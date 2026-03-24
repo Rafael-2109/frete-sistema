@@ -160,7 +160,10 @@
       "Bash(for file:*)",
       "WebFetch(domain:www.promptfoo.dev)",
       "Bash(jq -r \"select\\(.type==\"\"assistant\"\"\\) | .message.content[] | select\\(.type==\"\"tool_use\"\"\\) | .name\")",
-      "Skill(operando-portal-atacadao)"
+      "Skill(operando-portal-atacadao)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//home/rafaelnascimento/projetos/frete_sistema/**)"
     ],
     "deny": []
   },

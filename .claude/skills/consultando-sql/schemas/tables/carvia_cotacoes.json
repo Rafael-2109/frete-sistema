@@ -36,6 +36,10 @@
       "nullable": false
     },
     {
+      "name": "tipo_carga",
+      "type": "varchar(20)"
+    },
+    {
       "name": "peso",
       "type": "numeric(15,3)"
     },
