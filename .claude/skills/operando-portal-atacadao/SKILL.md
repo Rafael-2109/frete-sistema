@@ -154,11 +154,16 @@ O CSV exportado de `/relatorio/itens` tem colunas com nomes diferentes do nosso 
 
 ## Decision Tree
 
+**Todos os scripts ficam em `.claude/skills/operando-portal-atacadao/scripts/`.**
+**Invocacao**: `source .venv/bin/activate && python .claude/skills/operando-portal-atacadao/scripts/<script>.py [args]`
+
 ```
 Imprimir PEDIDO(s) do portal? (detalhe ou listagem)
   -> Resolver filial para CNPJ: resolvendo-entidades (se usuario passou nome/numero de filial)
-  -> Modo detalhe: imprimir_pedidos.py --pedido 457652 [--cnpj 75315333003043] [--dry-run]
-  -> Modo listagem: imprimir_pedidos.py --cnpj 75315333003043 [--dry-run]
+  -> Modo detalhe:
+     python .claude/skills/operando-portal-atacadao/scripts/imprimir_pedidos.py --pedido 457652 [--cnpj 75315333003043] [--dry-run]
+  -> Modo listagem:
+     python .claude/skills/operando-portal-atacadao/scripts/imprimir_pedidos.py --cnpj 75315333003043 [--dry-run]
   -> Gera PDF em /tmp/pedidos_atacadao/
   -> Output: {"sucesso": true, "modo": "detalhe"|"listagem", "pdf_path": "...", "pdf_size_kb": N}
 
@@ -170,7 +175,7 @@ Imprimir PROTOCOLO(s) de agendamento? (senha de entrega)
   -> DISTINCAO: protocolo = senha de agendamento (numero inteiro). Pedido = numero do pedido no portal.
 
 Consultar agendamentos futuros de um CNPJ?
-  -> consultar_agendamentos.py --cnpj 12345678000190 [--dias 30] [--cruzar-local]
+  -> python .claude/skills/operando-portal-atacadao/scripts/consultar_agendamentos.py --cnpj 12345678000190 [--dias 30] [--cruzar-local]
   -> Sem --cruzar-local: exporta CSV + retorna registros e resumo por_status
   -> Com --cruzar-local: adiciona resumo_cruzamento com contadores:
      agendamento_disponivel, agenda_perdida, em_dia, entregue, sem_cruzamento
@@ -179,7 +184,7 @@ Consultar agendamentos futuros de um CNPJ?
               "resumo_cruzamento": {...} (se --cruzar-local)}
 
 Consultar saldo disponivel para agendamento?
-  -> consultar_saldo.py [--cnpj 75315333003043] [--filial 183] [--cruzar-local]
+  -> python .claude/skills/operando-portal-atacadao/scripts/consultar_saldo.py [--cnpj 75315333003043] [--filial 183] [--cruzar-local]
   -> Sem --cnpj: exporta saldo de TODAS as filiais
   -> Com --cnpj: filtra resultados por CNPJ do fornecedor
   -> Com --filial: filtra resultados por codigo de filial (loja Atacadao)
@@ -190,13 +195,17 @@ Consultar saldo disponivel para agendamento?
               "cruzamento": {"com_match": N, "sem_match": N} (se --cruzar-local)}
 
 Agendar entrega em lote (TODOS os produtos/filiais)?
-  -> PASSO 1: consultar_saldo.py --cruzar-local (obter CSV de saldo + identificar produtos)
-  -> PASSO 2: agendar_lote.py --saldo-csv /tmp/saldo_atacadao/saldo.csv \
-       --data DD/MM/YYYY --veiculo 7 --dry-run
+  -> PASSO 1:
+     python .claude/skills/operando-portal-atacadao/scripts/consultar_saldo.py --cruzar-local
+  -> PASSO 2:
+     python .claude/skills/operando-portal-atacadao/scripts/agendar_lote.py \
+       --saldo-csv /tmp/saldo_atacadao/saldo.csv --data DD/MM/YYYY --veiculo 7 --dry-run
      Parametros opcionais: --multiplicar N, --dividir-por N, --cnpj-cd CNPJ
   -> PASSO 3: Reportar validacao (validas/inconsistentes)
   -> PASSO 4: AskUserQuestion: "Confirmar agendamento de N linhas para DD/MM/YYYY?"
-  -> PASSO 5: agendar_lote.py --planilha /tmp/agendamento_atacadao/agendamento.xlsx --confirmar
+  -> PASSO 5:
+     python .claude/skills/operando-portal-atacadao/scripts/agendar_lote.py \
+       --planilha /tmp/agendamento_atacadao/agendamento.xlsx --confirmar
   -> OU: usuario pode preparar planilha manualmente e usar --planilha diretamente
 
 Agendar produto ESPECIFICO? (ex: "10 pallets de palmito pro Atacadao de Jacarei dia 24/3")
@@ -208,9 +217,11 @@ Agendar produto ESPECIFICO? (ex: "10 pallets de palmito pro Atacadao de Jacarei 
         e identificar o codigo de filial correspondente a cidade (ex: Jacarei=filial 183)
         NOTA: o portal so tem codigos de filial (numeros), nao nomes de cidade.
         Se nao conseguir resolver, AskUserQuestion com as filiais disponiveis.
-  -> PASSO 1: consultar_saldo.py --filial <CODIGO> --cruzar-local
-     (confirma saldo disponivel para o produto naquela filial)
-  -> PASSO 2: agendar_lote.py --saldo-csv /tmp/saldo_atacadao/saldo.csv \
+  -> PASSO 1:
+     python .claude/skills/operando-portal-atacadao/scripts/consultar_saldo.py --filial <CODIGO> --cruzar-local
+  -> PASSO 2:
+     python .claude/skills/operando-portal-atacadao/scripts/agendar_lote.py \
+       --saldo-csv /tmp/saldo_atacadao/saldo.csv \
        --ean <EAN> --filial <CODIGO> --pallets 10 \
        --data 24/03/2026,25/03/2026,26/03/2026 --veiculo 7 --dry-run
      Notas:
@@ -222,7 +233,9 @@ Agendar produto ESPECIFICO? (ex: "10 pallets de palmito pro Atacadao de Jacarei 
        --veiculo: codigo do veiculo na planilha (7=Carreta-Bau padrao)
   -> PASSO 3: Reportar validacao (validas/inconsistentes) + qtd convertida em unidades
   -> PASSO 4: AskUserQuestion: "Confirmar agendamento?"
-  -> PASSO 5: agendar_lote.py --planilha /tmp/agendamento_atacadao/agendamento.xlsx --confirmar
+  -> PASSO 5:
+     python .claude/skills/operando-portal-atacadao/scripts/agendar_lote.py \
+       --planilha /tmp/agendamento_atacadao/agendamento.xlsx --confirmar
 
 Sessao expirada? (detectada no Passo 1 ou por erro do script)
   -> PARAR IMEDIATAMENTE. NAO tentar executar mais scripts.
@@ -239,9 +252,31 @@ Consultar dados de agendamento SEM acessar portal?
 
 ## Arquitetura
 
+### Onde ficam os scripts
+
+```
+.claude/skills/operando-portal-atacadao/scripts/   ← SCRIPTS EXECUTAVEIS (5 arquivos)
+app/portal/atacadao/                                ← INFRAESTRUTURA Flask (reutilizada pelos scripts)
+```
+
+Scripts ficam no diretorio da skill, NAO em `app/portal/atacadao/`.
+Eles IMPORTAM de `app.portal.atacadao.*` mas NAO vivem la.
+
+### Invocacao
+
+```bash
+# Todos os scripts sao invocados assim (da raiz do projeto):
+source .venv/bin/activate && python .claude/skills/operando-portal-atacadao/scripts/<script>.py [args]
+
+# Exemplo:
+python .claude/skills/operando-portal-atacadao/scripts/consultar_saldo.py --cruzar-local
+```
+
+### Workflow
+
 ```
 Agente Web — SEGUIR EXATAMENTE ESTA ORDEM:
-  1. VERIFICAR SESSAO: ls -la app/portal/atacadao/storage_state_atacadao.json
+  1. VERIFICAR SESSAO: ls -la storage_state_atacadao.json
      Se nao existe → PARAR, pedir: python -m app.portal.atacadao.login_interativo
   2. Resolver parametros (CNPJ, pedido) — usar resolvendo-entidades se necessario
   3. Executar script com argumentos corretos (ver Decision Tree)
@@ -253,15 +288,19 @@ Agente Web — SEGUIR EXATAMENTE ESTA ORDEM:
 ```
 
 Scripts sao standalone (Playwright sync), importam de `app.portal.atacadao.*`.
-Requerem `create_app()` + `app.app_context()` quando acessam banco (acoes 2-4).
+Requerem `create_app()` + `app.app_context()` quando acessam banco (--cruzar-local, --pallets).
+Ref completa de parametros: `references/SCRIPTS.md`
 
 ---
 
 ## Scripts
 
+**Caminho**: `.claude/skills/operando-portal-atacadao/scripts/`
+**Ref completa** (parametros, output, dependencias): `references/SCRIPTS.md`
+
 | # | Script | Proposito | Status |
 |---|--------|-----------|--------|
-| 0 | `atacadao_common.py` | Funcoes compartilhadas (sessao, sessao download, screenshot, saida JSON) | IMPLEMENTADO |
+| 0 | `atacadao_common.py` | Biblioteca compartilhada (sessao, download, screenshot, saida JSON) — NAO executavel | IMPLEMENTADO |
 | 1 | `imprimir_pedidos.py` | Imprimir pedidos como PDF — detalhe (--pedido) ou listagem (--cnpj) | IMPLEMENTADO |
 | 2 | `consultar_agendamentos.py` | Export CSV de agendamentos futuros por CNPJ, cruzamento local opcional | IMPLEMENTADO |
 | 3 | `consultar_saldo.py` | Export CSV de saldo disponivel de /relatorio/planilhaPedidos, cruzamento com EAN local opcional | IMPLEMENTADO |
@@ -295,6 +334,7 @@ Requerem `create_app()` + `app.app_context()` quando acessam banco (acoes 2-4).
 
 | Quando o agente precisa de... | Ler |
 |-------------------------------|-----|
+| **Parametros, invocacao e output dos scripts** | [SCRIPTS.md](references/SCRIPTS.md) |
 | Seletores e caminhos do portal | [PORTAL_NAVEGACAO.md](references/PORTAL_NAVEGACAO.md) |
 | URLs, veiculos, timeouts padrao | `atacadao_defaults.json` |
 | Config existente (seletores) | `app/portal/atacadao/config.py` |

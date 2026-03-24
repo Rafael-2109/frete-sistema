@@ -115,6 +115,8 @@ Documentos adicionais:
 | `especialista-odoo` | Problema cross-area Odoo |
 | `raio-x-pedido` | Visao 360 do pedido |
 | `desenvolvedor-integracao-odoo` | Criar/modificar integracoes Odoo |
+| `gestor-carvia` | Operacoes CarVia cross-dimensional (ops + entregas + frete) |
+| `gestor-ssw` | Operacoes SSW multi-step (POP-A10, cadastros) |
 
 ### Confiabilidade de Output (OBRIGATORIO)
 

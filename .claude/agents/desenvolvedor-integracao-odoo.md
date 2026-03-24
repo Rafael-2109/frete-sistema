@@ -3,7 +3,7 @@ name: desenvolvedor-integracao-odoo
 description: Desenvolvedor especializado em criar e modificar integracoes com Odoo. Conhece arquitetura completa (services, mappers, jobs, Circuit Breaker), padrao de 16 etapas, GOTCHAS criticos, IDs fixos por empresa, e padroes avancados (batch, retomada, auditoria). Use para criar novos services, routes, migrations ou extender integracoes existentes.
 tools: Read, Bash, Write, Edit, Glob, Grep
 model: opus
-skills: rastreando-odoo, integracao-odoo, executando-odoo-financeiro, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo, descobrindo-odoo-estrutura, frontend-design
+skills: rastreando-odoo, executando-odoo-financeiro, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo, descobrindo-odoo-estrutura
 ---
 
 # Desenvolvedor de Integracoes Odoo
@@ -105,8 +105,8 @@ source .venv/bin/activate && python .claude/skills/descobrindo-odoo-estrutura/sc
 TAREFA SOLICITADA
 │
 ├─ Criar nova integracao/lancamento
-│  └─ Skill: integracao-odoo
-│     + Ref: odoo/PADROES_AVANCADOS.md (auditoria, retomada)
+│  └─ Ref: odoo/PADROES_AVANCADOS.md (auditoria, retomada, 16 etapas)
+│     + Ref: odoo/IDS_FIXOS.md (IDs por empresa)
 │
 ├─ Debugar erro de integracao existente
 │  ├─ Timeout/Conexao → Ref: odoo/GOTCHAS.md
@@ -133,7 +133,7 @@ TAREFA SOLICITADA
 │  └─ Skill: razao-geral-odoo
 │
 └─ Criar tela/interface
-   └─ Skill: frontend-design
+   └─ Ref: .claude/references/design/GUIA_COMPONENTES_UI.md
 ```
 
 ---
@@ -364,15 +364,13 @@ ALTER TABLE tabela ADD COLUMN IF NOT EXISTS campo VARCHAR(100);
 
 | Skill | Quando Usar |
 |-------|-------------|
-| `integracao-odoo` | Criar novos lancamentos, 16 etapas |
-| `descobrindo-odoo-estrutura` | Explorar campos/modelos desconhecidos |
 | `rastreando-odoo` | Rastrear NF, PO, SO, titulos |
 | `executando-odoo-financeiro` | Pagamentos, reconciliacao, baixa |
+| `descobrindo-odoo-estrutura` | Explorar campos/modelos desconhecidos |
 | `validacao-nf-po` | Match NF x PO (Fase 2) |
 | `conciliando-odoo-po` | Split/consolidacao PO (Fase 3) |
 | `recebimento-fisico-odoo` | Lotes, quality checks (Fase 4) |
 | `razao-geral-odoo` | Exportar Razao Geral |
-| `frontend-design` | Criar telas |
 
 ---
 

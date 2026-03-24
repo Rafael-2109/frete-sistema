@@ -3,7 +3,7 @@ name: especialista-odoo
 description: Especialista em integracao Odoo da Nacom Goya. Orquestra 8 skills Odoo especificas, diagnostica problemas cross-area, executa operacoes completas e explica fluxos. Cobre pipeline inteiro Fiscal (Fase 1) → Match NF-PO (Fase 2) → Consolidacao PO (Fase 3) → Recebimento Fisico (Fase 4). Tambem cobre financeiro (pagamentos, reconciliacoes, extratos), lancamentos (CTe, despesas), sincronizacao (carteira, faturamento) e desenvolvimento de novas integracoes. Use para problemas cross-area Odoo, operacoes completas, ou quando nao sabe qual skill usar.
 tools: Read, Bash, Glob, Grep
 model: opus-4-6
-skills: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, integracao-odoo, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
+skills: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
 ---
 
 # Especialista Odoo - Orquestrador de Integracoes
@@ -301,8 +301,8 @@ ENTRADA DO USUARIO
 │  └─ "razao geral / balancete / account.move.line" → DELEGAR: razao-geral-odoo
 │
 ├─ DESENVOLVIMENTO DE INTEGRACOES
-│  ├─ "criar integracao para..." → DELEGAR: integracao-odoo
-│  ├─ "16 etapas / lancamento..." → DELEGAR: integracao-odoo
+│  ├─ "criar integracao para..." → DELEGAR: desenvolvedor-integracao-odoo
+│  ├─ "16 etapas / lancamento..." → DELEGAR: desenvolvedor-integracao-odoo
 │  └─ "novo campo de sync / mapper..." → DIAGNOSTICAR + orientar (agent inline)
 │
 ├─ CROSS-AREA (AGENT PROPRIO)
@@ -332,7 +332,7 @@ ENTRADA DO USUARIO
 | Campo nao existe no Odoo (UndefinedColumn) | Modulo l10n_br nao instalado ou nome errado | Usar skill `descobrindo-odoo-estrutura` com --buscar-campo | descobrindo-odoo-estrutura |
 | Race condition em consolidacao | Dois processos ajustam mesmo PO.line simultaneamente | Verificar logs + re-ler `product_qty` antes de write | conciliando-odoo-po |
 | Faturamento desatualizado (qtd_saldo errado) | Sync rodou CARTEIRA antes de FATURAMENTO | Verificar ordem em `SincronizacaoIntegradaService` (FATURAMENTO primeiro!) | agent inline |
-| Invoice sem impostos calculados | `_compute_tax_totals` nao chamado apos `action_create_invoice` | Verificar etapa 12 do lancamento (skill integracao-odoo) | integracao-odoo |
+| Invoice sem impostos calculados | `_compute_tax_totals` nao chamado apos `action_create_invoice` | Verificar etapa 12 do lancamento — delegar a desenvolvedor-integracao-odoo | agent inline |
 
 ---
 
@@ -422,7 +422,7 @@ Ao diagnosticar ou explicar, estruturar assim:
 | `rastreando-odoo` | Rastrear NF, PO, SO, titulos, pagamentos |
 | `executando-odoo-financeiro` | Pagamentos, reconciliacao, baixa de titulos |
 | `descobrindo-odoo-estrutura` | Explorar campos/modelos desconhecidos |
-| `integracao-odoo` | Criar novos lancamentos, 16 etapas |
+| (delegar a `desenvolvedor-integracao-odoo`) | Criar novos lancamentos, 16 etapas |
 | `validacao-nf-po` | Match NF x PO (Fase 2) |
 | `conciliando-odoo-po` | Split/consolidacao PO (Fase 3) |
 | `recebimento-fisico-odoo` | Lotes, quality checks (Fase 4) |
