@@ -197,6 +197,21 @@ Conciliacao 100% de um documento automaticamente altera status de pagamento:
 
 Desconciliacao reverte: status → PENDENTE, limpa campos pago_em/pago_por.
 
+### R12: Fluxo unico para novos fretes (cotacao → embarque → portaria)
+Novos fretes CarVia DEVEM passar pelo fluxo:
+  CarViaCotacao → CarViaPedido → Embarque (provisorio) → NF → Portaria → CarviaFreteService
+
+**Criacao manual** de CarviaOperacao (wizard/freteiro) e DEPRECATED para novos fluxos.
+Templates `criar_manual.html` e `criar_freteiro.html` exibem alerta de deprecacao.
+
+**Import CTe ENRIQUECE** operacao/subcontrato auto-gerado (nao cria duplicata):
+- CTe CarVia: busca op `AUTO_PORTARIA` pelas mesmas NFs → se encontra, preenche campos do CTe real
+- CTe Subcontrato: busca sub auto pelo mesmo operacao+transportadora → se encontra, preenche campos
+
+**Vinculacao a Fatura permanece MANUAL** (R5):
+- Fatura Subcontrato: criada primeiro, depois subcontratos sao anexados via AJAX
+- Fatura CarVia: criada vinculando operacoes (CTe antes de Fatura)
+
 ### R9: Admin — Hard Delete com Auditoria
 GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete com:
 1. Verificacao de bloqueios (PAGO, FATURADO com dependentes, conciliado)

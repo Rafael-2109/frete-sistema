@@ -12,6 +12,16 @@
         </a>
     </div>
 
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+            <strong>Para novos fretes</strong>, utilize o fluxo
+            <a href="{{ url_for('carvia.listar_cotacoes_v2') }}">Cotacao Comercial</a>
+            &rarr; Pedido &rarr; Embarque &rarr; Portaria.
+            A criacao manual e mantida apenas para operacoes historicas.
+        </div>
+    </div>
+
     {% set carvia_active = 'operacoes' %}
     {% include 'carvia/_quick_nav.html' %}
 

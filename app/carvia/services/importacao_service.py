@@ -570,13 +570,37 @@ class ImportacaoService:
                             operacoes_criadas.append(op_existente)
                             continue
 
+                    # Guardrail: buscar op AUTO_PORTARIA existente pelas mesmas NFs
+                    # Se CarviaFreteService ja criou op auto, ENRIQUECER com dados do CTe
+                    nfs_ref = cte_data.get('nfs_referenciadas', [])
+                    op_auto = self._buscar_op_auto_por_nfs(nfs_ref, nf_map)
+                    if op_auto:
+                        # Enriquecer: adicionar XML/chave/PDF ao auto-gerado
+                        op_auto.cte_chave_acesso = cte_data.get('cte_chave_acesso')
+                        op_auto.cte_xml_nome_arquivo = cte_data.get('arquivo_nome_original')
+                        op_auto.cte_xml_path = cte_data.get('cte_xml_path')
+                        op_auto.cte_pdf_path = cte_data.get('cte_pdf_path')
+                        op_auto.cte_data_emissao = self._parsear_data_cte(
+                            cte_data.get('cte_data_emissao')
+                        )
+                        if not op_auto.nfs_referenciadas_json and nfs_ref:
+                            op_auto.nfs_referenciadas_json = nfs_ref
+                        # Vincular NFs adicionais
+                        self._vincular_nfs(op_auto, nfs_ref, nf_map)
+                        logger.info(
+                            "CTe CarVia enriqueceu op AUTO_PORTARIA existente: "
+                            "op_id=%s, chave=%s",
+                            op_auto.id, cte_data.get('cte_chave_acesso'),
+                        )
+                        operacoes_criadas.append(op_auto)
+                        continue
+
                     operacao = self._criar_operacao_de_cte(cte_data, nf_map, criado_por)
                     with db.session.begin_nested():
                         db.session.add(operacao)
                         db.session.flush()
 
                     # Vincular NFs
-                    nfs_ref = cte_data.get('nfs_referenciadas', [])
                     self._vincular_nfs(operacao, nfs_ref, nf_map)
 
                     # Re-linking retroativo: atualizar itens de fatura
@@ -1370,6 +1394,55 @@ class ImportacaoService:
 
         return None
 
+    def _buscar_op_auto_por_nfs(self, nfs_ref: list, nf_map: dict):
+        """Busca CarviaOperacao AUTO_PORTARIA que referencia as mesmas NFs.
+
+        Usado como guardrail: se CarviaFreteService ja criou op auto na portaria,
+        o import de CTe deve ENRIQUECER (nao duplicar).
+        """
+        if not nfs_ref:
+            return None
+
+        # Resolver NF IDs a partir das referencias
+        nf_ids = []
+        for nf_ref in nfs_ref:
+            chave = nf_ref.get('chave')
+            nf = nf_map.get(chave) if chave else None
+            if nf is None and nf_ref.get('cnpj_emitente') and nf_ref.get('numero_nf'):
+                nf = nf_map.get((nf_ref['cnpj_emitente'], nf_ref['numero_nf']))
+            if nf is None:
+                nf = self._buscar_nf_no_banco(nf_ref)
+            if nf and isinstance(nf, CarviaNf):
+                nf_ids.append(nf.id)
+
+        if not nf_ids:
+            return None
+
+        # Buscar op auto-gerada que tem junction com essas NFs
+        from app.carvia.models import CarviaOperacaoNf
+        op_auto = CarviaOperacao.query.filter(
+            CarviaOperacao.tipo_entrada == 'AUTO_PORTARIA',
+            CarviaOperacao.cte_chave_acesso.is_(None),  # ainda sem CTe real
+            CarviaOperacao.id.in_(
+                db.session.query(CarviaOperacaoNf.operacao_id).filter(
+                    CarviaOperacaoNf.nf_id.in_(nf_ids)
+                )
+            ),
+        ).first()
+
+        return op_auto
+
+    def _buscar_sub_auto_por_operacao(self, operacao_id: int, transportadora_id: int):
+        """Busca CarviaSubcontrato auto-gerado pela mesma operacao + transportadora."""
+        from app.carvia.models import CarviaSubcontrato
+        return CarviaSubcontrato.query.filter(
+            CarviaSubcontrato.operacao_id == operacao_id,
+            CarviaSubcontrato.transportadora_id == transportadora_id,
+            CarviaSubcontrato.observacoes.ilike('%auto:embarque=%'),
+            CarviaSubcontrato.cte_chave_acesso.is_(None),  # ainda sem CTe real
+            CarviaSubcontrato.status != 'CANCELADO',
+        ).first()
+
     # ------------------------------------------------------------------
     # CTe Subcontrato — metodos auxiliares
     # ------------------------------------------------------------------
@@ -1442,14 +1515,36 @@ class ImportacaoService:
                 )
                 return sub_existente
 
-        # 4. Gerar numero sequencial por transportadora
+        # 4. Guardrail: buscar sub AUTO_PORTARIA existente → enriquecer
+        sub_auto = self._buscar_sub_auto_por_operacao(
+            operacao.id, transportadora.id
+        )
+        if sub_auto:
+            sub_auto.cte_chave_acesso = cte_data.get('cte_chave_acesso')
+            sub_auto.cte_xml_nome_arquivo = cte_data.get('arquivo_nome_original')
+            sub_auto.cte_xml_path = cte_data.get('cte_xml_path')
+            sub_auto.cte_pdf_path = cte_data.get('cte_pdf_path')
+            sub_auto.cte_data_emissao = self._parsear_data_cte(
+                cte_data.get('cte_data_emissao')
+            )
+            # Valor REAL cobrado pela transportadora (atualiza custo)
+            if cte_data.get('cte_valor'):
+                sub_auto.cte_valor = cte_data['cte_valor']
+            logger.info(
+                "CTe Subcontrato enriqueceu sub AUTO_PORTARIA existente: "
+                "sub_id=%s, chave=%s",
+                sub_auto.id, cte_data.get('cte_chave_acesso'),
+            )
+            return sub_auto
+
+        # 5. Gerar numero sequencial por transportadora
         max_seq = db.session.query(
             db.func.max(CarviaSubcontrato.numero_sequencial_transportadora)
         ).filter(
             CarviaSubcontrato.transportadora_id == transportadora.id,
         ).scalar() or 0
 
-        # 5. Criar subcontrato
+        # 6. Criar subcontrato
         sub = CarviaSubcontrato(
             operacao_id=operacao.id,
             transportadora_id=transportadora.id,
