@@ -11,7 +11,8 @@ Mapeamento frontmatter -> AgentDefinition:
 - markdown body (apos ---) -> AgentDefinition.prompt
 - tools (csv) -> AgentDefinition.tools (list)
 - model -> AgentDefinition.model (mapeado para "opus"|"sonnet"|"haiku"|None)
-- skills -> incluido no prompt como secao "Skills Disponiveis"
+- skills (csv) -> AgentDefinition.skills (list, nativo SDK >= 0.1.49)
+                   Fallback: injetado como texto no prompt (SDK < 0.1.49)
 """
 
 import logging
@@ -34,6 +35,30 @@ _MODEL_MAP: Dict[str, str] = {
     "haiku_4_5": "haiku",
     "inherit": "inherit",
 }
+
+
+def _check_sdk_native_fields() -> bool:
+    """
+    Verifica se AgentDefinition tem campo 'skills' nativo (SDK >= 0.1.49).
+
+    Executado uma vez no import do modulo. Se True, skills sao passadas via
+    campo nativo do AgentDefinition. Se False, fallback para injecao de texto
+    no prompt (comportamento original).
+
+    Returns:
+        True se SDK tem campos skills/memory/mcpServers, False caso contrario
+    """
+    try:
+        from claude_agent_sdk import AgentDefinition
+        import dataclasses
+        fields = {f.name for f in dataclasses.fields(AgentDefinition)}
+        return 'skills' in fields
+    except Exception:
+        return False
+
+
+# Detectado uma vez no import — zero overhead por agent carregado
+_SDK_HAS_NATIVE_FIELDS = _check_sdk_native_fields()
 
 
 def _parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -163,12 +188,30 @@ def _parse_tools(tools_str: Optional[str]) -> Optional[list]:
     return tools if tools else None
 
 
+def _parse_skills(skills_str: Optional[str]) -> Optional[list]:
+    """
+    Parseia string CSV de skills para lista.
+
+    Args:
+        skills_str: String CSV (ex: "gerindo-expedicao, cotando-frete")
+
+    Returns:
+        Lista de skill names ou None se vazio
+    """
+    if not skills_str:
+        return None
+
+    skills = [s.strip() for s in skills_str.split(",") if s.strip()]
+    return skills if skills else None
+
+
 def _build_prompt_with_skills(body: str, skills_str: Optional[str]) -> str:
     """
-    Constroi prompt final incluindo skills disponiveis.
+    Constroi prompt final incluindo skills disponiveis como texto.
 
-    AgentDefinition NAO tem campo 'skills', entao incluimos como texto
-    no prompt para que o sub-agent saiba quais skills pode invocar.
+    Fallback para SDK < 0.1.49 onde AgentDefinition nao tem campo 'skills'.
+    Quando _SDK_HAS_NATIVE_FIELDS=True, esta funcao NAO e chamada — skills
+    sao passadas via campo nativo AgentDefinition.skills.
 
     Args:
         body: Corpo markdown do arquivo .md
@@ -204,6 +247,9 @@ def load_agent_definitions(agents_dir: str) -> dict:
 
     Cada arquivo .md com frontmatter valido gera uma entrada no dict.
     Arquivos com erro sao logados e ignorados (nao bloqueiam os demais).
+
+    SDK >= 0.1.49: skills passadas via AgentDefinition.skills (nativo).
+    SDK < 0.1.49: skills injetadas como texto no prompt (fallback).
 
     Args:
         agents_dir: Caminho para o diretorio .claude/agents/
@@ -258,23 +304,42 @@ def load_agent_definitions(agents_dir: str) -> dict:
             model = _map_model(frontmatter.get("model"))
             tools = _parse_tools(frontmatter.get("tools"))
             skills_str = frontmatter.get("skills")
+            skills_list = _parse_skills(skills_str)
 
-            # Prompt = corpo markdown + skills disponiveis
-            prompt = _build_prompt_with_skills(body, skills_str)
+            # Prompt: nativo (SDK >= 0.1.49) ou fallback (texto no prompt)
+            if _SDK_HAS_NATIVE_FIELDS:
+                # SDK carrega skills nativamente via AgentDefinition.skills
+                prompt = body
+            else:
+                # Fallback: injetar skills como texto no prompt
+                prompt = _build_prompt_with_skills(body, skills_str)
 
             # Construir AgentDefinition
-            agent_def = AgentDefinition(
-                description=description,
-                prompt=prompt,
-                tools=tools,
-                model=model,
-            )
+            agent_kwargs = {
+                "description": description,
+                "prompt": prompt,
+                "tools": tools,
+                "model": model,
+            }
+
+            # Campos nativos do SDK >= 0.1.49
+            if _SDK_HAS_NATIVE_FIELDS and skills_list:
+                agent_kwargs["skills"] = skills_list
+
+            agent_def = AgentDefinition(**agent_kwargs)
 
             agents[name] = agent_def
 
+            # Log com indicacao de skills nativas vs injetadas
+            skills_mode = (
+                f"native:{skills_list}"
+                if _SDK_HAS_NATIVE_FIELDS and skills_list
+                else f"injected:{skills_str}" if skills_str else "none"
+            )
             logger.debug(
                 f"[AGENT_LOADER] Carregado: {name} | "
                 f"model={model} | tools={tools} | "
+                f"skills={skills_mode} | "
                 f"prompt_len={len(prompt)} chars"
             )
 
@@ -286,7 +351,8 @@ def load_agent_definitions(agents_dir: str) -> dict:
 
     if agents:
         logger.info(
-            f"[AGENT_LOADER] {len(agents)} agents carregados: {list(agents.keys())}"
+            f"[AGENT_LOADER] {len(agents)} agents carregados: {list(agents.keys())} "
+            f"(skills={'native' if _SDK_HAS_NATIVE_FIELDS else 'text-injected'})"
         )
 
     return agents

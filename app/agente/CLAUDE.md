@@ -358,6 +358,9 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - **`effort` field nativo**: `ClaudeAgentOptions.effort` (Literal["low"|"medium"|"high"|"max"]) — substituiu `max_thinking_tokens` (deprecated)
 - **`RateLimitEvent`** (0.1.50): Detecta rate limits com status (`allowed_warning`, `rejected`), utilizacao e tempo de reset. Pipeline 3-layer: client.py → routes.py → chat.js (toast).
 - **`HookMatcher.timeout`** (0.1.50): Timeout granular por hook. `UserPromptSubmit` usa 120s (memorias + semantic search). Demais usam default SDK.
+- **`AgentDefinition.skills`** (0.1.49): Skills nativas no subagente. `agent_loader.py` detecta suporte via `_SDK_HAS_NATIVE_FIELDS` e passa skills como campo nativo em vez de injetar texto no prompt. Fallback automatico para SDK < 0.1.49.
+- **`AgentDefinition.mcpServers`** (0.1.49, NAO usado): MCP servers por agente. Apenas para servers stdio/sse/http EXTERNOS. Os 6 MCP servers in-process sao herdados via tool inheritance — `mcpServers` nao funciona para eles.
+- **`AgentDefinition.memory`** (0.1.49, NAO usado): Escopo de memoria CLI do subagente. Conflita com sistema custom `mcp__memory__*` (PostgreSQL). Reservado para avaliacao futura.
 - **Session Management APIs** (0.1.50, NAO usadas): `list_sessions()`, `get_session_info()`, `get_session_messages()`, `rename_session()`, `tag_session()` — operam em JSONL do CLI.
 - **MCP Runtime Control** (0.1.50, NAO usadas): `get_mcp_status()`, `reconnect_mcp_server()`, `toggle_mcp_server()` — requerem ClaudeSDKClient.
 
