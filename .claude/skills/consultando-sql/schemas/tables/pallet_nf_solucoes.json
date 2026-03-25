@@ -155,27 +155,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_odoo_status",
-      "columns": [
-        "odoo_status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_tipo",
-      "columns": [
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
-      "columns": [
-        "nf_remessa_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_solucao_confirmado",
       "columns": [
         "confirmado",
@@ -217,6 +196,27 @@
       "columns": [
         "tipo",
         "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
+      "columns": [
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_odoo_status",
+      "columns": [
+        "odoo_status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_tipo",
+      "columns": [
+        "tipo"
       ],
       "unique": false
     }

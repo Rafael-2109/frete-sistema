@@ -137,16 +137,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_subcontratos_transportadora_id",
+      "name": "ix_carvia_subcontratos_cte_numero",
       "columns": [
-        "transportadora_id"
+        "cte_numero"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_cte_numero",
+      "name": "ix_carvia_subcontratos_transportadora_id",
       "columns": [
-        "cte_numero"
+        "transportadora_id"
       ],
       "unique": false
     },

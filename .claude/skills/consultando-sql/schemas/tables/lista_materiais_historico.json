@@ -106,17 +106,17 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_cod_produto_componente",
-      "columns": [
-        "cod_produto_componente"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_historico_produto_data",
       "columns": [
         "cod_produto_produzido",
         "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_cod_produto_componente",
+      "columns": [
+        "cod_produto_componente"
       ],
       "unique": false
     },

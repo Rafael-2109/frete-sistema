@@ -89,6 +89,13 @@
   ],
   "indices": [
     {
+      "name": "idx_picking_rec_partner",
+      "columns": [
+        "odoo_partner_name"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_picking_rec_partner_cnpj",
       "columns": [
         "odoo_partner_cnpj"
@@ -128,13 +135,6 @@
       "columns": [
         "company_id",
         "state"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_partner",
-      "columns": [
-        "odoo_partner_name"
       ],
       "unique": false
     }
