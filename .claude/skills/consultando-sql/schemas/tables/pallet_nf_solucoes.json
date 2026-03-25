@@ -162,10 +162,10 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_confirmado",
+      "name": "idx_nf_solucao_emitente",
       "columns": [
-        "confirmado",
-        "vinculacao"
+        "cnpj_emitente",
+        "tipo"
       ],
       "unique": false
     },
@@ -177,10 +177,10 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_emitente",
+      "name": "idx_nf_solucao_tipo_vinculacao",
       "columns": [
-        "cnpj_emitente",
-        "tipo"
+        "tipo",
+        "vinculacao"
       ],
       "unique": false
     },
@@ -199,9 +199,9 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_tipo_vinculacao",
+      "name": "idx_nf_solucao_confirmado",
       "columns": [
-        "tipo",
+        "confirmado",
         "vinculacao"
       ],
       "unique": false

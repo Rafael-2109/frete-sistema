@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 162,
+  "total_tabelas": 163,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -445,6 +445,15 @@
         "nf_id",
         "codigo_produto",
         "descricao"
+      ]
+    },
+    {
+      "name": "carvia_nf_veiculos",
+      "description": "Tabela carvia_nf_veiculos",
+      "key_fields": [
+        "nf_id",
+        "chassi",
+        "modelo"
       ]
     },
     {

@@ -1,0 +1,62 @@
+{
+  "name": "carvia_nf_veiculos",
+  "description": "Tabela carvia_nf_veiculos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id",
+      "nullable": false
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "modelo",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "ano",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "numero_motor",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_id",
+      "references": "carvia_nfs.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_nf_veiculos_nf_id",
+      "columns": [
+        "nf_id"
+      ],
+      "unique": false
+    }
+  ]
+}
