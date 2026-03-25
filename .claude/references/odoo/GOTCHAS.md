@@ -47,7 +47,7 @@ entidade = db.session.get(MinhaEntidade, entidade_id)
 |--------------|--------|---------------|
 | `purchase_ids` | dfe | `purchase_id` (many2one → purchase.order, retorna `[id, 'name']` ou `False`) |
 | `nfe_infnfe_dest_xnome` | dfe | NAO EXISTE - buscar via `res.partner` pelo CNPJ |
-| `reserved_uom_qty` | stock.move.line | `quantity` (reservado) ou `qty_done` (realizado) |
+| `reserved_uom_qty` | stock.move.line | `quantity` (reservado) ou `qty_done` (realizado). **CRITICO: para preencher quantidade feita, usar `qty_done`, NAO `quantity`** |
 | `lines_ids` | dfe | NAO EXISTE - buscar via `dfe.line` com filtro `dfe_id` |
 | `odoo.execute()` | OdooConnection | `odoo.execute_kw()` |
 

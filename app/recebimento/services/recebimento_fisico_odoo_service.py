@@ -277,6 +277,7 @@ class RecebimentoFisicoOdooService:
                     # Primeira entrada: atualizar line existente
                     line = existing_lines[0]
                     write_data = {
+                        'qty_done': float(lote.quantidade),
                         'quantity': float(lote.quantidade),
                     }
                     write_data.update(lot_data)
@@ -303,6 +304,7 @@ class RecebimentoFisicoOdooService:
                         'picking_id': recebimento.odoo_picking_id,
                         'product_id': product_id,
                         'product_uom_id': ref_line['product_uom_id'][0] if ref_line['product_uom_id'] else None,
+                        'qty_done': float(lote.quantidade),
                         'quantity': float(lote.quantidade),
                         'location_id': ref_line['location_id'][0] if ref_line['location_id'] else None,
                         'location_dest_id': ref_line['location_dest_id'][0] if ref_line['location_dest_id'] else None,

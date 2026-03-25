@@ -2369,7 +2369,10 @@ class RecebimentoLfOdooService:
 
             # Preencher primeira move_line com lote e quantidade total
             first_line = product_lines[0]
-            write_data = {'quantity': float(lote_info.quantidade)}
+            write_data = {
+                'qty_done': float(lote_info.quantidade),
+                'quantity': float(lote_info.quantidade),
+            }
             if lot_id:
                 write_data['lot_id'] = lot_id
             elif lote_info.lote_nome:
@@ -2380,7 +2383,7 @@ class RecebimentoLfOdooService:
 
             # Zerar move_lines extras (evita duplicacao de quantidade)
             for extra_line in product_lines[1:]:
-                odoo.write('stock.move.line', extra_line['id'], {'quantity': 0})
+                odoo.write('stock.move.line', extra_line['id'], {'qty_done': 0, 'quantity': 0})
                 logger.debug(f"    Move line {extra_line['id']}: zerada (extra)")
 
         # 4. Aprovar quality checks
@@ -3461,7 +3464,10 @@ class RecebimentoLfOdooService:
                 # Buscar/criar stock.lot na company CD
                 lot_id_cd = self._resolver_lote_cd(odoo, lote_info)
 
-                write_data = {'quantity': float(lote_info.quantidade)}
+                write_data = {
+                    'qty_done': float(lote_info.quantidade),
+                    'quantity': float(lote_info.quantidade),
+                }
                 if lot_id_cd:
                     write_data['lot_id'] = lot_id_cd
                 elif lote_info.lote_nome:
@@ -4053,6 +4059,7 @@ class RecebimentoLfOdooService:
                     # Primeira entrada: atualizar line existente
                     line = existing_lines[0]
                     write_data = {
+                        'qty_done': float(qty),
                         'quantity': float(qty),
                     }
                     write_data.update(lot_data)
@@ -4079,6 +4086,7 @@ class RecebimentoLfOdooService:
                         'picking_id': picking_id,
                         'product_id': product_id,
                         'product_uom_id': ref_line['product_uom_id'][0] if ref_line['product_uom_id'] else None,
+                        'qty_done': float(qty),
                         'quantity': float(qty),
                         'location_id': ref_line['location_id'][0] if ref_line['location_id'] else None,
                         'location_dest_id': ref_line['location_dest_id'][0] if ref_line['location_dest_id'] else None,
@@ -4173,24 +4181,29 @@ class RecebimentoLfOdooService:
             test_type = check.get('test_type', 'passfail')
 
             try:
-                if test_type == 'measure':
-                    odoo.write('quality.check', check_id, {'measure': 0})
-                    try:
-                        odoo.execute_kw('quality.check', 'do_measure', [[check_id]])
-                    except Exception as e:
-                        if 'cannot marshal None' not in str(e):
-                            raise
-                else:
-                    try:
-                        odoo.execute_kw('quality.check', 'do_pass', [[check_id]])
-                    except Exception as e:
-                        if 'cannot marshal None' not in str(e):
-                            raise
+                # Para LF, aprovamos TUDO via do_pass independente do test_type.
+                # do_measure com valor 0 causa FAIL quando tolerancia > 0,
+                # gerando erro interno em stock.quant (product_id obrigatorio).
+                try:
+                    odoo.execute_kw('quality.check', 'do_pass', [[check_id]])
+                except Exception as e:
+                    if 'cannot marshal None' not in str(e):
+                        raise
 
-                logger.debug(f"    QC {check_id} ({test_type}): aprovado")
+                logger.debug(f"    QC {check_id} ({test_type}): aprovado via do_pass")
 
             except Exception as e:
-                logger.error(f"    Erro no quality check {check_id}: {e}")
+                logger.error(f"    Erro no quality check {check_id} (test_type={test_type}): {e}")
+                # Buscar detalhes do QC para diagnostico
+                try:
+                    qc_detail = odoo.execute_kw(
+                        'quality.check', 'read', [[check_id]],
+                        {'fields': ['product_id', 'picking_id', 'lot_line_id']}
+                    )
+                    if qc_detail:
+                        logger.error(f"    QC {check_id} detail: {qc_detail[0]}")
+                except Exception:
+                    pass
                 raise
 
     def _criar_movimentacoes_estoque(self, odoo):

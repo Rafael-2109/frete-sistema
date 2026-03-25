@@ -885,6 +885,190 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
         }
 
 
+# =============================================================================
+# T3: MÉTRICAS DE SAÚDE DO ROTEAMENTO
+# =============================================================================
+
+def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Métricas de saúde do roteamento do agente — custo $0 (zero LLM).
+
+    Mede:
+    - Taxa de ambiguidade (% sessões com AskUserQuestion)
+    - Sessões struggling (muitas msgs, poucos tools)
+    - Distribuição de skills
+    - Correções e memórias mais corrigidas
+    - Estado da instrumentação
+    """
+    try:
+        from ..models import AgentSession, AgentMemory
+        from app import db
+        from sqlalchemy import text as sql_text
+
+        now = agora_utc_naive()
+        since = now - timedelta(days=days)
+
+        # ── Filtro base ──
+        base_q = AgentSession.query.filter(AgentSession.created_at >= since)
+        if user_id:
+            base_q = base_q.filter(AgentSession.user_id == user_id)
+
+        total_sessions = base_q.count()
+        if total_sessions == 0:
+            return {'total_sessions': 0, 'period_days': days, 'error': 'Sem sessões no período'}
+
+        # ── Taxa de ambiguidade (AskUserQuestion nos summaries) ──
+        sessions_askuser = base_q.filter(
+            AgentSession.summary.isnot(None),
+            AgentSession.summary['ferramentas_usadas'].astext.contains('AskUserQuestion'),
+        ).count()
+
+        sessions_com_skill = base_q.filter(
+            AgentSession.summary.isnot(None),
+            AgentSession.summary['ferramentas_usadas'].astext.contains('Skill'),
+        ).count()
+
+        sessions_com_summary = base_q.filter(
+            AgentSession.summary.isnot(None),
+        ).count()
+
+        # ── Sessões struggling (muitas msgs, poucos tools) ──
+        struggling_rows = db.session.execute(sql_text("""
+            SELECT
+                s.id, s.user_id, s.message_count, s.created_at::date as data,
+                LEFT(s.data->'messages'->0->>'content', 120) as primeira_msg,
+                jsonb_array_length(COALESCE(s.summary->'ferramentas_usadas', '[]'::jsonb)) as n_tools
+            FROM agent_sessions s
+            WHERE s.message_count >= 15
+            AND s.summary IS NOT NULL
+            AND jsonb_array_length(COALESCE(s.summary->'ferramentas_usadas', '[]'::jsonb)) <= 2
+            AND s.created_at >= :since
+            ORDER BY s.message_count DESC
+            LIMIT 10
+        """), {'since': since}).fetchall()
+
+        struggling = [
+            {
+                'id': r[0], 'user_id': r[1], 'message_count': r[2],
+                'data': str(r[3]), 'primeira_msg': r[4], 'n_tools': r[5],
+            }
+            for r in struggling_rows
+        ]
+
+        # ── Distribuição de skills (top 15) ──
+        skill_rows = db.session.execute(sql_text("""
+            SELECT tool_name, COUNT(*) as vezes
+            FROM (
+                SELECT jsonb_array_elements_text(summary->'ferramentas_usadas') as tool_name
+                FROM agent_sessions
+                WHERE summary IS NOT NULL
+                AND summary->'ferramentas_usadas' IS NOT NULL
+                AND created_at >= :since
+            ) sub
+            GROUP BY tool_name
+            ORDER BY vezes DESC
+            LIMIT 15
+        """), {'since': since}).fetchall()
+
+        skill_distribution = [{'tool': r[0], 'count': r[1]} for r in skill_rows]
+
+        # ── Correções admin ──
+        corrections = AgentMemory.query.filter(
+            AgentMemory.path.like('/memories/corrections/%'),
+        ).order_by(AgentMemory.created_at.desc()).limit(10).all()
+
+        corrections_list = [
+            {
+                'path': c.path,
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+                'preview': (c.content or '')[:150],
+            }
+            for c in corrections
+        ]
+
+        # ── Memórias mais corrigidas ──
+        top_corrected = AgentMemory.query.filter(
+            AgentMemory.correction_count > 0,
+        ).order_by(AgentMemory.correction_count.desc()).limit(5).all()
+
+        top_corrected_list = [
+            {
+                'path': m.path,
+                'correction_count': m.correction_count,
+                'usage_count': m.usage_count,
+                'importance_score': round(m.importance_score, 2) if m.importance_score else 0,
+            }
+            for m in top_corrected
+        ]
+
+        # ── Tópicos mais demandados ──
+        topic_rows = db.session.execute(sql_text("""
+            SELECT topic, COUNT(*) as freq
+            FROM (
+                SELECT jsonb_array_elements_text(summary->'topicos_abordados') as topic
+                FROM agent_sessions
+                WHERE summary IS NOT NULL
+                AND summary->'topicos_abordados' IS NOT NULL
+                AND created_at >= :since
+            ) sub
+            GROUP BY topic
+            ORDER BY freq DESC
+            LIMIT 15
+        """), {'since': since}).fetchall()
+
+        topics = [{'topic': r[0], 'count': r[1]} for r in topic_rows]
+
+        # ── Instrumentação ──
+        inst_correction_count = AgentMemory.query.filter(AgentMemory.correction_count > 0).count()
+        inst_effective_count = AgentMemory.query.filter(AgentMemory.effective_count > 0).count()
+        inst_usage_count = AgentMemory.query.filter(AgentMemory.usage_count > 0).count()
+
+        from ..models import AgentMemoryEntityRelation
+        inst_resolves_to = AgentMemoryEntityRelation.query.filter_by(
+            relation_type='resolves_to',
+        ).count()
+
+        instrumentacao = {
+            'correction_count_ativo': inst_correction_count > 0,
+            'resolves_to_ativo': inst_resolves_to > 0,
+            'effective_count_ativo': inst_effective_count > 0,
+            'usage_count_ativo': inst_usage_count > 0,
+        }
+        campos_ativos = sum(1 for v in instrumentacao.values() if v)
+
+        # ── Health Score do Routing ──
+        taxa_askuser = round(100 * sessions_askuser / max(sessions_com_summary, 1), 1)
+        n_struggling = len(struggling)
+
+        score_inst = min(40, (campos_ativos / max(len(instrumentacao), 1)) * 40)
+        score_amb = 30 if taxa_askuser < 5 else (20 if taxa_askuser < 15 else (10 if taxa_askuser < 30 else 0))
+        score_str = 30 if n_struggling == 0 else (20 if n_struggling < 3 else (10 if n_struggling < 10 else 0))
+        health_score = round(score_inst + score_amb + score_str)
+
+        return {
+            'period_days': days,
+            'total_sessions': total_sessions,
+            'sessions_com_summary': sessions_com_summary,
+            'health_score': health_score,
+            'ambiguidade': {
+                'sessions_askuser': sessions_askuser,
+                'sessions_com_skill': sessions_com_skill,
+                'taxa_askuser_pct': taxa_askuser,
+                'taxa_skill_pct': round(100 * sessions_com_skill / max(sessions_com_summary, 1), 1),
+            },
+            'struggling': struggling,
+            'skill_distribution': skill_distribution,
+            'corrections': corrections_list,
+            'top_corrected': top_corrected_list,
+            'topics': topics,
+            'instrumentacao': instrumentacao,
+        }
+
+    except Exception as e:
+        logger.error(f"[INSIGHTS] Erro ao calcular routing metrics: {e}")
+        return {'total_sessions': 0, 'error': str(e)}
+
+
 def _compute_capdo_quality_metrics(
     base_filter: list,
     total_memories: int,

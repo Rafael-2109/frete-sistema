@@ -154,6 +154,9 @@
       <button class="insights-tab" onclick="switchTab('users')">
         <i class="fas fa-users"></i> Usuarios
       </button>
+      <button class="insights-tab" onclick="switchTab('routing')">
+        <i class="fas fa-route"></i> Roteamento
+      </button>
     </div>
 
     <!-- Tab: Sessoes -->
@@ -258,6 +261,77 @@
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- Tab: Roteamento -->
+    <div class="tab-content" id="tab-routing">
+
+      <!-- Health Score Routing -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+            <span style="font-size:2rem; font-weight:700;" id="routingHealthScore">&mdash;</span>
+            <span style="font-size:0.75rem; color:var(--text-muted);">/100 SAUDE DO ROUTING</span>
+          </div>
+          <div style="display:flex; gap:1.5rem; flex-wrap:wrap; font-size:0.85rem; color:var(--text-muted);">
+            <span><i class="fas fa-question-circle"></i> AskUser: <strong id="routingAskUserPct">&mdash;</strong></span>
+            <span><i class="fas fa-exclamation-triangle"></i> Struggling: <strong id="routingStruggling">&mdash;</strong></span>
+            <span><i class="fas fa-tools"></i> c/ Skill: <strong id="routingSkillPct">&mdash;</strong></span>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h5><i class="fas fa-plug"></i> Instrumentacao</h5>
+          <div id="routingInstrumentacao" style="font-size:0.85rem; line-height:2;"></div>
+        </div>
+      </div>
+
+      <!-- Skills + Topicos -->
+      <div class="charts-grid">
+        <div class="table-card">
+          <h5><i class="fas fa-layer-group"></i> Skills Mais Usadas</h5>
+          <table class="insights-table">
+            <thead><tr><th>Skill/Tool</th><th>Vezes</th></tr></thead>
+            <tbody id="routingSkillsBody"></tbody>
+          </table>
+        </div>
+        <div class="table-card">
+          <h5><i class="fas fa-tags"></i> Topicos Mais Demandados</h5>
+          <table class="insights-table">
+            <thead><tr><th>Topico</th><th>Freq</th></tr></thead>
+            <tbody id="routingTopicsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Struggling + Correcoes -->
+      <div class="charts-grid">
+        <div class="table-card">
+          <h5><i class="fas fa-frown"></i> Sessoes Struggling</h5>
+          <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem;">Muitas mensagens, poucos tools = routing perdido</p>
+          <table class="insights-table">
+            <thead><tr><th>Data</th><th>User</th><th>Msgs</th><th>Tools</th><th>Primeira Msg</th></tr></thead>
+            <tbody id="routingStrugglingBody"></tbody>
+          </table>
+        </div>
+        <div class="table-card">
+          <h5><i class="fas fa-graduation-cap"></i> Correcoes Admin</h5>
+          <table class="insights-table">
+            <thead><tr><th>Data</th><th>Path</th></tr></thead>
+            <tbody id="routingCorrectionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Memorias mais corrigidas -->
+      <div class="table-card" id="routingTopCorrectedCard" style="display:none;">
+        <h5><i class="fas fa-exclamation-circle"></i> Memorias Mais Corrigidas</h5>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem;">Memorias com correction_count &gt; 0 indicam conteudo problematico</p>
+        <table class="insights-table">
+          <thead><tr><th>Path</th><th>Correcoes</th><th>Usos</th><th>Importancia</th></tr></thead>
+          <tbody id="routingTopCorrectedBody"></tbody>
+        </table>
+      </div>
+
     </div>
 
   </div>
@@ -446,6 +520,9 @@ async function loadInsights() {
   const content = document.getElementById('insightsContent');
   const emptyState = document.getElementById('emptyState');
 
+  // Reset routing cache so it reloads with new period
+  window._routingLoaded = false;
+
   refreshBtn.classList.add('loading');
   loadingState.style.display = 'flex';
   content.style.display = 'none';
@@ -474,6 +551,11 @@ async function loadInsights() {
 
     loadingState.style.display = 'none';
     content.style.display = 'block';
+
+    // Reload routing if tab is active
+    if (document.getElementById('tab-routing')?.classList.contains('active')) {
+      loadRoutingData();
+    }
 
   } catch (err) {
     console.error('[INSIGHTS] Erro:', err);
@@ -779,6 +861,11 @@ function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelector(`.insights-tab[onclick="switchTab('${tabName}')"]`)?.classList.add('active');
   document.getElementById(`tab-${tabName}`)?.classList.add('active');
+
+  // Lazy-load routing data on first switch
+  if (tabName === 'routing' && !window._routingLoaded) {
+    loadRoutingData();
+  }
 }
 
 // ── Sessions Table ──
@@ -1304,6 +1391,99 @@ function _resetBtn(btnOrId, html) {
   if (!btn) return;
   btn.disabled = false;
   btn.innerHTML = html;
+}
+
+// ── Routing Tab ──
+async function loadRoutingData() {
+  const days = document.getElementById('periodSelect')?.value || 30;
+  try {
+    const res = await fetch(`/agente/api/insights/routing?days=${days}`);
+    const json = await res.json();
+    if (!json.success || !json.data) return;
+    window._routingLoaded = true;
+    renderRoutingTab(json.data);
+  } catch (e) {
+    console.error('Routing load error:', e);
+  }
+}
+
+function renderRoutingTab(d) {
+  // Health score
+  const el = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  el('routingHealthScore', d.health_score ?? '—');
+  el('routingAskUserPct', (d.ambiguidade?.taxa_askuser_pct ?? '—') + '%');
+  el('routingStruggling', d.struggling?.length ?? 0);
+  el('routingSkillPct', (d.ambiguidade?.taxa_skill_pct ?? '—') + '%');
+
+  // Color health score
+  const hs = document.getElementById('routingHealthScore');
+  if (hs) {
+    const score = d.health_score || 0;
+    hs.style.color = score >= 70 ? 'var(--success)' : score >= 40 ? 'var(--warning)' : 'var(--danger)';
+  }
+
+  // Instrumentação
+  const instDiv = document.getElementById('routingInstrumentacao');
+  if (instDiv && d.instrumentacao) {
+    const labels = {
+      correction_count_ativo: 'correction_count',
+      resolves_to_ativo: 'resolves_to (KG)',
+      effective_count_ativo: 'effective_count',
+      usage_count_ativo: 'usage_count',
+    };
+    instDiv.innerHTML = Object.entries(d.instrumentacao).map(([k, v]) => {
+      const icon = v ? '<i class="fas fa-check-circle" style="color:var(--success);"></i>' :
+                       '<i class="fas fa-times-circle" style="color:var(--danger);"></i>';
+      return `${icon} ${labels[k] || k}: <strong>${v ? 'Ativo' : 'Morto'}</strong><br>`;
+    }).join('');
+  }
+
+  // Skills table
+  const skillsBody = document.getElementById('routingSkillsBody');
+  if (skillsBody && d.skill_distribution) {
+    skillsBody.innerHTML = d.skill_distribution.map(s =>
+      `<tr><td>${s.tool}</td><td>${s.count}</td></tr>`
+    ).join('');
+  }
+
+  // Topics table
+  const topicsBody = document.getElementById('routingTopicsBody');
+  if (topicsBody && d.topics) {
+    topicsBody.innerHTML = d.topics.map(t =>
+      `<tr><td>${t.topic}</td><td>${t.count}</td></tr>`
+    ).join('');
+  }
+
+  // Struggling table
+  const strBody = document.getElementById('routingStrugglingBody');
+  if (strBody) {
+    if (d.struggling?.length) {
+      strBody.innerHTML = d.struggling.map(s =>
+        `<tr><td>${s.data}</td><td>${s.user_id}</td><td>${s.message_count}</td><td>${s.n_tools}</td>` +
+        `<td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.primeira_msg || ''}</td></tr>`
+      ).join('');
+    } else {
+      strBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Nenhuma sessao struggling</td></tr>';
+    }
+  }
+
+  // Corrections table
+  const corrBody = document.getElementById('routingCorrectionsBody');
+  if (corrBody && d.corrections) {
+    corrBody.innerHTML = d.corrections.map(c =>
+      `<tr><td>${(c.created_at || '').slice(0, 10)}</td><td>${c.path?.split('/').pop() || c.path}</td></tr>`
+    ).join('') || '<tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Nenhuma correcao</td></tr>';
+  }
+
+  // Top corrected memories
+  const tcCard = document.getElementById('routingTopCorrectedCard');
+  const tcBody = document.getElementById('routingTopCorrectedBody');
+  if (tcCard && tcBody && d.top_corrected?.length) {
+    tcCard.style.display = 'block';
+    tcBody.innerHTML = d.top_corrected.map(m =>
+      `<tr><td>${m.path?.split('/').pop() || m.path}</td><td>${m.correction_count}</td><td>${m.usage_count}</td><td>${m.importance_score}</td></tr>`
+    ).join('');
+  }
 }
 
 // ── Init ──

@@ -2139,6 +2139,15 @@ def api_admin_save_correction():
 
         db.session.commit()
 
+        # Incrementar correction_count nas memórias recentemente injetadas de TODOS os usuários
+        # (correção empresa afeta todos)
+        try:
+            from .tools.memory_mcp_tool import _track_correction_feedback
+            # Para correções empresa, aplicar ao admin que criou (user_id do contexto)
+            _track_correction_feedback(current_user.id, path, correction)
+        except Exception as fb_err:
+            logger.debug(f"[AGENTE] Correction tracking admin falhou (ignorado): {fb_err}")
+
         # Embedding (best-effort, nao bloqueia)
         try:
             _embed_memory_best_effort(0, path, content)
@@ -2872,6 +2881,13 @@ def api_feedback():
                 db.session.commit()
                 result['memory_path'] = path
 
+                # Incrementar correction_count nas memórias recentemente injetadas
+                try:
+                    from .tools.memory_mcp_tool import _track_correction_feedback
+                    _track_correction_feedback(user_id, path, correction_text)
+                except Exception as fb_err:
+                    logger.debug(f"[FEEDBACK] Correction tracking falhou (ignorado): {fb_err}")
+
         elif feedback_type == 'preference':
             pref_key = feedback_data.get('key', 'general')
             pref_value = feedback_data.get('value', '')
@@ -3172,6 +3188,48 @@ def api_insights_memory():
 
     except Exception as e:
         logger.error(f"[AGENTE] Erro nas metricas de memoria: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# =============================================================================
+# API - INSIGHTS: ROUTING HEALTH
+# =============================================================================
+
+@agente_bp.route('/api/insights/routing', methods=['GET'])
+@login_required
+def api_insights_routing():
+    """
+    Métricas de saúde do roteamento — custo $0.
+
+    GET /agente/api/insights/routing?days=30&user_id=123
+    """
+    from .config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        days = request.args.get('days', 30, type=int)
+        days = min(max(days, 1), 90)
+        user_id = request.args.get('user_id', None, type=int)
+
+        from .services.insights_service import get_routing_metrics
+
+        data = get_routing_metrics(days=days, user_id=user_id)
+
+        return jsonify({
+            'success': True,
+            'data': data,
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro nas metricas de routing: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

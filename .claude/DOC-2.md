@@ -81,3 +81,18 @@ A known but unsupported hack involves having subagents invoke `claude -p` throug
 ## Conclusion
 
 The Claude Agent SDK's prohibition on nested subagent delegation is a deliberate architectural choice, enforced at both the type level (`AgentDefinition` lacks an `agents` parameter) and at runtime (the `Agent` tool is excluded from subagent contexts). No recursion guards exist because none are needed — the tool simply isn't available. The design reflects a clear philosophy: **subagents are disposable, isolated workers that receive a prompt and return a result**, not autonomous orchestrators capable of building their own agent hierarchies. For practitioners, the practical implication is that all orchestration logic must live in the parent agent, which chains subagent calls sequentially or fans them out in parallel. The cost multiplier of **4–7× for subagents** (and up to **15× for Agent Teams**) means that even single-level delegation demands careful token budgeting. Anyone designing multi-step pipelines with this SDK should plan for flat hierarchies with explicit parent-mediated handoffs rather than expecting recursive delegation to emerge naturally.
+
+
+
+Inclusive, os casos que possuem NF gravada, na tela de embarques/{id}, na coluna de         
+  "STATUS/AÇÕES" o "Badge" está ficando como "Pendente" ao invés de "OK".                     
+  Acredito que isso ainda não tinhamos mexido, mas o gatilho para gerar e persistir o         
+  alerta, poderá ser esse campo + data_embarque pois ambos definem o critério do alerta:      
+  1- NF preenchida                                                                            
+  2- data_embarque = Tem registro na portaria vinculado a esse embarque com "Saida" gravada.  
+                                                                                              
+  Os locais que teriamos que mexer seriam                                                     
+  1- Os critérios do "Alerta" (data_embarque + badge "Pendente")
+  2- Os critérios desse badge "Pendente" localizados em embarques/{id}, na coluna de         
+  "STATUS/AÇÕES"
+  3- 
