@@ -133,6 +133,13 @@ def cidades_por_uf(uf):
     cidades = Cidade.query.filter_by(uf=uf).order_by(Cidade.nome).all()
     return jsonify([cidade.nome for cidade in cidades])
 
+@localidades_bp.route('/ajax/cidades_por_uf_ibge/<uf>')
+@login_required
+def cidades_por_uf_ibge(uf):
+    """Retorna cidades com codigo IBGE para autocomplete CarVia."""
+    cidades = Cidade.query.filter_by(uf=uf).order_by(Cidade.nome).all()
+    return jsonify([{'nome': c.nome, 'codigo_ibge': c.codigo_ibge} for c in cidades])
+
 @localidades_bp.route('/ajax/microrregioes_por_uf/<uf>')
 @login_required
 def microrregioes_por_uf(uf):

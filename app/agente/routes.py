@@ -1271,6 +1271,39 @@ EFFECTIVENESS_WORD_OVERLAP_THRESHOLD = 0.35
 EFFECTIVENESS_RESPONSE_MAX_CHARS = 3000
 
 
+def _record_routing_resolution(user_id: int, question_text: str, answer_text: str) -> None:
+    """
+    Registra resolução de ambiguidade de routing no Knowledge Graph.
+    Cria relação resolves_to: termo_ambíguo → domínio/skill resolvido.
+    Best-effort, nunca propaga exceções.
+    """
+    try:
+        from .services.knowledge_graph_service import _upsert_entity, _upsert_relation
+        from app import db
+
+        with db.engine.connect() as conn:
+            # Extrair termo ambíguo da pergunta (heurística: texto entre "Detectei" e ".")
+            import re
+            term_match = re.search(r'[Dd]etectei\s+(.+?)[.]', question_text)
+            term = term_match.group(1).strip() if term_match else question_text[:100]
+
+            # Criar/buscar entidade do termo ambíguo
+            source_id = _upsert_entity(conn, user_id, 'conceito', term)
+
+            # Criar/buscar entidade da resolução (resposta do usuário)
+            target_id = _upsert_entity(conn, user_id, 'conceito', answer_text[:100])
+
+            if source_id and target_id:
+                _upsert_relation(conn, source_id, target_id, 'resolves_to', 1.0, None)
+                conn.commit()
+                logger.info(
+                    f"[ROUTING_RESOLUTION] user_id={user_id} "
+                    f"'{term[:40]}' resolves_to '{answer_text[:40]}'"
+                )
+    except Exception as e:
+        logger.debug(f"[ROUTING_RESOLUTION] Failed: {e}")
+
+
 def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_memory_ids: list[int] = None) -> None:
     """
     Memory v2 — Feedback Loop: rastreia se memórias injetadas foram usadas.
@@ -2795,6 +2828,35 @@ def api_feedback():
         user_id = current_user.id
         result = {'processed': True, 'action': feedback_type, 'memory_path': None}
 
+        # Feedback negativo enriquecido: persistir no session data + incrementar correction_count
+        if feedback_type == 'negative':
+            try:
+                from .models import AgentSession
+                session_record = AgentSession.query.filter_by(
+                    session_id=session_id, user_id=user_id
+                ).first()
+                if session_record and session_record.data:
+                    # Registrar feedback estruturado no session data
+                    feedbacks = session_record.data.get('feedbacks', [])
+                    feedbacks.append({
+                        'type': 'negative',
+                        'context': feedback_data.get('context', '')[:500],
+                        'error_category': feedback_data.get('error_category', ''),
+                        'correction': feedback_data.get('correction', ''),
+                        'source': feedback_data.get('source', 'thumbs_down'),
+                        'timestamp': agora_utc_naive().isoformat(),
+                    })
+                    session_record.data['feedbacks'] = feedbacks
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(session_record, 'data')
+                    db.session.commit()
+                    logger.info(
+                        f"[FEEDBACK] Negativo estruturado registrado: "
+                        f"session={session_id[:8]}... category={feedback_data.get('error_category', 'none')}"
+                    )
+            except Exception as neg_err:
+                logger.debug(f"[FEEDBACK] Erro ao persistir negativo (ignorado): {neg_err}")
+
         # Salva correções e preferências diretamente
         if feedback_type == 'correction':
             correction_text = feedback_data.get('correction', '')
@@ -2909,7 +2971,10 @@ def api_user_answer():
                 'error': 'Sessão não encontrada'
             }), 403
 
-        from .sdk.pending_questions import submit_answer
+        from .sdk.pending_questions import submit_answer, get_pending_tool_input
+
+        # Capturar tool_input ANTES do submit (para detectar routing questions)
+        tool_input = get_pending_tool_input(answer_session_id)
 
         submitted = submit_answer(answer_session_id, answers)
 
@@ -2924,6 +2989,22 @@ def api_user_answer():
             f"session={answer_session_id[:8]}... "
             f"keys={list(answers.keys())}"
         )
+
+        # Best-effort: se foi pergunta de routing, registrar resolução no KG
+        try:
+            if tool_input and isinstance(tool_input, dict):
+                questions = tool_input.get('questions', [])
+                for q in questions:
+                    header = (q.get('header') or '').lower()
+                    if header in ('roteamento', 'routing'):
+                        question_text = q.get('question', '')
+                        answer_text = answers.get(question_text, '')
+                        if answer_text:
+                            _record_routing_resolution(
+                                current_user.id, question_text, answer_text
+                            )
+        except Exception as resolve_err:
+            logger.debug(f"[AGENTE] Routing resolution registro falhou (ignorado): {resolve_err}")
 
         return jsonify({
             'success': True,

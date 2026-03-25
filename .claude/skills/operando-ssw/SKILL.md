@@ -89,6 +89,11 @@ Cotar frete no SSW (002)?
   → Se coletar=S: perguntar CEP origem (local de coleta)
   → cotar_frete_ssw_002.py --cnpj-pagador X --cep-destino X --peso X --valor X [--coletar N] [--entregar S] --dry-run
   → Exibir parametros_assumidos antes de confirmar
+Cancelar CT-e autorizado (004)?
+  → cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "NF vinculada incorretamente" --dry-run
+  → OPERACAO FISCAL IRREVERSIVEL — prazo 7 dias SEFAZ
+  → Verificar antes: manifesto cancelado, mercadoria nao embarcada
+  → POP-C06: pops/POP-C06-cancelar-cte.md
 Consultar/navegar SSW (sem alterar)?
   → NAO usar esta skill. Usar acessando-ssw
 ```
@@ -131,6 +136,7 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | 11 | `exportar_todas_cidades_402.py` | 402 | Exportar CSV de cidades para TODAS as 27 UFs (batch) |
 | 12 | `agrupar_csvs.py` | — | Merge generico de CSVs (reutilizavel 402 e 408) |
 | 13 | `exportar_comissao_cidade_408.py` | 408 | Exportar CSV comissao por cidade para todas as unidades |
+| 14 | `cancelar_cte_004.py` | 004 | Cancelar CT-e autorizado (SEFAZ, irreversivel, POP-C06) |
 
 ---
 

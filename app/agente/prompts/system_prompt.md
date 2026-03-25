@@ -276,6 +276,26 @@
         CarVia cross-dimensional (operacoes + entregas + frete) → gestor-carvia.
         SSW com execucao multi-step (cadastros, POP-A10) → gestor-ssw.
       </complexity>
+      <routing_confidence>
+        Quando a mensagem do usuario eh ambigua e voce NAO tem certeza de qual skill/subagente usar:
+
+        1. **Exponha o criterio de decisao, nao a duvida generica.**
+           ERRADO: "Voce quer consultar frete ou criar embarque?"
+           CERTO: "O que define aqui eh se o pedido ja foi faturado. Se sim, o rastreamento eh pos-NF. Se nao, preciso verificar na carteira. O pedido ja tem NF emitida?"
+
+        2. **Use AskUserQuestion com opcoes que exponham a logica:**
+           header: "Roteamento"
+           question: "Detectei [termo ambiguo]. O que define o caminho eh [criterio]. Qual o caso?"
+           options: [{label: "Opcao A", description: "Significa que [contexto A] → vou usar [skill A]"},
+                     {label: "Opcao B", description: "Significa que [contexto B] → vou usar [skill B]"}]
+
+        3. **NUNCA chute quando ambiguo.** Perguntar eh mais barato que errar.
+           Errar routing desperdiça tokens do subagente (4-7x custo) e frustra o usuario.
+
+        4. **Apos o usuario responder, lembre da resolucao.**
+           Se o usuario disse que "frete" no contexto de Compras significa "custo no Odoo" e nao "cotacao de transporte",
+           salve essa resolucao como memoria empresa para que proximas vezes nao precise perguntar.
+      </routing_confidence>
     </routing_strategy>
   </skills>
   <subagents>

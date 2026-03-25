@@ -1240,7 +1240,14 @@ function createMessageElement(text, role) {
                         b.style.display = 'none';
                     }
                 });
-                showToast(rating === 'positive' ? '👍 Obrigado!' : '👎 Anotado, vou melhorar!', 2000);
+
+                if (rating === 'positive') {
+                    showToast('Obrigado!', 2000);
+                } else {
+                    showToast('Anotado!', 2000);
+                    // Mostrar formulário de correção inline (opcional, baixa fricção)
+                    showCorrectionForm(parent, text);
+                }
             });
         });
     }
@@ -1253,8 +1260,17 @@ function createMessageElement(text, role) {
  * @param {string} rating - 'positive' ou 'negative'
  * @param {string} context - Texto da mensagem avaliada
  */
-function sendFeedback(rating, context) {
+function sendFeedback(rating, context, extraData) {
     if (!sessionId) return;
+
+    const payload = {
+        session_id: sessionId,
+        type: rating,
+        data: { context: (context || '').substring(0, 500) }
+    };
+    if (extraData) {
+        Object.assign(payload.data, extraData);
+    }
 
     fetch('/agente/api/feedback', {
         method: 'POST',
@@ -1262,11 +1278,7 @@ function sendFeedback(rating, context) {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
         },
-        body: JSON.stringify({
-            session_id: sessionId,
-            type: rating,
-            data: { context: (context || '').substring(0, 500) }
-        })
+        body: JSON.stringify(payload)
     })
     .then(r => r.json())
     .then(data => {
@@ -1274,6 +1286,56 @@ function sendFeedback(rating, context) {
     })
     .catch(err => {
         console.error('[FEEDBACK] Erro ao enviar:', err);
+    });
+}
+
+/**
+ * Mostra formulário inline de correção após thumbs-down.
+ * Baixa fricção: o thumbs-down já foi registrado, a correção é opcional.
+ */
+function showCorrectionForm(feedbackDiv, assistantText) {
+    // Não mostrar se já tem formulário
+    if (feedbackDiv.querySelector('.correction-form')) return;
+
+    const form = document.createElement('div');
+    form.className = 'correction-form';
+    form.style.cssText = 'margin-top:8px;padding:8px;border-radius:6px;background:var(--bg-light,#f8f9fa);border:1px solid var(--border-light,#dee2e6);';
+    form.innerHTML = `
+        <div style="font-size:12px;color:var(--text-muted,#6c757d);margin-bottom:6px;">Quer explicar o erro? (opcional)</div>
+        <textarea class="correction-text" placeholder="O que você queria que o agente fizesse?"
+            style="width:100%;min-height:48px;padding:6px;border:1px solid var(--border-light,#dee2e6);border-radius:4px;font-size:13px;background:var(--bg,#fff);color:var(--text,#212529);resize:vertical;"
+        ></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+            <select class="correction-category" style="padding:4px 8px;border:1px solid var(--border-light,#dee2e6);border-radius:4px;font-size:12px;background:var(--bg,#fff);color:var(--text,#212529);">
+                <option value="">Categoria do erro</option>
+                <option value="routing">Usou ferramenta errada</option>
+                <option value="dados">Dados incorretos</option>
+                <option value="interpretacao">Entendeu errado o pedido</option>
+                <option value="outro">Outro</option>
+            </select>
+            <button class="correction-submit" style="padding:4px 12px;border:none;border-radius:4px;background:var(--primary,#0d6efd);color:#fff;font-size:12px;cursor:pointer;">Enviar</button>
+            <button class="correction-cancel" style="padding:4px 8px;border:none;background:none;color:var(--text-muted,#6c757d);font-size:12px;cursor:pointer;">Cancelar</button>
+        </div>
+    `;
+
+    feedbackDiv.after(form);
+
+    form.querySelector('.correction-submit').addEventListener('click', () => {
+        const correctionText = form.querySelector('.correction-text').value.trim();
+        const category = form.querySelector('.correction-category').value;
+        if (correctionText || category) {
+            sendFeedback('correction', assistantText, {
+                correction: correctionText,
+                error_category: category,
+                source: 'thumbs_down_enriched'
+            });
+            showToast('Correção registrada!', 2000);
+        }
+        form.remove();
+    });
+
+    form.querySelector('.correction-cancel').addEventListener('click', () => {
+        form.remove();
     });
 }
 

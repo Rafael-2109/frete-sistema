@@ -163,7 +163,8 @@
       "Skill(operando-portal-atacadao)",
       "Bash(for f:*)",
       "Bash(do echo:*)",
-      "Read(//home/rafaelnascimento/projetos/frete_sistema/**)"
+      "Read(//home/rafaelnascimento/projetos/frete_sistema/**)",
+      "Skill(operando-ssw)"
     ],
     "deny": []
   },

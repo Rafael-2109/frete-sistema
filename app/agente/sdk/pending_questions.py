@@ -81,6 +81,13 @@ def register_question(session_id: str, tool_input: Dict[str, Any]) -> PendingQue
         return pq
 
 
+def get_pending_tool_input(session_id: str) -> Optional[Dict[str, Any]]:
+    """Retorna o tool_input da pergunta pendente (para inspeção antes do submit)."""
+    with _lock:
+        pq = _pending.get(session_id)
+        return pq.tool_input if pq else None
+
+
 def submit_answer(session_id: str, answers: Dict[str, str]) -> bool:
     """
     Submete resposta do usuário. Chamado pelo endpoint HTTP.
