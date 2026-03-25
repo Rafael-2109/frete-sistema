@@ -178,13 +178,6 @@
   ],
   "indices": [
     {
-      "name": "ix_recebimento_lf_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_recebimento_lf_chave_nfe",
       "columns": [
         "chave_nfe"
@@ -192,16 +185,23 @@
       "unique": false
     },
     {
-      "name": "ix_recebimento_lf_status",
+      "name": "ix_recebimento_lf_odoo_lf_invoice_id",
       "columns": [
-        "status"
+        "odoo_lf_invoice_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_recebimento_lf_odoo_lf_invoice_id",
+      "name": "ix_recebimento_lf_odoo_dfe_id",
       "columns": [
-        "odoo_lf_invoice_id"
+        "odoo_dfe_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_recebimento_lf_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

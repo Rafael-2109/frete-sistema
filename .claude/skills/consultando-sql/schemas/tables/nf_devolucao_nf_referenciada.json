@@ -86,7 +86,7 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
+      "name": "idx_nf_ref_chave",
       "columns": [
         "chave_nf"
       ],
@@ -107,7 +107,7 @@
       "unique": false
     },
     {
-      "name": "idx_nf_ref_chave",
+      "name": "ix_nf_devolucao_nf_referenciada_chave_nf",
       "columns": [
         "chave_nf"
       ],

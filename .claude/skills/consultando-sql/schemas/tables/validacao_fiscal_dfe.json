@@ -83,16 +83,9 @@
   ],
   "indices": [
     {
-      "name": "ix_validacao_fiscal_dfe_status",
+      "name": "ix_validacao_fiscal_dfe_chave_nfe",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
-      "columns": [
-        "cnpj_fornecedor"
+        "chave_nfe"
       ],
       "unique": false
     },
@@ -111,9 +104,16 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_fiscal_dfe_chave_nfe",
+      "name": "ix_validacao_fiscal_dfe_status",
       "columns": [
-        "chave_nfe"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
       ],
       "unique": false
     }
