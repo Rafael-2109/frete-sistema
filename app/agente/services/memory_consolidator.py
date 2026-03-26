@@ -41,7 +41,15 @@ REGRAS:
 - Organize por topico (preferencias, regras, correcoes, contexto)
 - Formato: texto corrido organizado, maximo 1500 caracteres
 - Linguagem: portugues brasileiro
-- NAO adicione interpretacoes ou suposicoes — apenas o que esta escrito"""
+- NAO adicione interpretacoes ou suposicoes — apenas o que esta escrito
+
+PRIORIZACAO (essencial vs acidental):
+Antes de consolidar, classifique mentalmente cada fato:
+ESSENCIAL — se perdido, o agente cometeria erro em sessao futura
+  (correcoes, regras de negocio, armadilhas, preferencias firmes do usuario)
+ACIDENTAL — se perdido, nenhuma consequencia pratica
+  (detalhes de formatacao redundante, contexto de sessao especifica ja encerrada)
+Priorize essenciais. Acidentais podem ser omitidos se o limite de 1500 chars exigir."""
 
 # System prompt estático para verificação — prompt caching
 VERIFICATION_SYSTEM_PROMPT = """Voce eh um verificador de qualidade de consolidacao de memorias.

@@ -986,6 +986,15 @@ FILTRO ANTI-RUIDO (aplicar ANTES de incluir qualquer item):
    sao informacoes de Nivel 1 (lookup na tabela usuarios). NAO extraia.
 4. Termos do sistema: nomes de tabelas, campos, modelos ORM. Estao no codigo. NAO extraia.
 
+RACIOCINIO PRE-EXTRACAO (aplique antes de incluir cada item):
+Antes de decidir se um item merece extracao, raciocine brevemente:
+- MATERIAL: Que dados/eventos concretos aconteceram? (fatos da sessao)
+- FORMAL: Qual padrao de conhecimento isto representa? (protocolo/armadilha/heuristica)
+- EFICIENTE: Que mecanismo CAUSOU esta situacao? (por que aconteceu)
+- FINAL: Que comportamento futuro esta memoria MUDARIA? (prescricao)
+Se FINAL estiver vazio (a memoria nao mudaria nenhum comportamento), NAO extraia.
+Inclua o raciocinio brevemente no campo "descricao" — ele enriquece a prescricao.
+
 RESPONDA APENAS JSON VALIDO, sem markdown.""")
 
     return "".join(parts)

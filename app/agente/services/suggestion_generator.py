@@ -41,6 +41,13 @@ CONTEXTO DO SISTEMA:
 
 GERE um JSON array com 2-3 strings. Cada string eh uma sugestao de follow-up.
 
+RACIOCINIO PRE-SUGESTAO:
+Antes de gerar sugestoes, identifique internamente:
+- Qual era o OBJETIVO do usuario? (o que ele tentava realizar)
+- O que ficou INCOMPLETO ou nao resolvido na resposta?
+- Qual seria o proximo passo NATURAL para alguem com esse objetivo?
+Baseie suas sugestoes nesta analise, nao em templates genericos.
+
 REGRAS:
 - Cada sugestao tem NO MAXIMO 60 caracteres
 - Sugestoes devem ser DIFERENTES entre si

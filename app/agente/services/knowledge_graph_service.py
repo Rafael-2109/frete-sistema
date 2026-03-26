@@ -348,11 +348,12 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
     """
     Parse resposta do contextual retrieval (Sonnet) no formato estruturado (T3-3).
 
-    Formato esperado:
+    Formato esperado (v2 — com relevancia/confianca opcionais):
         CONTEXTO: 1-2 frases de contexto
-        ENTIDADES: tipo:nome|tipo:nome
-        RELACOES: origem>tipo>destino|origem>tipo>destino
+        ENTIDADES: tipo:nome:E|tipo:nome:A   (E=essencial, A=acidental — opcional)
+        RELACOES: origem>tipo>destino:alta    (alta/media/baixa — opcional)
 
+    Backward-compatible: formato sem flags (tipo:nome, origem>tipo>destino) continua funcionando.
     Fallback: se parse falhar, tudo vira contexto (compatibilidade T3-1).
 
     Args:
@@ -361,8 +362,8 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
     Returns:
         Tupla (contexto, entidades, relações)
         - contexto: str ou None
-        - entidades: [(tipo, nome), ...]
-        - relações: [(origem, tipo_relacao, destino), ...]
+        - entidades: [(tipo, nome), ...] — nome pode conter sufixo de relevancia
+        - relações: [(origem, tipo_relacao, destino), ...] — destino pode conter sufixo de confianca
     """
     if not text or not text.strip():
         return None, [], []
@@ -386,9 +387,17 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
             for part in raw.split('|'):
                 part = part.strip()
                 if ':' in part:
-                    parts = part.split(':', 1)
-                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-                        entities.append((parts[0].strip().lower(), parts[1].strip()))
+                    segments = part.split(':')
+                    if len(segments) >= 2 and segments[0].strip() and segments[1].strip():
+                        etype = segments[0].strip().lower()
+                        ename = segments[1].strip()
+                        # v2: relevancia flag (E=essencial, A=acidental) — opcional
+                        relevance = segments[2].strip().upper() if len(segments) >= 3 else None
+                        if relevance in ('E', 'A'):
+                            # Sufixar relevancia ao nome para downstream processing
+                            # KG save_entities pode usar isso para ajustar mention_count
+                            ename = f"{ename}:{relevance}"
+                        entities.append((etype, ename))
 
         elif line.upper().startswith('RELACOES:') or line.upper().startswith('RELAÇÕES:'):
             raw = line.split(':', 1)[1].strip() if ':' in line else ''
@@ -399,10 +408,16 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
                 if '>' in part:
                     parts = part.split('>')
                     if len(parts) == 3 and all(p.strip() for p in parts):
+                        destino = parts[2].strip()
+                        # v2: confianca suffix (alta/media/baixa) — opcional
+                        if ':' in destino:
+                            dest_parts = destino.rsplit(':', 1)
+                            if dest_parts[1].strip().lower() in ('alta', 'media', 'baixa'):
+                                destino = f"{dest_parts[0].strip()}:{dest_parts[1].strip().lower()}"
                         relations.append((
                             parts[0].strip(),
                             parts[1].strip().lower(),
-                            parts[2].strip(),
+                            destino,
                         ))
 
     # Fallback: se contexto não encontrado, tudo é contexto

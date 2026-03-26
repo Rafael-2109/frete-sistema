@@ -1165,6 +1165,10 @@ class AgentClient:
         # Contador de falhas por tool na sessão (para detecção de repetição)
         self._tool_failure_counts: dict[str, int] = {}
 
+        # B2: Buffer do ultimo thinking block para auditoria de deliberacao
+        # Acessivel por _parse_sdk_message (escrita) e hooks (leitura)
+        self._last_thinking_content: Optional[str] = None
+
         logger.info(
             f"[AGENT_CLIENT] Inicializado | "
             f"Modelo: {self.settings.model} | "
@@ -1626,6 +1630,8 @@ Nunca invente informações."""
                     if isinstance(block, ThinkingBlock):
                         thinking_content = getattr(block, 'thinking', '')
                         if thinking_content:
+                            # B2: Buffer para auditoria de deliberacao (instancia)
+                            self._last_thinking_content = thinking_content
                             events.append(StreamEvent(
                                 type='thinking',
                                 content=thinking_content
@@ -2162,6 +2168,25 @@ Nunca invente informações."""
                         "codigo_produto vs cod_produto."
                     )
 
+                # B3: Pre-mortem seletivo para acoes irreversiveis
+                # Dynamis/energeia: antes de atualizar (energeia), mapear modos de falha (dynamis)
+                from ..config.permissions import _classify_destructive_action
+                from ..config.feature_flags import USE_REVERSIBILITY_CHECK
+
+                if USE_REVERSIBILITY_CHECK:
+                    tool_input_data = hook_input.get('tool_input', {})
+                    if isinstance(tool_input_data, str):
+                        tool_input_data = {}
+                    destructive = _classify_destructive_action(tool_name, tool_input_data)
+                    if destructive and destructive.get('reversibility') == 'irreversible':
+                        pre_mortem = (
+                            f"ACAO IRREVERSIVEL DETECTADA: {destructive['description']}. "
+                            "ANTES de executar, liste 2 consequencias negativas possiveis "
+                            "desta acao e como cada uma poderia ser revertida ou mitigada. "
+                            "Se nao houver como reverter, confirme com o usuario antes."
+                        )
+                        additional = f"{additional}\n{pre_mortem}" if additional else pre_mortem
+
                 if additional:
                     return {
                         "continue_": True,
@@ -2179,6 +2204,8 @@ Nunca invente informações."""
                 SDK 0.1.29+: PostToolUseHookInput agora inclui tool_use_id
                 para correlação precisa tool_call → tool_result.
                 SDK 0.1.46+: agent_id e agent_type para distinguir subagentes.
+
+                B2: Persiste thinking block quando acao e destrutiva (auditoria de deliberacao).
                 """
                 try:
                     tool_name = hook_input.get('tool_name', 'unknown')
@@ -2193,6 +2220,48 @@ Nunca invente informações."""
                         f"| agent={agent_type or 'main'}:{agent_id[:12] if agent_id else 'N/A'} "
                         f"| input: {tool_input_str}"
                     )
+
+                    # B2: Persistir deliberacao para acoes destrutivas
+                    if self._last_thinking_content:
+                        from ..config.permissions import _classify_destructive_action
+                        tool_input_data = hook_input.get('tool_input', {})
+                        if isinstance(tool_input_data, str):
+                            tool_input_data = {}
+                        destructive = _classify_destructive_action(tool_name, tool_input_data)
+                        if destructive and destructive.get('reversibility') in ('irreversible', 'hard_to_reverse'):
+                            from ...utils.timezone import agora_utc_naive
+                            log_entry = {
+                                'timestamp': agora_utc_naive().isoformat(),
+                                'action': destructive['action'],
+                                'description': destructive['description'],
+                                'reversibility': destructive['reversibility'],
+                                'tool_name': tool_name,
+                                'thinking_excerpt': self._last_thinking_content[:2000],
+                            }
+                            logger.info(
+                                f"[DELIBERATION] Thinking capturado para acao {destructive['action']} "
+                                f"({len(self._last_thinking_content)} chars)"
+                            )
+                            # Salvar no session.data via ContextVar de session_id
+                            try:
+                                from ..config.permissions import get_current_session_id
+                                current_sid = get_current_session_id()
+                                if current_sid:
+                                    from ..models import AgentSession
+                                    from app import db
+                                    session_obj = AgentSession.query.filter_by(
+                                        session_id=current_sid
+                                    ).first()
+                                    if session_obj and session_obj.data:
+                                        if 'deliberation_log' not in session_obj.data:
+                                            session_obj.data['deliberation_log'] = []
+                                        session_obj.data['deliberation_log'].append(log_entry)
+                                        from sqlalchemy.orm.attributes import flag_modified
+                                        flag_modified(session_obj, 'data')
+                                        db.session.commit()
+                            except Exception as db_err:
+                                logger.debug(f"[DELIBERATION] Erro ao persistir: {db_err}")
+
                     return {}
                 except Exception as e:
                     logger.debug(f"[HOOK:PostToolUse] Suppressed (stream likely closed): {e}")
@@ -2318,6 +2387,13 @@ Nunca invente informações."""
                             "  </contexto_usuario>\n"
                             "</session_context>\n"
                             "```\n\n"
+                            "PRIORIZACAO (essencial → acidental):\n"
+                            "1. decisoes_tomadas — ESSENCIAL: se perdidas, voce contradira o usuario\n"
+                            "2. tarefas_pendentes — ESSENCIAL: se perdidas, trabalho fica incompleto\n"
+                            "3. pedidos_em_discussao — ESSENCIAL: contexto de negocio ativo\n"
+                            "4. contexto_usuario — MODERADO: preferencias e perfil\n"
+                            "5. dados_consultados — ACIDENTAL: podem ser re-consultados\n"
+                            "Se espaco for limitado, OMITA dados_consultados antes de omitir decisoes.\n\n"
                             "APÓS salvar, consulte /memories/context/session_notes.xml para "
                             "recuperar o estado e continue a conversa normalmente."
                         )

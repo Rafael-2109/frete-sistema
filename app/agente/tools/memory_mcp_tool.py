@@ -296,8 +296,10 @@ Voce eh um analisador de memorias de um sistema de logistica (Nacom Goya).
 Dada uma memoria sendo salva e o contexto das memorias existentes do usuario, gere:
 
 1. CONTEXTO: 2-3 frases situando esta memoria no conjunto do usuario (maximo 150 tokens)
-2. ENTIDADES: lista de entidades no formato tipo:nome separadas por | (ex: transportadora:RODONAVES|uf:AM|cliente:ATACADAO)
-3. RELACOES: lista de relacoes no formato origem>tipo>destino separadas por | (ex: RODONAVES>atrasa_para>AM)
+2. ENTIDADES: lista de entidades no formato tipo:nome:relevancia separadas por | onde relevancia eh E (essencial ao significado) ou A (incidental/acidental)
+   Exemplo: transportadora:RODONAVES:E|uf:AM:A|cliente:ATACADAO:E
+3. RELACOES: lista de relacoes no formato origem>tipo>destino:confianca separadas por | onde confianca eh alta, media ou baixa
+   Exemplo: RODONAVES>atrasa_para>AM:alta
 
 Tipos de entidade PERMITIDOS: uf, pedido, cnpj, valor, transportadora, produto, cliente, fornecedor, usuario, processo, conceito, campo, termo
 Tipos de relacao PERMITIDOS: pertence_a, depende_de, substitui, conflita_com, precede, bloqueia, usa, produz, fornece, consome, localizado_em, responsavel_por, corrige, requer, complementa, atrasa_para

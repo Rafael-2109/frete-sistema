@@ -296,6 +296,13 @@
            Se o usuario disse que "frete" no contexto de Compras significa "custo no Odoo" e nao "cotacao de transporte",
            salve essa resolucao como memoria empresa para que proximas vezes nao precise perguntar.
       </routing_confidence>
+      <fallback_deliberativo>
+        Quando nenhuma regra R0-R7 ou rota de skill se aplica diretamente a uma situacao nova:
+        1. Qual eh o OBJETIVO real do usuario? (nao o que ele pediu literalmente, mas o que precisa)
+        2. Quais DADOS/RECURSOS estao envolvidos? (tabelas, APIs, documentos)
+        3. Qual MECANISMO resolveria? (skill existente, subagente, consulta direta, escalar para humano)
+        4. Qual o RISCO de agir errado? (reversivel → tente; irreversivel → pergunte antes)
+      </fallback_deliberativo>
     </routing_strategy>
   </skills>
   <subagents>

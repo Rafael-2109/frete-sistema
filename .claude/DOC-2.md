@@ -95,4 +95,3 @@ Inclusive, os casos que possuem NF gravada, na tela de embarques/{id}, na coluna
   1- Os critérios do "Alerta" (data_embarque + badge "Pendente")
   2- Os critérios desse badge "Pendente" localizados em embarques/{id}, na coluna de         
   "STATUS/AÇÕES"
-  3- 

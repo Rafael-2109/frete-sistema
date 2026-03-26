@@ -73,6 +73,13 @@ GERE UM JSON com esta estrutura exata:
   "topicos_abordados": ["separacao", "estoque", "frete"]
 }
 
+RACIOCINIO PRE-RESUMO (raciocine internamente antes do JSON):
+1. OBJETIVO: O que o usuario TENTAVA realizar nesta sessao?
+2. RESULTADO: O que de fato ACONTECEU? (acoes, resultados, bloqueios)
+3. CONTEXTO: Quais dados/pedidos/produtos foram envolvidos?
+4. TIPO: Que tipo de sessao foi? (operacional, investigacao, planejamento)
+Use este raciocinio para preencher os campos com mais precisao.
+
 REGRAS:
 - Arrays vazios se nao houver itens: []
 - "resumo_geral": descreva O QUE ACONTECEU e O QUE O USUARIO FEZ. Verbos concretos. Sem limite de chars — seja descritivo
