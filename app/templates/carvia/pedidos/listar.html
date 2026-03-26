@@ -9,6 +9,22 @@
     {% set carvia_active = 'pedidos_carvia' %}
     {% include 'carvia/_quick_nav.html' %}
 
+    {# Contadores por status #}
+    {% if contadores %}
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+        <a href="{{ url_for('carvia.listar_pedidos_carvia') }}"
+           class="btn btn-sm {{ 'btn-primary' if not status_filtro else 'btn-outline-secondary' }}">
+            Todos ({{ contadores.values()|sum }})
+        </a>
+        {% for st, cnt in contadores.items()|sort %}
+        <a href="{{ url_for('carvia.listar_pedidos_carvia', status=st) }}"
+           class="btn btn-sm {{ 'btn-primary' if status_filtro == st else 'btn-outline-secondary' }}">
+            {{ st }} ({{ cnt }})
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="card">
         <div class="card-body p-0">
             {% if pedidos %}
@@ -18,8 +34,10 @@
                         <tr>
                             <th>Numero</th>
                             <th>Cotacao</th>
+                            <th>NF</th>
                             <th>Filial</th>
                             <th>Tipo</th>
+                            <th class="text-center">Embarque</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Data</th>
                             <th class="text-center">Acoes</th>
@@ -38,11 +56,25 @@
                                     {{ ped.cotacao.numero_cotacao if ped.cotacao else '-' }}
                                 </a>
                             </td>
+                            <td>
+                                {% set nfs = nfs_por_pedido.get(ped.id, []) %}
+                                {% if nfs %}
+                                    {% for nf in nfs %}<span class="badge carvia-badge-faturado">{{ nf }}</span> {% endfor %}
+                                {% else %}-{% endif %}
+                            </td>
                             <td>{{ ped.filial }}</td>
                             <td>{{ ped.tipo_separacao }}</td>
                             <td class="text-center">
+                                {% set emb = embarques_por_pedido.get(ped.id) %}
+                                {% if emb %}
+                                <a href="{{ url_for('embarques.visualizar_embarque', id=emb.id) }}" class="badge bg-info text-decoration-none">
+                                    <i class="fas fa-truck"></i> #{{ emb.numero }}
+                                </a>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
                                 {% set st = ped.status_calculado %}
-                                {% set st_map = {'PENDENTE': 'carvia-badge-pendente', 'FATURADO': 'carvia-badge-faturado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
+                                {% set st_map = {'ABERTO': 'carvia-badge-pendente', 'FATURADO': 'carvia-badge-faturado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
                                 <span class="badge {{ st_map.get(st, 'bg-secondary') }}">{{ st }}</span>
                             </td>
                             <td class="text-center small text-muted">

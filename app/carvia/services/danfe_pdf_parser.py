@@ -15,9 +15,15 @@ Layout Tabular: DANFEs reais usam layout tabular — cabecalhos numa
 linha e valores na seguinte. Cada metodo usa Strategy 1 (same-line regex
 com [^\\S\\n]* para nao cruzar newline) + Strategy 2 (split por \\n, localizar
 linha do cabecalho, extrair token por posicao na linha seguinte).
+
+Veiculos (chassi/motor/cor): Extrai dados da secao DADOS ADICIONAIS via
+LLM (Haiku primario + Sonnet fallback). Gate rapido por NCM/keyword evita
+chamada API em NFs sem veiculo.
 """
 
+import json
 import logging
+import os
 import re
 from typing import Dict, List, Optional
 
@@ -26,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 class DanfePDFParser:
     """Parser para extrair informacoes de DANFE em PDF"""
+
+    HAIKU_MODEL = "claude-haiku-4-5-20251001"
+    SONNET_MODEL = "claude-sonnet-4-6"
 
     _UFS_BRASIL = frozenset({
         'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
@@ -44,6 +53,7 @@ class DanfePDFParser:
         self.texto_completo = ''
         self.paginas = []
         self.confianca = 0.0
+        self._client = None
         self._extrair_texto()
 
     def _extrair_texto(self):
@@ -243,6 +253,7 @@ class DanfePDFParser:
                 return numero
 
         # Strategy 2: regexes same-line (numeros simples sem separador de milhar)
+        # Usa finditer para continuar buscando apos rejeicao por guard de ano
         patterns = [
             r'N[°ºo.][^\S\n]*[:.]?[^\S\n]*(\d{1,9})',
             r'N[UÚ]MERO[^\S\n]*[:.]?[^\S\n]*(\d{1,9})',
@@ -250,12 +261,11 @@ class DanfePDFParser:
             r'(?:NOTA\s*FISCAL|NF)\s*(?:ELETR[OÔ]NICA)?\s*[Nn]?\s*[°ºo.]?[^\S\n]*[:.]?[^\S\n]*(\d{1,9})',
         ]
         for pattern in patterns:
-            match = re.search(pattern, self.texto_completo, re.IGNORECASE)
-            if match:
+            for match in re.finditer(pattern, self.texto_completo, re.IGNORECASE):
                 resultado = match.group(1).lstrip('0') or '0'
                 # Guard: rejeitar numeros que parecem ano (19xx, 20xx)
                 if re.match(r'^(19|20)\d{2}$', resultado):
-                    continue  # provavelmente "ANO 2025", tentar proximo pattern
+                    continue  # provavelmente "ANO 2025", tentar proximo match
                 self.confianca += 0.1
                 return resultado
         return None
@@ -305,11 +315,13 @@ class DanfePDFParser:
         return None
 
     def get_cnpj_destinatario(self) -> Optional[str]:
-        """Extrai CNPJ do destinatario
+        """Extrai CNPJ ou CPF do destinatario
 
         P3 fix: Exigir '/' no CNPJ. Buscar primeiro CNPJ apos DESTINATARIO.
+        P5 fix: Suportar CPF (XXX.XXX.XXX-XX) quando destinatario e pessoa fisica.
         """
         cnpj_pattern = r'\d{2}\.?\d{3}\.?\d{3}/\d{4}-?\d{2}'
+        cpf_pattern = r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}'
 
         # Buscar apos SECAO DESTINATARIO/REMETENTE (ignora canhoto)
         dest_idx = self._encontrar_secao_destinatario()
@@ -318,11 +330,34 @@ class DanfePDFParser:
             # Converter indice de linha para posicao de caractere
             offset = sum(len(l) + 1 for l in linhas[:dest_idx])
             texto_dest = self.texto_completo[offset:]
+
+            # Tentar CNPJ primeiro (14 digitos com /)
             matches = re.findall(cnpj_pattern, texto_dest)
             if matches:
                 cnpj = re.sub(r'\D', '', matches[0])
-                if len(cnpj) == 14:
+                # Rejeitar se for identico ao emitente (parser pegou o errado)
+                cnpj_emit = self.get_cnpj_emitente()
+                if len(cnpj) == 14 and cnpj != cnpj_emit:
                     return cnpj
+
+            # Tentar CPF (11 digitos com -)
+            # Buscar apos label CNPJ/CPF na secao destinatario
+            cpf_match = re.search(
+                r'CNPJ/CPF[^\S\n]*(' + cpf_pattern + r')',
+                texto_dest, re.IGNORECASE,
+            )
+            if cpf_match:
+                cpf = re.sub(r'\D', '', cpf_match.group(1))
+                if len(cpf) == 11:
+                    return cpf
+
+            # Fallback: qualquer CPF na secao (ate proxima secao)
+            texto_secao = texto_dest[:1000]  # limitar busca
+            matches_cpf = re.findall(cpf_pattern, texto_secao)
+            for m in matches_cpf:
+                cpf = re.sub(r'\D', '', m)
+                if len(cpf) == 11:
+                    return cpf
 
         # Fallback: segundo CNPJ com '/' no texto completo
         matches = re.findall(cnpj_pattern, self.texto_completo)
@@ -1206,6 +1241,189 @@ class DanfePDFParser:
             'valor_total_item': valor_total_item,
         }
 
+    # --- Extracao de veiculos (chassi/motor/cor) via LLM ---
+
+    def _tem_indicativo_veiculo(self) -> bool:
+        """Gate rapido: verifica se NF provavelmente contem dados de veiculo.
+
+        Evita chamada API em NFs sem veiculo (alimentos, eletronicos, etc.).
+        Verifica NCM de veiculos (8711*) ou keyword CHASSI no texto.
+        """
+        upper = self.texto_completo.upper()
+        # NCM de veiculos eletricos/motocicletas
+        if '87116000' in upper or '87114000' in upper:
+            return True
+        if 'CHASSI' in upper:
+            return True
+        return False
+
+    def _extrair_texto_dados_adicionais(self) -> str:
+        """Extrai texto bruto da secao DADOS ADICIONAIS / INFORMACOES COMPLEMENTARES.
+
+        Retorna do primeiro marker ate o fim do texto (max 3000 chars).
+        O LLM filtra o ruido (enderecos, headers de pagina 2, etc.).
+        """
+        upper = self.texto_completo.upper()
+        markers = [
+            'DADOS ADICIONAIS',
+            'INFORMAÇÕES COMPLEMENTARES',
+            'INFORMACOES COMPLEMENTARES',
+        ]
+        earliest_idx = len(self.texto_completo)
+        for marker in markers:
+            idx = upper.find(marker)
+            if 0 <= idx < earliest_idx:
+                earliest_idx = idx
+
+        if earliest_idx >= len(self.texto_completo):
+            return ''
+
+        return self.texto_completo[earliest_idx:earliest_idx + 3000]
+
+    def _get_anthropic_client(self):
+        """Lazy init do Anthropic client"""
+        if self._client is not None:
+            return self._client
+
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not api_key:
+            logger.warning(
+                "ANTHROPIC_API_KEY nao configurada — extracao de veiculos LLM desabilitada"
+            )
+            return None
+
+        try:
+            import anthropic
+            self._client = anthropic.Anthropic(api_key=api_key)
+            return self._client
+        except ImportError:
+            logger.warning(
+                "anthropic package nao instalado — extracao de veiculos LLM desabilitada"
+            )
+            return None
+
+    def _extrair_veiculos_llm(self, model: str, texto_secao: str) -> Optional[List[Dict]]:
+        """Extrai dados de veiculos via LLM.
+
+        Args:
+            model: Model ID (Haiku ou Sonnet)
+            texto_secao: Texto da secao DADOS ADICIONAIS
+
+        Returns:
+            Lista de dicts com chassi/cor/modelo/numero_motor/ano_modelo ou None
+        """
+        client = self._get_anthropic_client()
+        if not client:
+            return None
+
+        prompt = (
+            "Extraia informações de veículos do texto abaixo (seção DADOS ADICIONAIS "
+            "de uma Nota Fiscal brasileira).\n\n"
+            "Para cada veículo/unidade encontrado, extraia:\n"
+            "- modelo: nome/modelo do veículo (ex: \"JOY SUPER\", \"X11-MINI\", "
+            "\"X11-MINI (RP)\", \"MIA\")\n"
+            "- chassi: código do chassi (alfanumérico)\n"
+            "- numero_motor: número do motor, se presente (alfanumérico, "
+            "diferente do chassi)\n"
+            "- cor: cor do veículo (ex: \"AZUL\", \"BRANCO\", \"PRETA\")\n"
+            "- ano_modelo: ano/modelo se presente (ex: \"2025/MOD 2025\")\n\n"
+            "REGRAS:\n"
+            "- Nomes de modelo são palavras curtas (DOT, JET, MIA, JOY SUPER, "
+            "X11-MINI, X11-MINI (RP))\n"
+            "- Códigos alfanuméricos longos (10+ chars misturando letras e "
+            "números como LA25860V1000W2087) são chassi ou motor, NUNCA modelo\n"
+            "- Especificações como \"1000WATTS\" NÃO são número de motor\n"
+            "- Exemplo: 'DOT LA25860V1000W2087 QS60V30H25111101233 CINZA' → "
+            "modelo=DOT, chassi=LA25860V1000W2087, numero_motor="
+            "QS60V30H25111101233, cor=CINZA\n"
+            "- Ignore endereços, telefones, CEPs, CNPJs e textos informativos\n"
+            "- Se não houver informações de veículos, retorne []\n"
+            "- Retorne APENAS um array JSON válido, sem texto adicional\n\n"
+            f"Texto:\n{texto_secao}"
+        )
+
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            texto_resposta = response.content[0].text.strip()
+
+            # Extrair JSON array da resposta (pode vir com ```json...``` ou direto)
+            json_match = re.search(r'\[.*\]', texto_resposta, re.DOTALL)
+            if not json_match:
+                logger.warning(
+                    "Extracao veiculos LLM (%s): resposta sem JSON array", model
+                )
+                return None
+
+            veiculos_raw = json.loads(json_match.group(0))
+            if not isinstance(veiculos_raw, list):
+                return None
+
+            # Normalizar e validar
+            resultado = []
+            for v in veiculos_raw:
+                if not isinstance(v, dict) or not v.get('chassi'):
+                    continue
+                veiculo = {
+                    'chassi': str(v['chassi']).strip(),
+                    'cor': str(v.get('cor', '')).strip().upper() or None,
+                }
+                if v.get('modelo'):
+                    veiculo['modelo'] = str(v['modelo']).strip()
+                if v.get('numero_motor'):
+                    veiculo['numero_motor'] = str(v['numero_motor']).strip()
+                if v.get('ano_modelo'):
+                    veiculo['ano_modelo'] = str(v['ano_modelo']).strip()
+                resultado.append(veiculo)
+
+            logger.info(
+                "Extracao veiculos LLM (%s): %d veiculo(s) extraido(s)",
+                model, len(resultado),
+            )
+            return resultado if resultado else None
+
+        except Exception as e:
+            logger.error("Erro na extracao de veiculos LLM (%s): %s", model, e)
+
+        return None
+
+    def get_veiculos_info(self) -> List[Dict]:
+        """Extrai informacoes de veiculos (chassi, motor, cor) da secao
+        DADOS ADICIONAIS / INFORMACOES COMPLEMENTARES via LLM.
+
+        Pipeline: gate rapido → Haiku → Sonnet (fallback)
+
+        Gate: NCM 8711* ou keyword CHASSI no texto. Se ausentes, retorna []
+        sem chamada API (NFs de alimentos, eletronicos, etc.).
+
+        Returns:
+            Lista de dicts com: modelo (opcional), chassi, numero_motor (opcional),
+                                cor, ano_modelo (opcional)
+        """
+        if not self._tem_indicativo_veiculo():
+            return []
+
+        texto_secao = self._extrair_texto_dados_adicionais()
+        if not texto_secao or len(texto_secao.strip()) < 10:
+            return []
+
+        # Camada 1: Haiku (rapido, barato)
+        resultado = self._extrair_veiculos_llm(self.HAIKU_MODEL, texto_secao)
+        if resultado:
+            return resultado
+
+        # Camada 2: Sonnet (fallback)
+        logger.info("Haiku nao extraiu veiculos — tentando Sonnet")
+        resultado = self._extrair_veiculos_llm(self.SONNET_MODEL, texto_secao)
+        if resultado:
+            return resultado
+
+        return []
+
     def get_todas_informacoes(self) -> Dict:
         """Extrai todas as informacoes disponiveis"""
         self.confianca = 0.0
@@ -1250,6 +1468,7 @@ class DanfePDFParser:
             'peso_liquido': self.get_peso_liquido(),
             'quantidade_volumes': self.get_quantidade_volumes(),
             'itens': self.get_itens_produto(),
+            'veiculos': self.get_veiculos_info(),
             'tipo_fonte': 'PDF_DANFE',
             'confianca': round(self.confianca, 2),
         }

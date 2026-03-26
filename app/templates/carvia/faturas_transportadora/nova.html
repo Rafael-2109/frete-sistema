@@ -38,8 +38,9 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Numero da Fatura</label>
-                        <input type="text" class="form-control" disabled value="Gerado automaticamente (FTRANSP-###)">
+                        <label class="form-label">Numero da Fatura <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="numero_fatura" required
+                               placeholder="Ex: 12345" maxlength="50">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Valor Total (R$) <span class="text-danger">*</span></label>

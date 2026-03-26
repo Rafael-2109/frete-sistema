@@ -352,6 +352,32 @@ def lista_pedidos():
                          for cnpj in cnpjs_pedidos
                          if cnpj in contatos_por_cnpj_global}
     
+    # Complementar: CarVia items cujo lote original pode nao ter EmbarqueItem
+    # (apos expandir_provisorio, lote muda de CARVIA-{id} para CARVIA-NF-{nf_id})
+    for pedido in pedidos:
+        if getattr(pedido, 'eh_carvia', False) and pedido.separacao_lote_id not in embarques_por_lote:
+            lote = pedido.separacao_lote_id or ''
+            cot_id = None
+            try:
+                if lote.startswith('CARVIA-PED-'):
+                    ped_id = int(lote.replace('CARVIA-PED-', ''))
+                    from app.carvia.models import CarviaPedido as _CP
+                    _p = db.session.get(_CP, ped_id)
+                    cot_id = _p.cotacao_id if _p else None
+                elif lote.startswith('CARVIA-'):
+                    cot_id = int(lote.replace('CARVIA-', ''))
+            except (ValueError, TypeError):
+                pass
+            if cot_id:
+                em_item = EmbarqueItem.query.filter(
+                    EmbarqueItem.carvia_cotacao_id == cot_id,
+                    EmbarqueItem.status == 'ativo',
+                ).first()
+                if em_item:
+                    emb = db.session.get(Embarque, em_item.embarque_id)
+                    if emb and emb.status == 'ativo':
+                        embarques_por_lote[pedido.separacao_lote_id] = emb
+
     # Adiciona o embarque e contato de agendamento a cada pedido
     for pedido in pedidos:
         pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
@@ -1864,6 +1890,7 @@ def processar_cotacao_manual():
                 cnpj_cliente=pedido.cnpj_cpf,
                 cliente=pedido.raz_social_red,
                 pedido=pedido.num_pedido,
+                nota_fiscal=pedido.nf or None,
                 protocolo_agendamento='',
                 data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                 peso=pedido.peso_total or 0,
@@ -1872,7 +1899,7 @@ def processar_cotacao_manual():
                 uf_destino=uf_cv,
                 cidade_destino=cidade_cv,
                 volumes=None,
-                provisorio=True,
+                provisorio=not pedido.nf,
                 carvia_cotacao_id=carvia_cot_id,
             )
             # DIRETA: dados da tabela ficam no Embarque (campos vazio no item)

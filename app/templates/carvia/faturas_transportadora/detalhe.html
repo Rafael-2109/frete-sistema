@@ -207,9 +207,15 @@
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-handshake"></i> Subcontratos Vinculados ({{ subcontratos|length }})</h5>
             {% if fatura.status_conferencia != 'CONFERIDO' %}
-            <button type="button" class="btn btn-sm btn-primary" id="btn-abrir-modal-anexar">
-                <i class="fas fa-plus"></i> Anexar Subcontratos
-            </button>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('carvia.lancar_cte_carvia', fatura_id=fatura.id) }}"
+                   class="btn btn-sm btn-outline-primary" title="Buscar por NF e vincular CTe">
+                    <i class="fas fa-search-dollar"></i> Lancar CTe
+                </a>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-abrir-modal-anexar">
+                    <i class="fas fa-plus"></i> Anexar Subcontratos
+                </button>
+            </div>
             {% endif %}
         </div>
         <div class="card-body p-0">

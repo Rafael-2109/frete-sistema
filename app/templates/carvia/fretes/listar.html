@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Fretes CarVia{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-money-bill-wave"></i> Fretes CarVia</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.lancar_cte_carvia') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Lancar CTe
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'fretes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {% set tem_filtro = filtro_id or filtro_embarque or filtro_emitente or filtro_destino or filtro_nf or filtro_status or filtro_transportadora or filtro_data_de or filtro_data_ate %}
+
+    <!-- Filtros (colapsaveis) -->
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center"
+             role="button" data-bs-toggle="collapse" data-bs-target="#filtrosCollapse"
+             aria-expanded="{{ 'true' if tem_filtro else 'false' }}">
+            <h6 class="mb-0">
+                <i class="fas fa-filter"></i> Filtros
+                {% if tem_filtro %}
+                <span class="badge bg-primary ms-1">Ativos</span>
+                {% endif %}
+            </h6>
+            <i class="fas fa-chevron-down"></i>
+        </div>
+        <div class="collapse {{ 'show' if tem_filtro }}" id="filtrosCollapse">
+            <div class="card-body py-2">
+                <form method="GET">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-1">
+                        <label class="form-label small">Frete ID</label>
+                        <input type="text" name="id" class="form-control form-control-sm"
+                               placeholder="ID..." value="{{ filtro_id }}">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label small">Embarque</label>
+                        <input type="text" name="embarque" class="form-control form-control-sm"
+                               placeholder="Embarque..." value="{{ filtro_embarque }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Emitente</label>
+                        <input type="text" name="emitente" class="form-control form-control-sm"
+                               placeholder="Nome emitente..." value="{{ filtro_emitente }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Destino</label>
+                        <input type="text" name="destino" class="form-control form-control-sm"
+                               placeholder="Nome destino..." value="{{ filtro_destino }}">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label small">NF</label>
+                        <input type="text" name="nf" class="form-control form-control-sm"
+                               placeholder="NF..." value="{{ filtro_nf }}">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label small">Status</label>
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <option value="PENDENTE" {{ 'selected' if filtro_status == 'PENDENTE' }}>Pendente</option>
+                            <option value="CONFERIDO" {{ 'selected' if filtro_status == 'CONFERIDO' }}>Conferido</option>
+                            <option value="FATURADO" {{ 'selected' if filtro_status == 'FATURADO' }}>Faturado</option>
+                            <option value="CANCELADO" {{ 'selected' if filtro_status == 'CANCELADO' }}>Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 align-items-end mt-0">
+                    <div class="col-md-3">
+                        <label class="form-label small">Transportadora</label>
+                        <input type="text" name="transportadora" class="form-control form-control-sm"
+                               placeholder="Nome..." value="{{ filtro_transportadora }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Criado De</label>
+                        <input type="date" name="data_de" class="form-control form-control-sm"
+                               value="{{ filtro_data_de }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Criado Ate</label>
+                        <input type="date" name="data_ate" class="form-control form-control-sm"
+                               value="{{ filtro_data_ate }}">
+                    </div>
+                    <div class="col-md-2 d-flex gap-1">
+                        <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        {% if tem_filtro %}
+                        <a href="{{ url_for('carvia.listar_fretes_carvia') }}" class="btn btn-sm btn-outline-secondary flex-grow-1">
+                            <i class="fas fa-times"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body p-0">
+            {% if fretes %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Emitente</th>
+                            <th>Destino</th>
+                            <th>Embarque</th>
+                            <th>Transportadora</th>
+                            <th class="text-end">V.Cotado</th>
+                            <th class="text-end">V.CTe</th>
+                            <th class="text-end">V.Considerado</th>
+                            <th class="text-end">V.Pago</th>
+                            <th>Fat. CUSTO</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for frete in fretes %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}">#{{ frete.id }}</a>
+                            </td>
+                            <td>
+                                <span title="{{ frete.nome_emitente or '' }}">
+                                    {{ frete.nome_emitente[:20] ~ '...' if frete.nome_emitente and frete.nome_emitente|length > 20 else frete.nome_emitente or '-' }}
+                                </span>
+                            </td>
+                            <td>
+                                <span title="{{ frete.nome_destino or '' }}">
+                                    {{ frete.nome_destino[:20] ~ '...' if frete.nome_destino and frete.nome_destino|length > 20 else frete.nome_destino or '-' }}
+                                </span>
+                                {% if frete.cidade_destino %}
+                                <br><small class="text-muted">{{ frete.cidade_destino }}/{{ frete.uf_destino }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if frete.embarque %}
+                                <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}">
+                                    {{ frete.embarque.numero }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ frete.transportadora.razao_social if frete.transportadora else '-' }}</strong>
+                            </td>
+                            <td class="text-end">{{ frete.valor_cotado|valor_br if frete.valor_cotado else '-' }}</td>
+                            <td class="text-end">{{ frete.valor_cte|valor_br if frete.valor_cte else '-' }}</td>
+                            <td class="text-end">{{ frete.valor_considerado|valor_br if frete.valor_considerado else '-' }}</td>
+                            <td class="text-end">{{ frete.valor_pago|valor_br if frete.valor_pago else '-' }}</td>
+                            <td>
+                                {% if frete.fatura_transportadora_rel %}
+                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=frete.fatura_transportadora_id) }}">
+                                    <span class="badge bg-success">{{ frete.fatura_transportadora_rel.numero_fatura }}</span>
+                                </a>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge carvia-badge-{{ frete.status|lower }}">
+                                    {{ frete.status }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}"
+                                       class="btn btn-sm btn-outline-primary" title="Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('carvia.editar_frete_carvia', id=frete.id) }}"
+                                       class="btn btn-sm btn-outline-secondary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginacao -->
+            {% if paginacao.pages > 1 %}
+            <nav class="d-flex justify-content-center py-3">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if paginacao.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carvia.listar_fretes_carvia', page=paginacao.prev_num, id=filtro_id, embarque=filtro_embarque, emitente=filtro_emitente, destino=filtro_destino, nf=filtro_nf, status=filtro_status, transportadora=filtro_transportadora, data_de=filtro_data_de, data_ate=filtro_data_ate) }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                        <li class="page-item {{ 'active' if p == paginacao.page }}">
+                            <a class="page-link" href="{{ url_for('carvia.listar_fretes_carvia', page=p, id=filtro_id, embarque=filtro_embarque, emitente=filtro_emitente, destino=filtro_destino, nf=filtro_nf, status=filtro_status, transportadora=filtro_transportadora, data_de=filtro_data_de, data_ate=filtro_data_ate) }}">{{ p }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if paginacao.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('carvia.listar_fretes_carvia', page=paginacao.next_num, id=filtro_id, embarque=filtro_embarque, emitente=filtro_emitente, destino=filtro_destino, nf=filtro_nf, status=filtro_status, transportadora=filtro_transportadora, data_de=filtro_data_de, data_ate=filtro_data_ate) }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-money-bill-wave fa-3x mb-3 d-block opacity-50"></i>
+                <p>Nenhum frete encontrado.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

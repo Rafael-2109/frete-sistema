@@ -1,0 +1,179 @@
+{# Partial: conteúdo de separação CarVia (usado por imprimir_separacao_carvia.html e imprimir_completo.html)
+   Variáveis esperadas: cotacao, pedido, itens_pedido, motos, veiculos_por_nf, eh_pedido, embarque #}
+
+{% if not eh_pedido %}
+<div class="watermark">PROVISORIO</div>
+{% endif %}
+
+<!-- Header CarVia -->
+<div class="carvia-header">
+    {% if eh_pedido %}
+    <div style="text-align:center; margin-bottom: 6px;">
+        <span style="font-size: 36px; font-weight: 900; color: white; padding: 4px 20px; border-radius: 6px;
+                     background-color: {{ '#1a73e8' if pedido.filial == 'SP' else '#d93025' }};">
+            {{ pedido.filial }}
+        </span>
+    </div>
+    <h1>SEPARACAO CARVIA — {{ pedido.numero_pedido }}</h1>
+    {% set nfs_pedido = itens_pedido | map(attribute='numero_nf') | select | unique | list %}
+    {% if nfs_pedido %}
+    <div style="font-size: 22px; font-weight: bold; margin: 4px 0 8px;">NF: {{ nfs_pedido | join(', ') }}</div>
+    {% endif %}
+    <h2 style="font-weight: bold; font-size: 16px;">Filial: {{ pedido.filial }} | Tipo: {{ pedido.tipo_separacao }}</h2>
+    {% else %}
+    <h1>SEPARACAO CARVIA — {{ cotacao.numero_cotacao }} (PROVISORIO)</h1>
+    <h2>Aguardando pedidos/NF</h2>
+    {% endif %}
+    <h2>Embarque #{{ embarque.numero }}
+        {% if embarque.transportadora %} | {{ embarque.transportadora.razao_social }}{% endif %}
+    </h2>
+</div>
+
+{% if not eh_pedido %}
+<div class="provisorio-alert">
+    <strong>ESTE DOCUMENTO E PROVISORIO</strong><br>
+    Sera substituido quando os pedidos e NFs da CarVia forem anexados a cotacao.<br>
+    <small>Reimprimir o embarque apos a resolucao dos pedidos.</small>
+</div>
+{% endif %}
+
+<!-- Dados da cotacao -->
+<div class="info-section">
+    <div class="info-left">
+        <div class="info-row">
+            <span class="info-label">Cotacao:</span>
+            <span class="text-bold">{{ cotacao.numero_cotacao }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Cliente:</span>
+            {{ cotacao.cliente.razao_social if cotacao.cliente else 'N/A' }}
+        </div>
+        <div class="info-row">
+            <span class="info-label">Material:</span>
+            {{ cotacao.tipo_material or 'N/A' }}
+        </div>
+        <div class="info-row">
+            <span class="info-label">Peso:</span>
+            {{ "%.0f"|format(cotacao.peso_total or 0) }} kg
+        </div>
+    </div>
+    <div class="info-right">
+        <div class="info-row">
+            <span class="info-label">Destino:</span>
+            {% if cotacao.endereco_destino %}
+                {{ cotacao.endereco_destino.fisico_cidade or '' }}/{{ cotacao.endereco_destino.fisico_uf or '' }}
+            {% else %}N/A{% endif %}
+        </div>
+        <div class="info-row">
+            <span class="info-label">Valor Mercadoria:</span>
+            R$ {{ "%.2f"|format(cotacao.valor_mercadoria or 0) }}
+        </div>
+        {% if eh_pedido %}
+        <div class="info-row">
+            <span class="info-label">Pedido:</span>
+            {{ pedido.numero_pedido }}
+        </div>
+        {% endif %}
+        <div class="info-row">
+            <span class="info-label">Status:</span>
+            {{ cotacao.status }}
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de itens: 1 linha por veiculo/chassi (pedido) ou motos (cotacao) -->
+{% if eh_pedido and itens_pedido %}
+<h3 style="margin: 10px 0 5px; font-size: 14px;">ITENS DO PEDIDO</h3>
+<table class="products-table">
+    <thead>
+        <tr>
+            <th style="background-color: #17a2b8; color: white; width: 25%;">Chassi</th>
+            <th style="background-color: #17a2b8; color: white; width: 25%;">Modelo</th>
+            <th style="background-color: #17a2b8; color: white; width: 15%;">Cor</th>
+            <th style="background-color: #17a2b8; color: white; width: 15%;">Valor</th>
+            <th style="background-color: #17a2b8; color: white; width: 10%;">Ano</th>
+            <th style="background-color: #17a2b8; color: white; width: 10%;">NF</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set ns = namespace(total_valor=0, total_veiculos=0) %}
+        {% for item in itens_pedido %}
+            {% set item_veiculos = veiculos_por_nf.get(item.numero_nf, []) if veiculos_por_nf and item.numero_nf else [] %}
+            {% if item_veiculos %}
+                {% for v in item_veiculos %}
+                {% set ns.total_veiculos = ns.total_veiculos + 1 %}
+                {% set ns.total_valor = ns.total_valor + (v.valor or 0) %}
+                <tr>
+                    <td><code>{{ v.chassi }}</code></td>
+                    <td>{{ v.modelo or '-' }}</td>
+                    <td>{{ v.cor or '-' }}</td>
+                    <td class="text-right">{{ "%.2f"|format(v.valor or 0) }}</td>
+                    <td>{{ v.ano or '-' }}</td>
+                    <td>{{ item.numero_nf or '-' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                {% set ns.total_veiculos = ns.total_veiculos + (item.quantidade or 1) %}
+                {% set ns.total_valor = ns.total_valor + (item.valor_total or 0) %}
+                <tr>
+                    <td>-</td>
+                    <td>{{ item.descricao or '-' }}</td>
+                    <td>{{ item.cor or '-' }}</td>
+                    <td class="text-right">{{ "%.2f"|format(item.valor_total or 0) }}</td>
+                    <td>-</td>
+                    <td>{{ item.numero_nf or '-' }}</td>
+                </tr>
+            {% endif %}
+        {% endfor %}
+        <tr style="font-weight: bold; border-top: 2px solid #17a2b8;">
+            <td colspan="2">TOTAL</td>
+            <td></td>
+            <td class="text-right">{{ "%.2f"|format(ns.total_valor) }}</td>
+            <td></td>
+            <td>{{ ns.total_veiculos }} un.</td>
+        </tr>
+    </tbody>
+</table>
+{% elif motos and not eh_pedido %}
+<h3 style="margin: 10px 0 5px; font-size: 14px;">MOTOS COTADAS</h3>
+<table class="products-table">
+    <thead>
+        <tr>
+            <th style="background-color: #17a2b8; color: white; width: 40%;">Modelo</th>
+            <th style="background-color: #17a2b8; color: white; width: 20%;">Qtd</th>
+            <th style="background-color: #17a2b8; color: white; width: 20%;">Peso Cubado Unit.</th>
+            <th style="background-color: #17a2b8; color: white; width: 20%;">Peso Cubado Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for moto in motos %}
+        <tr>
+            <td>{{ moto.modelo_moto.nome if moto.modelo_moto else '-' }}</td>
+            <td class="text-center">{{ moto.quantidade }}</td>
+            <td class="text-right">{{ "%.2f"|format(moto.peso_cubado_unitario or 0) }}</td>
+            <td class="text-right">{{ "%.2f"|format(moto.peso_cubado_total or 0) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Controle de Atividades -->
+<div style="margin-top: 20px; border: 1px solid #ddd; padding: 10px;">
+    <div style="display: flex; justify-content: space-between;">
+        <div style="width: 48%;">
+            <h4 style="font-size: 11px; margin: 10px 0 10px 0;">SEPARACAO</h4>
+            <div style="font-size: 10px;">
+                <strong>Nome:</strong> _________________________<br><br>
+                <strong>Hora Envio:</strong> ___________ <strong>Hora Retorno:</strong> ___________
+            </div>
+        </div>
+        <div style="width: 48%;">
+            <h4 style="font-size: 11px; margin: 10px 0 10px 0;">CONFERENCIA</h4>
+            <div style="font-size: 10px;">
+                <strong>Nome:</strong> _________________________<br><br>
+                <strong>Horario:</strong> ___________
+            </div>
+        </div>
+    </div>
+</div>

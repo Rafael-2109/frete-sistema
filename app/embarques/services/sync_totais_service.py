@@ -134,7 +134,9 @@ def _sincronizar_item(item: EmbarqueItem) -> dict:
     Sincroniza um EmbarqueItem com dados de NF ou Separacao.
 
     REGRA:
+        - CarVia (CARVIA-*): pular (dados gerenciados por expandir_provisorio)
         - SE erro_validacao IS NULL → NF validada → usa FaturamentoProduto
+          - Fallback: se NF nao encontrada em FaturamentoProduto → usa Separacao
         - SENÃO → usa Separacao
     """
     peso_antigo = item.peso or 0
@@ -142,75 +144,87 @@ def _sincronizar_item(item: EmbarqueItem) -> dict:
     pallets_antigo = item.pallets or 0
 
     # ========================================
+    # SKIP: Itens CarVia (gerenciados por expandir_provisorio, nao por sync)
+    # ========================================
+    lote = item.separacao_lote_id or ''
+    if lote.startswith('CARVIA-') or item.carvia_cotacao_id:
+        return {
+            'item_id': item.id,
+            'pedido': item.pedido,
+            'fonte': 'CarVia (skip)',
+            'alteracoes': {}
+        }
+
+    # ========================================
     # CASO 1: NF VALIDADA (erro_validacao IS NULL)
     # ========================================
     if item.nota_fiscal and (item.erro_validacao is None or item.erro_validacao == ''):
-        logger.info(f"[SYNC] 📋 Item {item.id} (NF {item.nota_fiscal}): Usando dados de FaturamentoProduto")
+        logger.info(f"[SYNC] Item {item.id} (NF {item.nota_fiscal}): Tentando FaturamentoProduto")
 
         # Busca produtos da NF
         produtos_nf = FaturamentoProduto.query.filter_by(
             numero_nf=item.nota_fiscal
         ).all()
 
-        if not produtos_nf:
-            raise ValueError(f"NF {item.nota_fiscal} não encontrada em FaturamentoProduto")
+        if produtos_nf:
+            # Soma totais da NF
+            peso_nf = sum(float(p.peso_total or 0) for p in produtos_nf)
+            valor_nf = sum(float(p.valor_produto_faturado or 0) for p in produtos_nf)
 
-        # Soma totais da NF
-        peso_nf = sum(float(p.peso_total or 0) for p in produtos_nf)
-        valor_nf = sum(float(p.valor_produto_faturado or 0) for p in produtos_nf)
+            # Calcula pallets usando CadastroPalletizacao
+            pallets_nf = _calcular_pallets_from_produtos(produtos_nf)
 
-        # Calcula pallets usando CadastroPalletizacao
-        pallets_nf = _calcular_pallets_from_produtos(produtos_nf)
+            # Atualiza EmbarqueItem
+            item.peso = peso_nf
+            item.valor = valor_nf
+            item.pallets = pallets_nf
 
-        # Atualiza EmbarqueItem
-        item.peso = peso_nf
-        item.valor = valor_nf
-        item.pallets = pallets_nf
-
-        return {
-            'item_id': item.id,
-            'pedido': item.pedido,
-            'nota_fiscal': item.nota_fiscal,
-            'fonte': 'FaturamentoProduto',
-            'alteracoes': {
-                'peso': {'antes': peso_antigo, 'depois': peso_nf},
-                'valor': {'antes': valor_antigo, 'depois': valor_nf},
-                'pallets': {'antes': pallets_antigo, 'depois': pallets_nf}
+            return {
+                'item_id': item.id,
+                'pedido': item.pedido,
+                'nota_fiscal': item.nota_fiscal,
+                'fonte': 'FaturamentoProduto',
+                'alteracoes': {
+                    'peso': {'antes': peso_antigo, 'depois': peso_nf},
+                    'valor': {'antes': valor_antigo, 'depois': valor_nf},
+                    'pallets': {'antes': pallets_antigo, 'depois': pallets_nf}
+                }
             }
-        }
+
+        # Fallback: NF nao encontrada em FaturamentoProduto → tentar Separacao
+        logger.info(f"[SYNC] Item {item.id}: NF {item.nota_fiscal} nao em FaturamentoProduto, fallback Separacao")
 
     # ========================================
-    # CASO 2: NF NÃO VALIDADA → USA SEPARACAO
+    # CASO 2: SEPARACAO (fallback ou sem NF validada)
     # ========================================
-    else:
-        logger.info(f"[SYNC] 📦 Item {item.id} (Lote {item.separacao_lote_id}): Usando dados de Separacao")
+    logger.info(f"[SYNC] Item {item.id} (Lote {item.separacao_lote_id}): Usando dados de Separacao")
 
-        if not item.separacao_lote_id:
-            raise ValueError(f"Item {item.id} sem separacao_lote_id e sem NF validada")
+    if not item.separacao_lote_id:
+        raise ValueError(f"Item {item.id} sem separacao_lote_id e sem NF em FaturamentoProduto")
 
-        # Busca separações do lote
-        separacoes = Separacao.query.filter_by(
-            separacao_lote_id=item.separacao_lote_id,
-            num_pedido=item.pedido
-        ).all()
+    # Busca separações do lote
+    separacoes = Separacao.query.filter_by(
+        separacao_lote_id=item.separacao_lote_id,
+        num_pedido=item.pedido
+    ).all()
 
-        if not separacoes:
-            raise ValueError(f"Separacao não encontrada para lote {item.separacao_lote_id}")
+    if not separacoes:
+        raise ValueError(f"Separacao nao encontrada para lote {item.separacao_lote_id}")
 
-        # Soma totais das separações
-        peso_sep = sum(float(s.peso or 0) for s in separacoes)
-        valor_sep = sum(float(s.valor_saldo or 0) for s in separacoes)
-        pallets_sep = sum(float(s.pallet or 0) for s in separacoes)
+    # Soma totais das separações
+    peso_sep = sum(float(s.peso or 0) for s in separacoes)
+    valor_sep = sum(float(s.valor_saldo or 0) for s in separacoes)
+    pallets_sep = sum(float(s.pallet or 0) for s in separacoes)
 
-        # Atualiza EmbarqueItem
-        item.peso = peso_sep
-        item.valor = valor_sep
-        item.pallets = pallets_sep
+    # Atualiza EmbarqueItem
+    item.peso = peso_sep
+    item.valor = valor_sep
+    item.pallets = pallets_sep
 
-        return {
-            'item_id': item.id,
-            'pedido': item.pedido,
-            'separacao_lote_id': item.separacao_lote_id,
+    return {
+        'item_id': item.id,
+        'pedido': item.pedido,
+        'separacao_lote_id': item.separacao_lote_id,
             'fonte': 'Separacao',
             'alteracoes': {
                 'peso': {'antes': peso_antigo, 'depois': peso_sep},

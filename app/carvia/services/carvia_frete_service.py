@@ -2,23 +2,19 @@
 CarviaFreteService — Orquestrador central de fretes CarVia
 ============================================================
 
-Cria CarviaOperacao + CarviaSubcontrato + CarviaFrete numa sequencia atomica,
-com todos os FKs populados na criacao. Absorve a logica anterior do
-SubcontratoAutoService (deletado).
+Cria APENAS CarviaFrete na portaria. CarviaOperacao (CTe CarVia) e
+CarviaSubcontrato (CTe Subcontrato) sao criados MANUALMENTE pelo usuario
+quando lanca cada CTe. CarviaFrete e o eixo central.
 
 Gatilho:
-  1. Portaria deu saida + embarque tem itens CarVia com NF → gera frete
-  2. NF anexada apos portaria → gera frete para grupo desta NF
-
-Cardinalidades:
-  1 Frete = 1 CTe CarVia (CarviaOperacao) + 1 CTe Subcontrato + N NFs
-  1 Fatura = N CTes = N Fretes
+  1. Portaria deu saida + embarque tem itens CarVia com NF → gera CarviaFrete
+  2. NF anexada apos portaria → atualiza CarviaFrete existente
 
 Agregacao: EmbarqueItems com mesmo (cnpj_emitente + cnpj_destino) no embarque.
 
-Calculo de custo (valor_cotado):
-  DIRETA:     rateio proporcional ao peso — frete_total_embarque * (peso_grupo / peso_embarque)
-  FRACIONADA: calculo individual via CotacaoService.cotar_subcontrato()
+Calculo automatico ao criar CarviaFrete:
+  valor_cotado (CUSTO):  DIRETA = rateio; FRACIONADA = tabela do item
+  valor_venda  (VENDA):  tabela CarVia via CarviaTabelaService
 
 Ref: app/carvia/INTEGRACAO_EMBARQUE.md
 """
@@ -34,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class CarviaFreteService:
-    """Orquestrador central: cria CarviaOperacao + CarviaSubcontrato + CarviaFrete."""
+    """Orquestrador central: cria CarviaFrete (eixo central) na portaria."""
 
     @staticmethod
     def lancar_frete_carvia(embarque_id: int, usuario: str) -> List[int]:
@@ -117,14 +113,19 @@ class CarviaFreteService:
             ).first()
 
             if existente:
-                # NF tardia: atualizar frete existente com novos totais + junctions + valores
-                atualizado = CarviaFreteService._atualizar_frete_existente(
-                    existente, itens_grupo, embarque=embarque
-                )
-                if atualizado:
-                    fretes_resultado.append(existente.id)
-                    itens_com_frete.extend(itens_grupo)
-                continue
+                if existente.status == 'CANCELADO':
+                    # Deletar frete cancelado e recriar do zero
+                    CarviaFreteService._limpar_frete_cancelado(existente)
+                    # NAO dar continue — cair no _criar_frete_completo abaixo
+                else:
+                    # NF tardia: atualizar frete existente com novos totais
+                    atualizado = CarviaFreteService._atualizar_frete_existente(
+                        existente, itens_grupo, embarque=embarque
+                    )
+                    if atualizado:
+                        fretes_resultado.append(existente.id)
+                        itens_com_frete.extend(itens_grupo)
+                    continue
 
             # Criar operacao + subcontrato + frete (sequencia atomica)
             cot_id_grupo = next(
@@ -157,7 +158,8 @@ class CarviaFreteService:
         return fretes_resultado
 
     # ------------------------------------------------------------------
-    # Criacao atomica: Operacao + SubContrato + Frete
+    # Criacao: APENAS CarviaFrete (eixo central)
+    # CarviaOperacao e CarviaSubcontrato sao criados manualmente pelo usuario
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -169,11 +171,13 @@ class CarviaFreteService:
         usuario: str,
         valor_venda_cotacao: float = None,
     ) -> Optional[int]:
-        """Cria CarviaOperacao + CarviaSubcontrato + CarviaFrete atomicamente."""
-        from app.carvia.models import (
-            CarviaFrete, CarviaOperacao, CarviaOperacaoNf,
-            CarviaSubcontrato, CarviaNf,
-        )
+        """Cria APENAS CarviaFrete com valores calculados.
+
+        CarviaOperacao (CTe CarVia) e CarviaSubcontrato (CTe Subcontrato)
+        NAO sao criados aqui — serao criados manualmente quando o usuario
+        lancar cada CTe. CarviaFrete e o eixo central.
+        """
+        from app.carvia.models import CarviaFrete
         from app.utils.timezone import agora_utc_naive
 
         try:
@@ -186,99 +190,28 @@ class CarviaFreteService:
             nome_destino = itens[0].cliente or ''
             nome_emitente = CarviaFreteService._resolver_nome_emitente(cnpj_emitente)
 
-            # --- 1. Criar CarviaOperacao (CTe CarVia — VENDA) ---
-            operacao = CarviaOperacao(
-                cte_numero=CarviaOperacao.gerar_numero_cte(),
-                cnpj_cliente=cnpj_destino,
-                nome_cliente=nome_destino,
-                uf_origem='SP',
-                cidade_origem='Guarulhos',
-                uf_destino=uf_destino,
-                cidade_destino=cidade_destino,
-                peso_bruto=Decimal(str(peso_total)),
-                peso_utilizado=Decimal(str(peso_total)),  # sem cubagem na auto-geracao
-                valor_mercadoria=Decimal(str(valor_total_nfs)),
-                tipo_entrada='AUTO_PORTARIA',
-                status='RASCUNHO',
-                criado_por=usuario,
-                criado_em=agora_utc_naive(),
-                observacoes=f'auto:embarque={embarque.id}',
-            )
-
-            # Calcular cte_valor (preco VENDA)
+            # --- Calcular valor_venda (preco VENDA — tabela CarVia) ---
             if valor_venda_cotacao is not None:
-                operacao.cte_valor = Decimal(str(valor_venda_cotacao))
-                operacao.status = 'COTADO'
+                valor_venda_final = valor_venda_cotacao
             else:
-                cte_valor = CarviaFreteService._calcular_venda(
+                valor_venda_final = CarviaFreteService._calcular_venda(
                     uf_destino=uf_destino,
                     cidade_destino=cidade_destino,
                     peso=peso_total,
                     valor_mercadoria=valor_total_nfs,
                     cnpj_cliente=cnpj_destino,
                 )
-                if cte_valor is not None:
-                    operacao.cte_valor = Decimal(str(cte_valor))
-                    operacao.status = 'COTADO'
 
-            db.session.add(operacao)
-            db.session.flush()  # operacao.id disponivel
-
-            # --- 2. Criar CarviaOperacaoNf junctions ---
-            nfs_vinculadas = 0
-            for item in itens:
-                if not item.nota_fiscal:
-                    continue
-                carvia_nf = CarviaNf.query.filter_by(
-                    numero_nf=item.nota_fiscal,
-                    status='ATIVA',
-                ).first()
-                if carvia_nf:
-                    existente_junc = CarviaOperacaoNf.query.filter_by(
-                        operacao_id=operacao.id,
-                        nf_id=carvia_nf.id,
-                    ).first()
-                    if not existente_junc:
-                        db.session.add(CarviaOperacaoNf(
-                            operacao_id=operacao.id,
-                            nf_id=carvia_nf.id,
-                        ))
-                        nfs_vinculadas += 1
-
-            if nfs_vinculadas > 0:
-                db.session.flush()
-
-            # --- 3. Criar CarviaSubcontrato (CUSTO) ---
-            sub = CarviaSubcontrato(
-                operacao_id=operacao.id,
-                transportadora_id=embarque.transportadora_id,
-                cte_numero=CarviaSubcontrato.gerar_numero_sub(),
-                status='COTADO',
-                criado_por=usuario,
-                criado_em=agora_utc_naive(),
-                observacoes=f'auto:embarque={embarque.id}',
-            )
-            db.session.add(sub)
-            db.session.flush()  # sub.id disponivel
-
-            # Calcular valor_cotado (preco CUSTO)
+            # --- Calcular valor_cotado (preco CUSTO — tabela Nacom) ---
             valor_custo = CarviaFreteService._calcular_custo(
                 embarque=embarque,
                 itens=itens,
                 peso_total=peso_total,
                 valor_total=valor_total_nfs,
-                operacao_id=operacao.id,
-            )
-            if valor_custo is not None:
-                sub.valor_cotado = Decimal(str(valor_custo))
-
-            # --- 4. Criar CarviaFrete com TODOS FKs populados ---
-            valor_venda_final = (
-                float(operacao.cte_valor)
-                if operacao.cte_valor is not None
-                else None
+                operacao_id=None,  # sem CarviaOperacao na auto-criacao
             )
 
+            # --- Criar CarviaFrete (eixo central, sem operacao/sub) ---
             frete = CarviaFrete(
                 embarque_id=embarque.id,
                 transportadora_id=embarque.transportadora_id,
@@ -293,13 +226,13 @@ class CarviaFreteService:
                 valor_total_nfs=valor_total_nfs,
                 quantidade_nfs=len(nfs),
                 numeros_nfs=','.join(nfs),
-                valor_cotado=float(sub.valor_cotado) if sub.valor_cotado else 0,
-                valor_considerado=float(sub.valor_cotado) if sub.valor_cotado else 0,
-                valor_venda=valor_venda_final,
-                operacao_id=operacao.id,
-                subcontrato_id=sub.id,
+                valor_cotado=float(valor_custo) if valor_custo else 0,
+                valor_considerado=float(valor_custo) if valor_custo else 0,
+                valor_venda=float(valor_venda_final) if valor_venda_final else None,
+                # operacao_id: NULL — criado quando usuario lancar CTe CarVia
+                # subcontrato_id: NULL — criado quando usuario lancar CTe Subcontrato
                 # fatura_cliente_id: preenchido retroativamente ao criar fatura
-                # fatura_transportadora_id: preenchido retroativamente ao anexar sub
+                # fatura_transportadora_id: preenchido retroativamente ao lancar CTe
                 status='PENDENTE',
                 criado_em=agora_utc_naive(),
                 criado_por=usuario,
@@ -313,21 +246,63 @@ class CarviaFreteService:
 
             logger.info(
                 "CarviaFrete criado: embarque=%s, emit=%s→dest=%s, "
-                "operacao=%s (venda=%s), sub=%s (custo=%s), %d NFs",
+                "custo=%s, venda=%s, %d NFs",
                 embarque.id, cnpj_emitente, cnpj_destino,
-                operacao.cte_numero, operacao.cte_valor,
-                sub.cte_numero, sub.valor_cotado,
-                nfs_vinculadas,
+                valor_custo, valor_venda_final, len(nfs),
             )
 
             return frete.id
 
         except Exception as e:
             logger.error(
-                "Erro ao criar frete completo para grupo (%s, %s): %s",
+                "Erro ao criar frete para grupo (%s, %s): %s",
                 cnpj_emitente, cnpj_destino, e, exc_info=True
             )
             return None
+
+    # ------------------------------------------------------------------
+    # Limpeza de frete cancelado (para re-criacao)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _limpar_frete_cancelado(frete) -> None:
+        """Deleta CarviaFrete CANCELADO e filhos cancelados para liberar unique constraint.
+
+        Chamado quando embarque e revinculado na portaria e o frete anterior
+        foi cancelado. Deleta tudo para permitir re-criacao limpa.
+        """
+        from app.carvia.models import (
+            CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
+        )
+
+        try:
+            # Deletar subcontrato cancelado (se nao faturado)
+            if frete.subcontrato_id:
+                sub = db.session.get(CarviaSubcontrato, frete.subcontrato_id)
+                if sub and sub.status == 'CANCELADO' and not sub.fatura_transportadora_id:
+                    db.session.delete(sub)
+
+            # Deletar operacao cancelada (se nao faturada) + junctions
+            if frete.operacao_id:
+                op = db.session.get(CarviaOperacao, frete.operacao_id)
+                if op and op.status == 'CANCELADO' and not op.fatura_cliente_id:
+                    # Deletar junctions primeiro
+                    CarviaOperacaoNf.query.filter_by(operacao_id=op.id).delete()
+                    db.session.delete(op)
+
+            # Deletar o frete cancelado
+            db.session.delete(frete)
+            db.session.flush()  # Libera unique constraint para re-criacao
+
+            logger.info(
+                "CarviaFrete #%s CANCELADO deletado para re-criacao "
+                "(embarque=%s, emit=%s, dest=%s)",
+                frete.id, frete.embarque_id,
+                frete.cnpj_emitente, frete.cnpj_destino,
+            )
+
+        except Exception as e:
+            logger.error("Erro ao limpar frete cancelado #%s: %s", frete.id, e)
 
     # ------------------------------------------------------------------
     # Atualizacao de frete existente (NF tardia)
@@ -338,12 +313,9 @@ class CarviaFreteService:
         """Atualiza frete existente com novos itens (NF tardia).
 
         Quando NF chega apos portaria e frete ja existe para o grupo:
-        1. Atualiza totais (peso, valor, NFs)
-        2. Cria CarviaOperacaoNf junctions para NFs novas
-        3. Atualiza CarviaOperacao (peso, valor)
-        4. Recalcula valor_cotado (custo) e valor_venda
+        1. Atualiza totais (peso, valor, NFs) no CarviaFrete
+        2. Recalcula valor_cotado (custo) e valor_venda
         """
-        from app.carvia.models import CarviaOperacao, CarviaOperacaoNf, CarviaNf
 
         try:
             nfs_atuais = set((frete.numeros_nfs or '').split(','))
@@ -364,51 +336,18 @@ class CarviaFreteService:
             frete.quantidade_nfs = len(todas_nfs)
             frete.numeros_nfs = ','.join(sorted(todas_nfs))
 
-            # 2. Criar junctions para NFs novas na CarviaOperacao
-            if frete.operacao_id:
-                for item in itens_grupo:
-                    if item.nota_fiscal and item.nota_fiscal in nfs_adicionadas:
-                        carvia_nf = CarviaNf.query.filter_by(
-                            numero_nf=item.nota_fiscal,
-                            status='ATIVA',
-                        ).first()
-                        if carvia_nf:
-                            existente_junc = CarviaOperacaoNf.query.filter_by(
-                                operacao_id=frete.operacao_id,
-                                nf_id=carvia_nf.id,
-                            ).first()
-                            if not existente_junc:
-                                db.session.add(CarviaOperacaoNf(
-                                    operacao_id=frete.operacao_id,
-                                    nf_id=carvia_nf.id,
-                                ))
-
-                # 3. Atualizar peso/valor da CarviaOperacao
-                operacao = db.session.get(CarviaOperacao, frete.operacao_id)
-                if operacao:
-                    from decimal import Decimal
-                    operacao.peso_bruto = Decimal(str(peso_total))
-                    operacao.peso_utilizado = Decimal(str(peso_total))
-                    operacao.valor_mercadoria = Decimal(str(valor_total))
-
-            # 4. Recalcular valor_cotado (custo)
+            # 2. Recalcular valor_cotado (custo)
             if embarque:
                 novo_custo = CarviaFreteService._calcular_custo(
                     embarque=embarque,
                     itens=itens_grupo,
                     peso_total=peso_total,
                     valor_total=valor_total,
-                    operacao_id=frete.operacao_id,
+                    operacao_id=frete.operacao_id,  # pode ser None
                 )
                 if novo_custo is not None:
                     frete.valor_cotado = novo_custo
                     frete.valor_considerado = novo_custo
-                    # Atualizar subcontrato tambem
-                    if frete.subcontrato_id:
-                        from app.carvia.models import CarviaSubcontrato
-                        sub = db.session.get(CarviaSubcontrato, frete.subcontrato_id)
-                        if sub:
-                            sub.valor_cotado = Decimal(str(novo_custo))
 
             logger.info(
                 "CarviaFrete %s atualizado com %d NF(s) nova(s): %s "

@@ -96,6 +96,7 @@ class CarviaTabelaService:
             if cidade_obj:
                 vinculos = CarviaCidadeAtendida.query.filter(
                     CarviaCidadeAtendida.codigo_ibge == cidade_obj.codigo_ibge,
+                    CarviaCidadeAtendida.uf_origem == uf_origem.upper(),
                     CarviaCidadeAtendida.ativo == True,  # noqa: E712
                 ).all()
                 if vinculos:
@@ -141,6 +142,7 @@ class CarviaTabelaService:
         tabela,
         peso: float,
         valor_mercadoria: float,
+        cidade=None,
     ) -> Optional[Dict]:
         """Calcula frete usando uma CarviaTabelaFrete.
 
@@ -151,6 +153,7 @@ class CarviaTabelaService:
             tabela: CarviaTabelaFrete ORM object
             peso: Peso em kg
             valor_mercadoria: Valor da mercadoria R$
+            cidade: Cidade obj (para ICMS fallback quando icms_proprio nao definido)
 
         Returns:
             Dict com valor, detalhes, tabela_dados ou None
@@ -166,7 +169,7 @@ class CarviaTabelaService:
                 peso=peso,
                 valor_mercadoria=valor_mercadoria,
                 tabela_dados=tabela_dados,
-                cidade=None,  # CarVia: apenas icms_proprio da tabela
+                cidade=cidade,
             )
 
             if resultado and 'valor_com_icms' in resultado:
@@ -186,6 +189,7 @@ class CarviaTabelaService:
         tabela,
         categorias_qtd: List[Dict],
         valor_mercadoria: float = 0,
+        cidade=None,
     ) -> Optional[Dict]:
         """Calcula frete por categoria de moto (preco fixo por unidade).
 
@@ -193,6 +197,7 @@ class CarviaTabelaService:
             tabela: CarviaTabelaFrete
             categorias_qtd: [{'categoria_id': int, 'quantidade': int}, ...]
             valor_mercadoria: para referencia (nao afeta calculo por categoria)
+            cidade: Cidade obj (para ICMS fallback quando icms_proprio nao definido)
 
         Returns:
             Dict com valor_total, breakdown por categoria, icms ou None
@@ -243,8 +248,14 @@ class CarviaTabelaService:
         if not breakdown:
             return None
 
-        # Aplicar ICMS se nao incluso
+        # Obter ICMS: prioriza icms_proprio da tabela, fallback para ICMS da cidade
         icms_percentual = float(tabela.icms_proprio) if tabela.icms_proprio else 0
+        if icms_percentual == 0 and cidade:
+            icms_cidade = getattr(cidade, 'icms', 0) or 0
+            if icms_cidade > 0:
+                # Normalizar: se < 1 e decimal (0.12), converter para percentual (12)
+                icms_percentual = icms_cidade * 100 if icms_cidade < 1 else icms_cidade
+
         valor_icms = 0
         valor_total = subtotal
 
@@ -342,6 +353,14 @@ class CarviaTabelaService:
             if not tabelas:
                 return []
 
+            # 2b. Resolver cidade destino para ICMS (fallback quando icms_proprio nao definido)
+            cidade_obj = None
+            if cidade_destino:
+                from app.utils.frete_simulador import buscar_cidade_unificada
+                cidade_obj = buscar_cidade_unificada(
+                    cidade=cidade_destino, uf=uf_destino
+                )
+
             # 3. Calcular com cada tabela
             from app.carvia.services.cotacao_service import CotacaoService
             cotacao_svc = CotacaoService()
@@ -354,7 +373,8 @@ class CarviaTabelaService:
                 # Tentar calculo por categoria moto primeiro
                 if categorias_moto:
                     resultado = self._calcular_por_categoria_moto(
-                        tabela, categorias_moto, valor_mercadoria
+                        tabela, categorias_moto, valor_mercadoria,
+                        cidade=cidade_obj,
                     )
                     if resultado:
                         tipo_calculo = 'CATEGORIA_MOTO'
@@ -362,7 +382,8 @@ class CarviaTabelaService:
                 # Fallback: calculo por peso
                 if not resultado and peso > 0:
                     resultado = self.calcular_com_tabela_carvia(
-                        tabela, peso, valor_mercadoria
+                        tabela, peso, valor_mercadoria,
+                        cidade=cidade_obj,
                     )
                     tipo_calculo = 'PESO'
 

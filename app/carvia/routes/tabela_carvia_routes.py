@@ -251,45 +251,52 @@ def register_tabela_carvia_routes(bp):
     @bp.route('/configuracoes/tabelas-frete') # type: ignore
     @login_required
     def listar_tabelas_carvia(): # type: ignore
-        """Lista tabelas de frete CarVia"""
+        """Lista tabelas de frete CarVia — agrupada por combinacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
         from app.carvia.models import CarviaTabelaFrete, CarviaGrupoCliente
 
-        uf_filtro = request.args.get('uf', '')
-        tipo_filtro = request.args.get('tipo_carga', '')
+        grupo_filtro = request.args.get('grupo_cliente_id', '')
 
-        query = CarviaTabelaFrete.query.order_by(
-            CarviaTabelaFrete.uf_origem.asc(),
-            CarviaTabelaFrete.uf_destino.asc(),
-            CarviaTabelaFrete.nome_tabela.asc(),
+        query = db.session.query(
+            CarviaTabelaFrete.nome_tabela,
+            CarviaTabelaFrete.uf_origem,
+            CarviaTabelaFrete.uf_destino,
+            CarviaTabelaFrete.tipo_carga,
+        ).filter(
+            CarviaTabelaFrete.ativo == True,  # noqa: E712
         )
 
-        if uf_filtro:
-            query = query.filter(
-                db.or_(
-                    CarviaTabelaFrete.uf_origem == uf_filtro,
-                    CarviaTabelaFrete.uf_destino == uf_filtro,
-                )
-            )
+        if grupo_filtro:
+            gid = int(grupo_filtro) if grupo_filtro != 'standard' else None
+            if gid:
+                query = query.filter(CarviaTabelaFrete.grupo_cliente_id == gid)
+            else:
+                query = query.filter(CarviaTabelaFrete.grupo_cliente_id.is_(None))
 
-        if tipo_filtro:
-            query = query.filter(CarviaTabelaFrete.tipo_carga == tipo_filtro)
+        combos = query.group_by(
+            CarviaTabelaFrete.nome_tabela,
+            CarviaTabelaFrete.uf_origem,
+            CarviaTabelaFrete.uf_destino,
+            CarviaTabelaFrete.tipo_carga,
+        ).order_by(
+            CarviaTabelaFrete.nome_tabela,
+            CarviaTabelaFrete.uf_origem,
+            CarviaTabelaFrete.uf_destino,
+        ).all()
 
-        tabelas = query.all()
         grupos = CarviaGrupoCliente.query.filter_by(ativo=True).order_by(
             CarviaGrupoCliente.nome.asc()
         ).all()
 
         return render_template(
             'carvia/configuracoes/tabelas_frete_carvia.html',
-            tabelas=tabelas,
+            combos=combos,
             grupos=grupos,
             ufs=UFS_BRASIL,
-            uf_filtro=uf_filtro,
-            tipo_filtro=tipo_filtro,
+            grupo_filtro=grupo_filtro,
         )
 
     @bp.route('/api/tabelas-frete-carvia', methods=['POST']) # type: ignore
@@ -445,6 +452,339 @@ def register_tabela_carvia_routes(bp):
             return jsonify({'erro': f'Erro: {e}'}), 500
 
     # =================================================================
+    # APIS COMBINACAO (listagem agrupada)
+    # =================================================================
+
+    @bp.route('/api/tabelas-frete-carvia/nomes-tabela') # type: ignore
+    @login_required
+    def api_nomes_tabela(): # type: ignore
+        """Retorna nomes de tabela disponiveis de CarviaCidadeAtendida"""
+        from app.carvia.models import CarviaCidadeAtendida
+
+        uf_origem = request.args.get('uf_origem', '').strip().upper()
+        uf_destino = request.args.get('uf_destino', '').strip().upper()
+
+        if not uf_origem or not uf_destino:
+            return jsonify({'nomes': []})
+
+        nomes = db.session.query(
+            CarviaCidadeAtendida.nome_tabela
+        ).filter(
+            CarviaCidadeAtendida.uf_origem == uf_origem,
+            CarviaCidadeAtendida.uf_destino == uf_destino,
+            CarviaCidadeAtendida.ativo == True,  # noqa: E712
+        ).distinct().order_by(
+            CarviaCidadeAtendida.nome_tabela
+        ).all()
+
+        return jsonify({'nomes': [n[0] for n in nomes]})
+
+    @bp.route('/api/tabelas-frete-carvia/combinacao') # type: ignore
+    @login_required
+    def api_combinacao(): # type: ignore
+        """Retorna dados de preco para uma combinacao + grupo"""
+        from app.carvia.models import (
+            CarviaTabelaFrete, CarviaPrecoCategoriaMoto, CarviaCategoriaMoto,
+        )
+
+        nome_tabela = request.args.get('nome_tabela', '').strip().upper()
+        uf_origem = request.args.get('uf_origem', '').strip().upper()
+        uf_destino = request.args.get('uf_destino', '').strip().upper()
+        tipo_carga = request.args.get('tipo_carga', '').strip().upper()
+        grupo_id_str = request.args.get('grupo_cliente_id', '')
+        grupo_id = int(grupo_id_str) if grupo_id_str else None
+
+        if not all([nome_tabela, uf_origem, uf_destino, tipo_carga]):
+            return jsonify({'erro': 'Parametros obrigatorios faltando.'}), 400
+
+        base_filter = [
+            CarviaTabelaFrete.nome_tabela == nome_tabela,
+            CarviaTabelaFrete.uf_origem == uf_origem,
+            CarviaTabelaFrete.uf_destino == uf_destino,
+            CarviaTabelaFrete.tipo_carga == tipo_carga,
+            CarviaTabelaFrete.ativo == True,  # noqa: E712
+        ]
+        if grupo_id:
+            base_filter.append(CarviaTabelaFrete.grupo_cliente_id == grupo_id)
+        else:
+            base_filter.append(CarviaTabelaFrete.grupo_cliente_id.is_(None))
+
+        if tipo_carga == 'FRACIONADA':
+            # Buscar registro FRETE PESO
+            tab = CarviaTabelaFrete.query.filter(
+                *base_filter,
+                CarviaTabelaFrete.modalidade == 'FRETE PESO',
+            ).first()
+
+            frete_peso = None
+            frete_moto = []
+
+            if tab:
+                campos = [
+                    'id', 'valor_kg', 'frete_minimo_peso', 'percentual_valor',
+                    'frete_minimo_valor', 'percentual_gris', 'gris_minimo',
+                    'percentual_adv', 'adv_minimo', 'percentual_rca',
+                    'pedagio_por_100kg', 'valor_despacho', 'valor_cte',
+                    'valor_tas', 'icms_incluso', 'icms_proprio',
+                ]
+                frete_peso = {c: getattr(tab, c) for c in campos}
+
+                # Precos moto vinculados a este registro
+                precos = CarviaPrecoCategoriaMoto.query.filter_by(
+                    tabela_frete_id=tab.id, ativo=True,
+                ).all()
+                for p in precos:
+                    frete_moto.append({
+                        'id': p.id,
+                        'categoria_id': p.categoria_moto_id,
+                        'categoria_nome': p.categoria.nome if p.categoria else '?',
+                        'valor_unitario': float(p.valor_unitario) if p.valor_unitario else None,
+                    })
+
+            # Todas as categorias ativas (para mostrar campos vazios)
+            categorias = CarviaCategoriaMoto.query.filter_by(
+                ativo=True
+            ).order_by(CarviaCategoriaMoto.ordem, CarviaCategoriaMoto.nome).all()
+            todas_categorias = [{'id': c.id, 'nome': c.nome} for c in categorias]
+
+            return jsonify({
+                'frete_peso': frete_peso,
+                'frete_moto': frete_moto,
+                'todas_categorias': todas_categorias,
+            })
+
+        else:  # DIRETA
+            from app.veiculos.models import Veiculo
+
+            veiculos_db = Veiculo.query.order_by(Veiculo.nome).all()
+            resultado = []
+
+            for v in veiculos_db:
+                tab = CarviaTabelaFrete.query.filter(
+                    *base_filter,
+                    CarviaTabelaFrete.modalidade == v.nome,
+                ).first()
+
+                resultado.append({
+                    'nome': v.nome,
+                    'id': tab.id if tab else None,
+                    'frete_minimo_valor': float(tab.frete_minimo_valor)
+                        if tab and tab.frete_minimo_valor else None,
+                    'icms_incluso': tab.icms_incluso if tab else False,
+                })
+
+            return jsonify({'veiculos': resultado})
+
+    @bp.route('/api/tabelas-frete-carvia/salvar-combinacao', methods=['POST']) # type: ignore
+    @login_required
+    def api_salvar_combinacao(): # type: ignore
+        """Salva (upsert) combinacao completa de precos"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import (
+            CarviaTabelaFrete, CarviaPrecoCategoriaMoto,
+        )
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        nome_tabela = (data.get('nome_tabela') or '').strip().upper()
+        uf_origem = (data.get('uf_origem') or '').strip().upper()
+        uf_destino = (data.get('uf_destino') or '').strip().upper()
+        tipo_carga = (data.get('tipo_carga') or '').strip().upper()
+        grupo_id = data.get('grupo_cliente_id') or None
+
+        if not all([nome_tabela, uf_origem, uf_destino, tipo_carga]):
+            return jsonify({'erro': 'Campos de identificacao obrigatorios.'}), 400
+
+        if tipo_carga not in ('DIRETA', 'FRACIONADA'):
+            return jsonify({'erro': 'Tipo carga invalido.'}), 400
+
+        try:
+            base_kw = dict(
+                nome_tabela=nome_tabela, uf_origem=uf_origem,
+                uf_destino=uf_destino, tipo_carga=tipo_carga,
+            )
+            grupo_filter = (
+                CarviaTabelaFrete.grupo_cliente_id == grupo_id
+                if grupo_id
+                else CarviaTabelaFrete.grupo_cliente_id.is_(None)
+            )
+
+            if tipo_carga == 'FRACIONADA':
+                frete_peso_data = data.get('frete_peso', {})
+                frete_moto_data = data.get('frete_moto', [])
+
+                # Upsert FRETE PESO
+                tab = CarviaTabelaFrete.query.filter_by(
+                    **base_kw, modalidade='FRETE PESO', ativo=True,
+                ).filter(grupo_filter).first()
+
+                campos_num = [
+                    'valor_kg', 'frete_minimo_peso', 'percentual_valor',
+                    'frete_minimo_valor', 'percentual_gris', 'gris_minimo',
+                    'percentual_adv', 'adv_minimo', 'percentual_rca',
+                    'pedagio_por_100kg', 'valor_despacho', 'valor_cte',
+                    'valor_tas', 'icms_proprio',
+                ]
+
+                # Verificar se ha algum valor real de frete peso
+                tem_frete_peso = any(
+                    frete_peso_data.get(c) is not None
+                    for c in campos_num
+                )
+
+                if tab:
+                    # Update: so sobrescrever campos que tem valor
+                    # (preserva dados existentes quando campo vem null)
+                    for c in campos_num:
+                        if c in frete_peso_data and frete_peso_data[c] is not None:
+                            setattr(tab, c, frete_peso_data[c])
+                    if 'icms_incluso' in frete_peso_data:
+                        tab.icms_incluso = frete_peso_data['icms_incluso']
+                elif tem_frete_peso or frete_moto_data:
+                    # Create: precisa do registro para vincular precos moto
+                    tab = CarviaTabelaFrete(
+                        **base_kw, modalidade='FRETE PESO',
+                        grupo_cliente_id=grupo_id,
+                        criado_em=agora_utc_naive(),
+                        criado_por=current_user.email,
+                    )
+                    for c in campos_num:
+                        if c in frete_peso_data and frete_peso_data[c] is not None:
+                            setattr(tab, c, frete_peso_data[c])
+                    if 'icms_incluso' in frete_peso_data:
+                        tab.icms_incluso = frete_peso_data['icms_incluso']
+                    db.session.add(tab)
+
+                if tab:
+                    db.session.flush()  # Garante tab.id
+
+                # Upsert precos moto — update/insert/soft-delete
+                if tab:
+                    existing = {
+                        p.categoria_moto_id: p
+                        for p in CarviaPrecoCategoriaMoto.query.filter_by(
+                            tabela_frete_id=tab.id
+                        ).all()
+                    }
+                    received_cat_ids = set()
+
+                    for pm in (frete_moto_data or []):
+                        cat_id = pm.get('categoria_moto_id')
+                        valor = pm.get('valor_unitario')
+                        if cat_id is not None and valor is not None:
+                            cat_id = int(cat_id)
+                            received_cat_ids.add(cat_id)
+                            if cat_id in existing:
+                                existing[cat_id].valor_unitario = float(valor)
+                                existing[cat_id].ativo = True
+                            else:
+                                preco = CarviaPrecoCategoriaMoto(
+                                    tabela_frete_id=tab.id,
+                                    categoria_moto_id=cat_id,
+                                    valor_unitario=float(valor),
+                                    ativo=True,
+                                    criado_em=agora_utc_naive(),
+                                    criado_por=current_user.email,
+                                )
+                                db.session.add(preco)
+
+                    # Soft-delete categorias removidas pelo usuario
+                    if frete_moto_data:
+                        for cat_id, preco in existing.items():
+                            if cat_id not in received_cat_ids and preco.ativo:
+                                preco.ativo = False
+
+            else:  # DIRETA
+                veiculos_data = data.get('veiculos', [])
+
+                for vd in veiculos_data:
+                    modalidade = vd.get('nome', '').strip()
+                    if not modalidade:
+                        continue
+
+                    tab = CarviaTabelaFrete.query.filter_by(
+                        **base_kw, modalidade=modalidade,
+                    ).filter(grupo_filter).first()
+
+                    frete_min = vd.get('frete_minimo_valor')
+                    icms = vd.get('icms_incluso', False)
+
+                    if tab:
+                        tab.frete_minimo_valor = frete_min
+                        tab.icms_incluso = icms
+                    elif frete_min:
+                        tab = CarviaTabelaFrete(
+                            **base_kw, modalidade=modalidade,
+                            grupo_cliente_id=grupo_id,
+                            frete_minimo_valor=frete_min,
+                            icms_incluso=icms,
+                            criado_em=agora_utc_naive(),
+                            criado_por=current_user.email,
+                        )
+                        db.session.add(tab)
+
+            db.session.commit()
+            return jsonify({'sucesso': True, 'mensagem': 'Combinacao salva.'})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao salvar combinacao: %s", e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/tabelas-frete-carvia/desativar-combinacao', methods=['POST']) # type: ignore
+    @login_required
+    def api_desativar_combinacao(): # type: ignore
+        """Desativa TODOS os registros de uma combinacao"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaTabelaFrete
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        nome_tabela = (data.get('nome_tabela') or '').strip().upper()
+        uf_origem = (data.get('uf_origem') or '').strip().upper()
+        uf_destino = (data.get('uf_destino') or '').strip().upper()
+        tipo_carga = (data.get('tipo_carga') or '').strip().upper()
+
+        if not all([nome_tabela, uf_origem, uf_destino, tipo_carga]):
+            return jsonify({'erro': 'Parametros obrigatorios faltando.'}), 400
+
+        try:
+            count = CarviaTabelaFrete.query.filter_by(
+                nome_tabela=nome_tabela, uf_origem=uf_origem,
+                uf_destino=uf_destino, tipo_carga=tipo_carga,
+            ).update({'ativo': False})
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'{count} registro(s) desativados.',
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao desativar combinacao: %s", e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/veiculos-lista') # type: ignore
+    @login_required
+    def api_veiculos_lista(): # type: ignore
+        """Lista veiculos cadastrados para modalidades DIRETA"""
+        from app.veiculos.models import Veiculo
+
+        veiculos = Veiculo.query.order_by(Veiculo.nome).all()
+        return jsonify({
+            'veiculos': [{'id': v.id, 'nome': v.nome} for v in veiculos]
+        })
+
+    # =================================================================
     # CIDADES ATENDIDAS CARVIA
     # =================================================================
 
@@ -461,12 +801,12 @@ def register_tabela_carvia_routes(bp):
         uf_filtro = request.args.get('uf', '')
 
         query = CarviaCidadeAtendida.query.order_by(
-            CarviaCidadeAtendida.uf.asc(),
+            CarviaCidadeAtendida.uf_destino.asc(),
             CarviaCidadeAtendida.nome_cidade.asc(),
         )
 
         if uf_filtro:
-            query = query.filter(CarviaCidadeAtendida.uf == uf_filtro)
+            query = query.filter(CarviaCidadeAtendida.uf_destino == uf_filtro)
 
         cidades = query.all()
 
@@ -492,26 +832,28 @@ def register_tabela_carvia_routes(bp):
 
         codigo_ibge = (data.get('codigo_ibge') or '').strip()
         nome_cidade = (data.get('nome_cidade') or '').strip()
-        uf = (data.get('uf') or '').strip().upper()
+        uf_origem = (data.get('uf_origem') or '').strip().upper()
+        uf_destino = (data.get('uf_destino') or data.get('uf') or '').strip().upper()
         nome_tabela = (data.get('nome_tabela') or '').strip().upper()
 
-        if not all([codigo_ibge, nome_cidade, uf, nome_tabela]):
+        if not all([codigo_ibge, nome_cidade, uf_origem, uf_destino, nome_tabela]):
             return jsonify({'erro': 'Campos obrigatorios: codigo IBGE, '
-                           'cidade, UF, nome tabela.'}), 400
+                           'cidade, UF origem, UF destino, nome tabela.'}), 400
 
         # Verificar duplicata
         existente = CarviaCidadeAtendida.query.filter_by(
-            codigo_ibge=codigo_ibge, nome_tabela=nome_tabela
+            codigo_ibge=codigo_ibge, nome_tabela=nome_tabela, uf_origem=uf_origem
         ).first()
         if existente:
             return jsonify({'erro': f'Cidade {nome_cidade} ja vinculada '
-                           f'a tabela {nome_tabela}.'}), 409
+                           f'a tabela {nome_tabela} (origem {uf_origem}).'}), 409
 
         try:
             cidade = CarviaCidadeAtendida(
                 codigo_ibge=codigo_ibge,
                 nome_cidade=nome_cidade,
-                uf=uf,
+                uf_origem=uf_origem,
+                uf_destino=uf_destino,
                 nome_tabela=nome_tabela,
                 lead_time=data.get('lead_time'),
                 criado_em=agora_utc_naive(),
@@ -523,7 +865,7 @@ def register_tabela_carvia_routes(bp):
             return jsonify({
                 'sucesso': True,
                 'id': cidade.id,
-                'mensagem': f'{nome_cidade}/{uf} vinculada a {nome_tabela}.',
+                'mensagem': f'{nome_cidade}/{uf_destino} vinculada a {nome_tabela}.',
             }), 201
 
         except Exception as e:

@@ -128,9 +128,11 @@
   {# Alerta CarVia Provisorios #}
   {% set itens_provisorios = embarque.itens | selectattr('provisorio') | list %}
   {% if itens_provisorios %}
-  <div class="alert alert-info border-info">
+  <div class="alert alert-warning border-warning" style="border-width: 3px !important;">
     <div class="d-flex align-items-center">
-      <i class="fas fa-motorcycle fa-2x text-info me-3"></i>
+      <div class="me-3 text-center" style="min-width: 80px;">
+        <div style="font-size: 2rem; font-weight: 900; color: #856404; letter-spacing: 2px; line-height: 1;">PROVISORIO</div>
+      </div>
       <div>
         <h5 class="alert-heading mb-1">
           <i class="fas fa-clock"></i> {{ itens_provisorios|length }} item(ns) CarVia provisorio(s)
@@ -286,6 +288,16 @@
 
     <!-- FieldList de Itens -->
     <h4>Itens do Embarque</h4>
+    {# Pre-calcular contagens por tipo para headers de secao #}
+    {% set ns = namespace(nacom=0, carvia=0) %}
+    {% for idx in range(embarque.itens|length) %}
+      {% set it = embarque.itens[idx] %}
+      {% if it and it.separacao_lote_id and it.separacao_lote_id.startswith('CARVIA-') %}
+        {% set ns.carvia = ns.carvia + 1 %}
+      {% elif it %}
+        {% set ns.nacom = ns.nacom + 1 %}
+      {% endif %}
+    {% endfor %}
     </div>
     <div class="card-body">
       <!-- ============================================================ -->
@@ -312,9 +324,22 @@
             </tr>
           </thead>
           <tbody>
+            {% set secao = namespace(atual='') %}
             {% for loop_index in range(form.itens|length) %}
               {% set item_form = form.itens[loop_index] %}
               {% set item = embarque.itens[loop_index] if loop_index < embarque.itens|length else none %}
+              {# Header de secao Nacom/CarVia #}
+              {% if item %}
+                {% set tipo = 'carvia' if (item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-')) else 'nacom' %}
+                {% if tipo != secao.atual %}
+                  {% set secao.atual = tipo %}
+                  {% if tipo == 'nacom' %}
+                  <tr class="table-primary"><td colspan="13" class="fw-bold py-1" style="border-bottom: 2px solid var(--bs-primary);">Nacom ({{ ns.nacom }})</td></tr>
+                  {% else %}
+                  <tr class="table-info"><td colspan="13" class="fw-bold py-1" style="border-bottom: 2px solid #17a2b8;"><i class="fas fa-motorcycle"></i> CarVia ({{ ns.carvia }})</td></tr>
+                  {% endif %}
+                {% endif %}
+              {% endif %}
               <tr class="item-form{% if item and item.status == 'cancelado' %} table-danger{% endif %}"{% if item and item.status == 'cancelado' %} style="opacity: 0.6; text-decoration: line-through;"{% endif %}>
                 {# ✅ CORREÇÃO: Renderizar ID diretamente do objeto item, não do WTForms #}
                 <input type="hidden" name="itens-{{ loop_index }}-id" value="{{ item.id if item else '' }}">
@@ -686,7 +711,8 @@
             {% for lote_id in lotes_separacao %}
               {% set item_com_lote = embarque.itens_ativos | selectattr('separacao_lote_id', 'equalto', lote_id) | first %}
               {% if item_com_lote %}
-                <li><h6 class="dropdown-header">{{ item_com_lote.pedido or 'Sem pedido' }} - {{ item_com_lote.cliente or 'Sem cliente' }}</h6></li>
+                {% set tipo_sep = 'CarVia' if lote_id.startswith('CARVIA-') else 'Nacom' %}
+                <li><h6 class="dropdown-header"><span class="badge {{ 'bg-info' if tipo_sep == 'CarVia' else 'bg-primary' }} me-1">{{ tipo_sep }}</span>{{ item_com_lote.pedido or 'Sem pedido' }} - {{ item_com_lote.cliente or 'Sem cliente' }}</h6></li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('embarques.acessar_separacao', embarque_id=embarque.id, separacao_lote_id=lote_id) }}">
                     <i class="fas fa-eye"></i> Acessar Dados

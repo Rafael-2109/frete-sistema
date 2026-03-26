@@ -22,22 +22,57 @@ def register_pedido_routes(bp):
             return redirect(url_for('main.dashboard'))
 
         from app.carvia.models import CarviaPedido
+        from collections import Counter
 
         status = request.args.get('status')
         cotacao_id = request.args.get('cotacao_id', type=int)
 
         query = CarviaPedido.query
-        if status:
-            query = query.filter_by(status=status)
         if cotacao_id:
             query = query.filter_by(cotacao_id=cotacao_id)
 
-        pedidos = query.order_by(CarviaPedido.criado_em.desc()).all()
+        todos = query.order_by(CarviaPedido.criado_em.desc()).all()
+
+        # Contadores por status_calculado (property, nao coluna DB)
+        contadores = Counter(p.status_calculado for p in todos)
+
+        # Filtrar por status_calculado (nao pela coluna DB)
+        if status:
+            pedidos = [p for p in todos if p.status_calculado == status]
+        else:
+            pedidos = todos
+
+        # Pre-build NFs e embarque por pedido
+        from app.carvia.models import CarviaNf
+        from app.embarques.models import EmbarqueItem, Embarque
+
+        nfs_por_pedido = {}
+        embarques_por_pedido = {}
+        for ped in pedidos:
+            itens = ped.itens.all()
+            nf_nums = sorted({i.numero_nf for i in itens if i.numero_nf})
+            nfs_por_pedido[ped.id] = nf_nums
+
+            for nf_num in nf_nums:
+                nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+                if nf_obj:
+                    em = EmbarqueItem.query.filter_by(
+                        separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
+                        status='ativo',
+                    ).first()
+                    if em:
+                        embarques_por_pedido[ped.id] = db.session.get(
+                            Embarque, em.embarque_id
+                        )
+                        break
 
         return render_template(
             'carvia/pedidos/listar.html',
             pedidos=pedidos,
             status_filtro=status,
+            contadores=dict(contadores),
+            nfs_por_pedido=nfs_por_pedido,
+            embarques_por_pedido=embarques_por_pedido,
         )
 
     @bp.route('/pedidos-carvia/<int:pedido_id>')
@@ -91,7 +126,7 @@ def register_pedido_routes(bp):
 
         try:
             pedido = CarviaPedido(
-                numero_pedido=CarviaPedido.gerar_numero_pedido(),
+                numero_pedido=CarviaPedido.gerar_numero_pedido(cotacao_id),
                 cotacao_id=cotacao_id,
                 filial=filial,
                 tipo_separacao=tipo_sep,
@@ -187,8 +222,8 @@ def register_pedido_routes(bp):
             for item in itens:
                 item.numero_nf = numero_nf
 
-            # Atualizar status do pedido (cache para queries DB)
-            if pedido.status == 'PENDENTE':
+            # Atualizar status do pedido
+            if pedido.status == 'ABERTO':
                 pedido.status = 'FATURADO'
 
             db.session.flush()
@@ -207,6 +242,28 @@ def register_pedido_routes(bp):
                     "Erro ao expandir provisorio (nao-bloqueante): %s", e
                 )
 
+            # 3. Limpar alerta saida-sem-nf se todos os itens da cotacao agora tem NF
+            try:
+                from app.carvia.models import CarviaCotacao as _CC
+                cot = db.session.get(_CC, pedido.cotacao_id)
+                if cot and cot.alerta_saida_sem_nf:
+                    from app.embarques.models import EmbarqueItem as _EI
+                    still_pending = _EI.query.filter(
+                        _EI.carvia_cotacao_id == pedido.cotacao_id,
+                        _EI.status == 'ativo',
+                        db.or_(
+                            _EI.provisorio == True,
+                            _EI.nota_fiscal.is_(None),
+                            _EI.nota_fiscal == '',
+                        )
+                    ).count()
+                    if still_pending == 0:
+                        cot.alerta_saida_sem_nf = False
+                        cot.alerta_saida_sem_nf_em = None
+                        cot.alerta_saida_embarque_id = None
+            except Exception as e:
+                logger.warning("Erro ao limpar alerta saida-sem-nf: %s", e)
+
             db.session.commit()
 
             resposta = {
@@ -223,4 +280,127 @@ def register_pedido_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error("Erro ao anexar NF ao pedido %s: %s", pedido_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>', methods=['DELETE'])
+    @login_required
+    def api_excluir_pedido(pedido_id):
+        """Exclui pedido CarVia, seus itens e EmbarqueItem vinculado."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaPedido, CarviaPedidoItem
+        from app.embarques.models import EmbarqueItem
+
+        pedido = db.session.get(CarviaPedido, pedido_id)
+        if not pedido:
+            return jsonify({'erro': 'Pedido nao encontrado.'}), 404
+
+        if pedido.status_calculado == 'EMBARCADO':
+            return jsonify({'erro': 'Pedido ja embarcado, nao pode ser excluido.'}), 400
+
+        try:
+            numero = pedido.numero_pedido
+            cotacao_id = pedido.cotacao_id
+
+            # 1. Coletar EmbarqueItems de NFs do pedido (CARVIA-NF-*)
+            # e o EmbarqueItem do pedido antigo (CARVIA-PED-*)
+            nfs_do_pedido = [i.numero_nf for i in pedido.itens.all() if i.numero_nf]
+            from app.carvia.models import CarviaNf
+            nf_ids = []
+            for nf_num in set(nfs_do_pedido):
+                nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+                if nf_obj:
+                    nf_ids.append(nf_obj.id)
+
+            # Somar peso/valor/volumes dos EmbarqueItems que serao removidos
+            peso_devolver = 0
+            valor_devolver = 0
+            vol_devolver = 0
+            embarque_id_ref = None
+
+            for nf_id in nf_ids:
+                lote_nf = f'CARVIA-NF-{nf_id}'
+                ei = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=lote_nf, status='ativo',
+                ).first()
+                if ei:
+                    peso_devolver += float(ei.peso or 0)
+                    valor_devolver += float(ei.valor or 0)
+                    vol_devolver += int(ei.volumes or 0)
+                    embarque_id_ref = ei.embarque_id
+                    db.session.delete(ei)
+
+            # Remover EmbarqueItem antigo (CARVIA-PED-*)
+            lote_ped = f'CARVIA-PED-{pedido_id}'
+            ei_ped = EmbarqueItem.query.filter_by(
+                separacao_lote_id=lote_ped, status='ativo',
+            ).first()
+            if ei_ped:
+                peso_devolver += float(ei_ped.peso or 0)
+                valor_devolver += float(ei_ped.valor or 0)
+                vol_devolver += int(ei_ped.volumes or 0)
+                embarque_id_ref = ei_ped.embarque_id
+                db.session.delete(ei_ped)
+
+            # 2. Devolver saldo ao provisorio
+            if embarque_id_ref and cotacao_id:
+                provisorio = EmbarqueItem.query.filter_by(
+                    carvia_cotacao_id=cotacao_id,
+                    provisorio=True,
+                    status='ativo',
+                ).first()
+
+                if provisorio:
+                    provisorio.volumes = (provisorio.volumes or 0) + vol_devolver
+                    provisorio.peso = (provisorio.peso or 0) + peso_devolver
+                    provisorio.valor = (provisorio.valor or 0) + valor_devolver
+                    logger.info(
+                        "Provisorio restaurado: +%d vol, +%.1f kg, +%.2f R$ (cotacao %s)",
+                        vol_devolver, peso_devolver, valor_devolver, cotacao_id,
+                    )
+                elif peso_devolver > 0 or vol_devolver > 0:
+                    # Recriar provisorio com saldo devolvido
+                    from app.carvia.models import CarviaCotacao
+                    cotacao = db.session.get(CarviaCotacao, cotacao_id)
+                    dest = cotacao.endereco_destino if cotacao else None
+                    novo_prov = EmbarqueItem(
+                        embarque_id=embarque_id_ref,
+                        separacao_lote_id=f'CARVIA-COT-{cotacao_id}',
+                        cnpj_cliente=dest.cnpj if dest else '',
+                        cliente=cotacao.cliente.nome_comercial if cotacao and cotacao.cliente else '',
+                        pedido=cotacao.numero_cotacao if cotacao else '',
+                        peso=peso_devolver,
+                        valor=valor_devolver,
+                        pallets=0,
+                        uf_destino=dest.fisico_uf if dest else '',
+                        cidade_destino=dest.fisico_cidade if dest else '',
+                        volumes=vol_devolver,
+                        provisorio=True,
+                        carvia_cotacao_id=cotacao_id,
+                    )
+                    db.session.add(novo_prov)
+                    logger.info(
+                        "Provisorio RECRIADO: vol=%d, peso=%.1f, valor=%.2f (cotacao %s, embarque %s)",
+                        vol_devolver, peso_devolver, valor_devolver, cotacao_id, embarque_id_ref,
+                    )
+
+            # 3. Remover itens do pedido
+            CarviaPedidoItem.query.filter_by(
+                pedido_id=pedido_id
+            ).delete(synchronize_session='fetch')
+
+            # 4. Remover pedido
+            db.session.delete(pedido)
+            db.session.commit()
+
+            logger.info("Pedido %s excluido com restauracao (cotacao %s)", numero, cotacao_id)
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'Pedido {numero} excluido. Saldo restaurado.',
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao excluir pedido %s: %s", pedido_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500

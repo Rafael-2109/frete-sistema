@@ -118,8 +118,8 @@ class CarviaClienteService:
             return None, 'Cliente nao encontrado.'
 
         cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj)
-        if not cnpj_limpo or len(cnpj_limpo) != 14:
-            return None, 'CNPJ invalido (deve ter 14 digitos).'
+        if not cnpj_limpo or len(cnpj_limpo) not in (11, 14):
+            return None, 'Documento invalido (CNPJ=14 digitos, CPF=11 digitos).'
 
         tipo = tipo.upper()
         if tipo not in ('ORIGEM', 'DESTINO'):
@@ -132,7 +132,7 @@ class CarviaClienteService:
             tipo=tipo,
         ).first()
         if existente:
-            return None, f'Endereco com CNPJ {cnpj_limpo} ({tipo}) ja cadastrado para este cliente.'
+            return None, f'Endereco com documento {cnpj_limpo} ({tipo}) ja cadastrado para este cliente.'
 
         # Montar dados Receita
         receita = dados_receita or {}
@@ -183,6 +183,10 @@ class CarviaClienteService:
             if chave in dados:
                 setattr(endereco, chave, dados[chave])
 
+        if 'tipo' in dados:
+            tipo = dados['tipo'].upper()
+            if tipo in ('ORIGEM', 'DESTINO'):
+                endereco.tipo = tipo
         if 'razao_social' in dados:
             endereco.razao_social = dados['razao_social']
         if 'principal' in dados:

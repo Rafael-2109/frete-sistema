@@ -3248,26 +3248,61 @@ def simulador():
 
 def verificar_cte_existente_para_embarque(embarque_id, cnpj_cliente=None):
     """
-    Verifica se já existe CTe lançado para um embarque e CNPJ
-    """
-    query = Frete.query.filter_by(embarque_id=embarque_id)
+    Verifica se ja existe CTe lancado para um embarque e CNPJ.
 
+    Checa AMBOS os modulos:
+    - Nacom (Frete): numero_cte preenchido
+    - CarVia (CarviaFrete): valor_cte preenchido (CTe real, nao auto-gerado)
+    """
+    # --- Nacom ---
+    query = Frete.query.filter_by(embarque_id=embarque_id)
     if cnpj_cliente:
         query = query.filter_by(cnpj_cliente=cnpj_cliente)
+    fretes_nacom = query.filter(Frete.numero_cte.isnot(None)).all()
 
-    fretes = query.filter(Frete.numero_cte.isnot(None)).all()
-    return fretes
+    # --- CarVia: CTe real (valor_cte preenchido) ---
+    try:
+        from app.carvia.models import CarviaFrete
+        carvia_fretes = CarviaFrete.query.filter(
+            CarviaFrete.embarque_id == embarque_id,
+            CarviaFrete.status != 'CANCELADO',
+            CarviaFrete.valor_cte.isnot(None),
+        ).all()
+    except Exception:
+        carvia_fretes = []
+
+    return fretes_nacom + carvia_fretes
+
+
+def _is_nacom_item(item):
+    """True se EmbarqueItem e Nacom (nao CarVia).
+
+    CarVia items identificados por:
+    1. carvia_cotacao_id IS NOT NULL (marcador canonico)
+    2. separacao_lote_id LIKE 'CARVIA-%' (marcador legado/fallback)
+    """
+    if item.carvia_cotacao_id:
+        return False
+    if item.separacao_lote_id and str(item.separacao_lote_id).startswith('CARVIA-'):
+        return False
+    return True
 
 
 def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     """
     Verifica se um frete pode ser lançado automaticamente
     REQUISITOS RIGOROSOS (TODOS DEVEM SER ATENDIDOS):
-    1. TODAS as NFs do embarque devem estar preenchidas
-    2. TODAS as NFs do embarque devem estar no faturamento
+    0. Portaria deve ter dado saída (embarque.data_embarque preenchida)
+    1. TODAS as NFs Nacom do embarque devem estar preenchidas
+    2. TODAS as NFs Nacom do embarque devem estar no faturamento
     3. TODOS os CNPJs devem coincidir entre embarque e faturamento
     4. Não pode já existir frete para este CNPJ/embarque
     """
+    # REQUISITO 0: Portaria deve ter dado saída
+    embarque = db.session.get(Embarque, embarque_id)
+    if not embarque or not embarque.data_embarque:
+        return False, "Aguardando saída da portaria para lançamento de frete"
+
     # Verifica se já existe frete
     frete_existente = Frete.query.filter(
         and_(Frete.embarque_id == embarque_id, Frete.cnpj_cliente == cnpj_cliente)
@@ -3276,11 +3311,19 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     if frete_existente:
         return False, f"Já existe frete para CNPJ {cnpj_cliente} no embarque {embarque_id}"
 
-    # ✅ CORREÇÃO: Busca APENAS os itens ATIVOS do embarque
-    itens_embarque = EmbarqueItem.query.filter_by(embarque_id=embarque_id, status="ativo").all()
+    # Busca APENAS itens ATIVOS Nacom do embarque (exclui CarVia)
+    itens_embarque = EmbarqueItem.query.filter(
+        EmbarqueItem.embarque_id == embarque_id,
+        EmbarqueItem.status == "ativo",
+        EmbarqueItem.carvia_cotacao_id.is_(None),
+        db.or_(
+            EmbarqueItem.separacao_lote_id.is_(None),
+            ~EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+        ),
+    ).all()
 
     if not itens_embarque:
-        return False, "Nenhum item ativo encontrado no embarque"
+        return False, "Nenhum item Nacom ativo encontrado no embarque"
 
     # REQUISITO 1: TODAS as NFs dos itens ATIVOS devem estar preenchidas
     itens_sem_nf = [item for item in itens_embarque if not item.nota_fiscal or item.nota_fiscal.strip() == ""]
@@ -3370,10 +3413,10 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
         if not nf_faturamento:
             return False, "Dados do CNPJ não encontrados no faturamento"
 
-        # ✅ CORREÇÃO: Busca itens ATIVOS do embarque para este CNPJ
+        # Busca itens ATIVOS Nacom do embarque para este CNPJ (exclui CarVia)
         itens_embarque_cnpj = []
         for item in embarque.itens:
-            if item.status == "ativo" and item.nota_fiscal:
+            if item.status == "ativo" and item.nota_fiscal and _is_nacom_item(item):
                 nf_fat = RelatorioFaturamentoImportado.query.filter_by(
                     numero_nf=item.nota_fiscal, cnpj_cliente=cnpj_cliente
                 ).first()
@@ -3442,10 +3485,10 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
             tabela_dados["icms_destino"] = embarque.icms_destino or 0
 
-            # ✅ CORREÇÃO: Calcula totais do embarque inteiro (apenas itens ATIVOS)
+            # Calcula totais do embarque inteiro (apenas itens ATIVOS Nacom, exclui CarVia)
             todas_nfs_embarque = []
             for item in embarque.itens:
-                if item.status == "ativo" and item.nota_fiscal:
+                if item.status == "ativo" and item.nota_fiscal and _is_nacom_item(item):
                     nf_fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=item.nota_fiscal).first()
                     if nf_fat:
                         todas_nfs_embarque.append(nf_fat)
@@ -3680,6 +3723,12 @@ def validar_cnpj_embarque_faturamento(embarque_id):
             if item.status != "ativo":
                 continue
 
+            # Itens CarVia: NFs gerenciadas pelo modulo CarVia, nao pelo faturamento Nacom
+            if item.carvia_cotacao_id:
+                if item.erro_validacao:
+                    item.erro_validacao = None
+                continue
+
             # REQUISITO: Todas as NFs dos itens ATIVOS devem estar preenchidas
             if not item.nota_fiscal or item.nota_fiscal.strip() == "":
                 item.erro_validacao = "NF_NAO_PREENCHIDA"
@@ -3776,6 +3825,10 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
             if not embarque:
                 return False, "Embarque não encontrado"
 
+            # REQUISITO: Portaria deve ter dado saída (early return para performance)
+            if not embarque.data_embarque:
+                return True, "Aguardando saída da portaria para lançamento de frete"
+
             # VALIDAÇÃO RIGOROSA: Todas as NFs devem estar validadas
             sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque_id)
 
@@ -3816,6 +3869,11 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
             )
 
             for (embarque_id_encontrado,) in embarques_com_cnpj:
+                # Verifica se portaria já deu saída neste embarque
+                embarque_obj = db.session.get(Embarque, embarque_id_encontrado)
+                if not embarque_obj or not embarque_obj.data_embarque:
+                    continue  # Portaria não deu saída ainda
+
                 # VALIDAÇÃO RIGOROSA para cada embarque
                 sucesso_validacao, _ = validar_cnpj_embarque_faturamento(embarque_id_encontrado)
 

@@ -27,18 +27,20 @@ embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
 
 def apagar_fretes_sem_cte_embarque(embarque_id):
     """
-    🔧 NOVA FUNÇÃO: Apaga fretes existentes do embarque que não possuem CTe preenchido
-    
-    Esta função resolve o problema de sincronização entre embarques e fretes:
-    - Busca todos os fretes do embarque
-    - Remove apenas os fretes que NÃO têm CTe preenchido
-    - Preserva fretes que já têm CTe (para não perder dados já processados)
-    - Retorna informações sobre a operação
+    Apaga/cancela fretes existentes do embarque que nao possuem CTe preenchido.
+
+    Nacom (Frete): DELETA fretes sem CTe (serao regenerados pelo lancamento automatico).
+    CarVia (CarviaFrete): CANCELA fretes sem CTe (preserva entidades vinculadas).
+
+    Preserva fretes que ja tem CTe para nao perder dados ja processados.
+    Nao faz commit — sera feito junto com o salvamento do embarque.
     """
     try:
         from app.fretes.models import Frete
-        
-        # Busca fretes do embarque sem CTe preenchido
+
+        mensagens = []
+
+        # --- Nacom: DELETAR fretes sem CTe ---
         fretes_sem_cte = Frete.query.filter(
             Frete.embarque_id == embarque_id,
             Frete.status != 'CANCELADO',
@@ -48,20 +50,48 @@ def apagar_fretes_sem_cte_embarque(embarque_id):
                 Frete.valor_cte.is_(None)
             )
         ).all()
-        
-        if not fretes_sem_cte:
-            return True, "Nenhum frete sem CTe encontrado"
-        
-        # Remove os fretes sem CTe
-        fretes_removidos = []
+
         for frete in fretes_sem_cte:
-            fretes_removidos.append(f"Frete #{frete.id} (CNPJ: {frete.cnpj_cliente})")
             db.session.delete(frete)
-        
-        # Não faz commit aqui - será feito junto com o salvamento do embarque
-        
-        return True, f"✅ {len(fretes_removidos)} frete(s) sem CTe removido(s) antes do salvamento"
-        
+
+        if fretes_sem_cte:
+            mensagens.append(f"{len(fretes_sem_cte)} frete(s) Nacom sem CTe removido(s)")
+
+        # --- CarVia: CANCELAR fretes sem CTe + cascata para operacao/sub ---
+        from app.carvia.models import CarviaFrete, CarviaOperacao, CarviaSubcontrato
+        carvia_fretes_sem_cte = CarviaFrete.query.filter(
+            CarviaFrete.embarque_id == embarque_id,
+            CarviaFrete.status != 'CANCELADO',
+            db.or_(
+                CarviaFrete.valor_cte.is_(None),
+                CarviaFrete.valor_cte == 0,
+            )
+        ).all()
+
+        for cf in carvia_fretes_sem_cte:
+            cf.status = 'CANCELADO'
+            cf.observacoes = (cf.observacoes or '') + '\nCancelado: embarque desvinculado.'
+
+            # Cascata: cancelar operacao nao-faturada
+            if cf.operacao_id:
+                op = CarviaOperacao.query.get(cf.operacao_id)
+                if op and op.status != 'FATURADO' and not op.fatura_cliente_id:
+                    op.status = 'CANCELADO'
+
+            # Cascata: cancelar subcontrato nao-faturado
+            if cf.subcontrato_id:
+                sub = CarviaSubcontrato.query.get(cf.subcontrato_id)
+                if sub and sub.status != 'FATURADO' and not sub.fatura_transportadora_id:
+                    sub.status = 'CANCELADO'
+
+        if carvia_fretes_sem_cte:
+            mensagens.append(f"{len(carvia_fretes_sem_cte)} frete(s) CarVia sem CTe cancelado(s)")
+
+        if not mensagens:
+            return True, "Nenhum frete sem CTe encontrado"
+
+        return True, '; '.join(mensagens)
+
     except Exception as e:
         return False, f"Erro ao apagar fretes sem CTe: {str(e)}"
 
@@ -1112,18 +1142,34 @@ def obter_dados_portaria_embarque(embarque_id):
 @login_required
 def acessar_separacao(embarque_id, separacao_lote_id):
     """
-    Exibe os dados detalhados da separação vinculada ao embarque
-    """    
-    from app.separacao.models import Separacao
+    Exibe os dados detalhados da separação vinculada ao embarque.
+    Detecta CarVia e redireciona para impressao CarVia (que mostra os dados).
+    """
     embarque = Embarque.query.get_or_404(embarque_id)
-    
-    # Busca todos os itens da separação com este lote_id
+
+    # CarVia: redirecionar para impressao CarVia (exibe dados da cotacao/pedido)
+    if str(separacao_lote_id).startswith('CARVIA-'):
+        return _imprimir_separacao_carvia(embarque_id, separacao_lote_id)
+
+    # Fallback: item com carvia_cotacao_id mas sem prefixo CARVIA-
+    item_check = EmbarqueItem.query.filter_by(
+        embarque_id=embarque_id,
+        separacao_lote_id=separacao_lote_id,
+        status='ativo',
+    ).first()
+    if item_check and item_check.carvia_cotacao_id:
+        return _imprimir_separacao_carvia(
+            embarque_id, f'CARVIA-{item_check.carvia_cotacao_id}'
+        )
+
+    # Nacom: busca na tabela Separacao
+    from app.separacao.models import Separacao
     itens_separacao = Separacao.query.filter_by(separacao_lote_id=separacao_lote_id).all()
-    
+
     if not itens_separacao:
         flash('Dados de separação não encontrados para este embarque.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
-    
+
     # Agrupa informações da separação
     resumo_separacao = {
         'lote_id': separacao_lote_id,
@@ -1139,9 +1185,9 @@ def acessar_separacao(embarque_id, separacao_lote_id):
         'pallet_total': sum(item.pallet or 0 for item in itens_separacao),
         'qtd_total': sum(item.qtd_saldo or 0 for item in itens_separacao),
     }
-    
+
     return render_template(
-        'embarques/acessar_separacao.html', 
+        'embarques/acessar_separacao.html',
         embarque=embarque,
         itens_separacao=itens_separacao,
         resumo_separacao=resumo_separacao
@@ -1157,6 +1203,17 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
     # CarVia: usar template proprio (dados de CarViaCotacao/CarviaPedido)
     if str(separacao_lote_id).startswith('CARVIA-'):
         return _imprimir_separacao_carvia(embarque_id, separacao_lote_id)
+
+    # Fallback: item com carvia_cotacao_id mas sem prefixo CARVIA-
+    item_check = EmbarqueItem.query.filter_by(
+        embarque_id=embarque_id,
+        separacao_lote_id=separacao_lote_id,
+        status='ativo',
+    ).first()
+    if item_check and item_check.carvia_cotacao_id:
+        return _imprimir_separacao_carvia(
+            embarque_id, f'CARVIA-{item_check.carvia_cotacao_id}'
+        )
 
     from app.separacao.models import Separacao
     from app.pedidos.models import Pedido
@@ -1238,13 +1295,32 @@ def imprimir_embarque(embarque_id):
         url_rastreamento = embarque.rastreamento.url_rastreamento
         qrcode_base64 = QRCodeService.gerar_qrcode(url_rastreamento, tamanho=8, borda=1)
 
+    # Resolver filial dos itens CarVia para badge SP/RJ
+    filial_por_lote = {}
+    for item in embarque.itens_ativos:
+        lid = item.separacao_lote_id or ''
+        if lid.startswith('CARVIA-NF-'):
+            try:
+                nf_id = int(lid.replace('CARVIA-NF-', ''))
+                from app.carvia.models import CarviaNf, CarviaPedidoItem
+                nf_obj = db.session.get(CarviaNf, nf_id)
+                if nf_obj:
+                    pi = CarviaPedidoItem.query.filter_by(
+                        numero_nf=str(nf_obj.numero_nf)
+                    ).first()
+                    if pi and pi.pedido:
+                        filial_por_lote[lid] = pi.pedido.filial
+            except (ValueError, TypeError):
+                pass
+
     # Renderiza template específico para impressão do embarque
     html = render_template(
         'embarques/imprimir_embarque.html',
         embarque=embarque,
+        filial_por_lote=filial_por_lote,
         data_impressao=agora_utc_naive(),
         current_user=current_user,
-        qrcode_base64=qrcode_base64  # 🚚 QR Code
+        qrcode_base64=qrcode_base64
     )
     
     response = make_response(html)
@@ -1289,10 +1365,11 @@ def imprimir_embarque_completo(embarque_id):
 
     db.session.commit()
 
-    # Busca todos os lotes únicos de separação vinculados a este embarque
+    # Busca todos os lotes únicos de separação vinculados a este embarque (apenas ativos)
     lotes_separacao = db.session.query(EmbarqueItem.separacao_lote_id).filter(
         EmbarqueItem.embarque_id == embarque_id,
-        EmbarqueItem.separacao_lote_id.isnot(None)
+        EmbarqueItem.separacao_lote_id.isnot(None),
+        EmbarqueItem.status == 'ativo',
     ).distinct().all()
 
     # Particionar lotes: Nacom vs CarVia
@@ -1333,43 +1410,24 @@ def imprimir_embarque_completo(embarque_id):
                 'itens': itens_separacao
             })
 
-    # Prepara dados de cada separação CARVIA
-    from app.carvia.models import CarviaCotacao, CarviaPedido, CarviaPedidoItem, CarviaCotacaoMoto
+    # Prepara dados de cada separação CARVIA (via resolver centralizado)
+    from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
 
     carvia_separacoes_data = []
     for lote_id in lotes_carvia:
-        eh_pedido = str(lote_id).startswith('CARVIA-PED-')
-        cotacao = None
-        pedido_cv = None
-        itens_pedido = []
-        motos = []
-
-        try:
-            if eh_pedido:
-                ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
-                pedido_cv = db.session.get(CarviaPedido, ped_id)
-                if pedido_cv:
-                    cotacao = db.session.get(CarviaCotacao, pedido_cv.cotacao_id)
-                    itens_pedido = CarviaPedidoItem.query.filter_by(pedido_id=ped_id).all()
-            else:
-                cot_id = int(str(lote_id).replace('CARVIA-', ''))
-                cotacao = db.session.get(CarviaCotacao, cot_id)
-        except (ValueError, TypeError):
+        dados = EmbarqueCarViaService.resolver_lote_carvia(lote_id)
+        if not dados or not dados['cotacao']:
             continue
-
-        if not cotacao:
-            continue
-
-        if cotacao.tipo_material == 'MOTO' and not eh_pedido:
-            motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all()
 
         carvia_separacoes_data.append({
             'lote_id': lote_id,
-            'eh_pedido': eh_pedido,
-            'cotacao': cotacao,
-            'pedido': pedido_cv,
-            'itens_pedido': itens_pedido,
-            'motos': motos,
+            'eh_pedido': dados['eh_pedido'],
+            'cotacao': dados['cotacao'],
+            'pedido': dados['pedido'],
+            'itens_pedido': dados['itens_pedido'],
+            'motos': dados['motos'],
+            'veiculos_por_nf': dados['veiculos_por_nf'],
+            'filial': dados['filial'],
         })
     
     # 🚚 Gerar QR Code para rastreamento
@@ -1378,12 +1436,19 @@ def imprimir_embarque_completo(embarque_id):
         url_rastreamento = embarque.rastreamento.url_rastreamento
         qrcode_base64 = QRCodeService.gerar_qrcode(url_rastreamento, tamanho=8, borda=1)
 
+    # Construir filial_por_lote para badges SP/RJ no resumo de itens
+    filial_por_lote = {}
+    for cv in carvia_separacoes_data:
+        if cv.get('filial'):
+            filial_por_lote[cv['lote_id']] = cv['filial']
+
     # Renderiza template específico para impressão completa
     html = render_template(
         'embarques/imprimir_completo.html',
         embarque=embarque,
         separacoes_data=separacoes_data,
         carvia_separacoes_data=carvia_separacoes_data,
+        filial_por_lote=filial_por_lote,
         data_impressao=agora_utc_naive(),
         current_user=current_user,
         qrcode_base64=qrcode_base64
@@ -1493,7 +1558,12 @@ def validar_nf_cliente(item_embarque):
     
     if not item_embarque.nota_fiscal:
         return True, None
-        
+
+    # Itens CarVia: NFs validadas pelo modulo CarVia, nao pelo faturamento Nacom
+    if item_embarque.carvia_cotacao_id:
+        item_embarque.erro_validacao = None
+        return True, None
+
     # Busca a NF no faturamento
     nf_faturamento = RelatorioFaturamentoImportado.query.filter_by(
         numero_nf=item_embarque.nota_fiscal
@@ -2918,44 +2988,22 @@ def _imprimir_separacao_carvia(embarque_id, separacao_lote_id):
 
     embarque = Embarque.query.get_or_404(embarque_id)
 
-    eh_pedido = str(separacao_lote_id).startswith('CARVIA-PED-')
+    from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
+    dados = EmbarqueCarViaService.resolver_lote_carvia(separacao_lote_id)
 
-    cotacao = None
-    pedido = None
-    itens_pedido = []
-
-    try:
-        if eh_pedido:
-            ped_id = int(str(separacao_lote_id).replace('CARVIA-PED-', ''))
-            from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaCotacao
-            pedido = db.session.get(CarviaPedido, ped_id)
-            if pedido:
-                cotacao = db.session.get(CarviaCotacao, pedido.cotacao_id)
-                itens_pedido = CarviaPedidoItem.query.filter_by(pedido_id=ped_id).all()
-        else:
-            cot_id = int(str(separacao_lote_id).replace('CARVIA-', ''))
-            from app.carvia.models import CarviaCotacao
-            cotacao = db.session.get(CarviaCotacao, cot_id)
-    except (ValueError, TypeError):
-        pass
-
-    if not cotacao:
+    if not dados or not dados['cotacao']:
         flash('Cotacao CarVia nao encontrada.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
-
-    motos = []
-    if cotacao.tipo_material == 'MOTO':
-        from app.carvia.models import CarviaCotacaoMoto
-        motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all()
 
     html = render_template(
         'embarques/imprimir_separacao_carvia.html',
         embarque=embarque,
-        cotacao=cotacao,
-        pedido=pedido,
-        itens_pedido=itens_pedido,
-        motos=motos,
-        eh_pedido=eh_pedido,
+        cotacao=dados['cotacao'],
+        pedido=dados['pedido'],
+        itens_pedido=dados['itens_pedido'],
+        motos=dados['motos'],
+        eh_pedido=dados['eh_pedido'],
+        veiculos_por_nf=dados['veiculos_por_nf'],
         separacao_lote_id=separacao_lote_id,
         data_impressao=agora_utc_naive(),
         current_user=current_user,

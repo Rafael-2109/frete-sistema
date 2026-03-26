@@ -63,7 +63,7 @@
                     <thead>
                         <tr>
                             <th>Tipo</th>
-                            <th>CNPJ</th>
+                            <th>CNPJ/CPF</th>
                             <th>Razao Social</th>
                             <th>Endereco Fisico</th>
                             <th class="text-center">Principal</th>
@@ -99,7 +99,8 @@
                             </td>
                             <td class="text-center">
                                 <button type="button" class="btn btn-outline-primary btn-sm"
-                                        onclick="editarEndereco({{ end.id }}, {{ end|tojson }})"
+                                        data-endereco='{{ {'tipo': end.tipo, 'fisico_logradouro': end.fisico_logradouro, 'fisico_numero': end.fisico_numero, 'fisico_bairro': end.fisico_bairro, 'fisico_cidade': end.fisico_cidade, 'fisico_uf': end.fisico_uf, 'fisico_cep': end.fisico_cep, 'fisico_complemento': end.fisico_complemento}|tojson }}'
+                                        onclick="editarEndereco({{ end.id }}, JSON.parse(this.dataset.endereco))"
                                         title="Editar endereco fisico">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -138,10 +139,10 @@
                 {# Step 1: CNPJ + Tipo #}
                 <div class="row mb-3">
                     <div class="col-md-5">
-                        <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+                        <label class="form-label">CNPJ/CPF <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="endCnpj" placeholder="00.000.000/0000-00">
-                            <button type="button" class="btn btn-outline-primary" id="btnBuscarCnpj" onclick="buscarCnpj()">
+                            <input type="text" class="form-control" id="endCnpj" placeholder="CNPJ ou CPF">
+                            <button type="button" class="btn btn-outline-primary" id="btnBuscarDoc" onclick="buscarDocumento()">
                                 <i class="fas fa-search"></i> Buscar
                             </button>
                         </div>
@@ -165,7 +166,7 @@
                 <div id="cnpjAviso" class="alert alert-warning py-1 small d-none mb-3"></div>
                 <div id="cnpjErro" class="alert alert-danger py-1 small d-none mb-3"></div>
 
-                {# Dados Receita (readonly) #}
+                {# Dados Receita (readonly) — CNPJ only #}
                 <div id="secaoReceita" class="d-none">
                     <h6 class="text-muted mb-2"><i class="fas fa-university"></i> Dados da Receita Federal</h6>
                     <div class="row mb-3">
@@ -210,12 +211,24 @@
                             <input type="text" class="form-control form-control-sm" id="recComplemento" readonly>
                         </div>
                     </div>
+                </div>
 
+                {# Pessoa Fisica — CPF only #}
+                <div id="secaoCpf" class="d-none">
+                    <h6 class="text-muted mb-2"><i class="fas fa-user"></i> Pessoa Fisica</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small">Nome Completo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="endNomeCpf" placeholder="Nome da pessoa fisica">
+                        </div>
+                    </div>
+                </div>
+
+                {# Endereco Fisico (editavel) — ambos #}
+                <div id="secaoFisico" class="d-none">
                     <hr>
-
-                    {# Endereco Fisico (editavel) #}
                     <h6 class="text-muted mb-2"><i class="fas fa-map-marker-alt"></i> Endereco Fisico (editavel)</h6>
-                    <div class="alert alert-info py-1 small mb-2">
+                    <div class="alert alert-info py-1 small mb-2" id="alertaPrePreenchido">
                         Pre-preenchido da Receita. Edite se o endereco fisico for diferente.
                     </div>
                     <div class="row mb-3">
@@ -243,7 +256,12 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small">CEP</label>
-                            <input type="text" class="form-control form-control-sm" id="fisCep">
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="fisCep">
+                                <button type="button" class="btn btn-outline-secondary" onclick="buscarCep('fis')" title="Buscar endereco pelo CEP">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small">Complemento</label>
@@ -273,6 +291,15 @@
             <div class="modal-body">
                 <input type="hidden" id="editEndId">
                 <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Tipo</label>
+                        <select class="form-select form-select-sm" id="editTipo">
+                            <option value="ORIGEM">Origem</option>
+                            <option value="DESTINO">Destino</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label small">Logradouro</label>
                         <input type="text" class="form-control form-control-sm" id="editFisLogradouro">
@@ -297,7 +324,12 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small">CEP</label>
-                        <input type="text" class="form-control form-control-sm" id="editFisCep">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="editFisCep">
+                            <button type="button" class="btn btn-outline-secondary" onclick="buscarCep('editFis')" title="Buscar endereco pelo CEP">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small">Complemento</label>
@@ -318,19 +350,52 @@
 <script>
 const clienteId = {{ cliente.id }};
 
-/* ===== Buscar CNPJ na Receita ===== */
 let dadosReceita = null;
+let tipoDocumento = null; // 'cnpj' ou 'cpf'
 
-function buscarCnpj() {
-    const cnpj = document.getElementById('endCnpj').value.trim();
-    if (!cnpj) return alert('Informe o CNPJ.');
+/* ===== Detectar tipo de documento ===== */
+function detectarTipoDocumento(valor) {
+    const limpo = valor.replace(/\D/g, '');
+    if (limpo.length === 14) return 'cnpj';
+    if (limpo.length === 11) return 'cpf';
+    return null;
+}
 
-    const btn = document.getElementById('btnBuscarCnpj');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+/* ===== Buscar Documento (CNPJ ou CPF) ===== */
+function buscarDocumento() {
+    const valor = document.getElementById('endCnpj').value.trim();
+    if (!valor) return alert('Informe o CNPJ ou CPF.');
 
+    const tipo = detectarTipoDocumento(valor);
+    if (!tipo) return alert('Documento invalido. Informe um CNPJ (14 digitos) ou CPF (11 digitos).');
+
+    // Reset secoes
+    document.getElementById('secaoReceita').classList.add('d-none');
+    document.getElementById('secaoCpf').classList.add('d-none');
+    document.getElementById('secaoFisico').classList.add('d-none');
     document.getElementById('cnpjAviso').classList.add('d-none');
     document.getElementById('cnpjErro').classList.add('d-none');
+    dadosReceita = null;
+    tipoDocumento = tipo;
+
+    if (tipo === 'cnpj') {
+        buscarCnpj(valor);
+    } else {
+        // CPF: sem consulta Receita — mostrar campos manuais
+        document.getElementById('secaoCpf').classList.remove('d-none');
+        document.getElementById('secaoFisico').classList.remove('d-none');
+        document.getElementById('alertaPrePreenchido').textContent =
+            'Informe o CEP para buscar o endereco automaticamente.';
+        document.getElementById('btnSalvarEndereco').disabled = false;
+        dadosReceita = {};
+    }
+}
+
+/* ===== Buscar CNPJ na Receita ===== */
+function buscarCnpj(cnpj) {
+    const btn = document.getElementById('btnBuscarDoc');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     fetch('{{ url_for("carvia.api_buscar_cnpj") }}', {
         method: 'POST',
@@ -357,6 +422,9 @@ function buscarCnpj() {
         preencherReceita(dadosReceita);
         preencherFisico(dadosReceita);
         document.getElementById('secaoReceita').classList.remove('d-none');
+        document.getElementById('secaoFisico').classList.remove('d-none');
+        document.getElementById('alertaPrePreenchido').textContent =
+            'Pre-preenchido da Receita. Edite se o endereco fisico for diferente.';
         document.getElementById('btnSalvarEndereco').disabled = false;
     })
     .catch(err => {
@@ -388,22 +456,62 @@ function preencherFisico(d) {
     document.getElementById('fisComplemento').value = d.complemento || '';
 }
 
+/* ===== Buscar CEP via ViaCEP (client-side, CORS suportado) ===== */
+function buscarCep(prefix) {
+    const cepInput = document.getElementById(prefix + 'Cep');
+    const cep = cepInput.value.replace(/\D/g, '');
+    if (!cep || cep.length !== 8) return alert('CEP invalido. Informe 8 digitos.');
+
+    cepInput.disabled = true;
+
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+    .then(r => r.json())
+    .then(data => {
+        cepInput.disabled = false;
+        if (data.erro) {
+            alert('CEP nao encontrado.');
+            return;
+        }
+        document.getElementById(prefix + 'Logradouro').value = data.logradouro || '';
+        document.getElementById(prefix + 'Bairro').value = data.bairro || '';
+        document.getElementById(prefix + 'Cidade').value = data.localidade || '';
+        document.getElementById(prefix + 'Uf').value = data.uf || '';
+        // Complemento: preenche apenas se vazio
+        const complEl = document.getElementById(prefix + 'Complemento');
+        if (complEl && !complEl.value) {
+            complEl.value = data.complemento || '';
+        }
+    })
+    .catch(err => {
+        cepInput.disabled = false;
+        alert('Erro ao buscar CEP: ' + err);
+    });
+}
+
 /* ===== Salvar Endereco ===== */
 function salvarEndereco() {
-    if (!dadosReceita) return alert('Busque o CNPJ primeiro.');
+    if (!dadosReceita && !tipoDocumento) return alert('Busque o documento primeiro.');
+
+    const razaoSocial = tipoDocumento === 'cpf'
+        ? document.getElementById('endNomeCpf').value.trim()
+        : document.getElementById('endRazaoSocial').value;
+
+    if (tipoDocumento === 'cpf' && !razaoSocial) {
+        return alert('Nome completo e obrigatorio para CPF.');
+    }
 
     const payload = {
         cnpj: document.getElementById('endCnpj').value.trim(),
         tipo: document.getElementById('endTipo').value,
         principal: document.getElementById('endPrincipal').checked,
-        razao_social: document.getElementById('endRazaoSocial').value,
-        receita_uf: document.getElementById('recUf').value,
-        receita_cidade: document.getElementById('recCidade').value,
-        receita_logradouro: document.getElementById('recLogradouro').value,
-        receita_numero: document.getElementById('recNumero').value,
-        receita_bairro: document.getElementById('recBairro').value,
-        receita_cep: document.getElementById('recCep').value,
-        receita_complemento: document.getElementById('recComplemento').value,
+        razao_social: razaoSocial,
+        receita_uf: tipoDocumento === 'cnpj' ? document.getElementById('recUf').value : '',
+        receita_cidade: tipoDocumento === 'cnpj' ? document.getElementById('recCidade').value : '',
+        receita_logradouro: tipoDocumento === 'cnpj' ? document.getElementById('recLogradouro').value : '',
+        receita_numero: tipoDocumento === 'cnpj' ? document.getElementById('recNumero').value : '',
+        receita_bairro: tipoDocumento === 'cnpj' ? document.getElementById('recBairro').value : '',
+        receita_cep: tipoDocumento === 'cnpj' ? document.getElementById('recCep').value : '',
+        receita_complemento: tipoDocumento === 'cnpj' ? document.getElementById('recComplemento').value : '',
         fisico_uf: document.getElementById('fisUf').value,
         fisico_cidade: document.getElementById('fisCidade').value,
         fisico_logradouro: document.getElementById('fisLogradouro').value,
@@ -432,6 +540,7 @@ function salvarEndereco() {
 /* ===== Editar Endereco Fisico ===== */
 function editarEndereco(id, end) {
     document.getElementById('editEndId').value = id;
+    document.getElementById('editTipo').value = end.tipo || 'ORIGEM';
     document.getElementById('editFisLogradouro').value = end.fisico_logradouro || '';
     document.getElementById('editFisNumero').value = end.fisico_numero || '';
     document.getElementById('editFisBairro').value = end.fisico_bairro || '';
@@ -445,6 +554,7 @@ function editarEndereco(id, end) {
 function atualizarEndereco() {
     const id = document.getElementById('editEndId').value;
     const payload = {
+        tipo: document.getElementById('editTipo').value,
         fisico_logradouro: document.getElementById('editFisLogradouro').value,
         fisico_numero: document.getElementById('editFisNumero').value,
         fisico_bairro: document.getElementById('editFisBairro').value,

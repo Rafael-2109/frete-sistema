@@ -1379,10 +1379,15 @@ def fechar_frete():
                 # Flush para garantir que as alterações estejam visíveis
                 db.session.flush()
 
-                # Coleta CNPJs únicos dos itens ativos com NF preenchida
-                itens_ativos = EmbarqueItem.query.filter_by(
-                    embarque_id=embarque_existente.id,
-                    status='ativo'
+                # Coleta CNPJs únicos dos itens ativos Nacom (exclui CarVia)
+                itens_ativos = EmbarqueItem.query.filter(
+                    EmbarqueItem.embarque_id == embarque_existente.id,
+                    EmbarqueItem.status == 'ativo',
+                    EmbarqueItem.carvia_cotacao_id.is_(None),
+                    db.or_(
+                        EmbarqueItem.separacao_lote_id.is_(None),
+                        ~EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+                    ),
                 ).all()
 
                 cnpjs_unicos = set()
@@ -1545,13 +1550,14 @@ def fechar_frete():
                         cnpj_cliente=pedido.cnpj_cpf,
                         cliente=pedido.raz_social_red,
                         pedido=pedido.num_pedido,
+                        nota_fiscal=pedido.nf or None,
                         peso=pedido.peso_total or 0,
                         valor=pedido.valor_saldo_total or 0,
                         pallets=0,
                         uf_destino=uf_cv,
                         cidade_destino=cidade_cv,
                         volumes=None,
-                        provisorio=True,
+                        provisorio=not pedido.nf,
                         carvia_cotacao_id=carvia_cot_id,
                     )
                     if tipo == 'FRACIONADA':
@@ -1913,13 +1919,14 @@ def fechar_frete_grupo():
                     cnpj_cliente=pedido.cnpj_cpf,
                     cliente=pedido.raz_social_red,
                     pedido=pedido.num_pedido,
+                    nota_fiscal=pedido.nf or None,
                     peso=pedido.peso_total or 0,
                     valor=pedido.valor_saldo_total or 0,
                     pallets=0,
                     uf_destino=uf_cv,
                     cidade_destino=cidade_cv,
                     volumes=None,
-                    provisorio=True,
+                    provisorio=not pedido.nf,
                     carvia_cotacao_id=carvia_cot_id,
                 )
                 if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:

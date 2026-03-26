@@ -327,18 +327,41 @@ def registrar_movimento():
                                 'warning'
                             )
 
-                    # Alerta CarVia provisorios (nao bloqueia saida)
+                    # Alerta CarVia: saida sem NF (persiste + flash)
                     if registro.embarque_id:
                         try:
                             from app.embarques.models import EmbarqueItem as _EI
-                            _prov = _EI.query.filter_by(
-                                embarque_id=registro.embarque_id,
-                                provisorio=True, status='ativo',
-                            ).count()
-                            if _prov > 0:
+                            from app.carvia.models import CarviaCotacao as _CC
+
+                            # Itens CarVia ativos sem NF (provisorio ou nota_fiscal vazia)
+                            itens_sem_nf = _EI.query.filter(
+                                _EI.embarque_id == registro.embarque_id,
+                                _EI.status == 'ativo',
+                                _EI.carvia_cotacao_id.isnot(None),
+                                db.or_(
+                                    _EI.provisorio == True,
+                                    _EI.nota_fiscal.is_(None),
+                                    _EI.nota_fiscal == '',
+                                )
+                            ).all()
+
+                            cotacao_ids = set(
+                                item.carvia_cotacao_id for item in itens_sem_nf
+                            )
+
+                            if cotacao_ids:
+                                agora = agora_utc_naive()
+                                for cot_id in cotacao_ids:
+                                    cot = db.session.get(_CC, cot_id)
+                                    if cot and not cot.alerta_saida_sem_nf:
+                                        cot.alerta_saida_sem_nf = True
+                                        cot.alerta_saida_sem_nf_em = agora
+                                        cot.alerta_saida_embarque_id = registro.embarque_id
+
                                 flash(
-                                    f'ATENCAO: Embarque tem {_prov} item(ns) CarVia PROVISORIO(S). '
-                                    'Verifique se pedidos/NF foram anexados.',
+                                    f'ATENCAO: {len(cotacao_ids)} cotacao(oes) CarVia '
+                                    f'saiu(ram) SEM NF no Embarque #{embarque.numero}. '
+                                    'Verifique a listagem de cotacoes.',
                                     'warning'
                                 )
                         except Exception:
@@ -357,6 +380,22 @@ def registrar_movimento():
                                 flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
                         except Exception as e:
                             print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
+
+                    # Hook Nacom: gerar fretes (mesma lógica do embarque save)
+                    if registro.embarque_id:
+                        try:
+                            from app.fretes.routes import processar_lancamento_automatico_fretes
+                            sucesso_nacom, resultado_nacom = processar_lancamento_automatico_fretes(
+                                embarque_id=registro.embarque_id,
+                                usuario=current_user.email,
+                            )
+                            print(f"[DEBUG] Hook Nacom frete: sucesso={sucesso_nacom}, resultado={resultado_nacom}")
+                            if sucesso_nacom and "lançado(s) automaticamente" in resultado_nacom:
+                                flash(resultado_nacom, 'info')
+                            elif resultado_nacom:
+                                flash(f'Frete Nacom: {resultado_nacom}', 'info')
+                        except Exception as e:
+                            print(f"[AVISO] Hook Nacom FreteService falhou: {e}")
 
                     db.session.commit()
                     flash('Saída registrada com sucesso!', 'success')
@@ -635,6 +674,15 @@ def adicionar_embarque():
             if embarque_substituido and embarque_substituido.data_embarque:
                 embarque_substituido.data_embarque = None
                 print(f"[DEBUG] Data embarque removida do Embarque #{embarque_substituido.numero} (substituído)")
+
+                # Cancela fretes sem CTe (Nacom + CarVia) do embarque substituido
+                try:
+                    from app.embarques.routes import apagar_fretes_sem_cte_embarque
+                    suc_f, res_f = apagar_fretes_sem_cte_embarque(embarque_id)
+                    if suc_f and res_f != "Nenhum frete sem CTe encontrado":
+                        print(f"[DEBUG] Fretes cancelados do embarque substituido: {res_f}")
+                except Exception as e:
+                    print(f"[AVISO] Erro ao cancelar fretes do embarque substituido: {e}")
                 
                 # Ajusta sistema de entregas para cada NF do embarque substituído
                 if embarque_substituido.itens:
@@ -755,8 +803,18 @@ def excluir_embarque():
         if embarque and embarque.data_embarque:
             embarque.data_embarque = None
             print(f"[DEBUG] Data embarque removida do Embarque #{embarque_numero}")
-            
-            # ✅ LIMPAR data_embarque da tabela Separacao
+
+            # Cancela fretes sem CTe (Nacom + CarVia)
+            try:
+                from app.embarques.routes import apagar_fretes_sem_cte_embarque
+                suc_f, res_f = apagar_fretes_sem_cte_embarque(embarque.id)
+                if suc_f and res_f != "Nenhum frete sem CTe encontrado":
+                    flash(res_f, 'info')
+                    print(f"[DEBUG] Fretes cancelados: {res_f}")
+            except Exception as e:
+                print(f"[AVISO] Erro ao cancelar fretes: {e}")
+
+            # LIMPAR data_embarque da tabela Separacao
             for item in embarque.itens:
                 if item.separacao_lote_id:
                     num_atualizados = Separacao.query.filter_by(

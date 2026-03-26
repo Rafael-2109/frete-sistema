@@ -4,7 +4,7 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-table"></i> Tabelas de Frete CarVia</h2>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaTabela">
+        <button type="button" class="btn btn-primary btn-sm" onclick="abrirNovaTabela()">
             <i class="fas fa-plus"></i> Nova Tabela
         </button>
     </div>
@@ -12,28 +12,21 @@
     {% set carvia_active = 'configuracoes' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    {# Filtros #}
+    {# Filtro #}
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
                 <div class="col-auto">
-                    <label class="form-label form-label-sm mb-0">UF</label>
-                    <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        {% for uf in ufs %}
-                        <option value="{{ uf }}" {{ 'selected' if uf_filtro == uf }}>{{ uf }}</option>
+                    <label class="form-label form-label-sm mb-0">Grupo de Cliente</label>
+                    <select name="grupo_cliente_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="standard" {{ 'selected' if grupo_filtro == 'standard' }}>Standard (sem grupo)</option>
+                        {% for g in grupos %}
+                        <option value="{{ g.id }}" {{ 'selected' if grupo_filtro == g.id|string }}>{{ g.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-auto">
-                    <label class="form-label form-label-sm mb-0">Tipo Carga</label>
-                    <select name="tipo_carga" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        <option value="DIRETA" {{ 'selected' if tipo_filtro == 'DIRETA' }}>Direta</option>
-                        <option value="FRACIONADA" {{ 'selected' if tipo_filtro == 'FRACIONADA' }}>Fracionada</option>
-                    </select>
-                </div>
-                {% if uf_filtro or tipo_filtro %}
+                {% if grupo_filtro %}
                 <div class="col-auto">
                     <a href="{{ url_for('carvia.listar_tabelas_carvia') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-times"></i> Limpar
@@ -46,78 +39,38 @@
 
     <div class="card">
         <div class="card-body p-0">
-            {% if tabelas %}
+            {% if combos %}
             <div class="table-responsive">
                 <table class="table table-hover table-sm mb-0 carvia-table">
                     <thead>
                         <tr>
                             <th>Tabela</th>
-                            <th>Origem</th>
-                            <th>Destino</th>
+                            <th>Rota</th>
                             <th>Tipo</th>
-                            <th>Modalidade</th>
-                            <th>Grupo</th>
-                            <th class="text-end">R$/kg</th>
-                            <th class="text-end">Min Peso</th>
-                            <th class="text-end">% Valor</th>
-                            <th class="text-end">Min Valor</th>
-                            <th class="text-center">Ativo</th>
                             <th class="text-center">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for t in tabelas %}
+                        {% for c in combos %}
                         <tr>
-                            <td><strong>{{ t.nome_tabela }}</strong></td>
-                            <td>{{ t.uf_origem }}</td>
-                            <td>{{ t.uf_destino }}</td>
+                            <td><strong>{{ c.nome_tabela }}</strong></td>
+                            <td>{{ c.uf_origem }} <i class="fas fa-arrow-right text-muted small"></i> {{ c.uf_destino }}</td>
                             <td>
-                                <span class="badge {{ 'bg-primary' if t.tipo_carga == 'DIRETA' else 'bg-info' }}">
-                                    {{ t.tipo_carga }}
+                                <span class="badge {{ 'bg-primary' if c.tipo_carga == 'DIRETA' else 'bg-info' }}">
+                                    {{ c.tipo_carga }}
                                 </span>
                             </td>
-                            <td>{{ t.modalidade }}</td>
-                            <td>{{ t.grupo_cliente.nome if t.grupo_cliente else '-' }}</td>
-                            <td class="text-end">{{ t.valor_kg|numero_br(4) if t.valor_kg else '-' }}</td>
-                            <td class="text-end">{{ t.frete_minimo_peso|valor_br if t.frete_minimo_peso else '-' }}</td>
-                            <td class="text-end">{{ t.percentual_valor|numero_br(4) if t.percentual_valor else '-' }}%</td>
-                            <td class="text-end">{{ t.frete_minimo_valor|valor_br if t.frete_minimo_valor else '-' }}</td>
-                            <td class="text-center">
-                                {% if t.ativo %}
-                                <span class="badge bg-success">Sim</span>
-                                {% else %}
-                                <span class="badge bg-danger">Nao</span>
-                                {% endif %}
-                            </td>
                             <td class="text-center text-nowrap">
-                                <button type="button" class="btn btn-outline-info btn-sm"
-                                        onclick="togglePrecosMoto({{ t.id }})"
-                                        title="Precos por Categoria Moto">
-                                    <i class="fas fa-motorcycle"></i>
-                                </button>
                                 <button type="button" class="btn btn-outline-primary btn-sm"
-                                        onclick="abrirEditarTabela({{ t.id }})" title="Editar">
-                                    <i class="fas fa-edit"></i>
+                                        onclick="abrirEditarTabela('{{ c.nome_tabela }}','{{ c.uf_origem }}','{{ c.uf_destino }}','{{ c.tipo_carga }}')"
+                                        title="Editar precos">
+                                    <i class="fas fa-edit"></i> Editar
                                 </button>
                                 <button type="button" class="btn btn-outline-danger btn-sm"
-                                        onclick="desativarTabela({{ t.id }}, '{{ t.nome_tabela }}')" title="Desativar">
+                                        onclick="desativarCombinacao('{{ c.nome_tabela }}','{{ c.uf_origem }}','{{ c.uf_destino }}','{{ c.tipo_carga }}')"
+                                        title="Desativar">
                                     <i class="fas fa-ban"></i>
                                 </button>
-                            </td>
-                        </tr>
-                        {# Linha expansivel de precos por categoria #}
-                        <tr id="precosMoto{{ t.id }}" style="display:none">
-                            <td colspan="12" class="p-3 bg-body-tertiary">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <strong><i class="fas fa-motorcycle"></i> Precos por Categoria de Moto</strong>
-                                    <button type="button" class="btn btn-outline-primary btn-sm"
-                                            onclick="abrirAdicionarPreco({{ t.id }})">
-                                        <i class="fas fa-plus"></i> Adicionar
-                                    </button>
-                                </div>
-                                <div id="precosLista{{ t.id }}">
-                                    <span class="text-muted small">Carregando...</span>
-                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -134,55 +87,79 @@
     </div>
 </div>
 
-{# Modal Nova Tabela #}
-<div class="modal fade" id="modalNovaTabela" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+{# ==================== MODAL TABELA (Nova + Editar) ==================== #}
+<div class="modal fade" id="modalTabela" tabindex="-1">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <form id="formNovaTabela" onsubmit="criarTabela(event)">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-plus"></i> Nova Tabela de Frete CarVia</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTabelaTitulo">
+                    <i class="fas fa-table"></i> <span id="modalTituloTexto">Nova Tabela</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {# Cabecalho: identificacao da combinacao #}
+                <div class="row g-3 mb-3" id="secaoIdentificacao">
+                    <div class="col-md-2">
+                        <label class="form-label">UF Origem *</label>
+                        <select class="form-select" id="mdUfOrigem" onchange="carregarNomesTabela()">
+                            <option value="">--</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">UF Destino *</label>
+                        <select class="form-select" id="mdUfDestino" onchange="carregarNomesTabela()">
+                            <option value="">--</option>
+                            {% for uf in ufs %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Nome Tabela *</label>
+                        <div class="input-group">
+                            <select class="form-select" id="mdNomeTabela">
+                                <option value="">Selecione UFs primeiro</option>
+                            </select>
+                            <input type="text" class="form-control d-none" id="mdNomeTabelaManual"
+                                   placeholder="Nome manual">
+                            <button type="button" class="btn btn-outline-secondary" id="btnToggleManual"
+                                    onclick="toggleNomeTabelaManual()" title="Digitar manualmente">
+                                <i class="fas fa-keyboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo Carga *</label>
+                        <select class="form-select" id="mdTipoCarga" onchange="toggleTipoCarga()">
+                            <option value="FRACIONADA">Fracionada</option>
+                            <option value="DIRETA">Direta</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Grupo Cliente</label>
+                        <select class="form-select" id="mdGrupoCliente" onchange="carregarCombinacao()">
+                            <option value="">Standard (todos)</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}">{{ g.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Nome Tabela *</label>
-                            <input type="text" class="form-control" name="nome_tabela" required
-                                   placeholder="Ex: CARVIA-SP">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">UF Origem *</label>
-                            <select name="uf_origem" class="form-select" required>
-                                <option value="">--</option>
-                                {% for uf in ufs %}
-                                <option value="{{ uf }}">{{ uf }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">UF Destino *</label>
-                            <select name="uf_destino" class="form-select" required>
-                                <option value="">--</option>
-                                {% for uf in ufs %}
-                                <option value="{{ uf }}">{{ uf }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Tipo Carga *</label>
-                            <select name="tipo_carga" class="form-select" required>
-                                <option value="DIRETA">Direta</option>
-                                <option value="FRACIONADA">Fracionada</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Modalidade *</label>
-                            <input type="text" class="form-control" name="modalidade" required
-                                   placeholder="CIF" value="CIF">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Grupo de Cliente</label>
-                            <select name="grupo_cliente_id" class="form-select">
+
+                {# Info readonly no modo editar #}
+                <div id="secaoInfoReadonly" class="d-none mb-3">
+                    <div class="d-flex gap-3 align-items-center bg-body-tertiary rounded p-2">
+                        <span><strong>Tabela:</strong> <code id="infoNome"></code></span>
+                        <span><strong>Rota:</strong> <span id="infoRota"></span></span>
+                        <span><strong>Tipo:</strong> <span id="infoTipo"></span></span>
+                        <div class="ms-auto">
+                            <label class="form-label form-label-sm mb-0 me-1">Grupo:</label>
+                            <select class="form-select form-select-sm d-inline-block" style="width:auto"
+                                    id="mdGrupoClienteEdit" onchange="carregarCombinacao()">
                                 <option value="">Standard (todos)</option>
                                 {% for g in grupos %}
                                 <option value="{{ g.id }}">{{ g.nome }}</option>
@@ -190,92 +167,139 @@
                             </select>
                         </div>
                     </div>
-                    <hr>
-                    <h6 class="text-muted"><i class="fas fa-calculator"></i> Valores</h6>
-                    <div class="row g-2">
+                </div>
+
+                <hr>
+                <div id="secaoPrecoLoading" class="text-center py-3 d-none">
+                    <i class="fas fa-spinner fa-spin"></i> Carregando precos...
+                </div>
+
+                {# ===== FRACIONADA: Frete Peso + Frete por Moto ===== #}
+                <div id="secaoFracionada">
+                    <h6 class="text-muted mb-2"><i class="fas fa-weight-hanging"></i> Frete Peso</h6>
+                    <div class="row g-2 mb-3">
                         <div class="col-md-3">
                             <label class="form-label form-label-sm">R$/kg</label>
-                            <input type="text" class="form-control form-control-sm" name="valor_kg"
+                            <input type="text" class="form-control form-control-sm" id="fpValorKg"
                                    inputmode="decimal" placeholder="0,0000">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label form-label-sm">Frete Min Peso (R$)</label>
-                            <input type="text" class="form-control form-control-sm" name="frete_minimo_peso"
+                            <input type="text" class="form-control form-control-sm" id="fpMinPeso"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label form-label-sm">% Valor</label>
-                            <input type="text" class="form-control form-control-sm" name="percentual_valor"
+                            <input type="text" class="form-control form-control-sm" id="fpPercentualValor"
                                    inputmode="decimal" placeholder="0,0000">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label form-label-sm">Frete Min Valor (R$)</label>
-                            <input type="text" class="form-control form-control-sm" name="frete_minimo_valor"
+                            <input type="text" class="form-control form-control-sm" id="fpMinValor"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
+                    </div>
+                    <div class="row g-2 mb-3">
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">% GRIS</label>
-                            <input type="text" class="form-control form-control-sm" name="percentual_gris"
+                            <input type="text" class="form-control form-control-sm" id="fpGris"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">GRIS Min</label>
-                            <input type="text" class="form-control form-control-sm" name="gris_minimo"
+                            <input type="text" class="form-control form-control-sm" id="fpGrisMin"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">% Ad Valorem</label>
-                            <input type="text" class="form-control form-control-sm" name="percentual_adv"
+                            <input type="text" class="form-control form-control-sm" id="fpAdv"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">ADV Min</label>
-                            <input type="text" class="form-control form-control-sm" name="adv_minimo"
+                            <input type="text" class="form-control form-control-sm" id="fpAdvMin"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">% RCA</label>
-                            <input type="text" class="form-control form-control-sm" name="percentual_rca"
+                            <input type="text" class="form-control form-control-sm" id="fpRca"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">Pedagio/100kg</label>
-                            <input type="text" class="form-control form-control-sm" name="pedagio_por_100kg"
+                            <input type="text" class="form-control form-control-sm" id="fpPedagio"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
+                    </div>
+                    <div class="row g-2 mb-3">
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">Despacho</label>
-                            <input type="text" class="form-control form-control-sm" name="valor_despacho"
+                            <input type="text" class="form-control form-control-sm" id="fpDespacho"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">CTe</label>
-                            <input type="text" class="form-control form-control-sm" name="valor_cte"
+                            <input type="text" class="form-control form-control-sm" id="fpCte"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">TAS</label>
-                            <input type="text" class="form-control form-control-sm" name="valor_tas"
+                            <input type="text" class="form-control form-control-sm" id="fpTas"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label form-label-sm">ICMS Proprio %</label>
-                            <input type="text" class="form-control form-control-sm" name="icms_proprio"
+                            <input type="text" class="form-control form-control-sm" id="fpIcmsProprio"
                                    inputmode="decimal" placeholder="0,00">
                         </div>
                         <div class="col-md-2">
                             <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" name="icms_incluso" id="novoIcmsIncluso">
-                                <label class="form-check-label" for="novoIcmsIncluso">ICMS Incluso</label>
+                                <input class="form-check-input" type="checkbox" id="fpIcmsIncluso">
+                                <label class="form-check-label" for="fpIcmsIncluso">ICMS Incluso</label>
                             </div>
                         </div>
                     </div>
+
+                    <hr>
+                    <h6 class="text-muted mb-2"><i class="fas fa-motorcycle"></i> Frete por Moto</h6>
+                    <div id="tabelaMotoContainer">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th style="width:200px">Valor Unitario (R$)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyMotoPrecos">
+                                <tr><td colspan="2" class="text-muted small text-center">Carregando categorias...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+
+                {# ===== DIRETA: Veiculos ===== #}
+                <div id="secaoDireta" class="d-none">
+                    <h6 class="text-muted mb-2"><i class="fas fa-truck"></i> Veiculos</h6>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Veiculo</th>
+                                <th style="width:200px">Frete Minimo (R$)</th>
+                                <th style="width:120px" class="text-center">ICMS Incluso</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyVeiculos">
+                            <tr><td colspan="3" class="text-muted small text-center">Carregando veiculos...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-            </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvar" onclick="salvarCombinacao()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -283,9 +307,15 @@
 
 {% block scripts %}
 <script>
+/* ===== Utils ===== */
 function parseBR(value) {
     if (!value) return null;
     return parseFloat(String(value).replace(/\./g, '').replace(',', '.'));
+}
+
+function formatBR(val) {
+    if (val == null) return '';
+    return Number(val).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 4});
 }
 
 function csrfHeaders() {
@@ -295,178 +325,372 @@ function csrfHeaders() {
     };
 }
 
-function getFormFields(form) {
-    var data = {};
-    var strFields = ['nome_tabela', 'uf_origem', 'uf_destino', 'tipo_carga', 'modalidade'];
-    var numFields = ['valor_kg', 'frete_minimo_peso', 'percentual_valor', 'frete_minimo_valor',
-                     'percentual_gris', 'gris_minimo', 'percentual_adv', 'adv_minimo',
-                     'percentual_rca', 'pedagio_por_100kg', 'valor_despacho', 'valor_cte',
-                     'valor_tas', 'icms_proprio'];
-
-    strFields.forEach(function(f) {
-        var el = form.querySelector('[name="' + f + '"]');
-        if (el) data[f] = el.value;
-    });
-
-    numFields.forEach(function(f) {
-        var el = form.querySelector('[name="' + f + '"]');
-        if (el) data[f] = parseBR(el.value);
-    });
-
-    var grupoEl = form.querySelector('[name="grupo_cliente_id"]');
-    if (grupoEl) data.grupo_cliente_id = grupoEl.value ? parseInt(grupoEl.value) : null;
-
-    var icmsEl = form.querySelector('[name="icms_incluso"]');
-    if (icmsEl) data.icms_incluso = icmsEl.checked;
-
-    var ativoEl = form.querySelector('[name="ativo"]');
-    if (ativoEl) data.ativo = ativoEl.checked;
-
-    return data;
+function apiCall(url, opts) {
+    return fetch(url, opts)
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); });
 }
 
-function criarTabela(event) {
-    event.preventDefault();
-    var data = getFormFields(event.target);
-    fetch('/carvia/api/tabelas-frete-carvia', {
-        method: 'POST',
-        headers: csrfHeaders(),
-        body: JSON.stringify(data)
-    })
-    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
-    .then(function(res) {
-        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
-        location.reload();
-    })
-    .catch(function(err) { alert(err.message); });
-}
-
-function abrirEditarTabela(id) {
-    alert('Para editar, use a API PUT /carvia/api/tabelas-frete-carvia/' + id + ' (modal em construcao)');
-}
-
-function desativarTabela(id, nome) {
-    if (!confirm('Desativar tabela "' + nome + '"?')) return;
-    fetch('/carvia/api/tabelas-frete-carvia/' + id, {
-        method: 'DELETE',
-        headers: csrfHeaders()
-    })
-    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
-    .then(function(res) {
-        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
-        location.reload();
-    })
-    .catch(function(err) { alert(err.message); });
-}
-
-// ==================== PRECOS POR CATEGORIA MOTO ====================
-
+/* ===== Estado do modal ===== */
+var _modoEditar = false;
+var _combo = {};     // {nome_tabela, uf_origem, uf_destino, tipo_carga}
+var _veiculosCache = null;
 var _categoriasCache = null;
 
-function _carregarCategorias(callback) {
-    if (_categoriasCache) { callback(_categoriasCache); return; }
-    fetch('/carvia/api/categorias-moto-lista', {headers: csrfHeaders()})
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        _categoriasCache = data.categorias || [];
-        callback(_categoriasCache);
-    })
-    .catch(function() { callback([]); });
+/* ===== Abrir Nova Tabela ===== */
+function abrirNovaTabela() {
+    _modoEditar = false;
+    _combo = {};
+
+    document.getElementById('modalTituloTexto').textContent = 'Nova Tabela de Frete';
+    document.getElementById('secaoIdentificacao').classList.remove('d-none');
+    document.getElementById('secaoInfoReadonly').classList.add('d-none');
+
+    // Reset campos identificacao
+    document.getElementById('mdUfOrigem').value = '';
+    document.getElementById('mdUfDestino').value = '';
+    document.getElementById('mdNomeTabela').innerHTML = '<option value="">Selecione UFs primeiro</option>';
+    document.getElementById('mdTipoCarga').value = 'FRACIONADA';
+    document.getElementById('mdGrupoCliente').value = '';
+
+    // Habilitar selects
+    ['mdUfOrigem', 'mdUfDestino', 'mdTipoCarga'].forEach(function(id) {
+        document.getElementById(id).disabled = false;
+    });
+
+    limparFormPrecos();
+    toggleTipoCarga();
+    carregarDadosFixos();
+
+    new bootstrap.Modal(document.getElementById('modalTabela')).show();
 }
 
-function togglePrecosMoto(tid) {
-    var row = document.getElementById('precosMoto' + tid);
-    if (row.style.display === 'none') {
-        row.style.display = '';
-        carregarPrecosMoto(tid);
+/* ===== Abrir Editar ===== */
+function abrirEditarTabela(nome, origem, destino, tipo) {
+    _modoEditar = true;
+    _combo = {nome_tabela: nome, uf_origem: origem, uf_destino: destino, tipo_carga: tipo};
+
+    document.getElementById('modalTituloTexto').textContent = 'Editar Tabela de Frete';
+    document.getElementById('secaoIdentificacao').classList.add('d-none');
+    document.getElementById('secaoInfoReadonly').classList.remove('d-none');
+
+    // Preencher info readonly
+    document.getElementById('infoNome').textContent = nome;
+    document.getElementById('infoRota').textContent = origem + ' \u2192 ' + destino;
+    document.getElementById('infoTipo').innerHTML = '<span class="badge ' +
+        (tipo === 'DIRETA' ? 'bg-primary' : 'bg-info') + '">' + tipo + '</span>';
+    document.getElementById('mdGrupoClienteEdit').value = '';
+
+    // Configurar tipo_carga (fixa)
+    if (tipo === 'DIRETA') {
+        document.getElementById('secaoFracionada').classList.add('d-none');
+        document.getElementById('secaoDireta').classList.remove('d-none');
     } else {
-        row.style.display = 'none';
+        document.getElementById('secaoFracionada').classList.remove('d-none');
+        document.getElementById('secaoDireta').classList.add('d-none');
+    }
+
+    limparFormPrecos();
+    carregarDadosFixos(function() { carregarCombinacao(); });
+
+    new bootstrap.Modal(document.getElementById('modalTabela')).show();
+}
+
+/* ===== Toggle tipo carga (Nova Tabela) ===== */
+function toggleTipoCarga() {
+    var tipo = document.getElementById('mdTipoCarga').value;
+    document.getElementById('secaoFracionada').classList.toggle('d-none', tipo === 'DIRETA');
+    document.getElementById('secaoDireta').classList.toggle('d-none', tipo !== 'DIRETA');
+}
+
+/* ===== Toggle nome tabela manual ===== */
+var _nomeManual = false;
+function toggleNomeTabelaManual() {
+    _nomeManual = !_nomeManual;
+    document.getElementById('mdNomeTabela').classList.toggle('d-none', _nomeManual);
+    document.getElementById('mdNomeTabelaManual').classList.toggle('d-none', !_nomeManual);
+    if (_nomeManual) document.getElementById('mdNomeTabelaManual').focus();
+}
+
+/* ===== Carregar nomes tabela de CarviaCidadeAtendida ===== */
+function carregarNomesTabela() {
+    var origem = document.getElementById('mdUfOrigem').value;
+    var destino = document.getElementById('mdUfDestino').value;
+    var sel = document.getElementById('mdNomeTabela');
+
+    if (!origem || !destino) {
+        sel.innerHTML = '<option value="">Selecione ambas UFs</option>';
+        return;
+    }
+
+    fetch('/carvia/api/tabelas-frete-carvia/nomes-tabela?uf_origem=' + origem + '&uf_destino=' + destino)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var nomes = data.nomes || [];
+        if (nomes.length === 0) {
+            sel.innerHTML = '<option value="">Nenhuma tabela encontrada</option>';
+        } else {
+            var html = '<option value="">Selecione...</option>';
+            nomes.forEach(function(n) { html += '<option value="' + n + '">' + n + '</option>'; });
+            sel.innerHTML = html;
+        }
+    });
+}
+
+/* ===== Carregar dados fixos (veiculos + categorias) ===== */
+function carregarDadosFixos(callback) {
+    var pending = 2;
+    function done() { if (--pending === 0 && callback) callback(); }
+
+    if (_veiculosCache) { renderizarVeiculos(); done(); }
+    else {
+        fetch('/carvia/api/veiculos-lista').then(function(r) { return r.json(); })
+        .then(function(data) {
+            _veiculosCache = data.veiculos || [];
+            renderizarVeiculos();
+            done();
+        }).catch(done);
+    }
+
+    if (_categoriasCache) { renderizarCategoriasMoto(); done(); }
+    else {
+        fetch('/carvia/api/categorias-moto-lista').then(function(r) { return r.json(); })
+        .then(function(data) {
+            _categoriasCache = data.categorias || [];
+            renderizarCategoriasMoto();
+            done();
+        }).catch(done);
     }
 }
 
-function carregarPrecosMoto(tid) {
-    var container = document.getElementById('precosLista' + tid);
-    container.innerHTML = '<span class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Carregando...</span>';
+function renderizarVeiculos(dados) {
+    var tbody = document.getElementById('tbodyVeiculos');
+    if (!_veiculosCache || _veiculosCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-muted small text-center">Nenhum veiculo cadastrado.</td></tr>';
+        return;
+    }
+    var html = '';
+    _veiculosCache.forEach(function(v) {
+        var d = (dados || []).find(function(x) { return x.nome === v.nome; });
+        var val = d && d.frete_minimo_valor != null ? formatBR(d.frete_minimo_valor) : '';
+        var checked = d && d.icms_incluso ? 'checked' : '';
+        html += '<tr>' +
+            '<td>' + v.nome + '</td>' +
+            '<td><input type="text" class="form-control form-control-sm" data-veiculo="' + v.nome + '"' +
+            ' inputmode="decimal" placeholder="0,00" value="' + val + '"></td>' +
+            '<td class="text-center"><input type="checkbox" class="form-check-input" data-veiculo-icms="' + v.nome + '" ' + checked + '></td>' +
+            '</tr>';
+    });
+    tbody.innerHTML = html;
+}
 
-    fetch('/carvia/api/tabela-carvia/' + tid + '/precos-moto', {headers: csrfHeaders()})
+function renderizarCategoriasMoto(dados) {
+    var tbody = document.getElementById('tbodyMotoPrecos');
+    if (!_categoriasCache || _categoriasCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-muted small text-center">Nenhuma categoria cadastrada.</td></tr>';
+        return;
+    }
+    var html = '';
+    _categoriasCache.forEach(function(c) {
+        var p = (dados || []).find(function(x) { return x.categoria_id === c.id; });
+        var val = p && p.valor_unitario != null ? formatBR(p.valor_unitario) : '';
+        html += '<tr>' +
+            '<td>' + c.nome + '</td>' +
+            '<td><input type="text" class="form-control form-control-sm" data-cat-id="' + c.id + '"' +
+            ' inputmode="decimal" placeholder="0,00" value="' + val + '"></td>' +
+            '</tr>';
+    });
+    tbody.innerHTML = html;
+}
+
+/* ===== Limpar form de precos ===== */
+function limparFormPrecos() {
+    var fpIds = ['fpValorKg','fpMinPeso','fpPercentualValor','fpMinValor',
+                 'fpGris','fpGrisMin','fpAdv','fpAdvMin','fpRca','fpPedagio',
+                 'fpDespacho','fpCte','fpTas','fpIcmsProprio'];
+    fpIds.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('fpIcmsIncluso').checked = false;
+    renderizarVeiculos();
+    renderizarCategoriasMoto();
+}
+
+/* ===== Carregar combinacao existente ===== */
+function carregarCombinacao() {
+    var grupoSel = _modoEditar
+        ? document.getElementById('mdGrupoClienteEdit')
+        : document.getElementById('mdGrupoCliente');
+    var grupoId = grupoSel.value;
+
+    var nome, origem, destino, tipo;
+    if (_modoEditar) {
+        nome = _combo.nome_tabela;
+        origem = _combo.uf_origem;
+        destino = _combo.uf_destino;
+        tipo = _combo.tipo_carga;
+    } else {
+        origem = document.getElementById('mdUfOrigem').value;
+        destino = document.getElementById('mdUfDestino').value;
+        var selNome = document.getElementById('mdNomeTabela');
+        var manualNome = document.getElementById('mdNomeTabelaManual');
+        nome = _nomeManual ? manualNome.value.trim().toUpperCase() : selNome.value;
+        tipo = document.getElementById('mdTipoCarga').value;
+    }
+
+    if (!nome || !origem || !destino || !tipo) return;
+
+    document.getElementById('secaoPrecoLoading').classList.remove('d-none');
+
+    var url = '/carvia/api/tabelas-frete-carvia/combinacao?nome_tabela=' +
+        encodeURIComponent(nome) + '&uf_origem=' + origem + '&uf_destino=' + destino +
+        '&tipo_carga=' + tipo;
+    if (grupoId) url += '&grupo_cliente_id=' + grupoId;
+
+    fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (!data.precos || data.precos.length === 0) {
-            container.innerHTML = '<span class="text-muted small">Nenhum preco por categoria. Esta tabela usara calculo por peso.</span>';
-            return;
+        document.getElementById('secaoPrecoLoading').classList.add('d-none');
+
+        if (tipo === 'FRACIONADA') {
+            preencherFretePeso(data.frete_peso);
+            renderizarCategoriasMoto(data.frete_moto || []);
+        } else {
+            renderizarVeiculos(data.veiculos || []);
         }
-        var html = '<table class="table table-sm mb-0"><thead><tr>' +
-            '<th>Categoria</th><th class="text-end">Valor Unitario (R$)</th><th class="text-center">Acoes</th>' +
-            '</tr></thead><tbody>';
-        data.precos.forEach(function(p) {
-            html += '<tr><td>' + p.categoria_nome + '</td>' +
-                '<td class="text-end">' + Number(p.valor_unitario).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
-                '<td class="text-center">' +
-                '<button class="btn btn-outline-danger btn-sm" onclick="removerPrecoMoto(' + p.id + ',' + tid + ')" title="Remover">' +
-                '<i class="fas fa-trash"></i></button></td></tr>';
-        });
-        html += '</tbody></table>';
-        container.innerHTML = html;
     })
     .catch(function(err) {
-        container.innerHTML = '<span class="text-danger small">Erro: ' + err.message + '</span>';
+        document.getElementById('secaoPrecoLoading').classList.add('d-none');
+        console.error(err);
     });
 }
 
-function abrirAdicionarPreco(tid) {
-    _carregarCategorias(function(cats) {
-        if (cats.length === 0) {
-            alert('Nenhuma categoria de moto cadastrada. Crie categorias primeiro em Configuracoes > Categorias de Moto.');
+/* ===== Preencher campos Frete Peso ===== */
+var _fpMap = {
+    valor_kg: 'fpValorKg', frete_minimo_peso: 'fpMinPeso',
+    percentual_valor: 'fpPercentualValor', frete_minimo_valor: 'fpMinValor',
+    percentual_gris: 'fpGris', gris_minimo: 'fpGrisMin',
+    percentual_adv: 'fpAdv', adv_minimo: 'fpAdvMin',
+    percentual_rca: 'fpRca', pedagio_por_100kg: 'fpPedagio',
+    valor_despacho: 'fpDespacho', valor_cte: 'fpCte',
+    valor_tas: 'fpTas', icms_proprio: 'fpIcmsProprio',
+};
+
+function preencherFretePeso(fp) {
+    Object.keys(_fpMap).forEach(function(key) {
+        var el = document.getElementById(_fpMap[key]);
+        if (el) el.value = fp && fp[key] != null ? formatBR(fp[key]) : '';
+    });
+    document.getElementById('fpIcmsIncluso').checked = fp && fp.icms_incluso || false;
+}
+
+/* ===== Salvar ===== */
+function salvarCombinacao() {
+    var grupoSel = _modoEditar
+        ? document.getElementById('mdGrupoClienteEdit')
+        : document.getElementById('mdGrupoCliente');
+    var grupoId = grupoSel.value ? parseInt(grupoSel.value) : null;
+
+    var nome, origem, destino, tipo;
+    if (_modoEditar) {
+        nome = _combo.nome_tabela;
+        origem = _combo.uf_origem;
+        destino = _combo.uf_destino;
+        tipo = _combo.tipo_carga;
+    } else {
+        origem = document.getElementById('mdUfOrigem').value;
+        destino = document.getElementById('mdUfDestino').value;
+        var selNome = document.getElementById('mdNomeTabela');
+        var manualNome = document.getElementById('mdNomeTabelaManual');
+        nome = _nomeManual ? manualNome.value.trim().toUpperCase() : selNome.value;
+        tipo = document.getElementById('mdTipoCarga').value;
+    }
+
+    if (!nome || !origem || !destino || !tipo) {
+        alert('Preencha todos os campos obrigatorios.');
+        return;
+    }
+
+    var payload = {
+        nome_tabela: nome, uf_origem: origem, uf_destino: destino,
+        tipo_carga: tipo, grupo_cliente_id: grupoId,
+    };
+
+    if (tipo === 'FRACIONADA') {
+        var fp = {};
+        var temAlgumValor = false;
+        Object.keys(_fpMap).forEach(function(key) {
+            var v = parseBR(document.getElementById(_fpMap[key]).value);
+            fp[key] = v;
+            if (v != null && v !== 0) temAlgumValor = true;
+        });
+        fp.icms_incluso = document.getElementById('fpIcmsIncluso').checked;
+        payload.frete_peso = fp;
+
+        var moto = [];
+        document.querySelectorAll('#tbodyMotoPrecos input[data-cat-id]').forEach(function(inp) {
+            var val = parseBR(inp.value);
+            if (val !== null && val !== undefined) {
+                moto.push({categoria_moto_id: parseInt(inp.dataset.catId), valor_unitario: val});
+                temAlgumValor = true;
+            }
+        });
+        payload.frete_moto = moto;
+
+        if (!temAlgumValor) {
+            alert('Preencha pelo menos um campo de preco (Frete Peso ou Frete por Moto).');
             return;
         }
-        var opts = cats.map(function(c) {
-            return '<option value="' + c.id + '">' + c.nome + (c.descricao ? ' — ' + c.descricao : '') + '</option>';
-        }).join('');
+    } else {
+        var veiculos = [];
+        var temAlgumVeiculo = false;
+        document.querySelectorAll('#tbodyVeiculos input[data-veiculo]').forEach(function(inp) {
+            var nome_v = inp.dataset.veiculo;
+            var icmsEl = document.querySelector('input[data-veiculo-icms="' + nome_v + '"]');
+            var val = parseBR(inp.value);
+            veiculos.push({
+                nome: nome_v,
+                frete_minimo_valor: val,
+                icms_incluso: icmsEl ? icmsEl.checked : false,
+            });
+            if (val) temAlgumVeiculo = true;
+        });
+        payload.veiculos = veiculos;
 
-        var html = '<div class="row g-2 align-items-end mt-2" id="formAddPreco' + tid + '">' +
-            '<div class="col-auto"><label class="form-label form-label-sm">Categoria</label>' +
-            '<select class="form-select form-select-sm" id="selCat' + tid + '">' + opts + '</select></div>' +
-            '<div class="col-auto"><label class="form-label form-label-sm">Valor Unitario (R$)</label>' +
-            '<input type="text" class="form-control form-control-sm" id="valPreco' + tid + '" inputmode="decimal" placeholder="0,00"></div>' +
-            '<div class="col-auto"><button class="btn btn-primary btn-sm" onclick="salvarPrecoMoto(' + tid + ')">' +
-            '<i class="fas fa-check"></i> Salvar</button></div></div>';
+        if (!temAlgumVeiculo) {
+            alert('Preencha o frete minimo de pelo menos um veiculo.');
+            return;
+        }
+    }
 
-        var container = document.getElementById('precosLista' + tid);
-        // Remover form existente se houver
-        var old = document.getElementById('formAddPreco' + tid);
-        if (old) old.remove();
-        container.insertAdjacentHTML('beforeend', html);
+    document.getElementById('btnSalvar').disabled = true;
+
+    apiCall('/carvia/api/tabelas-frete-carvia/salvar-combinacao', {
+        method: 'POST', headers: csrfHeaders(), body: JSON.stringify(payload)
+    })
+    .then(function(res) {
+        document.getElementById('btnSalvar').disabled = false;
+        if (!res.ok) { alert(res.data.erro || 'Erro ao salvar.'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modalTabela')).hide();
+        location.reload();
+    })
+    .catch(function(err) {
+        document.getElementById('btnSalvar').disabled = false;
+        alert(err.message);
     });
 }
 
-function salvarPrecoMoto(tid) {
-    var catId = document.getElementById('selCat' + tid).value;
-    var valor = parseBR(document.getElementById('valPreco' + tid).value);
-    if (!valor || valor <= 0) { alert('Valor invalido'); return; }
+/* ===== Desativar combinacao ===== */
+function desativarCombinacao(nome, origem, destino, tipo) {
+    if (!confirm('Desativar TODOS os registros de "' + nome + '" (' + origem + '\u2192' + destino + ' ' + tipo + ')?')) return;
 
-    fetch('/carvia/api/tabela-carvia/' + tid + '/precos-moto', {
-        method: 'POST',
-        headers: csrfHeaders(),
-        body: JSON.stringify({categoria_moto_id: parseInt(catId), valor_unitario: valor})
+    apiCall('/carvia/api/tabelas-frete-carvia/desativar-combinacao', {
+        method: 'POST', headers: csrfHeaders(),
+        body: JSON.stringify({nome_tabela: nome, uf_origem: origem, uf_destino: destino, tipo_carga: tipo})
     })
-    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
     .then(function(res) {
         if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
-        carregarPrecosMoto(tid);
-    })
-    .catch(function(err) { alert(err.message); });
-}
-
-function removerPrecoMoto(precoId, tid) {
-    if (!confirm('Remover este preco?')) return;
-    fetch('/carvia/api/precos-moto/' + precoId, {
-        method: 'DELETE',
-        headers: csrfHeaders()
-    })
-    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
-    .then(function(res) {
-        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
-        carregarPrecosMoto(tid);
+        location.reload();
     })
     .catch(function(err) { alert(err.message); });
 }

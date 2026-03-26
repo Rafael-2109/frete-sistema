@@ -91,9 +91,28 @@
             height: 25px;
             margin-bottom: 8px;
         }
+
+        /* Watermark PROVISÓRIO */
+        .embarque-provisorio {
+            position: relative;
+        }
+        .embarque-provisorio .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-35deg);
+            font-size: 100px;
+            font-weight: 900;
+            color: rgba(255, 193, 7, 0.20);
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+        }
     </style>
 </head>
-<body>
+{% set tem_provisorio = embarque.itens_ativos | selectattr('provisorio') | list | length > 0 %}
+<body{% if tem_provisorio %} class="embarque-provisorio"{% endif %}>
+    {% if tem_provisorio %}<div class="watermark">PROVISORIO</div>{% endif %}
     <!-- CABEÇALHO DO EMBARQUE -->
     <div class="embarque-header">
         <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '___/___/_____' }}</h1>
@@ -160,7 +179,7 @@
 
     <!-- Itens Nacom -->
     {% if itens_nacom %}
-    <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Itens do Embarque</h3>
+    <h3 style="border-bottom: 2px solid #007bff; padding-bottom: 3px; margin-bottom: 8px;">Nacom ({{ itens_nacom|length }})</h3>
     <table class="table-embarque">
         <thead>
             <tr>
@@ -212,7 +231,12 @@
             {% for item in itens_carvia %}
             <tr{% if item.provisorio %} style="background-color: #fff3cd;"{% endif %}>
                 <td>{{ item.cliente }}</td>
-                <td>{{ item.pedido }}</td>
+                <td>
+                    {{ item.pedido }}
+                    {% if filial_por_lote is defined and filial_por_lote.get(item.separacao_lote_id) %}
+                    <span style="background-color: {{ '#1a73e8' if filial_por_lote[item.separacao_lote_id] == 'SP' else '#d93025' }}; color: white; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">{{ filial_por_lote[item.separacao_lote_id] }}</span>
+                    {% endif %}
+                </td>
                 <td>{{ item.nota_fiscal or '-' }}</td>
                 <td>
                   {% if item.provisorio %}

@@ -1,7 +1,7 @@
 {# Navegacao rapida CarVia — incluir em todas as telas do modulo.
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, importar, nfs, operacoes, subcontratos,
-   ctes_complementares, custos_entrega, faturas_cliente, faturas_transportadora,
+   ctes_complementares, custos_entrega, fretes, faturas_cliente, faturas_transportadora,
    despesas, receitas, fluxo_caixa, conciliacao, extrato_bancario, configuracoes
 #}
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
@@ -36,6 +36,13 @@
     <a href="{{ url_for('carvia.listar_custos_entrega') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'custos_entrega' else 'btn-outline-secondary' }}">
         Custos Entrega
+    </a>
+
+    {# --- Fretes --- #}
+    <span class="carvia-quick-nav-sep"></span>
+    <a href="{{ url_for('carvia.listar_fretes_carvia') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'fretes' else 'btn-outline-secondary' }}">
+        Fretes
     </a>
 
     {# --- Faturamento --- #}

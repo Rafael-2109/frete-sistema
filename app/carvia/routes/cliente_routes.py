@@ -160,7 +160,7 @@ def register_cliente_routes(bp):
         tipo = (data.get('tipo') or '').strip().upper()
 
         if not cnpj:
-            return jsonify({'erro': 'CNPJ e obrigatorio.'}), 400
+            return jsonify({'erro': 'CNPJ/CPF e obrigatorio.'}), 400
         if not tipo:
             return jsonify({'erro': 'Tipo (ORIGEM/DESTINO) e obrigatorio.'}), 400
 

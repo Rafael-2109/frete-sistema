@@ -614,6 +614,7 @@ class OdooDevolucaoService:
                 if move_data:
                     qty = move_data[0].get('product_uom_qty', 0)
                     self.odoo.write('stock.move.line', [ml['id']], {
+                        'qty_done': qty,
                         'quantity': qty,
                     })
 

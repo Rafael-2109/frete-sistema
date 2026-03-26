@@ -47,7 +47,8 @@
                     <thead>
                         <tr>
                             <th>Cidade</th>
-                            <th>UF</th>
+                            <th>UF Origem</th>
+                            <th>UF Destino</th>
                             <th>Cod. IBGE</th>
                             <th>Tabela</th>
                             <th class="text-center">Lead Time (dias)</th>
@@ -59,10 +60,20 @@
                         {% for c in cidades %}
                         <tr>
                             <td><strong>{{ c.nome_cidade }}</strong></td>
-                            <td>{{ c.uf }}</td>
+                            <td>{{ c.uf_origem }}</td>
+                            <td>{{ c.uf_destino }}</td>
                             <td><code>{{ c.codigo_ibge }}</code></td>
-                            <td>{{ c.nome_tabela }}</td>
-                            <td class="text-center">{{ c.lead_time if c.lead_time is not none else '-' }}</td>
+                            <td>
+                                <span id="lblTabela{{ c.id }}">{{ c.nome_tabela }}</span>
+                                <input type="text" class="form-control form-control-sm d-none"
+                                       id="inpTabela{{ c.id }}" value="{{ c.nome_tabela }}" style="width:120px;display:inline-block!important">
+                            </td>
+                            <td class="text-center">
+                                <span id="lblLead{{ c.id }}">{{ c.lead_time if c.lead_time is not none else '-' }}</span>
+                                <input type="number" class="form-control form-control-sm d-none"
+                                       id="inpLead{{ c.id }}" value="{{ c.lead_time if c.lead_time is not none else '' }}"
+                                       min="0" style="width:70px;display:inline-block!important">
+                            </td>
                             <td class="text-center">
                                 {% if c.ativo %}
                                 <span class="badge bg-success">Sim</span>
@@ -71,6 +82,22 @@
                                 {% endif %}
                             </td>
                             <td class="text-center text-nowrap">
+                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                        id="btnEdit{{ c.id }}"
+                                        onclick="editarCidadeInline({{ c.id }})" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm d-none"
+                                        id="btnSave{{ c.id }}"
+                                        onclick="salvarCidadeInline({{ c.id }})" title="Salvar">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm d-none"
+                                        id="btnCancel{{ c.id }}"
+                                        onclick="cancelarCidadeInline({{ c.id }}, '{{ c.nome_tabela }}', '{{ c.lead_time if c.lead_time is not none else '' }}')"
+                                        title="Cancelar">
+                                    <i class="fas fa-times"></i>
+                                </button>
                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                         onclick="desativarCidade({{ c.id }}, '{{ c.nome_cidade }}')" title="Desativar">
                                     <i class="fas fa-ban"></i>
@@ -103,21 +130,30 @@
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label class="form-label">UF *</label>
-                            <select name="uf" id="novaCidadeUf" class="form-select" required>
+                            <label class="form-label">UF Origem *</label>
+                            <select name="uf_origem" id="novaCidadeUfOrigem" class="form-select" required>
                                 <option value="">--</option>
                                 {% for uf in ufs %}
                                 <option value="{{ uf }}">{{ uf }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-3">
+                            <label class="form-label">UF Destino *</label>
+                            <select name="uf_destino" id="novaCidadeUf" class="form-select" required>
+                                <option value="">--</option>
+                                {% for uf in ufs %}
+                                <option value="{{ uf }}">{{ uf }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label">Cidade *</label>
                             <div class="carvia-autocomplete-wrapper">
                                 <input type="hidden" name="nome_cidade" id="novaCidadeHidden">
                                 <input type="hidden" name="codigo_ibge" id="novaCidadeIbge">
                                 <input type="text" id="novaCidadeInput" class="form-control"
-                                       placeholder="Cidade" required autocomplete="off">
+                                       placeholder="Selecione UF Destino primeiro" required autocomplete="off">
                                 <div class="carvia-autocomplete-results" id="novaCidadeResults"></div>
                             </div>
                         </div>
@@ -171,9 +207,55 @@ function criarCidade(event) {
         body: JSON.stringify({
             codigo_ibge: codigoIbge,
             nome_cidade: nomeCidade,
-            uf: form.querySelector('[name="uf"]').value,
+            uf_origem: form.querySelector('[name="uf_origem"]').value,
+            uf_destino: form.querySelector('[name="uf_destino"]').value,
             nome_tabela: form.querySelector('[name="nome_tabela"]').value,
             lead_time: leadTimeVal ? parseInt(leadTimeVal) : null
+        })
+    })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+        if (!res.ok) { alert(res.data.erro || 'Erro'); return; }
+        location.reload();
+    })
+    .catch(function(err) { alert(err.message); });
+}
+
+function editarCidadeInline(id) {
+    document.getElementById('lblTabela' + id).classList.add('d-none');
+    document.getElementById('lblLead' + id).classList.add('d-none');
+    document.getElementById('inpTabela' + id).classList.remove('d-none');
+    document.getElementById('inpLead' + id).classList.remove('d-none');
+    document.getElementById('btnEdit' + id).classList.add('d-none');
+    document.getElementById('btnSave' + id).classList.remove('d-none');
+    document.getElementById('btnCancel' + id).classList.remove('d-none');
+    document.getElementById('inpTabela' + id).focus();
+}
+
+function cancelarCidadeInline(id, tabela, lead) {
+    document.getElementById('inpTabela' + id).value = tabela;
+    document.getElementById('inpLead' + id).value = lead;
+    document.getElementById('lblTabela' + id).classList.remove('d-none');
+    document.getElementById('lblLead' + id).classList.remove('d-none');
+    document.getElementById('inpTabela' + id).classList.add('d-none');
+    document.getElementById('inpLead' + id).classList.add('d-none');
+    document.getElementById('btnEdit' + id).classList.remove('d-none');
+    document.getElementById('btnSave' + id).classList.add('d-none');
+    document.getElementById('btnCancel' + id).classList.add('d-none');
+}
+
+function salvarCidadeInline(id) {
+    var tabela = document.getElementById('inpTabela' + id).value.trim();
+    var leadVal = document.getElementById('inpLead' + id).value;
+
+    if (!tabela) { alert('Nome tabela e obrigatorio.'); return; }
+
+    fetch('/carvia/api/cidades-atendidas-carvia/' + id, {
+        method: 'PUT',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+            nome_tabela: tabela,
+            lead_time: leadVal ? parseInt(leadVal) : null
         })
     })
     .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
@@ -222,7 +304,7 @@ function desativarCidade(id, nome) {
         resultsDiv.classList.remove('show');
         var uf = this.value;
         if (uf && !cidadeCache[uf]) {
-            fetch('/localidades/ajax/cidades_por_uf/' + uf)
+            fetch('/localidades/ajax/cidades_por_uf_ibge/' + uf)
                 .then(function(r) { return r.json(); })
                 .then(function(data) { cidadeCache[uf] = data; });
         }
@@ -244,40 +326,30 @@ function desativarCidade(id, nome) {
     function filtrar(uf, termo) {
         var cidades = cidadeCache[uf];
         if (!cidades) {
-            fetch('/localidades/ajax/cidades_por_uf/' + uf)
+            fetch('/localidades/ajax/cidades_por_uf_ibge/' + uf)
                 .then(function(r) { return r.json(); })
                 .then(function(data) { cidadeCache[uf] = data; filtrar(uf, termo); });
             return;
         }
         var termoNorm = normalizeText(termo);
         var filtradas = cidades.filter(function(c) {
-            var nome = typeof c === 'string' ? c : c.nome;
-            return normalizeText(nome).indexOf(termoNorm) !== -1;
+            return normalizeText(c.nome).indexOf(termoNorm) !== -1;
         }).slice(0, 15);
 
         if (filtradas.length === 0) { resultsDiv.classList.remove('show'); return; }
 
         resultsDiv.innerHTML = '';
         filtradas.forEach(function(c) {
-            var nome = typeof c === 'string' ? c : c.nome;
             var item = document.createElement('div');
             item.className = 'dropdown-item';
             item.style.cursor = 'pointer';
-            item.textContent = nome;
+            item.textContent = c.nome;
             item.addEventListener('click', function() {
-                cidadeInput.value = nome;
-                hiddenNome.value = nome;
+                cidadeInput.value = c.nome;
+                hiddenNome.value = c.nome;
+                hiddenIbge.value = c.codigo_ibge;
                 cidadeInput.classList.remove('is-invalid');
                 resultsDiv.classList.remove('show');
-                {# Buscar IBGE pelo nome exato #}
-                fetch('/localidades/ajax/buscar_ibge?cidade=' + encodeURIComponent(nome) + '&uf=' + uf)
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        if (data.codigo_ibge) hiddenIbge.value = data.codigo_ibge;
-                    })
-                    .catch(function() {
-                        {# Fallback: IBGE vazio, sera preenchido manualmente #}
-                    });
             });
             resultsDiv.appendChild(item);
         });

@@ -706,14 +706,15 @@ def register_fatura_routes(bp):
 
         if request.method == 'POST':
             transportadora_id = request.form.get('transportadora_id', type=int)
+            numero_fatura = request.form.get('numero_fatura', '').strip()
             valor_total_str = request.form.get('valor_total', '').strip()
             data_emissao_str = request.form.get('data_emissao', '')
             vencimento_str = request.form.get('vencimento', '')
             observacoes = request.form.get('observacoes', '')
 
             # Validacoes
-            if not transportadora_id or not data_emissao_str or not vencimento_str:
-                flash('Transportadora, valor, data de emissao e vencimento sao obrigatorios.', 'warning')
+            if not transportadora_id or not numero_fatura or not data_emissao_str or not vencimento_str:
+                flash('Transportadora, numero da fatura, valor, data de emissao e vencimento sao obrigatorios.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_transportadora'))
 
             try:
@@ -736,9 +737,6 @@ def register_fatura_routes(bp):
             try:
                 data_emissao = date.fromisoformat(data_emissao_str)
                 vencimento = date.fromisoformat(vencimento_str)
-
-                # Gerar numero automaticamente
-                numero_fatura = CarviaFaturaTransportadora.gerar_numero_fatura()
 
                 fatura = CarviaFaturaTransportadora(
                     transportadora_id=transportadora_id,

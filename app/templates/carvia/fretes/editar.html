@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Frete CarVia #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-edit"></i> Editar Frete CarVia #{{ frete.id }}</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <button type="submit" form="formEditarFrete" class="btn btn-primary btn-sm">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </div>
+
+    {% set carvia_active = 'fretes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <form method="POST" action="{{ url_for('carvia.editar_frete_carvia', id=frete.id) }}" id="formEditarFrete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Dados (read-only) -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Emitente</small>
+                        <strong>{{ frete.nome_emitente or '-' }}</strong>
+                        <div class="small text-muted">{{ frete.cnpj_emitente }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Destino</small>
+                        <strong>{{ frete.nome_destino or '-' }}</strong>
+                        <div class="small text-muted">{{ frete.cidade_destino }}/{{ frete.uf_destino }}</div>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Embarque</small>
+                        {% if frete.embarque %}
+                        <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}">
+                            <strong>{{ frete.embarque.numero }}</strong>
+                        </a>
+                        {% else %}
+                        <strong class="text-muted">-</strong>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Transportadora</small>
+                        <strong>{{ frete.transportadora.razao_social if frete.transportadora else '-' }}</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">NFs</small>
+                        <strong>{{ frete.numeros_nfs or '-' }}</strong>
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Peso</small>
+                        <strong>{{ frete.peso_total|numero_br(1) if frete.peso_total else '-' }} kg</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Valor NFs</small>
+                        <strong>{{ frete.valor_total_nfs|valor_br if frete.valor_total_nfs else '-' }}</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Fatura Transportadora</small>
+                        {% if frete.fatura_transportadora_rel %}
+                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=frete.fatura_transportadora_id) }}">
+                            <strong>{{ frete.fatura_transportadora_rel.numero_fatura }}</strong>
+                        </a>
+                        {% else %}
+                        <strong class="text-warning">Nao vinculada</strong>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">CTe Subcontrato</small>
+                        {% if frete.subcontrato %}
+                        <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=frete.subcontrato_id) }}">
+                            <strong>{{ frete.subcontrato.cte_numero or '#' ~ frete.subcontrato_id }}</strong>
+                        </a>
+                        {% else %}
+                        <strong class="text-muted">-</strong>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Valores CUSTO + VENDA -->
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-arrow-down"></i> Valores CUSTO</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if not custo_editavel %}
+                        <div class="alert alert-warning py-2 mb-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Vincule uma fatura transportadora para editar valores CUSTO.
+                            <a href="{{ url_for('carvia.lancar_cte_carvia') }}" class="alert-link">Lancar CTe</a>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label">Valor Cotado</label>
+                            <div class="form-control bg-light" id="valor_cotado_display">{{ frete.valor_cotado|valor_br }}</div>
+                            <div class="form-text">Gerado automaticamente pela tabela de frete</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="valor_cte" class="form-label">Valor CTe</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="valor_cte" id="valor_cte" class="form-control"
+                                       value="{{ frete.valor_cte or '' }}" placeholder="0,00"
+                                       {{ 'disabled' if not custo_editavel }}>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                {% if frete.valor_cte %}
+                                <div class="form-text">Atual: {{ frete.valor_cte|valor_br }}</div>
+                                {% else %}
+                                <div></div>
+                                {% endif %}
+                                <span id="diff_cte" class="small"></span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="valor_considerado" class="form-label">Valor Considerado</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="valor_considerado" id="valor_considerado" class="form-control"
+                                       value="{{ frete.valor_considerado or '' }}" placeholder="0,00"
+                                       {{ 'disabled' if not custo_editavel }}>
+                            </div>
+                            {% if frete.valor_considerado %}
+                            <div class="form-text">Atual: {{ frete.valor_considerado|valor_br }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="valor_pago" class="form-label">Valor Pago</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="valor_pago" id="valor_pago" class="form-control"
+                                       value="{{ frete.valor_pago or '' }}" placeholder="0,00"
+                                       {{ 'disabled' if not custo_editavel }}>
+                            </div>
+                            {% if frete.valor_pago %}
+                            <div class="form-text">Atual: {{ frete.valor_pago|valor_br }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Valor VENDA -->
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-arrow-up"></i> Valor VENDA</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="valor_venda" class="form-label">Valor Venda</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="valor_venda" id="valor_venda" class="form-control"
+                                       value="{{ frete.valor_venda or '' }}" placeholder="0,00">
+                            </div>
+                            {% if frete.valor_venda %}
+                            <div class="form-text">Atual: {{ frete.valor_venda|valor_br }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Observacoes -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-comment-alt"></i> Observacoes</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea name="observacoes" class="form-control" rows="4"
+                                  placeholder="Observacoes sobre o frete...">{{ frete.observacoes or '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Sugestoes CTe Subcontrato -->
+    {% if sugestoes_sub %}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-handshake"></i> Sugestoes CTe Subcontrato</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>CTe</th>
+                            <th>Transportadora</th>
+                            <th class="text-end">Valor</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sub in sugestoes_sub %}
+                        <tr>
+                            <td><strong>{{ sub.cte_numero or '-' }}</strong></td>
+                            <td>{{ sub.transportadora.razao_social if sub.transportadora else '-' }}</td>
+                            <td class="text-end">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</td>
+                            <td>
+                                <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('carvia.vincular_subcontrato_frete', id=frete.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="subcontrato_id" value="{{ sub.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Vincular este subcontrato">
+                                        <i class="fas fa-link"></i> Vincular
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    var valorCotado = {{ frete.valor_cotado or 0 }};
+
+    function parseBR(str) {
+        if (!str) return 0;
+        return parseFloat(String(str).replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    function formatBR(val) {
+        return val.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function calcularDiferenca() {
+        var input = document.getElementById('valor_cte');
+        var badge = document.getElementById('diff_cte');
+        if (!input || !badge || !valorCotado) return;
+
+        var valorCte = parseBR(input.value);
+        if (!valorCte) {
+            badge.innerHTML = '';
+            return;
+        }
+
+        var diff = valorCte - valorCotado;
+        if (Math.abs(diff) < 0.01) {
+            badge.innerHTML = '<span class="badge bg-success">Igual</span>';
+            return;
+        }
+
+        var sinal = diff > 0 ? '+' : '';
+        var cor = diff > 0 ? 'danger' : 'success';
+        badge.innerHTML = '<span class="badge bg-' + cor + '">' + sinal + 'R$ ' + formatBR(diff) + '</span>';
+    }
+
+    var cteInput = document.getElementById('valor_cte');
+    if (cteInput) {
+        cteInput.addEventListener('blur', calcularDiferenca);
+        cteInput.addEventListener('input', calcularDiferenca);
+        // Calcular na carga se ja tem valor
+        calcularDiferenca();
+    }
+})();
+</script>
+{% endblock %}

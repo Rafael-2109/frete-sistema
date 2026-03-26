@@ -60,7 +60,7 @@ class CotacaoV2Service:
             return None, 'Tipo de material deve ser CARGA_GERAL ou MOTO.'
 
         cotacao = CarviaCotacao(
-            numero_cotacao=CarviaCotacao.gerar_numero_cotacao(),
+            numero_cotacao='COT-TEMP',  # atualizado apos flush com COT-{id}
             cliente_id=cliente_id,
             endereco_origem_id=endereco_origem_id,
             endereco_destino_id=endereco_destino_id,
@@ -88,6 +88,8 @@ class CotacaoV2Service:
 
         db.session.add(cotacao)
         db.session.flush()
+        # Atualizar numero_cotacao com COT-{id} apos flush (id disponivel)
+        cotacao.numero_cotacao = CarviaCotacao.gerar_numero_cotacao(cotacao.id)
         return cotacao, None
 
     @staticmethod
@@ -210,6 +212,13 @@ class CotacaoV2Service:
             cotacao.valor_tabela = Decimal(str(resultado_carvia['valor']))
             cotacao.tabela_carvia_id = resultado_carvia.get('tabela_carvia_id')
             cotacao.detalhes_calculo = resultado_carvia.get('detalhes')
+
+            # Reaplicar desconto com novo valor_tabela (0% se nunca definido)
+            desconto = float(cotacao.percentual_desconto or 0)
+            valor_desc = float(cotacao.valor_tabela) * (1 - desconto / 100)
+            cotacao.valor_descontado = Decimal(str(round(valor_desc, 2)))
+            cotacao.valor_final_aprovado = cotacao.valor_descontado
+
             db.session.flush()
             return {
                 'dentro_tabela': True,
@@ -270,6 +279,7 @@ class CotacaoV2Service:
                 peso=peso,
                 valor_mercadoria=valor,
                 cnpj_cliente=cnpj_cliente,
+                tipo_carga=cotacao.tipo_carga,
                 categorias_moto=categorias_moto,
             )
 
@@ -403,6 +413,8 @@ class CotacaoV2Service:
             return False, f'Cotacao em status {cotacao.status}, esperado RASCUNHO.'
         if cotacao.valor_final_aprovado is None:
             return False, 'Cotacao sem valor final. Calcule o preco primeiro.'
+        if cotacao.data_expedicao is None:
+            return False, 'Data de expedicao obrigatoria antes de gravar.'
 
         cotacao.status = 'ENVIADO'
         db.session.flush()
@@ -446,8 +458,12 @@ class CotacaoV2Service:
         cotacao_id: int,
         novo_valor: float,
     ) -> Tuple[bool, Optional[str]]:
-        """Registra contra-proposta do cliente com novo valor."""
+        """Registra contra-proposta do cliente com novo valor.
+
+        Se desconto implícito excede limite, bloqueia para aprovação admin.
+        """
         from app.carvia.models import CarviaCotacao
+        from app.carvia.services.config_service import CarviaConfigService
 
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
@@ -468,7 +484,14 @@ class CotacaoV2Service:
         cotacao.valor_final_aprovado = Decimal(str(novo_valor))
         cotacao.percentual_desconto = Decimal(str(round(max(desconto, 0), 2)))
         cotacao.valor_descontado = Decimal(str(novo_valor))
-        cotacao.status = 'RASCUNHO'  # Volta para reavaliacao
+
+        # Verificar limite de desconto
+        limite = CarviaConfigService.limite_desconto_percentual()
+        if desconto > limite:
+            cotacao.status = 'PENDENTE_ADMIN'
+        else:
+            cotacao.status = 'RASCUNHO'
+
         db.session.flush()
         return True, None
 
@@ -513,6 +536,7 @@ class CotacaoV2Service:
     def listar_cotacoes(
         status: Optional[str] = None,
         cliente_id: Optional[int] = None,
+        alerta: Optional[str] = None,
     ) -> List:
         """Lista cotacoes com filtros opcionais."""
         from app.carvia.models import CarviaCotacao
@@ -523,6 +547,8 @@ class CotacaoV2Service:
             query = query.filter_by(status=status)
         if cliente_id:
             query = query.filter_by(cliente_id=cliente_id)
+        if alerta == 'saida_sem_nf':
+            query = query.filter_by(alerta_saida_sem_nf=True)
 
         return query.order_by(CarviaCotacao.criado_em.desc()).all()
 

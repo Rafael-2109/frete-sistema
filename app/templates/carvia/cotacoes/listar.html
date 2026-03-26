@@ -24,6 +24,12 @@
             {{ st }} ({{ cnt }})
         </a>
         {% endfor %}
+        {% if contadores_alerta %}
+        <a href="{{ url_for('carvia.listar_cotacoes_v2', alerta='saida_sem_nf') }}"
+           class="btn btn-sm {{ 'btn-danger' if alerta_filtro == 'saida_sem_nf' else 'btn-outline-danger' }}">
+            <i class="fas fa-exclamation-triangle"></i> Sem NF ({{ contadores_alerta }})
+        </a>
+        {% endif %}
     </div>
 
     {# Tabela #}
@@ -45,7 +51,7 @@
                     </thead>
                     <tbody>
                         {% for cot in cotacoes %}
-                        <tr>
+                        <tr class="{{ 'carvia-alerta-saida-sem-nf' if cot.alerta_saida_sem_nf else '' }}">
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cot.id) }}">
                                     <strong>{{ cot.numero_cotacao }}</strong>
@@ -84,6 +90,12 @@
                                 <span class="badge bg-danger">Recusado</span>
                                 {% elif cot.status == 'CANCELADO' %}
                                 <span class="badge bg-dark">Cancelado</span>
+                                {% endif %}
+                                {% if cot.alerta_saida_sem_nf %}
+                                <span class="badge bg-danger ms-1"
+                                      title="Embarque #{{ cot.alerta_saida_embarque_id or '?' }} saiu sem NF em {{ cot.alerta_saida_sem_nf_em.strftime('%d/%m %H:%M') if cot.alerta_saida_sem_nf_em else '?' }}">
+                                    <i class="fas fa-exclamation-triangle"></i> Sem NF
+                                </span>
                                 {% endif %}
                             </td>
                             <td class="text-center small text-muted">

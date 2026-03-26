@@ -434,9 +434,29 @@ class CarteiraService:
 
                         if pedidos_standby:
                             nomes_standby = [p.num_pedido for p in pedidos_standby]
-                            # OR: pedidos na janela temporal OU pedidos em standby ativo
-                            domain = ['|'] + domain + [('order_id.name', 'in', nomes_standby)]
-                            logger.info(f"   📋 Incluindo {len(nomes_standby)} pedidos em SaldoStandby na busca")
+                            # FIX: Reconstruir domain com OR correto em notação polonesa
+                            # A versão anterior ('|' + domain + [standby]) quebrava o domain:
+                            # o '|' consumia apenas 2 operandos, e (name IN standby) ficava
+                            # como AND no topo — restringindo TUDO a apenas pedidos standby.
+                            #
+                            # Correto: ((write_date ∈ janela) OR (name ∈ standby))
+                            #          AND state AND tipo_pedido
+                            domain = [
+                                '|',  # OR entre janela temporal e standby
+                                '&',  # AND das duas condições de write_date
+                                ('order_id.write_date', '>=', data_corte.isoformat()),
+                                ('order_id.write_date', '<=', momento_atual.isoformat()),
+                                ('order_id.name', 'in', nomes_standby),
+                                # Resto: AND implícito no topo
+                                ('order_id.state', 'in', ['draft', 'sent', 'sale', 'cancel']),
+                                '|', '|', '|', '|',
+                                ('order_id.l10n_br_tipo_pedido', '=', 'venda'),
+                                ('order_id.l10n_br_tipo_pedido', '=', 'bonificacao'),
+                                ('order_id.l10n_br_tipo_pedido', '=', 'industrializacao'),
+                                ('order_id.l10n_br_tipo_pedido', '=', 'exportacao'),
+                                ('order_id.l10n_br_tipo_pedido', '=', 'venda-industrializacao')
+                            ]
+                            logger.info(f"   📋 Domain com SaldoStandby: {len(nomes_standby)} pedidos standby, {len(domain)} condições no domain")
                     except Exception as e:
                         logger.warning(f"⚠️ Não foi possível incluir pedidos standby: {e}")
                         # Degradação graceful — sync continua sem os standby

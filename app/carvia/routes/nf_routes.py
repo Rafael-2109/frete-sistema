@@ -192,6 +192,7 @@ def register_nf_routes(bp):
             return redirect(url_for('carvia.listar_nfs'))
 
         itens = nf.itens.all()
+        veiculos = nf.veiculos.all()
 
         # Operacoes vinculadas (CTes CarVia) via junction
         operacoes = nf.operacoes.all()
@@ -232,6 +233,7 @@ def register_nf_routes(bp):
             'carvia/nfs/detalhe.html',
             nf=nf,
             itens=itens,
+            veiculos=veiculos,
             operacoes=operacoes,
             subcontratos=subcontratos,
             faturas_cliente=faturas_cliente,

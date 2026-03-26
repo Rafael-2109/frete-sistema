@@ -145,6 +145,22 @@
         <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-money-bill-wave text-primary"></i> Fretes</h5>
+                    <p class="card-text text-muted small">Fretes CarVia por grupo CNPJ emitente/destino. CTe e fatura.</p>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('carvia.listar_fretes_carvia') }}" class="btn btn-outline-primary btn-sm">
+                            Listar Fretes
+                        </a>
+                        <a href="{{ url_for('carvia.lancar_cte_carvia') }}" class="btn btn-outline-success btn-sm">
+                            Lancar CTe
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
                     <h5 class="card-title"><i class="fas fa-file-alt text-info"></i> Documentos</h5>
                     <p class="card-text text-muted small">NFs de venda, CTes CarVia e CTes de subcontratados.</p>
                     <div class="d-flex flex-wrap gap-1">

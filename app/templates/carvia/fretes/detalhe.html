@@ -1,0 +1,512 @@
+{% extends "base.html" %}
+
+{% block title %}Frete CarVia #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    {# ================================================================ #}
+    {# 1. HEADER                                                        #}
+    {# ================================================================ #}
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-2">
+                <i class="fas fa-file-invoice"></i> Frete CarVia #{{ frete.id }}
+                <span class="badge carvia-badge-{{ frete.status|lower }} ms-2">{{ frete.status }}</span>
+            </h1>
+            <p class="text-muted mb-4">
+                Criado em {{ frete.criado_em|formatar_data_hora_brasil if frete.criado_em else '-' }}
+                por {{ frete.criado_por or '-' }}
+            </p>
+        </div>
+    </div>
+
+    {# ================================================================ #}
+    {# 2. ACTION BAR                                                    #}
+    {# ================================================================ #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{{ url_for('carvia.listar_fretes_carvia') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar a Lista
+            </a>
+
+            {% if not fatura_transportadora or fatura_transportadora.status_conferencia != 'CONFERIDO' %}
+            <a href="{{ url_for('carvia.editar_frete_carvia', id=frete.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> Editar Frete
+            </a>
+            {% else %}
+            <button class="btn btn-secondary" disabled title="Frete bloqueado - fatura conferida">
+                <i class="fas fa-lock"></i> Frete Bloqueado
+            </button>
+            {% endif %}
+
+            <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}" class="btn btn-info">
+                <i class="fas fa-truck"></i> Ver Embarque
+            </a>
+
+            {% if not frete.fatura_cliente_id and not frete.fatura_transportadora_id and frete.status != 'CANCELADO' %}
+            <form method="POST" action="{{ url_for('carvia.cancelar_frete_carvia', id=frete.id) }}"
+                  style="display: inline-block;"
+                  onsubmit="return confirm('Tem certeza que deseja cancelar este frete?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ================================================================ #}
+    {# 3. QUICK NAV                                                     #}
+    {# ================================================================ #}
+    {% set carvia_active = 'fretes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# ================================================================ #}
+    {# 4. LAYOUT DUAS COLUNAS                                           #}
+    {# ================================================================ #}
+    <div class="row">
+
+        {# ============================================================ #}
+        {# 5. COLUNA ESQUERDA (col-md-8)                                #}
+        {# ============================================================ #}
+        <div class="col-md-8">
+
+            {# -------------------------------------------------------- #}
+            {# 5a. Card "Dados do Frete" com tabs Compra/Venda          #}
+            {# -------------------------------------------------------- #}
+            <div class="card mb-4">
+                <div class="card-header p-0">
+                    <div class="d-flex align-items-center px-3 pt-3 pb-0">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-info-circle"></i> Dados do Frete
+                        </h5>
+                    </div>
+                    <ul class="nav nav-tabs card-header-tabs px-3 mt-3" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-compra"
+                                    type="button" role="tab" aria-selected="true">
+                                <i class="fas fa-handshake"></i> Compra (Subcontrato)
+                                {% if subcontrato %}
+                                <span class="badge bg-success ms-1"><i class="fas fa-check"></i></span>
+                                {% endif %}
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-venda"
+                                    type="button" role="tab" aria-selected="false">
+                                <i class="fas fa-file-invoice"></i> Venda (CarVia)
+                                {% if operacao %}
+                                <span class="badge bg-success ms-1"><i class="fas fa-check"></i></span>
+                                {% endif %}
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+
+                    {# --- Dados compartilhados (sempre visiveis) --- #}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-building"></i> Emitente</h6>
+                            <p><strong>CNPJ:</strong> {{ frete.cnpj_emitente or '-' }}</p>
+                            <p><strong>Razao Social:</strong> {{ frete.nome_emitente or '-' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-truck"></i> Transporte</h6>
+                            <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social if frete.transportadora else '-' }}</p>
+                            <p><strong>Embarque:</strong>
+                                <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}">
+                                    #{{ frete.embarque.numero if frete.embarque else frete.embarque_id }}
+                                </a>
+                            </p>
+                            <p><strong>Tipo de Carga:</strong>
+                                {% if frete.tipo_carga == 'DIRETA' %}
+                                <span class="badge bg-info">{{ frete.tipo_carga }}</span>
+                                {% elif frete.tipo_carga == 'FRACIONADA' %}
+                                <span class="badge bg-warning text-dark">{{ frete.tipo_carga }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ frete.tipo_carga or '-' }}</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>UF/Cidade Destino:</strong> {{ frete.uf_destino or '-' }}/{{ frete.cidade_destino or '-' }}</p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-weight"></i> Totais das NFs</h6>
+                            <p><strong>Peso Total:</strong> {{ frete.peso_total|numero_br(2) if frete.peso_total else '-' }} kg</p>
+                            <p><strong>Valor Total:</strong> {{ frete.valor_total_nfs|valor_br if frete.valor_total_nfs else '-' }}</p>
+                            <p><strong>Quantidade de NFs:</strong> {{ frete.quantidade_nfs or 0 }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-map-marker-alt"></i> Destino</h6>
+                            <p><strong>CNPJ:</strong> {{ frete.cnpj_destino or '-' }}</p>
+                            <p><strong>Nome:</strong> {{ frete.nome_destino or '-' }}</p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h6><i class="fas fa-list"></i> Notas Fiscais Incluidas</h6>
+                    <div class="bg-light p-3 rounded">
+                        {% if frete.numeros_nfs %}
+                        {% set nfs_list = frete.numeros_nfs.split(',') %}
+                        {% for nf in nfs_list %}
+                        {% if nf.strip() %}
+                        <span class="badge bg-primary me-1 mb-1">{{ nf.strip() }}</span>
+                        {% endif %}
+                        {% endfor %}
+                        {% else %}
+                        <span class="text-muted">Nenhuma nota fiscal informada</span>
+                        {% endif %}
+                    </div>
+
+                    <hr>
+
+                    {# --- Conteudo das tabs --- #}
+                    <div class="tab-content">
+
+                        {# ============================================ #}
+                        {# TAB COMPRA (Subcontrato)                     #}
+                        {# ============================================ #}
+                        <div class="tab-pane fade show active" id="tab-compra" role="tabpanel">
+                            {% if subcontrato %}
+                                    <div class="alert alert-success border-left-success mb-0" role="alert">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <h6 class="alert-heading mb-2">
+                                                    <i class="fas fa-check-circle"></i> CTe Subcontrato
+                                                    <span class="badge carvia-badge-{{ subcontrato.status|lower }} ms-1">{{ subcontrato.status }}</span>
+                                                </h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <p class="mb-1"><strong>CTe Numero:</strong> {{ subcontrato.cte_numero or 'Sem CTe' }}</p>
+                                                        <p class="mb-1"><strong>Chave:</strong>
+                                                            <code class="text-dark small">{{ subcontrato.cte_chave_acesso[:30] ~ '...' if subcontrato.cte_chave_acesso and subcontrato.cte_chave_acesso|length > 30 else subcontrato.cte_chave_acesso or '-' }}</code>
+                                                        </p>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <p class="mb-1"><strong>Transportadora:</strong> {{ subcontrato.transportadora.razao_social if subcontrato.transportadora else '-' }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="ms-3 text-end">
+                                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=subcontrato.id) }}"
+                                                   class="btn btn-success btn-sm mb-1 d-block">
+                                                    <i class="fas fa-external-link-alt"></i> Ver Subcontrato
+                                                </a>
+                                                {% if fatura_transportadora %}
+                                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_transportadora.id) }}"
+                                                   class="btn btn-outline-secondary btn-sm mb-1 d-block">
+                                                    <i class="fas fa-file-invoice-dollar"></i> Fatura #{{ fatura_transportadora.numero_fatura or fatura_transportadora.id }}
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {# Acoes #}
+                                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                                            {% if not fatura_transportadora %}
+                                            <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-outline-success btn-sm" target="_blank">
+                                                <i class="fas fa-plus"></i> Criar Fatura Transportadora
+                                            </a>
+                                            {% endif %}
+                                            {% if not fatura_transportadora or fatura_transportadora.status_conferencia != 'CONFERIDO' %}
+                                            <form method="POST" action="{{ url_for('carvia.desvincular_subcontrato_frete', id=frete.id) }}"
+                                                  style="display: inline-block;"
+                                                  onsubmit="return confirm('Desvincular CTe Subcontrato? Os valores CUSTO (CTe, Considerado, Pago) serao zerados.')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                    <i class="fas fa-unlink"></i> Desvincular CTe
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                            {% else %}
+                            {# Sem subcontrato #}
+                            <div class="text-center py-4">
+                                <div class="alert alert-warning d-inline-block mb-3">
+                                    <i class="fas fa-exclamation-triangle"></i> Nenhum CTe Subcontrato vinculado a este frete.
+                                </div>
+                                <br>
+                                <a href="{{ url_for('carvia.lancar_cte_carvia') }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-link"></i> Lancar CTe Subcontrato
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {# ============================================ #}
+                        {# TAB VENDA (CarVia)                           #}
+                        {# ============================================ #}
+                        <div class="tab-pane fade" id="tab-venda" role="tabpanel">
+                            {% if operacao %}
+                                    <div class="alert alert-info border-left-info mb-0" role="alert">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <h6 class="alert-heading mb-2">
+                                                    <i class="fas fa-info-circle"></i> CTe CarVia
+                                                    <span class="badge carvia-badge-{{ operacao.status|lower }} ms-1">{{ operacao.status }}</span>
+                                                </h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <p class="mb-1"><strong>CTe Numero:</strong> {{ operacao.cte_numero or 'Sem CTe' }}</p>
+                                                        <p class="mb-1"><strong>Chave:</strong>
+                                                            <code class="text-dark small">{{ operacao.cte_chave_acesso[:30] ~ '...' if operacao.cte_chave_acesso and operacao.cte_chave_acesso|length > 30 else operacao.cte_chave_acesso or '-' }}</code>
+                                                        </p>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <p class="mb-1"><strong>Cliente:</strong> {{ operacao.nome_cliente or '-' }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="ms-3 text-end">
+                                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}"
+                                                   class="btn btn-info btn-sm mb-1 d-block">
+                                                    <i class="fas fa-external-link-alt"></i> Ver Operacao
+                                                </a>
+                                                {% if fatura_cliente %}
+                                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_cliente.id) }}"
+                                                   class="btn btn-outline-secondary btn-sm mb-1 d-block">
+                                                    <i class="fas fa-file-invoice-dollar"></i> Fatura #{{ fatura_cliente.numero_fatura or fatura_cliente.id }}
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {# Acoes #}
+                                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                                            {% if not fatura_cliente %}
+                                            <a href="{{ url_for('carvia.nova_fatura_cliente') }}" class="btn btn-outline-success btn-sm" target="_blank">
+                                                <i class="fas fa-plus"></i> Criar Fatura Cliente
+                                            </a>
+                                            {% endif %}
+                                            {% if not frete.fatura_cliente_id %}
+                                            <form method="POST" action="{{ url_for('carvia.desvincular_operacao_frete', id=frete.id) }}"
+                                                  style="display: inline-block;"
+                                                  onsubmit="return confirm('Desvincular CTe CarVia deste frete?')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                    <i class="fas fa-unlink"></i> Desvincular CTe
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                            {% else %}
+                            {# Sem operacao #}
+                            <div class="text-center py-4">
+                                <div class="alert alert-warning d-inline-block mb-3">
+                                    <i class="fas fa-exclamation-triangle"></i> Nenhum CTe CarVia vinculado a este frete.
+                                </div>
+                                <br>
+                                <a href="{{ url_for('carvia.lancar_cte_carvia', tipo='venda') }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-link"></i> Lancar CTe CarVia
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                    </div>{# /tab-content #}
+
+                </div>
+            </div>
+
+            {# -------------------------------------------------------- #}
+            {# 5c. Card "Tabela de Frete Utilizada"                     #}
+            {# -------------------------------------------------------- #}
+            {% if frete.tabela_nome_tabela %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-table"></i> Tabela de Frete Utilizada
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Nome da Tabela:</strong> {{ frete.tabela_nome_tabela }}</p>
+                            <p><strong>Valor por Kg:</strong> {{ frete.tabela_valor_kg|valor_br(4) if frete.tabela_valor_kg else 'N/A' }}</p>
+                            <p><strong>% Valor Mercadoria:</strong> {{ frete.tabela_percentual_valor|numero_br(2) ~ '%' if frete.tabela_percentual_valor else 'N/A' }}</p>
+                            <p><strong>Frete Minimo Peso:</strong> {{ frete.tabela_frete_minimo_peso|numero_br(2) ~ ' kg' if frete.tabela_frete_minimo_peso else 'N/A' }}</p>
+                            <p><strong>Frete Minimo Valor:</strong> {{ frete.tabela_frete_minimo_valor|valor_br if frete.tabela_frete_minimo_valor else 'N/A' }}</p>
+                            <p><strong>ICMS:</strong> {{ frete.tabela_icms|numero_br(2) ~ '%' if frete.tabela_icms else 'N/A' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>GRIS:</strong> {{ frete.tabela_percentual_gris|numero_br(2) ~ '%' if frete.tabela_percentual_gris else 'N/A' }}
+                                {% if frete.tabela_gris_minimo %}
+                                <span class="text-muted small">(min. {{ frete.tabela_gris_minimo|valor_br }})</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>ADV:</strong> {{ frete.tabela_percentual_adv|numero_br(2) ~ '%' if frete.tabela_percentual_adv else 'N/A' }}
+                                {% if frete.tabela_adv_minimo %}
+                                <span class="text-muted small">(min. {{ frete.tabela_adv_minimo|valor_br }})</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>RCA:</strong> {{ frete.tabela_percentual_rca|numero_br(2) ~ '%' if frete.tabela_percentual_rca else 'N/A' }}</p>
+                            <p><strong>Pedagio/100kg:</strong> {{ frete.tabela_pedagio_por_100kg|valor_br if frete.tabela_pedagio_por_100kg else 'N/A' }}</p>
+                            <p><strong>TAS:</strong> {{ frete.tabela_valor_tas|valor_br if frete.tabela_valor_tas else 'N/A' }}</p>
+                            <p><strong>Valor Despacho:</strong> {{ frete.tabela_valor_despacho|valor_br if frete.tabela_valor_despacho else 'N/A' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>{# /col-md-8 #}
+
+        {# ============================================================ #}
+        {# 6. COLUNA DIREITA (col-md-4)                                 #}
+        {# ============================================================ #}
+        <div class="col-md-4">
+
+            {# -------------------------------------------------------- #}
+            {# 6a. Card "Valores do Frete" (xerox de /fretes/)          #}
+            {# -------------------------------------------------------- #}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-dollar-sign"></i> Valores do Frete
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="fw-bold text-primary">Valor Cotado</label>
+                        <div class="h4 text-primary">{{ frete.valor_cotado|valor_br if frete.valor_cotado else '-' }}</div>
+                        <small class="text-muted">Calculado pela tabela</small>
+                    </div>
+
+                    {% if frete.valor_cte %}
+                    <div class="mb-3">
+                        <label class="fw-bold text-info">Valor CTe</label>
+                        <div class="h4 text-info">{{ frete.valor_cte|valor_br }}</div>
+                        <small class="text-muted">Cobrado pela transportadora</small>
+                        {% if frete.valor_cotado and frete.valor_cte != frete.valor_cotado %}
+                        {% set diferenca_cte = frete.valor_cte - frete.valor_cotado %}
+                        <div class="mt-1">
+                            {% if diferenca_cte > 0 %}
+                            <span class="badge bg-danger">+{{ diferenca_cte|valor_br }}</span>
+                            {% else %}
+                            <span class="badge bg-success">{{ diferenca_cte|valor_br }}</span>
+                            {% endif %}
+                            <small class="text-muted d-block">
+                                {% if diferenca_cte > 0 %}Acima{% else %}Abaixo{% endif %} do cotado
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if frete.valor_considerado %}
+                    <div class="mb-3">
+                        <label class="fw-bold text-success">Valor Considerado</label>
+                        <div class="h4 text-success">{{ frete.valor_considerado|valor_br }}</div>
+                        <small class="text-muted">Valor valido definido</small>
+                    </div>
+                    {% endif %}
+
+                    {% if frete.valor_pago %}
+                    <div class="mb-3">
+                        <label class="fw-bold text-dark">Valor Pago</label>
+                        <div class="h4 text-dark">{{ frete.valor_pago|valor_br }}</div>
+                        <small class="text-muted">Valor efetivamente pago</small>
+                        {% if frete.valor_considerado %}
+                        {% set diferenca_pago = frete.valor_pago - frete.valor_considerado %}
+                        {% if diferenca_pago != 0 %}
+                        <div class="mt-1">
+                            {% if diferenca_pago > 0 %}
+                            <span class="badge bg-warning text-dark">+{{ diferenca_pago|valor_br }}</span>
+                            {% else %}
+                            <span class="badge bg-info">{{ diferenca_pago|valor_br }}</span>
+                            {% endif %}
+                            <small class="text-muted d-block">
+                                Diferenca para considerado
+                            </small>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# -------------------------------------------------------- #}
+            {# 6b. Card "Faturas Vinculadas"                            #}
+            {# -------------------------------------------------------- #}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-file-invoice-dollar"></i> Faturas Vinculadas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Fatura Transportadora</small>
+                        {% if fatura_transportadora %}
+                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_transportadora.id) }}"
+                           class="badge bg-primary text-white text-decoration-none"
+                           title="Ver fatura transportadora">
+                            <i class="fas fa-file-invoice-dollar me-1"></i>
+                            {{ fatura_transportadora.numero_fatura or '#' ~ fatura_transportadora.id }}
+                        </a>
+                        <small class="text-muted ms-1">
+                            <span class="badge carvia-badge-{{ fatura_transportadora.status_conferencia|lower }}">{{ fatura_transportadora.status_conferencia }}</span>
+                        </small>
+                        {% else %}
+                        <span class="text-muted">Nao vinculada</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-0">
+                        <small class="text-muted d-block">Fatura Cliente</small>
+                        {% if fatura_cliente %}
+                        <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_cliente.id) }}"
+                           class="badge bg-success text-white text-decoration-none"
+                           title="Ver fatura cliente">
+                            <i class="fas fa-file-invoice-dollar me-1"></i>
+                            {{ fatura_cliente.numero_fatura or '#' ~ fatura_cliente.id }}
+                        </a>
+                        <small class="text-muted ms-1">
+                            <span class="badge carvia-badge-{{ fatura_cliente.status|lower }}">{{ fatura_cliente.status }}</span>
+                        </small>
+                        {% else %}
+                        <span class="text-muted">Nao vinculada</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div>{# /col-md-4 #}
+
+    </div>{# /row #}
+
+    {# ================================================================ #}
+    {# 7. SECOES FULL-WIDTH                                             #}
+    {# ================================================================ #}
+
+    {# 7a. Observacoes #}
+    {% if frete.observacoes %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-comment"></i> Observacoes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {{ frete.observacoes }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>{# /container-fluid #}
+{% endblock %}

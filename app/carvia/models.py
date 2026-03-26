@@ -327,14 +327,18 @@ class CarviaOperacaoNf(db.Model):
 
 
 class CarviaSubcontrato(db.Model):
-    """Subcontratacao — 1 por transportadora por operacao"""
+    """Subcontratacao — 1 por transportadora por CarviaFrete.
+
+    operacao_id e nullable: CarviaSubcontrato pode ser criado independente
+    de CarviaOperacao. CarviaFrete e o eixo central.
+    """
     __tablename__ = 'carvia_subcontratos'
 
     id = db.Column(db.Integer, primary_key=True)
     operacao_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_operacoes.id'),
-        nullable=False,
+        nullable=True,
         index=True
     )
 
@@ -1411,6 +1415,11 @@ class CarviaCotacao(db.Model):
     # Observacoes
     observacoes = db.Column(db.Text, nullable=True)
 
+    # Alerta: saida portaria sem NF
+    alerta_saida_sem_nf = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    alerta_saida_sem_nf_em = db.Column(db.DateTime, nullable=True)
+    alerta_saida_embarque_id = db.Column(db.Integer, nullable=True)
+
     # Auditoria
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
@@ -1639,13 +1648,28 @@ class CarviaPedido(db.Model):
 
         # Todos itens com NF — verificar se esta em embarque embarcado
         from app.embarques.models import EmbarqueItem, Embarque
-        em_embarque = EmbarqueItem.query.filter(
-            EmbarqueItem.separacao_lote_id == f'CARVIA-PED-{self.id}',
-            EmbarqueItem.status == 'ativo',
-        ).first()
 
-        if em_embarque:
-            embarque = db.session.get(Embarque, em_embarque.embarque_id)
+        # Buscar EmbarqueItems via padrao CARVIA-NF-{nf_id} (novo)
+        nf_nums = {i.numero_nf for i in itens_lista if i.numero_nf}
+        for nf_num in nf_nums:
+            nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+            if nf_obj:
+                em_embarque = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
+                    status='ativo',
+                ).first()
+                if em_embarque:
+                    embarque = db.session.get(Embarque, em_embarque.embarque_id)
+                    if embarque and embarque.data_embarque:
+                        return 'EMBARCADO'
+
+        # Backward compat: padrao antigo CARVIA-PED-{id}
+        em_legado = EmbarqueItem.query.filter_by(
+            separacao_lote_id=f'CARVIA-PED-{self.id}',
+            status='ativo',
+        ).first()
+        if em_legado:
+            embarque = db.session.get(Embarque, em_legado.embarque_id)
             if embarque and embarque.data_embarque:
                 return 'EMBARCADO'
 
