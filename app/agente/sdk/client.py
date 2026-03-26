@@ -2128,7 +2128,6 @@ Nunca invente informações."""
                 PostToolUseFailureHookInput,
                 PreCompactHookInput, StopHookInput, UserPromptSubmitHookInput,
                 HookContext,
-                SubagentStartHookInput, SubagentStopHookInput,
             )
 
             async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
