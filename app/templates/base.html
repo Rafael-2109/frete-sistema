@@ -40,7 +40,7 @@
         {% if current_user.sistema_motochefe and not current_user.sistema_logistica %}
         <i class="fas fa-motorcycle"></i> <span>Sistema MotoChefe</span>
         {% else %}
-        <i class="fas fa-truck"></i> <span>Logística Nacom Goya</span>
+        <i class="fas fa-truck"></i> <span>{% if request.path.startswith('/carvia/') %}Logística CarVia{% else %}Logística Nacom Goya{% endif %}</span>
         {% endif %}
       </a>
       {% else %}

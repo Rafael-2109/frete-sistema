@@ -1896,12 +1896,41 @@ def listar_faturas():
     return render_template("fretes/listar_faturas.html", faturas=faturas, form=form)
 
 
+@fretes_bp.route("/api/transportadoras/buscar")
+@login_required
+def api_buscar_transportadoras():
+    """Busca transportadoras para autocomplete (sem exigir sistema_carvia)"""
+    busca = request.args.get('busca', '')
+    try:
+        query = db.session.query(Transportadora).filter(
+            Transportadora.ativo == True  # noqa: E712
+        )
+        if busca:
+            busca_like = f'%{busca}%'
+            query = query.filter(
+                or_(
+                    Transportadora.razao_social.ilike(busca_like),
+                    Transportadora.cnpj.ilike(busca_like),
+                )
+            )
+        query = query.order_by(Transportadora.razao_social).limit(50)
+        transportadoras = query.all()
+        resultado = [{
+            'id': t.id,
+            'nome': t.razao_social,
+            'cnpj': t.cnpj,
+        } for t in transportadoras]
+        return jsonify({'sucesso': True, 'transportadoras': resultado})
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Erro ao buscar transportadoras: {e}")
+        return jsonify({'erro': str(e)}), 500
+
+
 @fretes_bp.route("/faturas/nova", methods=["GET", "POST"])
 @login_required
 def nova_fatura():
     """Cadastra nova fatura de frete"""
     form = FaturaFreteForm()
-    transportadoras = Transportadora.query.order_by(Transportadora.razao_social).all()
     if form.validate_on_submit():
         nova_fatura = FaturaFrete(
             transportadora_id=request.form.get("transportadora_id"),
@@ -1927,11 +1956,11 @@ def nova_fatura():
                     nova_fatura.arquivo_pdf = file_path
                 else:
                     flash("❌ Erro ao salvar arquivo PDF da fatura.", "danger")
-                    return render_template("fretes/nova_fatura.html", form=form, transportadoras=transportadoras)
+                    return render_template("fretes/nova_fatura.html", form=form)
 
             except Exception as e:
                 flash(f"❌ Erro ao salvar PDF: {str(e)}", "danger")
-                return render_template("fretes/nova_fatura.html", form=form, transportadoras=transportadoras)
+                return render_template("fretes/nova_fatura.html", form=form)
 
         db.session.add(nova_fatura)
         db.session.commit()
@@ -1939,7 +1968,7 @@ def nova_fatura():
         flash("Fatura cadastrada com sucesso!", "success")
         return redirect(url_for("fretes.listar_faturas"))
 
-    return render_template("fretes/nova_fatura.html", form=form, transportadoras=transportadoras)
+    return render_template("fretes/nova_fatura.html", form=form)
 
 
 @fretes_bp.route("/faturas/<int:fatura_id>/conferir")

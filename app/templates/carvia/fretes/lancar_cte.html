@@ -157,16 +157,20 @@
                                         <form method="POST" action="{{ url_for('carvia.processar_cte_subcontrato') }}" class="d-flex gap-1 align-items-center">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="frete_id" value="{{ frete.id }}">
+                                            {% if fatura_id %}
+                                            <input type="hidden" name="fatura_id" value="{{ fatura_id }}">
+                                            {% else %}
                                             <select name="fatura_id" class="form-select form-select-sm" style="min-width: 180px;" required>
                                                 <option value="">Selecione fatura...</option>
                                                 {% for fat in faturas %}
-                                                {% if fat.transportadora_id == frete.transportadora_id %}
-                                                <option value="{{ fat.id }}" {{ 'selected' if fatura_id == fat.id }}>
+                                                {% if fat.transportadora_id in grupo_ids_por_transp.get(frete.transportadora_id, [frete.transportadora_id]) %}
+                                                <option value="{{ fat.id }}">
                                                     {{ fat.numero_fatura }} — {{ fat.transportadora.razao_social[:20] if fat.transportadora else '-' }}
                                                 </option>
                                                 {% endif %}
                                                 {% endfor %}
                                             </select>
+                                            {% endif %}
                                             <button type="submit" class="btn btn-sm btn-primary" title="Lancar CTe nesta fatura">
                                                 <i class="fas fa-file-invoice-dollar"></i> Lancar
                                             </button>
@@ -176,16 +180,20 @@
                                         <form method="POST" action="{{ url_for('carvia.processar_cte_subcontrato') }}" class="d-flex gap-1 align-items-center">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="frete_id" value="{{ frete.id }}">
+                                            {% if fatura_id %}
+                                            <input type="hidden" name="fatura_id" value="{{ fatura_id }}">
+                                            {% else %}
                                             <select name="fatura_id" class="form-select form-select-sm" style="min-width: 180px;" required>
                                                 <option value="">Selecione fatura...</option>
                                                 {% for fat in faturas %}
-                                                {% if fat.transportadora_id == frete.transportadora_id %}
-                                                <option value="{{ fat.id }}" {{ 'selected' if fatura_id == fat.id }}>
+                                                {% if fat.transportadora_id in grupo_ids_por_transp.get(frete.transportadora_id, [frete.transportadora_id]) %}
+                                                <option value="{{ fat.id }}">
                                                     {{ fat.numero_fatura }} — {{ fat.transportadora.razao_social[:20] if fat.transportadora else '-' }}
                                                 </option>
                                                 {% endif %}
                                                 {% endfor %}
                                             </select>
+                                            {% endif %}
                                             <button type="submit" class="btn btn-sm btn-primary" title="Criar CTe e vincular a fatura">
                                                 <i class="fas fa-file-invoice-dollar"></i> Lancar
                                             </button>

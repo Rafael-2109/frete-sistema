@@ -608,34 +608,61 @@ def register_exportacao_routes(bp):
         if _check_access():
             return redirect(url_for('main.dashboard'))
 
-        status_filtro = request.args.get('status', '')
-        pagamento_filtro = request.args.get('pagamento', '')
-        busca = request.args.get('busca', '')
+        from datetime import date as date_type
+
+        numero_fatura = request.args.get('numero_fatura', '')
+        transportadora_id = request.args.get('transportadora_id', '')
+        numero_subcontrato = request.args.get('numero_subcontrato', '')
+        status_conferencia = request.args.get('status_conferencia', '') or request.args.get('status', '')
+        status_pagamento = request.args.get('status_pagamento', '') or request.args.get('pagamento', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
+        data_vencimento_de = request.args.get('data_vencimento_de', '')
+        data_vencimento_ate = request.args.get('data_vencimento_ate', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaFaturaTransportadora)
 
-        if status_filtro:
+        if numero_fatura:
             query = query.filter(
-                CarviaFaturaTransportadora.status_conferencia == status_filtro
+                CarviaFaturaTransportadora.numero_fatura.ilike(f'%{numero_fatura}%')
             )
-        if pagamento_filtro:
+        if transportadora_id:
             query = query.filter(
-                CarviaFaturaTransportadora.status_pagamento == pagamento_filtro
+                CarviaFaturaTransportadora.transportadora_id == int(transportadora_id)
             )
-        if busca:
-            from app.transportadoras.models import Transportadora
-            busca_like = f'%{busca}%'
-            query = query.outerjoin(
-                Transportadora,
-                CarviaFaturaTransportadora.transportadora_id == Transportadora.id,
+        if numero_subcontrato:
+            faturas_com_sub = db.session.query(
+                CarviaSubcontrato.fatura_transportadora_id
             ).filter(
-                db.or_(
-                    CarviaFaturaTransportadora.numero_fatura.ilike(busca_like),
-                    Transportadora.razao_social.ilike(busca_like),
-                    Transportadora.cnpj.ilike(busca_like),
-                )
+                CarviaSubcontrato.cte_numero.ilike(f'%{numero_subcontrato}%'),
+                CarviaSubcontrato.fatura_transportadora_id.isnot(None),
+            ).distinct().subquery()
+            query = query.filter(CarviaFaturaTransportadora.id.in_(faturas_com_sub))
+        if status_conferencia:
+            query = query.filter(
+                CarviaFaturaTransportadora.status_conferencia == status_conferencia
+            )
+        if status_pagamento:
+            query = query.filter(
+                CarviaFaturaTransportadora.status_pagamento == status_pagamento
+            )
+        if data_emissao_de:
+            query = query.filter(
+                CarviaFaturaTransportadora.data_emissao >= date_type.fromisoformat(data_emissao_de)
+            )
+        if data_emissao_ate:
+            query = query.filter(
+                CarviaFaturaTransportadora.data_emissao <= date_type.fromisoformat(data_emissao_ate)
+            )
+        if data_vencimento_de:
+            query = query.filter(
+                CarviaFaturaTransportadora.vencimento >= date_type.fromisoformat(data_vencimento_de)
+            )
+        if data_vencimento_ate:
+            query = query.filter(
+                CarviaFaturaTransportadora.vencimento <= date_type.fromisoformat(data_vencimento_ate)
             )
 
         sortable_columns = {

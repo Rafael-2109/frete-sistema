@@ -297,6 +297,10 @@
 .text-secondary { color: var(--text-muted) !important; }
 .text-dark { color: var(--text) !important; }
 .text-body { color: var(--text) !important; }
+.text-navy { color: hsl(220 70% 30%) !important; }
+
+[data-bs-theme="dark"] .text-navy,
+[data-theme="dark"] .text-navy { color: hsl(220 70% 65%) !important; }
 
 /* text-primary mais escuro no light mode para melhor contraste */
 [data-bs-theme="light"] .text-primary,

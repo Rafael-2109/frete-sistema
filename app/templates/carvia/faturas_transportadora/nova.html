@@ -34,7 +34,7 @@
                         </div>
                         <div id="transp-selecionada-info" class="form-text d-none">
                             <i class="fas fa-check-circle text-success"></i>
-                            <span id="transp-selecionada-nome"></span>
+                            <span id="transp-selecionada-nome" class="text-navy fw-semibold"></span>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -184,7 +184,7 @@ function renderAutocomplete(transportadoras) {
         html += `<a href="#" class="list-group-item list-group-item-action py-2 autocomplete-item"
                     data-id="${t.id}" data-nome="${t.nome}" data-cnpj="${t.cnpj || ''}">
                     <div class="d-flex align-items-center">
-                        <strong>${t.nome}</strong>
+                        <strong class="text-navy">${t.nome}</strong>
                         ${t.freteiro ? '<span class="badge bg-warning text-dark ms-1">Freteiro</span>' : ''}
                     </div>
                     <small class="text-muted">${t.cnpj || '-'}</small>

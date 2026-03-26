@@ -255,6 +255,20 @@ def register_frete_routes(bp):
                 CarviaFrete.numeros_nfs.ilike(f'%{numero_nf}%')
             ).order_by(CarviaFrete.id.desc()).all()
 
+        # Pre-computa IDs do grupo empresarial por transportadora
+        # para matching fatura↔frete (grupo > prefixo CNPJ > exato)
+        grupo_ids_por_transp = {}
+        if fretes_encontrados and tipo != 'venda':
+            from app.utils.grupo_empresarial import GrupoEmpresarialService
+            grupo_svc = GrupoEmpresarialService()
+            transp_ids_vistos = set()
+            for frete in fretes_encontrados:
+                if frete.transportadora_id and frete.transportadora_id not in transp_ids_vistos:
+                    transp_ids_vistos.add(frete.transportadora_id)
+                    grupo_ids_por_transp[frete.transportadora_id] = set(
+                        grupo_svc.obter_transportadoras_grupo(frete.transportadora_id)
+                    )
+
         return render_template(
             'carvia/fretes/lancar_cte.html',
             faturas=faturas,
@@ -262,6 +276,7 @@ def register_frete_routes(bp):
             numero_nf=numero_nf,
             tipo=tipo,
             fretes_encontrados=fretes_encontrados,
+            grupo_ids_por_transp=grupo_ids_por_transp,
         )
 
     # ------------------------------------------------------------------
@@ -308,18 +323,20 @@ def register_frete_routes(bp):
                 )
                 return redirect(url_for('carvia.lancar_cte_carvia', fatura_id=fatura_id))
 
-            # Validar transportadora match
+            # Validar transportadora match (grupo empresarial > prefixo CNPJ > exato)
             if frete.transportadora_id != fatura.transportadora_id:
+                from app.utils.grupo_empresarial import GrupoEmpresarialService
                 from app.transportadoras.models import Transportadora
-                transp_frete = Transportadora.query.get(frete.transportadora_id)
-                transp_fatura = Transportadora.query.get(fatura.transportadora_id)
+                grupo_ids = set(GrupoEmpresarialService().obter_transportadoras_grupo(frete.transportadora_id))
 
-                if transp_frete and hasattr(transp_frete, 'pertence_mesmo_grupo') and transp_frete.pertence_mesmo_grupo(fatura.transportadora_id):
+                if fatura.transportadora_id in grupo_ids:
                     flash(
                         'Transportadoras diferentes mas do mesmo grupo. Vinculacao permitida.',
                         'info',
                     )
                 else:
+                    transp_frete = Transportadora.query.get(frete.transportadora_id)
+                    transp_fatura = Transportadora.query.get(fatura.transportadora_id)
                     nome_frete = transp_frete.razao_social if transp_frete else str(frete.transportadora_id)
                     nome_fatura = transp_fatura.razao_social if transp_fatura else str(fatura.transportadora_id)
                     flash(

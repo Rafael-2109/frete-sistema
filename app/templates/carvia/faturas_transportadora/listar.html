@@ -1,21 +1,15 @@
 {% extends "base.html" %}
 {% from "carvia/_macros.html" import th_sort %}
 
+{% block title %}Faturas Subcontrato{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-file-invoice"></i> Faturas Subcontrato</h2>
-        <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.exportar_faturas_transportadora', status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}"
-               class="btn btn-outline-success btn-sm" title="Exportar Excel">
-                <i class="fas fa-file-excel"></i> Excel
-            </a>
-            <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-success btn-sm">
-                <i class="fas fa-plus"></i> Nova Fatura
-            </a>
-            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left"></i> Dashboard
-            </a>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-file-pdf"></i> Faturas Subcontrato
+            </h1>
         </div>
     </div>
 
@@ -23,106 +17,231 @@
     {% include 'carvia/_quick_nav.html' %}
 
     <!-- Filtros -->
-    <div class="card mb-3">
-        <div class="card-body py-2">
-            <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small">Busca</label>
-                    <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Numero, transportadora, CNPJ..."
-                           value="{{ busca }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Conferencia</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <option value="PENDENTE" {{ 'selected' if status_filtro == 'PENDENTE' }}>Pendente</option>
-                        <option value="EM_CONFERENCIA" {{ 'selected' if status_filtro == 'EM_CONFERENCIA' }}>Em Conferencia</option>
-                        <option value="CONFERIDO" {{ 'selected' if status_filtro == 'CONFERIDO' }}>Conferido</option>
-                        <option value="DIVERGENTE" {{ 'selected' if status_filtro == 'DIVERGENTE' }}>Divergente</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Pagamento</label>
-                    <select name="pagamento" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <option value="PENDENTE" {{ 'selected' if pagamento_filtro == 'PENDENTE' }}>Pendente</option>
-                        <option value="PAGO" {{ 'selected' if pagamento_filtro == 'PAGO' }}>Pago</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                        <i class="fas fa-filter"></i> Filtrar
-                    </button>
-                </div>
-                {% if busca or status_filtro or pagamento_filtro %}
-                <div class="col-md-2">
-                    <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-sm btn-outline-secondary w-100">
-                        <i class="fas fa-times"></i> Limpar
-                    </a>
-                </div>
-                {% endif %}
-            </form>
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosFaturas"
+                    aria-expanded="false">
+                    <i class="fas fa-filter"></i> Filtros
+                </button>
+            </h5>
+        </div>
+        <div class="collapse" id="filtrosFaturas">
+            <div class="card-body">
+                <form method="GET">
+                    <div class="row">
+                        <div class="col-md-3">
+                            {{ form.numero_fatura.label(class="form-label") }}
+                            {{ form.numero_fatura(class="form-control", placeholder="Ex: FTRANSP-001") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.transportadora_id.label(class="form-label") }}
+                            {{ form.transportadora_id(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.numero_subcontrato.label(class="form-label") }}
+                            {{ form.numero_subcontrato(class="form-control", placeholder="Ex: Sub-001") }}
+                            {% if form.numero_subcontrato.description %}
+                            <small class="form-text text-muted">{{ form.numero_subcontrato.description }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.status_conferencia.label(class="form-label") }}
+                            {{ form.status_conferencia(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-2">
+                            {{ form.status_pagamento.label(class="form-label") }}
+                            {{ form.status_pagamento(class="form-control") }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ form.data_emissao_de.label(class="form-label") }}
+                            {{ form.data_emissao_de(class="form-control") }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ form.data_emissao_ate.label(class="form-label") }}
+                            {{ form.data_emissao_ate(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.data_vencimento_de.label(class="form-label") }}
+                            {{ form.data_vencimento_de(class="form-control") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.data_vencimento_ate.label(class="form-label") }}
+                            {{ form.data_vencimento_ate(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-12 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
+    <!-- Acoes -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Nova Fatura
+            </a>
+            <a href="{{ url_for('carvia.exportar_faturas_transportadora',
+                numero_fatura=form.numero_fatura.data or '',
+                transportadora_id=form.transportadora_id.data or '',
+                numero_subcontrato=form.numero_subcontrato.data or '',
+                status_conferencia=form.status_conferencia.data or '',
+                status_pagamento=form.status_pagamento.data or '',
+                sort=sort, direction=direction) }}" class="btn btn-primary">
+                <i class="fas fa-file-excel"></i> Exportar Faturas
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Lista de faturas -->
     <div class="card">
-        <div class="card-body p-0">
+        <div class="card-body">
             {% if faturas %}
             <div class="table-responsive">
-                <table class="table table-hover mb-0 carvia-table">
+                <table class="table table-striped">
                     <thead>
                         <tr>
-                            {{ th_sort('numero_fatura', 'Fatura', sort, direction) }}
+                            <th>ID</th>
+                            {{ th_sort('numero_fatura', 'Numero Fatura', sort, direction) }}
                             <th>Transportadora</th>
-                            <th>Subs</th>
-                            {{ th_sort('data_emissao', 'Emissao', sort, direction) }}
+                            {{ th_sort('data_emissao', 'Data Emissao', sort, direction) }}
+                            {{ th_sort('valor_total', 'Valor Total', sort, direction, 'text-end') }}
                             {{ th_sort('vencimento', 'Vencimento', sort, direction) }}
-                            {{ th_sort('valor_total', 'Valor', sort, direction, 'text-end') }}
-                            <th>Pagamento</th>
-                            {{ th_sort('status_conferencia', 'Conferencia', sort, direction) }}
-                            <th></th>
+                            {{ th_sort('status_conferencia', 'Status', sort, direction) }}
+                            <th>Subcontratos</th>
+                            <th>Arquivo</th>
+                            <th>Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for f, qtd_subs in faturas %}
+                        {% for f, qtd_subs, valor_subs in faturas %}
                         <tr>
-                            <td>
-                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}">
-                                    <strong>{{ f.numero_fatura }}</strong>
-                                </a>
-                            </td>
-                            <td>
-                                {{ f.transportadora.razao_social if f.transportadora else '-' }}
-                                {% if f.transportadora and f.transportadora.cnpj %}
-                                <small class="text-muted cnpj-col d-block">{{ f.transportadora.cnpj }}</small>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if qtd_subs %}
-                                <span class="badge bg-info">{{ qtd_subs }}</span>
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '-' }}</td>
-                            <td{% if f.vencimento and f.status_pagamento == 'PENDENTE' and f.vencimento < today %} class="carvia-vencido"{% endif %}>{{ f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '-' }}</td>
-                            <td class="valor-col">{{ f.valor_total|valor_br }}</td>
-                            <td>
-                                <span class="badge carvia-badge-{{ f.status_pagamento|lower if f.status_pagamento else 'pendente' }}">
-                                    {{ f.status_pagamento or 'PENDENTE' }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge carvia-badge-{{ f.status_conferencia|lower|replace('_', '-') if f.status_conferencia else 'pendente' }}">
-                                    {{ f.status_conferencia|replace('_', ' ') if f.status_conferencia else 'PENDENTE' }}
-                                </span>
-                            </td>
+                            <td>{{ f.id }}</td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
-                                   class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-eye"></i>
+                                   class="text-decoration-none" title="Visualizar fatura">
+                                    {{ f.numero_fatura }}
                                 </a>
+                            </td>
+                            <td title="{{ f.transportadora.razao_social if f.transportadora else '' }}">
+                                {{ f.transportadora.razao_social[:30] if f.transportadora else '-' }}{% if f.transportadora %}...{% endif %}
+                                {% if f.transportadora and f.transportadora.cnpj %}
+                                <br><small class="text-muted">{{ f.transportadora.cnpj }}</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ f.data_emissao|formatar_data_segura if f.data_emissao else '-' }}</td>
+                            <td class="text-end">{{ f.valor_total|moeda_carteira }}</td>
+                            <td{% if f.vencimento and f.status_pagamento == 'PENDENTE' and f.vencimento < today %} class="carvia-vencido"{% endif %}>
+                                {{ f.vencimento|formatar_data_segura if f.vencimento else '-' }}
+                            </td>
+                            <td>
+                                {% if f.status_conferencia == 'PENDENTE' %}
+                                <span class="badge bg-warning text-dark">{{ f.status_conferencia }}</span>
+                                {% elif f.status_conferencia == 'CONFERIDO' %}
+                                <span class="badge bg-success">{{ f.status_conferencia }}</span>
+                                {% elif f.status_conferencia == 'DIVERGENTE' %}
+                                <span class="badge bg-danger">{{ f.status_conferencia }}</span>
+                                {% else %}
+                                <span class="badge bg-info">{{ f.status_conferencia|replace('_', ' ') }}</span>
+                                {% endif %}
+                                {% if f.status_pagamento == 'PAGO' %}
+                                <br><span class="badge bg-success mt-1">PAGO</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">{{ qtd_subs or 0 }} sub(s)</span>
+                                {% if qtd_subs and qtd_subs > 0 %}
+                                <br><small class="text-muted">
+                                    {{ valor_subs|moeda_carteira }}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if f.arquivo_pdf_path %}
+                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                        onclick="downloadFaturaPdf({{ f.id }})" title="Visualizar PDF">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </button>
+                                {% else %}
+                                <span class="text-muted small">Sem anexo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group-vertical" role="group">
+                                    <!-- Visualizar -->
+                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
+                                        class="btn btn-sm btn-outline-info mb-1" title="Visualizar fatura">
+                                        <i class="fas fa-eye"></i> Visualizar
+                                    </a>
+
+                                    {% if f.status_conferencia in ('PENDENTE', 'EM_CONFERENCIA') %}
+                                    <!-- Conferir -->
+                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
+                                        class="btn btn-sm btn-outline-success mb-1" title="Conferir fatura">
+                                        <i class="fas fa-check-double"></i> Conferir
+                                    </a>
+
+                                    {% if current_user.perfil == 'administrador' %}
+                                    <!-- Editar (admin) -->
+                                    <a href="{{ url_for('carvia.admin_editar', tipo='fatura-transportadora', id=f.id) }}"
+                                        class="btn btn-sm btn-outline-warning mb-1" title="Editar fatura">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </a>
+
+                                    <!-- Excluir (admin, sem subcontratos) -->
+                                    {% if not qtd_subs %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="modal" data-bs-target="#modalAdminExcluirLista"
+                                            data-fatura-id="{{ f.id }}"
+                                            data-fatura-label="Fatura {{ f.numero_fatura }}"
+                                            data-url="{{ url_for('carvia.admin_excluir', tipo='fatura-transportadora', id=f.id) }}"
+                                            title="Excluir fatura">
+                                        <i class="fas fa-trash"></i> Excluir
+                                    </button>
+                                    {% endif %}
+                                    {% endif %}
+
+                                    {% elif f.status_conferencia == 'CONFERIDO' %}
+                                    <!-- Fatura conferida -->
+                                    <span class="badge bg-success mb-1">
+                                        <i class="fas fa-lock"></i> CONFERIDA
+                                    </span>
+                                    <!-- Reabrir -->
+                                    <form method="POST"
+                                          action="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=f.id) }}"
+                                          style="display: inline-block;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="status" value="PENDENTE">
+                                        <button type="submit" class="btn btn-sm btn-outline-warning mb-1"
+                                                title="Reabrir fatura"
+                                                onclick="return confirm('Deseja reabrir esta fatura?')">
+                                            <i class="fas fa-unlock"></i> Reabrir
+                                        </button>
+                                    </form>
+
+                                    {% elif f.status_conferencia == 'DIVERGENTE' %}
+                                    <!-- Divergente — ir ao detalhe para resolver -->
+                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
+                                        class="btn btn-sm btn-outline-danger mb-1" title="Resolver divergencia">
+                                        <i class="fas fa-exclamation-triangle"></i> Resolver
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -130,45 +249,186 @@
                 </table>
             </div>
 
+            <!-- Paginacao -->
             {% if paginacao.pages > 1 %}
-            <nav class="d-flex justify-content-center py-3">
-                <ul class="pagination pagination-sm mb-0">
+            <nav aria-label="Paginacao de faturas">
+                <ul class="pagination justify-content-center">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=paginacao.prev_num, status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}">
-                            <i class="fas fa-chevron-left"></i>
-                        </a>
+                        <a class="page-link"
+                            href="{{ url_for('carvia.listar_faturas_transportadora',
+                                page=paginacao.prev_num,
+                                numero_fatura=form.numero_fatura.data or '',
+                                transportadora_id=form.transportadora_id.data or '',
+                                numero_subcontrato=form.numero_subcontrato.data or '',
+                                status_conferencia=form.status_conferencia.data or '',
+                                status_pagamento=form.status_pagamento.data or '',
+                                sort=sort, direction=direction) }}">Anterior</a>
                     </li>
                     {% endif %}
-                    {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                    {% if p %}
-                    <li class="page-item {{ 'active' if p == paginacao.page }}">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=p, status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+
+                    {% for page_num in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                    {% if page_num != paginacao.page %}
+                    <li class="page-item">
+                        <a class="page-link"
+                            href="{{ url_for('carvia.listar_faturas_transportadora',
+                                page=page_num,
+                                numero_fatura=form.numero_fatura.data or '',
+                                transportadora_id=form.transportadora_id.data or '',
+                                numero_subcontrato=form.numero_subcontrato.data or '',
+                                status_conferencia=form.status_conferencia.data or '',
+                                status_pagamento=form.status_pagamento.data or '',
+                                sort=sort, direction=direction) }}">{{ page_num }}</a>
                     </li>
                     {% else %}
-                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
                     {% endif %}
                     {% endfor %}
+
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_transportadora', page=paginacao.next_num, status=status_filtro, pagamento=pagamento_filtro, busca=busca, sort=sort, direction=direction) }}">
-                            <i class="fas fa-chevron-right"></i>
-                        </a>
+                        <a class="page-link"
+                            href="{{ url_for('carvia.listar_faturas_transportadora',
+                                page=paginacao.next_num,
+                                numero_fatura=form.numero_fatura.data or '',
+                                transportadora_id=form.transportadora_id.data or '',
+                                numero_subcontrato=form.numero_subcontrato.data or '',
+                                status_conferencia=form.status_conferencia.data or '',
+                                status_pagamento=form.status_pagamento.data or '',
+                                sort=sort, direction=direction) }}">Proxima</a>
                     </li>
                     {% endif %}
                 </ul>
             </nav>
             {% endif %}
+
             {% else %}
-            <div class="text-center py-5 text-muted">
-                <i class="fas fa-file-invoice fa-3x mb-3 d-block opacity-50"></i>
-                <p>Nenhuma fatura encontrada.</p>
-                <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-success">
-                    <i class="fas fa-plus"></i> Criar Fatura
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle"></i>
+                Nenhuma fatura encontrada.
+                <br><br>
+                <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Cadastrar primeira fatura
                 </a>
             </div>
             {% endif %}
         </div>
     </div>
 </div>
+
+<!-- Modal Admin Excluir (dinamico para listagem) -->
+{% if current_user.perfil == 'administrador' %}
+<div class="modal fade" id="modalAdminExcluirLista" tabindex="-1" aria-labelledby="modalAdminExcluirListaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdminExcluirListaLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Exclusao Permanente
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formAdminExcluirLista" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-danger mb-3">
+                        <strong>ATENCAO:</strong> Esta acao e <strong>irreversivel</strong>.
+                        A fatura <strong id="labelFaturaExcluir"></strong> sera excluida permanentemente do banco de dados.
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Impacto cascade (tambem serao afetados):</strong>
+                        <ul class="mt-1 mb-0">
+                            <li class="text-danger">Itens da fatura transportadora</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="motivoExclusaoLista" class="form-label">
+                            <strong>Motivo da exclusao</strong> <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="motivoExclusaoLista" name="motivo"
+                                  rows="3" required minlength="10"
+                                  placeholder="Descreva o motivo da exclusao (min. 10 caracteres)..."></textarea>
+                    </div>
+
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="confirmarExclusaoLista" required>
+                        <label class="form-check-label text-danger" for="confirmarExclusaoLista">
+                            Confirmo que entendo que esta acao e irreversivel
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btnConfirmarExclusaoLista" disabled>
+                        <i class="fas fa-trash-alt"></i> Excluir Permanentemente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// Download PDF via presigned URL
+function downloadFaturaPdf(faturaId) {
+    fetch('/carvia/api/fatura-transportadora/' + faturaId + '/pdf')
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+            if (data.url) {
+                window.open(data.url, '_blank');
+            } else {
+                alert(data.error || 'Erro ao obter PDF.');
+            }
+        })
+        .catch(function() { alert('Erro de conexao ao obter PDF.'); });
+}
+
+{% if current_user.perfil == 'administrador' %}
+// Modal Admin Excluir — atualizar action e label ao abrir
+document.addEventListener('DOMContentLoaded', function() {
+    var modalEl = document.getElementById('modalAdminExcluirLista');
+    if (!modalEl) return;
+
+    var form = document.getElementById('formAdminExcluirLista');
+    var label = document.getElementById('labelFaturaExcluir');
+    var motivo = document.getElementById('motivoExclusaoLista');
+    var checkbox = document.getElementById('confirmarExclusaoLista');
+    var btn = document.getElementById('btnConfirmarExclusaoLista');
+
+    modalEl.addEventListener('show.bs.modal', function(event) {
+        var trigger = event.relatedTarget;
+        form.action = trigger.getAttribute('data-url');
+        label.textContent = trigger.getAttribute('data-fatura-label');
+        motivo.value = '';
+        checkbox.checked = false;
+        btn.disabled = true;
+    });
+
+    function updateBtn() {
+        btn.disabled = !(checkbox.checked && motivo.value.trim().length >= 10);
+    }
+    checkbox.addEventListener('change', updateBtn);
+    motivo.addEventListener('input', updateBtn);
+
+    form.addEventListener('submit', function(e) {
+        if (!checkbox.checked || motivo.value.trim().length < 10) {
+            e.preventDefault();
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+    });
+});
+{% endif %}
+</script>
 {% endblock %}

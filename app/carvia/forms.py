@@ -97,6 +97,45 @@ class SubcontratoForm(FlaskForm):
     observacoes = TextAreaField('Observacoes', validators=[Optional()])
 
 
+class FiltroFaturasTransportadoraForm(FlaskForm):
+    """Filtros para listagem de faturas subcontrato (espelha FiltroFaturasForm do Nacom)"""
+    class Meta:
+        csrf = False  # GET form, sem CSRF
+
+    numero_fatura = StringField('Número da Fatura')
+    transportadora_id = SelectField(
+        'Transportadora',
+        choices=[],
+        validate_choice=False,
+    )
+    numero_subcontrato = StringField(
+        'Número do Subcontrato',
+        description='Busca faturas que contêm subcontratos com este número',
+    )
+    status_conferencia = SelectField(
+        'Status Conferência',
+        choices=[
+            ('', 'Todos'),
+            ('PENDENTE', 'Pendente'),
+            ('EM_CONFERENCIA', 'Em Conferência'),
+            ('CONFERIDO', 'Conferido'),
+            ('DIVERGENTE', 'Divergente'),
+        ],
+    )
+    status_pagamento = SelectField(
+        'Status Pagamento',
+        choices=[
+            ('', 'Todos'),
+            ('PENDENTE', 'Pendente'),
+            ('PAGO', 'Pago'),
+        ],
+    )
+    data_emissao_de = DateField('Data Emissão - De', validators=[Optional()])
+    data_emissao_ate = DateField('Data Emissão - Até', validators=[Optional()])
+    data_vencimento_de = DateField('Vencimento - De', validators=[Optional()])
+    data_vencimento_ate = DateField('Vencimento - Até', validators=[Optional()])
+
+
 class CubagemForm(FlaskForm):
     """Formulario para informar cubagem da operacao"""
     peso_cubado = DecimalField(

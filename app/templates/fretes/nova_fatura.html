@@ -35,17 +35,19 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         {{ form.hidden_tag() }}
 
-                        <!-- Transportadora -->
+                        <!-- Transportadora (autocomplete) -->
+                        <input type="hidden" name="transportadora_id" id="transportadora_id_input" value="">
                         <div class="form-group mb-3">
                             <label class="form-label">Transportadora</label>
-                            <select name="transportadora_id" class="form-control" required>
-                                <option value="">Selecione uma transportadora</option>
-                                {% for transportadora in transportadoras %}
-                                    <option value="{{ transportadora.id }}">
-                                        {{ transportadora.razao_social }}
-                                    </option>
-                                {% endfor %}
-                            </select>
+                            <div class="carvia-autocomplete-wrapper">
+                                <input type="text" id="busca-transportadora" class="form-control"
+                                       placeholder="Digite para buscar transportadora..." autocomplete="off" required>
+                                <div id="autocomplete-results" class="carvia-autocomplete-results"></div>
+                            </div>
+                            <div id="transp-selecionada-info" class="form-text d-none">
+                                <i class="fas fa-check-circle text-success"></i>
+                                <span id="transp-selecionada-nome" class="text-navy fw-semibold"></span>
+                            </div>
                         </div>
 
                         <!-- Número e Data -->
@@ -196,55 +198,125 @@
 </div>
 
 <script>
-    /**
-     * Máscara de entrada para valores monetários em formato brasileiro
-     * Aceita: 1.234,56 ou 1234,56 ou 1234.56
-     * Formata para: 1.234,56
-     */
+    // ====== Mascara monetaria ======
     document.querySelectorAll('.valor-monetario').forEach(function(input) {
         input.addEventListener('blur', function(e) {
             let value = e.target.value.trim();
             if (!value) return;
-
-            // Remove tudo exceto dígitos, vírgula e ponto
             value = value.replace(/[^\d.,]/g, '');
-
-            // Detecta formato e converte
             let numero;
-
             if (value.includes(',')) {
-                // Formato brasileiro: remove pontos (milhares) e troca vírgula por ponto
                 numero = parseFloat(value.replace(/\./g, '').replace(',', '.'));
             } else if (value.includes('.')) {
-                // Pode ser formato americano ou brasileiro sem decimais
                 const partes = value.split('.');
                 if (partes[partes.length - 1].length <= 2) {
-                    // Último segmento tem 1-2 dígitos = é decimal
                     numero = parseFloat(value);
                 } else {
-                    // Último segmento tem 3+ dígitos = é milhar (sem decimais)
                     numero = parseFloat(value.replace(/\./g, ''));
                 }
             } else {
-                // Só dígitos
                 numero = parseFloat(value);
             }
-
             if (!isNaN(numero)) {
-                // Formata para padrão brasileiro: 1.234,56
                 e.target.value = numero.toLocaleString('pt-BR', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
                 });
             }
         });
-
-        // Permite apenas caracteres válidos durante digitação
         input.addEventListener('input', function(e) {
             let value = e.target.value;
             value = value.replace(/[^\d.,]/g, '');
             e.target.value = value;
         });
+    });
+
+    // ====== Autocomplete Transportadora ======
+    let debounceTimer = null;
+    let transportadoraSelecionada = false;
+
+    const inputBusca = document.getElementById('busca-transportadora');
+    const autocompleteResults = document.getElementById('autocomplete-results');
+    const hiddenInput = document.getElementById('transportadora_id_input');
+
+    inputBusca.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        transportadoraSelecionada = false;
+        hiddenInput.value = '';
+        document.getElementById('transp-selecionada-info').classList.add('d-none');
+
+        const val = this.value.trim();
+        if (val.length < 2) {
+            autocompleteResults.classList.remove('show');
+            return;
+        }
+        debounceTimer = setTimeout(() => fetchAutocomplete(val), 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.carvia-autocomplete-wrapper')) {
+            autocompleteResults.classList.remove('show');
+        }
+    });
+
+    function fetchAutocomplete(busca) {
+        const url = `/fretes/api/transportadoras/buscar?busca=${encodeURIComponent(busca)}`;
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.sucesso) {
+                    autocompleteResults.classList.remove('show');
+                    return;
+                }
+                renderAutocomplete(data.transportadoras || []);
+            })
+            .catch(() => autocompleteResults.classList.remove('show'));
+    }
+
+    function renderAutocomplete(transportadoras) {
+        let html = '';
+        transportadoras.forEach(t => {
+            html += `<a href="#" class="list-group-item list-group-item-action py-2 autocomplete-item"
+                        data-id="${t.id}" data-nome="${t.nome}" data-cnpj="${t.cnpj || ''}">
+                        <strong class="text-navy">${t.nome}</strong>
+                        <br><small class="text-muted">${t.cnpj || '-'}</small>
+                     </a>`;
+        });
+
+        if (!transportadoras.length) {
+            html = `<div class="list-group-item text-muted py-2">Nenhuma transportadora encontrada</div>`;
+        }
+
+        autocompleteResults.innerHTML = html;
+        autocompleteResults.classList.add('show');
+
+        autocompleteResults.querySelectorAll('.autocomplete-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                selecionarTransportadora(this.dataset.id, this.dataset.nome, this.dataset.cnpj);
+            });
+        });
+    }
+
+    function selecionarTransportadora(id, nome, cnpj) {
+        hiddenInput.value = id;
+        inputBusca.value = nome;
+        transportadoraSelecionada = true;
+        autocompleteResults.classList.remove('show');
+
+        const info = document.getElementById('transp-selecionada-info');
+        document.getElementById('transp-selecionada-nome').textContent =
+            nome + (cnpj ? ` (${cnpj})` : '');
+        info.classList.remove('d-none');
+    }
+
+    // ====== Validacao de submit ======
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!hiddenInput.value) {
+            e.preventDefault();
+            alert('Selecione uma transportadora da lista de autocomplete.');
+            inputBusca.focus();
+        }
     });
 </script>
 {% endblock %}
