@@ -120,16 +120,16 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
-        "odoo_dfe_id"
+        "tipo_divergencia"
       ],
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_tipo_divergencia",
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
       "columns": [
-        "tipo_divergencia"
+        "odoo_dfe_id"
       ],
       "unique": false
     },

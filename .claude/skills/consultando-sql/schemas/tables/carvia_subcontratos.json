@@ -10,8 +10,7 @@
     {
       "name": "operacao_id",
       "type": "integer",
-      "description": "FK → carvia_operacoes.id",
-      "nullable": false
+      "description": "FK → carvia_operacoes.id"
     },
     {
       "name": "transportadora_id",
@@ -137,9 +136,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_subcontratos_cte_numero",
+      "name": "ix_carvia_subcontratos_operacao_id",
       "columns": [
-        "cte_numero"
+        "operacao_id"
       ],
       "unique": false
     },
@@ -151,9 +150,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_operacao_id",
+      "name": "ix_carvia_subcontratos_cte_numero",
       "columns": [
-        "operacao_id"
+        "cte_numero"
       ],
       "unique": false
     },

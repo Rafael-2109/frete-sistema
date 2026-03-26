@@ -255,55 +255,6 @@
   ],
   "indices": [
     {
-      "name": "idx_cte_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_numero_cte",
-      "columns": [
-        "numero_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cte_complementa_chave",
-      "columns": [
-        "cte_complementa_chave"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_cnpj_remetente",
-      "columns": [
-        "cnpj_remetente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
-      "columns": [
-        "cte_complementa_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_data_emissao",
-      "columns": [
-        "data_emissao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_cte_frete",
       "columns": [
         "frete_id"
@@ -409,6 +360,14 @@
       "unique": false
     },
     {
+      "name": "idx_cte_numero_serie",
+      "columns": [
+        "numero_cte",
+        "serie_cte"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_conhecimento_transporte_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -423,10 +382,51 @@
       "unique": false
     },
     {
-      "name": "idx_cte_numero_serie",
+      "name": "idx_cte_cnpj_emitente",
       "columns": [
-        "numero_cte",
-        "serie_cte"
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_numero_cte",
+      "columns": [
+        "numero_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "columns": [
+        "cte_complementa_chave"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_data_emissao",
+      "columns": [
+        "data_emissao"
       ],
       "unique": false
     }
