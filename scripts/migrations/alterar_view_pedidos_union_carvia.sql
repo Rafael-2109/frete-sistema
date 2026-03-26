@@ -203,7 +203,10 @@ SELECT
     NULL::double precision AS valor_melhor_opcao,
     NULL::integer AS lead_time,
     NULL::date AS data_embarque,
-    NULL::text AS nf,
+    (SELECT string_agg(DISTINCT pi.numero_nf, ', ')
+     FROM carvia_pedido_itens pi
+     WHERE pi.pedido_id = ped.id AND pi.numero_nf IS NOT NULL AND pi.numero_nf != ''
+    )::text AS nf,
     ped.status AS status,
     FALSE AS nf_cd,
     NULL::text AS pedido_cliente,
