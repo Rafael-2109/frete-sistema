@@ -29,5 +29,17 @@
       "Bash(eval:*)"
     ]
   },
-  "hooks": {}
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/enriquecer-feature-dev.py"
+          }
+        ]
+      }
+    ]
+  }
 }
