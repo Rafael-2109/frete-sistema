@@ -1,38 +1,32 @@
 {% extends "base.html" %}
 {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
 
+{% block title %}Fatura Subcontrato - {{ fatura.numero_fatura }}{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid">
+    <!-- Cabecalho -->
     <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-eye"></i> Fatura Subcontrato - {{ fatura.numero_fatura }}</h2>
         <div>
-            <h2>
-                <i class="fas fa-file-invoice"></i> Fatura {{ fatura.numero_fatura }}
-                <span class="badge carvia-badge-{{ fatura.status_conferencia|lower|replace('_', '-') }}">
-                    {{ fatura.status_conferencia }}
-                </span>
-            </h2>
-            <p class="text-muted mb-0">
-                Fatura Subcontrato | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
-                por {{ fatura.criado_por }}
-            </p>
-        </div>
-        <div class="d-flex gap-2">
             {% if fatura.arquivo_pdf_path %}
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadFaturaTranspPdf({{ fatura.id }})" title="Baixar PDF original da fatura">
+            <button type="button" class="btn btn-outline-primary" onclick="downloadFaturaTranspPdf({{ fatura.id }})" title="Baixar PDF original da fatura">
                 <i class="fas fa-download"></i> PDF
             </button>
             {% endif %}
-            {% if current_user.perfil == 'administrador' %}
-            <a href="{{ url_for('carvia.admin_editar', tipo='fatura-transportadora', id=fatura.id) }}" class="btn carvia-admin-btn"
+            {% if fatura.status_conferencia != 'CONFERIDO' and current_user.perfil == 'administrador' %}
+            <a href="{{ url_for('carvia.admin_editar', tipo='fatura-transportadora', id=fatura.id) }}" class="btn btn-warning"
                title="Edicao completa (admin)">
-                <i class="fas fa-shield-alt"></i> Editar
+                <i class="fas fa-edit"></i> Editar
             </a>
-            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+            {% endif %}
+            {% if current_user.perfil == 'administrador' %}
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
                     title="Exclusao permanente (admin)">
-                <i class="fas fa-shield-alt"></i> Excluir
+                <i class="fas fa-trash"></i> Excluir
             </button>
             {% endif %}
-            <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
         </div>
@@ -41,164 +35,264 @@
     {% set carvia_active = 'faturas_transportadora' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    <div class="row g-4">
-        <!-- Info da fatura -->
-        <div class="col-md-5">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Fatura</h5>
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.listar_faturas_transportadora') }}">Faturas Subcontrato</a></li>
+            <li class="breadcrumb-item active">{{ fatura.numero_fatura }}</li>
+        </ol>
+    </nav>
+
+    <!-- Dados da Fatura -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Dados da Fatura</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Informacoes Basicas</h6>
+                    <table class="table table-borderless">
+                        <tr>
+                            <td><strong>Numero da Fatura:</strong></td>
+                            <td>{{ fatura.numero_fatura }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Transportadora:</strong></td>
+                            <td>
+                                {{ fatura.transportadora.razao_social if fatura.transportadora else '-' }}
+                                <div class="small text-muted">{{ fatura.transportadora.cnpj if fatura.transportadora else '-' }}</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Data de Emissao:</strong></td>
+                            <td>{{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else '-' }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Vencimento:</strong></td>
+                            <td>
+                                {{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}
+                                {% if fatura.status_conferencia != 'CONFERIDO' %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
+                                        data-bs-toggle="modal" data-bs-target="#modalEditarVencimento"
+                                        title="Editar vencimento">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
                 </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-6">
-                            <small class="text-muted d-block">Transportadora</small>
-                            <strong>{{ fatura.transportadora.razao_social if fatura.transportadora else '-' }}</strong>
-                            <div class="small text-muted">{{ fatura.transportadora.cnpj if fatura.transportadora else '-' }}</div>
-                        </div>
-                        <div class="col-6">
-                            <small class="text-muted d-block">Numero</small>
-                            <strong>{{ fatura.numero_fatura }}</strong>
-                        </div>
-                        <div class="col-6">
-                            <small class="text-muted d-block">Data Emissao</small>
-                            <strong>{{ fatura.data_emissao.strftime('%d/%m/%Y') if fatura.data_emissao else '-' }}</strong>
-                        </div>
-                        <div class="col-6">
-                            <small class="text-muted d-block">Vencimento</small>
-                            <strong>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</strong>
-                            {% if fatura.status_conferencia != 'CONFERIDO' %}
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
-                                    data-bs-toggle="modal" data-bs-target="#modalEditarVencimento"
-                                    title="Editar vencimento">
-                                <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            {% endif %}
-                        </div>
-                        <div class="col-12">
-                            <small class="text-muted d-block">Valor Total da Fatura</small>
-                            <h3 class="text-primary mb-0" id="valor-total-display">{{ fatura.valor_total|valor_br }}</h3>
+                <div class="col-md-6">
+                    <h6>Valores e Status</h6>
+                    <table class="table table-borderless">
+                        <tr>
+                            <td><strong>Valor Total:</strong></td>
+                            <td><span class="h5 text-success" id="valor-total-display">{{ fatura.valor_total|valor_br }}</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Status Conferencia:</strong></td>
+                            <td>
+                                {% if fatura.status_conferencia == 'CONFERIDO' %}
+                                <span class="badge bg-success">CONFERIDO</span>
+                                {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
+                                <span class="badge bg-warning text-dark">EM CONFERENCIA</span>
+                                {% elif fatura.status_conferencia == 'DIVERGENTE' %}
+                                <span class="badge bg-danger">DIVERGENTE</span>
+                                {% else %}
+                                <span class="badge bg-secondary">PENDENTE</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Status Pagamento:</strong></td>
+                            <td>
+                                {% if fatura.status_pagamento == 'PAGO' %}
+                                <span class="badge bg-success">PAGO</span>
+                                {% else %}
+                                <span class="badge bg-secondary">PENDENTE</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Criado em:</strong></td>
+                            <td>{{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Criado por:</strong></td>
+                            <td>{{ fatura.criado_por or '-' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% if fatura.observacoes %}
+            <hr>
+            <p><strong>Observacoes:</strong> {{ fatura.observacoes }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Resumo</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h3 class="text-primary">{{ subcontratos|length }}</h3>
+                            <p class="mb-0">Subcontratos Vinculados</p>
+                            <small class="text-muted">{{ valor_acertado_total|valor_br }}</small>
                         </div>
                     </div>
-                    {% if fatura.conferido_por %}
-                    <hr>
-                    <small class="text-muted d-block">Conferido por</small>
-                    <p class="mb-0">{{ fatura.conferido_por }} em {{ fatura.conferido_em|formatar_data_hora_brasil if fatura.conferido_em else '-' }}</p>
-                    {% endif %}
-                    {% if fatura.observacoes %}
-                    <hr>
-                    <small class="text-muted d-block">Observacoes</small>
-                    <p class="mb-0">{{ fatura.observacoes }}</p>
-                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h3 class="text-warning">{{ valor_cotado_total|valor_br }}</h3>
+                            <p class="mb-0">Total Cotado</p>
+                            <small class="text-muted">Soma dos valores cotados</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h3 class="text-success">{{ fatura.valor_total|valor_br }}</h3>
+                            <p class="mb-0">Valor Fatura</p>
+                            <small class="text-muted">Valor declarado</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            {% if fatura.arquivo_pdf_path %}
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadFaturaTranspPdf({{ fatura.id }})">
+                                <i class="fas fa-file-pdf"></i> Ver PDF
+                            </button>
+                            {% else %}
+                            <p class="text-muted mb-0">Sem Anexo</p>
+                            {% endif %}
+                            <p class="mb-0 mt-1">PDF Anexo</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Conferencia -->
-        <div class="col-md-7">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-clipboard-check"></i> Conferencia</h5>
+    <!-- Conferencia -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-clipboard-check"></i> Conferencia</h5>
+        </div>
+        <div class="card-body">
+            <!-- Comparativo -->
+            <div class="row g-3 mb-3">
+                <div class="col-3 text-center">
+                    <small class="text-muted d-block">Valor Fatura</small>
+                    <h5>{{ fatura.valor_total|valor_br }}</h5>
                 </div>
-                <div class="card-body">
-                    <!-- Comparativo -->
-                    <div class="row g-3 mb-3">
-                        <div class="col-3 text-center">
-                            <small class="text-muted d-block">Valor Fatura</small>
-                            <h5>{{ fatura.valor_total|valor_br }}</h5>
-                        </div>
-                        <div class="col-3 text-center">
-                            <small class="text-muted d-block">Soma Cotado</small>
-                            <h5>R$ {{ "%.2f"|format(valor_cotado_total) }}</h5>
-                        </div>
-                        <div class="col-3 text-center">
-                            <small class="text-muted d-block">Soma Final</small>
-                            <h5>R$ {{ "%.2f"|format(valor_acertado_total) }}</h5>
-                        </div>
-                        <div class="col-3 text-center">
-                            <small class="text-muted d-block">Soma Considerado</small>
-                            <h5>{% if conferencia_resumo.soma_considerado %}R$ {{ "%.2f"|format(conferencia_resumo.soma_considerado) }}{% else %}-{% endif %}</h5>
-                        </div>
-                    </div>
+                <div class="col-3 text-center">
+                    <small class="text-muted d-block">Soma Cotado</small>
+                    <h5>{{ valor_cotado_total|valor_br }}</h5>
+                </div>
+                <div class="col-3 text-center">
+                    <small class="text-muted d-block">Soma Final</small>
+                    <h5>{{ valor_acertado_total|valor_br }}</h5>
+                </div>
+                <div class="col-3 text-center">
+                    <small class="text-muted d-block">Soma Considerado</small>
+                    <h5>{% if conferencia_resumo.soma_considerado %}{{ conferencia_resumo.soma_considerado|valor_br }}{% else %}-{% endif %}</h5>
+                </div>
+            </div>
 
-                    {% if subcontratos %}
-                    {# Barra de progresso de conferencia individual #}
-                    {% if conferencia_resumo.total > 0 %}
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between small mb-1">
-                            <span>Conferencia individual: {{ conferencia_resumo.aprovados + conferencia_resumo.divergentes }} de {{ conferencia_resumo.total }}</span>
-                            <span>{{ conferencia_resumo.percentual_conferido }}%</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            {% if conferencia_resumo.aprovados > 0 %}
-                            <div class="progress-bar bg-success" style="width: {{ (conferencia_resumo.aprovados / conferencia_resumo.total * 100)|round }}%"
-                                 title="{{ conferencia_resumo.aprovados }} aprovado(s)"></div>
-                            {% endif %}
-                            {% if conferencia_resumo.divergentes > 0 %}
-                            <div class="progress-bar bg-danger" style="width: {{ (conferencia_resumo.divergentes / conferencia_resumo.total * 100)|round }}%"
-                                 title="{{ conferencia_resumo.divergentes }} divergente(s)"></div>
-                            {% endif %}
-                        </div>
-                    </div>
+            {% if subcontratos %}
+            {# Barra de progresso de conferencia individual #}
+            {% if conferencia_resumo.total > 0 %}
+            <div class="mb-3">
+                <div class="d-flex justify-content-between small mb-1">
+                    <span>Conferencia individual: {{ conferencia_resumo.aprovados + conferencia_resumo.divergentes }} de {{ conferencia_resumo.total }}</span>
+                    <span>{{ conferencia_resumo.percentual_conferido }}%</span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    {% if conferencia_resumo.aprovados > 0 %}
+                    <div class="progress-bar bg-success" style="width: {{ (conferencia_resumo.aprovados / conferencia_resumo.total * 100)|round }}%"
+                         title="{{ conferencia_resumo.aprovados }} aprovado(s)"></div>
                     {% endif %}
-
-                    {# Alerta quando todos aprovados mas fatura nao conferida #}
-                    {% if conferencia_resumo.aprovados == conferencia_resumo.total and conferencia_resumo.total > 0 and fatura.status_conferencia != 'CONFERIDO' %}
-                    <div class="alert alert-success mb-3">
-                        <i class="fas fa-check-circle"></i>
-                        Todos os {{ conferencia_resumo.total }} subcontratos estao <strong>APROVADOS</strong>.
-                        Clique em <strong>CONFERIDO</strong> para concluir a conferencia da fatura.
-                    </div>
-                    {% endif %}
-
-                    {% set diff = (fatura.valor_total|float - valor_acertado_total)|abs %}
-                    {% if diff > 0.01 %}
-                    <div class="alert alert-warning mb-3">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Diferenca de R$ {{ "%.2f"|format(diff) }} entre valor da fatura e soma dos valores finais.
-                    </div>
-                    {% else %}
-                    <div class="alert alert-success mb-3">
-                        <i class="fas fa-check-circle"></i> Valores conferem.
-                    </div>
-                    {% endif %}
-                    {% else %}
-                    <div class="alert alert-info mb-3">
-                        <i class="fas fa-info-circle"></i> Nenhum subcontrato anexado ainda. Use o botao abaixo para anexar.
-                    </div>
-                    {% endif %}
-
-                    <!-- Acoes de conferencia -->
-                    <h6>Alterar Status de Conferencia:</h6>
-                    <div class="d-flex gap-2 flex-wrap">
-                        {% for status in ['PENDENTE', 'EM_CONFERENCIA', 'CONFERIDO', 'DIVERGENTE'] %}
-                        {% if status != fatura.status_conferencia %}
-                        <form method="POST" action="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="status" value="{{ status }}">
-                            <button type="submit" class="btn btn-sm
-                                {% if status == 'CONFERIDO' %}btn-success
-                                {% elif status == 'DIVERGENTE' %}btn-danger
-                                {% elif status == 'EM_CONFERENCIA' %}btn-info
-                                {% else %}btn-secondary{% endif %}"
-                                {% if status == 'CONFERIDO' %}onclick="return confirm('Confirmar conferencia? Subcontratos serao marcados como CONFERIDO.')"{% endif %}>
-                                {{ status|replace('_', ' ') }}
-                            </button>
-                        </form>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-                    {# Badge conciliacao bancaria #}
-                    {% if fatura.conciliado %}
-                    <div class="mt-2">
-                        <span class="badge carvia-badge-conciliado"><i class="fas fa-check-double"></i> Conciliado no Banco</span>
-                    </div>
-                    {% elif fatura.total_conciliado and fatura.total_conciliado > 0 %}
-                    <div class="mt-2">
-                        <span class="badge carvia-badge-parcial"><i class="fas fa-exchange-alt"></i> Parcialmente Conciliado ({{ fatura.total_conciliado|valor_br }})</span>
-                    </div>
+                    {% if conferencia_resumo.divergentes > 0 %}
+                    <div class="progress-bar bg-danger" style="width: {{ (conferencia_resumo.divergentes / conferencia_resumo.total * 100)|round }}%"
+                         title="{{ conferencia_resumo.divergentes }} divergente(s)"></div>
                     {% endif %}
                 </div>
             </div>
+            {% endif %}
+
+            {# Alerta quando todos aprovados mas fatura nao conferida #}
+            {% if conferencia_resumo.aprovados == conferencia_resumo.total and conferencia_resumo.total > 0 and fatura.status_conferencia != 'CONFERIDO' %}
+            <div class="alert alert-success mb-3">
+                <i class="fas fa-check-circle"></i>
+                Todos os {{ conferencia_resumo.total }} subcontratos estao <strong>APROVADOS</strong>.
+                Clique em <strong>CONFERIDO</strong> para concluir a conferencia da fatura.
+            </div>
+            {% endif %}
+
+            {% set diff = (fatura.valor_total|float - valor_acertado_total)|abs %}
+            {% if diff > 0.01 %}
+            <div class="alert alert-warning mb-3">
+                <i class="fas fa-exclamation-triangle"></i>
+                Diferenca de {{ diff|valor_br }} entre valor da fatura e soma dos valores finais.
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-3">
+                <i class="fas fa-check-circle"></i> Valores conferem.
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle"></i> Nenhum subcontrato anexado ainda. Use o botao abaixo para anexar.
+            </div>
+            {% endif %}
+
+            {% if fatura.conferido_por %}
+            <hr>
+            <p class="mb-3"><strong>Conferido por:</strong> {{ fatura.conferido_por }} em {{ fatura.conferido_em|formatar_data_hora_brasil if fatura.conferido_em else '-' }}</p>
+            {% endif %}
+
+            <!-- Acoes de conferencia -->
+            <h6>Alterar Status de Conferencia:</h6>
+            <div class="d-flex gap-2 flex-wrap">
+                {% for status in ['PENDENTE', 'EM_CONFERENCIA', 'CONFERIDO', 'DIVERGENTE'] %}
+                {% if status != fatura.status_conferencia %}
+                <form method="POST" action="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="{{ status }}">
+                    <button type="submit" class="btn btn-sm
+                        {% if status == 'CONFERIDO' %}btn-success
+                        {% elif status == 'DIVERGENTE' %}btn-danger
+                        {% elif status == 'EM_CONFERENCIA' %}btn-info
+                        {% else %}btn-secondary{% endif %}"
+                        {% if status == 'CONFERIDO' %}onclick="return confirm('Confirmar conferencia? Subcontratos serao marcados como CONFERIDO.')"{% endif %}>
+                        {{ status|replace('_', ' ') }}
+                    </button>
+                </form>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {# Badge conciliacao bancaria #}
+            {% if fatura.conciliado %}
+            <div class="mt-2">
+                <span class="badge carvia-badge-conciliado"><i class="fas fa-check-double"></i> Conciliado no Banco</span>
+            </div>
+            {% elif fatura.total_conciliado and fatura.total_conciliado > 0 %}
+            <div class="mt-2">
+                <span class="badge carvia-badge-parcial"><i class="fas fa-exchange-alt"></i> Parcialmente Conciliado ({{ fatura.total_conciliado|valor_br }})</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -218,11 +312,11 @@
             </div>
             {% endif %}
         </div>
-        <div class="card-body p-0">
+        <div class="card-body">
             {% if subcontratos %}
             <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 carvia-table">
-                    <thead>
+                <table class="table table-striped table-hover">
+                    <thead class="thead-dark">
                         <tr>
                             <th>CTe Sub</th>
                             <th>Cliente</th>
@@ -289,10 +383,10 @@
                     <tfoot>
                         <tr class="table-light">
                             <td colspan="5" class="text-end"><strong>Soma dos valores finais:</strong></td>
-                            <td class="valor-col"><strong>R$ {{ "%.2f"|format(valor_acertado_total) }}</strong></td>
+                            <td class="valor-col"><strong>{{ valor_acertado_total|valor_br }}</strong></td>
                             <td></td>
                             <td class="valor-col">
-                                <strong>{% if conferencia_resumo.soma_considerado %}R$ {{ "%.2f"|format(conferencia_resumo.soma_considerado) }}{% endif %}</strong>
+                                <strong>{% if conferencia_resumo.soma_considerado %}{{ conferencia_resumo.soma_considerado|valor_br }}{% endif %}</strong>
                             </td>
                             <td colspan="2"></td>
                         </tr>
@@ -329,10 +423,10 @@
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-list-alt"></i> Itens de Detalhe ({{ itens|length }})</h5>
         </div>
-        <div class="card-body p-0">
+        <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 carvia-table">
-                    <thead>
+                <table class="table table-striped table-hover">
+                    <thead class="thead-dark">
                         <tr>
                             <th>CTe Subcontrato</th>
                             <th>Emissao</th>
@@ -539,7 +633,7 @@
                         </button>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-sm table-hover mb-0 carvia-table">
+                        <table class="table table-sm table-striped table-hover">
                             <thead>
                                 <tr>
                                     <th width="30"><input type="checkbox" id="check-all-anexar"></th>
@@ -656,7 +750,7 @@
                                         Nenhuma tabela de frete encontrada para esta rota/transportadora.
                                     </div>
                                     <div class="table-responsive">
-                                        <table class="table table-sm table-hover mb-0 carvia-table" id="conf-tabela-opcoes">
+                                        <table class="table table-sm table-striped table-hover mb-0" id="conf-tabela-opcoes">
                                             <thead>
                                                 <tr>
                                                     <th>Tabela</th>

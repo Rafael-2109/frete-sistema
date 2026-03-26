@@ -291,6 +291,19 @@
     font-size: 0.75rem;
 }
 
+/* Standalone value/truncate columns — used outside carvia-table context */
+.valor-col {
+    text-align: right;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.text-truncate-col {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
 /* Vencimento vencido */
 .carvia-vencido {
     color: var(--semantic-danger);
