@@ -572,69 +572,59 @@ async def emitir_cte(args):
             popup.on("dialog", on_dialog)
 
             try:
-                # Clicar no ► principal (calculafrete)
-                # O ► esta na area principal, nao nos sub-paineis
+                # ── 6. Clicar ► (calculafrete) = SIMULAR ──
                 try:
-                    # Tentar localizar o link ► de calcular frete
-                    calc_link = popup.locator('a[onclick*="calculafrete"]')
-                    if await calc_link.count() > 0:
-                        await calc_link.first.click()
-                    else:
-                        await popup.evaluate("calculafrete(this)")
-                except Exception:
                     await popup.evaluate("calculafrete(this)")
+                except Exception:
+                    pass
 
-                await asyncio.sleep(8)  # Esperar calculo
+                await asyncio.sleep(8)
                 await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
-                await capturar_screenshot_local(popup, "06_pos_calcular")
+                await capturar_screenshot_local(popup, "06_pos_simular")
 
-                # ── 7. Clicar "1. Gravar CTRC" ──
+                # ── 7. Tratar "Email nao disponivel" (popup SSW customizado) ──
+                # calculafrete pode disparar email dialog antes do resumo
                 try:
-                    gravar_link = popup.locator('a:has-text("Gravar")')
-                    if await gravar_link.count() > 0:
-                        await gravar_link.first.click(force=True)
-                    else:
-                        await popup.evaluate("""() => {
-                            const links = document.querySelectorAll('a[onclick]');
-                            for (const el of links) {
-                                if (el.textContent.includes('Gravar')) {
-                                    el.click(); return true;
-                                }
+                    await popup.evaluate("""() => {
+                        const links = document.querySelectorAll('a');
+                        for (const el of links) {
+                            const t = el.textContent.toLowerCase();
+                            if (t.includes('disponível') || t.includes('disponivel')) {
+                                el.click(); return true;
                             }
-                            return false;
-                        }""")
+                        }
+                        return false;
+                    }""")
                 except Exception:
                     pass
-
                 await asyncio.sleep(5)
+                await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                await capturar_screenshot_local(popup, "07_pos_email")
 
-                # ── 8. Tratar dialog "Email nao disponivel" (popup SSW customizado) ──
-                # O SSW mostra opcoes: "1. Enviar e-mail" / "2. E-mail não disponível"
-                # Clicar em "2. E-mail não disponível"
+                # ── 8. GRAVAR no painel de resumo ──
+                # O botao REAL eh "1. Gravar" com onclick concluindo('C')
+                # NAO confundir com "1. Gravar CTRC/Subcontrato/NFPS" (ajaxEnvia #res_con#)
                 try:
-                    email_link = popup.locator('a:has-text("não disponível"), a:has-text("nao disponivel")')
-                    if await email_link.count() > 0:
-                        await email_link.first.click(force=True)
-                        await asyncio.sleep(5)
-                    else:
-                        # Fallback: procurar por texto e clicar
-                        await popup.evaluate("""() => {
-                            const links = document.querySelectorAll('a');
-                            for (const el of links) {
-                                if (el.textContent.includes('disponível') || el.textContent.includes('disponivel')) {
-                                    el.click(); return true;
-                                }
-                            }
-                            return false;
-                        }""")
-                        await asyncio.sleep(5)
+                    await popup.evaluate("concluindo('C')")
                 except Exception:
-                    pass
+                    # Fallback: clicar no link
+                    await popup.evaluate("""() => {
+                        const links = document.querySelectorAll('a[onclick]');
+                        for (const el of links) {
+                            if (el.getAttribute('onclick') && el.getAttribute('onclick').includes("concluindo('C')")) {
+                                el.click(); return true;
+                            }
+                        }
+                        return false;
+                    }""")
 
-                await asyncio.sleep(5)
-                await capturar_screenshot_local(popup, "07_pos_gravar")
+                await asyncio.sleep(10)  # Esperar gravar + possiveis dialogs
+                await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                await capturar_screenshot_local(popup, "08_pos_gravar")
 
-                # ── 9. Extrair CTRC ANTES de fechar ──
+                # ── 9. Extrair CTRC do formulario pos-gravar ──
+                # Apos concluindo('C'), o SSW volta ao formulario vazio
+                # com "CTRC anterior: 000094-9" mostrando o ultimo gravado
                 page_closed = False
                 try:
                     await popup.evaluate("1")
@@ -642,60 +632,26 @@ async def emitir_cte(args):
                     page_closed = True
 
                 if not ctrc_num and not page_closed:
-                    # Campo hidden seq_ctrc
-                    seq = await popup.evaluate(
-                        "() => { const e = document.getElementById('seq_ctrc'); "
-                        "return e && e.value && e.value.trim() !== '' ? e.value.trim() : null; }"
+                    body = await popup.evaluate(
+                        "() => document.body ? document.body.innerText.substring(0,8000) : ''"
                     )
-                    if seq:
-                        ctrc_num = seq
+                    # Extrair de "CTRC anterior: 000094-9" → pegar 94
+                    m = re.search(r'CTRC\s*anterior\s*:?\s*0*(\d+)', body, re.IGNORECASE)
+                    if m:
+                        ctrc_num = m.group(1)
 
-                    # Body com regex amplo: qualquer "CTRC nnn" ou numero apos "Pagador"
+                    # Fallback: campo hidden ou input com valor do CTRC
                     if not ctrc_num:
-                        body = await popup.evaluate(
-                            "() => document.body ? document.body.innerText.substring(0,8000) : ''"
-                        )
-                        # Tentar "CTRC 12345" ou "CT-e 12345"
-                        m = re.search(r'(?:CTRC|CT-e)\s*:?\s*(\d{2,})', body, re.IGNORECASE)
-                        if m:
-                            ctrc_num = m.group(1)
-                        # Tentar "Conhecimento: 12345"
-                        if not ctrc_num:
-                            m = re.search(r'Conhecimento\s*:?\s*(\d{2,})', body, re.IGNORECASE)
-                            if m:
-                                ctrc_num = m.group(1)
-                        # Tentar campo de input com nome seq_ctrc via query
-                        if not ctrc_num:
-                            ctrc_num = await popup.evaluate("""() => {
-                                const inputs = document.querySelectorAll('input');
-                                for (const el of inputs) {
-                                    if (el.name && el.name.includes('seq') && el.value && el.value.trim()) {
-                                        return el.value.trim();
-                                    }
-                                }
-                                return null;
-                            }""")
-
-                # ── 10. Clicar "Enviar e fechar arquivo" ──
-                try:
-                    enviar_link = popup.locator('a:has-text("Enviar e fechar")')
-                    if await enviar_link.count() > 0:
-                        await enviar_link.first.click(force=True)
-                    else:
-                        await popup.evaluate("""() => {
-                            const links = document.querySelectorAll('a');
-                            for (const el of links) {
-                                if (el.textContent.includes('Enviar e fechar')) {
-                                    el.click(); return true;
-                                }
-                            }
-                            return false;
+                        ctrc_num = await popup.evaluate("""() => {
+                            // Tentar campo que mostra CTRC anterior
+                            const el = document.querySelector('input[name="seq_ant"]');
+                            if (el && el.value && el.value.trim()) return el.value.trim();
+                            const el2 = document.getElementById('seq_ctrc');
+                            if (el2 && el2.value && el2.value.trim()) return el2.value.trim();
+                            return null;
                         }""")
-                except Exception:
-                    pass
 
-                await asyncio.sleep(5)
-                await capturar_screenshot_local(popup, "08_pos_fechar")
+                await capturar_screenshot_local(popup, "09_resultado")
 
                 resultado = {
                     "ctrc": ctrc_num,
@@ -750,7 +706,7 @@ async def emitir_cte(args):
                 except Exception as e:
                     sefaz_result = {"erro": str(e)}
 
-            # ── 9. Consultar 101 ──
+            # ── 12. Consultar 101 + baixar DACTE/XML ──
             consulta_101 = None
             if args.consultar_101 and ctrc_num:
                 try:
@@ -760,26 +716,38 @@ async def emitir_cte(args):
                     await asyncio.sleep(2)
                     await popup_101.evaluate(CREATE_NEW_DOC_OVERRIDE)
 
-                    # Preencher CTRC e pesquisar (nativo)
-                    # Nota: id="2" nao eh seletor CSS valido, usar name
-                    campo_ctrc = popup_101.locator('input[name="2"]').first
-                    await campo_ctrc.fill(ctrc_num)
-                    await campo_ctrc.press("Tab")
+                    # Preencher CTRC no campo t_nro_ctrc (sem DV)
+                    await popup_101.evaluate(f"""() => {{
+                        const el = document.getElementById('t_nro_ctrc');
+                        if (el) el.value = '{ctrc_num}';
+                    }}""")
                     await asyncio.sleep(1)
 
-                    # Clicar ► para pesquisar
-                    pes_link = popup_101.locator('a:has-text("►")').first
-                    await pes_link.click()
-                    await asyncio.sleep(5)
-
+                    # Pesquisar: ajaxEnvia('P1', 1)
+                    await popup_101.evaluate("ajaxEnvia('P1', 1)")
+                    await asyncio.sleep(8)
                     await popup_101.evaluate(CREATE_NEW_DOC_OVERRIDE)
-                    await capturar_screenshot_local(popup_101, f"12_101_{ctrc_num}")
+                    await capturar_screenshot_local(popup_101, f"10_101_{ctrc_num}")
 
                     body_101 = await popup_101.evaluate(
                         "() => document.body ? document.body.innerText.substring(0,5000) : ''"
                     )
 
-                    consulta_101 = {"body": body_101[:3000]}
+                    # Capturar links DACTE e XML (se existirem)
+                    dacte_info = await popup_101.evaluate("""() => {
+                        const d = document.getElementById('link_imp_dacte');
+                        const x = document.getElementById('link_imp_xml');
+                        return {
+                            dacte: d ? d.getAttribute('onclick') : null,
+                            xml: x ? x.getAttribute('onclick') : null
+                        };
+                    }""")
+
+                    consulta_101 = {
+                        "body": body_101[:3000],
+                        "dacte_onclick": dacte_info.get("dacte"),
+                        "xml_onclick": dacte_info.get("xml"),
+                    }
 
                     try:
                         await popup_101.close()

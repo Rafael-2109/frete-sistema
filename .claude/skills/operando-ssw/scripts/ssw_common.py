@@ -75,6 +75,11 @@ async def login_ssw(page, timeout_s=30):
     """
     Login no SSW. Reutiliza sessao ativa se detectada.
 
+    Robusto contra:
+    - Sessao ja ativa (frameset carregado, sem campos de login)
+    - accept_downloads=True alterando comportamento do page load
+    - Campos de login ausentes por load parcial
+
     Args:
         page: Playwright Page
         timeout_s: Timeout em segundos
@@ -88,6 +93,37 @@ async def login_ssw(page, timeout_s=30):
     # Sessao ativa = mais de 2 frames (frameset carregado)
     if len(page.frames) > 2:
         return True
+
+    # Verificar se campos de login existem antes de preencher
+    has_login_fields = await page.evaluate("""() => {
+        return !!(document.querySelector('input[name="f1"]')
+              && document.querySelector('input[name="f4"]'));
+    }""")
+
+    if not has_login_fields:
+        # Campos nao existem — pode ser sessao ativa sem frameset completo
+        # ou page load diferente (ex: accept_downloads=True).
+        # Aguardar mais e re-checar frames.
+        for _ in range(5):
+            await asyncio.sleep(2)
+            if len(page.frames) > 2:
+                return True
+
+        # Ultima tentativa: recarregar pagina sem cache
+        await page.reload(wait_until="networkidle", timeout=timeout_s * 1000)
+        await asyncio.sleep(2)
+
+        if len(page.frames) > 2:
+            return True
+
+        # Re-checar campos apos reload
+        has_login_fields = await page.evaluate("""() => {
+            return !!(document.querySelector('input[name="f1"]')
+                  && document.querySelector('input[name="f4"]'));
+        }""")
+
+        if not has_login_fields:
+            return False
 
     # Preencher campos de login
     for name, value in [
@@ -130,9 +166,23 @@ async def abrir_opcao_popup(context, main_frame, opcao, timeout_s=15):
     """
     option_str = str(opcao).zfill(3)
 
+    # Aguardar campo #3 existir (pode demorar em sessoes recem-logadas)
+    for _ in range(10):
+        has_field = await main_frame.evaluate(
+            "() => !!document.getElementById('3')"
+        )
+        if has_field:
+            break
+        await asyncio.sleep(1)
+
     async with context.expect_page(timeout=timeout_s * 1000) as new_page_info:
         await main_frame.evaluate(
-            f"document.getElementById('3').value = '{option_str}'; doOption();"
+            f"""() => {{
+                var el = document.getElementById('3');
+                if (!el) throw new Error('Campo opcao #3 nao encontrado');
+                el.value = '{option_str}';
+                doOption();
+            }}"""
         )
 
     popup = await new_page_info.value
