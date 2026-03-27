@@ -3,7 +3,7 @@
    Gestao de frete subcontratado
    ═══════════════════════════════════════════════════════════════ */
 
-/* Dashboard Stats Cards */
+/* Stats Cards — usado em fluxo_caixa, extrato_conta, conciliacao, extrato_bancario, revisar_csv */
 .carvia-stat-card {
     border-radius: var(--radius-lg, 0.75rem);
     transition: transform 0.15s ease, box-shadow 0.15s ease;

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def register_dashboard_routes(bp):
 
-    @bp.route('/') # type: ignore   
+    @bp.route('/') # type: ignore
     @bp.route('/dashboard') # type: ignore
     @login_required
     def dashboard(): # type: ignore
@@ -29,7 +29,7 @@ def register_dashboard_routes(bp):
             flash('Acesso negado. Voce nao tem permissao para o sistema CarVia.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        # Estatisticas
+        # Estatisticas basicas (COUNTs simples)
         stats = {}
         try:
             # NFs Venda
@@ -94,6 +94,60 @@ def register_dashboard_routes(bp):
                 func.coalesce(func.sum(CarviaReceita.valor), 0)
             ).filter(CarviaReceita.status == 'PENDENTE').scalar() or 0
 
+            # Vencidos e vencendo hoje (padrao do context processor em app/__init__.py:968-999)
+            from app.utils.timezone import agora_brasil_naive
+            hoje = agora_brasil_naive().date()
+
+            venc_cli = db.session.query(func.count(CarviaFaturaCliente.id)).filter(
+                CarviaFaturaCliente.vencimento < hoje,
+                CarviaFaturaCliente.status.notin_(['PAGA', 'CANCELADA']),
+            ).scalar() or 0
+
+            venc_transp = db.session.query(func.count(CarviaFaturaTransportadora.id)).filter(
+                CarviaFaturaTransportadora.vencimento < hoje,
+                CarviaFaturaTransportadora.status_pagamento == 'PENDENTE',
+            ).scalar() or 0
+
+            venc_desp = db.session.query(func.count(CarviaDespesa.id)).filter(
+                CarviaDespesa.data_vencimento < hoje,
+                CarviaDespesa.status == 'PENDENTE',
+            ).scalar() or 0
+
+            stats['vencidos_total'] = venc_cli + venc_transp + venc_desp
+
+            dia_cli = db.session.query(func.count(CarviaFaturaCliente.id)).filter(
+                CarviaFaturaCliente.vencimento == hoje,
+                CarviaFaturaCliente.status.notin_(['PAGA', 'CANCELADA']),
+            ).scalar() or 0
+
+            dia_transp = db.session.query(func.count(CarviaFaturaTransportadora.id)).filter(
+                CarviaFaturaTransportadora.vencimento == hoje,
+                CarviaFaturaTransportadora.status_pagamento == 'PENDENTE',
+            ).scalar() or 0
+
+            dia_desp = db.session.query(func.count(CarviaDespesa.id)).filter(
+                CarviaDespesa.data_vencimento == hoje,
+                CarviaDespesa.status == 'PENDENTE',
+            ).scalar() or 0
+
+            stats['vencimento_hoje_total'] = dia_cli + dia_transp + dia_desp
+
+            # Cotacoes comerciais
+            from app.carvia.models import CarviaCotacao
+            stats['cotacoes_ativas'] = CarviaCotacao.query.filter(
+                CarviaCotacao.status.in_(['RASCUNHO', 'PENDENTE_ADMIN', 'ENVIADO'])
+            ).count()
+
+            stats['cotacoes_pendentes_admin'] = CarviaCotacao.query.filter_by(
+                status='PENDENTE_ADMIN'
+            ).count()
+
+            # Pedidos abertos
+            from app.carvia.models import CarviaPedido
+            stats['pedidos_abertos'] = CarviaPedido.query.filter(
+                CarviaPedido.status == 'ABERTO'
+            ).count()
+
             # Ultimas operacoes
             stats['ultimas_operacoes'] = db.session.query(CarviaOperacao).order_by(
                 CarviaOperacao.criado_em.desc()
@@ -116,7 +170,22 @@ def register_dashboard_routes(bp):
                 'despesas_valor_pendente': 0,
                 'receitas_pendentes': 0,
                 'receitas_valor_pendente': 0,
+                'vencidos_total': 0,
+                'vencimento_hoje_total': 0,
+                'cotacoes_ativas': 0,
+                'cotacoes_pendentes_admin': 0,
+                'pedidos_abertos': 0,
                 'ultimas_operacoes': [],
+                'saldo_conta': 0,
             }
+
+        # Saldo da conta (isolado — falha nao zera stats basicas)
+        if 'saldo_conta' not in stats:
+            try:
+                from app.carvia.services.fluxo_caixa_service import FluxoCaixaService
+                stats['saldo_conta'] = FluxoCaixaService().obter_saldo_conta() or 0
+            except Exception as e:
+                logger.warning(f"Erro ao obter saldo conta CarVia: {e}")
+                stats['saldo_conta'] = 0
 
         return render_template('carvia/dashboard.html', stats=stats)
