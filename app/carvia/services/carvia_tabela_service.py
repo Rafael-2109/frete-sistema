@@ -248,29 +248,12 @@ class CarviaTabelaService:
         if not breakdown:
             return None
 
-        # Obter ICMS: prioriza icms_proprio da tabela, fallback para ICMS da cidade
-        icms_percentual = float(tabela.icms_proprio) if tabela.icms_proprio else 0
-        if icms_percentual == 0 and cidade:
-            icms_cidade = getattr(cidade, 'icms', 0) or 0
-            if icms_cidade > 0:
-                # Normalizar: se < 1 e decimal (0.12), converter para percentual (12)
-                icms_percentual = icms_cidade * 100 if icms_cidade < 1 else icms_cidade
-
-        valor_icms = 0
-        valor_total = subtotal
-
-        if icms_percentual > 0 and not tabela.icms_incluso:
-            # ICMS por fora: total / (1 - icms/100)
-            fator = 1 - (icms_percentual / 100)
-            if fator > 0:
-                valor_total = subtotal / fator
-                valor_icms = valor_total - subtotal
-
+        # Frete por moto: ICMS NAO se aplica (preco por unidade ja e final)
         return {
-            'valor': round(valor_total, 2),
+            'valor': round(subtotal, 2),
             'subtotal': round(subtotal, 2),
-            'valor_icms': round(valor_icms, 2),
-            'icms_percentual': icms_percentual,
+            'valor_icms': 0,
+            'icms_percentual': 0,
             'breakdown': breakdown,
             'tipo_calculo': 'CATEGORIA_MOTO',
         }

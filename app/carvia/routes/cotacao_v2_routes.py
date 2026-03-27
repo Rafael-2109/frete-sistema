@@ -132,6 +132,16 @@ def register_cotacao_v2_routes(bp):
                     }
                     for it in dados.get('itens', [])
                 ],
+                'veiculos': [
+                    {
+                        'chassi': v.get('chassi'),
+                        'cor': v.get('cor'),
+                        'modelo': v.get('modelo'),
+                        'numero_motor': v.get('numero_motor'),
+                        'ano_modelo': v.get('ano_modelo'),
+                    }
+                    for v in dados.get('veiculos', [])
+                ],
             })
 
         except Exception as e:
@@ -329,6 +339,16 @@ def register_cotacao_v2_routes(bp):
                         'valor_total': it.get('valor_total_item'),
                     }
                     for it in itens
+                ],
+                'veiculos': [
+                    {
+                        'chassi': v.get('chassi'),
+                        'cor': v.get('cor'),
+                        'modelo': v.get('modelo'),
+                        'numero_motor': v.get('numero_motor'),
+                        'ano_modelo': v.get('ano_modelo'),
+                    }
+                    for v in dados.get('veiculos', [])
                 ],
                 'tipo_material': 'MOTO' if eh_moto else 'CARGA_GERAL',
                 'cliente': {
@@ -535,7 +555,7 @@ def register_cotacao_v2_routes(bp):
             except Exception as e_price:
                 logger.warning("Auto-cotacao falhou para %s: %s", cotacao.id, e_price)
 
-            # Criar CarviaNf se veio NF pre-preenchida
+            # Criar CarviaNf + pedido + veiculos se veio NF pre-preenchida
             nf_dados_raw = request.form.get('nf_dados_json', '').strip()
             if nf_dados_raw:
                 try:
@@ -543,8 +563,12 @@ def register_cotacao_v2_routes(bp):
                     nf_parsed = json_lib.loads(nf_dados_raw)
                     nf_info = nf_parsed.get('nf', {})
                     nf_itens = nf_parsed.get('itens', [])
+                    nf_veiculos = nf_parsed.get('veiculos', [])
 
-                    from app.carvia.models import CarviaNf, CarviaNfItem
+                    from app.carvia.models import (
+                        CarviaNf, CarviaNfItem, CarviaNfVeiculo,
+                        CarviaPedido, CarviaPedidoItem,
+                    )
                     from app.utils.timezone import agora_utc_naive as _agora
 
                     data_emissao = nf_info.get('data_emissao')
@@ -556,15 +580,17 @@ def register_cotacao_v2_routes(bp):
                     else:
                         data_emissao = None
 
-                    # Dedup: nao criar se ja existe pela chave
+                    # Dedup: reutilizar NF existente se mesma chave
                     chave = nf_info.get('chave_acesso')
-                    nf_existente = None
-                    if chave:
-                        nf_existente = CarviaNf.query.filter_by(chave_acesso_nf=chave).first()
+                    nf_obj = None
+                    numero_nf = nf_info.get('numero_nf') or '0'
 
-                    if not nf_existente:
+                    if chave:
+                        nf_obj = CarviaNf.query.filter_by(chave_acesso_nf=chave).first()
+
+                    if not nf_obj:
                         nf_obj = CarviaNf(
-                            numero_nf=nf_info.get('numero_nf') or '0',
+                            numero_nf=numero_nf,
                             serie_nf=nf_info.get('serie_nf'),
                             chave_acesso_nf=chave,
                             data_emissao=data_emissao,
@@ -598,13 +624,79 @@ def register_cotacao_v2_routes(bp):
                                 valor_unitario=it.get('valor_unitario'),
                                 valor_total_item=it.get('valor_total'),
                             ))
+                    else:
+                        numero_nf = nf_obj.numero_nf or numero_nf
+
+                    # Criar veiculos (chassis) — dedup por chassi
+                    for v_idx, v in enumerate(nf_veiculos):
+                        chassi = (v.get('chassi') or '').strip()
+                        if chassi:
+                            existente = CarviaNfVeiculo.query.filter_by(chassi=chassi).first()
+                            if not existente:
+                                item_ref = nf_itens[v_idx] if v_idx < len(nf_itens) else {}
+                                db.session.add(CarviaNfVeiculo(
+                                    nf_id=nf_obj.id,
+                                    chassi=chassi,
+                                    modelo=v.get('modelo') or item_ref.get('descricao'),
+                                    cor=v.get('cor'),
+                                    valor=(
+                                        v.get('valor')
+                                        or item_ref.get('valor_unitario')
+                                        or item_ref.get('valor_total')
+                                    ),
+                                    ano=v.get('ano_modelo'),
+                                    numero_motor=v.get('numero_motor'),
+                                ))
+
+                    # Criar pedido vinculado a cotacao
+                    origem = cotacao.endereco_origem
+                    filial = 'RJ' if origem and origem.fisico_uf == 'RJ' else 'SP'
+                    tipo_sep = 'ESTOQUE' if filial == 'SP' else 'CROSSDOCK'
+
+                    pedido = CarviaPedido(
+                        numero_pedido=CarviaPedido.gerar_numero_pedido(cotacao.id),
+                        cotacao_id=cotacao.id,
+                        filial=filial,
+                        tipo_separacao=tipo_sep,
+                        criado_por=current_user.email,
+                        criado_em=_agora(),
+                        atualizado_em=_agora(),
+                    )
+                    db.session.add(pedido)
+                    db.session.flush()
+
+                    # Criar itens do pedido com dados reais da NF
+                    if nf_itens:
+                        for idx, it in enumerate(nf_itens):
+                            veiculo = nf_veiculos[idx] if idx < len(nf_veiculos) else None
+                            cor = veiculo.get('cor') if veiculo else None
+                            db.session.add(CarviaPedidoItem(
+                                pedido_id=pedido.id,
+                                descricao=it.get('descricao') or 'Produto',
+                                cor=cor,
+                                quantidade=int(it.get('quantidade') or 1),
+                                valor_unitario=it.get('valor_unitario'),
+                                valor_total=it.get('valor_total'),
+                                numero_nf=numero_nf,
+                            ))
+                    else:
+                        # Fallback: NF sem itens detalhados
+                        db.session.add(CarviaPedidoItem(
+                            pedido_id=pedido.id,
+                            descricao=nf_info.get('nome_emitente') or 'Produto',
+                            quantidade=1,
+                            valor_total=nf_info.get('valor_total'),
+                            numero_nf=numero_nf,
+                        ))
+
+                    pedido.status = 'FATURADO'
 
                     logger.info(
-                        "NF %s vinculada na criacao da cotacao %s",
-                        nf_info.get('numero_nf'), cotacao.numero_cotacao,
+                        "NF %s + pedido %s criados na cotacao %s",
+                        numero_nf, pedido.numero_pedido, cotacao.numero_cotacao,
                     )
                 except Exception as e_nf:
-                    logger.warning("Erro ao criar NF na cotacao: %s", e_nf)
+                    logger.warning("Erro ao criar NF/pedido na cotacao: %s", e_nf)
 
             db.session.commit()
             flash(f'Cotacao {cotacao.numero_cotacao} criada.', 'success')
@@ -1094,6 +1186,26 @@ def register_cotacao_v2_routes(bp):
                 return jsonify({'erro': erro}), 400
             db.session.commit()
             return jsonify({'sucesso': True, 'mensagem': 'Cotacao cancelada.'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/reabrir', methods=['POST']) # type: ignore
+    @login_required
+    def api_reabrir_cotacao(cotacao_id): # type: ignore
+        """Reabre cotacao aprovada — volta para RASCUNHO"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+
+        try:
+            sucesso, erro = CotacaoV2Service.reabrir(
+                cotacao_id, current_user.email)
+            if not sucesso:
+                return jsonify({'erro': erro}), 400
+            db.session.commit()
+            return jsonify({'sucesso': True, 'mensagem': 'Cotacao reaberta.'})
         except Exception as e:
             db.session.rollback()
             return jsonify({'erro': f'Erro: {e}'}), 500

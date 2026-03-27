@@ -496,6 +496,39 @@ class CotacaoV2Service:
         return True, None
 
     @staticmethod
+    def reabrir(cotacao_id: int, reaberto_por: str) -> Tuple[bool, Optional[str]]:
+        """Reabre cotacao APROVADA, voltando para RASCUNHO.
+
+        Bloqueia se houver pedidos EMBARCADO ou FATURADO vinculados.
+        """
+        from app.carvia.models import CarviaCotacao, CarviaPedido
+        from app.utils.timezone import agora_utc_naive
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return False, 'Cotacao nao encontrada.'
+        if cotacao.status != 'APROVADO':
+            return False, f'Cotacao em status {cotacao.status}, esperado APROVADO.'
+
+        # Verificar se ha pedidos em estados irreversiveis
+        pedidos_bloqueantes = CarviaPedido.query.filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedido.status.in_(['EMBARCADO', 'FATURADO']),
+        ).count()
+        if pedidos_bloqueantes > 0:
+            return False, (
+                f'Cotacao possui {pedidos_bloqueantes} pedido(s) EMBARCADO/FATURADO. '
+                'Nao e possivel reabrir.'
+            )
+
+        cotacao.status = 'RASCUNHO'
+        cotacao.aprovado_por = None
+        cotacao.aprovado_em = None
+        cotacao.atualizado_em = agora_utc_naive()
+        db.session.flush()
+        return True, None
+
+    @staticmethod
     def cancelar(cotacao_id: int) -> Tuple[bool, Optional[str]]:
         """Cancela cotacao (de qualquer status exceto APROVADO).
 

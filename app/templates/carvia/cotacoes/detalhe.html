@@ -343,6 +343,13 @@
                     </button>
                     {% endif %}
 
+                    {% if cotacao.status == 'APROVADO' %}
+                    <hr>
+                    <button class="btn btn-outline-warning btn-sm w-100" onclick="reabrirCotacao()">
+                        <i class="fas fa-undo"></i> Reabrir Cotacao
+                    </button>
+                    {% endif %}
+
                     {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
                     <hr>
                     <button class="btn btn-outline-danger btn-sm w-100" onclick="cancelarCotacao()">Cancelar Cotacao</button>
@@ -632,6 +639,7 @@ function aprovarCliente() { if (!confirm('Cliente aprovou?')) return; apiCall(`/
 function recusarCliente() { if (!confirm('Cliente recusou?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/recusar-cliente`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function contraProposta() { const v = prompt('Valor da contra-proposta (R$):'); if (!v) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/contra-proposta`, 'POST', {novo_valor: parseFloat(v)}).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function cancelarCotacao() { if (!confirm('Cancelar cotacao?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/cancelar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
+function reabrirCotacao() { if (!confirm('Reabrir cotacao? O status voltara para RASCUNHO.')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/reabrir`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function adminAprovar() { if (!confirm('Aprovar desconto?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-aprovar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function adminRejeitar() { if (!confirm('Rejeitar desconto?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-rejeitar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 
