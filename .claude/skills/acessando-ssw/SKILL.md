@@ -93,10 +93,10 @@ Se ambiguo → perguntar: "Voce quer no SSW (CarVia) ou no sistema interno (Naco
 Busca na documentacao SSW com 3 modos: regex, semantica (embeddings Voyage AI) e hibrida.
 
 ```bash
-python scripts/consultar_documentacao_ssw.py --busca "MDF-e"
-python scripts/consultar_documentacao_ssw.py --busca "como transferir entre filiais" --modo semantica
-python scripts/consultar_documentacao_ssw.py --busca "faturamento manual" --modo hibrida --limite 5
-python scripts/consultar_documentacao_ssw.py --busca "conta corrente fornecedor" --diretorio pops --modo regex
+python .claude/skills/acessando-ssw/scripts/consultar_documentacao_ssw.py --busca "MDF-e"
+python .claude/skills/acessando-ssw/scripts/consultar_documentacao_ssw.py --busca "como transferir entre filiais" --modo semantica
+python .claude/skills/acessando-ssw/scripts/consultar_documentacao_ssw.py --busca "faturamento manual" --modo hibrida --limite 5
+python .claude/skills/acessando-ssw/scripts/consultar_documentacao_ssw.py --busca "conta corrente fornecedor" --diretorio pops --modo regex
 ```
 
 **Parametros:**
@@ -114,9 +114,9 @@ python scripts/consultar_documentacao_ssw.py --busca "conta corrente fornecedor"
 Resolve numero ou nome de opcao SSW para arquivo .md e URL de ajuda.
 
 ```bash
-python scripts/resolver_opcao_ssw.py --numero 436
-python scripts/resolver_opcao_ssw.py --nome "faturamento"
-python scripts/resolver_opcao_ssw.py --numero 062
+python .claude/skills/acessando-ssw/scripts/resolver_opcao_ssw.py --numero 436
+python .claude/skills/acessando-ssw/scripts/resolver_opcao_ssw.py --nome "faturamento"
+python .claude/skills/acessando-ssw/scripts/resolver_opcao_ssw.py --numero 062
 ```
 
 **Parametros:**

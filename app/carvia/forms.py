@@ -136,6 +136,56 @@ class FiltroFaturasTransportadoraForm(FlaskForm):
     data_vencimento_ate = DateField('Vencimento - Até', validators=[Optional()])
 
 
+class CarviaEditarCteForm(FlaskForm):
+    """Formulario para preenchimento de CTe na fatura subcontratado.
+
+    Espelho do FreteForm (app/fretes/forms.py) adaptado para CarVia.
+    numero_cte → CarviaSubcontrato.cte_numero
+    valores → CarviaFrete.valor_cte / valor_considerado / valor_pago
+    """
+    numero_cte = StringField(
+        'Numero CTe',
+        validators=[DataRequired(), Length(max=20)],
+    )
+    valor_cte = StringField(
+        'Valor CTe',
+        validators=[DataRequired()],
+        description='Use virgula como separador decimal (ex: 1.234,56)',
+    )
+    valor_considerado = StringField(
+        'Valor Considerado',
+        validators=[DataRequired()],
+        description='Use virgula como separador decimal (ex: 1.234,56)',
+    )
+    valor_pago = StringField(
+        'Valor Pago',
+        validators=[Optional()],
+        description='Use virgula como separador decimal (ex: 1.234,56)',
+    )
+    observacoes = TextAreaField('Observacoes')
+
+    def validate_valor_cte(self, field):
+        if field.data:
+            from app.utils.valores_brasileiros import validar_valor_brasileiro
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
+
+    def validate_valor_considerado(self, field):
+        if field.data:
+            from app.utils.valores_brasileiros import validar_valor_brasileiro
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
+
+    def validate_valor_pago(self, field):
+        if field.data:
+            from app.utils.valores_brasileiros import validar_valor_brasileiro
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
+
+
 class CubagemForm(FlaskForm):
     """Formulario para informar cubagem da operacao"""
     peso_cubado = DecimalField(

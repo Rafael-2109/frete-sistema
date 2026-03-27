@@ -144,81 +144,102 @@ def register_frete_routes(bp):
     @bp.route('/fretes/<int:id>/editar', methods=['GET', 'POST'])  # type: ignore
     @login_required
     def editar_frete_carvia(id):  # type: ignore
-        """Editar valores do CarviaFrete.
+        """Tela de preenchimento de CTe — espelho de fretes/editar_frete.
 
-        Campos CUSTO (valor_cte, valor_considerado, valor_pago) so sao
-        editaveis se frete tem fatura_transportadora vinculada.
-        Campos VENDA (valor_venda) e observacoes sao sempre editaveis.
+        Apos escolher o frete em lancar_cte_carvia, usuario preenche:
+        numero_cte, valor_cte, valor_considerado, valor_pago.
+        numero_cte → CarviaSubcontrato.cte_numero
+        valores → CarviaFrete + sync CarviaSubcontrato
         """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
         frete = CarviaFrete.query.get_or_404(id)
-        custo_editavel = bool(frete.fatura_transportadora_id)
 
-        if request.method == 'POST':
+        # Guard: sem fatura transportadora nao pode lancar CTe
+        if not frete.fatura_transportadora_id:
+            flash(
+                'Este frete nao possui fatura transportadora vinculada. '
+                'Para lancar CTe, vincule primeiro via Lancar CTe.',
+                'danger',
+            )
+            return redirect(url_for('carvia.detalhe_frete_carvia', id=frete.id))
+
+        from app.carvia.forms import CarviaEditarCteForm
+
+        sub = CarviaSubcontrato.query.get(frete.subcontrato_id) if frete.subcontrato_id else None
+        fatura = frete.fatura_transportadora_rel
+
+        form = CarviaEditarCteForm()
+
+        if form.validate_on_submit():
             try:
-                # Campos CUSTO — so processar se tem fatura transportadora
-                if custo_editavel:
-                    valor_cte = request.form.get('valor_cte', '').strip().replace('.', '').replace(',', '.')
-                    valor_considerado = request.form.get('valor_considerado', '').strip().replace('.', '').replace(',', '.')
-                    valor_pago = request.form.get('valor_pago', '').strip().replace('.', '').replace(',', '.')
+                from app.utils.valores_brasileiros import converter_valor_brasileiro
 
-                    if valor_cte:
-                        frete.valor_cte = float(valor_cte)
-                    if valor_considerado:
-                        frete.valor_considerado = float(valor_considerado)
-                    if valor_pago:
-                        frete.valor_pago = float(valor_pago)
+                # Gravar numero_cte no subcontrato
+                if sub:
+                    sub.cte_numero = form.numero_cte.data.strip()
 
-                    # Sincronizar CarviaFrete → CarviaSubcontrato
-                    if frete.subcontrato_id:
-                        sub = CarviaSubcontrato.query.get(frete.subcontrato_id)
-                        if sub:
-                            if valor_cte and frete.valor_cte:
-                                sub.cte_valor = frete.valor_cte
-                                sub.valor_acertado = frete.valor_cte
-                            if valor_considerado and frete.valor_considerado:
-                                sub.valor_considerado = frete.valor_considerado
+                # Gravar valores no frete
+                frete.valor_cte = converter_valor_brasileiro(form.valor_cte.data)
+                frete.valor_considerado = converter_valor_brasileiro(form.valor_considerado.data)
+                frete.valor_pago = (
+                    converter_valor_brasileiro(form.valor_pago.data)
+                    if form.valor_pago.data else None
+                )
+                frete.observacoes = form.observacoes.data
 
-                # Campos VENDA — sempre processar
-                valor_venda = request.form.get('valor_venda', '').strip().replace('.', '').replace(',', '.')
-                observacoes = request.form.get('observacoes', '').strip()
-
-                if valor_venda:
-                    frete.valor_venda = float(valor_venda)
-                if observacoes:
-                    frete.observacoes = observacoes
+                # Sincronizar CarviaFrete → CarviaSubcontrato
+                if sub:
+                    if frete.valor_cte:
+                        sub.cte_valor = frete.valor_cte
+                        sub.valor_acertado = frete.valor_cte
+                    if frete.valor_considerado:
+                        sub.valor_considerado = frete.valor_considerado
 
                 db.session.commit()
                 flash('Frete atualizado com sucesso!', 'success')
-                return redirect(url_for('carvia.detalhe_frete_carvia', id=frete.id))
+
+                # Detectar acao do botao
+                acao = request.form.get('acao')
+                if acao == 'salvar_e_lancar_cte':
+                    return redirect(url_for(
+                        'carvia.lancar_cte_carvia',
+                        fatura_id=frete.fatura_transportadora_id,
+                    ))
+                elif acao == 'salvar_e_visualizar_fatura':
+                    return redirect(url_for(
+                        'carvia.detalhe_fatura_transportadora',
+                        fatura_id=frete.fatura_transportadora_id,
+                    ))
+                else:
+                    return redirect(url_for('carvia.detalhe_frete_carvia', id=frete.id))
 
             except Exception as e:
                 db.session.rollback()
+                logger.exception(f'Erro ao atualizar frete CarVia #{id}: {e}')
                 flash(f'Erro ao atualizar frete: {e}', 'danger')
 
-        # Sugestoes de CTe Subcontrato (busca por NFs do frete)
-        sugestoes_sub = []
-        if frete.numeros_nfs:
-            nfs_lista = [nf.strip() for nf in frete.numeros_nfs.split(',') if nf.strip()]
-            for nf_num in nfs_lista:
-                carvia_nf = CarviaNf.query.filter_by(numero_nf=nf_num, status='ATIVA').first()
-                if carvia_nf:
-                    from app.carvia.models import CarviaOperacaoNf
-                    junctions = CarviaOperacaoNf.query.filter_by(nf_id=carvia_nf.id).all()
-                    for j in junctions:
-                        subs = CarviaSubcontrato.query.filter_by(
-                            operacao_id=j.operacao_id,
-                        ).filter(CarviaSubcontrato.id != frete.subcontrato_id).all()
-                        sugestoes_sub.extend(subs)
+        elif request.method == 'GET':
+            # Pre-popular form com dados existentes
+            if sub and sub.cte_numero:
+                form.numero_cte.data = sub.cte_numero
+            if frete.valor_cte:
+                form.valor_cte.data = f'{frete.valor_cte:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+            if frete.valor_considerado:
+                form.valor_considerado.data = f'{frete.valor_considerado:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+            if frete.valor_pago:
+                form.valor_pago.data = f'{frete.valor_pago:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+            if frete.observacoes:
+                form.observacoes.data = frete.observacoes
 
         return render_template(
             'carvia/fretes/editar.html',
             frete=frete,
-            custo_editavel=custo_editavel,
-            sugestoes_sub=list({s.id: s for s in sugestoes_sub}.values()),
+            form=form,
+            sub=sub,
+            fatura=fatura,
         )
 
     # ------------------------------------------------------------------
@@ -362,13 +383,14 @@ def register_frete_routes(bp):
                     return redirect(url_for('carvia.lancar_cte_carvia', fatura_id=fatura_id))
             else:
                 # CRIAR novo CarviaSubcontrato
+                # cte_numero=None — usuario preenche na tela seguinte (editar_frete_carvia)
                 sub = CarviaSubcontrato(
                     operacao_id=frete.operacao_id,  # pode ser NULL
                     transportadora_id=frete.transportadora_id,
-                    cte_numero=CarviaSubcontrato.gerar_numero_sub(),
+                    cte_numero=None,
                     valor_cotado=Decimal(str(frete.valor_cotado)) if frete.valor_cotado else None,
                     fatura_transportadora_id=fatura.id,
-                    status='FATURADO',
+                    status='PENDENTE',
                     criado_por=current_user.email,
                     criado_em=agora_utc_naive(),
                     observacoes=f'Criado via Lancar CTe — frete #{frete.id}',
@@ -402,7 +424,7 @@ def register_frete_routes(bp):
             db.session.commit()
 
             flash(
-                f'CTe {sub.cte_numero} vinculado a fatura {fatura.numero_fatura}. '
+                f'Frete #{frete.id} vinculado a fatura {fatura.numero_fatura}. '
                 f'Preencha os dados do CTe.',
                 'success',
             )
