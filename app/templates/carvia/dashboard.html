@@ -19,371 +19,310 @@
     {% set carvia_active = 'dashboard' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    {# ══════════════════════════════════════════════════════════════
-       SECAO A: ALERTAS — condicional, so aparece se ha itens pendentes
-       ══════════════════════════════════════════════════════════════ #}
+    {# ── Alertas ── #}
     {% if stats.vencidos_total > 0 or stats.vencimento_hoje_total > 0 or stats.cotacoes_pendentes_admin > 0 %}
-    <div class="card mb-4">
-        <div class="card-header card-header-theme py-3">
-            <h6 class="m-0 fw-bold">
-                <i class="fas fa-exclamation-triangle text-accent"></i> Atencao Requerida
-            </h6>
-        </div>
-        <div class="card-body">
-            <div class="row g-3">
-                {% if stats.vencidos_total > 0 %}
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.fluxo_caixa') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-danger">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.vencidos_total }}</h5>
-                                        <span class="small text-muted">Vencidos</span>
-                                    </div>
-                                    <i class="fas fa-calendar-times fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                {% endif %}
-                {% if stats.vencimento_hoje_total > 0 %}
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.fluxo_caixa') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-warning">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.vencimento_hoje_total }}</h5>
-                                        <span class="small text-muted">Vencem Hoje</span>
-                                    </div>
-                                    <i class="fas fa-clock fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                {% endif %}
-                {% if stats.cotacoes_pendentes_admin > 0 %}
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-warning">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.cotacoes_pendentes_admin }}</h5>
-                                        <span class="small text-muted">Cotacoes Pend. Admin</span>
-                                    </div>
-                                    <i class="fas fa-user-clock fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        {% if stats.vencidos_total > 0 %}
+        <a href="{{ url_for('carvia.fluxo_caixa') }}" class="badge bg-danger text-decoration-none fs-6 py-2 px-3">
+            <i class="fas fa-exclamation-triangle"></i> {{ stats.vencidos_total }} vencido{{ 's' if stats.vencidos_total != 1 }}
+        </a>
+        {% endif %}
+        {% if stats.vencimento_hoje_total > 0 %}
+        <a href="{{ url_for('carvia.fluxo_caixa') }}" class="badge bg-warning text-dark text-decoration-none fs-6 py-2 px-3">
+            <i class="fas fa-clock"></i> {{ stats.vencimento_hoje_total }} vence{{ 'm' if stats.vencimento_hoje_total != 1 }} hoje
+        </a>
+        {% endif %}
+        {% if stats.cotacoes_pendentes_admin > 0 %}
+        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="badge bg-warning text-dark text-decoration-none fs-6 py-2 px-3">
+            <i class="fas fa-user-clock"></i> {{ stats.cotacoes_pendentes_admin }} cotacao{{ 'oes' if stats.cotacoes_pendentes_admin != 1 else '' }} pend. admin
+        </a>
+        {% endif %}
     </div>
     {% endif %}
 
-    {# ══════════════════════════════════════════════════════════════
-       SECAO B: OPERACIONAL
-       ══════════════════════════════════════════════════════════════ #}
-    <div class="card mb-4">
-        <div class="card-header card-header-theme py-3">
-            <h6 class="m-0 fw-bold">
-                <i class="fas fa-cogs text-accent"></i> Operacional
-            </h6>
-        </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_nfs') }}" class="text-decoration-none">
-                        <div class="card stat-card">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.total_nfs }}</h5>
-                                        <span class="small text-muted">NFs Venda</span>
-                                    </div>
-                                    <i class="fas fa-file-alt fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
+    <div class="row g-3">
+
+        {# ══════════════════════════════════════════
+           EMISSAO CARVIA (CTe proprio)
+           ══════════════════════════════════════════ #}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-file-invoice text-accent"></i> Emissao CarVia
+                    </h6>
                 </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_operacoes') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-primary">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.total_operacoes }}</h5>
-                                        <span class="small text-muted">CTes CarVia</span>
-                                    </div>
-                                    <i class="fas fa-file-invoice fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_operacoes', status='RASCUNHO') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-warning">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+                <div class="card-body py-2">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_operacoes', status='RASCUNHO') }}" class="text-decoration-none">
+                                <div class="card stat-card stat-card-warning">
+                                    <div class="card-body py-2 px-2">
                                         <h5 class="mb-0 fw-bold">{{ stats.operacoes_rascunho }}</h5>
                                         <span class="small text-muted">Rascunho</span>
                                     </div>
-                                    <i class="fas fa-pencil-alt fa-lg text-muted"></i>
                                 </div>
-                            </div>
+                            </a>
                         </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_operacoes', status='COTADO') }}" class="text-decoration-none">
-                        <div class="card stat-card">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_operacoes', status='COTADO') }}" class="text-decoration-none">
+                                <div class="card stat-card">
+                                    <div class="card-body py-2 px-2">
                                         <h5 class="mb-0 fw-bold">{{ stats.operacoes_cotadas }}</h5>
                                         <span class="small text-muted">Cotadas</span>
                                     </div>
-                                    <i class="fas fa-tag fa-lg text-muted"></i>
                                 </div>
-                            </div>
+                            </a>
                         </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_operacoes', status='CONFIRMADO') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-success">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_operacoes', status='CONFIRMADO') }}" class="text-decoration-none">
+                                <div class="card stat-card stat-card-success">
+                                    <div class="card-body py-2 px-2">
                                         <h5 class="mb-0 fw-bold">{{ stats.operacoes_confirmadas }}</h5>
                                         <span class="small text-muted">Confirmadas</span>
                                     </div>
-                                    <i class="fas fa-check-circle fa-lg text-muted"></i>
                                 </div>
-                            </div>
+                            </a>
                         </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_subcontratos') }}" class="text-decoration-none">
-                        <div class="card stat-card">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.total_subcontratos }}</h5>
-                                        <span class="small text-muted">Subcontratos</span>
-                                    </div>
-                                    <i class="fas fa-handshake fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_subcontratos', status='PENDENTE') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-warning">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.subcontratos_pendentes }}</h5>
-                                        <span class="small text-muted">Sub. Pendentes</span>
-                                    </div>
-                                    <i class="fas fa-hourglass-half fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_subcontratos', status='COTADO') }}" class="text-decoration-none">
-                        <div class="card stat-card">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.subcontratos_cotados }}</h5>
-                                        <span class="small text-muted">Sub. Cotados</span>
-                                    </div>
-                                    <i class="fas fa-tag fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
+                    </div>
+                    <div class="d-flex gap-2 mt-2">
+                        <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-list"></i> CTes CarVia
+                        </a>
+                        <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-file-invoice-dollar"></i> Faturas Cliente
+                            {% if stats.faturas_carvia_pendentes > 0 %}
+                            <span class="badge bg-warning text-dark ms-1">{{ stats.faturas_carvia_pendentes }}</span>
+                            {% endif %}
+                        </a>
+                        <a href="{{ url_for('carvia.lancar_cte_carvia') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-plus"></i> Lancar CTe
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    {# ══════════════════════════════════════════════════════════════
-       SECAO C: FINANCEIRO
-       ══════════════════════════════════════════════════════════════ #}
-    <div class="card mb-4">
-        <div class="card-header card-header-theme py-3">
-            <h6 class="m-0 fw-bold">
-                <i class="fas fa-dollar-sign text-accent"></i> Financeiro
-            </h6>
-        </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-primary">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.faturas_carvia_pendentes }}</h5>
-                                        <span class="small text-muted">Fat. CarVia Pend.</span>
-                                    </div>
-                                    <i class="fas fa-file-invoice-dollar fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
+        {# ══════════════════════════════════════════
+           SUBCONTRATOS (CTe terceiros + despesas)
+           ══════════════════════════════════════════ #}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-handshake text-accent"></i> Subcontratos
+                    </h6>
                 </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-danger">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.faturas_sub_pendentes }}</h5>
-                                        <span class="small text-muted">Fat. Sub. Pend.</span>
+                <div class="card-body py-2">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_subcontratos', status='PENDENTE') }}" class="text-decoration-none">
+                                <div class="card stat-card stat-card-warning">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.subcontratos_pendentes }}</h5>
+                                        <span class="small text-muted">Pendentes</span>
                                     </div>
-                                    <i class="fas fa-file-invoice fa-lg text-muted"></i>
                                 </div>
-                            </div>
+                            </a>
                         </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_despesas') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-warning">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_subcontratos', status='COTADO') }}" class="text-decoration-none">
+                                <div class="card stat-card">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.subcontratos_cotados }}</h5>
+                                        <span class="small text-muted">Cotados</span>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_despesas') }}" class="text-decoration-none">
+                                <div class="card stat-card {% if stats.despesas_pendentes > 0 %}stat-card-danger{% endif %}">
+                                    <div class="card-body py-2 px-2">
                                         <h5 class="mb-0 fw-bold">{{ stats.despesas_pendentes }}</h5>
-                                        <span class="small text-muted">Desp. Pendentes</span>
+                                        <span class="small text-muted">Despesas</span>
                                     </div>
-                                    <i class="fas fa-coins fa-lg text-muted"></i>
                                 </div>
-                                {% if stats.despesas_valor_pendente %}
-                                <div class="small text-muted mt-1">{{ stats.despesas_valor_pendente|valor_br }}</div>
-                                {% endif %}
-                            </div>
+                            </a>
                         </div>
-                    </a>
+                    </div>
+                    <div class="d-flex gap-2 mt-2">
+                        <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-list"></i> Subcontratos
+                        </a>
+                        <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-file-invoice"></i> Faturas Transp.
+                            {% if stats.faturas_sub_pendentes > 0 %}
+                            <span class="badge bg-danger ms-1">{{ stats.faturas_sub_pendentes }}</span>
+                            {% endif %}
+                        </a>
+                        <a href="{{ url_for('carvia.listar_despesas') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-coins"></i> Despesas
+                            {% if stats.despesas_valor_pendente %}
+                            <span class="badge bg-warning text-dark ms-1">{{ stats.despesas_valor_pendente|valor_br }}</span>
+                            {% endif %}
+                        </a>
+                    </div>
                 </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_receitas') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-success">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
+            </div>
+        </div>
+
+        {# ══════════════════════════════════════════
+           FINANCEIRO
+           ══════════════════════════════════════════ #}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-dollar-sign text-accent"></i> Financeiro
+                    </h6>
+                </div>
+                <div class="card-body py-2">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.extrato_conta') }}" class="text-decoration-none">
+                                <div class="card stat-card {% if stats.saldo_conta >= 0 %}stat-card-success{% else %}stat-card-danger{% endif %}">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.saldo_conta|valor_br }}</h5>
+                                        <span class="small text-muted">Saldo</span>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_receitas') }}" class="text-decoration-none">
+                                <div class="card stat-card stat-card-success">
+                                    <div class="card-body py-2 px-2">
                                         <h5 class="mb-0 fw-bold">{{ stats.receitas_pendentes }}</h5>
                                         <span class="small text-muted">Rec. Pendentes</span>
                                     </div>
-                                    <i class="fas fa-hand-holding-usd fa-lg text-muted"></i>
                                 </div>
-                                {% if stats.receitas_valor_pendente %}
-                                <div class="small text-muted mt-1">{{ stats.receitas_valor_pendente|valor_br }}</div>
-                                {% endif %}
-                            </div>
+                            </a>
                         </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.extrato_conta') }}" class="text-decoration-none">
-                        <div class="card stat-card {% if stats.saldo_conta >= 0 %}stat-card-success{% else %}stat-card-danger{% endif %}">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.saldo_conta|valor_br }}</h5>
-                                        <span class="small text-muted">Saldo Conta</span>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.fluxo_caixa') }}" class="text-decoration-none">
+                                <div class="card stat-card">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.receitas_valor_pendente|valor_br }}</h5>
+                                        <span class="small text-muted">A Receber</span>
                                     </div>
-                                    <i class="fas fa-wallet fa-lg text-muted"></i>
                                 </div>
-                            </div>
+                            </a>
                         </div>
-                    </a>
+                    </div>
+                    <div class="d-flex gap-2 mt-2">
+                        <a href="{{ url_for('carvia.fluxo_caixa') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-chart-line"></i> Fluxo de Caixa
+                        </a>
+                        <a href="{{ url_for('carvia.extrato_conta') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-list-alt"></i> Extrato
+                        </a>
+                        <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-exchange-alt"></i> Conciliacao
+                        </a>
+                        <a href="{{ url_for('carvia.extrato_bancario') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-university"></i> Extrato Bancario
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    {# ══════════════════════════════════════════════════════════════
-       SECAO D: COMERCIAL
-       ══════════════════════════════════════════════════════════════ #}
-    <div class="card mb-4">
-        <div class="card-header card-header-theme py-3">
-            <h6 class="m-0 fw-bold">
-                <i class="fas fa-briefcase text-accent"></i> Comercial
+        {# ══════════════════════════════════════════
+           COMERCIAL (cotacoes + pedidos + NFs)
+           ══════════════════════════════════════════ #}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-briefcase text-accent"></i> Comercial
+                    </h6>
+                </div>
+                <div class="card-body py-2">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="text-decoration-none">
+                                <div class="card stat-card stat-card-primary">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.cotacoes_ativas }}</h5>
+                                        <span class="small text-muted">Cotacoes</span>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_pedidos_carvia') }}" class="text-decoration-none">
+                                <div class="card stat-card">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.pedidos_abertos }}</h5>
+                                        <span class="small text-muted">Pedidos</span>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('carvia.listar_nfs') }}" class="text-decoration-none">
+                                <div class="card stat-card">
+                                    <div class="card-body py-2 px-2">
+                                        <h5 class="mb-0 fw-bold">{{ stats.total_nfs }}</h5>
+                                        <span class="small text-muted">NFs Venda</span>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-2">
+                        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-calculator"></i> Cotacoes
+                        </a>
+                        <a href="{{ url_for('carvia.listar_pedidos_carvia') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-shopping-cart"></i> Pedidos
+                        </a>
+                        <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-file-alt"></i> NFs Venda
+                        </a>
+                        <a href="{{ url_for('carvia.listar_fretes_carvia') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-truck"></i> Fretes
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>{# /row #}
+
+    {# ── Cadastros ── #}
+    <div class="card mt-3 mb-3">
+        <div class="card-header card-header-theme py-2">
+            <h6 class="m-0 fw-bold small">
+                <i class="fas fa-cog text-accent"></i> Cadastros
             </h6>
         </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-primary">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.cotacoes_ativas }}</h5>
-                                        <span class="small text-muted">Cotacoes Ativas</span>
-                                    </div>
-                                    <i class="fas fa-calculator fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="text-decoration-none">
-                        <div class="card stat-card stat-card-warning">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.cotacoes_pendentes_admin }}</h5>
-                                        <span class="small text-muted">Pend. Admin</span>
-                                    </div>
-                                    <i class="fas fa-user-clock fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_pedidos_carvia') }}" class="text-decoration-none">
-                        <div class="card stat-card">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-0 fw-bold">{{ stats.pedidos_abertos }}</h5>
-                                        <span class="small text-muted">Pedidos Abertos</span>
-                                    </div>
-                                    <i class="fas fa-shopping-cart fa-lg text-muted"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
+        <div class="card-body py-2">
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('carvia.listar_modelos_moto') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-motorcycle"></i> Modelos Moto
+                </a>
+                <a href="{{ url_for('carvia.listar_empresas_cubagem') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-cube"></i> Empresas Cubagem
+                </a>
+                <a href="{{ url_for('carvia.listar_grupos_cliente') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-users"></i> Grupos de Cliente
+                </a>
+                <a href="{{ url_for('carvia.listar_tabelas_carvia') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-table"></i> Tabelas Frete
+                </a>
+                <a href="{{ url_for('carvia.listar_cidades_carvia') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-map-marked-alt"></i> Cidades Atendidas
+                </a>
             </div>
         </div>
     </div>
 
-    {# ══════════════════════════════════════════════════════════════
-       SECAO E: ULTIMAS OPERACOES
-       ══════════════════════════════════════════════════════════════ #}
-    <div class="card mb-4">
-        <div class="card-header card-header-theme py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 fw-bold">
+    {# ── Ultimas Operacoes ── #}
+    <div class="card">
+        <div class="card-header card-header-theme py-2 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 fw-bold small">
                 <i class="fas fa-history text-accent"></i> Ultimas Operacoes
             </h6>
             <a href="{{ url_for('carvia.listar_operacoes') }}" class="small text-decoration-none">
@@ -450,70 +389,6 @@
                 Nenhuma operacao registrada
             </div>
             {% endif %}
-        </div>
-    </div>
-
-    {# ══════════════════════════════════════════════════════════════
-       SECAO F: FERRAMENTAS E CONFIGURACOES (unificado)
-       ══════════════════════════════════════════════════════════════ #}
-    <div class="card">
-        <div class="card-header card-header-theme py-3">
-            <h6 class="m-0 fw-bold">
-                <i class="fas fa-th-large text-accent"></i> Ferramentas e Configuracoes
-            </h6>
-        </div>
-        <div class="card-body">
-            <h6 class="text-muted small text-uppercase mb-2">Financeiro</h6>
-            <div class="row g-2 mb-3">
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.fluxo_caixa') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-chart-line"></i> Fluxo de Caixa
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.extrato_conta') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-list-alt"></i> Extrato da Conta
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-exchange-alt"></i> Conciliacao
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.extrato_bancario') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-file-invoice-dollar"></i> Extrato Bancario
-                    </a>
-                </div>
-            </div>
-            <h6 class="text-muted small text-uppercase mb-2">Configuracoes</h6>
-            <div class="row g-2">
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_modelos_moto') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-motorcycle"></i> Modelos Moto
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_empresas_cubagem') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-cube"></i> Empresas Cubagem
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_grupos_cliente') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-users"></i> Grupos de Cliente
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_tabelas_carvia') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-table"></i> Tabelas Frete CarVia
-                    </a>
-                </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <a href="{{ url_for('carvia.listar_cidades_carvia') }}" class="btn btn-outline-secondary btn-sm w-100 text-start">
-                        <i class="fas fa-map-marked-alt"></i> Cidades Atendidas
-                    </a>
-                </div>
-            </div>
         </div>
     </div>
 </div>

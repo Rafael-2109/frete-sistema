@@ -115,6 +115,16 @@ def get_insights_data(
             adoption_rate=current['adoption_rate'],
         )
 
+        # ── Saude de Memorias ──
+        try:
+            current['memory_health'] = _calc_memory_health()
+        except Exception as e:
+            logger.warning(f"[INSIGHTS] Erro ao calcular saude de memorias: {e}")
+            current['memory_health'] = {
+                'total': 0, 'by_scope': {}, 'cold_tier': 0,
+                'ineffective': 0, 'with_enrichments': 0,
+            }
+
         # ── Recomendacoes ──
         try:
             from .recommendations_engine import generate_recommendations
@@ -435,6 +445,79 @@ def _empty_insights(days: int) -> Dict[str, Any]:
         },
         'recommendations': [],
         'deltas': _null_deltas(),
+        'memory_health': {
+            'total': 0, 'by_scope': {}, 'cold_tier': 0,
+            'ineffective': 0, 'with_enrichments': 0,
+        },
+    }
+
+
+def _calc_memory_health() -> Dict[str, Any]:
+    """Calcula metricas de saude do sistema de memorias.
+
+    Metricas:
+    - total: total de memorias ativas (nao-cold)
+    - by_scope: contagem por escopo (pessoal vs empresa)
+    - cold_tier: memorias no tier frio
+    - ineffective: memorias com usage_count >= 20 e effective_count = 0
+    - with_enrichments: memorias com marcadores de enrichment acumulado
+
+    Returns:
+        Dict com metricas de saude de memorias.
+    """
+    from ..models import AgentMemory
+    from app import db
+    from sqlalchemy import text
+
+    # Total ativas (nao-cold)
+    total_active = AgentMemory.query.filter(
+        AgentMemory.is_cold.is_(False),
+        AgentMemory.is_directory.is_(False),
+    ).count()
+
+    # Por escopo
+    empresa_count = AgentMemory.query.filter(
+        AgentMemory.user_id == 0,
+        AgentMemory.is_cold.is_(False),
+        AgentMemory.is_directory.is_(False),
+    ).count()
+
+    pessoal_count = AgentMemory.query.filter(
+        AgentMemory.user_id != 0,
+        AgentMemory.is_cold.is_(False),
+        AgentMemory.is_directory.is_(False),
+    ).count()
+
+    # Cold tier
+    cold_count = AgentMemory.query.filter(
+        AgentMemory.is_cold.is_(True),
+        AgentMemory.is_directory.is_(False),
+    ).count()
+
+    # Ineffective: injetadas 20+ vezes sem efeito
+    ineffective_count = AgentMemory.query.filter(
+        AgentMemory.usage_count >= 20,
+        AgentMemory.effective_count == 0,
+        AgentMemory.is_cold.is_(False),
+        AgentMemory.is_directory.is_(False),
+    ).count()
+
+    # Com enrichments acumulados (marcador <!-- Enriquecido em)
+    enrichment_count = db.session.execute(text(
+        "SELECT COUNT(*) FROM agent_memories "
+        "WHERE content LIKE '%<!-- Enriquecido em%' "
+        "AND is_cold = false AND is_directory = false"
+    )).scalar() or 0
+
+    return {
+        'total': total_active,
+        'by_scope': {
+            'empresa': empresa_count,
+            'pessoal': pessoal_count,
+        },
+        'cold_tier': cold_count,
+        'ineffective': ineffective_count,
+        'with_enrichments': enrichment_count,
     }
 
 

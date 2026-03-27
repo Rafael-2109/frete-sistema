@@ -167,6 +167,13 @@ MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION
 # Minimo de arquivos em um diretorio para ser candidato a consolidacao
 MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
 
+# Merge inteligente de memorias empresa via Sonnet (substitui append cego)
+# Quando true: _try_enrich_existing() usa Sonnet para fundir old+new em versao unica
+# Quando false: fallback para append legado (old + "<!-- Enriquecido em -->" + new)
+# Custo: ~$0.002 por merge. Frequencia: ~1-3x/semana (so quando enrichment dispara)
+# Rollback instantaneo: AGENT_MERGE_ENRICHMENT=false
+USE_MERGE_ENRICHMENT = os.getenv("AGENT_MERGE_ENRICHMENT", "true").lower() == "true"
+
 # Briefing Inter-Sessão — injeta eventos entre sessões (erros Odoo, imports, alertas de memória)
 # Queries SQL leves, zero custo LLM. Injetado como Tier 0b no início da sessão.
 # Default true (env AGENT_INTERSESSION_BRIEFING)

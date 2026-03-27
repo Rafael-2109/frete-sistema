@@ -506,40 +506,8 @@ def _save_patterns_to_memory(
             f'{ctx}</default>'
         )
 
-    # Formatar user_profile (novo campo M2)
-    profile_xml = ""
-    profile = patterns.get('user_profile', {})
-    if profile and isinstance(profile, dict):
-        resumo = _xml_escape(profile.get('resumo', ''))
-        contextualizacao = _xml_escape(profile.get('contextualizacao_para_agente', ''))
-
-        atividades_xml = ""
-        for a in profile.get('atividades_frequentes', []):
-            ativ = _xml_escape(a.get('atividade', ''))
-            freq = _xml_escape(a.get('frequencia', ''))
-            atividades_xml += f'\n      <atividade frequencia="{freq}">{ativ}</atividade>'
-
-        clientes_xml = ""
-        for c in profile.get('clientes_principais', []):
-            nome = _xml_escape(c.get('nome', ''))
-            ctx = _xml_escape(c.get('contexto', ''))
-            clientes_xml += f'\n      <cliente contexto="{ctx}">{nome}</cliente>'
-
-        insights_xml = ""
-        for ins in profile.get('insights', []):
-            insights_xml += f'\n      <insight>{_xml_escape(ins)}</insight>'
-
-        profile_xml = f"""
-  <user_profile>
-    <resumo>{resumo}</resumo>
-    <atividades_frequentes>{atividades_xml}
-    </atividades_frequentes>
-    <clientes_principais>{clientes_xml}
-    </clientes_principais>
-    <insights>{insights_xml}
-    </insights>
-    <contextualizacao>{contextualizacao}</contextualizacao>
-  </user_profile>"""
+    # user_profile REMOVIDO de patterns.xml — ja e salvo separadamente em user.xml (Tier 1)
+    # Evita duplicacao: user.xml e SEMPRE injetado, patterns.xml so via Tier 2 semantico.
 
     content = f"""<operational_patterns updated_at="{timestamp}" confianca="{confianca}" sessoes="{sessions_analyzed}">
   <error_patterns>{errors_xml}
@@ -547,7 +515,7 @@ def _save_patterns_to_memory(
   <anti_patterns>{anti_xml}
   </anti_patterns>
   <entity_defaults>{defaults_xml}
-  </entity_defaults>{profile_xml}
+  </entity_defaults>
 </operational_patterns>"""
 
     try:
@@ -1460,6 +1428,70 @@ def _find_similar_empresa_memory(descricao: str, current_path: str):
         return None
 
 
+def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[str]:
+    """Funde duas memorias sobre o mesmo tema em uma versao unica via Sonnet.
+
+    Produz conteudo compacto que preserva toda informacao unica de ambas as versoes,
+    eliminando duplicatas e mantendo estrutura XML.
+
+    Args:
+        old_content: Conteudo existente da memoria
+        new_content: Novo conteudo a ser incorporado
+
+    Returns:
+        Conteudo fundido, ou None se merge falhou (caller mantem original).
+
+    Custo: ~$0.002 por merge (~2K input, ~500 output Sonnet).
+    """
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model=SONNET_MODEL,
+            max_tokens=1500,
+            system=[{
+                "type": "text",
+                "text": (
+                    "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
+                    "Produza UMA UNICA versao que:\n"
+                    "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
+                    "2. Elimine repeticoes e redundancias\n"
+                    "3. Mantenha estrutura XML valida\n"
+                    "4. Fique com no maximo 2000 caracteres\n"
+                    "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
+                    "Retorne APENAS o XML final, sem explicacoes."
+                ),
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"VERSAO EXISTENTE:\n{old_content[:2000]}\n\n"
+                    f"NOVO CONTEUDO:\n{new_content[:2000]}\n\n"
+                    "Produza a versao fundida:"
+                ),
+            }],
+        )
+
+        merged = response.content[0].text.strip()
+
+        # Sanity check: resultado nao pode ser vazio ou maior que 2500
+        if not merged or len(merged) < 20:
+            logger.debug("[KNOWLEDGE_EXTRACTION] Merge produziu resultado vazio/curto")
+            return None
+        if len(merged) > 2500:
+            merged = merged[:2500]
+
+        logger.info(
+            f"[KNOWLEDGE_EXTRACTION] Merge via Sonnet: "
+            f"{len(old_content)}+{len(new_content)} → {len(merged)} chars"
+        )
+        return merged
+
+    except Exception as e:
+        logger.debug(f"[KNOWLEDGE_EXTRACTION] Merge via Sonnet falhou: {e}")
+        return None
+
+
 def _try_enrich_existing(
     path: str,
     new_content: str,
@@ -1473,12 +1505,17 @@ def _try_enrich_existing(
     2. Embedding semantico (threshold 0.80) — encontra memorias sobre
        o mesmo tema mesmo com titulo/path diferente
 
+    Estrategia de enriquecimento (controlada por USE_MERGE_ENRICHMENT):
+    - True: merge inteligente via Sonnet (funde old+new em 1 versao compacta)
+    - False: append legado (old + separador + new)
+
     Returns:
         True se enriqueceu memoria existente, False se nao encontrou similar.
     """
     try:
         from ..models import AgentMemory
         from app import db
+        from ..config.feature_flags import USE_MERGE_ENRICHMENT
 
         # Camada 1: path exato
         existing = AgentMemory.get_by_path(0, path)
@@ -1494,27 +1531,39 @@ def _try_enrich_existing(
         if existing.content == new_content:
             return True
 
-        # Enriquecer: manter conteudo existente e adicionar novo contexto
-        # Nao substituir — agregar informacao
+        # Verificar overlap de palavras para decidir se vale enriquecer
         from .knowledge_graph_service import clean_for_comparison
         words_old = set(clean_for_comparison(existing.content).lower().split())
         words_new = set(clean_for_comparison(new_content).lower().split())
         min_size = min(len(words_old), len(words_new))
         overlap = len(words_old & words_new) / min_size if min_size > 0 else 0
 
-        if overlap > 0.80:
+        if overlap > 0.75:
             # Conteudo muito similar — nao vale enriquecer
             return True
 
-        # Enriquecer com novo contexto (append, nao replace)
-        enriched = (
-            f"{existing.content}\n"
-            f"<!-- Enriquecido em {agora_utc_naive().strftime('%Y-%m-%d')} -->\n"
-            f"{new_content}"
-        )
+        if USE_MERGE_ENRICHMENT:
+            # Merge inteligente via Sonnet — funde em versao unica
+            merged = _merge_memories_via_sonnet(existing.content, new_content)
+            if merged:
+                enriched = merged
+            else:
+                # Fallback: append legado se Sonnet falhar
+                enriched = (
+                    f"{existing.content}\n"
+                    f"<!-- Enriquecido em {agora_utc_naive().strftime('%Y-%m-%d')} -->\n"
+                    f"{new_content}"
+                )
+        else:
+            # Append legado (flag desativada)
+            enriched = (
+                f"{existing.content}\n"
+                f"<!-- Enriquecido em {agora_utc_naive().strftime('%Y-%m-%d')} -->\n"
+                f"{new_content}"
+            )
 
         # Limite de tamanho para nao crescer indefinidamente
-        if len(enriched) > 4000:
+        if len(enriched) > 2500:
             logger.debug(
                 f"[KNOWLEDGE_EXTRACTION] Memoria {path} ja muito longa, "
                 f"nao enriquecendo ({len(enriched)} chars)"
@@ -1526,7 +1575,8 @@ def _try_enrich_existing(
         existing.created_by = created_by
         db.session.commit()
 
-        logger.info(f"[KNOWLEDGE_EXTRACTION] Enriquecido: {existing.path}")
+        log_method = "Merged" if USE_MERGE_ENRICHMENT else "Enriquecido"
+        logger.info(f"[KNOWLEDGE_EXTRACTION] {log_method}: {existing.path}")
         return True
 
     except Exception as e:

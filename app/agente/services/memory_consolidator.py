@@ -139,6 +139,65 @@ def maybe_move_to_cold(user_id: int) -> int:
         return 0
 
 
+def maybe_cleanup_low_value() -> int:
+    """
+    Move memorias empresa de baixo valor para cold tier automaticamente.
+
+    Criterio: memorias em /empresa/termos/ com usage_count >= 30 e effective_count == 0.
+    Termos genericos de logistica sao frequentemente injetados mas NUNCA contribuem
+    para respostas do agente (violacao de R0c do system_prompt).
+
+    Chamado junto com maybe_consolidate, best-effort.
+    Escopo: apenas memorias empresa (user_id=0) em paths de termos.
+
+    Returns:
+        Numero de memorias movidas para cold.
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+
+        candidates = AgentMemory.query.filter(
+            AgentMemory.user_id == 0,
+            AgentMemory.path.like('%/empresa/termos/%'),
+            AgentMemory.is_directory.is_(False),
+            AgentMemory.is_cold.is_(False),
+            AgentMemory.usage_count >= 30,
+            AgentMemory.effective_count == 0,
+        ).all()
+
+        if not candidates:
+            return 0
+
+        moved = 0
+        for mem in candidates:
+            mem.is_cold = True
+            moved += 1
+            logger.info(
+                f"[MEMORY_CONSOLIDATOR] Termo low-value → cold: {mem.path} "
+                f"(usage={mem.usage_count}, effective=0)"
+            )
+
+        if moved > 0:
+            try:
+                db.session.commit()
+                logger.info(
+                    f"[MEMORY_CONSOLIDATOR] {moved} termos low-value movidos para cold"
+                )
+            except Exception as commit_err:
+                db.session.rollback()
+                logger.warning(
+                    f"[MEMORY_CONSOLIDATOR] Erro ao committar cleanup: {commit_err}"
+                )
+                return 0
+
+        return moved
+
+    except Exception as e:
+        logger.warning(f"[MEMORY_CONSOLIDATOR] Cleanup low-value falhou: {e}")
+        return 0
+
+
 def maybe_consolidate(user_id: int) -> Optional[Dict[str, Any]]:
     """
     Verifica se memórias do usuário excedem thresholds e consolida se necessário.

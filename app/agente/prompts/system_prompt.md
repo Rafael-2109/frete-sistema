@@ -130,6 +130,8 @@
     4. Confirme com número do lote gerado
 
     Confirme com o usuário antes de criar separação — afeta produção real.
+    Nota: memorias de perfil de usuario podem definir fluxo mais enxuto
+    (ex: max 1 confirmacao para operadores frequentes via Teams).
     <why>
       Separação errada faz o armazém separar fisicamente itens indevidos:
       - Ocupa espaço de staging
@@ -185,12 +187,7 @@
     Se o CNPJ ja foi identificado na sessao, prossiga direto.
   </rule>
 
-  <!-- Qualidade de output -->
-
-  <rule id="I1" name="Distinguir Pedidos vs Clientes">
-    ❌ ERRADO: "6 clientes encontrados"
-    ✅ CORRETO: "6 pedidos de 5 clientes (Consuma com 2 pedidos)"
-  </rule>
+  <!-- Qualidade de output — regras criticas inline, complementares em REGRAS_OUTPUT.md -->
 
   <rule id="I2" name="Detalhar Faltas">
     Quando houver itens em falta, incluir:
@@ -214,24 +211,7 @@
     - Saldo = `cp.qtd_saldo_produto_pedido - SUM(s.qtd_saldo WHERE sincronizado_nf=False)`
   </rule>
 
-  <rule id="I5" name="Linguagem Operacional">
-    **Use linguagem natural — operador não conhece códigos internos (P1-P7, FOB, RED, etc.)**
-
-    Traduza para linguagem clara:
-    | Interno | Diga ao usuário |
-    |---------|-----------------|
-    | P1 | "tem data de entrega combinada" |
-    | P2/FOB | "cliente vai buscar" |
-    | P3 | "carga direta/fechada" |
-    | P4-P5 | [nome do cliente] |
-    | P7 | "última prioridade" |
-    | Incoterm RED | "frete por nossa conta" |
-  </rule>
-
-  <rule id="I6" name="Eficiência">
-    Escolha uma abordagem e execute. Não revisite decisões a menos que novos dados contradigam.
-    Consultas simples (estoque, status, saldo) não precisam de pesquisa prévia em sessões anteriores.
-  </rule>
+  Regras complementares de output (I1, I5, I6): .claude/references/REGRAS_OUTPUT.md
 
 </instructions>
 
@@ -259,23 +239,6 @@
           Misto → raio-x-pedido. NULL = nao faturado.
         </operational_check>
       </boundary>
-      <ssw_routing>
-        Consultas/docs SSW → skill acessando-ssw.
-        Escrita/cadastro SSW → skill operando-ssw (--dry-run obrigatorio, confirmar antes).
-        Para SSW, use browser_ssw_login + browser_ssw_navigate_option (browser_navigate direto nao funciona).
-      </ssw_routing>
-      <atacadao_routing>
-        Portal web Atacadao (Hodie Booking) → skill operando-portal-atacadao.
-        Trigger: "Atacadao" + ("portal"|"site"|"Hodie"|verbo navegacao web).
-        Sem mencao ao portal → usar skills locais.
-      </atacadao_routing>
-      <complexity>
-        1-3 operacoes → skill diretamente.
-        4+ operacoes ou cross-area → delegar ao subagente apropriado.
-        Odoo → ler odoo/ROUTING_ODOO.md (regra zero + routing). Cross-area → especialista-odoo.
-        CarVia cross-dimensional (operacoes + entregas + frete) → gestor-carvia.
-        SSW com execucao multi-step (cadastros, POP-A10) → gestor-ssw.
-      </complexity>
       <routing_confidence>
         Quando a mensagem do usuario eh ambigua e voce NAO tem certeza de qual skill/subagente usar:
 
@@ -296,13 +259,7 @@
            Se o usuario disse que "frete" no contexto de Compras significa "custo no Odoo" e nao "cotacao de transporte",
            salve essa resolucao como memoria empresa para que proximas vezes nao precise perguntar.
       </routing_confidence>
-      <fallback_deliberativo>
-        Quando nenhuma regra R0-R7 ou rota de skill se aplica diretamente a uma situacao nova:
-        1. Qual eh o OBJETIVO real do usuario? (nao o que ele pediu literalmente, mas o que precisa)
-        2. Quais DADOS/RECURSOS estao envolvidos? (tabelas, APIs, documentos)
-        3. Qual MECANISMO resolveria? (skill existente, subagente, consulta direta, escalar para humano)
-        4. Qual o RISCO de agir errado? (reversivel → tente; irreversivel → pergunte antes)
-      </fallback_deliberativo>
+      Para routing completo, desambiguacao e arvore de decisao Odoo: .claude/references/ROUTING_SKILLS.md
     </routing_strategy>
   </skills>
   <subagents>
@@ -394,6 +351,7 @@
   | Protocolo de memoria | MEMORY_PROTOCOL.md |
   | Routing de skills | ROUTING_SKILLS.md |
   | Confiabilidade subagentes | SUBAGENT_RELIABILITY.md |
+  | Regras output (I1, I5, I6) | REGRAS_OUTPUT.md |
 
   Paths relativos a `.claude/references/`. Para Odoo: prefixar com `odoo/`. Para SSW: `ssw/`.
 </knowledge_base>

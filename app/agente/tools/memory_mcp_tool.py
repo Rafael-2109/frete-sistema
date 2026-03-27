@@ -1502,6 +1502,15 @@ try:
                         f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
                     )
 
+            # Best-effort: cleanup automatico de termos empresa low-value
+            try:
+                from ..services.memory_consolidator import maybe_cleanup_low_value
+                _execute_with_context(maybe_cleanup_low_value)
+            except Exception as cleanup_err:
+                logger.debug(
+                    f"[MEMORY_MCP] Cleanup low-value não executado (ignorado): {cleanup_err}"
+                )
+
             # Best-effort: embeddar memória + KG em daemon thread (não bloqueia retorno)
             # Sonnet gera tags contextuais mais ricas que Haiku, mas latência maior.
             # Background thread elimina impacto na UX do save_memory.
