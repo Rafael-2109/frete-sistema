@@ -9,9 +9,12 @@ description: >-
   cidade no SSW", "importar CSV 408", "exportar cidades todas UFs",
   "CSV 402 completo", "exportar comissao cidade todas unidades",
   "baixar CSV 408", "merge CSVs", "consolidar CSVs exportados",
-  "POP-A10", "nova rota completa", "vincular unidade a transportadora".
+  "POP-A10", "nova rota completa", "vincular unidade a transportadora",
+  "emitir CT-e", "emitir CTE", "gerar CT-e fracionado", "enviar SEFAZ",
+  "consultar CTRC", "consultar CT-e", "status do CT-e", "baixar DACTE",
+  "baixar XML CT-e", "cancelar CT-e".
   Requer --dry-run obrigatorio na primeira execucao e confirmacao do
-  usuario antes da execucao real.
+  usuario antes da execucao real (exceto consultar_ctrc_101.py que e read-only).
   NAO USAR QUANDO:
   - Consultar/navegar SSW sem alterar, usar acessando-ssw
   - Cotacao de frete INTERNA Nacom, usar cotando-frete
@@ -44,6 +47,9 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 - **478 inclusao=S**: Fornecedor com `inclusao=S` nao esta finalizado. 408 REJEITA esse CNPJ. Verificar sucesso da 478 antes de prosseguir.
 - **485 multiplas filiais**: Se CNPJ tem N filiais no SSW, PES retorna lista (nao form). Script da timeout. Informar ao usuario.
 - **Resultados do script**: Apresentar EXATAMENTE o que o JSON de saida retorna. NAO inferir campos que nao existem no output.
+- **CT-e filial DEVE ser CAR**: Emissao (004) e consulta (101) DEVEM usar filial CAR. NAO usar MTZ. Script troca automaticamente, mas agente deve confirmar.
+- **CT-e chave NF-e = 44 digitos exatos**: Se usuario fornecer chave com menos ou mais digitos, REJEITAR. NAO completar com zeros. NAO remover digitos.
+- **Consulta 101 e READ-ONLY**: `consultar_ctrc_101.py` NAO altera dados. NAO pedir confirmacao nem --dry-run. Executar diretamente.
 
 ## TRATAMENTO DE ERROS
 
@@ -54,6 +60,10 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 | "Sigla ja existe" na 401 | Unidade ja cadastrada | Verificar se e a mesma, nao criar duplicata |
 | CSV 402 vazio | UF sem cidades cadastradas | Normal para UFs novas, prosseguir |
 | "Nao inclusas" no import CSV | Valores IDENTICOS ao existente | NAO e erro — SSW reporta 3 contadores: Incluidas/Alteradas/Nao inclusas |
+| Placa nao encontrada na 004 | Placa invalida ou nao cadastrada | Usar ARMAZEM para fracionado, placa real para carga direta |
+| "Chave nao localizada" na 004 | Chave NF-e errada ou NF nao importada | Verificar 44 digitos, confirmar com usuario |
+| Timeout na consulta 101 | CTRC nao existe ou filial errada | Confirmar numero CTRC e filial CAR |
+| SEFAZ rejeicao na 007 | Dados inconsistentes no CT-e | Cancelar pre-CTRC e reemitir com dados corretos |
 
 ---
 
@@ -89,11 +99,21 @@ Cotar frete no SSW (002)?
   → Se coletar=S: perguntar CEP origem (local de coleta)
   → cotar_frete_ssw_002.py --cnpj-pagador X --cep-destino X --peso X --valor X [--coletar N] [--entregar S] --dry-run
   → Exibir parametros_assumidos antes de confirmar
+Emitir CT-e fracionado (004)?
+  → Perguntar: chave NF-e (44 digitos), frete peso (R$), placa (ARMAZEM=fracionado)
+  → emitir_cte_004.py --chave-nfe "..." --frete-peso 600 --placa ARMAZEM --dry-run
+  → OPERACAO FISCAL — apos confirmar: --enviar-sefaz --consultar-101 [--baixar-dacte]
+  → Detalhes: [SCRIPTS.md](SCRIPTS.md) | POP-C01 (fracionado) / POP-C02 (carga direta)
+Consultar CTRC / CT-e (101)?
+  → consultar_ctrc_101.py --ctrc 94 [--baixar-xml] [--baixar-dacte]
+  → OU: consultar_ctrc_101.py --nf 35714 [--baixar-xml] [--baixar-dacte]
+  → READ-ONLY: executar diretamente, sem --dry-run nem confirmacao
+  → Detalhes: [SCRIPTS.md](SCRIPTS.md)
 Cancelar CT-e autorizado (004)?
   → cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "NF vinculada incorretamente" --dry-run
   → OPERACAO FISCAL IRREVERSIVEL — prazo 7 dias SEFAZ
   → Verificar antes: manifesto cancelado, mercadoria nao embarcada
-  → POP-C06: pops/POP-C06-cancelar-cte.md
+  → Detalhes: [SCRIPTS.md](SCRIPTS.md) | POP-C06: pops/POP-C06-cancelar-cte.md
 Consultar/navegar SSW (sem alterar)?
   → NAO usar esta skill. Usar acessando-ssw
 ```
@@ -137,6 +157,8 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | 12 | `agrupar_csvs.py` | — | Merge generico de CSVs (reutilizavel 402 e 408) |
 | 13 | `exportar_comissao_cidade_408.py` | 408 | Exportar CSV comissao por cidade para todas as unidades |
 | 14 | `cancelar_cte_004.py` | 004 | Cancelar CT-e autorizado (SEFAZ, irreversivel, POP-C06) |
+| 15 | `emitir_cte_004.py` | 004 | Emitir CT-e completo (004 → 007 → 101) |
+| 16 | `consultar_ctrc_101.py` | 101 | Consultar CTRC/CT-e + baixar DACTE/XML (read-only) |
 
 ---
 
@@ -148,6 +170,8 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | Criar comissao, gerar/importar CSV 408 | [COMISSOES.md](references/COMISSOES.md) |
 | Cotar frete na 002 (params, workflow, gotchas) | [COTACAO.md](references/COTACAO.md) |
 | Funcoes ssw_common, defaults, batch, mapeamento | [SSW_COMMON.md](references/SSW_COMMON.md) |
+| Emitir, consultar ou cancelar CT-e (params, retornos) | [SCRIPTS.md](SCRIPTS.md) |
+| CT-e gotchas, FIELD_MAP, workflow completo | [CTE.md](references/CTE.md) |
 | Cadastrar unidade passo-a-passo | `POP-A02-cadastrar-unidade-parceira.md` |
 | Cadastrar cidades passo-a-passo | `POP-A03-cadastrar-cidades.md` |
 | Implantar rota completa | `POP-A10-implantar-nova-rota.md` |
