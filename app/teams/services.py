@@ -608,20 +608,11 @@ def _obter_resposta_agente(
                 timeout=MAX_TEAMS_RESPONSE_SECONDS,
             )
 
-        # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
-        from app.agente.config.feature_flags import USE_PERSISTENT_SDK_CLIENT
-
-        if USE_PERSISTENT_SDK_CLIENT:
-            # Path v3: submeter ao daemon thread do pool de ClaudeSDKClient.
-            # O client DEVE rodar no MESMO event loop em que foi conectado.
-            from app.agente.sdk.client_pool import submit_coroutine
-            future = submit_coroutine(_get_response_with_timeout())
-            response = future.result(timeout=MAX_TEAMS_RESPONSE_SECONDS + 10)
-        else:
-            # Path v2: event loop efêmero (cria + destrói por chamada).
-            # asyncio.run() instala ThreadedChildWatcher automaticamente,
-            # necessário para o SDK gerenciar o CLI subprocess.
-            response = asyncio.run(_get_response_with_timeout())
+        # ClaudeSDKClient persistente (v3) — daemon thread pool.
+        # v2 (asyncio.run) desligado em 2026-03-27.
+        from app.agente.sdk.client_pool import submit_coroutine
+        future = submit_coroutine(_get_response_with_timeout())
+        response = future.result(timeout=MAX_TEAMS_RESPONSE_SECONDS + 10)
 
         resposta_texto = _extrair_texto_resposta(response)
         new_sdk_session_id = getattr(response, 'session_id', None)
@@ -1131,20 +1122,13 @@ def _obter_resposta_agente_streaming(
         async def _stream_with_timeout():
             return await _stream_with_flush()
 
-        # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
-        from app.agente.config.feature_flags import USE_PERSISTENT_SDK_CLIENT
-
-        if USE_PERSISTENT_SDK_CLIENT:
-            # Path v3: submeter ao daemon thread do pool de ClaudeSDKClient.
-            # O client DEVE rodar no MESMO event loop em que foi conectado.
-            from app.agente.sdk.client_pool import submit_coroutine
-            future = submit_coroutine(_stream_with_timeout())
-            resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = future.result(
-                timeout=MAX_ABSOLUTE + 10
-            )
-        else:
-            # Path v2: event loop efêmero (cria + destrói por chamada)
-            resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = asyncio.run(_stream_with_timeout())
+        # ClaudeSDKClient persistente (v3) — daemon thread pool.
+        # v2 (asyncio.run) desligado em 2026-03-27.
+        from app.agente.sdk.client_pool import submit_coroutine
+        future = submit_coroutine(_stream_with_timeout())
+        resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = future.result(
+            timeout=MAX_ABSOLUTE + 10
+        )
 
         # Extrair e sanitizar resposta
         if resposta_texto:

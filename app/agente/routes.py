@@ -729,24 +729,12 @@ def _stream_chat_response(
                         'timeout': True
                     }))
 
-            # Dispatch: daemon thread pool (v3) ou asyncio.run (v2)
-            from .config.feature_flags import USE_PERSISTENT_SDK_CLIENT
-
-            if USE_PERSISTENT_SDK_CLIENT:
-                # Path v3: submeter ao daemon thread do pool de ClaudeSDKClient.
-                # O event loop persistente é compartilhado por todos os clients.
-                # O ClaudeSDKClient DEVE rodar no MESMO event loop em que foi
-                # conectado — submit_coroutine() garante isso.
-                from .sdk.client_pool import submit_coroutine
-                future = submit_coroutine(async_stream_with_timeout())
-                # Bloqueia esta thread até o coroutine completar no daemon thread.
-                # Events são emitidos via event_queue durante a execução.
-                future.result(timeout=MAX_STREAM_DURATION_SECONDS)
-                logger.info("[AGENTE] submit_coroutine() completado com sucesso")
-            else:
-                # Path v2: event loop efêmero (cria + destrói por request)
-                asyncio.run(async_stream_with_timeout())
-                logger.info("[AGENTE] asyncio.run() completado com sucesso")
+            # ClaudeSDKClient persistente (v3) — daemon thread pool.
+            # v2 (asyncio.run) desligado em 2026-03-27.
+            from .sdk.client_pool import submit_coroutine
+            future = submit_coroutine(async_stream_with_timeout())
+            future.result(timeout=MAX_STREAM_DURATION_SECONDS)
+            logger.info("[AGENTE] submit_coroutine() completado com sucesso")
 
         except (Exception, BaseExceptionGroup) as e:
             if isinstance(e, BaseExceptionGroup):
@@ -2272,17 +2260,7 @@ def api_rename_session(session_db_id: int):
 @agente_bp.route('/api/interrupt', methods=['POST'])
 @login_required
 def api_interrupt():
-    """Interrompe a geração atual do agente."""
-    from .config.feature_flags import USE_PERSISTENT_SDK_CLIENT
-
-    if not USE_PERSISTENT_SDK_CLIENT:
-        return jsonify({
-            'success': False,
-            'error': 'Interrupt não disponível nesta versão. O processamento será concluído automaticamente.',
-            'info': 'Arquitetura query() + resume não suporta interrupt. Aguarde a conclusão ou envie nova mensagem.',
-        }), 501  # 501 Not Implemented
-
-    # Path persistente: interrupt real via ClaudeSDKClient
+    """Interrompe a geração atual do agente via ClaudeSDKClient.interrupt()."""
     data = request.get_json(silent=True) or {}
     session_id = data.get('session_id')
 
@@ -2744,10 +2722,8 @@ def api_health():
         # Pool status (quando USE_PERSISTENT_SDK_CLIENT=true)
         pool_status = None
         try:
-            from .config.feature_flags import USE_PERSISTENT_SDK_CLIENT
-            if USE_PERSISTENT_SDK_CLIENT:
-                from .sdk.client_pool import get_pool_status
-                pool_status = get_pool_status()
+            from .sdk.client_pool import get_pool_status
+            pool_status = get_pool_status()
         except Exception:
             pass
 

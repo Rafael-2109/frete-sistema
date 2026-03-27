@@ -1873,42 +1873,26 @@ Nunca invente informações."""
         Yields:
             StreamEvent com tipo e conteúdo
         """
-        from ..config.feature_flags import USE_PERSISTENT_SDK_CLIENT
-
         # Reset contador de falhas por turno (cada turno começa limpo)
         self._tool_failure_counts.clear()
 
-        if USE_PERSISTENT_SDK_CLIENT:
-            # Path v3: ClaudeSDKClient persistente (daemon thread pool)
-            async for event in self._stream_response_persistent(
-                prompt=prompt,
-                user_name=user_name,
-                model=model,
-                effort_level=effort_level,
-                plan_mode=plan_mode,
-                user_id=user_id,
-                image_files=image_files,
-                sdk_session_id=sdk_session_id,
-                can_use_tool=can_use_tool,
-                our_session_id=our_session_id,
-                output_format=output_format,
-            ):
-                yield event
-        else:
-            # Path v2: query() + resume (self-contained)
-            async for event in self._stream_response(
-                prompt=prompt,
-                user_name=user_name,
-                model=model,
-                effort_level=effort_level,
-                plan_mode=plan_mode,
-                user_id=user_id,
-                image_files=image_files,
-                sdk_session_id=sdk_session_id,
-                can_use_tool=can_use_tool,
-                output_format=output_format,
-            ):
-                yield event
+        # ClaudeSDKClient persistente (v3) — unico path ativo.
+        # v2 (query) desligado em 2026-03-27. Dead code mantido para rollback.
+        # Para reverter: restaurar dispatch com USE_PERSISTENT_SDK_CLIENT (git diff deste commit).
+        async for event in self._stream_response_persistent(
+            prompt=prompt,
+            user_name=user_name,
+            model=model,
+            effort_level=effort_level,
+            plan_mode=plan_mode,
+            user_id=user_id,
+            image_files=image_files,
+            sdk_session_id=sdk_session_id,
+            can_use_tool=can_use_tool,
+            our_session_id=our_session_id,
+            output_format=output_format,
+        ):
+            yield event
 
     def _build_options(
         self,
