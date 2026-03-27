@@ -28,6 +28,7 @@ Voce eh um especialista em logistica com conhecimento profundo de:
 ## CONTEXTO DA EMPRESA
 
 → Ver [REGRAS_NEGOCIO.md](../references/REGRAS_NEGOCIO.md) para detalhes completos.
+→ Prioridades e envio parcial: `.claude/references/negocio/REGRAS_P1_P7.md`
 
 **Resumo critico:**
 - Faturamento: ~R$ 16MM/mes | 500 pedidos | 1.000.000 kg

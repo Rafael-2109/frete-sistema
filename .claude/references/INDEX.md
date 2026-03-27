@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 26/02/2026
+**Ultima atualizacao**: 27/03/2026
 
 ---
 
@@ -16,6 +16,7 @@
 | Regras de negocio | [negocio/REGRAS_NEGOCIO.md](negocio/REGRAS_NEGOCIO.md) |
 | Frete Real vs Teorico (4 valores, divergencias, conta corrente) | [negocio/FRETE_REAL_VS_TEORICO.md](negocio/FRETE_REAL_VS_TEORICO.md) |
 | Margem e Custeio (formula margem, tabelas de custo) | [negocio/MARGEM_CUSTEIO.md](negocio/MARGEM_CUSTEIO.md) |
+| Prioridades P1-P7, envio parcial, decisao de corte | [negocio/REGRAS_P1_P7.md](negocio/REGRAS_P1_P7.md) |
 | Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](negocio/RECEBIMENTO_MATERIAIS.md) |
 | Historico de decisoes | [negocio/historia_nacom.md](negocio/historia_nacom.md) |
 | **OBRIGATORIO — Timezone (Brasil naive)** | [REGRAS_TIMEZONE.md](REGRAS_TIMEZONE.md) |
@@ -27,6 +28,8 @@
 | **Protocolo de memoria do agente** | [MEMORY_PROTOCOL.md](MEMORY_PROTOCOL.md) |
 | **Framework aristotelico (analise/planejamento)** | [FRAMEWORK_ARISTOTELICO.md](FRAMEWORK_ARISTOTELICO.md) |
 | **Regras output agente (I1, I5, I6)** | [REGRAS_OUTPUT.md](REGRAS_OUTPUT.md) |
+| **Best Practices Anthropic 2026 (caching, structured output, pgvector)** | [BEST_PRACTICES_2026.md](BEST_PRACTICES_2026.md) |
+| **Roadmap SDK Client (migracao query→ClaudeSDKClient)** | [ROADMAP_SDK_CLIENT.md](ROADMAP_SDK_CLIENT.md) |
 | **Evolucao do sistema de memoria do agente** | `memory/memory_evolution.md` (auto-memory) |
 | **Gestao do Agente (memorias, sessoes, KG, diagnosticos)** | `.claude/skills/gerindo-agente/SKILL.md` |
 | **Agente Teams (bot async, sessoes, diferencas)** | `app/agente/CLAUDE.md` secao "Export critico: Teams" |
@@ -87,6 +90,7 @@
 | Documento | Descricao |
 |-----------|-----------|
 | [design/MAPEAMENTO_CORES.md](design/MAPEAMENTO_CORES.md) | Tokens de cor, paleta, dark/light mode |
+| [design/GUIA_COMPONENTES_UI.md](design/GUIA_COMPONENTES_UI.md) | Botoes, badges, cores — qual classe usar |
 
 ---
 
@@ -112,4 +116,12 @@ Roadmaps e planejamento futuro foram movidos para `.planning/roadmaps/`:
 | `descobrindo-odoo-estrutura` | odoo/MODELOS_CAMPOS |
 | `gerindo-expedicao` | modelos/REGRAS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
 | `gerindo-carvia` | app/carvia/CLAUDE.md |
-| `frontend-design` | design/MAPEAMENTO_CORES |
+| `frontend-design` | design/MAPEAMENTO_CORES, design/GUIA_COMPONENTES_UI |
+| `cotando-frete` | negocio/FRETE_REAL_VS_TEORICO, negocio/MARGEM_CUSTEIO |
+| `monitorando-entregas` | modelos/CADEIA_PEDIDO_ENTREGA |
+| `acessando-ssw` | ssw/ROUTING_SSW, ssw/CARVIA_STATUS, ssw/INDEX |
+| `operando-ssw` | ssw/INDEX, ssw/ROUTING_SSW |
+| `consultando-sentry` | INFRAESTRUTURA |
+| `visao-produto` | modelos/CADEIA_PEDIDO_ENTREGA, negocio/REGRAS_NEGOCIO |
+| `gerindo-agente` | MEMORY_PROTOCOL, REGRAS_OUTPUT |
+| `resolvendo-entidades` | (sem references — consulta banco diretamente) |

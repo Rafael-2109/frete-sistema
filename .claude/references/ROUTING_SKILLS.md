@@ -23,7 +23,8 @@
 | PORTAL ATACADAO (automacao web Hodie Booking) | "portal Atacadao", "site do Atacadao", "Hodie Booking", "entrar no portal", "imprimir protocolo no site", "agendar no portal" + OBRIGATORIO mencionar portal/site/Hodie | -> `operando-portal-atacadao` |
 | CARVIA (frete subcontratado) | "operacoes CarVia", "subcontratos pendentes", "cotar subcontrato", "faturas CarVia", "conferencia transportadora" | -> `gerindo-carvia` |
 | SENTRY (erros, issues, monitoring) | "issues do Sentry", "erros em producao", "bugs no Sentry", "resolver issue", "root cause analysis", "500 errors", "Seer" | -> `consultando-sentry` |
-| LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `buscando-rotas` |
+| LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `mcp__routes__search_routes` (MCP tool, agente web) / Grep+Glob (Claude Code) |
+| AGENTE (memorias, sessoes, diagnosticos) | "memorias do usuario", "sessoes anteriores", "health score agente", "knowledge graph", "consolidar memorias", "padroes aprendidos" | -> `gerindo-agente` |
 | PROBLEMA COMPLEXO (investigacao, root cause) | "resolver problema complexo em...", "investigar bug em...", "por que X esta...", "analisar modulo completo", "mapear dependencias", "root cause analysis" | -> `resolvendo-problemas` |
 
 ---
@@ -97,10 +98,6 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-| AGENTE (memorias, sessoes, diagnosticos) | "memorias do usuario", "sessoes anteriores", "health score agente", "knowledge graph", "consolidar memorias", "padroes aprendidos" | -> `gerindo-agente` |
-
----
-
 ## Skills — Inventario Completo (30 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
@@ -135,4 +132,4 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 ### Utilitarios (compartilhados)
 `exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
 `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`,
-`diagnosticando-banco`, `buscando-rotas`
+`diagnosticando-banco`

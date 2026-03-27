@@ -165,3 +165,24 @@ Apresentar resultado direto com tabela formatada.
 | `cotando-frete` | Cotacao, tabelas de preco, lead times |
 | `monitorando-entregas` | Entregas pos-faturamento, canhotos, devolucoes |
 | `resolvendo-entidades` | Resolver nomes → CNPJs, cidades → IBGE |
+
+---
+
+## REFERENCIAS
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Regras de negocio, perfil empresa | `.claude/references/negocio/REGRAS_NEGOCIO.md` |
+| Guia dev CarVia (R1-R5, gotchas) | `app/carvia/CLAUDE.md` |
+
+---
+
+## PROTOCOLO DE CONFIABILIDADE (OBRIGATORIO)
+
+> Ref: `.claude/references/SUBAGENT_RELIABILITY.md`
+
+### Ao Concluir Tarefa
+
+1. **Criar arquivo de findings** em `/tmp/subagent-findings/` com evidencias detalhadas
+2. **Citar fontes**: para cada afirmacao, incluir script + campo JSON de origem
+3. **Declarar limites**: se dados estao incompletos ou skill falhou, reportar explicitamente
