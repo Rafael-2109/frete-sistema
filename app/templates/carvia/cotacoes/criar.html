@@ -390,33 +390,36 @@ function iniciarSetupNF() {
         if (_wizSteps.length > 0) {
             // Pre-preencher wizard
             const nf = d.nf;
+            const re = d.receita_emitente;
+            const rd = d.receita_destinatario;
+
             document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
             document.getElementById('wizOrigCnpj').value = nf.cnpj_emitente || '';
             document.getElementById('wizOrigRazao').value = nf.nome_emitente || '';
             document.getElementById('wizDestCnpj').value = nf.cnpj_destinatario || '';
             document.getElementById('wizDestRazao').value = nf.nome_destinatario || '';
 
-            // Pre-preencher enderecos da Receita ou da NF
-            const re = d.receita_emitente;
+            // Steps 2/3: Pre-preencher enderecos da Receita ou da NF
             if (re) {
                 document.getElementById('wizOrigLogradouro').value = re.logradouro || '';
                 document.getElementById('wizOrigNumero').value = re.numero || '';
                 document.getElementById('wizOrigBairro').value = re.bairro || '';
-                document.getElementById('wizOrigCidade').value = re.municipio || '';
+                document.getElementById('wizOrigCidade').value = re.cidade || '';
                 document.getElementById('wizOrigUf').value = re.uf || '';
                 document.getElementById('wizOrigCep').value = re.cep || '';
+                document.getElementById('wizOrigComplemento').value = re.complemento || '';
             } else {
                 document.getElementById('wizOrigCidade').value = nf.cidade_emitente || '';
                 document.getElementById('wizOrigUf').value = nf.uf_emitente || '';
             }
-            const rd = d.receita_destinatario;
             if (rd) {
                 document.getElementById('wizDestLogradouro').value = rd.logradouro || '';
                 document.getElementById('wizDestNumero').value = rd.numero || '';
                 document.getElementById('wizDestBairro').value = rd.bairro || '';
-                document.getElementById('wizDestCidade').value = rd.municipio || '';
+                document.getElementById('wizDestCidade').value = rd.cidade || '';
                 document.getElementById('wizDestUf').value = rd.uf || '';
                 document.getElementById('wizDestCep').value = rd.cep || '';
+                document.getElementById('wizDestComplemento').value = rd.complemento || '';
             } else {
                 document.getElementById('wizDestCidade').value = nf.cidade_destinatario || '';
                 document.getElementById('wizDestUf').value = nf.uf_destinatario || '';

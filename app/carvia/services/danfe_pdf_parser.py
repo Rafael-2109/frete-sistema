@@ -223,12 +223,21 @@ class DanfePDFParser:
                 return digitos_concat
 
         # Strategy 3: padrao com espacos entre grupos de 4 digitos (nao cruza \n)
-        match = re.search(r'\d{4}(?:[^\S\n]+\d{4}){8,}', self.texto_completo)
-        if match:
+        # Usa finditer para testar TODOS os matches.
+        # Se match tem > 44 digitos, digitos espurios (ex: telefone 7089) podem
+        # preceder a chave na mesma linha. Tentar extrair ultimos 44 digitos
+        # descartando grupos de 4 do inicio.
+        for match in re.finditer(r'\d{4}(?:[^\S\n]+\d{4}){8,}', self.texto_completo):
             digitos = re.sub(r'\D', '', match.group(0))
             if len(digitos) == 44:
                 self.confianca += 0.2
                 return digitos
+            if len(digitos) > 44:
+                excess = len(digitos) - 44
+                if excess % 4 == 0:
+                    candidato = digitos[excess:]
+                    self.confianca += 0.15
+                    return candidato
 
         return None
 
@@ -987,7 +996,8 @@ class DanfePDFParser:
         # NCM (8 dig) + O/CST (1-3 dig, possivelmente split: "3 00") + CFOP (4 dig, OPCIONAL)
         # DANFEs compactas (ex: Laiouns) omitem CFOP. Guard: apos NCM+CST exigir unidade
         # (1-5 chars alfa) em ate 2 tokens para evitar falsos positivos sem CFOP.
-        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:\s+\d{2})?(?:\s+\d{4}|\s+[A-Za-z]{1,5}\s)')
+        # CFOP pode vir formatado com ponto (ex: 6.403 em vez de 6403) — \d\.?\d{3}
+        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:\s+\d{2})?(?:\s+\d\.?\d{3}|\s+[A-Za-z]{1,5}\s)')
 
         # --- Dois niveis de filtro para linhas sem NCM ---
 
@@ -1165,15 +1175,15 @@ class DanfePDFParser:
             continuacoes = []
 
         # Tentar com CFOP primeiro (mais especifico, menos falsos positivos)
-        # NCM (8 dig) + O/CST skip (1-3 dig, possivelmente split) + CFOP (4 dig)
-        # Ex: "20057000 3 00 6101" ou "87116000 460 5405" — ambos devem funcionar
+        # NCM (8 dig) + O/CST skip (1-3 dig, possivelmente split) + CFOP (4 dig, com ponto opcional)
+        # Ex: "20057000 3 00 6101" ou "87116000 460 5405" ou "87116000 100 6.403" — todos funcionam
         match = re.search(
-            r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+(\d{4})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+            r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+(\d\.?\d{3})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
             ncm_line,
         )
         if match:
             ncm = match.group(1)
-            cfop = match.group(2)
+            cfop = match.group(2).replace('.', '')  # normalizar 6.403 → 6403
             unidade = match.group(3)
             quantidade = self._parse_valor_br(match.group(4))
             valor_unitario = self._parse_valor_br(match.group(5))
