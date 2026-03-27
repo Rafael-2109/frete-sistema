@@ -164,7 +164,9 @@
       "Bash(for f:*)",
       "Bash(do echo:*)",
       "Read(//home/rafaelnascimento/projetos/frete_sistema/**)",
-      "Skill(operando-ssw)"
+      "Skill(operando-ssw)",
+      "Bash(dpkg -l)",
+      "Bash(apt list:*)"
     ],
     "deny": []
   },
