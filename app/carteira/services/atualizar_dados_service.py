@@ -55,42 +55,57 @@ class AtualizarDadosService:
             
             pedidos_unicos = [p[0] for p in pedidos_nao_sincronizados if p[0]]
             logger.info(f"📋 Encontrados {len(pedidos_unicos)} pedidos com separações não sincronizadas")
-            
+
+            # ==================================================================
+            # BATCH LOADING: 2 queries substituem ~1000+ queries N+1
+            # ==================================================================
+            all_carteira = CarteiraPrincipal.query.filter(
+                CarteiraPrincipal.num_pedido.in_(pedidos_unicos),
+                CarteiraPrincipal.ativo == True
+            ).all() if pedidos_unicos else []
+
+            # Cache por pedido (primeiro item) e por (pedido, produto)
+            carteira_por_pedido = {}
+            carteira_por_chave = {}
+            for item in all_carteira:
+                if item.num_pedido not in carteira_por_pedido:
+                    carteira_por_pedido[item.num_pedido] = item
+                carteira_por_chave[(item.num_pedido, item.cod_produto)] = item
+
+            all_separacoes = Separacao.query.filter(
+                Separacao.num_pedido.in_(pedidos_unicos),
+                Separacao.sincronizado_nf == False
+            ).all() if pedidos_unicos else []
+
+            seps_por_pedido = {}
+            for sep in all_separacoes:
+                seps_por_pedido.setdefault(sep.num_pedido, []).append(sep)
+
+            logger.info(
+                f"   [BATCH] Carregados {len(all_carteira)} itens carteira, "
+                f"{len(all_separacoes)} separações (2 queries vs ~{len(pedidos_unicos)*3} N+1)"
+            )
+
             for num_pedido in pedidos_unicos:
                 try:
-                    # Buscar dados atualizados da CarteiraPrincipal
-                    # Pegar o primeiro item para obter dados do cliente (todos têm o mesmo cliente)
-                    item_carteira = CarteiraPrincipal.query.filter(
-                        CarteiraPrincipal.num_pedido == num_pedido,
-                        CarteiraPrincipal.ativo == True
-                    ).first()
-                    
+                    # O(1) lookup em vez de query individual
+                    item_carteira = carteira_por_pedido.get(num_pedido)
+
                     if not item_carteira:
                         logger.debug(f"⚠️ Nenhum item encontrado na carteira para pedido {num_pedido}")
                         continue
-                    
+
                     self.total_pedidos_processados += 1
-                    
-                    # ========================================
-                    # ATUALIZAR TODAS AS SEPARAÇÕES NÃO SINCRONIZADAS DO PEDIDO
-                    # ========================================
-                    
-                    # Buscar TODAS as separações não sincronizadas deste pedido
-                    separacoes = Separacao.query.filter(
-                        Separacao.num_pedido == num_pedido,
-                        Separacao.sincronizado_nf == False
-                    ).all()
-                    
+
+                    # O(1) lookup em vez de query individual
+                    separacoes = seps_por_pedido.get(num_pedido, [])
+
                     for separacao in separacoes:
-                        # Buscar item específico da carteira para este produto
-                        item_produto = CarteiraPrincipal.query.filter(
-                            and_(
-                                CarteiraPrincipal.num_pedido == separacao.num_pedido,
-                                CarteiraPrincipal.cod_produto == separacao.cod_produto,
-                                CarteiraPrincipal.ativo == True
-                            )
-                        ).first()
-                        
+                        # O(1) lookup em vez de query individual
+                        item_produto = carteira_por_chave.get(
+                            (separacao.num_pedido, separacao.cod_produto)
+                        )
+
                         if not item_produto:
                             item_produto = item_carteira  # Usar dados gerais do pedido
                         

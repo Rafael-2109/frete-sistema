@@ -632,14 +632,16 @@ class CarteiraService:
                         carrier_ids_to_fetch.add(carrier_id)
 
             # Se houver carriers para buscar, fazer query adicional para obter os partner_ids
+            cache_carriers = {}  # {carrier_id: carrier_dict} — passado ao mapper para evitar N+1
             if carrier_ids_to_fetch:
                 logger.info(f"🚚 Detectados {len(carrier_ids_to_fetch)} pedidos com REDESPACHO")
                 carrier_data = self.connection.search_read(
                     'delivery.carrier',
                     [('id', 'in', list(carrier_ids_to_fetch))],
-                    ['id', 'l10n_br_partner_id']
+                    ['id', 'name', 'l10n_br_partner_id']
                 )
-                for carrier in carrier_data:
+                for carrier in (carrier_data or []):
+                    cache_carriers[carrier['id']] = carrier
                     if carrier.get('l10n_br_partner_id'):
                         partner_id = carrier['l10n_br_partner_id'][0] if isinstance(carrier['l10n_br_partner_id'], list) else carrier['l10n_br_partner_id']
                         carrier_partner_ids.add(partner_id)
@@ -732,8 +734,9 @@ class CarteiraService:
             for linha in dados_odoo_brutos:
                 try:
                     item_mapeado = self._mapear_item_otimizado(
-                        linha, cache_pedidos, cache_partners, 
-                        cache_produtos, cache_categorias
+                        linha, cache_pedidos, cache_partners,
+                        cache_produtos, cache_categorias,
+                        cache_carriers=cache_carriers
                     )
                     dados_processados.append(item_mapeado)
                     
@@ -753,7 +756,7 @@ class CarteiraService:
             logger.error(f"❌ Erro no processamento otimizado: {e}")
             return []
     
-    def _mapear_item_otimizado(self, linha, cache_pedidos, cache_partners, cache_produtos, cache_categorias):
+    def _mapear_item_otimizado(self, linha, cache_pedidos, cache_partners, cache_produtos, cache_categorias, cache_carriers=None):
         """
         🚀 MAPEAMENTO OTIMIZADO - JOIN em memória usando caches
         Mapeia TODOS os 39 campos usando dados já carregados
@@ -830,15 +833,18 @@ class CarteiraService:
                 if 'RED' in incoterm_texto or 'REDESPACHO' in incoterm_texto:
                     carrier_id = pedido['carrier_id'][0] if isinstance(pedido['carrier_id'], list) else pedido['carrier_id']
                     
-                    # Buscar dados da transportadora
+                    # Buscar dados da transportadora (cache batch em vez de N+1)
                     try:
-                        
-                        # Buscar delivery.carrier para obter o l10n_br_partner_id
-                        carrier_data = self.connection.search_read(
-                            'delivery.carrier',
-                            [('id', '=', carrier_id)],
-                            ['id', 'name', 'l10n_br_partner_id']
-                        )
+                        # Usar cache batch construído em _processar_dados_carteira_com_multiplas_queries
+                        if cache_carriers and carrier_id in cache_carriers:
+                            carrier_data = [cache_carriers[carrier_id]]
+                        else:
+                            # Fallback: chamada individual se cache indisponível
+                            carrier_data = self.connection.search_read(
+                                'delivery.carrier',
+                                [('id', '=', carrier_id)],
+                                ['id', 'name', 'l10n_br_partner_id']
+                            )
                         
                         if carrier_data and carrier_data[0].get('l10n_br_partner_id'):
                             # Pegar o ID do parceiro da transportadora
@@ -1212,7 +1218,7 @@ class CarteiraService:
         except (ValueError, TypeError):
             return 0.0
 
-    def _obter_snapshot_custo(self, cod_produto: str) -> Dict[str, Any]:
+    def _obter_snapshot_custo(self, cod_produto: str, cache_custos: Dict = None) -> Dict[str, Any]:
         """
         Obtém snapshot do custo considerado atual para um produto.
 
@@ -1221,15 +1227,20 @@ class CarteiraService:
 
         Args:
             cod_produto: Código do produto
+            cache_custos: Dict opcional com custos pre-carregados em batch {cod_produto: CustoConsiderado}
 
         Returns:
             Dict com campos de snapshot ou dict vazio se não encontrar custo
         """
         try:
-            custo = CustoConsiderado.query.filter_by(
-                cod_produto=cod_produto,
-                custo_atual=True
-            ).first()
+            # Usar cache batch se disponível (evita N+1)
+            if cache_custos is not None:
+                custo = cache_custos.get(cod_produto)
+            else:
+                custo = CustoConsiderado.query.filter_by(
+                    cod_produto=cod_produto,
+                    custo_atual=True
+                ).first()
 
             if custo:
                 return {
@@ -2467,12 +2478,45 @@ class CarteiraService:
                 contador_removidos = 0
                 contador_mantidos = 0
 
+                # BATCH: Verificar todos os produtos suspeitos de uma vez
+                # em vez de 1 chamada Odoo por produto (N+1)
+                pedidos_suspeitos = list(set(chave[0] for chave in [c for c, _ in produtos_suspeitos]))
+                produtos_existentes_odoo = set()
+                if pedidos_suspeitos:
+                    try:
+                        linhas_odoo = self.connection.execute_kw(
+                            'sale.order.line', 'search_read',
+                            [[
+                                ['order_id.name', 'in', pedidos_suspeitos],
+                                ['product_qty', '>', 0]
+                            ]],
+                            {'fields': ['order_id', 'product_id'], 'limit': 5000},
+                            timeout_override=180
+                        )
+                        for l in (linhas_odoo or []):
+                            order_name = l.get('order_id', [0, ''])[1] if isinstance(l.get('order_id'), list) else ''
+                            product_code = l.get('product_id', [0, ''])[1] if isinstance(l.get('product_id'), list) else ''
+                            # Extrair default_code do product display name: "[CODE] Name"
+                            if product_code and '[' in product_code and ']' in product_code:
+                                code = product_code.split(']')[0].replace('[', '').strip()
+                                produtos_existentes_odoo.add((order_name, code))
+                        logger.info(
+                            f"   [BATCH] Verificados {len(linhas_odoo or [])} linhas Odoo "
+                            f"(1 query vs {len(produtos_suspeitos)} N+1)"
+                        )
+                    except Exception as e:
+                        logger.error(f"❌ Erro no batch de verificação: {e}. Usando fallback individual.")
+                        # Fallback: usar método individual se batch falhar
+                        for chave, registro in produtos_suspeitos:
+                            num_pedido, cod_produto = chave
+                            if self._verificar_produto_no_odoo(num_pedido, cod_produto):
+                                produtos_existentes_odoo.add(chave)
+
                 for chave, registro in produtos_suspeitos:
                     num_pedido, cod_produto = chave
 
                     try:
-                        # 🔍 CONFIRMAÇÃO: Buscar no Odoo se o produto ainda existe no pedido
-                        existe_no_odoo = self._verificar_produto_no_odoo(num_pedido, cod_produto)
+                        existe_no_odoo = chave in produtos_existentes_odoo
 
                         if not existe_no_odoo:
                             # ✅ CONFIRMADO: Produto foi excluído do pedido no Odoo
@@ -2506,11 +2550,32 @@ class CarteiraService:
             
             # 🚀 SUPER OTIMIZAÇÃO: Processar TUDO de uma vez, UM ÚNICO COMMIT!
             logger.info(f"🔄 Processando {len(dados_novos)} registros em operação única otimizada...")
-            
+
+            # BATCH: Pre-carregar custos vigentes para TODOS os produtos novos
+            # Substitui N queries individuais por 1 query batch
+            from app.custeio.models import CustoConsiderado
+            produtos_para_inserir = set()
+            for item in dados_novos:
+                chave = (item.get('num_pedido'), item.get('cod_produto'))
+                if chave not in registros_odoo_existentes and item.get('cod_produto'):
+                    produtos_para_inserir.add(item['cod_produto'])
+
+            cache_custos = {}
+            if produtos_para_inserir:
+                custos_vigentes = CustoConsiderado.query.filter(
+                    CustoConsiderado.cod_produto.in_(list(produtos_para_inserir)),
+                    CustoConsiderado.custo_atual == True
+                ).all()
+                cache_custos = {c.cod_produto: c for c in custos_vigentes}
+                logger.info(
+                    f"   [BATCH] Custos carregados: {len(cache_custos)} produtos "
+                    f"(1 query vs {len(produtos_para_inserir)} N+1)"
+                )
+
             # Inicializar contador (removido da otimização mas pode ser referenciado em outro lugar)
             contador_lote = 0
             registros_para_inserir = []
-            
+
             # Processar todos os dados de uma vez
             for item in dados_novos:
                 # Validar dados essenciais
@@ -2535,8 +2600,8 @@ class CarteiraService:
                     if not item.get('nome_cidade') and item.get('municipio'):
                         item['nome_cidade'] = item['municipio']
 
-                    # SNAPSHOT DE CUSTO - Capturar custo vigente no momento da inserção
-                    snapshot = self._obter_snapshot_custo(item.get('cod_produto'))
+                    # SNAPSHOT DE CUSTO - Usar cache batch (carregado acima)
+                    snapshot = self._obter_snapshot_custo(item.get('cod_produto'), cache_custos=cache_custos)
                     if snapshot:
                         item.update(snapshot)
                         # CALCULAR MARGEM - Após capturar snapshot
@@ -2623,16 +2688,32 @@ class CarteiraService:
 
                 logger.info(f"   📊 Verificando {len(itens_standby_ativos)} itens em SaldoStandby...")
 
+                # BATCH: Buscar TODOS os itens relevantes da CarteiraPrincipal de uma vez
+                # Substitui N queries individuais (1 por item standby) por 1 query batch
+                pedidos_standby = list(set(s.num_pedido for s in itens_standby_ativos))
+                produtos_standby = list(set(s.cod_produto for s in itens_standby_ativos))
+                carteira_standby_items = CarteiraPrincipal.query.filter(
+                    CarteiraPrincipal.num_pedido.in_(pedidos_standby),
+                    CarteiraPrincipal.cod_produto.in_(produtos_standby)
+                ).all() if pedidos_standby else []
+                carteira_standby_cache = {
+                    (item.num_pedido, item.cod_produto): item
+                    for item in carteira_standby_items
+                }
+                logger.info(
+                    f"   [BATCH] Carregados {len(carteira_standby_items)} itens carteira "
+                    f"(1 query vs {len(itens_standby_ativos)} N+1)"
+                )
+
                 contador_itens_zerados = 0
                 contador_pedidos_cancelados = 0
                 itens_removidos = []
 
                 for item_standby in itens_standby_ativos:
-                    # Verificar se o item ainda existe na CarteiraPrincipal com saldo > 0
-                    item_carteira = CarteiraPrincipal.query.filter_by(
-                        num_pedido=item_standby.num_pedido,
-                        cod_produto=item_standby.cod_produto
-                    ).first()
+                    # O(1) lookup em vez de query individual
+                    item_carteira = carteira_standby_cache.get(
+                        (item_standby.num_pedido, item_standby.cod_produto)
+                    )
 
                     if not item_carteira:
                         # CASO 1: Item não existe mais na CarteiraPrincipal (pedido cancelado/produto removido)

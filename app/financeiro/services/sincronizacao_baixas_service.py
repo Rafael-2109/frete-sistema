@@ -22,6 +22,7 @@ Data: 2025-11-28
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -114,13 +115,16 @@ class SincronizacaoBaixasService:
 
             logger.info(f"📊 {len(titulos)} títulos para processar")
 
-            # Processar cada título
+            # BATCH: Buscar todos os dados do Odoo de uma vez (4 calls em vez de ~2T + 2R)
+            cache = self._buscar_dados_odoo_batch(titulos)
+
+            # Processar cada título usando dados do cache
             for i, titulo in enumerate(titulos, 1):
                 try:
                     if i % 50 == 0:
                         logger.info(f"   Progresso: {i}/{len(titulos)}")
 
-                    qtd_importadas = self._processar_titulo(titulo)
+                    qtd_importadas = self._processar_titulo_batch(titulo, cache)
                     self.estatisticas['titulos_processados'] += 1
 
                     if qtd_importadas > 0:
@@ -205,6 +209,311 @@ class SincronizacaoBaixasService:
             query = query.limit(limite)
 
         return query.all()
+
+    # =========================================================================
+    # BATCH — Busca todos os dados do Odoo em 4 chamadas (P4: Batch Fan-Out)
+    # =========================================================================
+
+    def _buscar_dados_odoo_batch(self, titulos: List[ContasAReceber]) -> Dict:
+        """
+        Busca TODOS os dados do Odoo em 4 chamadas batch.
+
+        Substitui o padrão N+1 anterior (~2T + 2R chamadas) por exatamente:
+        1. search_read account.move.line (títulos)    — 1+ calls (chunked por 200 NFs)
+        2. search_read account.partial.reconcile       — 1+ calls (chunked por 200 IDs)
+        3. search_read account.move.line (credit lines)— 1+ calls (chunked por 200 IDs)
+        4. search_read account.journal                 — 1 call
+
+        Returns:
+            Dict com caches indexados para lookup O(1) em memória
+        """
+        t0 = time.time()
+        CHUNK = 200
+
+        # Coletar todos os titulo_nf distintos
+        nfs_distintas = list(set(t.titulo_nf for t in titulos if t.titulo_nf))
+
+        if not nfs_distintas:
+            logger.info("  [BATCH] Nenhuma NF para buscar")
+            return {
+                'linhas_por_nf': {}, 'recs_por_id': {},
+                'credit_lines_por_id': {}, 'journals_por_id': {}
+            }
+
+        # --- CALL 1: Todas as account.move.line por NF ---
+        # timeout_override=180 para queries batch grandes (P3: Timeout Adaptativo)
+        t1 = time.time()
+        todas_linhas = []
+        campos_titulo = [
+            'id', 'name', 'x_studio_nf_e', 'l10n_br_cobranca_parcela',
+            'balance', 'amount_residual', 'debit', 'credit',
+            'matched_credit_ids', 'matched_debit_ids',
+            'full_reconcile_id', 'reconciled', 'l10n_br_paga',
+            'company_id', 'partner_id', 'move_id'
+        ]
+        for i in range(0, len(nfs_distintas), CHUNK):
+            chunk = nfs_distintas[i:i + CHUNK]
+            linhas = self.connection.execute_kw(
+                'account.move.line', 'search_read',
+                [[
+                    ['x_studio_nf_e', 'in', chunk],
+                    ['account_type', '=', 'asset_receivable'],
+                    ['parent_state', '=', 'posted']
+                ]],
+                {'fields': campos_titulo},
+                timeout_override=180
+            )
+            todas_linhas.extend(linhas or [])
+
+        # Indexar por NF para lookup rápido
+        linhas_por_nf: Dict[str, List[Dict]] = {}
+        for linha in todas_linhas:
+            nf = linha.get('x_studio_nf_e')
+            if nf:
+                linhas_por_nf.setdefault(nf, []).append(linha)
+
+        logger.info(
+            f"  [BATCH] Call 1 (move.lines): {len(todas_linhas)} registros, "
+            f"{len(nfs_distintas)} NFs ({time.time() - t1:.1f}s)"
+        )
+
+        # Coletar TODOS os matched_credit_ids
+        todos_credit_ids = set()
+        for linha in todas_linhas:
+            for cid in (linha.get('matched_credit_ids') or []):
+                todos_credit_ids.add(cid)
+
+        # --- CALL 2: Todas as reconciliações ---
+        t2 = time.time()
+        todas_recs = []
+        campos_rec = [
+            'id', 'amount', 'debit_move_id', 'credit_move_id',
+            'max_date', 'company_id', 'create_date', 'write_date'
+        ]
+        if todos_credit_ids:
+            credit_ids_list = list(todos_credit_ids)
+            for i in range(0, len(credit_ids_list), CHUNK):
+                chunk = credit_ids_list[i:i + CHUNK]
+                recs = self.connection.execute_kw(
+                    'account.partial.reconcile', 'search_read',
+                    [[['id', 'in', chunk]]],
+                    {'fields': campos_rec},
+                    timeout_override=180
+                )
+                todas_recs.extend(recs or [])
+
+        recs_por_id = {r['id']: r for r in todas_recs}
+
+        logger.info(
+            f"  [BATCH] Call 2 (reconciliações): {len(todas_recs)} registros ({time.time() - t2:.1f}s)"
+        )
+
+        # Coletar TODOS os credit_move_ids das reconciliações
+        todos_credit_move_ids = set()
+        for rec in todas_recs:
+            cmid = self._extrair_id(rec.get('credit_move_id'))
+            if cmid:
+                todos_credit_move_ids.add(cmid)
+
+        # --- CALL 3: Todas as credit lines ---
+        t3 = time.time()
+        todas_credit_lines = []
+        if todos_credit_move_ids:
+            cm_list = list(todos_credit_move_ids)
+            for i in range(0, len(cm_list), CHUNK):
+                chunk = cm_list[i:i + CHUNK]
+                lines = self.connection.execute_kw(
+                    'account.move.line', 'search_read',
+                    [[['id', 'in', chunk]]],
+                    {'fields': ['id', 'name', 'ref', 'move_type', 'payment_id', 'journal_id']},
+                    timeout_override=180
+                )
+                todas_credit_lines.extend(lines or [])
+
+        credit_lines_por_id = {cl['id']: cl for cl in todas_credit_lines}
+
+        logger.info(
+            f"  [BATCH] Call 3 (credit lines): {len(todas_credit_lines)} registros ({time.time() - t3:.1f}s)"
+        )
+
+        # Coletar TODOS os journal_ids distintos
+        todos_journal_ids = set()
+        for cl in todas_credit_lines:
+            jid = self._extrair_id(cl.get('journal_id'))
+            if jid:
+                todos_journal_ids.add(jid)
+
+        # --- CALL 4: Todos os journals (poucos registros, timeout padrão suficiente) ---
+        t4 = time.time()
+        journals_por_id: Dict[int, str] = {}
+        if todos_journal_ids:
+            journals = self.connection.search_read(
+                'account.journal',
+                [['id', 'in', list(todos_journal_ids)]],
+                fields=['id', 'code']
+            )
+            journals_por_id = {j['id']: j.get('code') for j in (journals or [])}
+
+        logger.info(
+            f"  [BATCH] Call 4 (journals): {len(journals_por_id)} registros ({time.time() - t4:.1f}s)"
+        )
+
+        total = time.time() - t0
+        chamadas_antes = len(titulos) + len(titulos) + len(todas_recs) * 2
+        logger.info(
+            f"  [BATCH] Concluído em {total:.1f}s — "
+            f"4 chamadas batch vs ~{chamadas_antes} chamadas N+1 anteriores"
+        )
+
+        return {
+            'linhas_por_nf': linhas_por_nf,
+            'recs_por_id': recs_por_id,
+            'credit_lines_por_id': credit_lines_por_id,
+            'journals_por_id': journals_por_id
+        }
+
+    def _buscar_titulo_odoo_from_cache(
+        self, titulo: ContasAReceber, linhas_por_nf: Dict
+    ) -> Optional[Dict]:
+        """Busca título no cache batch (substitui _buscar_titulo_odoo para o fluxo batch)."""
+        linhas = linhas_por_nf.get(titulo.titulo_nf, [])
+        if not linhas:
+            return None
+
+        parcela_odoo = parcela_to_odoo(titulo.parcela)
+
+        # Filtrar por parcela (mesma lógica do método individual)
+        # Gotcha Odoo: integer 0 armazenado como False
+        candidatas = []
+        for linha in linhas:
+            parcela_valor = linha.get('l10n_br_cobranca_parcela')
+            if parcela_odoo:
+                if parcela_valor == parcela_odoo:
+                    candidatas.append(linha)
+            else:
+                if parcela_valor in (0, False, None):
+                    candidatas.append(linha)
+
+        if not candidatas:
+            return None
+
+        # Filtrar por empresa se múltiplas (mesma lógica do método individual)
+        empresa_map = {1: 'FB', 2: 'SC', 3: 'CD'}
+        empresa_sufixo = empresa_map.get(titulo.empresa, '')
+
+        if len(candidatas) > 1 and empresa_sufixo:
+            for linha in candidatas:
+                company = linha.get('company_id')
+                if company and isinstance(company, (list, tuple)):
+                    if empresa_sufixo in company[1]:
+                        return linha
+
+        return candidatas[0]
+
+    def _processar_titulo_batch(self, titulo: ContasAReceber, cache: Dict) -> int:
+        """
+        Processa um título usando dados do cache batch.
+        Mesma lógica de _processar_titulo(), mas sem chamadas Odoo.
+        """
+        titulo_odoo = self._buscar_titulo_odoo_from_cache(titulo, cache['linhas_por_nf'])
+
+        if not titulo_odoo:
+            return 0
+
+        # Atualizar parcela_paga se Odoo indica título pago
+        paga_odoo = bool(titulo_odoo.get('l10n_br_paga'))
+        amount_residual = float(titulo_odoo.get('amount_residual', 0) or 0)
+
+        if (paga_odoo or amount_residual <= 0) and not titulo.parcela_paga:
+            titulo.parcela_paga = True
+            if not titulo.metodo_baixa:
+                titulo.metodo_baixa = 'ODOO_DIRETO'
+            logger.info(f"  Titulo {titulo.titulo_nf}-{titulo.parcela}: marcado pago via sync baixas")
+
+        matched_credit_ids = titulo_odoo.get('matched_credit_ids', [])
+        if not matched_credit_ids:
+            return 0
+
+        # Buscar reconciliações do cache (em vez de chamar Odoo)
+        reconciliacoes = [
+            cache['recs_por_id'][cid]
+            for cid in matched_credit_ids
+            if cid in cache['recs_por_id']
+        ]
+
+        count = 0
+        for rec in reconciliacoes:
+            try:
+                criada = self._salvar_reconciliacao_batch(titulo, rec, cache)
+                if criada:
+                    self.estatisticas['reconciliacoes_criadas'] += 1
+                else:
+                    self.estatisticas['reconciliacoes_atualizadas'] += 1
+                count += 1
+            except Exception as e:
+                logger.error(f"   Erro na reconciliação {rec.get('id')}: {e}")
+
+        return count
+
+    def _salvar_reconciliacao_batch(
+        self,
+        titulo: ContasAReceber,
+        rec: Dict,
+        cache: Dict
+    ) -> bool:
+        """
+        Salva ou atualiza reconciliação usando cache batch.
+        Mesma lógica de _salvar_reconciliacao(), mas lookup em cache em vez de Odoo.
+        """
+        odoo_id = rec.get('id')
+
+        existente = ContasAReceberReconciliacao.query.filter_by(odoo_id=odoo_id).first()
+        criada = existente is None
+
+        if existente:
+            reconciliacao = existente
+        else:
+            reconciliacao = ContasAReceberReconciliacao()
+            reconciliacao.odoo_id = odoo_id
+            reconciliacao.conta_a_receber_id = titulo.id
+            db.session.add(reconciliacao)
+
+        reconciliacao.amount = rec.get('amount')
+        reconciliacao.debit_move_id = self._extrair_id(rec.get('debit_move_id'))
+        reconciliacao.credit_move_id = self._extrair_id(rec.get('credit_move_id'))
+        reconciliacao.max_date = self._parse_date(rec.get('max_date'))
+        reconciliacao.company_id = self._extrair_id(rec.get('company_id'))
+
+        reconciliacao.odoo_create_date = self._parse_datetime(rec.get('create_date'))
+        reconciliacao.odoo_write_date = self._parse_datetime(rec.get('write_date'))
+
+        # Lookup credit line no cache (em vez de chamada individual ao Odoo)
+        credit_move_id = reconciliacao.credit_move_id
+        if credit_move_id:
+            credit_line = cache['credit_lines_por_id'].get(credit_move_id)
+            if credit_line:
+                journal_id = self._extrair_id(credit_line.get('journal_id'))
+                journal_code = cache['journals_por_id'].get(journal_id) if journal_id else None
+
+                reconciliacao.credit_move_name = credit_line.get('name')
+                reconciliacao.credit_move_ref = credit_line.get('ref')
+                reconciliacao.tipo_baixa_odoo = credit_line.get('move_type')
+                reconciliacao.journal_code = journal_code
+
+                reconciliacao.tipo_baixa = self._classificar_tipo_baixa(
+                    move_type=credit_line.get('move_type'),
+                    payment_id=self._extrair_id(credit_line.get('payment_id')),
+                    journal_code=journal_code,
+                    ref=credit_line.get('ref')
+                )
+
+        reconciliacao.ultima_sincronizacao = agora_utc_naive()
+
+        return criada
+
+    # =========================================================================
+    # Métodos individuais (mantidos para uso manual/fallback, não usados no scheduler)
+    # =========================================================================
 
     def _processar_titulo(self, titulo: ContasAReceber) -> int:
         """
