@@ -423,6 +423,24 @@ function iniciarSetupNF() {
             } else {
                 document.getElementById('wizDestCidade').value = nf.cidade_destinatario || '';
                 document.getElementById('wizDestUf').value = nf.uf_destinatario || '';
+                if (d.receita_destinatario_erro) {
+                    fb.innerHTML = '<div class="alert alert-warning py-1 small mb-2">' +
+                        '<i class="fas fa-exclamation-triangle me-1"></i>' +
+                        '<strong>Destinatario:</strong> ' + d.receita_destinatario_erro +
+                        '. Preencha o endereco manualmente.' +
+                        '</div>';
+                    fb.style.display = 'block';
+                }
+            }
+            if (!re && d.receita_emitente_erro) {
+                const existingHtml = fb.innerHTML || '';
+                fb.innerHTML = existingHtml +
+                    '<div class="alert alert-warning py-1 small mb-2">' +
+                    '<i class="fas fa-exclamation-triangle me-1"></i>' +
+                    '<strong>Emitente:</strong> ' + d.receita_emitente_erro +
+                    '. Preencha o endereco manualmente.' +
+                    '</div>';
+                fb.style.display = 'block';
             }
 
             // Abrir wizard no primeiro passo necessario
@@ -560,10 +578,31 @@ function aplicarDadosNF(d) {
         document.getElementById('selTipoMaterial').dispatchEvent(new Event('change'));
     }
 
-    // Preencher campos
+    // Preencher campos de carga geral
     if (nf.peso_bruto) document.querySelector('[name="peso"]').value = nf.peso_bruto;
     if (nf.valor_total) document.querySelector('[name="valor_mercadoria"]').value = nf.valor_total;
     if (nf.quantidade_volumes) document.querySelector('[name="volumes"]').value = nf.quantidade_volumes;
+
+    // Auto-preencher linhas de moto se reconhecidas
+    if (d.tipo_material === 'MOTO' && d.motos_reconhecidas && d.motos_reconhecidas.length > 0) {
+        // Limpar linhas existentes (a troca de tipo ja adicionou 1 vazia)
+        document.getElementById('tbodyMotos').innerHTML = '';
+        motoRowIdx = 0;
+
+        d.motos_reconhecidas.forEach((moto) => {
+            adicionarLinhaMotos();
+            const idx = motoRowIdx - 1;
+            if (moto.modelo_moto_id) {
+                document.getElementById(`motoModelo${idx}`).value = moto.modelo_moto_id;
+                onModeloChange(idx);  // preenche peso cubado
+            }
+            document.getElementById(`motoQtd${idx}`).value = Math.round(moto.quantidade || 1);
+            if (moto.valor_unitario) {
+                document.getElementById(`motoValorUnit${idx}`).value = moto.valor_unitario;
+            }
+            recalcularMoto(idx);
+        });
+    }
 
     // Guardar NF para gravar ao salvar
     document.getElementById('nfArquivoNome').value = nf.arquivo_nome || '';

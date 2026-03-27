@@ -242,21 +242,61 @@ def register_cotacao_v2_routes(bp):
 
             # 5. Consultar Receita para CNPJs (se sao CNPJ, nao CPF)
             receita_emitente = None
+            receita_emitente_erro = None
             receita_dest = None
+            receita_dest_erro = None
             if len(cnpj_emit_limpo) == 14:
                 try:
-                    receita_emitente, _ = CarviaClienteService.buscar_cnpj_receita(
+                    receita_emitente, erro = CarviaClienteService.buscar_cnpj_receita(
                         cnpj_emit_limpo
                     )
-                except Exception:
-                    pass
+                    if erro:
+                        receita_emitente_erro = erro
+                        logger.warning("ReceitaWS emitente %s: %s", cnpj_emit_limpo, erro)
+                except Exception as e:
+                    receita_emitente_erro = f'Erro ao consultar Receita: {e}'
+                    logger.warning("ReceitaWS emitente %s exception: %s", cnpj_emit_limpo, e)
+            elif cnpj_emit_limpo:
+                receita_emitente_erro = 'CPF detectado (Receita so consulta CNPJ)'
+
             if len(cnpj_dest_limpo) == 14:
                 try:
-                    receita_dest, _ = CarviaClienteService.buscar_cnpj_receita(
+                    receita_dest, erro = CarviaClienteService.buscar_cnpj_receita(
                         cnpj_dest_limpo
                     )
-                except Exception:
-                    pass
+                    if erro:
+                        receita_dest_erro = erro
+                        logger.warning("ReceitaWS dest %s: %s", cnpj_dest_limpo, erro)
+                except Exception as e:
+                    receita_dest_erro = f'Erro ao consultar Receita: {e}'
+                    logger.warning("ReceitaWS dest %s exception: %s", cnpj_dest_limpo, e)
+            elif cnpj_dest_limpo:
+                receita_dest_erro = 'CPF detectado (Receita so consulta CNPJ)'
+
+            # 6. Reconhecimento automatico de motos nos itens da NF
+            motos_reconhecidas = []
+            if eh_moto:
+                try:
+                    from app.carvia.services.moto_recognition_service import MotoRecognitionService
+                    from app.carvia.models import CarviaModeloMoto
+                    modelos_db = CarviaModeloMoto.query.filter_by(ativo=True).all()
+                    modelos_by_nome = {m.nome: m for m in modelos_db}
+                    for it in itens:
+                        nome_match = MotoRecognitionService._match_descricao(
+                            it.get('descricao', ''), modelos_db, it.get('codigo_produto')
+                        )
+                        modelo = modelos_by_nome.get(nome_match) if nome_match else None
+                        motos_reconhecidas.append({
+                            'descricao': it.get('descricao'),
+                            'modelo_moto_id': modelo.id if modelo else None,
+                            'modelo_nome': modelo.nome if modelo else None,
+                            'quantidade': it.get('quantidade', 1),
+                            'valor_unitario': it.get('valor_unitario'),
+                            'valor_total': it.get('valor_total_item'),
+                            'match': nome_match,
+                        })
+                except Exception as e:
+                    logger.warning("Erro no reconhecimento de motos: %s", e)
 
             return jsonify({
                 'sucesso': True,
@@ -303,7 +343,10 @@ def register_cotacao_v2_routes(bp):
                     'destino_existe': endereco_destino_id is not None,
                 },
                 'receita_emitente': receita_emitente,
+                'receita_emitente_erro': receita_emitente_erro,
                 'receita_destinatario': receita_dest,
+                'receita_destinatario_erro': receita_dest_erro,
+                'motos_reconhecidas': motos_reconhecidas,
             })
 
         except Exception as e:

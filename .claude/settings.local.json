@@ -166,7 +166,8 @@
       "Read(//home/rafaelnascimento/projetos/frete_sistema/**)",
       "Skill(operando-ssw)",
       "Bash(dpkg -l)",
-      "Bash(apt list:*)"
+      "Bash(apt list:*)",
+      "mcp__sentry__get_sentry_resource"
     ],
     "deny": []
   },
