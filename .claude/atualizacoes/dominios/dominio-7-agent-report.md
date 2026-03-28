@@ -94,12 +94,12 @@ SELECT
             WHERE m->>'role' = 'assistant' AND m->'tools_used' IS NOT NULL
               AND jsonb_array_length(m->'tools_used') > 0
         ) THEN 'no_tools'
-        WHEN total_cost_usd > 0.50 THEN 'high_cost'
-        WHEN message_count >= 4 AND EXISTS (
+        WHEN message_count >= 3 AND EXISTS (
             SELECT 1 FROM jsonb_array_elements(data->'messages') m
             WHERE m->>'role' = 'assistant' AND m->'tools_used' IS NOT NULL
               AND jsonb_array_length(m->'tools_used') > 0
-        ) THEN 'resolved'
+        ) AND total_cost_usd <= 2.00 THEN 'resolved'
+        WHEN total_cost_usd > 2.00 THEN 'high_cost'
         ELSE 'other'
     END as quality_bucket,
     COUNT(*) as session_count,
@@ -110,6 +110,8 @@ WHERE updated_at > NOW() - INTERVAL '30 days'
 GROUP BY quality_bucket
 ORDER BY session_count DESC
 ```
+
+**Nota sobre buckets**: `resolved` avaliado ANTES de `high_cost` para que sessoes com tools usadas e custo <= $2.00 sejam contadas como resolucao. Threshold de $2.00 reflete custo medio de sessoes operacionais com Opus. Sessoes > $2.00 sem tools continuam como `other`.
 
 ### Q3 — Mensagens Iniciais Repetidas (proxy friccao, ultimos 30d)
 

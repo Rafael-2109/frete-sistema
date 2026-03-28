@@ -23,12 +23,18 @@ DATA: usar output de `date +%Y-%m-%d`
 
 ## FASE 1: Coleta de Issues
 
-1. Buscar issues nao resolvidas:
+1. Buscar issues nao resolvidas em producao:
    ```
-   mcp__sentry__search_issues(organizationSlug="nacom", projectSlug="python-flask", query="is:unresolved", regionUrl="https://us.sentry.io")
+   mcp__sentry__search_issues(organizationSlug="nacom", projectSlug="python-flask", query="is:unresolved environment:production", regionUrl="https://us.sentry.io")
    ```
 2. Ordenar por frequencia (events count) e impacto (users affected)
 3. Foco em issues com > 10 eventos ou > 3 usuarios afetados
+
+### Filtros de Exclusao (aplicar ANTES da classificacao)
+
+- **Ignorar environment != production**: Issues exclusivas de development/staging sao de responsabilidade do dev, nao do cron
+- **Ignorar migrations pendentes**: Issues com "relation does not exist", "column does not exist", "UndefinedTable", "UndefinedColumn" sao migrations nao executadas — registrar no relatorio mas NAO tentar corrigir
+- **Ignorar transientes**: Issues com < 3 eventos em < 48h — apenas documentar, NAO classificar para correcao
 
 ---
 
@@ -40,6 +46,7 @@ DATA: usar output de `date +%Y-%m-%d`
 | ALTO | Erros frequentes, UX degradada | Corrigir |
 | MEDIO | Erros esporadicos, workaround existe | Corrigir se simples |
 | BAIXO | Warnings, edge cases raros | Apenas documentar |
+| IGNORAR | Migrations pendentes, infra externa, environment != production | Nao processar (registrar no relatorio como excluido) |
 
 ---
 

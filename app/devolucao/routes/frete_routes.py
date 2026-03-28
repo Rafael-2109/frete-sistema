@@ -738,9 +738,9 @@ def download_termo_descarte(descarte_id: int):
             usuario_geracao=current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
         )
 
-        # Gerar PDF com WeasyPrint
+        # Gerar PDF com WeasyPrint (base_url resolve URIs relativas de CSS/imagens)
         pdf_buffer = BytesIO()
-        HTML(string=html_content).write_pdf(pdf_buffer)
+        HTML(string=html_content, base_url=request.host_url).write_pdf(pdf_buffer)
         pdf_buffer.seek(0)
 
         response = make_response(pdf_buffer.getvalue())

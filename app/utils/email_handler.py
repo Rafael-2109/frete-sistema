@@ -3,7 +3,6 @@ Utilitário para processar e armazenar emails .msg e .eml
 """
 import os
 import json
-import extract_msg
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import current_app
@@ -40,7 +39,8 @@ class EmailHandler:
             temp_path = f"/tmp/{secure_filename(arquivo_msg.filename)}"
             arquivo_msg.save(temp_path)
             
-            # Processa o arquivo .msg
+            # Processa o arquivo .msg (lazy import — ebcdic trava no import de modulo)
+            import extract_msg
             msg = extract_msg.openMsg(temp_path)
             
             # Extrai metadados (garantindo str)

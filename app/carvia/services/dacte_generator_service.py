@@ -15,7 +15,7 @@ import logging
 from io import BytesIO
 from typing import Optional
 
-from flask import render_template
+from flask import render_template, request
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +57,10 @@ class DacteGeneratorService:
             simplificado=simplificado,
         )
 
-        # Gerar PDF
+        # Gerar PDF (base_url resolve URIs relativas de CSS/imagens)
         pdf_buffer = BytesIO()
-        HTML(string=html_content).write_pdf(pdf_buffer)
+        base_url = request.host_url if request else None
+        HTML(string=html_content, base_url=base_url).write_pdf(pdf_buffer)
         pdf_buffer.seek(0)
 
         return pdf_buffer.getvalue()

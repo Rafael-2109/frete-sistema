@@ -387,17 +387,22 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
             for part in raw.split('|'):
                 part = part.strip()
                 if ':' in part:
-                    segments = part.split(':')
-                    if len(segments) >= 2 and segments[0].strip() and segments[1].strip():
-                        etype = segments[0].strip().lower()
-                        ename = segments[1].strip()
-                        # v2: relevancia flag (E=essencial, A=acidental) — opcional
-                        relevance = segments[2].strip().upper() if len(segments) >= 3 else None
-                        if relevance in ('E', 'A'):
+                    etype, rest = part.split(':', 1)
+                    etype = etype.strip().lower()
+                    rest = rest.strip()
+                    if not etype or not rest:
+                        continue
+                    # v2: relevancia flag (E=essencial, A=acidental) — opcional
+                    # Verifica se o ULTIMO segmento apos ':' e flag de relevancia
+                    ename = rest
+                    if ':' in rest:
+                        name_part, maybe_flag = rest.rsplit(':', 1)
+                        if maybe_flag.strip().upper() in ('E', 'A'):
                             # Sufixar relevancia ao nome para downstream processing
                             # KG save_entities pode usar isso para ajustar mention_count
-                            ename = f"{ename}:{relevance}"
-                        entities.append((etype, ename))
+                            ename = f"{name_part.strip()}:{maybe_flag.strip().upper()}"
+                        # else: ':' faz parte do nome (ex: prioridade:alta)
+                    entities.append((etype, ename))
 
         elif line.upper().startswith('RELACOES:') or line.upper().startswith('RELAÇÕES:'):
             raw = line.split(':', 1)[1].strip() if ':' in line else ''
