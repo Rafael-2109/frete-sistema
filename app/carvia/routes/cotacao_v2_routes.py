@@ -373,6 +373,206 @@ def register_cotacao_v2_routes(bp):
             logger.error("Erro no setup-nf: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
+    # ==================== SETUP NF EXISTENTE (A PARTIR DO BANCO) ====================
+
+    @bp.route('/api/cotacoes/setup-nf-existente/<int:nf_id>') # type: ignore
+    @login_required
+    def api_setup_nf_existente(nf_id): # type: ignore
+        """Carrega NF ja importada do banco e retorna dados para pre-preencher cotacao.
+
+        Mesma estrutura de retorno que api_setup_nf, mas sem parsear arquivo —
+        usa dados ja existentes no banco. Permite reusar o wizard JS do criar.html.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        import re as _re
+        from app.carvia.models import (
+            CarviaNf, CarviaPedido, CarviaPedidoItem,
+            CarviaClienteEndereco,
+        )
+        from app.carvia.services.cliente_service import CarviaClienteService
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return jsonify({'erro': 'NF nao encontrada.'}), 404
+
+        if nf.status == 'CANCELADA':
+            return jsonify({'erro': 'NF cancelada nao pode gerar cotacao.'}), 400
+
+        cnpj_emit_limpo = _re.sub(r'\D', '', nf.cnpj_emitente or '')
+        cnpj_dest_limpo = _re.sub(r'\D', '', nf.cnpj_destinatario or '')
+
+        if not cnpj_emit_limpo:
+            return jsonify({'erro': 'NF sem CNPJ emitente — nao e possivel identificar o cliente.'}), 400
+
+        try:
+            # 1. Verificar cotacao existente via pedido
+            #    Escopo: mesmo numero_nf E cotacao cujo endereco_origem tem o mesmo CNPJ
+            aviso_cotacao_existente = False
+            cotacao_existente_info = None
+
+            from app.carvia.models import CarviaCotacao
+            existing_pedido = db.session.query(CarviaPedido).join(
+                CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id
+            ).join(
+                CarviaCotacao, CarviaPedido.cotacao_id == CarviaCotacao.id
+            ).join(
+                CarviaClienteEndereco,
+                CarviaCotacao.endereco_origem_id == CarviaClienteEndereco.id,
+            ).filter(
+                CarviaPedidoItem.numero_nf == str(nf.numero_nf),
+                CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
+            ).first()
+
+            if existing_pedido and existing_pedido.cotacao:
+                aviso_cotacao_existente = True
+                cotacao_existente_info = {
+                    'cotacao_id': existing_pedido.cotacao.id,
+                    'numero_cotacao': existing_pedido.cotacao.numero_cotacao,
+                    'status': existing_pedido.cotacao.status,
+                }
+
+            # 2. Buscar cliente existente por CNPJ emitente
+            cliente_id = None
+            cliente_nome = None
+            enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(
+                cnpj_emit_limpo
+            )
+            if enderecos_existentes:
+                cliente_id = enderecos_existentes[0].cliente_id
+                cliente_nome = enderecos_existentes[0].cliente.nome_comercial
+
+            # Tambem checar pelo CNPJ destino
+            if not cliente_id and cnpj_dest_limpo:
+                enderecos_dest = CarviaClienteService.buscar_enderecos_por_cnpj(
+                    cnpj_dest_limpo
+                )
+                if enderecos_dest:
+                    cliente_id = enderecos_dest[0].cliente_id
+                    cliente_nome = enderecos_dest[0].cliente.nome_comercial
+
+            # 3. Verificar enderecos ORIGEM e DESTINO
+            endereco_origem_id = None
+            endereco_destino_id = None
+            if cliente_id:
+                if cnpj_emit_limpo:
+                    orig = CarviaClienteEndereco.query.filter_by(
+                        cliente_id=cliente_id, cnpj=cnpj_emit_limpo, tipo='ORIGEM'
+                    ).first()
+                    if orig:
+                        endereco_origem_id = orig.id
+
+                if cnpj_dest_limpo:
+                    dest = CarviaClienteEndereco.query.filter_by(
+                        cliente_id=cliente_id, cnpj=cnpj_dest_limpo, tipo='DESTINO'
+                    ).first()
+                    if dest:
+                        endereco_destino_id = dest.id
+
+            # 4. Detectar tipo material (MOTO se NCM comeca com 8711)
+            itens_db = nf.itens.all()
+            eh_moto = any(
+                (it.ncm or '').startswith('8711')
+                for it in itens_db
+            )
+
+            # 5. Reconhecimento automatico de motos
+            motos_reconhecidas = []
+            if eh_moto:
+                try:
+                    from app.carvia.services.moto_recognition_service import MotoRecognitionService
+                    from app.carvia.models import CarviaModeloMoto
+                    modelos_db = CarviaModeloMoto.query.filter_by(ativo=True).all()
+                    modelos_by_nome = {m.nome: m for m in modelos_db}
+                    for it in itens_db:
+                        nome_match = MotoRecognitionService._match_descricao(
+                            it.descricao or '', modelos_db, it.codigo_produto
+                        )
+                        modelo = modelos_by_nome.get(nome_match) if nome_match else None
+                        motos_reconhecidas.append({
+                            'descricao': it.descricao,
+                            'modelo_moto_id': modelo.id if modelo else None,
+                            'modelo_nome': modelo.nome if modelo else None,
+                            'quantidade': float(it.quantidade or 1),
+                            'valor_unitario': float(it.valor_unitario) if it.valor_unitario else None,
+                            'valor_total': float(it.valor_total_item) if it.valor_total_item else None,
+                            'match': nome_match,
+                        })
+                except Exception as e:
+                    logger.warning("Erro no reconhecimento de motos (NF existente): %s", e)
+
+            # 6. Serializar veiculos
+            veiculos_db = nf.veiculos.all()
+
+            return jsonify({
+                'sucesso': True,
+                'nf_id': nf.id,
+                'aviso_cotacao_existente': aviso_cotacao_existente,
+                'cotacao_existente_info': cotacao_existente_info,
+                'nf': {
+                    'numero_nf': nf.numero_nf,
+                    'chave_acesso': nf.chave_acesso_nf,
+                    'data_emissao': str(nf.data_emissao or ''),
+                    'cnpj_emitente': cnpj_emit_limpo,
+                    'nome_emitente': nf.nome_emitente,
+                    'uf_emitente': nf.uf_emitente,
+                    'cidade_emitente': nf.cidade_emitente,
+                    'cnpj_destinatario': cnpj_dest_limpo,
+                    'nome_destinatario': nf.nome_destinatario,
+                    'uf_destinatario': nf.uf_destinatario,
+                    'cidade_destinatario': nf.cidade_destinatario,
+                    'valor_total': float(nf.valor_total) if nf.valor_total else None,
+                    'peso_bruto': float(nf.peso_bruto) if nf.peso_bruto else None,
+                    'quantidade_volumes': nf.quantidade_volumes,
+                    'tipo_fonte': nf.tipo_fonte,
+                    'arquivo_nome': nf.arquivo_nome_original,
+                },
+                'itens': [
+                    {
+                        'codigo': it.codigo_produto,
+                        'descricao': it.descricao,
+                        'ncm': it.ncm,
+                        'unidade': it.unidade,
+                        'quantidade': float(it.quantidade) if it.quantidade else None,
+                        'valor_unitario': float(it.valor_unitario) if it.valor_unitario else None,
+                        'valor_total': float(it.valor_total_item) if it.valor_total_item else None,
+                    }
+                    for it in itens_db
+                ],
+                'veiculos': [
+                    {
+                        'chassi': v.chassi,
+                        'cor': v.cor,
+                        'modelo': v.modelo,
+                        'numero_motor': v.numero_motor,
+                        'ano_modelo': v.ano,
+                    }
+                    for v in veiculos_db
+                ],
+                'tipo_material': 'MOTO' if eh_moto else 'CARGA_GERAL',
+                'cliente': {
+                    'id': cliente_id,
+                    'nome': cliente_nome,
+                    'existe': cliente_id is not None,
+                },
+                'enderecos': {
+                    'origem_id': endereco_origem_id,
+                    'origem_existe': endereco_origem_id is not None,
+                    'destino_id': endereco_destino_id,
+                    'destino_existe': endereco_destino_id is not None,
+                },
+                'receita_emitente': None,
+                'receita_emitente_erro': None,
+                'receita_destinatario': None,
+                'receita_destinatario_erro': None,
+                'motos_reconhecidas': motos_reconhecidas,
+            })
+
+        except Exception as e:
+            logger.error("Erro no setup-nf-existente (nf_id=%s): %s", nf_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
     # ==================== CRIAR CLIENTE+ENDERECOS RAPIDO ====================
 
     @bp.route('/api/cotacoes/criar-cliente-rapido', methods=['POST']) # type: ignore
@@ -493,9 +693,17 @@ def register_cotacao_v2_routes(bp):
             }
 
         if request.method == 'GET':
-            return render_template('carvia/cotacoes/criar.html', **_ctx_criar())
+            nf_id_param = request.args.get('nf_id', type=int)
+            return render_template(
+                'carvia/cotacoes/criar.html',
+                nf_id_param=nf_id_param,
+                **_ctx_criar(),
+            )
 
         from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+
+        # Preservar nf_id para re-render em caso de erro
+        nf_id_param = request.form.get('nf_id_existente', type=int)
 
         try:
             # Parse datas
@@ -521,7 +729,11 @@ def register_cotacao_v2_routes(bp):
 
             if erro:
                 flash(erro, 'danger')
-                return render_template('carvia/cotacoes/criar.html', **_ctx_criar())
+                return render_template(
+                    'carvia/cotacoes/criar.html',
+                    nf_id_param=nf_id_param,
+                    **_ctx_criar(),
+                )
 
             # tipo_carga
             tipo_carga = request.form.get('tipo_carga', 'FRACIONADA')
@@ -555,9 +767,81 @@ def register_cotacao_v2_routes(bp):
             except Exception as e_price:
                 logger.warning("Auto-cotacao falhou para %s: %s", cotacao.id, e_price)
 
-            # Criar CarviaNf + pedido + veiculos se veio NF pre-preenchida
+            # Criar pedido vinculado a NF (existente do banco ou nova via JSON)
+            nf_id_existente = request.form.get('nf_id_existente', type=int)
             nf_dados_raw = request.form.get('nf_dados_json', '').strip()
-            if nf_dados_raw:
+
+            if nf_id_existente:
+                # ---- PATH A: NF ja existe no banco (veio da tela de NF) ----
+                try:
+                    from app.carvia.models import (
+                        CarviaNf, CarviaPedido, CarviaPedidoItem,
+                    )
+                    from app.utils.timezone import agora_utc_naive as _agora
+
+                    nf_obj = db.session.get(CarviaNf, nf_id_existente)
+                    if nf_obj and nf_obj.status != 'CANCELADA':
+                        numero_nf = nf_obj.numero_nf or '0'
+
+                        origem = cotacao.endereco_origem
+                        filial = 'RJ' if origem and origem.fisico_uf == 'RJ' else 'SP'
+                        tipo_sep = 'ESTOQUE' if filial == 'SP' else 'CROSSDOCK'
+
+                        pedido = CarviaPedido(
+                            numero_pedido=CarviaPedido.gerar_numero_pedido(cotacao.id),
+                            cotacao_id=cotacao.id,
+                            filial=filial,
+                            tipo_separacao=tipo_sep,
+                            criado_por=current_user.email,
+                            criado_em=_agora(),
+                            atualizado_em=_agora(),
+                        )
+                        db.session.add(pedido)
+                        db.session.flush()
+
+                        # Criar itens do pedido a partir dos itens reais da NF
+                        itens_nf = nf_obj.itens.all()
+                        veiculos_nf = nf_obj.veiculos.all()
+
+                        if itens_nf:
+                            for idx, it in enumerate(itens_nf):
+                                veiculo = veiculos_nf[idx] if idx < len(veiculos_nf) else None
+                                cor = veiculo.cor if veiculo else None
+                                db.session.add(CarviaPedidoItem(
+                                    pedido_id=pedido.id,
+                                    descricao=it.descricao or 'Produto',
+                                    cor=cor,
+                                    quantidade=int(it.quantidade or 1),
+                                    valor_unitario=float(it.valor_unitario) if it.valor_unitario else None,
+                                    valor_total=float(it.valor_total_item) if it.valor_total_item else None,
+                                    numero_nf=numero_nf,
+                                ))
+                        else:
+                            # Fallback: NF sem itens detalhados
+                            db.session.add(CarviaPedidoItem(
+                                pedido_id=pedido.id,
+                                descricao=nf_obj.nome_emitente or 'Produto',
+                                quantidade=1,
+                                valor_total=float(nf_obj.valor_total) if nf_obj.valor_total else None,
+                                numero_nf=numero_nf,
+                            ))
+
+                        pedido.status = 'FATURADO'
+
+                        logger.info(
+                            "Pedido %s criado (NF existente %s) na cotacao %s",
+                            pedido.numero_pedido, numero_nf, cotacao.numero_cotacao,
+                        )
+                    else:
+                        logger.warning(
+                            "NF %s nao encontrada ou cancelada ao criar cotacao",
+                            nf_id_existente,
+                        )
+                except Exception as e_nf:
+                    logger.warning("Erro ao criar pedido via NF existente: %s", e_nf)
+
+            elif nf_dados_raw:
+                # ---- PATH B: NF nova via JSON (veio do upload de arquivo) ----
                 try:
                     import json as json_lib
                     nf_parsed = json_lib.loads(nf_dados_raw)
@@ -706,7 +990,11 @@ def register_cotacao_v2_routes(bp):
             db.session.rollback()
             logger.error("Erro ao criar cotacao: %s", e)
             flash(f'Erro: {e}', 'danger')
-            return render_template('carvia/cotacoes/criar.html', **_ctx_criar())
+            return render_template(
+                'carvia/cotacoes/criar.html',
+                nf_id_param=nf_id_param,
+                **_ctx_criar(),
+            )
 
     # ==================== DETALHE ====================
 

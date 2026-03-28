@@ -12,6 +12,16 @@
     {% set carvia_active = 'cotacoes_v2' %}
     {% include 'carvia/_quick_nav.html' %}
 
+    {% if nf_id_param %}
+    {# Card de status para NF existente (carregada do banco) #}
+    <div class="card mb-3 border-info" id="cardNfExistente">
+        <div class="card-body">
+            <div id="nfExistenteFeedback">
+                <span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando dados da NF...</span>
+            </div>
+        </div>
+    </div>
+    {% else %}
     {# Upload de NF para pre-preencher #}
     <div class="card mb-3">
         <div class="card-body">
@@ -28,6 +38,7 @@
             <div id="prePreencherFeedback" class="mt-2" style="display:none"></div>
         </div>
     </div>
+    {% endif %}
 
     {# Modal Wizard: Criar Cliente + Enderecos #}
     <div class="modal fade" id="modalWizardNF" tabindex="-1" data-bs-backdrop="static">
@@ -101,6 +112,9 @@
             <form method="POST" id="formCotacao" enctype="multipart/form-data">
                 <input type="hidden" name="nf_arquivo_nome" id="nfArquivoNome" value="">
                 <input type="hidden" name="nf_dados_json" id="nfDadosJson" value="">
+                {% if nf_id_param %}
+                <input type="hidden" name="nf_id_existente" id="nfIdExistente" value="{{ nf_id_param }}">
+                {% endif %}
                 {# Cliente #}
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -604,9 +618,11 @@ function aplicarDadosNF(d) {
         });
     }
 
-    // Guardar NF para gravar ao salvar
-    document.getElementById('nfArquivoNome').value = nf.arquivo_nome || '';
-    document.getElementById('nfDadosJson').value = JSON.stringify(d);
+    // Guardar NF para gravar ao salvar — apenas se NAO e NF existente
+    if (!document.getElementById('nfIdExistente')) {
+        document.getElementById('nfArquivoNome').value = nf.arquivo_nome || '';
+        document.getElementById('nfDadosJson').value = JSON.stringify(d);
+    }
 
     // Feedback
     let html = '<div class="alert alert-success py-2 small">' +
@@ -647,5 +663,82 @@ document.getElementById('formCotacao').addEventListener('submit', function(e) {
     }
     document.getElementById('motosJson').value = JSON.stringify(motos);
 });
+
+/* ===== Auto-setup quando vem de NF existente ===== */
+(function() {
+    const nfId = {{ nf_id_param | tojson }};
+    if (!nfId) return;
+
+    fetch('/carvia/api/cotacoes/setup-nf-existente/' + nfId)
+    .then(r => r.json())
+    .then(d => {
+        const fb = document.getElementById('nfExistenteFeedback');
+        if (!fb) return;
+
+        if (!d.sucesso) {
+            fb.innerHTML = '<div class="alert alert-danger py-2 small mb-0">' + (d.erro || 'Erro ao carregar NF') + '</div>';
+            return;
+        }
+
+        // Aviso de cotacao existente com link
+        if (d.aviso_cotacao_existente && d.cotacao_existente_info) {
+            const info = d.cotacao_existente_info;
+            fb.innerHTML = '<div class="alert alert-warning py-2 small mb-0">' +
+                '<i class="fas fa-exclamation-triangle me-1"></i> ' +
+                'Esta NF ja possui cotacao ' +
+                '<a href="/carvia/cotacoes/' + info.cotacao_id + '" class="fw-bold">' +
+                info.numero_cotacao + '</a> (' + info.status + '). ' +
+                'Continuar criara uma nova cotacao para a mesma NF.' +
+                '</div>';
+        } else {
+            const nf = d.nf;
+            fb.innerHTML = '<div class="alert alert-success py-2 small mb-0">' +
+                '<i class="fas fa-check-circle me-1"></i> ' +
+                '<strong>NF ' + (nf.numero_nf || '?') + '</strong> carregada — ' +
+                (d.itens ? d.itens.length : 0) + ' item(ns), ' +
+                'R$ ' + (nf.valor_total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) +
+                ', ' + (nf.peso_bruto || 0) + ' kg. Tipo: <strong>' + d.tipo_material + '</strong>' +
+                '</div>';
+        }
+
+        _setupData = d;
+
+        // Determinar quais passos do wizard sao necessarios
+        _wizSteps = [];
+        if (!d.cliente.existe) _wizSteps.push(1);
+        if (!d.enderecos.origem_existe) _wizSteps.push(2);
+        if (!d.enderecos.destino_existe) _wizSteps.push(3);
+
+        if (_wizSteps.length > 0) {
+            // Pre-preencher wizard com dados da NF do banco
+            const nf = d.nf;
+
+            document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+            document.getElementById('wizOrigCnpj').value = nf.cnpj_emitente || '';
+            document.getElementById('wizOrigRazao').value = nf.nome_emitente || '';
+            document.getElementById('wizDestCnpj').value = nf.cnpj_destinatario || '';
+            document.getElementById('wizDestRazao').value = nf.nome_destinatario || '';
+
+            // Sem receita WS — usar cidade/UF direto da NF
+            document.getElementById('wizOrigCidade').value = nf.cidade_emitente || '';
+            document.getElementById('wizOrigUf').value = nf.uf_emitente || '';
+            document.getElementById('wizDestCidade').value = nf.cidade_destinatario || '';
+            document.getElementById('wizDestUf').value = nf.uf_destinatario || '';
+
+            _wizStep = 0;
+            wizMostrarPasso(_wizSteps[0]);
+            new bootstrap.Modal(document.getElementById('modalWizardNF')).show();
+        } else {
+            // Cliente e enderecos ja existem — preencher form direto
+            aplicarDadosNF(d);
+        }
+    })
+    .catch(err => {
+        const fb = document.getElementById('nfExistenteFeedback');
+        if (fb) {
+            fb.innerHTML = '<div class="alert alert-danger py-2 small mb-0">Erro ao carregar NF: ' + err.message + '</div>';
+        }
+    });
+})();
 </script>
 {% endblock %}
