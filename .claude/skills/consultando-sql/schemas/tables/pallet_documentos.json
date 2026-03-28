@@ -128,14 +128,6 @@
       "unique": false
     },
     {
-      "name": "idx_documento_emissor",
-      "columns": [
-        "cnpj_emissor",
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_documento_tipo_recebido",
       "columns": [
         "tipo",
@@ -154,6 +146,14 @@
       "name": "idx_documento_validade",
       "columns": [
         "data_validade"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_documento_emissor",
+      "columns": [
+        "cnpj_emissor",
+        "tipo"
       ],
       "unique": false
     }
