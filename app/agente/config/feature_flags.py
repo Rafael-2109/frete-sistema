@@ -174,6 +174,19 @@ MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION
 # Minimo de arquivos em um diretorio para ser candidato a consolidacao
 MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
 
+# Cold tier — sanitizacao automatica de memorias ineficazes
+# Move para cold (nao injetadas, mas buscaveis) memorias com eficacia abaixo do threshold
+# Eficacia = effective_count / usage_count (0.10 = 10%)
+# Criterio: usage >= MIN_USAGE E eficacia < MAX_EFFICACY
+# Rollback: AGENT_COLD_MOVE=false ou ajustar thresholds sem deploy
+USE_COLD_MOVE = os.getenv("AGENT_COLD_MOVE", "true").lower() == "true"
+COLD_MOVE_MIN_USAGE = int(os.getenv("AGENT_COLD_MOVE_MIN_USAGE", "20"))
+COLD_MOVE_MAX_EFFICACY = float(os.getenv("AGENT_COLD_MOVE_MAX_EFFICACY", "0.10"))
+
+# Sanitizar memorias empresa (user_id=0) com mesmos criterios
+# Desativar se empresa mover memorias demais: AGENT_COLD_MOVE_EMPRESA=false
+USE_COLD_MOVE_EMPRESA = os.getenv("AGENT_COLD_MOVE_EMPRESA", "true").lower() == "true"
+
 # Merge inteligente de memorias empresa via Sonnet (substitui append cego)
 # Quando true: _try_enrich_existing() usa Sonnet para fundir old+new em versao unica
 # Quando false: fallback para append legado (old + "<!-- Enriquecido em -->" + new)

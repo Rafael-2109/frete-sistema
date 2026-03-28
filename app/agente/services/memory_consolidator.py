@@ -74,36 +74,50 @@ CONSOLIDATION_DIRS = [
 
 def maybe_move_to_cold(user_id: int) -> int:
     """
-    Memory v2 — Fase 3B: Move memórias ineficazes para tier frio.
+    Move memorias ineficazes para tier frio baseado em taxa de eficacia.
 
-    Critério: usage_count >= 20 (injetada 20+ vezes) E effective_count == 0
-    (nunca usada na resposta do agente).
+    Criterio: usage_count >= MIN_USAGE E (effective_count / usage_count) < MAX_EFFICACY.
+    Thresholds configuraveis via env vars (ver feature_flags.py).
 
-    Memórias no tier frio:
-    - NÃO são injetadas automaticamente no contexto
-    - SÃO buscáveis via tool search_cold_memories
-    - NÃO são consolidadas
+    Memorias no tier frio:
+    - NAO sao injetadas automaticamente no contexto
+    - SAO buscaveis via tool search_cold_memories
+    - NAO sao consolidadas
 
     Chamado junto com maybe_consolidate, best-effort.
+    Funciona para memorias pessoais (user_id > 0) e empresa (user_id = 0).
 
     Args:
-        user_id: ID do usuário
+        user_id: ID do usuario (0 = empresa)
 
     Returns:
-        Número de memórias movidas para cold
+        Numero de memorias movidas para cold
     """
     try:
+        from ..config.feature_flags import (
+            USE_COLD_MOVE, COLD_MOVE_MIN_USAGE, COLD_MOVE_MAX_EFFICACY,
+        )
+        if not USE_COLD_MOVE:
+            return 0
+
         from ..models import AgentMemory
         from app import db
+        from sqlalchemy import case, cast, Float
 
-        # Buscar candidatas a cold: muito injetadas, nunca efetivas
+        # Eficacia = effective / usage. Sem uso = 1.0 (nao mover)
+        efficacy = case(
+            (AgentMemory.usage_count > 0,
+             cast(AgentMemory.effective_count, Float) / cast(AgentMemory.usage_count, Float)),
+            else_=1.0,
+        )
+
         candidates = AgentMemory.query.filter(
             AgentMemory.user_id == user_id,
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
-            AgentMemory.category != 'permanent',  # permanentes são imunes
-            AgentMemory.usage_count >= 20,
-            AgentMemory.effective_count == 0,
+            AgentMemory.category != 'permanent',  # permanentes sao imunes
+            AgentMemory.usage_count >= COLD_MOVE_MIN_USAGE,
+            efficacy < COLD_MOVE_MAX_EFFICACY,
         ).all()
 
         if not candidates:
@@ -111,19 +125,21 @@ def maybe_move_to_cold(user_id: int) -> int:
 
         moved = 0
         for mem in candidates:
+            eff_rate = (mem.effective_count / mem.usage_count) if mem.usage_count > 0 else 0
             mem.is_cold = True
             moved += 1
             logger.info(
                 f"[MEMORY_CONSOLIDATOR] Movida para cold: {mem.path} "
-                f"(usage={mem.usage_count}, effective=0)"
+                f"(usage={mem.usage_count}, effective={mem.effective_count}, "
+                f"efficacy={eff_rate:.1%})"
             )
 
         if moved > 0:
             try:
                 db.session.commit()
                 logger.info(
-                    f"[MEMORY_CONSOLIDATOR] {moved} memórias movidas para tier frio com sucesso "
-                    f"(user_id={user_id})"
+                    f"[MEMORY_CONSOLIDATOR] {moved} memorias movidas para tier frio "
+                    f"(user_id={user_id}, threshold=efficacy<{COLD_MOVE_MAX_EFFICACY:.0%})"
                 )
             except Exception as commit_err:
                 db.session.rollback()
@@ -141,60 +157,24 @@ def maybe_move_to_cold(user_id: int) -> int:
 
 def maybe_cleanup_low_value() -> int:
     """
-    Move memorias empresa de baixo valor para cold tier automaticamente.
+    Sanitiza memorias empresa (user_id=0) com baixa eficacia.
 
-    Criterio: memorias em /empresa/termos/ com usage_count >= 30 e effective_count == 0.
-    Termos genericos de logistica sao frequentemente injetados mas NUNCA contribuem
-    para respostas do agente (violacao de R0c do system_prompt).
+    Delega para maybe_move_to_cold(user_id=0) que usa os mesmos criterios
+    configuraveis (eficacia < threshold, usage >= min). Cobre TODOS os paths
+    empresa (termos, protocolos, armadilhas, heuristicas, regras, etc).
 
-    Chamado junto com maybe_consolidate, best-effort.
-    Escopo: apenas memorias empresa (user_id=0) em paths de termos.
+    Controlada por flag USE_COLD_MOVE_EMPRESA (independente de USE_COLD_MOVE).
 
     Returns:
         Numero de memorias movidas para cold.
     """
     try:
-        from ..models import AgentMemory
-        from app import db
-
-        candidates = AgentMemory.query.filter(
-            AgentMemory.user_id == 0,
-            AgentMemory.path.like('%/empresa/termos/%'),
-            AgentMemory.is_directory.is_(False),
-            AgentMemory.is_cold.is_(False),
-            AgentMemory.usage_count >= 30,
-            AgentMemory.effective_count == 0,
-        ).all()
-
-        if not candidates:
+        from ..config.feature_flags import USE_COLD_MOVE_EMPRESA
+        if not USE_COLD_MOVE_EMPRESA:
             return 0
-
-        moved = 0
-        for mem in candidates:
-            mem.is_cold = True
-            moved += 1
-            logger.info(
-                f"[MEMORY_CONSOLIDATOR] Termo low-value → cold: {mem.path} "
-                f"(usage={mem.usage_count}, effective=0)"
-            )
-
-        if moved > 0:
-            try:
-                db.session.commit()
-                logger.info(
-                    f"[MEMORY_CONSOLIDATOR] {moved} termos low-value movidos para cold"
-                )
-            except Exception as commit_err:
-                db.session.rollback()
-                logger.warning(
-                    f"[MEMORY_CONSOLIDATOR] Erro ao committar cleanup: {commit_err}"
-                )
-                return 0
-
-        return moved
-
+        return maybe_move_to_cold(user_id=0)
     except Exception as e:
-        logger.warning(f"[MEMORY_CONSOLIDATOR] Cleanup low-value falhou: {e}")
+        logger.warning(f"[MEMORY_CONSOLIDATOR] Cleanup empresa falhou (ignorado): {e}")
         return 0
 
 

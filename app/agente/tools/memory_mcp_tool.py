@@ -1661,28 +1661,29 @@ try:
                         f"[MEMORY_MCP] Sync dedup embed failed (ignorado): {sync_emb_err}"
                     )
 
-            # Best-effort: verificar se memórias precisam de consolidação + tier frio
-            # Skip consolidacao para memorias empresa (user_id=0) por enquanto
-            if actual_user_id != 0:
-                try:
-                    from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
-                    _consolidate_user_id = actual_user_id
-                    def _consolidate_and_cold():
+            # Best-effort: consolidacao + tier frio
+            # Consolidacao Sonnet: apenas pessoal (user_id > 0)
+            # Cold move: pessoal + empresa (eficacia < threshold)
+            try:
+                from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
+                _consolidate_user_id = actual_user_id
+                def _consolidate_and_cold():
+                    if _consolidate_user_id != 0:
                         maybe_consolidate(_consolidate_user_id)
-                        maybe_move_to_cold(_consolidate_user_id)
-                    _execute_with_context(_consolidate_and_cold)
-                except Exception as consolidation_err:
-                    logger.debug(
-                        f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
-                    )
+                    maybe_move_to_cold(_consolidate_user_id)
+                _execute_with_context(_consolidate_and_cold)
+            except Exception as consolidation_err:
+                logger.debug(
+                    f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
+                )
 
-            # Best-effort: cleanup automatico de termos empresa low-value
+            # Best-effort: cleanup empresa (user_id=0) — redundancia se save ja era empresa
             try:
                 from ..services.memory_consolidator import maybe_cleanup_low_value
                 _execute_with_context(maybe_cleanup_low_value)
             except Exception as cleanup_err:
                 logger.debug(
-                    f"[MEMORY_MCP] Cleanup low-value não executado (ignorado): {cleanup_err}"
+                    f"[MEMORY_MCP] Cleanup empresa não executado (ignorado): {cleanup_err}"
                 )
 
             # Best-effort: embeddar memória + KG em daemon thread (não bloqueia retorno)
