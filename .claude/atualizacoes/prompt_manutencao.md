@@ -16,13 +16,14 @@ DATA=$(date +%Y-%m-%d)
 mkdir -p /tmp/manutencao-$DATA
 ```
 
-Ler os 6 arquivos de dominio:
+Ler os 7 arquivos de dominio:
 - `.claude/atualizacoes/dominios/dominio-1-claude-md.md`
 - `.claude/atualizacoes/dominios/dominio-2-references.md`
 - `.claude/atualizacoes/dominios/dominio-3-memorias.md`
 - `.claude/atualizacoes/dominios/dominio-4-sentry.md`
 - `.claude/atualizacoes/dominios/dominio-5-tests.md`
 - `.claude/atualizacoes/dominios/dominio-6-memory-eval.md`
+- `.claude/atualizacoes/dominios/dominio-7-agent-report.md`
 
 ---
 
@@ -68,9 +69,9 @@ Se TODOS os 4 status estiverem FAILED ou ausentes, PULAR Estagio 2 e ir direto p
 
 ---
 
-## ESTAGIO 2 — Lancar 2 agentes EM PARALELO
+## ESTAGIO 2 — Lancar 3 agentes EM PARALELO
 
-CRITICO: Lancar os 2 agentes SIMULTANEAMENTE.
+CRITICO: Lancar os 3 agentes SIMULTANEAMENTE em uma unica mensagem com 3 Agent tool calls.
 
 ### Agent D5 — Test Runner
 - Prompt: conteudo COMPLETO de `dominio-5-tests.md`
@@ -82,9 +83,14 @@ CRITICO: Lancar os 2 agentes SIMULTANEAMENTE.
 - Mode: bypassPermissions
 - Espera: escrever `/tmp/manutencao-{DATA}/dominio-6-status.json`
 
+### Agent D7 — Agent Intelligence Report (Render Postgres)
+- Prompt: conteudo COMPLETO de `dominio-7-agent-report.md`
+- Mode: bypassPermissions
+- Espera: escrever `/tmp/manutencao-{DATA}/dominio-7-status.json`
+
 ### Verificacao pos-Estagio 2
 
-Mesma logica do Estagio 1 — verificar `dominio-5-status.json` e `dominio-6-status.json`.
+Mesma logica do Estagio 1 — verificar `dominio-5-status.json`, `dominio-6-status.json` e `dominio-7-status.json`.
 
 ---
 
@@ -92,7 +98,7 @@ Mesma logica do Estagio 1 — verificar `dominio-5-status.json` e `dominio-6-sta
 
 ### 3.1 Coletar resultados
 
-Ler TODOS os 6 status.json existentes em `/tmp/manutencao-{DATA}/`.
+Ler TODOS os 7 status.json existentes em `/tmp/manutencao-{DATA}/`.
 Para cada dominio:
 - Se status.json existe: extrair status, resumo, metricas
 - Se status.json nao existe: marcar como FAILED (agente nao completou)
@@ -136,6 +142,10 @@ git commit -m "maint(tests): relatorio de testes $DATA" || true
 # D6 (Memory Eval) — apenas relatorio
 git add .claude/atualizacoes/memory-eval/
 git commit -m "maint(memory-eval): avaliacao de saude $DATA" || true
+
+# D7 (Agent Intelligence Report) — apenas relatorio
+git add .claude/atualizacoes/agent-reports/
+git commit -m "maint(agent-report): relatorio de inteligencia $DATA" || true
 ```
 
 NOTA: `|| true` garante que commit vazio (sem mudancas) nao aborta o script.
@@ -148,7 +158,7 @@ Gerar `.claude/atualizacoes/atualizacao-{DATA}-consolidado.md`:
 # Manutencao Semanal Consolidada — {DATA}
 
 **Data**: {DATA}
-**Dominios executados**: 6
+**Dominios executados**: 7
 **Dominios OK**: X | **PARCIAL**: Y | **FAILED**: Z
 
 ## Resumo por Dominio
@@ -161,6 +171,7 @@ Gerar `.claude/atualizacoes/atualizacao-{DATA}-consolidado.md`:
 | 4 | Sentry Triage | OK/PARCIAL/FAILED | ... |
 | 5 | Test Runner | OK/PARCIAL/FAILED | ... |
 | 6 | Memory Eval | OK/PARCIAL/FAILED | ... |
+| 7 | Agent Intelligence Report | OK/PARCIAL/FAILED | ... |
 
 ## Metricas
 
@@ -183,6 +194,12 @@ Gerar `.claude/atualizacoes/atualizacao-{DATA}-consolidado.md`:
 - Health score: X/100
 - Total memorias: X, cold: Y, stale 60d: Z
 - Recomendacoes: N
+
+### Agent Intelligence Report
+- Health score: X/100
+- Sessoes analisadas: X, friction score: Y
+- Recomendacoes: N, backlog: M itens
+- Trend: improving/stable/declining
 
 ## Erros e Falhas
 (Listar erros de cada dominio que falhou)
@@ -216,6 +233,7 @@ Relatorio consolidado: \`.claude/atualizacoes/atualizacao-$DATA-consolidado.md\`
 - D4: Sentry Triage + Fixes
 - D5: Test Runner
 - D6: Memory Eval (Producao)
+- D7: Agent Intelligence Report (Bridge)
 
 Gerado automaticamente pelo Orquestrador de Manutencao." \
   --base main

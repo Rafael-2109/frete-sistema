@@ -1,7 +1,7 @@
 # Plano de Atualizacao Automatizada
 
 **Criado**: 27/03/2026
-**Atualizado**: 28/03/2026 (v2 — Orquestrador Paralelo)
+**Atualizado**: 28/03/2026 (v3 — Agent Intelligence Report)
 **Frequencia**: Semanal (segunda-feira, 10:00 BRT)
 **Executor**: OpenClaw Cron → Claude Code (Opus)
 
@@ -9,7 +9,7 @@
 
 ## Visao Geral
 
-Tarefa agendada que executa **6 dominios** de manutencao em **3 estagios paralelos**, gerando relatorios rastreaveis para cada execucao e um relatorio consolidado.
+Tarefa agendada que executa **7 dominios** de manutencao em **3 estagios paralelos**, gerando relatorios rastreaveis para cada execucao e um relatorio consolidado.
 
 **Scheduler unico**: OpenClaw (local). RemoteTrigger desabilitado em 28/03/2026.
 
@@ -25,6 +25,7 @@ Tarefa agendada que executa **6 dominios** de manutencao em **3 estagios paralel
 | 4 | **Sentry** | [`sentry/`](sentry/) | [`dominios/dominio-4-sentry.md`](dominios/dominio-4-sentry.md) | Tria issues do Sentry, corrige bugs tecnicos simples, gera relatorio |
 | 5 | **Tests** | [`tests/`](tests/) | [`dominios/dominio-5-tests.md`](dominios/dominio-5-tests.md) | Executa suite pytest e reporta resultados com correlacao D4 |
 | 6 | **Memory Eval** | [`memory-eval/`](memory-eval/) | [`dominios/dominio-6-memory-eval.md`](dominios/dominio-6-memory-eval.md) | Avalia saude do sistema de memorias em producao (Render Postgres) |
+| 7 | **Agent Intelligence Report** | [`agent-reports/`](agent-reports/) | [`dominios/dominio-7-agent-report.md`](dominios/dominio-7-agent-report.md) | Analisa sessoes, tools, friccao e gera recomendacoes prescritivas (Bridge Agent SDK <-> Claude Code) |
 
 ---
 
@@ -42,9 +43,10 @@ OpenClaw cron (seg 10:00)
         │   ├── D3: Memorias Cleanup
         │   └── D4: Sentry Triage + Fixes
         │
-        ├── ESTAGIO 2 — 2 Agent calls em PARALELO:
+        ├── ESTAGIO 2 — 3 Agent calls em PARALELO:
         │   ├── D5: Test Runner (apos D4 completar)
-        │   └── D6: Memory Eval (Render Postgres)
+        │   ├── D6: Memory Eval (Render Postgres)
+        │   └── D7: Agent Intelligence Report (Render Postgres + API POST)
         │
         └── ESTAGIO 3 — Consolidacao:
             ├── Commits atomicos por dominio
@@ -73,6 +75,7 @@ OpenClaw cron (seg 10:00)
     dominio-4-sentry.md
     dominio-5-tests.md
     dominio-6-memory-eval.md
+    dominio-7-agent-report.md
   claude_md/
     README.md                   ← Manual: como atualizar CLAUDE.md
     historico.md                ← Indice de todas as atualizacoes
@@ -95,6 +98,10 @@ OpenClaw cron (seg 10:00)
   memory-eval/
     historico.md
     atualizacao-YYYY-MM-DD-N.md
+  agent-reports/
+    README.md                   ← Manual do D7
+    historico.md                ← Indice de relatorios
+    report-YYYY-MM-DD.md        ← Relatorios semanais (bridge Agent <-> Claude Code)
   atualizacao-YYYY-MM-DD-consolidado.md  ← Relatorio consolidado por execucao
 ```
 
@@ -121,8 +128,9 @@ ESTAGIO 1 (paralelo):
   D4 Sentry     ─┘
 
 ESTAGIO 2 (paralelo):
-  D5 Tests      ─┬─ Esperar ambos
-  D6 Memory Eval─┘
+  D5 Tests           ─┬─ Esperar todos
+  D6 Memory Eval      │
+  D7 Agent Report    ─┘
 
 ESTAGIO 3 (sequencial):
   Consolidar → Commit → Push → PR
@@ -152,3 +160,4 @@ Cada dominio segue o ciclo: **Avaliar → Atualizar → Relatorio → Status JSO
 |------|--------|-------------|
 | 27/03/2026 | v1 | Criacao — 3 dominios sequenciais + RemoteTrigger |
 | 28/03/2026 | v2 | Orquestrador Paralelo — 6 dominios, 3 estagios, RemoteTrigger desabilitado |
+| 28/03/2026 | v3 | Agent Intelligence Report — D7 adicionado (bridge Agent SDK <-> Claude Code), Estagio 2 de 2→3 agentes |

@@ -74,6 +74,11 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         if stale_alert:
             parts.append(stale_alert)
 
+        # 7. Relatorio de inteligencia D7 (recomendacoes do cron semanal)
+        intelligence_alert = _check_intelligence_report()
+        if intelligence_alert:
+            parts.append(intelligence_alert)
+
         if not parts:
             return None
 
@@ -426,3 +431,75 @@ def _extract_modules_from_commit(commit_hash: str, project_dir: str) -> str:
 
     except Exception:
         return ''
+
+
+def _check_intelligence_report() -> Optional[str]:
+    """
+    Verifica se ha relatorio de inteligencia D7 recente (< 14 dias).
+
+    Extrai top 3 recomendacoes prescritivas do report_json e injeta
+    como XML no briefing. Zero custo LLM — query SQL direta.
+
+    Returns:
+        XML tag com recomendacoes ou None se nao houver relatorio recente.
+    """
+    try:
+        from ..models import AgentIntelligenceReport
+
+        report = AgentIntelligenceReport.get_latest()
+        if not report or not report.report_date:
+            return None
+
+        now = agora_utc_naive()
+        report_age = (now.date() - report.report_date).days
+        if report_age > 14:
+            return None
+
+        report_data = report.report_json
+        if not isinstance(report_data, dict):
+            return None
+
+        recs = report_data.get('recommendations', [])
+        if not recs or not isinstance(recs, list):
+            return None
+
+        # Top 3 recomendacoes, priorizando critical > warning > info
+        severity_order = {'critical': 0, 'warning': 1, 'info': 2, 'success': 3}
+        sorted_recs = sorted(
+            recs,
+            key=lambda r: severity_order.get(r.get('severity', 'info'), 99)
+        )
+        top_recs = sorted_recs[:3]
+
+        # Formatar como XML compacto
+        def _xml_esc(text: str) -> str:
+            """Escapa texto para XML (& < > ")."""
+            return (
+                text.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+            )
+
+        rec_parts = []
+        for rec in top_recs:
+            severity = _xml_esc(str(rec.get('severity', 'info')))
+            safe_title = _xml_esc(str(rec.get('title', '?')))
+            action = rec.get('suggested_action', '')
+            safe_action = _xml_esc(str(action)) if action else ''
+            rec_parts.append(
+                f'<rec severity="{severity}">{safe_title}'
+                f'{" — " + safe_action if safe_action else ""}</rec>'
+            )
+
+        score = float(report.health_score or 0)
+        return (
+            f'<intelligence_report date="{report.report_date}" '
+            f'score="{score:.0f}" age_days="{report_age}">'
+            + ''.join(rec_parts)
+            + '</intelligence_report>'
+        )
+
+    except Exception as e:
+        logger.debug(f"[BRIEFING] Intelligence report check falhou (ignorado): {e}")
+        return None

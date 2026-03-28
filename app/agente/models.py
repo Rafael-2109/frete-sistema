@@ -937,3 +937,98 @@ class AgentMemoryEntityRelation(db.Model):
             f'<AgentMemoryEntityRelation '
             f'src={self.source_entity_id} {self.relation_type} tgt={self.target_entity_id}>'
         )
+
+
+class AgentIntelligenceReport(db.Model):
+    """
+    Relatorio de inteligencia do agente (D7 do cron semanal).
+
+    Bridge Agent SDK <-> Claude Code: persiste metricas, recomendacoes prescritivas
+    e backlog acumulado. Lido pelo intersession_briefing (agente) e via MCP (Claude Code).
+
+    report_json contem:
+        - period: {start, end, days}
+        - metrics: {sessions, cost, resolution_rate, unique_users}
+        - tool_effectiveness: [{tool, calls, category, trend}]
+        - skill_gaps: [{topic, frequency, tools_available, recommendation}]
+        - friction_hotspots: [{pattern, count, suggestion}]
+        - memory_corrections: [{path, corrections, suggestion}]
+        - recommendations: [{id, severity, title, description, affected_files, suggested_action, weeks_open}]
+
+    backlog_json: lista de recomendacoes acumuladas de semanas anteriores (auto-escalate apos 4 semanas).
+    """
+    __tablename__ = 'agent_intelligence_reports'
+
+    id = db.Column(db.Integer, primary_key=True)
+    report_date = db.Column(db.Date, unique=True, nullable=False, index=True)
+
+    # Metricas de resumo (para queries rapidas sem parsear JSONB)
+    health_score = db.Column(db.Numeric(5, 1), default=0)
+    friction_score = db.Column(db.Numeric(5, 1), default=0)
+    recommendation_count = db.Column(db.Integer, default=0)
+    sessions_analyzed = db.Column(db.Integer, default=0)
+
+    # Conteudo completo
+    report_json = db.Column(db.JSON, nullable=False)
+    report_markdown = db.Column(db.Text, nullable=False)
+    backlog_json = db.Column(db.JSON, default=list)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    def __repr__(self):
+        return f'<AgentIntelligenceReport {self.report_date} score={self.health_score}>'
+
+    @classmethod
+    def get_latest(cls) -> Optional['AgentIntelligenceReport']:
+        """Retorna o relatorio mais recente."""
+        return cls.query.order_by(cls.report_date.desc()).first()
+
+    @classmethod
+    def upsert(
+        cls,
+        report_date,
+        health_score: float,
+        friction_score: float,
+        recommendation_count: int,
+        sessions_analyzed: int,
+        report_json: dict,
+        report_markdown: str,
+        backlog_json: list,
+    ) -> 'AgentIntelligenceReport':
+        """
+        Insere ou atualiza relatorio para uma data (UNIQUE constraint em report_date).
+
+        Returns:
+            Instancia criada/atualizada
+        """
+        from sqlalchemy.orm.attributes import flag_modified
+
+        existing = cls.query.filter_by(report_date=report_date).first()
+
+        if existing:
+            existing.health_score = health_score
+            existing.friction_score = friction_score
+            existing.recommendation_count = recommendation_count
+            existing.sessions_analyzed = sessions_analyzed
+            existing.report_json = report_json
+            existing.report_markdown = report_markdown
+            existing.backlog_json = backlog_json
+            existing.updated_at = agora_utc_naive()
+            flag_modified(existing, 'report_json')
+            flag_modified(existing, 'backlog_json')
+            return existing
+
+        report = cls(
+            report_date=report_date,
+            health_score=health_score,
+            friction_score=friction_score,
+            recommendation_count=recommendation_count,
+            sessions_analyzed=sessions_analyzed,
+            report_json=report_json,
+            report_markdown=report_markdown,
+            backlog_json=backlog_json,
+        )
+        db.session.add(report)
+        return report
