@@ -654,13 +654,21 @@ VERIFIQUE COM RIGOR (todos os itens sao obrigatorios):
      WHERE cod_uf = 35                  -> WHERE cod_uf = '35'
      WHERE numero_nf = 12345           -> WHERE numero_nf = '12345'
 
-5. Filtros necessarios estao presentes? (ativo=True, sincronizado_nf=False, status_nf='Lancado', etc.)
+5. ANTI-PATTERN "OR defensivo": Se a SQL contem um padrao como:
+     WHERE campo = 'valor' OR campo = valor_sem_aspas
+   onde a segunda clausula compara varchar com integer (redundancia defensiva do LLM),
+   REMOVA a clausula OR redundante. Exemplos a CORRIGIR:
+     WHERE numero_nf = '145398' OR numero_nf = 145398  -> WHERE numero_nf = '145398'
+     WHERE cnpj = '12345' OR cnpj = 12345              -> WHERE cnpj = '12345'
+   A clausula com aspas e SEMPRE a correta para campos varchar.
 
-6. JOINs usam os campos de FK corretos conforme os relacionamentos?
+6. Filtros necessarios estao presentes? (ativo=True, sincronizado_nf=False, status_nf='Lancado', etc.)
 
-7. Tem LIMIT? (maximo 500)
+7. JOINs usam os campos de FK corretos conforme os relacionamentos?
 
-8. A SQL e segura? (apenas SELECT, sem funcoes perigosas)
+8. Tem LIMIT? (maximo 500)
+
+9. A SQL e segura? (apenas SELECT, sem funcoes perigosas)
 
 REGRA DE FALLBACK: Se a SQL tem campos que NAO existem no schema e voce NAO consegue
 determinar o campo correto, retorne approved=false com improved_sql=null e reason
@@ -785,6 +793,69 @@ class SQLExecutor:
                     raise RuntimeError(f"Tabela ou campo nao existe: {error_msg}")
                 else:
                     raise RuntimeError(f"Erro na execucao: {error_msg}")
+
+
+# =====================================================================
+# SANITIZACAO POS-EVALUATOR
+# =====================================================================
+
+def _sanitize_type_mismatches(sql: str) -> str:
+    """Remove cláusulas OR redundantes com type mismatch (varchar = integer).
+
+    O LLM gera padrão defensivo como:
+        WHERE campo = '12345' OR campo = 12345
+    A segunda cláusula causa "operator does not exist: character varying = integer".
+
+    Esta função remove a cláusula OR redundante, mantendo a versão com aspas (correta).
+
+    Patterns detectados:
+    1. campo = 'valor' OR campo = valor  → campo = 'valor'
+    2. campo = valor OR campo = 'valor'  → campo = 'valor'
+    """
+    import re
+
+    # Pattern 1: campo = 'valor' OR campo = valor_inteiro
+    # Captura: (campo) = ('valor') OR \1 = (inteiro)
+    pattern1 = re.compile(
+        r"""(\b\w+)          # campo (group 1)
+            \s*=\s*          # =
+            '([^']+)'        # 'valor' (group 2)
+            \s+OR\s+         # OR
+            \1               # mesmo campo
+            \s*=\s*          # =
+            (\d+)            # inteiro sem aspas (group 3)
+        """,
+        re.IGNORECASE | re.VERBOSE
+    )
+
+    # Pattern 2: campo = valor_inteiro OR campo = 'valor'
+    pattern2 = re.compile(
+        r"""(\b\w+)          # campo (group 1)
+            \s*=\s*          # =
+            (\d+)            # inteiro sem aspas (group 2)
+            \s+OR\s+         # OR
+            \1               # mesmo campo
+            \s*=\s*          # =
+            '([^']+)'        # 'valor' (group 3)
+        """,
+        re.IGNORECASE | re.VERBOSE
+    )
+
+    original = sql
+
+    # Aplicar pattern 1: manter campo = 'valor'
+    sql = pattern1.sub(r"\1 = '\2'", sql)
+
+    # Aplicar pattern 2: manter campo = 'valor'
+    sql = pattern2.sub(r"\1 = '\3'", sql)
+
+    if sql != original:
+        logger.info(
+            f"[TEXT_TO_SQL] Sanitização type mismatch aplicada: "
+            f"'{original[:100]}' → '{sql[:100]}'"
+        )
+
+    return sql
 
 
 # =====================================================================
@@ -1021,6 +1092,14 @@ class TextToSQLPipeline:
                     return result
 
             result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
+
+            # =====================================================
+            # ETAPA 2b: SANITIZAÇÃO — Corrigir type mismatches residuais
+            # =====================================================
+            # O evaluator pode não capturar o padrão "OR campo = inteiro" (defensivo do LLM).
+            # Esta sanitização remove cláusulas OR redundantes com tipo incompatível.
+            sql = _sanitize_type_mismatches(sql)
+            result["sql"] = sql
 
             # =====================================================
             # ETAPA 3: SAFETY — Validacao de seguranca

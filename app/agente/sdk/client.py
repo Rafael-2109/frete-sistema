@@ -1567,7 +1567,8 @@ Nunca invente informações."""
                     f"reseta em {rate_info.resets_at}"
                 )
             elif rate_info.status == 'rejected':
-                logger.error(
+                # WARNING (não ERROR): rate limit é tratável e esperado em picos
+                logger.warning(
                     f"[RATE_LIMIT] REJEITADO: "
                     f"tipo={getattr(rate_info, 'rate_limit_type', 'unknown')}, "
                     f"reseta em {rate_info.resets_at}"

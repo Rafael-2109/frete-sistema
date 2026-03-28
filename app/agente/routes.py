@@ -723,7 +723,8 @@ def _stream_chat_response(
                         timeout=timeout_seconds
                     )
                 except asyncio.TimeoutError:
-                    logger.error(f"[AGENTE] async_stream timeout após {timeout_seconds}s")
+                    # WARNING (não ERROR): timeout é tratado — erro enviado ao frontend
+                    logger.warning(f"[AGENTE] async_stream timeout após {timeout_seconds}s")
                     event_queue.put(_sse_event('error', {
                         'message': 'Tempo limite interno excedido. A operação demorou muito.',
                         'timeout': True
@@ -733,8 +734,21 @@ def _stream_chat_response(
             # v2 (asyncio.run) desligado em 2026-03-27.
             from .sdk.client_pool import submit_coroutine
             future = submit_coroutine(async_stream_with_timeout())
-            future.result(timeout=MAX_STREAM_DURATION_SECONDS)
-            logger.info("[AGENTE] submit_coroutine() completado com sucesso")
+            try:
+                future.result(timeout=MAX_STREAM_DURATION_SECONDS)
+                logger.info("[AGENTE] submit_coroutine() completado com sucesso")
+            except TimeoutError:
+                # Cancelar task asyncio orphan no daemon thread
+                # (evita "Task was destroyed but it is pending" no GC)
+                future.cancel()
+                logger.warning(
+                    f"[AGENTE] future.result() timeout após {MAX_STREAM_DURATION_SECONDS}s "
+                    "— task cancelada"
+                )
+                event_queue.put(_sse_event('error', {
+                    'message': 'Tempo limite excedido. Tente novamente.',
+                    'timeout': True
+                }))
 
         except (Exception, BaseExceptionGroup) as e:
             if isinstance(e, BaseExceptionGroup):

@@ -19,6 +19,8 @@ Ref: .claude/references/ROADMAP_SDK_CLIENT.md (Fase 0, Task 0.2)
 
 import asyncio
 import logging
+import os
+import signal
 import threading
 import time
 from concurrent.futures import Future
@@ -73,22 +75,48 @@ async def _force_kill_subprocess(client) -> bool:
         return True
     except Exception as e:
         logger.warning(f"[SDK_POOL] _force_kill_subprocess: transport.close() falhou: {e}")
-        # Último recurso: terminate direto no processo
-        try:
-            process = getattr(transport, '_process', None)
-            if process and process.returncode is None:
+        # Fallback: terminate/kill direto no processo
+        process = getattr(transport, '_process', None)
+        if not process:
+            logger.warning("[SDK_POOL] _force_kill_subprocess: nenhum _process no transport")
+            return False
+
+        pid = getattr(process, 'pid', None)
+
+        # Nível 1: SIGTERM via process.terminate()
+        if process.returncode is None:
+            try:
                 process.terminate()
-                logger.info("[SDK_POOL] _force_kill_subprocess: process.terminate() OK")
+                # Aguardar brevemente para terminate fazer efeito
+                await asyncio.sleep(0.5)
+                if process.returncode is not None:
+                    logger.info("[SDK_POOL] _force_kill_subprocess: process.terminate() OK")
+                    return True
+            except Exception as e2:
+                logger.warning(f"[SDK_POOL] _force_kill_subprocess: terminate() falhou: {e2}")
+
+        # Nível 2: SIGKILL via os.kill (último recurso)
+        if process.returncode is None and pid:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                logger.warning(f"[SDK_POOL] _force_kill_subprocess: SIGKILL enviado para PID {pid}")
                 return True
-            else:
-                logger.debug(
-                    "[SDK_POOL] _force_kill_subprocess: processo já terminou "
-                    f"(returncode={getattr(process, 'returncode', 'N/A')})"
+            except ProcessLookupError:
+                logger.debug(f"[SDK_POOL] _force_kill_subprocess: PID {pid} já não existe")
+                return True  # Processo já morreu
+            except Exception as e3:
+                logger.error(
+                    f"[SDK_POOL] _force_kill_subprocess: FALHA TOTAL "
+                    f"(terminate + SIGKILL) PID={pid}: {e3}"
                 )
                 return False
-        except Exception as e2:
-            logger.error(f"[SDK_POOL] _force_kill_subprocess: FALHA TOTAL: {e2}")
-            return False
+
+        if process.returncode is not None:
+            logger.debug(
+                "[SDK_POOL] _force_kill_subprocess: processo já terminou "
+                f"(returncode={process.returncode})"
+            )
+        return process.returncode is not None
 
 
 # =============================================================================
@@ -128,6 +156,7 @@ _registry_lock = threading.Lock()
 # Daemon thread e event loop persistente
 _sdk_loop: Optional[asyncio.AbstractEventLoop] = None
 _sdk_loop_thread: Optional[threading.Thread] = None
+_cleanup_task: Optional[Future] = None  # Future da task _periodic_cleanup (rastreável)
 _pool_initialized = False
 _shutdown_requested = False
 
@@ -142,7 +171,7 @@ def _ensure_pool_initialized() -> bool:
     Returns:
         True se o pool está pronto, False se flag desabilitada.
     """
-    global _sdk_loop, _sdk_loop_thread, _pool_initialized
+    global _sdk_loop, _sdk_loop_thread, _cleanup_task, _pool_initialized
 
     if _pool_initialized:
         return True
@@ -165,10 +194,10 @@ def _ensure_pool_initialized() -> bool:
         )
         _sdk_loop_thread.start()
 
-        # Agendar cleanup periódico
-        _sdk_loop.call_soon_threadsafe(
-            _sdk_loop.create_task,
-            _periodic_cleanup(),
+        # Agendar cleanup periódico — armazenar referência para cancelar no shutdown
+        # (sem referência, a task é GC'd enquanto pendente → "Task was destroyed")
+        _cleanup_task = asyncio.run_coroutine_threadsafe(
+            _periodic_cleanup(), _sdk_loop
         )
 
         _pool_initialized = True
@@ -499,13 +528,20 @@ def shutdown_pool():
     Chamado no worker_exit hook do Gunicorn ou em testes.
     Thread-safe — pode ser chamado de qualquer thread.
     """
-    global _shutdown_requested, _pool_initialized
+    global _shutdown_requested, _pool_initialized, _cleanup_task
 
     if not _pool_initialized:
         return
 
     _shutdown_requested = True
     logger.info("[SDK_POOL] Shutdown iniciado...")
+
+    # Cancelar cleanup task periódica ANTES de desconectar clients
+    # (evita "Task was destroyed but it is pending" no GC)
+    if _cleanup_task and not _cleanup_task.done():
+        _cleanup_task.cancel()
+        logger.debug("[SDK_POOL] Cleanup task cancelada")
+    _cleanup_task = None
 
     # Desconectar todos os clients
     with _registry_lock:
