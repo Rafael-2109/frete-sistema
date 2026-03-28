@@ -489,13 +489,33 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         if armadilhas:
             parts.append('  <active_traps>')
             for arm in armadilhas:
-                # Extrair título do XML content
-                title_match = re.search(r'<titulo>(.*?)</titulo>', arm.content or '', re.DOTALL)
-                title = title_match.group(1).strip() if title_match else arm.path.split('/')[-1].replace('.xml', '')
-                # Truncar título
+                content = arm.content or ''
+                # Suporta formato XML legado (<titulo>/<prescricao>) e novo (WHEN/DO)
+                title_match = re.search(r'<titulo>(.*?)</titulo>', content, re.DOTALL)
+                if title_match:
+                    # Formato XML legado
+                    title = title_match.group(1).strip()
+                    presc_match = re.search(r'<prescricao>(.*?)</prescricao>', content, re.DOTALL)
+                    prescricao = presc_match.group(1).strip() if presc_match else ''
+                else:
+                    # Formato compacto WHEN/DO
+                    lines = content.strip().split('\n')
+                    title = lines[0].strip() if lines else arm.path.split('/')[-1].replace('.xml', '')
+                    # Extrair DO: line
+                    prescricao = ''
+                    for line in lines:
+                        if line.strip().startswith('DO:'):
+                            prescricao = line.strip()[3:].strip()
+                            break
+
                 if len(title) > 80:
                     title = title[:77] + '...'
-                parts.append(f'    - {title}')
+                if prescricao:
+                    if len(prescricao) > 200:
+                        prescricao = prescricao[:197] + '...'
+                    parts.append(f'    - {title}\n      DO: {prescricao}')
+                else:
+                    parts.append(f'    - {title}')
             parts.append('  </active_traps>')
 
         parts.append('</routing_context>')

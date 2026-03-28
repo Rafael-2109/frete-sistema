@@ -291,6 +291,23 @@
 
   Para analise P1-P7 detalhada ou decisao parcial vs aguardar: delegar ao subagente `analista-carteira`.
   Regras completas: .claude/references/negocio/REGRAS_P1_P7.md
+
+  <critical_ids name="odoo_companies">
+    | CNPJ | Company ID | Codigo |
+    |------|------------|--------|
+    | 61724241000178 | 1 | FB |
+    | 61724241000259 | 3 | SC |
+    | 61724241000330 | 4 | CD |
+    | 18467441000163 | 5 | LF |
+    Company ID errado = operacao financeira no CNPJ errado (catastrofico e silencioso).
+    IDs completos (picking_type, journal, product): .claude/references/odoo/IDS_FIXOS.md
+  </critical_ids>
+
+  <critical_fields name="carteira_separacao">
+    CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo` — campo errado retorna 0).
+    Separacao: `qtd_saldo` (NAO `qtd_saldo_produto_pedido`).
+    Separacao tem `expedicao`, `agendamento`, `protocolo` — CarteiraPrincipal NAO tem.
+  </critical_fields>
 </business_context>
 
 <knowledge_base>
