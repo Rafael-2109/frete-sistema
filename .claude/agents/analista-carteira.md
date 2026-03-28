@@ -207,4 +207,3 @@ Escrever em `/tmp/subagent-findings/analista-carteira-{contexto}.md` com:
 **Script principal:** `.claude/skills/gerindo-expedicao/scripts/analisando_carteira_completa.py` - Analise completa seguindo algoritmo P1-P7
 
 **Outros scripts:** Disponiveis na skill `.claude/skills/gerindo-expedicao` para consultas especificas
-
