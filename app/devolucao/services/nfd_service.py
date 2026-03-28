@@ -840,17 +840,21 @@ class NFDService:
             count = 0
             auto_resolvidas = 0
             cache_precos = {}  # {cod_produto: {mediana_caixa, qtd_por_caixa, total_vendas} ou None}
+
+            # Batch: carregar numeros_item existentes em 1 query (evita N+1)
+            numeros_existentes = set()
+            if nfd_id:
+                rows = db.session.query(NFDevolucaoLinha.numero_item).filter(
+                    NFDevolucaoLinha.nf_devolucao_id == nfd_id,
+                    NFDevolucaoLinha.numero_item != None  # noqa: E711
+                ).all()
+                numeros_existentes = {r[0] for r in rows}
+
             for item in itens:
                 # Verificar se já existe linha com mesmo numero_item
                 numero_item = item.get('numero_item')
-                if numero_item:
-                    existe = NFDevolucaoLinha.query.filter_by(
-                        nf_devolucao_id=nfd_id,
-                        numero_item=numero_item
-                    ).first()
-
-                    if existe:
-                        continue
+                if numero_item and numero_item in numeros_existentes:
+                    continue
 
                 # Criar linha
                 linha = NFDevolucaoLinha(
@@ -910,6 +914,32 @@ class NFDService:
                         fator = float(depara.get('fator_conversao', 1.0))
                         quantidade = float(item.get('quantidade', 0)) if item.get('quantidade') else None
 
+                        # =====================================================
+                        # ISSUE 2: Derivar fator do XML via preco quando possivel
+                        # O XML nao carrega fator_conversao, mas podemos inferir
+                        # comparando valor_unitario do XML com mediana do faturamento
+                        # =====================================================
+                        if tipo_unidade == 'UNIDADE' and item.get('valor_unitario'):
+                            valor_un_xml = float(item.get('valor_unitario', 0))
+                            dados_preco = cache_precos.get(depara['nosso_codigo'])
+                            if dados_preco and valor_un_xml > 0:
+                                mediana_cx = dados_preco['mediana_caixa']
+                                fator_inferido = round(mediana_cx / valor_un_xml)
+                                # Validar: fator faz sentido? (entre 2 e 100, ratio proximo de 1)
+                                if 2 <= fator_inferido <= 100:
+                                    ratio_check = mediana_cx / (valor_un_xml * fator_inferido)
+                                    if 0.8 <= ratio_check <= 1.2:
+                                        if fator_inferido != int(fator):
+                                            logger.info(
+                                                f"[NFD_SERVICE] Fator XML derivado: {fator_inferido} "
+                                                f"(De-Para: {fator}) para {depara['nosso_codigo']} "
+                                                f"(valor_un_xml={valor_un_xml}, mediana_cx={mediana_cx})"
+                                            )
+                                        fator = float(fator_inferido)
+                            elif _preco_override and dados_preco and dados_preco.get('qtd_por_caixa', 0) > 1:
+                                # Fallback: usar qtd_por_caixa do cache_precos (fonte: cadastro NxM)
+                                fator = float(dados_preco['qtd_por_caixa'])
+
                         if tipo_unidade == 'CAIXA' and quantidade:
                             # Já é caixa: 1:1
                             linha.qtd_por_caixa = 1
@@ -917,28 +947,22 @@ class NFDService:
                         elif tipo_unidade == 'UNIDADE' and fator > 0 and quantidade:
                             linha.qtd_por_caixa = int(fator)
                             linha.quantidade_convertida = round(quantidade / fator, 3)
-                        elif tipo_unidade == 'PESO' and quantidade:
-                            # Converter kg -> caixas via peso da caixa do cadastro
-                            try:
-                                from app.producao.models import CadastroPalletizacao
-                                produto = CadastroPalletizacao.query.filter_by(
-                                    cod_produto=depara['nosso_codigo']
-                                ).first()
-                                if produto and produto.peso_bruto and float(produto.peso_bruto) > 0:
-                                    peso_caixa = float(produto.peso_bruto)
-                                    linha.quantidade_convertida = round(quantidade / peso_caixa, 3)
-                            except Exception:
-                                pass
 
-                        # Calcular peso via CadastroPalletizacao
+                        # Buscar CadastroPalletizacao UMA vez (PESO + peso calculado)
                         try:
                             from app.producao.models import CadastroPalletizacao
-                            produto = CadastroPalletizacao.query.filter_by(
+                            produto_cad = CadastroPalletizacao.query.filter_by(
                                 cod_produto=depara['nosso_codigo']
                             ).first()
-                            if produto and produto.peso_bruto:
-                                qtd_para_peso = float(linha.quantidade_convertida) if linha.quantidade_convertida else float(quantidade or 0)
-                                linha.peso_bruto = Decimal(str(round(qtd_para_peso * float(produto.peso_bruto), 2)))
+                            if produto_cad:
+                                # PESO: converter kg -> caixas
+                                if tipo_unidade == 'PESO' and produto_cad.peso_bruto and float(produto_cad.peso_bruto) > 0 and quantidade:
+                                    peso_caixa = float(produto_cad.peso_bruto)
+                                    linha.quantidade_convertida = round(quantidade / peso_caixa, 3)
+                                # Peso calculado (todas as UM)
+                                if produto_cad.peso_bruto:
+                                    qtd_para_peso = float(linha.quantidade_convertida) if linha.quantidade_convertida else float(quantidade or 0)
+                                    linha.peso_bruto = Decimal(str(round(qtd_para_peso * float(produto_cad.peso_bruto), 2)))
                         except Exception:
                             pass
 

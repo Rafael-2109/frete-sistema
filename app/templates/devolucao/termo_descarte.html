@@ -214,7 +214,14 @@
                     <tr>
                         <td>{{ item.codigo }}</td>
                         <td>{{ item.descricao }}</td>
-                        <td class="right">{{ "%.0f"|format(item.quantidade) }} {{ item.unidade }}</td>
+                        <td class="right">
+                            {% if item.qtd_cx is not none %}
+                                {{ "%.3f"|format(item.qtd_cx)|replace('.000', '') }} CX
+                                <span style="color:#888; font-size:9px;">({{ "%.0f"|format(item.qtd_un) }} {{ item.unidade_xml }})</span>
+                            {% else %}
+                                {{ "%.0f"|format(item.qtd_un) }} {{ item.unidade_xml }}
+                            {% endif %}
+                        </td>
                         <td class="right">R$ {{ "%.2f"|format(item.valor_unitario) }}</td>
                         <td class="right">R$ {{ "%.2f"|format(item.valor_total) }}</td>
                     </tr>

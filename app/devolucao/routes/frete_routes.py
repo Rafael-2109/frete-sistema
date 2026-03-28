@@ -673,6 +673,45 @@ def excluir_descarte(descarte_id: int):
 # TERMO DE DESCARTE - Download e Impressao
 # =============================================================================
 
+
+def _montar_itens_descarte(linhas):
+    """
+    Monta lista de itens para o termo de descarte com conversao UN/CX.
+
+    Retorna (itens, valor_total) onde cada item contem:
+    - qtd_cx: quantidade convertida em caixas (None se nao convertido)
+    - qtd_un: quantidade raw do XML em unidades
+    - qtd_por_caixa: fator de conversao un->cx
+    - unidade_xml: unidade original do XML
+    """
+    itens = []
+    valor_total = Decimal('0')
+    for linha in linhas:
+        valor_linha = Decimal(str(linha.valor_total or 0))
+        valor_total += valor_linha
+
+        # Quantidades: converter para CX quando possivel
+        qtd_cx = float(linha.quantidade_convertida) if linha.quantidade_convertida else None
+        qtd_un = float(linha.quantidade or 0)
+        qtd_por_caixa = int(linha.qtd_por_caixa) if linha.qtd_por_caixa else None
+        unidade_xml = linha.unidade_medida or 'UN'
+
+        itens.append({
+            'codigo': linha.codigo_produto_interno or linha.codigo_produto_cliente or '-',
+            'descricao': linha.descricao_produto_interno or linha.descricao_produto_cliente or '-',
+            'qtd_cx': qtd_cx,
+            'qtd_un': qtd_un,
+            'qtd_por_caixa': qtd_por_caixa,
+            'unidade_xml': unidade_xml,
+            # Quantidade principal para exibicao
+            'quantidade': qtd_cx if qtd_cx else qtd_un,
+            'unidade': 'CX' if qtd_cx else unidade_xml,
+            'valor_unitario': float(linha.valor_unitario or 0),
+            'valor_total': float(valor_linha)
+        })
+    return itens, valor_total
+
+
 @frete_bp.route('/api/descarte/<int:descarte_id>/termo/download', methods=['GET'])
 @login_required
 def download_termo_descarte(descarte_id: int):
@@ -705,22 +744,9 @@ def download_termo_descarte(descarte_id: int):
         if not nfd:
             return jsonify({'sucesso': False, 'erro': 'NFD nao encontrada'}), 404
 
-        # Buscar linhas da NFD para itens
+        # Buscar linhas da NFD para itens (com conversao UN/CX)
         linhas = NFDevolucaoLinha.query.filter_by(nf_devolucao_id=nfd.id).all()
-
-        itens = []
-        valor_total = Decimal('0')
-        for linha in linhas:
-            valor_linha = Decimal(str(linha.valor_total or 0))
-            valor_total += valor_linha
-            itens.append({
-                'codigo': linha.codigo_produto_interno or linha.codigo_produto_cliente or '-',
-                'descricao': linha.descricao_produto_interno or linha.descricao_produto_cliente or '-',
-                'quantidade': float(linha.quantidade or 0),
-                'unidade': linha.unidade_medida or 'UN',
-                'valor_unitario': float(linha.valor_unitario or 0),
-                'valor_total': float(valor_linha)
-            })
+        itens, valor_total = _montar_itens_descarte(linhas)
 
         # Registrar download
         descarte.termo_salvo_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
@@ -785,22 +811,9 @@ def imprimir_termo_descarte(descarte_id: int):
         if not nfd:
             return jsonify({'sucesso': False, 'erro': 'NFD nao encontrada'}), 404
 
-        # Buscar linhas da NFD para itens
+        # Buscar linhas da NFD para itens (com conversao UN/CX)
         linhas = NFDevolucaoLinha.query.filter_by(nf_devolucao_id=nfd.id).all()
-
-        itens = []
-        valor_total = Decimal('0')
-        for linha in linhas:
-            valor_linha = Decimal(str(linha.valor_total or 0))
-            valor_total += valor_linha
-            itens.append({
-                'codigo': linha.codigo_produto_interno or linha.codigo_produto_cliente or '-',
-                'descricao': linha.descricao_produto_interno or linha.descricao_produto_cliente or '-',
-                'quantidade': float(linha.quantidade or 0),
-                'unidade': linha.unidade_medida or 'UN',
-                'valor_unitario': float(linha.valor_unitario or 0),
-                'valor_total': float(valor_linha)
-            })
+        itens, valor_total = _montar_itens_descarte(linhas)
 
         # Registrar impressao
         descarte.termo_impresso_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)

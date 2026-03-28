@@ -465,7 +465,8 @@ class AIResolverService:
         prefixo_cnpj: str,
         unidade_cliente: str = None,
         quantidade: float = None,
-        limite_candidatos: int = 20
+        limite_candidatos: int = 20,
+        historico_precalculado: list = None
     ) -> ResultadoResolucaoProduto:
         """
         Resolve codigo do cliente para nosso codigo interno.
@@ -587,8 +588,8 @@ class AIResolverService:
                 limite=50
             )
 
-            # 2b. Buscar TODO o historico de faturamento do CNPJ
-            historico_completo = self._buscar_historico_completo(prefixo_cnpj)
+            # 2b. Buscar historico de faturamento do CNPJ (usar cache se disponivel)
+            historico_completo = historico_precalculado if historico_precalculado is not None else self._buscar_historico_completo(prefixo_cnpj)
 
             if not todos_produtos:
                 return ResultadoResolucaoProduto(
@@ -1384,13 +1385,15 @@ class AIResolverService:
         prefixo_cnpj: str,
         unidade_cliente: str = None,
         quantidade: float = None,
-        semaforo: 'asyncio.Semaphore' = None
+        semaforo: 'asyncio.Semaphore' = None,
+        historico_precalculado: list = None
     ):
         """
         Versao async de resolver_produto para processamento paralelo.
 
         Args:
             semaforo: Semaforo para controlar concorrencia (evita rate limiting)
+            historico_precalculado: Historico de faturamento pre-carregado (evita N queries)
         """
         import asyncio
 
@@ -1405,7 +1408,8 @@ class AIResolverService:
                         descricao_cliente=descricao_cliente,
                         prefixo_cnpj=prefixo_cnpj,
                         unidade_cliente=unidade_cliente,
-                        quantidade=quantidade
+                        quantidade=quantidade,
+                        historico_precalculado=historico_precalculado
                     )
                 )
         else:
@@ -1417,7 +1421,8 @@ class AIResolverService:
                     descricao_cliente=descricao_cliente,
                     prefixo_cnpj=prefixo_cnpj,
                     unidade_cliente=unidade_cliente,
-                    quantidade=quantidade
+                    quantidade=quantidade,
+                    historico_precalculado=historico_precalculado
                 )
             )
 
@@ -1425,7 +1430,8 @@ class AIResolverService:
         self,
         linhas_pendentes: List[Dict],
         prefixo_cnpj: str,
-        max_concurrent: int = 3
+        max_concurrent: int = 3,
+        historico_precalculado: list = None
     ) -> Dict[int, 'ResultadoResolucaoProduto']:
         """
         Resolve multiplos produtos em PARALELO usando ThreadPoolExecutor.
@@ -1434,6 +1440,7 @@ class AIResolverService:
             linhas_pendentes: Lista de dicts com linha_id, codigo, descricao, etc.
             prefixo_cnpj: Prefixo CNPJ
             max_concurrent: Maximo de chamadas Haiku simultaneas (evita rate limit)
+            historico_precalculado: Historico de faturamento pre-carregado (evita N queries)
 
         Returns:
             Dict mapeando linha_id -> ResultadoResolucaoProduto
@@ -1458,7 +1465,8 @@ class AIResolverService:
                         descricao_cliente=linha_dict['descricao'],
                         prefixo_cnpj=prefixo_cnpj,
                         unidade_cliente=linha_dict.get('unidade'),
-                        quantidade=linha_dict.get('quantidade')
+                        quantidade=linha_dict.get('quantidade'),
+                        historico_precalculado=historico_precalculado
                     )
                     return (linha_dict['linha_id'], resultado)
                 except Exception as e:
@@ -1502,7 +1510,8 @@ class AIResolverService:
                         descricao_cliente=linha['descricao'],
                         prefixo_cnpj=prefixo_cnpj,
                         unidade_cliente=linha.get('unidade'),
-                        quantidade=linha.get('quantidade')
+                        quantidade=linha.get('quantidade'),
+                        historico_precalculado=historico_precalculado
                     )
                     resultados[linha['linha_id']] = resultado
                 except Exception as e2:
@@ -2069,9 +2078,15 @@ class AIResolverService:
             # FASE 3: Processar Haiku em PARALELO (se necessario)
             # ===================================================================
             haiku_resultados = {}
+            historico_precalculado = None
             if linhas_para_haiku:
                 logger.info(f"[AI_RESOLVER] FASE 3: Processando {len(linhas_para_haiku)} linhas via Haiku paralelo...")
                 tempo_fase3 = time.time()
+
+                # Pre-calcular historico de faturamento (mesmo CNPJ para todos)
+                # Evita N queries redundantes dentro do loop paralelo
+                historico_precalculado = self._buscar_historico_completo(prefixo_cnpj)
+                logger.info(f"[AI_RESOLVER] Historico pre-calculado: {len(historico_precalculado)} produtos")
 
                 # Converter NFDevolucaoLinha para dicts (formato esperado por _resolver_produtos_paralelo)
                 linhas_dicts = []
@@ -2084,8 +2099,11 @@ class AIResolverService:
                         'quantidade': float(linha.quantidade) if linha.quantidade else None
                     })
 
-                # Chamar processamento paralelo
-                haiku_resultados = self._resolver_produtos_paralelo(linhas_dicts, prefixo_cnpj)
+                # Chamar processamento paralelo com historico pre-calculado
+                haiku_resultados = self._resolver_produtos_paralelo(
+                    linhas_dicts, prefixo_cnpj,
+                    historico_precalculado=historico_precalculado
+                )
 
                 logger.info(f"[AI_RESOLVER] FASE 3 concluida em {time.time() - tempo_fase3:.2f}s")
 
@@ -2093,6 +2111,28 @@ class AIResolverService:
             # FASE 4: Processar resultados (De-Para + Haiku)
             # ===================================================================
             logger.info(f"[AI_RESOLVER] FASE 4: Processando resultados...")
+
+            # Batch: carregar todos os CadastroPalletizacao em 1 query
+            from app.producao.models import CadastroPalletizacao
+            todos_codigos_internos = set()
+            for _, nosso_codigo, _, _ in linhas_com_depara:
+                todos_codigos_internos.add(nosso_codigo)
+            for linha in linhas_para_haiku:
+                r = haiku_resultados.get(linha.id)
+                if r and r.sugestao_principal:
+                    todos_codigos_internos.add(r.sugestao_principal.codigo_interno)
+                    for outra in r.outras_sugestoes:
+                        todos_codigos_internos.add(outra.codigo_interno)
+
+            cadastro_cache = {}
+            if todos_codigos_internos:
+                cadastro_cache = {
+                    p.cod_produto: p
+                    for p in CadastroPalletizacao.query.filter(
+                        CadastroPalletizacao.cod_produto.in_(list(todos_codigos_internos))
+                    ).all()
+                }
+                logger.info(f"[AI_RESOLVER] CadastroPalletizacao batch: {len(cadastro_cache)} produtos carregados")
 
             # 4.1 Processar linhas com De-Para (confianca 100%)
             for linha, nosso_codigo, descricao_nosso, metodo in linhas_com_depara:
@@ -2105,7 +2145,8 @@ class AIResolverService:
                     justificativa=f"De-Para {metodo}",
                     outras_sugestoes=[],
                     auto_gravar_depara=False,  # Ja existe no De-Para
-                    prefixo_cnpj=prefixo_cnpj
+                    prefixo_cnpj=prefixo_cnpj,
+                    cadastro_cache=cadastro_cache
                 )
 
                 if linha_info['status'] == 'AUTO_RESOLVIDO':
@@ -2131,7 +2172,8 @@ class AIResolverService:
                         justificativa=resultado.sugestao_principal.justificativa,
                         outras_sugestoes=resultado.outras_sugestoes,
                         auto_gravar_depara=auto_gravar_depara,
-                        prefixo_cnpj=prefixo_cnpj
+                        prefixo_cnpj=prefixo_cnpj,
+                        cadastro_cache=cadastro_cache
                     )
                 else:
                     # Nao identificado
@@ -2193,12 +2235,16 @@ class AIResolverService:
         justificativa: str,
         outras_sugestoes: List,
         auto_gravar_depara: bool,
-        prefixo_cnpj: str
+        prefixo_cnpj: str,
+        cadastro_cache: dict = None
     ) -> Dict[str, Any]:
         """
         Processa resultado de resolucao para uma linha (seja De-Para ou Haiku).
 
         Calcula conversao de unidade, peso, e monta estrutura de retorno.
+
+        Args:
+            cadastro_cache: Dict pre-carregado {cod_produto: CadastroPalletizacao} (evita N+1)
         """
         from app.producao.models import CadastroPalletizacao
 
@@ -2236,12 +2282,14 @@ class AIResolverService:
         if not codigo_interno:
             return linha_info
 
-        # Buscar produto no CadastroPalletizacao
+        # Buscar produto no CadastroPalletizacao (usar cache se disponivel)
         produto = None
         try:
-            produto = CadastroPalletizacao.query.filter_by(
-                cod_produto=codigo_interno
-            ).first()
+            produto = (cadastro_cache or {}).get(codigo_interno)
+            if produto is None:
+                produto = CadastroPalletizacao.query.filter_by(
+                    cod_produto=codigo_interno
+                ).first()
         except Exception as e:
             logger.warning(f"[AI_RESOLVER] Erro ao buscar produto: {e}")
 
@@ -2329,11 +2377,13 @@ class AIResolverService:
                 if linha.valor_unitario:
                     valor_conv_outra = round(float(linha.valor_unitario) * qtd_caixa_outra, 2)
 
-            # Calcular peso para outras sugestoes
+            # Calcular peso para outras sugestoes (usar cache se disponivel)
             try:
-                prod_outra = CadastroPalletizacao.query.filter_by(
-                    cod_produto=outra.codigo_interno
-                ).first()
+                prod_outra = (cadastro_cache or {}).get(outra.codigo_interno)
+                if prod_outra is None:
+                    prod_outra = CadastroPalletizacao.query.filter_by(
+                        cod_produto=outra.codigo_interno
+                    ).first()
                 if prod_outra and prod_outra.peso_bruto:
                     qtd_peso_outra = qtd_conv_outra if qtd_conv_outra else float(linha.quantidade or 0)
                     peso_outra = round(qtd_peso_outra * float(prod_outra.peso_bruto), 2)
