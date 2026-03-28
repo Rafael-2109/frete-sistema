@@ -23,10 +23,11 @@ from app.devolucao.models import (
 )
 from app.monitoramento.models import EntregaMonitorada
 from app.carteira.models import CarteiraPrincipal
-from app.faturamento.models import FaturamentoProduto
+from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImportado
 from app.utils.timezone import agora_utc_naive
 from sqlalchemy import or_, func
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 
 # Blueprint
 ocorrencia_bp = Blueprint('devolucao_ocorrencia', __name__, url_prefix='/ocorrencias')
@@ -1380,10 +1381,26 @@ def api_comparar_nf_venda(ocorrencia_id):
             qtd = float(linha.quantidade_convertida or linha.quantidade or 0)
             produtos_devolvidos[codigo]['qtd_devolvida'] += qtd
 
-            # Calcular preço devolvido (valor unitário convertido)
-            if linha.valor_unitario and linha.qtd_por_caixa:
-                preco_conv = float(linha.valor_unitario) * float(linha.qtd_por_caixa)
-                produtos_devolvidos[codigo]['preco_devolvido'] = preco_conv
+            # Calcular preco por caixa devolvido — usar valor_total do XML (fiscalmente exato)
+            # para evitar divergencia de centavos por dizima periodica (ex: 10.00/6 = 1.6667)
+            if linha.valor_total and linha.quantidade_convertida and float(linha.quantidade_convertida) > 0:
+                # valor_total / qtd_caixas = preco por caixa (sem dizima)
+                preco_conv = float(
+                    Decimal(str(linha.valor_total)) / Decimal(str(linha.quantidade_convertida))
+                )
+                produtos_devolvidos[codigo]['preco_devolvido'] = round(preco_conv, 2)
+            elif linha.valor_total and linha.quantidade and float(linha.quantidade) > 0:
+                # Fallback: valor_total / qtd_original
+                preco_conv = float(
+                    Decimal(str(linha.valor_total)) / Decimal(str(linha.quantidade))
+                )
+                produtos_devolvidos[codigo]['preco_devolvido'] = round(preco_conv, 2)
+            elif linha.valor_unitario and linha.qtd_por_caixa:
+                # Ultimo fallback: calculo com Decimal (melhor que float)
+                preco_conv = float(
+                    Decimal(str(linha.valor_unitario)) * Decimal(str(linha.qtd_por_caixa))
+                )
+                produtos_devolvidos[codigo]['preco_devolvido'] = round(preco_conv, 2)
             elif linha.valor_unitario:
                 produtos_devolvidos[codigo]['preco_devolvido'] = float(linha.valor_unitario)
 
@@ -1496,9 +1513,9 @@ def exportar_relatorio():
             )
         )
 
-    # Filtros vendedor/equipe requerem subquery via FaturamentoProduto
+    # Filtros vendedor/equipe requerem subquery via FaturamentoProduto + RelatorioFaturamentoImportado
     if vendedor or equipe:
-        # Buscar NFs que matcham vendedor/equipe
+        # Fonte 1: FaturamentoProduto
         fat_subq = db.session.query(
             FaturamentoProduto.numero_nf
         ).filter(FaturamentoProduto.numero_nf.isnot(None))
@@ -1510,12 +1527,28 @@ def exportar_relatorio():
 
         fat_nfs = set(r[0] for r in fat_subq.distinct().all())
 
-        if fat_nfs:
+        # Fonte 2: RelatorioFaturamentoImportado (fallback para NFs nao presentes em FaturamentoProduto)
+        rfi_subq = db.session.query(
+            RelatorioFaturamentoImportado.numero_nf
+        ).filter(
+            RelatorioFaturamentoImportado.numero_nf.isnot(None),
+            RelatorioFaturamentoImportado.ativo == True
+        )
+        if vendedor:
+            rfi_subq = rfi_subq.filter(RelatorioFaturamentoImportado.vendedor.ilike(f'%{vendedor}%'))
+        if equipe:
+            rfi_subq = rfi_subq.filter(RelatorioFaturamentoImportado.equipe_vendas.ilike(f'%{equipe}%'))
+
+        rfi_nfs = set(r[0] for r in rfi_subq.distinct().all())
+
+        all_matching_nfs = fat_nfs | rfi_nfs
+
+        if all_matching_nfs:
             # Filtrar ocorrencias cujas NFs referenciadas estejam no set
             nfd_ids_subq = db.session.query(
                 NFDevolucaoNFReferenciada.nf_devolucao_id
             ).filter(
-                NFDevolucaoNFReferenciada.numero_nf.in_(fat_nfs)
+                NFDevolucaoNFReferenciada.numero_nf.in_(all_matching_nfs)
             ).distinct()
 
             query = query.filter(NFDevolucao.id.in_(nfd_ids_subq))
@@ -1532,16 +1565,21 @@ def exportar_relatorio():
     # Coletar dados
     nfd_ids = [nfd.id for _, nfd in results]
     cnpjs_prefixo = set()
+    cnpj_prefixo_map = {}  # cnpj_emitente original -> prefixo normalizado (8 digitos)
     for _, nfd in results:
         if nfd.cnpj_emitente:
-            cnpjs_prefixo.add(nfd.cnpj_emitente[:8])
+            cnpj_limpo = re.sub(r'\D', '', nfd.cnpj_emitente)
+            if len(cnpj_limpo) >= 8:
+                prefixo = cnpj_limpo[:8]
+                cnpjs_prefixo.add(prefixo)
+                cnpj_prefixo_map[nfd.cnpj_emitente] = prefixo
 
-    # Batch: raz_social por CNPJ prefixo
+    # Batch: raz_social por CNPJ prefixo (normalizado para match independente de formato)
     raz_social_map = {}
     if cnpjs_prefixo:
         for prefixo in cnpjs_prefixo:
             cp = CarteiraPrincipal.query.filter(
-                CarteiraPrincipal.cnpj_cpf.like(f'{prefixo}%')
+                func.regexp_replace(CarteiraPrincipal.cnpj_cpf, r'\D', '', 'g').like(f'{prefixo}%')
             ).first()
             if cp:
                 raz_social_map[prefixo] = {
@@ -1594,12 +1632,25 @@ def exportar_relatorio():
                 fat_por_nf[r.numero_nf] = r
             valor_por_nf[r.numero_nf] = float(r.valor_total_nf) if r.valor_total_nf else None
 
+    # Fallback: NFs nao encontradas em FaturamentoProduto → buscar em RelatorioFaturamentoImportado
+    nfs_sem_fat = all_nf_numeros - set(fat_por_nf.keys())
+    rfi_por_nf = {}
+    if nfs_sem_fat:
+        rfi_results = RelatorioFaturamentoImportado.query.filter(
+            RelatorioFaturamentoImportado.numero_nf.in_(nfs_sem_fat),
+            RelatorioFaturamentoImportado.ativo == True
+        ).all()
+        for r in rfi_results:
+            rfi_por_nf[r.numero_nf] = r
+            if r.numero_nf not in valor_por_nf:
+                valor_por_nf[r.numero_nf] = float(r.valor_total) if r.valor_total else None
+
     # =====================================================================
     # Montar linhas do relatorio
     # =====================================================================
     rows = []
     for oc, nfd in results:
-        prefixo = nfd.cnpj_emitente[:8] if nfd.cnpj_emitente else None
+        prefixo = cnpj_prefixo_map.get(nfd.cnpj_emitente)
         rs_info = raz_social_map.get(prefixo, {}) if prefixo else {}
 
         refs = refs_por_nfd.get(nfd.id, [])
@@ -1610,41 +1661,49 @@ def exportar_relatorio():
         if refs:
             for ref in refs:
                 fat = fat_por_nf.get(ref.numero_nf, None)
+                rfi = rfi_por_nf.get(ref.numero_nf, None) if not fat else None
+                src = fat or rfi  # FaturamentoProduto tem prioridade
                 rows.append({
                     'CNPJ': nfd.cnpj_emitente or '',
                     'Razao Social': rs_info.get('raz_social') or nfd.nome_emitente or '',
                     'Razao Social Reduzida': rs_info.get('raz_social_red') or '',
-                    'Cidade': (fat.municipio if fat else None) or nfd.municipio_emitente or '',
-                    'UF': (fat.estado if fat else None) or nfd.uf_emitente or '',
-                    'Incoterm': fat.incoterm if fat else '',
-                    'Vendedor': fat.vendedor if fat else '',
-                    'Equipe de Vendas': fat.equipe_vendas if fat else '',
+                    'Cidade': (src.municipio if src else None) or nfd.municipio_emitente or '',
+                    'UF': (src.estado if src else None) or nfd.uf_emitente or '',
+                    'Incoterm': src.incoterm if src else '',
+                    'Vendedor': src.vendedor if src else '',
+                    'Equipe de Vendas': src.equipe_vendas if src else '',
                     'NF': ref.numero_nf or '',
                     'NFD/NC': nfd_nc or '',
                     'Valor NF': valor_por_nf.get(ref.numero_nf),
                     'Valor NFD/NC': float(nfd.valor_total) if nfd.valor_total else None,
-                    'Data NF': fat.data_fatura.strftime('%d/%m/%Y') if fat and fat.data_fatura else '',
+                    'Data NF': src.data_fatura.strftime('%d/%m/%Y') if src and src.data_fatura else '',
                     'Data NFD': nfd.data_emissao.strftime('%d/%m/%Y') if nfd.data_emissao else '',
                 })
         else:
             # Sem NF referenciada — enriquecer por CNPJ (formatar para match)
             fat_cnpj = None
+            rfi_cnpj = None
             if nfd.cnpj_emitente:
                 from app.utils.cnpj_utils import formatar_cnpj as _fmt_cnpj_export
                 cnpj_fmt_export = _fmt_cnpj_export(nfd.cnpj_emitente)
                 fat_cnpj = FaturamentoProduto.query.filter_by(
                     cnpj_cliente=cnpj_fmt_export
                 ).order_by(FaturamentoProduto.data_fatura.desc()).first()
+                if not fat_cnpj:
+                    rfi_cnpj = RelatorioFaturamentoImportado.query.filter_by(
+                        cnpj_cliente=cnpj_fmt_export, ativo=True
+                    ).order_by(RelatorioFaturamentoImportado.data_fatura.desc()).first()
 
+            src_cnpj = fat_cnpj or rfi_cnpj
             rows.append({
                 'CNPJ': nfd.cnpj_emitente or '',
                 'Razao Social': rs_info.get('raz_social') or nfd.nome_emitente or '',
                 'Razao Social Reduzida': rs_info.get('raz_social_red') or '',
-                'Cidade': (fat_cnpj.municipio if fat_cnpj else None) or nfd.municipio_emitente or '',
-                'UF': (fat_cnpj.estado if fat_cnpj else None) or nfd.uf_emitente or '',
-                'Incoterm': fat_cnpj.incoterm if fat_cnpj else '',
-                'Vendedor': fat_cnpj.vendedor if fat_cnpj else '',
-                'Equipe de Vendas': fat_cnpj.equipe_vendas if fat_cnpj else '',
+                'Cidade': (src_cnpj.municipio if src_cnpj else None) or nfd.municipio_emitente or '',
+                'UF': (src_cnpj.estado if src_cnpj else None) or nfd.uf_emitente or '',
+                'Incoterm': src_cnpj.incoterm if src_cnpj else '',
+                'Vendedor': src_cnpj.vendedor if src_cnpj else '',
+                'Equipe de Vendas': src_cnpj.equipe_vendas if src_cnpj else '',
                 'NF': '',
                 'NFD/NC': nfd_nc or '',
                 'Valor NF': None,
