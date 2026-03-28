@@ -18,16 +18,13 @@ logger = logging.getLogger(__name__)
 ZERO = Decimal('0')
 
 
-def _build_nf_agg_subquery(alias='nf_agg'):
-    """Subquery reutilizavel: totais de NF (volumes + peso_bruto) por operacao."""
+def _build_nf_peso_subquery(alias='nf_peso'):
+    """Subquery: peso bruto total das NFs por operacao (fallback para peso_cubado)."""
     from app.carvia.models import CarviaNf, CarviaOperacaoNf
 
     return (
         db.session.query(
             CarviaOperacaoNf.operacao_id,
-            func.coalesce(
-                func.sum(CarviaNf.quantidade_volumes), 0
-            ).label('total_volumes'),
             func.coalesce(
                 func.sum(CarviaNf.peso_bruto), 0
             ).label('total_peso_bruto'),
@@ -38,8 +35,30 @@ def _build_nf_agg_subquery(alias='nf_agg'):
     )
 
 
+def _build_moto_count_subquery(alias='moto_count'):
+    """Subquery: contagem de veiculos (motos) por operacao via CarviaNfVeiculo.
+
+    Apenas operacoes cujas NFs tem registros em carvia_nf_veiculos (chassis)
+    sao consideradas 'moto'. COUNT(veiculo.id) = numero real de motos.
+    """
+    from app.carvia.models import CarviaOperacaoNf, CarviaNfVeiculo
+
+    return (
+        db.session.query(
+            CarviaOperacaoNf.operacao_id,
+            func.count(CarviaNfVeiculo.id).label('qtd_veiculos'),
+        )
+        .join(CarviaNfVeiculo, CarviaNfVeiculo.nf_id == CarviaOperacaoNf.nf_id)
+        .group_by(CarviaOperacaoNf.operacao_id)
+        .subquery(alias)
+    )
+
+
 def _calcular_metricas(valor_total_raw, qtd_motos_raw, peso_cubado_raw, peso_bruto_nfs_raw):
-    """Calcula peso efetivo, valor/unidade e valor/kg cubado a partir dos totais."""
+    """Calcula peso efetivo, valor/unidade e valor/kg cubado a partir dos totais.
+
+    qtd_motos: contagem real de veiculos (chassis) — se 0, mostra N/A.
+    """
     valor_total = Decimal(str(valor_total_raw)) if valor_total_raw else ZERO
     qtd_motos = int(qtd_motos_raw or 0)
     peso_cubado_total = Decimal(str(peso_cubado_raw)) if peso_cubado_raw else ZERO
@@ -79,13 +98,15 @@ class GerencialService:
 
         Regras:
         - Exclui status CANCELADO e registros sem UF/data
-        - qtd_motos = SUM(carvia_nfs.quantidade_volumes) via junction
+        - qtd_motos = COUNT(CarviaNfVeiculo.id) — so operacoes com motos identificadas
         - peso_efetivo = peso_cubado_total se > 0, senao peso_bruto_nfs_total
+        - Sem motos identificadas → valor_por_unidade = None (N/A)
         - Divisao por zero → None (template exibe N/A)
         """
         from app.carvia.models import CarviaOperacao
 
-        nf_agg = _build_nf_agg_subquery('nf_agg')
+        nf_peso = _build_nf_peso_subquery('nf_peso')
+        moto_count = _build_moto_count_subquery('moto_count')
 
         mes_trunc = func.date_trunc(
             'month', CarviaOperacao.cte_data_emissao
@@ -96,11 +117,12 @@ class GerencialService:
                 CarviaOperacao.uf_destino,
                 mes_trunc,
                 func.coalesce(func.sum(CarviaOperacao.cte_valor), 0).label('valor_total'),
-                func.coalesce(func.sum(nf_agg.c.total_volumes), 0).label('qtd_motos'),
+                func.coalesce(func.sum(moto_count.c.qtd_veiculos), 0).label('qtd_motos'),
                 func.coalesce(func.sum(CarviaOperacao.peso_cubado), 0).label('peso_cubado_total'),
-                func.coalesce(func.sum(nf_agg.c.total_peso_bruto), 0).label('peso_bruto_nfs_total'),
+                func.coalesce(func.sum(nf_peso.c.total_peso_bruto), 0).label('peso_bruto_nfs_total'),
             )
-            .outerjoin(nf_agg, nf_agg.c.operacao_id == CarviaOperacao.id)
+            .outerjoin(nf_peso, nf_peso.c.operacao_id == CarviaOperacao.id)
+            .outerjoin(moto_count, moto_count.c.operacao_id == CarviaOperacao.id)
             .filter(
                 CarviaOperacao.status != 'CANCELADO',
                 CarviaOperacao.cte_data_emissao.isnot(None),
@@ -135,16 +157,18 @@ class GerencialService:
         """
         from app.carvia.models import CarviaOperacao, CarviaDespesa
 
-        nf_agg = _build_nf_agg_subquery('nf_agg_totais')
+        nf_peso = _build_nf_peso_subquery('nf_peso_totais')
+        moto_count = _build_moto_count_subquery('moto_count_totais')
 
         row = (
             db.session.query(
                 func.coalesce(func.sum(CarviaOperacao.cte_valor), 0).label('valor_total'),
-                func.coalesce(func.sum(nf_agg.c.total_volumes), 0).label('qtd_motos'),
+                func.coalesce(func.sum(moto_count.c.qtd_veiculos), 0).label('qtd_motos'),
                 func.coalesce(func.sum(CarviaOperacao.peso_cubado), 0).label('peso_cubado_total'),
-                func.coalesce(func.sum(nf_agg.c.total_peso_bruto), 0).label('peso_bruto_nfs_total'),
+                func.coalesce(func.sum(nf_peso.c.total_peso_bruto), 0).label('peso_bruto_nfs_total'),
             )
-            .outerjoin(nf_agg, nf_agg.c.operacao_id == CarviaOperacao.id)
+            .outerjoin(nf_peso, nf_peso.c.operacao_id == CarviaOperacao.id)
+            .outerjoin(moto_count, moto_count.c.operacao_id == CarviaOperacao.id)
             .filter(
                 CarviaOperacao.status != 'CANCELADO',
                 CarviaOperacao.cte_data_emissao.isnot(None),

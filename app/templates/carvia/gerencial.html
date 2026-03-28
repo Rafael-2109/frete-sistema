@@ -53,7 +53,13 @@
         <div class="col-lg-2 col-md-4 col-6">
             <div class="card carvia-stat-card h-100">
                 <div class="card-body text-center">
-                    <div class="stat-value">{{ totais.qtd_motos|numero_br(0) }}</div>
+                    <div class="stat-value">
+                        {% if totais.qtd_motos > 0 %}
+                            {{ totais.qtd_motos|numero_br(0) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
                     <div class="stat-label">Motos (unid.)</div>
                 </div>
             </div>
@@ -132,7 +138,13 @@
                             <td><span class="fw-bold">{{ m.uf_destino }}</span></td>
                             <td>{{ m.mes_label }}</td>
                             <td class="text-end valor-col">{{ m.valor_total|valor_br }}</td>
-                            <td class="text-end">{{ m.qtd_motos|numero_br(0) }}</td>
+                            <td class="text-end">
+                                {% if m.qtd_motos > 0 %}
+                                    {{ m.qtd_motos|numero_br(0) }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
                             <td class="text-end">{{ m.peso_efetivo|numero_br(1) }}</td>
                             <td class="text-end valor-col">
                                 {% if m.valor_por_unidade is not none %}
