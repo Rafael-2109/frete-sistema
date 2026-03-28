@@ -185,7 +185,7 @@
 | Odoo MCP generico | `app/odoo/` custom (17.9K LOC) superior |
 | Redis MCP | Valor marginal |
 | Slack MCP | Time usa Teams |
-| Sentry MCP | Requer infra Sentry primeiro |
+| Sentry MCP | INTEGRADO desde 2026-03-11 (20 tools) |
 
 ---
 

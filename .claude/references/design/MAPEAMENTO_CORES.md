@@ -44,7 +44,7 @@ Fundo cinza médio, elementos elevados flutuam em direção ao branco.
 
 ```
 app/static/css/
-├── _design-tokens.css    # FONTE ÚNICA - Todos os tokens
+├── tokens/_design-tokens.css  # FONTE ÚNICA - Todos os tokens
 ├── _utilities.css        # Classes utilitárias
 ├── bootstrap-overrides.css # Importa tokens + override Bootstrap
 └── modules/

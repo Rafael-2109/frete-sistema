@@ -27,7 +27,7 @@ class MeuService:
             tempo_execucao_ms=kwargs.get('tempo'),
             usuario_nome=self.usuario_nome,
             usuario_ip=self.usuario_ip,
-            created_at=datetime.utcnow()
+            created_at=agora_brasil_naive()
         )
         db.session.add(auditoria)
         db.session.commit()
@@ -194,7 +194,7 @@ def _atualizar_progresso(self, job_id, etapa, total_etapas, mensagem):
         'total_etapas': total_etapas,
         'percentual': int((etapa / total_etapas) * 100),
         'mensagem': mensagem,
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': agora_brasil_naive().isoformat()
     })
     self.redis.expire(f'job:{job_id}:progress', 3600)  # TTL 1 hora
 

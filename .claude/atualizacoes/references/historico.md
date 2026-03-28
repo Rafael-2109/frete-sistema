@@ -7,7 +7,7 @@
 
 ## Atualizacoes
 
-(Nenhuma atualizacao automatizada realizada ainda. Primeira execucao pendente.)
+- [2026-03-28-1](atualizacao-2026-03-28-1.md) — Primeira auditoria. 3 arquivos corrigidos: datetime.utcnow em exemplos Odoo, Sentry status, caminho CSS. Zero caminhos quebrados.
 
 <!-- Template para novas entradas:
 - [YYYY-MM-DD-N](atualizacao-YYYY-MM-DD-N.md) — Resumo do que foi feito
