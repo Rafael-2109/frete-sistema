@@ -165,16 +165,30 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "idx_conta_pagar_odoo_line",
       "columns": [
-        "empresa"
+        "odoo_line_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_partner_id",
+      "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
-        "partner_id"
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_status_sistema",
+      "columns": [
+        "status_sistema"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_vencimento",
+      "columns": [
+        "vencimento"
       ],
       "unique": false
     },
@@ -182,6 +196,13 @@
       "name": "ix_contas_a_pagar_parcela",
       "columns": [
         "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_partner_id",
+      "columns": [
+        "partner_id"
       ],
       "unique": false
     },
@@ -207,30 +228,9 @@
       "unique": true
     },
     {
-      "name": "ix_contas_a_pagar_titulo_nf",
-      "columns": [
-        "titulo_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_conta_pagar_vencimento",
       "columns": [
         "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_odoo_move_id",
-      "columns": [
-        "odoo_move_id"
       ],
       "unique": false
     },
@@ -242,23 +242,23 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_status_sistema",
+      "name": "idx_conta_pagar_cnpj",
       "columns": [
-        "status_sistema"
+        "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
+      "name": "ix_contas_a_pagar_empresa",
       "columns": [
-        "odoo_line_id"
+        "empresa"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_vencimento",
+      "name": "ix_contas_a_pagar_odoo_move_id",
       "columns": [
-        "vencimento"
+        "odoo_move_id"
       ],
       "unique": false
     }

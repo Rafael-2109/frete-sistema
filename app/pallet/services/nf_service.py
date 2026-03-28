@@ -547,7 +547,7 @@ class NFService:
         try:
             # Criar solucao usando factory methods do modelo
             if tipo == 'DEVOLUCAO':
-                # Verificar duplicidade
+                # Verificar duplicidade por numero_nf + cnpj + nf_remessa
                 if PalletNFSolucao.verificar_duplicidade(
                     numero_nf=dados.get('numero_nf_solucao', ''),
                     cnpj_emitente=dados.get('cnpj_emitente', ''),
@@ -557,6 +557,20 @@ class NFService:
                         f"Ja existe solucao para NF {dados.get('numero_nf_solucao')} "
                         f"do emitente {dados.get('cnpj_emitente')}"
                     )
+
+                # FIX PYTHON-FLASK-A7: Verificar duplicidade por chave_nfe_solucao
+                # (UNIQUE constraint no banco). Sem este check, o INSERT falha com
+                # UniqueViolation quando a mesma NF-e é vinculada a múltiplas remessas.
+                chave_nfe = dados.get('chave_nfe_solucao')
+                if chave_nfe:
+                    existente = PalletNFSolucao.buscar_por_chave_nfe(chave_nfe)
+                    if existente:
+                        logger.warning(
+                            f"[PALLET] Solucao ja existe para chave_nfe={chave_nfe[:20]}... "
+                            f"(id={existente.id}, nf_remessa={existente.nf_remessa_id}). "
+                            f"Ignorando duplicata para nf_remessa={nf_remessa_id}."
+                        )
+                        return existente
 
                 solucao = PalletNFSolucao.criar_devolucao(
                     nf_remessa_id=nf_remessa_id,
@@ -583,6 +597,17 @@ class NFService:
                 )
 
             elif tipo == 'NOTA_CREDITO':
+                # FIX: Verificar duplicidade por chave_nfe (mesma constraint UNIQUE)
+                chave_nfe_nc = dados.get('chave_nfe_solucao')
+                if chave_nfe_nc:
+                    existente = PalletNFSolucao.buscar_por_chave_nfe(chave_nfe_nc)
+                    if existente:
+                        logger.warning(
+                            f"[PALLET] Nota credito ja existe para chave_nfe={chave_nfe_nc[:20]}... "
+                            f"(id={existente.id}). Ignorando duplicata."
+                        )
+                        return existente
+
                 # NOTA_CREDITO: vinculado automaticamente via reversed_entry_id
                 solucao = PalletNFSolucao.criar_nota_credito(
                     nf_remessa_id=nf_remessa_id,

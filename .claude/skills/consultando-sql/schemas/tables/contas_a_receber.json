@@ -226,6 +226,13 @@
   ],
   "indices": [
     {
+      "name": "idx_conta_receber_odoo_line_id",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_receber_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -299,13 +306,6 @@
       "name": "ix_contas_a_receber_vencimento",
       "columns": [
         "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_receber_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
       ],
       "unique": false
     }

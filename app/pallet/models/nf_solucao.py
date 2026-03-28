@@ -62,7 +62,10 @@ class PalletNFSolucao(db.Model):
     # Dados da NF de devolução/retorno (quando aplicável)
     numero_nf_solucao = db.Column(db.String(20), nullable=True, index=True)
     serie_nf_solucao = db.Column(db.String(5), nullable=True)
-    chave_nfe_solucao = db.Column(db.String(44), nullable=True, unique=True)
+    # FIX PYTHON-FLASK-A7: unique removido — agora UNIQUE composto parcial
+    # (chave_nfe_solucao, nf_remessa_id) WHERE ativo=true no banco.
+    # Permite 1 devolução → N remessas (1:N legítimo).
+    chave_nfe_solucao = db.Column(db.String(44), nullable=True, index=True)
     data_nf_solucao = db.Column(db.DateTime, nullable=True)
 
     # Dados do Odoo (se sincronizado)

@@ -228,6 +228,11 @@ class ExtratoConciliacaoService:
         snapshot_antes = self._capturar_snapshot(titulo_odoo_id)
         item.set_snapshot_antes(snapshot_antes)
 
+        # FIX PYTHON-FLASK-8V: Inicializar ANTES do if/else para evitar
+        # "cannot access local variable 'extrato_reconciliado'" quando o fluxo
+        # entra no branch com payment já existente (que não definia a variável).
+        extrato_reconciliado = True
+
         # =========================================================================
         # LÓGICA MULTI-COMPANY: Se título tem payment, reconciliar via conta PENDENTES
         # =========================================================================

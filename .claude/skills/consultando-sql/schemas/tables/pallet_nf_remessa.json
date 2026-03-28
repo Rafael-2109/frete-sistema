@@ -160,10 +160,10 @@
   ],
   "indices": [
     {
-      "name": "idx_nf_remessa_destinatario_tipo",
+      "name": "idx_nf_remessa_empresa_status",
       "columns": [
-        "cnpj_destinatario",
-        "tipo_destinatario"
+        "empresa",
+        "status"
       ],
       "unique": false
     },
@@ -175,9 +175,10 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_numero_nf",
+      "name": "idx_nf_remessa_destinatario_tipo",
       "columns": [
-        "numero_nf"
+        "cnpj_destinatario",
+        "tipo_destinatario"
       ],
       "unique": false
     },
@@ -186,6 +187,13 @@
       "columns": [
         "data_emissao",
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_remessa_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },
@@ -199,14 +207,6 @@
     {
       "name": "ix_pallet_nf_remessa_status",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_remessa_empresa_status",
-      "columns": [
-        "empresa",
         "status"
       ],
       "unique": false

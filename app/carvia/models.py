@@ -1530,10 +1530,12 @@ class CarviaCotacaoMoto(db.Model):
         db.ForeignKey('carvia_modelos_moto.id'),
         nullable=False
     )
+    # FIX PYTHON-FLASK-AY: nullable=True — modelos podem não ter categoria vinculada ainda.
+    # Precificação por categoria só funciona quando categoria está definida.
     categoria_moto_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_categorias_moto.id'),
-        nullable=False
+        nullable=True
     )
     quantidade = db.Column(db.Integer, nullable=False)
     peso_cubado_unitario = db.Column(db.Numeric(10, 3), nullable=True)

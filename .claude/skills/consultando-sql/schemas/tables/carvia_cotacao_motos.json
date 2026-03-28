@@ -22,8 +22,7 @@
     {
       "name": "categoria_moto_id",
       "type": "integer",
-      "description": "FK → carvia_categorias_moto.id",
-      "nullable": false
+      "description": "FK → carvia_categorias_moto.id"
     },
     {
       "name": "quantidade",

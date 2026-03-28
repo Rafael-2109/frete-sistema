@@ -603,8 +603,9 @@ class DeparaService:
                 logger.info(f"Supplierinfo {supplierinfo_id} nao existe no Odoo (ja foi excluido?)")
                 return {'sucesso': True, 'mensagem': 'Supplierinfo nao existe no Odoo'}
 
-            # Excluir o supplierinfo
-            odoo.unlink('product.supplierinfo', [supplierinfo_id])
+            # Excluir o supplierinfo via execute_kw
+            # FIX PYTHON-FLASK-9Z: OdooConnection não tem método unlink()
+            odoo.execute_kw('product.supplierinfo', 'unlink', [[supplierinfo_id]])
 
             logger.info(f"Supplierinfo {supplierinfo_id} excluido do Odoo")
 
