@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 163,
+  "total_tabelas": 164,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -112,6 +112,15 @@
         "entrega_id",
         "data_agendada",
         "hora_agendada"
+      ]
+    },
+    {
+      "name": "agent_intelligence_reports",
+      "description": "Relatorio de inteligencia do agente (D7 do cron semanal).",
+      "key_fields": [
+        "report_date",
+        "health_score",
+        "friction_score"
       ]
     },
     {

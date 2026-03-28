@@ -179,7 +179,8 @@
       "Bash(openclaw --version)",
       "Bash(openclaw --help)",
       "Bash(for i:*)",
-      "Bash(do grep:*)"
+      "Bash(do grep:*)",
+      "mcp__sentry__search_issue_events"
     ],
     "deny": []
   },

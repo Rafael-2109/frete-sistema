@@ -129,16 +129,23 @@
       "unique": false
     },
     {
-      "name": "idx_documento_validade",
+      "name": "ix_pallet_documentos_cnpj_emissor",
       "columns": [
-        "data_validade"
+        "cnpj_emissor"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_documentos_cnpj_emissor",
+      "name": "ix_pallet_documentos_credito_id",
       "columns": [
-        "cnpj_emissor"
+        "credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_documento_validade",
+      "columns": [
+        "data_validade"
       ],
       "unique": false
     },
@@ -147,13 +154,6 @@
       "columns": [
         "cnpj_emissor",
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_documentos_credito_id",
-      "columns": [
-        "credito_id"
       ],
       "unique": false
     }

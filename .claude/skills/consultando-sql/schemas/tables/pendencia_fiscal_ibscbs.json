@@ -172,23 +172,9 @@
   ],
   "indices": [
     {
-      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
+      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
       "columns": [
-        "chave_acesso"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
-      "columns": [
-        "cte_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pendencia_fiscal_ibscbs_status",
-      "columns": [
-        "status"
+        "tipo_documento"
       ],
       "unique": false
     },
@@ -214,9 +200,23 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_tipo_documento",
+      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
       "columns": [
-        "tipo_documento"
+        "chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_cte_id",
+      "columns": [
+        "cte_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pendencia_fiscal_ibscbs_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

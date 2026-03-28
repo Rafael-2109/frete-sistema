@@ -64,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_pedidos_status",
+      "name": "ix_carvia_pedidos_numero_pedido",
       "columns": [
-        "status"
+        "numero_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_pedidos_numero_pedido",
+      "name": "ix_carvia_pedidos_status",
       "columns": [
-        "numero_pedido"
+        "status"
       ],
       "unique": false
     },
