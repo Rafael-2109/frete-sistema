@@ -356,7 +356,18 @@
                             <i class="fas fa-undo"></i> NF no CD
                             <span class="badge badge-contador-theme">{{ contadores_status.nf_cd }}</span>
                         </a>
-                        
+                        <a href="{{ filtro_url(status='pend_embarque') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'pend_embarque' %}
+                                {% if contadores_status.pend_embarque > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                            {% else %}
+                                {% if contadores_status.pend_embarque > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}"
+                            title="Pedidos pendentes de embarque (sem data de embarque)">
+                            <i class="fas fa-shipping-fast"></i> Pend. Embarque
+                            <span class="badge badge-contador-theme">{{ contadores_status.pend_embarque }}</span>
+                        </a>
+
                         <!-- Contador de pedidos selecionados -->
                         <span id="selected-count" class="badge bg-success me-2" style="display: none;"></span>
                     </div>
