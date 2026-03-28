@@ -864,10 +864,15 @@ def register_fatura_routes(bp):
             for sub in subcontratos:
                 sub.fatura_transportadora_id = fatura.id
                 sub.status = 'FATURADO'
-                # Retroativo: vincular CarviaFrete pelo subcontrato_id
-                CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
-                    {'fatura_transportadora_id': fatura.id}
-                )
+                # Retroativo: vincular CarviaFrete via frete_id (novo) ou subcontrato_id (deprecated)
+                if sub.frete_id:
+                    frete_vinc = db.session.get(CarviaFrete, sub.frete_id)
+                    if frete_vinc:
+                        frete_vinc.fatura_transportadora_id = fatura.id
+                else:
+                    CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
+                        {'fatura_transportadora_id': fatura.id}
+                    )
 
             # Gerar itens de detalhe incrementalmente
             from app.carvia.services.linking_service import LinkingService
@@ -932,9 +937,15 @@ def register_fatura_routes(bp):
             # Reverter subcontrato + limpar CarviaFrete
             sub.fatura_transportadora_id = None
             sub.status = 'CONFIRMADO'
-            CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
-                {'fatura_transportadora_id': None}
-            )
+            # Propagar para CarviaFrete via frete_id (novo) ou subcontrato_id (deprecated)
+            if sub.frete_id:
+                frete_vinc = db.session.get(CarviaFrete, sub.frete_id)
+                if frete_vinc:
+                    frete_vinc.fatura_transportadora_id = None
+            else:
+                CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
+                    {'fatura_transportadora_id': None}
+                )
 
             # Remover item de detalhe
             CarviaFaturaTransportadoraItem.query.filter_by(

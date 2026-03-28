@@ -124,7 +124,12 @@ def register_frete_routes(bp):
 
         # Carregar entidades vinculadas
         operacao = frete.operacao if frete.operacao_id else None
-        subcontrato = frete.subcontrato if frete.subcontrato_id else None
+        subcontratos_list = frete.subcontratos.all()
+        # Backward compat: se nao tem via frete_id mas tem via subcontrato_id (deprecated)
+        if not subcontratos_list and frete.subcontrato_id:
+            sub_legacy = frete.subcontrato
+            subcontratos_list = [sub_legacy] if sub_legacy else []
+        subcontrato = subcontratos_list[0] if subcontratos_list else None
         fatura_cliente = frete.fatura_cliente_rel if frete.fatura_cliente_id else None
         fatura_transportadora = frete.fatura_transportadora_rel if frete.fatura_transportadora_id else None
 
@@ -133,6 +138,7 @@ def register_frete_routes(bp):
             frete=frete,
             operacao=operacao,
             subcontrato=subcontrato,
+            subcontratos=subcontratos_list,
             fatura_cliente=fatura_cliente,
             fatura_transportadora=fatura_transportadora,
         )
@@ -168,7 +174,10 @@ def register_frete_routes(bp):
 
         from app.carvia.forms import CarviaEditarCteForm
 
-        sub = CarviaSubcontrato.query.get(frete.subcontrato_id) if frete.subcontrato_id else None
+        # Buscar subcontrato via novo path (frete_id) com fallback para deprecated (subcontrato_id)
+        sub = frete.subcontratos.first()
+        if not sub and frete.subcontrato_id:
+            sub = CarviaSubcontrato.query.get(frete.subcontrato_id)
         fatura = frete.fatura_transportadora_rel
 
         form = CarviaEditarCteForm()
@@ -375,12 +384,15 @@ def register_frete_routes(bp):
             from app.utils.timezone import agora_utc_naive
             from decimal import Decimal
 
-            if frete.subcontrato_id:
+            # Verificar se ja tem subcontrato vinculado (novo path via frete_id)
+            sub_existente = frete.subcontratos.first()
+            # Fallback deprecated
+            if not sub_existente and frete.subcontrato_id:
+                sub_existente = CarviaSubcontrato.query.get(frete.subcontrato_id)
+
+            if sub_existente:
                 # Subcontrato ja existe (criado anteriormente) — reusar
-                sub = CarviaSubcontrato.query.get(frete.subcontrato_id)
-                if not sub:
-                    flash('Subcontrato vinculado nao encontrado.', 'danger')
-                    return redirect(url_for('carvia.lancar_cte_carvia', fatura_id=fatura_id))
+                sub = sub_existente
             else:
                 # CRIAR novo CarviaSubcontrato
                 # cte_numero=None — usuario preenche na tela seguinte (editar_frete_carvia)
@@ -394,11 +406,12 @@ def register_frete_routes(bp):
                     criado_por=current_user.email,
                     criado_em=agora_utc_naive(),
                     observacoes=f'Criado via Lancar CTe — frete #{frete.id}',
+                    frete_id=frete.id,  # N:1 — novo path
                 )
                 db.session.add(sub)
                 db.session.flush()  # sub.id disponivel
 
-                # Vincular subcontrato ao frete
+                # Backward compat: popular deprecated FK tambem
                 frete.subcontrato_id = sub.id
 
             # === VINCULAR ===
@@ -552,6 +565,9 @@ def register_frete_routes(bp):
             return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
 
         sub = CarviaSubcontrato.query.get_or_404(subcontrato_id)
+        # N:1 — novo path via frete_id
+        sub.frete_id = frete.id
+        # Backward compat: popular deprecated FK tambem
         frete.subcontrato_id = sub.id
 
         # Atualizar valor_cte com o valor do subcontrato
@@ -605,7 +621,12 @@ def register_frete_routes(bp):
 
         frete = CarviaFrete.query.get_or_404(id)
 
-        if not frete.subcontrato_id:
+        # Buscar subcontrato via novo path (frete_id) com fallback deprecated
+        sub = frete.subcontratos.first()
+        if not sub and frete.subcontrato_id:
+            sub = CarviaSubcontrato.query.get(frete.subcontrato_id)
+
+        if not sub:
             flash('Frete nao possui CTe Subcontrato vinculado.', 'warning')
             return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
 
@@ -617,19 +638,17 @@ def register_frete_routes(bp):
                 return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
 
         try:
-            sub = CarviaSubcontrato.query.get(frete.subcontrato_id)
+            # Limpar FK novo (frete_id) no subcontrato
+            sub.frete_id = None
+            sub.fatura_transportadora_id = None
+            sub.status = 'PENDENTE'
 
-            # Limpar FKs no frete
+            # Limpar FKs no frete (deprecated + valores)
             frete.subcontrato_id = None
             frete.fatura_transportadora_id = None
             frete.valor_cte = None
             frete.valor_considerado = None
             frete.valor_pago = None
-
-            # Reverter status do subcontrato
-            if sub:
-                sub.fatura_transportadora_id = None
-                sub.status = 'PENDENTE'
 
             db.session.commit()
             logger.info(

@@ -371,6 +371,12 @@ class CarviaSubcontrato(db.Model):
     )
     valor_acertado = db.Column(db.Numeric(15, 2))
 
+    # FK para CarviaFrete (N:1 — um frete pode ter N subcontratos multi-leg)
+    frete_id = db.Column(
+        db.Integer, db.ForeignKey('carvia_fretes.id'),
+        nullable=True, index=True
+    )
+
     # Fatura do subcontratado
     fatura_transportadora_id = db.Column(
         db.Integer,
@@ -401,6 +407,12 @@ class CarviaSubcontrato(db.Model):
         'CarviaFaturaTransportadora',
         backref='subcontratos',
         foreign_keys=[fatura_transportadora_id]
+    )
+    # N:1 com CarviaFrete via frete_id (back_populates com CarviaFrete.subcontratos)
+    frete = db.relationship(
+        'CarviaFrete',
+        foreign_keys=[frete_id],
+        back_populates='subcontratos',
     )
 
     @staticmethod
@@ -1961,6 +1973,8 @@ class CarviaFrete(db.Model):
     valor_venda = db.Column(db.Float)
 
     # --- Vinculacao CUSTO ---
+    # DEPRECATED: usar relationship subcontratos (1:N via CarviaSubcontrato.frete_id)
+    # Mantido temporariamente para backward compat durante transicao.
     subcontrato_id = db.Column(
         db.Integer, db.ForeignKey('carvia_subcontratos.id'),
         nullable=True, index=True
@@ -1991,7 +2005,15 @@ class CarviaFrete(db.Model):
     # --- Relationships ---
     embarque = db.relationship('Embarque')
     transportadora = db.relationship('Transportadora')
+    # DEPRECATED: 1:1 via subcontrato_id — usar subcontratos (1:N) para multi-leg
     subcontrato = db.relationship('CarviaSubcontrato', foreign_keys=[subcontrato_id])
+    # 1:N via CarviaSubcontrato.frete_id — suporta multi-leg transport
+    subcontratos = db.relationship(
+        'CarviaSubcontrato',
+        foreign_keys='CarviaSubcontrato.frete_id',
+        back_populates='frete',
+        lazy='dynamic',
+    )
     operacao = db.relationship('CarviaOperacao', foreign_keys=[operacao_id])
     fatura_transportadora_rel = db.relationship(
         'CarviaFaturaTransportadora', foreign_keys=[fatura_transportadora_id]

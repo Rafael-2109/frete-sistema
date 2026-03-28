@@ -276,11 +276,17 @@ class CarviaFreteService:
         )
 
         try:
-            # Deletar subcontrato cancelado (se nao faturado)
+            # Deletar subcontratos cancelados (via frete_id — novo path N:1)
+            for sub in frete.subcontratos.all():
+                if sub.status == 'CANCELADO' and not sub.fatura_transportadora_id:
+                    db.session.delete(sub)
+
+            # Fallback: subcontrato via deprecated FK (subcontrato_id)
             if frete.subcontrato_id:
                 sub = db.session.get(CarviaSubcontrato, frete.subcontrato_id)
                 if sub and sub.status == 'CANCELADO' and not sub.fatura_transportadora_id:
-                    db.session.delete(sub)
+                    if not sub.frete_id:  # so deleta se nao ja deletado acima
+                        db.session.delete(sub)
 
             # Deletar operacao cancelada (se nao faturada) + junctions
             if frete.operacao_id:

@@ -152,7 +152,7 @@
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                         </div>
-                                        {% elif frete.subcontrato_id %}
+                                        {% elif frete.subcontratos.count() > 0 or frete.subcontrato_id %}
                                         {# Tem subcontrato mas sem fatura — form para vincular #}
                                         <form method="POST" action="{{ url_for('carvia.processar_cte_subcontrato') }}" class="d-flex gap-1 align-items-center">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
