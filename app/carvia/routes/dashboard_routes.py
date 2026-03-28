@@ -177,6 +177,9 @@ def register_dashboard_routes(bp):
                 'pedidos_abertos': 0,
                 'ultimas_operacoes': [],
                 'saldo_conta': 0,
+                'faturamento': {
+                    'mes_atual': 0, 'mes_anterior': 0, 'variacao_pct': None,
+                },
             }
 
         # Saldo da conta (isolado — falha nao zera stats basicas)
@@ -187,5 +190,16 @@ def register_dashboard_routes(bp):
             except Exception as e:
                 logger.warning(f"Erro ao obter saldo conta CarVia: {e}")
                 stats['saldo_conta'] = 0
+
+        # Faturamento comparativo mes atual vs anterior (isolado)
+        if 'faturamento' not in stats:
+            try:
+                from app.carvia.services.gerencial_service import GerencialService
+                stats['faturamento'] = GerencialService().obter_faturamento_comparativo()
+            except Exception as e:
+                logger.warning(f"Erro ao obter faturamento comparativo CarVia: {e}")
+                stats['faturamento'] = {
+                    'mes_atual': 0, 'mes_anterior': 0, 'variacao_pct': None,
+                }
 
         return render_template('carvia/dashboard.html', stats=stats)

@@ -2,7 +2,7 @@
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, importar, nfs, operacoes, subcontratos,
    ctes_complementares, custos_entrega, fretes, faturas_cliente, faturas_transportadora,
-   despesas, receitas, fluxo_caixa, conciliacao, extrato_bancario, configuracoes
+   despesas, receitas, fluxo_caixa, conciliacao, extrato_bancario, configuracoes, gerencial
 #}
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
     {# --- Visao Geral --- #}
@@ -93,6 +93,15 @@
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'extrato_bancario' else 'btn-outline-secondary' }}">
         Extrato Bancario
     </a>
+
+    {# --- Admin --- #}
+    {% if current_user.is_authenticated and current_user.perfil == 'administrador' %}
+    <span class="carvia-quick-nav-sep"></span>
+    <a href="{{ url_for('carvia.gerencial') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'gerencial' else 'btn-outline-secondary' }}">
+        <i class="fas fa-chart-pie"></i> Gerencial
+    </a>
+    {% endif %}
 
     {# --- Config --- #}
     <span class="carvia-quick-nav-sep"></span>

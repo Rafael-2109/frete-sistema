@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-chart-pie"></i> CarVia — Gerencial</h2>
+            <p class="text-muted mb-0">Metricas por UF e periodo</p>
+        </div>
+        <div>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'gerencial' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {# ── Filtros ── #}
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label for="data_inicio" class="form-label small mb-0">Data Inicio</label>
+                    <input type="date" class="form-control form-control-sm" id="data_inicio"
+                           name="data_inicio" value="{{ data_inicio }}">
+                </div>
+                <div class="col-auto">
+                    <label for="data_fim" class="form-label small mb-0">Data Fim</label>
+                    <input type="date" class="form-control form-control-sm" id="data_fim"
+                           name="data_fim" value="{{ data_fim }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ── Cards Totais do Periodo ── #}
+    <div class="row g-3 mb-3">
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">{{ totais.valor_total|valor_br }}</div>
+                    <div class="stat-label">Faturamento</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">{{ totais.qtd_motos|numero_br(0) }}</div>
+                    <div class="stat-label">Motos (unid.)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">{{ totais.peso_efetivo|numero_br(1) }} kg</div>
+                    <div class="stat-label">Peso Efetivo</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">
+                        {% if totais.valor_por_unidade is not none %}
+                            {{ totais.valor_por_unidade|valor_br }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">R$/Unidade</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">
+                        {% if totais.valor_por_kg_cubado is not none %}
+                            {{ totais.valor_por_kg_cubado|valor_br }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">R$/Kg Cubado</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card carvia-stat-card h-100">
+                <div class="card-body text-center">
+                    <div class="stat-value">{{ totais.total_despesas|valor_br }}</div>
+                    <div class="stat-label">Despesas</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Tabela Detalhada por UF/Mes ── #}
+    <div class="card">
+        <div class="card-header card-header-theme py-2">
+            <h6 class="m-0 fw-bold small">
+                <i class="fas fa-table text-accent"></i> Detalhamento por UF e Mes
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            {% if metricas %}
+            <div class="table-responsive">
+                <table class="table table-sm carvia-table mb-0">
+                    <thead>
+                        <tr class="table-thead-theme">
+                            <th>UF</th>
+                            <th>Mes</th>
+                            <th class="text-end">Valor Total</th>
+                            <th class="text-end">Motos</th>
+                            <th class="text-end">Peso Efetivo (kg)</th>
+                            <th class="text-end">R$/Unidade</th>
+                            <th class="text-end">R$/Kg Cubado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in metricas %}
+                        <tr>
+                            <td><span class="fw-bold">{{ m.uf_destino }}</span></td>
+                            <td>{{ m.mes_label }}</td>
+                            <td class="text-end valor-col">{{ m.valor_total|valor_br }}</td>
+                            <td class="text-end">{{ m.qtd_motos|numero_br(0) }}</td>
+                            <td class="text-end">{{ m.peso_efetivo|numero_br(1) }}</td>
+                            <td class="text-end valor-col">
+                                {% if m.valor_por_unidade is not none %}
+                                    {{ m.valor_por_unidade|valor_br }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end valor-col">
+                                {% if m.valor_por_kg_cubado is not none %}
+                                    {{ m.valor_por_kg_cubado|valor_br }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-chart-bar fa-2x mb-2 d-block"></i>
+                Nenhum dado encontrado para o periodo selecionado
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
