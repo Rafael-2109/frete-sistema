@@ -18,41 +18,53 @@
     </div>
     <div class="card-body">
       <form method="GET">
-        <!-- Primeira linha: Datas -->
+        <!-- Primeira linha: Datas + Busca principal -->
         <div class="row g-3 mb-3">
-          <div class="col-md-3">
+          <div class="col-md-2">
             {{ form.data_inicio.label(class="form-label") }}
             {{ form.data_inicio(value=data_inicio | formatar_data_hora_brasil if data_inicio else '') }}
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             {{ form.data_fim.label(class="form-label") }}
             {{ form.data_fim(value=data_fim | formatar_data_hora_brasil if data_fim else '') }}
           </div>
           <div class="col-md-3">
+            {{ form.motorista_nome.label(class="form-label") }}
+            {{ form.motorista_nome() }}
+          </div>
+          <div class="col-md-2">
+            {{ form.placa.label(class="form-label") }}
+            {{ form.placa() }}
+          </div>
+          <div class="col-md-3">
+            {{ form.empresa.label(class="form-label") }}
+            {{ form.empresa() }}
+          </div>
+        </div>
+
+        <!-- Segunda linha: Filtros específicos -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-2">
             {{ form.embarque_numero.label(class="form-label") }}
             {{ form.embarque_numero() }}
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             {{ form.tem_embarque.label(class="form-label") }}
             {{ form.tem_embarque() }}
           </div>
-        </div>
-        
-        <!-- Segunda linha: Filtros específicos -->
-        <div class="row g-3 mb-3">
-          <div class="col-md-3">
+          <div class="col-md-2">
             {{ form.tipo_carga.label(class="form-label") }}
             {{ form.tipo_carga() }}
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             {{ form.tipo_veiculo_id.label(class="form-label") }}
             {{ form.tipo_veiculo_id() }}
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             {{ form.status.label(class="form-label") }}
             {{ form.status() }}
           </div>
-          <div class="col-md-3 d-flex align-items-end">
+          <div class="col-md-2 d-flex align-items-end">
             <div class="btn-group w-100">
               {{ form.filtrar(class="btn btn-primary") }}
               <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
@@ -68,8 +80,8 @@
   <!-- Resumo dos Resultados -->
   {% if filtros_aplicados %}
   <div class="alert alert-info">
-    <i class="fas fa-info-circle"></i> 
-    Encontrados <strong>{{ registros|length }}</strong> registro(s) com os filtros aplicados.
+    <i class="fas fa-info-circle"></i>
+    Encontrados <strong>{{ paginacao.total }}</strong> registro(s) com os filtros aplicados.
     <a href="{{ url_for('portaria.historico') }}" class="alert-link">Limpar filtros</a>
   </div>
   {% endif %}
@@ -80,7 +92,7 @@
     <div class="col-md-3">
       <div class="card stat-card">
         <div class="card-body text-center">
-          <h5 class="card-title">{{ registros|length }}</h5>
+          <h5 class="card-title">{{ paginacao.total }}</h5>
           <p class="card-text">Total de Registros</p>
         </div>
       </div>
@@ -89,7 +101,7 @@
       <div class="card stat-card stat-card-success">
         <div class="card-body text-center">
           <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'SAIU')|list|length }}</h5>
-          <p class="card-text">Veículos que Saíram</p>
+          <p class="card-text">Nesta Pagina</p>
         </div>
       </div>
     </div>
@@ -97,7 +109,7 @@
       <div class="card stat-card">
         <div class="card-body text-center">
           <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'DENTRO')|list|length }}</h5>
-          <p class="card-text">Veículos Dentro</p>
+          <p class="card-text">Nesta Pagina</p>
         </div>
       </div>
     </div>
@@ -105,7 +117,7 @@
       <div class="card stat-card">
         <div class="card-body text-center">
           <h5 class="card-title">{{ registros|selectattr('status', 'equalto', 'AGUARDANDO')|list|length }}</h5>
-          <p class="card-text">Aguardando Entrada</p>
+          <p class="card-text">Nesta Pagina</p>
         </div>
       </div>
     </div>
@@ -222,12 +234,13 @@
         </table>
       </div>
       
-      <!-- Paginação/Informações -->
+      <!-- Paginação -->
       <div class="card-footer">
         <div class="row align-items-center">
           <div class="col">
             <small class="text-muted">
-              Mostrando {{ registros|length }} registros
+              Mostrando {{ ((paginacao.page - 1) * paginacao.per_page) + 1 }}-{{ [paginacao.page * paginacao.per_page, paginacao.total] | min }}
+              de {{ paginacao.total }} registros
               {% if data_inicio or data_fim %}
                 filtrados
                 {% if data_inicio and data_fim %}
@@ -240,7 +253,49 @@
               {% endif %}
             </small>
           </div>
-          <div class="col-auto">
+          <div class="col-auto d-flex align-items-center gap-2">
+            {% if paginacao.pages > 1 %}
+            {% set args_no_page = request.args.copy() %}
+            {% if 'page' in args_no_page %}
+              {% set _ = args_no_page.pop('page') %}
+            {% endif %}
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                {# Primeira #}
+                <li class="page-item {{ 'disabled' if not paginacao.has_prev }}">
+                  <a class="page-link" href="{{ url_for('portaria.historico', page=1, **args_no_page) }}">
+                    <i class="fas fa-angle-double-left"></i>
+                  </a>
+                </li>
+                {# Anterior #}
+                <li class="page-item {{ 'disabled' if not paginacao.has_prev }}">
+                  <a class="page-link" href="{{ url_for('portaria.historico', page=paginacao.prev_num, **args_no_page) }}">
+                    <i class="fas fa-chevron-left"></i>
+                  </a>
+                </li>
+
+                {# Páginas ao redor #}
+                {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg > 0 and pg <= paginacao.pages %}
+                  <li class="page-item {{ 'active' if pg == paginacao.page }}">
+                    <a class="page-link" href="{{ url_for('portaria.historico', page=pg, **args_no_page) }}">{{ pg }}</a>
+                  </li>
+                {% endfor %}
+
+                {# Próximo #}
+                <li class="page-item {{ 'disabled' if not paginacao.has_next }}">
+                  <a class="page-link" href="{{ url_for('portaria.historico', page=paginacao.next_num, **args_no_page) }}">
+                    <i class="fas fa-chevron-right"></i>
+                  </a>
+                </li>
+                {# Última #}
+                <li class="page-item {{ 'disabled' if not paginacao.has_next }}">
+                  <a class="page-link" href="{{ url_for('portaria.historico', page=paginacao.pages, **args_no_page) }}">
+                    <i class="fas fa-angle-double-right"></i>
+                  </a>
+                </li>
+              </ul>
+            </nav>
+            {% endif %}
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportarHistorico()">
               <i class="fas fa-download"></i> Exportar CSV
             </button>

@@ -417,12 +417,13 @@ def registrar_movimento():
 @login_required
 def historico():
     """
-    Exibe histórico completo da portaria com filtros expandidos
+    Exibe histórico completo da portaria com filtros expandidos e paginação
     """
     form = FiltroHistoricoForm(request.args)
-    registros = []
     filtros_aplicados = False
-    
+    page = request.args.get('page', 1, type=int)
+    per_page = 25
+
     # Processa filtros
     data_inicio = None
     data_fim = None
@@ -431,7 +432,10 @@ def historico():
     tipo_carga = request.args.get('tipo_carga', '').strip()
     tipo_veiculo_id = request.args.get('tipo_veiculo_id', '').strip()
     status = request.args.get('status', '').strip()
-    
+    motorista_nome = request.args.get('motorista_nome', '').strip()
+    placa = request.args.get('placa', '').strip()
+    empresa = request.args.get('empresa', '').strip()
+
     # Converte datas
     data_inicio_str = request.args.get('data_inicio')
     if data_inicio_str:
@@ -440,7 +444,7 @@ def historico():
             filtros_aplicados = True
         except ValueError:
             flash('Data de início inválida!', 'warning')
-    
+
     data_fim_str = request.args.get('data_fim')
     if data_fim_str:
         try:
@@ -448,7 +452,7 @@ def historico():
             filtros_aplicados = True
         except ValueError:
             flash('Data de fim inválida!', 'warning')
-    
+
     # Converte tipo_veiculo_id para int se fornecido
     tipo_veiculo_id_int = None
     if tipo_veiculo_id:
@@ -457,26 +461,32 @@ def historico():
             filtros_aplicados = True
         except ValueError:
             pass
-    
+
     # Verifica se há filtros aplicados
-    if embarque_numero or tem_embarque or tipo_carga or status:
+    if embarque_numero or tem_embarque or tipo_carga or status or motorista_nome or placa or empresa:
         filtros_aplicados = True
-    
-    # Busca registros com todos os filtros
-    registros = ControlePortaria.historico(
+
+    # Busca registros com todos os filtros (retorna objeto Pagination)
+    paginacao = ControlePortaria.historico(
         data_inicio=data_inicio,
         data_fim=data_fim,
         embarque_numero=embarque_numero if embarque_numero else None,
         tem_embarque=tem_embarque if tem_embarque else None,
         tipo_carga=tipo_carga if tipo_carga else None,
         tipo_veiculo_id=tipo_veiculo_id_int,
-        status=status if status else None
+        status=status if status else None,
+        motorista_nome=motorista_nome if motorista_nome else None,
+        placa=placa if placa else None,
+        empresa=empresa if empresa else None,
+        page=page,
+        per_page=per_page
     )
-    
+
     return render_template(
         'portaria/historico.html',
         form=form,
-        registros=registros,
+        paginacao=paginacao,
+        registros=paginacao.items,
         data_inicio=data_inicio,
         data_fim=data_fim,
         filtros_aplicados=filtros_aplicados

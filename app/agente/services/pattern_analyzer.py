@@ -1702,7 +1702,7 @@ def extrair_conhecimento_sessao(
             total_items = sum(
                 len(knowledge.get(k, []))
                 for k in ('term_definitions', 'role_identifications',
-                           'business_rules', 'corrections')
+                           'business_rules', 'corrections') # noqa
             )
 
         if total_items == 0:

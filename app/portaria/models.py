@@ -135,17 +135,22 @@ class ControlePortaria(db.Model):
     
     @staticmethod
     def veiculos_do_dia():
-        """Retorna veículos do dia ordenados: primeiro DENTRO, depois AGUARDANDO, por último SAIU"""
+        """Retorna veículos do dia + não finalizados, ordenados: DENTRO, AGUARDANDO, SAIU"""
         hoje = agora_utc_naive().date()
-        
-        # Veículos que chegaram hoje
+
         from sqlalchemy.orm import joinedload
+        from sqlalchemy import or_
+
+        # Veículos que chegaram hoje OU que não finalizaram (sem saída registrada)
         registros = ControlePortaria.query.options(
             joinedload(ControlePortaria.motorista_obj),
             joinedload(ControlePortaria.embarque),
             joinedload(ControlePortaria.tipo_veiculo),
         ).filter(
-            ControlePortaria.data_chegada == hoje
+            or_(
+                ControlePortaria.data_chegada == hoje,
+                ControlePortaria.data_saida.is_(None)
+            )
         ).all()
         
         # Separa em três grupos por prioridade
@@ -178,53 +183,94 @@ class ControlePortaria(db.Model):
         return dentro + aguardando + saiu
     
     @staticmethod
-    def historico(data_inicio=None, data_fim=None, embarque_numero=None, tem_embarque=None, 
-                 tipo_carga=None, tipo_veiculo_id=None, status=None):
-        """Retorna histórico de registros com filtros opcionais"""
-        
+    def historico(data_inicio=None, data_fim=None, embarque_numero=None, tem_embarque=None,
+                 tipo_carga=None, tipo_veiculo_id=None, status=None,
+                 motorista_nome=None, placa=None, empresa=None,
+                 page=1, per_page=25):
+        """Retorna histórico de registros com filtros opcionais e paginação"""
+
         from sqlalchemy.orm import joinedload
+        from sqlalchemy import or_
+
         query = ControlePortaria.query.options(
             joinedload(ControlePortaria.motorista_obj),
             joinedload(ControlePortaria.embarque),
             joinedload(ControlePortaria.tipo_veiculo),
         ).join(Motorista)
-        
+
         # Filtros de data
         if data_inicio:
             query = query.filter(ControlePortaria.data_chegada >= data_inicio)
         if data_fim:
             query = query.filter(ControlePortaria.data_chegada <= data_fim)
-        
+
         # Filtro por número do embarque
         if embarque_numero:
             query = query.join(Embarque).filter(
                 Embarque.numero.like(f'%{embarque_numero}%')
             )
-        
+
         # Filtro por presença de embarque
         if tem_embarque == 'sim':
             query = query.filter(ControlePortaria.embarque_id.isnot(None))
         elif tem_embarque == 'nao':
             query = query.filter(ControlePortaria.embarque_id.is_(None))
-        
+
         # Filtro por tipo de carga
         if tipo_carga:
             query = query.filter(ControlePortaria.tipo_carga == tipo_carga)
-        
+
         # Filtro por tipo de veículo
         if tipo_veiculo_id:
             query = query.filter(ControlePortaria.tipo_veiculo_id == tipo_veiculo_id)
-        
-        # Filtro por status (calculado dinamicamente)
-        # Este será aplicado após a query base
-        
-        registros = query.order_by(
+
+        # Filtro por motorista (busca parcial no nome)
+        if motorista_nome:
+            query = query.filter(Motorista.nome_completo.ilike(f'%{motorista_nome}%'))
+
+        # Filtro por placa (busca parcial)
+        if placa:
+            query = query.filter(ControlePortaria.placa.ilike(f'%{placa}%'))
+
+        # Filtro por empresa (busca parcial)
+        if empresa:
+            query = query.filter(ControlePortaria.empresa.ilike(f'%{empresa}%'))
+
+        # Filtro por status — traduzido para SQL para compatibilidade com paginação
+        if status == 'SAIU':
+            query = query.filter(
+                ControlePortaria.data_saida.isnot(None),
+                ControlePortaria.hora_saida.isnot(None)
+            )
+        elif status == 'DENTRO':
+            query = query.filter(
+                ControlePortaria.data_entrada.isnot(None),
+                ControlePortaria.hora_entrada.isnot(None),
+                or_(
+                    ControlePortaria.data_saida.is_(None),
+                    ControlePortaria.hora_saida.is_(None)
+                )
+            )
+        elif status == 'AGUARDANDO':
+            query = query.filter(
+                ControlePortaria.data_chegada.isnot(None),
+                ControlePortaria.hora_chegada.isnot(None),
+                or_(
+                    ControlePortaria.data_entrada.is_(None),
+                    ControlePortaria.hora_entrada.is_(None)
+                )
+            )
+        elif status == 'PENDENTE':
+            query = query.filter(
+                or_(
+                    ControlePortaria.data_chegada.is_(None),
+                    ControlePortaria.hora_chegada.is_(None)
+                )
+            )
+
+        query = query.order_by(
             ControlePortaria.data_chegada.desc(),
             ControlePortaria.hora_chegada.desc()
-        ).all()
-        
-        # Aplicar filtro de status se especificado
-        if status:
-            registros = [r for r in registros if r.status == status]
-        
-        return registros
+        )
+
+        return query.paginate(page=page, per_page=per_page, error_out=False)

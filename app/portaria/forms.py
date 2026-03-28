@@ -185,19 +185,37 @@ class FiltroHistoricoForm(FlaskForm):
         validators=[Optional()],
         render_kw={'type': 'date', 'class': 'form-control'}
     )
-    
+
     data_fim = StringField(
         'Data Fim',
         validators=[Optional()],
         render_kw={'type': 'date', 'class': 'form-control'}
     )
-    
-    embarque_numero = StringField(
-        'Número do Embarque',
+
+    motorista_nome = StringField(
+        'Motorista',
         validators=[Optional()],
-        render_kw={'placeholder': 'Digite o número do embarque', 'class': 'form-control'}
+        render_kw={'placeholder': 'Nome do motorista', 'class': 'form-control'}
     )
-    
+
+    placa = StringField(
+        'Placa',
+        validators=[Optional()],
+        render_kw={'placeholder': 'Ex: ABC-1234', 'class': 'form-control', 'style': 'text-transform: uppercase;'}
+    )
+
+    empresa = StringField(
+        'Empresa',
+        validators=[Optional()],
+        render_kw={'placeholder': 'Nome da empresa', 'class': 'form-control'}
+    )
+
+    embarque_numero = StringField(
+        'Embarque',
+        validators=[Optional()],
+        render_kw={'placeholder': 'N. do embarque', 'class': 'form-control'}
+    )
+
     tem_embarque = SelectField(
         'Vinculado a Embarque',
         choices=[
@@ -208,7 +226,7 @@ class FiltroHistoricoForm(FlaskForm):
         validators=[Optional()],
         render_kw={'class': 'form-control'}
     )
-    
+
     tipo_carga = SelectField(
         'Tipo de Carga',
         choices=[
@@ -222,7 +240,7 @@ class FiltroHistoricoForm(FlaskForm):
         validators=[Optional()],
         render_kw={'class': 'form-control'}
     )
-    
+
     tipo_veiculo_id = SelectField(
         'Tipo de Veículo',
         coerce=coerce_int_or_none,
@@ -230,7 +248,7 @@ class FiltroHistoricoForm(FlaskForm):
         choices=[],  # Será populado dinamicamente
         render_kw={'class': 'form-control'}
     )
-    
+
     status = SelectField(
         'Status',
         choices=[
@@ -243,13 +261,13 @@ class FiltroHistoricoForm(FlaskForm):
         validators=[Optional()],
         render_kw={'class': 'form-control'}
     )
-    
+
     filtrar = SubmitField('Filtrar')
     limpar = SubmitField('Limpar Filtros')
-    
+
     def __init__(self, *args, **kwargs):
         super(FiltroHistoricoForm, self).__init__(*args, **kwargs)
-        
+
         # Carrega opções de tipos de veículos
         self.tipo_veiculo_id.choices = [('', 'Todos os tipos')]
         try:
