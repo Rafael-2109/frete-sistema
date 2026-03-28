@@ -1241,13 +1241,166 @@ def _detect_conflicts_async(user_id: int, new_path: str, new_content: str) -> No
 
 
 # =====================================================================
-# CUSTOM TOOLS — @tool decorator
+# OUTPUT SCHEMAS (Enhanced MCP — structuredContent)
+# =====================================================================
+
+MEMORY_VIEW_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "is_directory": {"type": "boolean"},
+        "content": {"type": ["string", "null"]},
+        "items": {
+            "type": ["array", "null"],
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "is_dir": {"type": "boolean"},
+                },
+            },
+        },
+    },
+    "required": ["path", "is_directory"],
+}
+
+MEMORY_SAVE_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "action": {"type": "string", "enum": ["criado", "atualizado", "duplicate_blocked"]},
+        "category": {"type": ["string", "null"]},
+        "importance": {"type": ["number", "null"]},
+    },
+    "required": ["path", "action"],
+}
+
+MEMORY_UPDATE_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "updated": {"type": "boolean"},
+    },
+    "required": ["path", "updated"],
+}
+
+MEMORY_DELETE_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "type": {"type": "string", "enum": ["file", "directory"]},
+        "count": {"type": "integer"},
+    },
+    "required": ["path", "type", "count"],
+}
+
+MEMORY_LIST_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+        "memories": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "preview": {"type": "string"},
+                },
+            },
+        },
+    },
+    "required": ["count", "memories"],
+}
+
+MEMORY_CLEAR_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+    },
+    "required": ["count"],
+}
+
+MEMORY_SEARCH_COLD_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "usage_count": {"type": "integer"},
+                    "effective_count": {"type": "integer"},
+                    "content_preview": {"type": "string"},
+                },
+            },
+        },
+    },
+    "required": ["count", "results"],
+}
+
+MEMORY_HISTORY_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "version_count": {"type": "integer"},
+        "versions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "version": {"type": "integer"},
+                    "changed_at": {"type": ["string", "null"]},
+                    "changed_by": {"type": ["string", "null"]},
+                    "preview": {"type": "string"},
+                },
+            },
+        },
+    },
+    "required": ["path", "version_count", "versions"],
+}
+
+MEMORY_RESTORE_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "restored_to_version": {"type": "integer"},
+        "backup_version": {"type": ["integer", "null"]},
+        "preview": {"type": ["string", "null"]},
+    },
+    "required": ["path", "restored_to_version"],
+}
+
+MEMORY_RESOLVE_PENDENCIA_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "description": {"type": "string"},
+        "total_resolved": {"type": "integer"},
+    },
+    "required": ["description", "total_resolved"],
+}
+
+MEMORY_LOG_PITFALL_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "area": {"type": "string"},
+        "description": {"type": "string"},
+        "total_pitfalls": {"type": "integer"},
+        "is_update": {"type": "boolean"},
+    },
+    "required": ["area", "description", "total_pitfalls", "is_update"],
+}
+
+# =====================================================================
+# CUSTOM TOOLS — Enhanced MCP v2.0.0
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import enhanced_tool, create_enhanced_mcp_server
 
-    @tool(
+    @enhanced_tool(
         "view_memories",
         "OBRIGATÓRIO no início de cada sessão: visualiza memórias persistentes do usuário. "
         "Consulte ANTES de responder a primeira mensagem para recuperar preferências, "
@@ -1262,6 +1415,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_VIEW_OUTPUT_SCHEMA,
     )
     async def view_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1289,45 +1443,58 @@ try:
                 if path == '/memories':
                     items = AgentMemory.list_directory(actual_user_id, path)
                     if not items:
-                        return "Diretório: /memories\n(vazio — nenhuma memória salva)"
+                        text = "Diretório: /memories\n(vazio — nenhuma memória salva)"
+                        return text, {"path": path, "is_directory": True, "content": None, "items": []}
 
                     lines = ["Diretório: /memories"]
+                    structured_items = []
                     for item in sorted(items, key=lambda x: x.path):
                         name = item.path.split('/')[-1]
                         suffix = '/' if item.is_directory else ''
                         lines.append(f"- {name}{suffix}")
-                    return "\n".join(lines)
+                        structured_items.append({"name": name, "is_dir": item.is_directory})
+                    text = "\n".join(lines)
+                    return text, {"path": path, "is_directory": True, "content": None, "items": structured_items}
 
                 if not memory:
-                    return f"Path não encontrado: {path}"
+                    text = f"Path não encontrado: {path}"
+                    return text, {"path": path, "is_directory": False, "content": None, "items": None}
 
                 # Se diretório, lista conteúdo
                 if memory.is_directory:
                     items = AgentMemory.list_directory(actual_user_id, path)
                     if not items:
-                        return f"Diretório: {path}\n(vazio)"
+                        text = f"Diretório: {path}\n(vazio)"
+                        return text, {"path": path, "is_directory": True, "content": None, "items": []}
 
                     lines = [f"Diretório: {path}"]
+                    structured_items = []
                     for item in sorted(items, key=lambda x: x.path):
                         name = item.path.split('/')[-1]
                         suffix = '/' if item.is_directory else ''
                         lines.append(f"- {name}{suffix}")
-                    return "\n".join(lines)
+                        structured_items.append({"name": name, "is_dir": item.is_directory})
+                    text = "\n".join(lines)
+                    return text, {"path": path, "is_directory": True, "content": None, "items": structured_items}
 
                 # Arquivo: retorna conteúdo
                 content = memory.content or "(vazio)"
-                return f"Arquivo: {path}\n\n{content}"
+                text = f"Arquivo: {path}\n\n{content}"
+                return text, {"path": path, "is_directory": False, "content": content, "items": None}
 
-            result = _execute_with_context(_view)
+            result_text, structured = _execute_with_context(_view)
             logger.info(f"[MEMORY_MCP] view_memories: {path}")
-            return {"content": [{"type": "text", "text": result}]}
+            return {
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
+            }
 
         except Exception as e:
             error_msg = f"Erro ao visualizar {path}: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "save_memory",
         "Salva fato, preferência ou correção na memória persistente do usuário. "
         "Use PROATIVAMENTE quando detectar: correções do usuário, preferências reveladas, "
@@ -1345,6 +1512,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_SAVE_OUTPUT_SCHEMA,
     )
     async def save_memory(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1470,7 +1638,13 @@ try:
                             f"'{dup_err.dup_path}'. Use update_memory para atualizar "
                             f"o conteudo existente, ou altere significativamente o conteudo."
                         ),
-                    }]
+                    }],
+                    "structuredContent": {
+                        "path": path,
+                        "action": "duplicate_blocked",
+                        "category": None,
+                        "importance": None,
+                    },
                 }
 
             logger.info(f"[MEMORY_MCP] save_memory: {path} ({action})")
@@ -1589,7 +1763,13 @@ try:
                 pass
 
             return {
-                "content": [{"type": "text", "text": f"Memória {action} em {path}{pitfall_hint}"}]
+                "content": [{"type": "text", "text": f"Memória {action} em {path}{pitfall_hint}"}],
+                "structuredContent": {
+                    "path": path,
+                    "action": action,
+                    "category": None,
+                    "importance": None,
+                },
             }
 
         except Exception as e:
@@ -1597,7 +1777,7 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "update_memory",
         "Substitui um trecho de texto em um arquivo de memória existente. "
         "O old_str deve ser encontrado exatamente UMA vez no arquivo. "
@@ -1609,6 +1789,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_UPDATE_OUTPUT_SCHEMA,
     )
     async def update_memory(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1722,7 +1903,8 @@ try:
             Thread(target=_bg_reembed_and_kg, daemon=True).start()
 
             return {
-                "content": [{"type": "text", "text": f"Memória atualizada em {path}"}]
+                "content": [{"type": "text", "text": f"Memória atualizada em {path}"}],
+                "structuredContent": {"path": path, "updated": True},
             }
 
         except Exception as e:
@@ -1730,7 +1912,7 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "delete_memory",
         "Deleta um arquivo ou diretório de memória. "
         "Não é possível deletar o diretório raiz /memories.",
@@ -1741,6 +1923,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_DELETE_OUTPUT_SCHEMA,
     )
     async def delete_memory(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1820,18 +2003,23 @@ try:
 
                 count = AgentMemory.delete_by_path(actual_user_id, path)
                 db.session.commit()
-                return f"{tipo} deletado: {path}" + (f" ({count} itens)" if count > 1 else "")
+                type_str = "directory" if tipo == "Diretório" else "file"
+                text = f"{tipo} deletado: {path}" + (f" ({count} itens)" if count > 1 else "")
+                return text, type_str, count
 
-            result = _execute_with_context(_delete)
+            result_text, type_str, count = _execute_with_context(_delete)
             logger.info(f"[MEMORY_MCP] delete_memory: {path}")
-            return {"content": [{"type": "text", "text": result}]}
+            return {
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": {"path": path, "type": type_str, "count": count},
+            }
 
         except Exception as e:
             error_msg = f"Erro ao deletar {path}: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "list_memories",
         "Lista todos os arquivos de memória persistente do usuário. "
         "Use no INÍCIO de cada sessão para verificar o que há salvo. "
@@ -1843,6 +2031,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_LIST_OUTPUT_SCHEMA,
     )
     async def list_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1867,27 +2056,33 @@ try:
                 ).order_by(AgentMemory.path).all()
 
                 if not memories:
-                    return "Nenhuma memória salva."
+                    return "Nenhuma memória salva.", {"count": 0, "memories": []}
 
                 lines = [f"Memórias do usuário ({len(memories)} arquivos):\n"]
+                structured_memories = []
                 for mem in memories:
                     content_preview = (mem.content or "")[:80]
                     if len(mem.content or "") > 80:
                         content_preview += "..."
                     lines.append(f"- {mem.path}: {content_preview}")
+                    structured_memories.append({"path": mem.path, "preview": content_preview})
 
-                return "\n".join(lines)
+                text = "\n".join(lines)
+                return text, {"count": len(memories), "memories": structured_memories}
 
-            result = _execute_with_context(_list)
+            result_text, structured = _execute_with_context(_list)
             logger.info(f"[MEMORY_MCP] list_memories: user={user_id}")
-            return {"content": [{"type": "text", "text": result}]}
+            return {
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
+            }
 
         except Exception as e:
             error_msg = f"Erro ao listar memórias: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "clear_memories",
         "Limpa TODAS as memórias do usuário. "
         "Use apenas quando o usuário pedir explicitamente para limpar tudo. "
@@ -1899,6 +2094,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_CLEAR_OUTPUT_SCHEMA,
     )
     async def clear_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1924,7 +2120,8 @@ try:
             count = _execute_with_context(_clear)
             logger.info(f"[MEMORY_MCP] clear_memories: user={user_id}, count={count}")
             return {
-                "content": [{"type": "text", "text": f"Todas as memórias limpas ({count} itens removidos)"}]
+                "content": [{"type": "text", "text": f"Todas as memórias limpas ({count} itens removidos)"}],
+                "structuredContent": {"count": count},
             }
 
         except Exception as e:
@@ -1932,7 +2129,7 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "search_cold_memories",
         "Busca no tier frio de memórias: memórias que foram automaticamente removidas da "
         "injeção por baixa efetividade (injetadas 20+ vezes sem nunca serem usadas na resposta). "
@@ -1945,6 +2142,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_SEARCH_COLD_OUTPUT_SCHEMA,
     )
     async def search_cold_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1993,9 +2191,11 @@ try:
                 ).limit(10).all()
 
                 if not cold_memories:
-                    return f"Nenhuma memória fria encontrada para '{query}'."
+                    text = f"Nenhuma memória fria encontrada para '{query}'."
+                    return text, {"count": 0, "results": []}
 
                 lines = [f"Memórias frias ({len(cold_memories)} resultados para '{query}'):\n"]
+                structured_results = []
                 for mem in cold_memories:
                     content_preview = (mem.content or "")[:200]
                     usage = getattr(mem, 'usage_count', 0) or 0
@@ -2007,19 +2207,29 @@ try:
                     if len(mem.content or "") > 200:
                         lines.append("...")
                     lines.append("")
+                    structured_results.append({
+                        "path": mem.path,
+                        "usage_count": usage,
+                        "effective_count": effective,
+                        "content_preview": content_preview,
+                    })
 
-                return "\n".join(lines)
+                text = "\n".join(lines)
+                return text, {"count": len(cold_memories), "results": structured_results}
 
-            result = _execute_with_context(_search_cold)
+            result_text, structured = _execute_with_context(_search_cold)
             logger.info(f"[MEMORY_MCP] search_cold_memories: query='{query[:50]}'")
-            return {"content": [{"type": "text", "text": result}]}
+            return {
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
+            }
 
         except Exception as e:
             error_msg = f"Erro ao buscar memórias frias: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "view_memory_history",
         "Consulta histórico de versões anteriores de uma memória. "
         "Use para ver quando e por quem a memória foi alterada, "
@@ -2032,6 +2242,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_HISTORY_OUTPUT_SCHEMA,
     )
     async def view_memory_history(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -2066,13 +2277,16 @@ try:
 
                 memory = AgentMemory.get_by_path(actual_user_id, path)
                 if not memory:
-                    return None, f"Memória não encontrada: {path}"
+                    text = f"Memória não encontrada: {path}"
+                    return None, text, {"path": path, "version_count": 0, "versions": []}
 
                 versions = AgentMemoryVersion.get_versions(memory.id, limit)
                 if not versions:
-                    return None, f"Nenhuma versão anterior para {path}. A memória existe mas nunca foi modificada."
+                    text = f"Nenhuma versão anterior para {path}. A memória existe mas nunca foi modificada."
+                    return None, text, {"path": path, "version_count": 0, "versions": []}
 
                 lines = [f"Histórico de {path} ({len(versions)} versão(ões)):\n"]
+                structured_versions = []
                 for v in versions:
                     changed_at = v.changed_at.strftime('%d/%m/%Y %H:%M') if v.changed_at else '?'
                     changed_by = v.changed_by or '?'
@@ -2083,20 +2297,33 @@ try:
                         f"v{v.version} | {changed_at} | {changed_by}\n"
                         f"  Preview: {preview}\n"
                     )
+                    structured_versions.append({
+                        "version": v.version,
+                        "changed_at": v.changed_at.isoformat() if v.changed_at else None,
+                        "changed_by": v.changed_by,
+                        "preview": preview,
+                    })
 
-                return versions, "\n".join(lines)
+                text = "\n".join(lines)
+                return versions, text, {"path": path, "version_count": len(versions), "versions": structured_versions}
 
-            versions, result_text = _execute_with_context(_view_history)
+            versions, result_text, structured = _execute_with_context(_view_history)
 
             if versions is None:
                 logger.info(f"[MEMORY_MCP] view_memory_history: path={path} — {result_text}")
-                return {"content": [{"type": "text", "text": result_text}]}
+                return {
+                    "content": [{"type": "text", "text": result_text}],
+                    "structuredContent": structured,
+                }
 
             logger.info(
                 f"[MEMORY_MCP] view_memory_history: path={path}, "
                 f"versions={len(versions)}"
             )
-            return {"content": [{"type": "text", "text": result_text}]}
+            return {
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
+            }
 
         except ValueError as e:
             return {"content": [{"type": "text", "text": f"Erro: {str(e)}"}], "is_error": True}
@@ -2107,7 +2334,7 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "restore_memory_version",
         "Restaura uma versão anterior de uma memória. "
         "O conteúdo atual é salvo como nova versão antes da restauração (backup automático). "
@@ -2119,6 +2346,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_RESTORE_OUTPUT_SCHEMA,
     )
     async def restore_memory_version(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -2172,7 +2400,8 @@ try:
 
                 memory = AgentMemory.get_by_path(actual_user_id, path)
                 if not memory:
-                    return None, f"Memória não encontrada: {path}"
+                    text = f"Memória não encontrada: {path}"
+                    return None, text, {"path": path, "restored_to_version": version_num, "backup_version": None, "preview": None}
 
                 target_version = AgentMemoryVersion.get_version(memory.id, version_num)
                 if not target_version:
@@ -2180,11 +2409,13 @@ try:
                     available = AgentMemoryVersion.get_versions(memory.id, 20)
                     if available:
                         nums = ", ".join(str(v.version) for v in available)
-                        return None, (
+                        text = (
                             f"Versão {version_num} não encontrada para {path}. "
                             f"Versões disponíveis: {nums}"
                         )
-                    return None, f"Versão {version_num} não encontrada para {path}. Nenhuma versão anterior existe."
+                    else:
+                        text = f"Versão {version_num} não encontrada para {path}. Nenhuma versão anterior existe."
+                    return None, text, {"path": path, "restored_to_version": version_num, "backup_version": None, "preview": None}
 
                 # Backup: salvar conteúdo atual como nova versão
                 backup_version = AgentMemoryVersion.save_version(
@@ -2201,23 +2432,35 @@ try:
                 if len(target_version.content or "") > 200:
                     preview += "..."
 
-                return backup_version, (
+                text = (
                     f"Memória {path} restaurada para versão {version_num}.\n"
                     f"Conteúdo anterior (backup) salvo como versão {backup_version.version}.\n"
                     f"Preview: {preview}"
                 )
+                return backup_version, text, {
+                    "path": path,
+                    "restored_to_version": version_num,
+                    "backup_version": backup_version.version,
+                    "preview": preview,
+                }
 
-            backup, result_text = _execute_with_context(_restore)
+            backup, result_text, structured = _execute_with_context(_restore)
 
             if backup is None:
                 logger.info(f"[MEMORY_MCP] restore_memory_version: path={path} — {result_text}")
-                return {"content": [{"type": "text", "text": result_text}]}
+                return {
+                    "content": [{"type": "text", "text": result_text}],
+                    "structuredContent": structured,
+                }
 
             logger.info(
                 f"[MEMORY_MCP] restore_memory_version: path={path}, "
                 f"restored_to=v{version_num}, backup=v{backup.version}"
             )
-            return {"content": [{"type": "text", "text": result_text}]}
+            return {
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
+            }
 
         except ValueError as e:
             return {"content": [{"type": "text", "text": f"Erro: {str(e)}"}], "is_error": True}
@@ -2228,7 +2471,7 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "resolve_pendencia",
         "Marca uma pendência como resolvida para que não apareça mais no briefing de sessão. "
         "Use quando o usuário confirmar que uma pendência listada já foi tratada, "
@@ -2241,6 +2484,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_RESOLVE_PENDENCIA_OUTPUT_SCHEMA,
     )
     async def resolve_pendencia(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -2308,7 +2552,8 @@ try:
                 "content": [{
                     "type": "text",
                     "text": f"Pendência resolvida: '{description}'. Total resolvidas: {total}.",
-                }]
+                }],
+                "structuredContent": {"description": description, "total_resolved": total},
             }
 
         except PermissionError as e:
@@ -2318,7 +2563,7 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
-    @tool(
+    @enhanced_tool(
         "log_system_pitfall",
         "Registra uma armadilha/falha OPERACIONAL do sistema (não erro do agente). "
         "Use quando descobrir um gotcha do ambiente que economizaria tempo se lembrado. "
@@ -2333,6 +2578,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=MEMORY_LOG_PITFALL_OUTPUT_SCHEMA,
     )
     async def log_system_pitfall(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -2424,9 +2670,9 @@ try:
                 # Regenerar XML de pitfalls para injeção no contexto
                 _regenerate_pitfalls_xml(user_id, pitfalls)
 
-                return len(pitfalls)
+                return len(pitfalls), found
 
-            total = _execute_with_context(_log_pitfall)
+            total, is_update = _execute_with_context(_log_pitfall)
             logger.info(
                 f"[MEMORY_MCP] log_system_pitfall: area={area}, "
                 f"desc='{description[:60]}' (total: {total})"
@@ -2435,7 +2681,13 @@ try:
                 "content": [{
                     "type": "text",
                     "text": f"Pitfall registrado em '{area}': {description}. Total pitfalls: {total}.",
-                }]
+                }],
+                "structuredContent": {
+                    "area": area,
+                    "description": description,
+                    "total_pitfalls": total,
+                    "is_update": is_update,
+                },
             }
 
         except PermissionError as e:
@@ -2446,9 +2698,9 @@ try:
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     # Criar MCP server in-process
-    memory_server = create_sdk_mcp_server(
+    memory_server = create_enhanced_mcp_server(
         name="memory-tools",
-        version="1.3.0",
+        version="2.0.0",
         tools=[
             view_memories,
             save_memory,
@@ -2464,7 +2716,7 @@ try:
         ],
     )
 
-    logger.info("[MEMORY_MCP] Custom Tool MCP 'memory' registrada com sucesso (11 operações)")
+    logger.info("[MEMORY_MCP] Enhanced MCP 'memory' v2.0.0 registrado (11 tools, structuredContent)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

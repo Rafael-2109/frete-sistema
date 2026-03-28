@@ -56,12 +56,12 @@ app/agente/                          # Root — 5 arquivos
 └── tools/                           # MCP tools (NAO callables) — 9 arquivos
     ├── __init__.py
     ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
-    ├── memory_mcp_tool.py           # 11 operacoes de memoria
+    ├── memory_mcp_tool.py           # 11 operacoes de memoria (Enhanced v2.0.0)
     ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
     ├── render_logs_tool.py          # Consulta logs Render
     ├── routes_search_tool.py        # Busca em rotas Flask
     ├── schema_mcp_tool.py           # Consulta schemas de tabelas
-    ├── session_search_tool.py       # 4 operacoes de busca em sessoes
+    ├── session_search_tool.py       # 4 operacoes de busca em sessoes (Enhanced v4.0.0)
     └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ```
 
@@ -110,20 +110,23 @@ Segue o modelo de 5 camadas do Agent SDK (Anthropic):
 | Mudanca | Racional (DOC-1.md) | Tokens salvos |
 |---------|---------------------|---------------|
 | R5: tabela MCP removida | Tool descriptions sao auto-descritas — duplicar no prompt e anti-pattern | ~150 |
-| P1-P7: inline → referencia | Agente delega a `analista-carteira`, nao decide P1-P7 sozinho | ~300 |
+| P1-P7: inline �� referencia | Agente delega a `analista-carteira`, nao decide P1-P7 sozinho | ~300 |
 | knowledge_base: 17 entradas → ponteiro para CLAUDE.md | Root CLAUDE.md ja fornece indice unificado via `setting_sources` | ~200 |
 | Subagent reliability: adicionado | Protocolo `/tmp/subagent-findings/` na coordination_protocol | +30 |
 | Root CLAUDE.md: reorganizado | Subcategorias (Odoo, SSW, Infra), entradas dev-only movidas | — |
 | analista-carteira.md: DRY | P1-P7 referencia REGRAS_P1_P7.md ao inves de inlinar | ~200 |
+| Prompt Cache Optimization | `{data_atual}`, `{usuario_nome}`, `{user_id}` extraidos do system_prompt → injecao via hook `session_context`. System prompt estatico → cache hits | ~20 (vars) |
+| Enhanced MCP Migration | Memory (11 tools) + Sessions (4 tools) migradas para `@enhanced_tool` com `outputSchema` + `structuredContent` | — |
 
 ### Rollback
-Env var `AGENT_CUSTOM_SYSTEM_PROMPT=false` restaura o preset claude_code instantaneamente.
+- `AGENT_CUSTOM_SYSTEM_PROMPT=false` restaura preset claude_code
+- `AGENT_PROMPT_CACHE_OPTIMIZATION=false` restaura variaveis dinamicas no system prompt (via prepend)
 
 ### Arquivos envolvidos
 - `prompts/preset_operacional.md` — preset customizado (~65 linhas)
-- `prompts/system_prompt.md` — system prompt operacional (v4.2.0)
-- `sdk/client.py` — `_load_preset_operacional()`, `_build_full_system_prompt()`, guard em `_build_options()`
-- `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`
+- `prompts/system_prompt.md` — system prompt operacional (v4.2.0, estatico — sem vars dinamicas)
+- `sdk/client.py` — `_format_system_prompt()` (guard cache), `_user_prompt_submit_hook()` (session_context)
+- `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`, `USE_PROMPT_CACHE_OPTIMIZATION`
 - `config/settings.py` — `operational_preset_path`
 
 ---
@@ -194,7 +197,7 @@ NUNCA importar e chamar como funcao Python — nao sao callables, gera erro sile
 ### R6: MCP Enhanced Wrapper
 `tools/_mcp_enhanced.py` adiciona `outputSchema` + `structuredContent` (MCP spec 2025-06-18).
 - Usar `@enhanced_tool` + `create_enhanced_mcp_server` para tools que precisam de structured output
-- SQL tool ja migrada (v2.0.0). Demais tools usam `@tool` + `create_sdk_mcp_server` (standard)
+- Migradas: SQL (v2.0.0), Memory (v2.0.0), Sessions (v4.0.0). Demais usam `@tool` standard
 - Ref completa: `.claude/references/MCP_CAPABILITIES_2026.md`
 
 ### R7: JSONB — flag_modified
@@ -252,7 +255,7 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
 Todos controlados por feature flags em `config/feature_flags.py`.
 
-### MCP Tools de memoria (memory_mcp_tool.py v1.3.0, 11 operacoes)
+### MCP Tools de memoria (memory_mcp_tool.py v2.0.0 Enhanced, 11 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `view_memories` | Le memoria por path |
@@ -270,7 +273,7 @@ Todos controlados por feature flags em `config/feature_flags.py`.
 **Admin (debug mode)**: TODAS as 11 tools aceitam `target_user_id=N` para acesso cross-user.
 Validacao: `_resolve_user_id(args)` — requer `get_debug_mode() == True`. Todo acesso logado.
 
-### MCP Tools de sessao (session_search_tool.py v3.0.0, 4 operacoes)
+### MCP Tools de sessao (session_search_tool.py v4.0.0 Enhanced, 4 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `search_sessions` | Busca textual (ILIKE) em sessoes anteriores |

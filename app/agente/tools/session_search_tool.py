@@ -732,9 +732,10 @@ try:
             return "\n".join(output_lines), structured
 
         try:
-            result = _execute_with_context(_list_users)
+            result_text, structured = _execute_with_context(_list_users)
             return {
-                "content": [{"type": "text", "text": result}],
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
             }
         except Exception as e:
             logger.error(f"[SESSION_SEARCH] Erro ao listar usuários: {e}")
@@ -744,15 +745,15 @@ try:
             }
 
     # ========================================================================
-    # MCP Server Registration
+    # MCP Server Registration (Enhanced v4.0.0)
     # ========================================================================
-    sessions_server = create_sdk_mcp_server(
+    sessions_server = create_enhanced_mcp_server(
         name="sessions",
-        version="3.0.0",
+        version="4.0.0",
         tools=[search_sessions, list_recent_sessions, semantic_search_sessions, list_session_users],
     )
 
-    logger.info("[SESSION_SEARCH] Custom Tool MCP 'sessions' registrado com sucesso (4 tools)")
+    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.0.0 registrado (4 tools, structuredContent)")
 
 except ImportError as e:
     sessions_server = None
