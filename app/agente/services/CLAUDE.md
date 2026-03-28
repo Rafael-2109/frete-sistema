@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: 5.8K | **Arquivos**: 12 | **Atualizado**: 11/03/2026
+**LOC**: ~7K | **Arquivos**: 12 | **Atualizado**: 28/03/2026
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -10,16 +10,16 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 
 ```
 app/agente/services/
-  ├── pattern_analyzer.py        # 1,236 LOC — Patterns prescritivos + perfil + extracao (P1-3)
-  ├── knowledge_graph_service.py #   936 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
-  ├── insights_service.py        #   879 LOC — Dashboard admin: metricas + health_score (P2)
-  ├── memory_consolidator.py     #   524 LOC — Consolidacao + tier frio (P0)
+  ├── pattern_analyzer.py        # 1,782 LOC — Patterns prescritivos + perfil + extracao (P1-3)
+  ├── knowledge_graph_service.py # 1,077 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
+  ├── insights_service.py        # 1,278 LOC — Dashboard admin: metricas + health_score (P2)
+  ├── memory_consolidator.py     #   590 LOC — Consolidacao + tier frio (P0)
   ├── friction_analyzer.py       #   463 LOC — Deteccao de friccao heuristica (P2-4)
-  ├── session_summarizer.py      #   438 LOC — Resumos M1 estruturados via Sonnet (P0-2)
-  ├── intersession_briefing.py   #   394 LOC — Briefing entre sessoes, zero LLM (P0)
+  ├── session_summarizer.py      #   445 LOC — Resumos M1 estruturados via Sonnet (P0-2)
+  ├── intersession_briefing.py   #   428 LOC — Briefing entre sessoes, zero LLM (P0)
   ├── tool_skill_mapper.py       #   316 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py  #   221 LOC — Recomendacoes rule-based para dashboard
-  ├── suggestion_generator.py    #   209 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
+  ├── suggestion_generator.py    #   216 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
   └── sentiment_detector.py      #   177 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
 ```
 

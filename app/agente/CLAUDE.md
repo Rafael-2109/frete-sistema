@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~20.7K | **Arquivos**: 41 | **Atualizado**: 17/03/2026
+**LOC**: ~24.8K | **Arquivos**: 46 | **Atualizado**: 28/03/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -67,22 +67,31 @@ app/agente/                          # Root — 5 arquivos
 
 ---
 
-## Arquitetura de Prompts (v2 — 17/03/2026)
+## Arquitetura de Prompts (v3 — 28/03/2026)
+
+### Principio: Separacao Estrutural (DOC-1.md)
+
+Segue o modelo de 5 camadas do Agent SDK (Anthropic):
+1. **System prompt** (`system_prompt`) → comportamento e routing (estatico, cacheavel)
+2. **Tools** (`mcp_servers`) → capacidades como dados estruturados (auto-descritos)
+3. **Skills** (`SKILL.md` filesystem) → conhecimento de dominio (progressive disclosure)
+4. **Subagents** (`agents` dict) → alvos de delegacao (cada um com tools/skills proprios)
+5. **Control** (hooks + `allowed_tools`) → permissoes e enforcement
 
 ### Dois modos (feature flag `USE_CUSTOM_SYSTEM_PROMPT`)
 
 | Flag | System Prompt | Identidade | Tokens |
 |------|--------------|------------|--------|
 | `false` | `{preset: "claude_code", append: system_prompt.md}` | Claude Code + Agente (conflito) | ~7K |
-| `true` (default) | `preset_operacional.md + system_prompt.md` (string) | Apenas Agente (coerente) | ~4K |
+| `true` (default) | `preset_operacional.md + system_prompt.md` (string) | Apenas Agente (coerente) | ~2.7K |
 
 ### Camadas (com flag true)
 
 ```
 ┌──────────────────────────────────────────┐
 │ 1. preset_operacional.md (~600 tok)      │ ← Tools, safety, environment
-│ 2. system_prompt.md (~3K tok)            │ ← Identidade, regras, routing
-│ 3. CLAUDE.md compartilhado (~1.5K tok)   │ ← Referencia (modelos, indices)
+│ 2. system_prompt.md (~2.1K tok)          │ ← Comportamento, routing, regras
+│ 3. CLAUDE.md compartilhado (~1.5K tok)   │ ← Indice de referencias (unificado)
 │ 4. Dynamic injections (hook)             │ ← Memorias, contexto operacional
 └──────────────────────────────────────────┘
 ```
@@ -91,16 +100,28 @@ app/agente/                          # Root — 5 arquivos
 
 | Arquivo | O QUE define | NAO define |
 |---------|-------------|------------|
-| `preset_operacional.md` | AWARENESS: "existem MCP tools, safety rules, /tmp restriction" | Identidade, regras de negocio |
-| `system_prompt.md` | COMPORTAMENTO: R0-R7, I1-I6, routing, skills, subagentes | Tool instructions genericas |
-| `CLAUDE.md` (raiz) | REFERENCIA: gotchas de modelos, indices, caminhos | Regras dev, CSS, migrations |
+| `preset_operacional.md` | AWARENESS: tool prioritization, safety, /tmp, persistent systems | Identidade, regras de negocio |
+| `system_prompt.md` | COMPORTAMENTO: R0-R7, I2-I4, routing strategy, subagent coordination | Tool descriptions (auto-descritas), knowledge_base (no CLAUDE.md) |
+| `CLAUDE.md` (raiz) | REFERENCIA: indice unificado de docs, gotchas de modelos, subagentes | Regras dev, CSS, caminhos de modulo (em ~/.claude/CLAUDE.md) |
+| `~/.claude/CLAUDE.md` | DEV-ONLY: Quick Start, migrations, CSS, caminhos, refs dev-only | Visivel apenas ao Claude Code |
+
+### O que mudou na v3 (v4.2.0 do system_prompt)
+
+| Mudanca | Racional (DOC-1.md) | Tokens salvos |
+|---------|---------------------|---------------|
+| R5: tabela MCP removida | Tool descriptions sao auto-descritas — duplicar no prompt e anti-pattern | ~150 |
+| P1-P7: inline → referencia | Agente delega a `analista-carteira`, nao decide P1-P7 sozinho | ~300 |
+| knowledge_base: 17 entradas → ponteiro para CLAUDE.md | Root CLAUDE.md ja fornece indice unificado via `setting_sources` | ~200 |
+| Subagent reliability: adicionado | Protocolo `/tmp/subagent-findings/` na coordination_protocol | +30 |
+| Root CLAUDE.md: reorganizado | Subcategorias (Odoo, SSW, Infra), entradas dev-only movidas | — |
+| analista-carteira.md: DRY | P1-P7 referencia REGRAS_P1_P7.md ao inves de inlinar | ~200 |
 
 ### Rollback
 Env var `AGENT_CUSTOM_SYSTEM_PROMPT=false` restaura o preset claude_code instantaneamente.
 
 ### Arquivos envolvidos
 - `prompts/preset_operacional.md` — preset customizado (~65 linhas)
-- `prompts/system_prompt.md` — system prompt operacional
+- `prompts/system_prompt.md` — system prompt operacional (v4.2.0)
 - `sdk/client.py` — `_load_preset_operacional()`, `_build_full_system_prompt()`, guard em `_build_options()`
 - `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`
 - `config/settings.py` — `operational_preset_path`
