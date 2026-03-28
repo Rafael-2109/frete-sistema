@@ -1343,34 +1343,45 @@ Nunca invente informações."""
         """
         Formata system prompt com variáveis.
 
+        Quando USE_PROMPT_CACHE_OPTIMIZATION=true (default):
+        Variáveis dinâmicas ({data_atual}, {usuario_nome}, {user_id}) NÃO existem
+        no template — são injetadas via _user_prompt_submit_hook como session_context.
+        System prompt fica estático entre usuários/turnos → prompt caching hits no CLI.
+
+        Quando USE_PROMPT_CACHE_OPTIMIZATION=false (rollback):
+        Prepend bloco dinâmico ao prompt para compatibilidade.
+
         Args:
             user_name: Nome do usuário
-            user_id: ID do usuário (para Memory Tool)
+            user_id: ID do usuário
 
         Returns:
             System prompt formatado
         """
-        prompt = self.system_prompt.replace(
-            "{data_atual}",
-            agora_utc_naive().strftime("%d/%m/%Y %H:%M")
-        )
-        prompt = prompt.replace("{usuario_nome}", user_name)
+        from ..config.feature_flags import USE_PROMPT_CACHE_OPTIMIZATION
 
-        # Memory Tool: passa user_id para os scripts
-        if user_id:
-            prompt = prompt.replace("{user_id}", str(user_id))
-        else:
-            prompt = prompt.replace("{user_id}", "NAO_DISPONIVEL")
+        prompt = self.system_prompt
 
-        # Módulo Pessoal + SQL Admin: restrição default seguro (texto inline no prompt)
-        # Se import falhar, restrição permanece (seguro por default)
-        restricao_pessoal = ", acessar ou mencionar tabelas pessoal_* (financas pessoais — dados privados, acesso restrito)"
-        try:
-            from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
-            if user_id and (user_id in USUARIOS_SQL_ADMIN or user_id in USUARIOS_PESSOAL):
-                prompt = prompt.replace(restricao_pessoal, "")
-        except ImportError:
-            pass  # restrição já está no prompt — seguro por default
+        if not USE_PROMPT_CACHE_OPTIMIZATION:
+            # Rollback: variáveis foram removidas do template (system_prompt.md),
+            # então prepend bloco dinâmico para manter contexto de data/usuário
+            data_hora = agora_utc_naive().strftime("%d/%m/%Y %H:%M")
+            dynamic_block = (
+                f"<current_context_dynamic>\n"
+                f"  Data: {data_hora}\n"
+                f"  Usuário: {user_name} (ID: {user_id or 'NAO_DISPONIVEL'})\n"
+                f"</current_context_dynamic>\n\n"
+            )
+            prompt = dynamic_block + prompt
+
+            # Módulo Pessoal + SQL Admin: remoção inline da restrição (modo legado)
+            restricao_pessoal = ", acessar ou mencionar tabelas pessoal_* (financas pessoais — dados privados, acesso restrito)"
+            try:
+                from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
+                if user_id and (user_id in USUARIOS_SQL_ADMIN or user_id in USUARIOS_PESSOAL):
+                    prompt = prompt.replace(restricao_pessoal, "")
+            except ImportError:
+                pass  # restrição permanece — seguro por default
 
         return prompt
 
@@ -2676,21 +2687,57 @@ Nunca invente informações."""
                     except Exception as admin_err:
                         logger.debug(f"[HOOK:UserPromptSubmit] SQL admin check failed: {admin_err}")
 
-                    if additional_context or correction_hint or debug_context or sql_admin_context:
-                        additional_context = (additional_context or "") + correction_hint + debug_context + sql_admin_context
+                    # ============================================================
+                    # Session Context Injection (Camada 0 — cache-safe)
+                    # Injeta data/hora e identidade do usuario aqui em vez do
+                    # system prompt, mantendo-o estatico para prompt caching.
+                    # ============================================================
+                    session_context = ""
+                    try:
+                        from ..config.feature_flags import (
+                            USE_PROMPT_CACHE_OPTIMIZATION,
+                            USE_CUSTOM_SYSTEM_PROMPT,
+                        )
+                        if USE_PROMPT_CACHE_OPTIMIZATION and USE_CUSTOM_SYSTEM_PROMPT and user_id:
+                            data_hora = agora_utc_naive().strftime("%d/%m/%Y %H:%M")
+
+                            pessoal_grant = ""
+                            try:
+                                from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
+                                if user_id in USUARIOS_SQL_ADMIN or user_id in USUARIOS_PESSOAL:
+                                    pessoal_grant = (
+                                        "\n  <pessoal_access>CONCEDIDO: tabelas pessoal_* "
+                                        "acessiveis para este usuario.</pessoal_access>"
+                                    )
+                            except ImportError:
+                                pass
+
+                            session_context = (
+                                "<session_context>"
+                                f"\n  <data_atual>{data_hora}</data_atual>"
+                                f"\n  <usuario>{user_name} (ID: {user_id})</usuario>"
+                                f"{pessoal_grant}"
+                                "\n</session_context>\n"
+                            )
+                    except Exception as sc_err:
+                        logger.debug(f"[HOOK:UserPromptSubmit] Session context falhou: {sc_err}")
+
+                    if session_context or additional_context or correction_hint or debug_context or sql_admin_context:
+                        full_context = session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context
                         # B2: Log de context budget por categoria
-                        memory_tokens_est = len(additional_context) // 4
+                        memory_tokens_est = len(full_context) // 4
                         logger.info(
                             f"[CONTEXT_BUDGET] "
                             f"user_id={user_id or 'None'} | "
-                            f"memory_chars={len(additional_context)} | "
-                            f"memory_tokens_est={memory_tokens_est} | "
+                            f"session_ctx_chars={len(session_context)} | "
+                            f"memory_chars={len(additional_context or '')} | "
+                            f"total_tokens_est={memory_tokens_est} | "
                             f"prompt_len={len(prompt)}"
                         )
                         return {
                             "hookSpecificOutput": {
                                 "hookEventName": "UserPromptSubmit",
-                                "additionalContext": additional_context,
+                                "additionalContext": full_context,
                             }
                         }
 

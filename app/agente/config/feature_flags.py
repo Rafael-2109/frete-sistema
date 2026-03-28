@@ -47,6 +47,13 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
 # Para desativar: AGENT_SELF_CORRECTION=false
 USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "true").lower() == "true"
 
+# Prompt Cache Optimization — extrai variáveis dinâmicas do system prompt
+# ({data_atual}, {usuario_nome}, {user_id}) para injeção via UserPromptSubmit hook.
+# System prompt fica estático entre usuários e turnos → prompt caching hits no CLI.
+# Depende de USE_CUSTOM_SYSTEM_PROMPT=true para ter efeito.
+# Rollback: AGENT_PROMPT_CACHE_OPTIMIZATION=false
+USE_PROMPT_CACHE_OPTIMIZATION = os.getenv("AGENT_PROMPT_CACHE_OPTIMIZATION", "true").lower() == "true"
+
 # ====================================================================
 # Melhorias de Contexto e Memoria (P0)
 # ====================================================================

@@ -167,7 +167,15 @@
       "Skill(operando-ssw)",
       "Bash(dpkg -l)",
       "Bash(apt list:*)",
-      "mcp__sentry__get_sentry_resource"
+      "mcp__sentry__get_sentry_resource",
+      "Skill(schedule)",
+      "Skill(schedule:*)",
+      "Read(//home/rafaelnascimento/**)",
+      "Bash(command -v openclaw)",
+      "Read(//usr/local/bin/**)",
+      "Bash(openclaw cron:*)",
+      "Bash(ps -p 620094 -o pid,etime,rss --no-headers)",
+      "Bash(ps -p 620094 --no-headers -o etime)"
     ],
     "deny": []
   },

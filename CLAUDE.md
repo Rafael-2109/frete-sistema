@@ -1,6 +1,6 @@
 # Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 17/03/2026
+**Ultima Atualizacao**: 28/03/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
@@ -53,6 +53,11 @@ Gotchas rapidos:
 
 ## INDICE DE REFERENCIAS
 
+> Indice unico consultado por AMBOS os contextos.
+> Entradas dev-only (CSS, Best Practices, MCP Capabilities, CLAUDE.md de modulo) estao em `~/.claude/CLAUDE.md`.
+
+### Modelos e Regras de Negocio
+
 | Preciso de... | Documento |
 |---------------|-----------|
 | Regras CarteiraPrincipal / Separacao | `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md` |
@@ -64,25 +69,38 @@ Gotchas rapidos:
 | Prioridades P1-P7 e envio parcial | `.claude/references/negocio/REGRAS_P1_P7.md` |
 | Frete Real vs Teorico | `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md` |
 | Margem e Custeio | `.claude/references/negocio/MARGEM_CUSTEIO.md` |
-| **Fluxos de reconciliacao financeira** | `app/financeiro/FLUXOS_RECONCILIACAO.md` |
-| **Timezone (convencao Brasil naive)** | `.claude/references/REGRAS_TIMEZONE.md` |
-| **Routing de skills** | `.claude/references/ROUTING_SKILLS.md` |
-| **Infraestrutura Render** | `.claude/references/INFRAESTRUTURA.md` |
-| **Confiabilidade de subagentes** | `.claude/references/SUBAGENT_RELIABILITY.md` |
-| **Manual CLAUDE.md de modulo** | `.claude/references/MANUAL_CLAUDE_MD.md` |
-| **Capacidades MCP (versoes, gaps, enhanced)** | `.claude/references/MCP_CAPABILITIES_2026.md` |
-| **Linx Microvix (APIs, WS, integracao)** | `.claude/references/linx/INTEGRACOES.md` |
-| **CarVia (frete subcontratado)** | `app/carvia/CLAUDE.md` |
-| **CarVia — Revisao de Gaps (37 gaps)** | `app/carvia/REVISAO_GAPS.md` |
-| **Botoes, badges e cores (qual classe usar)** | `.claude/references/design/GUIA_COMPONENTES_UI.md` |
-| **Portal Atacadao (automacao Hodie Booking)** | `.claude/skills/operando-portal-atacadao/SKILL.md` |
-| **Best Practices Anthropic 2026** | `.claude/references/BEST_PRACTICES_2026.md` |
-| Indice completo | `.claude/references/INDEX.md` |
 
-Documentos adicionais:
-- Card de Separacao: `CARD_SEPARACAO.md` (raiz)
-- Sistema de Devolucoes: `app/devolucao/README.md`
-- **SSW Sistemas (documentacao completa)**: `.claude/references/ssw/INDEX.md`
+### Odoo
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Odoo routing (regra zero, skills) | `.claude/references/odoo/ROUTING_ODOO.md` |
+| Odoo modelos e campos (CIEL IT) | `.claude/references/odoo/MODELOS_CAMPOS.md` |
+| Pipeline recebimento (4 fases) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
+| IDs fixos (company, journal, picking_type) | `.claude/references/odoo/IDS_FIXOS.md` |
+| Gotchas Odoo (timeouts, erros) | `.claude/references/odoo/GOTCHAS.md` |
+| Fluxos de reconciliacao financeira | `app/financeiro/FLUXOS_RECONCILIACAO.md` |
+
+### SSW e CarVia
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| SSW indice geral | `.claude/references/ssw/INDEX.md` |
+| SSW routing (decision tree) | `.claude/references/ssw/ROUTING_SSW.md` |
+| CarVia status de adocao | `.claude/references/ssw/CARVIA_STATUS.md` |
+| Portal Atacadao (automacao Hodie Booking) | `.claude/skills/operando-portal-atacadao/SKILL.md` |
+
+### Infraestrutura e Agente
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Timezone (convencao Brasil naive) | `.claude/references/REGRAS_TIMEZONE.md` |
+| Routing de skills | `.claude/references/ROUTING_SKILLS.md` |
+| Infraestrutura Render | `.claude/references/INFRAESTRUTURA.md` |
+| Confiabilidade de subagentes | `.claude/references/SUBAGENT_RELIABILITY.md` |
+| Protocolo de memoria (agente) | `.claude/references/MEMORY_PROTOCOL.md` |
+| Regras de output (agente, I1-I6) | `.claude/references/REGRAS_OUTPUT.md` |
+| Indice completo | `.claude/references/INDEX.md` |
 
 ---
 

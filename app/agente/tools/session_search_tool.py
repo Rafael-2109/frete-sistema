@@ -128,13 +128,110 @@ MAX_SEARCH_RESULTS = 10
 MAX_RECENT_SESSIONS = 10
 
 # ============================================================================
-# MCP TOOL DEFINITIONS
+# OUTPUT SCHEMAS (Enhanced MCP — structuredContent)
+# ============================================================================
+
+SESSION_SEARCH_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+        "sessions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "created_at": {"type": ["string", "null"]},
+                    "updated_at": {"type": ["string", "null"]},
+                    "message_count": {"type": "integer"},
+                    "channel": {"type": "string"},
+                    "excerpt": {"type": ["string", "null"]},
+                },
+            },
+        },
+    },
+    "required": ["count", "sessions"],
+}
+
+SESSION_LIST_RECENT_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+        "sessions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "created_at": {"type": ["string", "null"]},
+                    "message_count": {"type": "integer"},
+                    "cost_usd": {"type": "number"},
+                    "summary": {"type": ["string", "null"]},
+                    "topics": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
+    },
+    "required": ["count", "sessions"],
+}
+
+SESSION_SEMANTIC_SEARCH_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+        "fallback_used": {"type": "boolean"},
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "created_at": {"type": ["string", "null"]},
+                    "similarity": {"type": "number"},
+                    "user_content": {"type": "string"},
+                    "assistant_summary": {"type": ["string", "null"]},
+                },
+            },
+        },
+    },
+    "required": ["count", "fallback_used", "results"],
+}
+
+SESSION_LIST_USERS_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+        "users": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "integer"},
+                    "nome": {"type": "string"},
+                    "email": {"type": "string"},
+                    "total_sessions": {"type": "integer"},
+                    "web_sessions": {"type": "integer"},
+                    "teams_sessions": {"type": "integer"},
+                    "last_activity": {"type": ["string", "null"]},
+                },
+            },
+        },
+    },
+    "required": ["count", "users"],
+}
+
+# ============================================================================
+# MCP TOOL DEFINITIONS (Enhanced v4.0.0)
 # ============================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import enhanced_tool, create_enhanced_mcp_server
 
-    @tool(
+    @enhanced_tool(
         "search_sessions",
         (
             "Busca em sessões anteriores do usuário por texto. "
@@ -151,6 +248,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=SESSION_SEARCH_OUTPUT_SCHEMA,
     )
     async def search_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
         """Busca texto em sessões anteriores do usuário."""
@@ -211,9 +309,11 @@ try:
             results = db.session.execute(sql, params).fetchall()
 
             if not results:
-                return f"Nenhuma sessão encontrada com '{query}'."
+                structured = {"count": 0, "sessions": []}
+                return f"Nenhuma sessão encontrada com '{query}'.", structured
 
-            # Formatar resultados
+            # Construir structured data + texto formatado
+            structured_sessions = []
             is_cross_user = args.get('target_user_id') is not None
             header = f"🔍 Encontrei {len(results)} sessão(ões) com '{query}'"
             if is_cross_user:
@@ -226,11 +326,14 @@ try:
                 session_id = row[0]
                 title = row[1] or "Sem título"
                 msg_count = row[2] or 0
-                created = row[3].strftime('%d/%m/%Y %H:%M') if row[3] else 'data desconhecida'
-                updated = row[4].strftime('%d/%m/%Y %H:%M') if row[4] else ''
+                created_dt = row[3]
+                updated_dt = row[4]
+                created = created_dt.strftime('%d/%m/%Y %H:%M') if created_dt else 'data desconhecida'
+                updated = updated_dt.strftime('%d/%m/%Y %H:%M') if updated_dt else ''
 
                 # Indicar canal no output
-                canal_tag = " [Teams]" if session_id.startswith('teams_') else ""
+                ch = "teams" if session_id.startswith('teams_') else "web"
+                canal_tag = " [Teams]" if ch == "teams" else ""
                 output_lines.append(f"📋 **{title}**{canal_tag} ({created})")
                 output_lines.append(f"   ID: {session_id[:8]}... | {msg_count} mensagens | Atualizada: {updated}")
 
@@ -249,12 +352,24 @@ try:
 
                 output_lines.append("")  # Linha em branco
 
-            return "\n".join(output_lines)
+                structured_sessions.append({
+                    "session_id": session_id,
+                    "title": title,
+                    "created_at": created_dt.isoformat() if created_dt else None,
+                    "updated_at": updated_dt.isoformat() if updated_dt else None,
+                    "message_count": msg_count,
+                    "channel": ch,
+                    "excerpt": excerpt or None,
+                })
+
+            structured = {"count": len(results), "sessions": structured_sessions}
+            return "\n".join(output_lines), structured
 
         try:
-            result = _execute_with_context(_search)
+            result_text, structured = _execute_with_context(_search)
             return {
-                "content": [{"type": "text", "text": result}],
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
             }
         except Exception as e:
             logger.error(f"[SESSION_SEARCH] Erro na busca: {e}")
@@ -263,7 +378,7 @@ try:
                 "is_error": True,
             }
 
-    @tool(
+    @enhanced_tool(
         "list_recent_sessions",
         (
             "Lista as sessões recentes do usuário com título, data e quantidade de mensagens. "
@@ -279,6 +394,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=SESSION_LIST_RECENT_OUTPUT_SCHEMA,
     )
     async def list_recent_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
         """Lista sessões recentes do usuário."""
@@ -309,8 +425,10 @@ try:
             ).limit(limit).all()
 
             if not sessions:
-                return "Nenhuma sessão anterior encontrada."
+                structured = {"count": 0, "sessions": []}
+                return "Nenhuma sessão anterior encontrada.", structured
 
+            structured_sessions = []
             is_cross_user = args.get('target_user_id') is not None
             header = f"📚 Últimas {len(sessions)} sessões"
             if is_cross_user:
@@ -329,24 +447,39 @@ try:
                 output_lines.append(f"{i}. **{title}**{canal_tag}")
                 output_lines.append(f"   📅 {created} | 💬 {msg_count} msgs | 💰 ${cost:.4f}")
 
-                # Se tem summary, mostrar resumo geral
+                summary_text = None
+                topics_list = []
                 if sess.summary and isinstance(sess.summary, dict):
                     resumo = sess.summary.get('resumo_geral', '')
                     if resumo:
                         output_lines.append(f"   📝 {resumo}")
+                        summary_text = resumo
 
                     topicos = sess.summary.get('topicos_abordados', [])
                     if topicos:
                         output_lines.append(f"   🏷️ {', '.join(topicos)}")
+                        topics_list = topicos
 
                 output_lines.append("")
 
-            return "\n".join(output_lines)
+                structured_sessions.append({
+                    "session_id": sess.session_id,
+                    "title": title,
+                    "created_at": sess.created_at.isoformat() if sess.created_at else None,
+                    "message_count": msg_count,
+                    "cost_usd": cost,
+                    "summary": summary_text,
+                    "topics": topics_list,
+                })
+
+            structured = {"count": len(sessions), "sessions": structured_sessions}
+            return "\n".join(output_lines), structured
 
         try:
-            result = _execute_with_context(_list)
+            result_text, structured = _execute_with_context(_list)
             return {
-                "content": [{"type": "text", "text": result}],
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
             }
         except Exception as e:
             logger.error(f"[SESSION_SEARCH] Erro ao listar: {e}")
@@ -355,7 +488,7 @@ try:
                 "is_error": True,
             }
 
-    @tool(
+    @enhanced_tool(
         "semantic_search_sessions",
         (
             "Busca semântica em sessões anteriores do usuário. "
@@ -372,6 +505,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=SESSION_SEMANTIC_SEARCH_OUTPUT_SCHEMA,
     )
     async def semantic_search_sessions(args: Dict[str, Any]) -> Dict[str, Any]:
         """Busca semântica em sessões anteriores do usuário via embeddings."""
@@ -408,7 +542,8 @@ try:
             if not results:
                 return None  # Sinal para fallback
 
-            # Formatar resultados
+            # Formatar resultados + structured data
+            structured_results = []
             is_cross_user = args.get('target_user_id') is not None
             header = f"🔍 Busca semântica encontrou {len(results)} resultado(s) para '{query}'"
             if is_cross_user:
@@ -417,47 +552,82 @@ try:
 
             for r in results:
                 title = r.get('session_title') or 'Sem título'
-                created = r.get('session_created_at', '')
-                if created:
-                    # ISO -> DD/MM/YYYY HH:MM
+                created_iso = r.get('session_created_at', '')
+                created_display = created_iso
+                if created_iso:
                     try:
                         from datetime import datetime
-                        dt = datetime.fromisoformat(created)
-                        created = dt.strftime('%d/%m/%Y %H:%M')
+                        dt = datetime.fromisoformat(created_iso)
+                        created_display = dt.strftime('%d/%m/%Y %H:%M')
                     except (ValueError, TypeError):
                         pass
 
-                similarity_pct = round(r.get('similarity', 0) * 100, 1)
+                similarity = r.get('similarity', 0)
+                similarity_pct = round(similarity * 100, 1)
                 user_content = (r.get('user_content') or '')[:200]
                 assistant_summary = (r.get('assistant_summary') or '')[:150]
 
-                output_lines.append(f"📋 **{title}** ({created}) — {similarity_pct}% relevância")
+                output_lines.append(f"📋 **{title}** ({created_display}) — {similarity_pct}% relevância")
                 output_lines.append(f"   Pergunta: \"{user_content}\"")
                 if assistant_summary:
                     output_lines.append(f"   Resposta: \"{assistant_summary}...\"")
                 output_lines.append("")
 
-            return "\n".join(output_lines)
+                structured_results.append({
+                    "session_id": r.get('session_id', ''),
+                    "title": title,
+                    "created_at": created_iso or None,
+                    "similarity": round(similarity, 4),
+                    "user_content": user_content,
+                    "assistant_summary": assistant_summary or None,
+                })
+
+            structured = {
+                "count": len(results),
+                "fallback_used": False,
+                "results": structured_results,
+            }
+            return "\n".join(output_lines), structured
 
         try:
             result = _execute_with_context(_semantic_search)
 
             # Se semantic search nao retornou nada, fallback para ILIKE
             if result is None:
-                # Delegar para search_sessions (ILIKE) — propagar target_user_id/channel
                 fallback_args = {"query": query}
                 if args.get('target_user_id') is not None:
                     fallback_args['target_user_id'] = args['target_user_id']
                 fallback_result = await search_sessions.handler(fallback_args)
-                # Adicionar nota de fallback
+
                 if not fallback_result.get("is_error"):
                     text_content = fallback_result["content"][0]["text"]
                     text_content = "⚠️ Busca semântica indisponível, usando busca textual:\n\n" + text_content
                     fallback_result["content"][0]["text"] = text_content
+
+                    # Mapear structuredContent do search_sessions para schema semantic
+                    fb_structured = fallback_result.get("structuredContent") or {}
+                    fb_sessions = fb_structured.get("sessions", [])
+                    fallback_result["structuredContent"] = {
+                        "count": fb_structured.get("count", 0),
+                        "fallback_used": True,
+                        "results": [
+                            {
+                                "session_id": s.get("session_id", ""),
+                                "title": s.get("title", ""),
+                                "created_at": s.get("created_at"),
+                                "similarity": 0.0,
+                                "user_content": s.get("excerpt") or "",
+                                "assistant_summary": None,
+                            }
+                            for s in fb_sessions
+                        ],
+                    }
                 return fallback_result
 
+            result_text, structured = result
             return {
-                "content": [{"type": "text", "text": result}],
+                "content": [{"type": "text", "text": result_text}],
+                "structuredContent": structured,
             }
         except Exception as e:
             logger.error(f"[SESSION_SEARCH] Erro na busca semântica: {e}")
@@ -466,7 +636,7 @@ try:
                 "is_error": True,
             }
 
-    @tool(
+    @enhanced_tool(
         "list_session_users",
         (
             "Lista usuários que possuem sessões no sistema. "
@@ -481,6 +651,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=SESSION_LIST_USERS_OUTPUT_SCHEMA,
     )
     async def list_session_users(args: Dict[str, Any]) -> Dict[str, Any]:
         """Lista usuários com sessões (admin-only, requer debug mode)."""
@@ -521,8 +692,10 @@ try:
             results = db.session.execute(sql, {'limit': limit}).fetchall()
 
             if not results:
-                return "Nenhum usuário com sessões encontrado."
+                structured = {"count": 0, "users": []}
+                return "Nenhum usuário com sessões encontrado.", structured
 
+            structured_users = []
             output_lines = [f"👥 {len(results)} usuários com sessões:\n"]
 
             for row in results:
@@ -532,7 +705,8 @@ try:
                 total = row[3]
                 teams = row[4]
                 web = row[5]
-                ultima = row[6].strftime('%d/%m/%Y %H:%M') if row[6] else ''
+                ultima_dt = row[6]
+                ultima = ultima_dt.strftime('%d/%m/%Y %H:%M') if ultima_dt else ''
 
                 output_lines.append(f"**{nome}** (ID={uid})")
                 output_lines.append(f"   📧 {email}")
@@ -540,11 +714,22 @@ try:
                 output_lines.append(f"   🕐 Última atividade: {ultima}")
                 output_lines.append("")
 
+                structured_users.append({
+                    "user_id": uid,
+                    "nome": nome,
+                    "email": email,
+                    "total_sessions": total,
+                    "web_sessions": web,
+                    "teams_sessions": teams,
+                    "last_activity": ultima_dt.isoformat() if ultima_dt else None,
+                })
+
             output_lines.append(
                 "💡 Use target_user_id=N em search_sessions, list_recent_sessions "
                 "ou semantic_search_sessions para acessar sessões desse usuário."
             )
-            return "\n".join(output_lines)
+            structured = {"count": len(results), "users": structured_users}
+            return "\n".join(output_lines), structured
 
         try:
             result = _execute_with_context(_list_users)
