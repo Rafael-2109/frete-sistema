@@ -184,10 +184,12 @@ class GerencialService:
         )
 
         # Despesas do periodo (sem FK para operacao — total geral)
+        # Exclui categoria DESCONSIDERAR (nao entra no calculo gerencial)
         total_despesas = db.session.query(
             func.coalesce(func.sum(CarviaDespesa.valor), 0)
         ).filter(
             CarviaDespesa.status != 'CANCELADO',
+            CarviaDespesa.tipo_despesa != 'DESCONSIDERAR',
             CarviaDespesa.data_despesa >= data_inicio,
             CarviaDespesa.data_despesa <= data_fim,
         ).scalar() or ZERO

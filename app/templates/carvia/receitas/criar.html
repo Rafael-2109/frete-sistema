@@ -23,7 +23,15 @@
                             <div class="col-md-6">
                                 <label for="tipo_receita" class="form-label">Tipo de Receita *</label>
                                 <input type="text" class="form-control" id="tipo_receita" name="tipo_receita"
-                                       maxlength="50" required placeholder="Ex: Comissao, Reembolso, Bonificacao...">
+                                       maxlength="50" required placeholder="Ex: Comissao, Reembolso..."
+                                       list="tipos_receita_list">
+                                <datalist id="tipos_receita_list">
+                                    <option value="COMISSAO">
+                                    <option value="REEMBOLSO">
+                                    <option value="BONIFICACAO">
+                                    <option value="OUTROS">
+                                    <option value="DESCONSIDERAR">
+                                </datalist>
                             </div>
                             <div class="col-md-6">
                                 <label for="valor" class="form-label">Valor (R$) *</label>
