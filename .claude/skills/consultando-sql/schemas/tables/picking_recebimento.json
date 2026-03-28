@@ -96,16 +96,16 @@
       "unique": false
     },
     {
+      "name": "ix_picking_recebimento_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_picking_rec_partner_cnpj",
       "columns": [
         "odoo_partner_cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_po",
-      "columns": [
-        "odoo_purchase_order_id"
       ],
       "unique": false
     },
@@ -117,11 +117,11 @@
       "unique": false
     },
     {
-      "name": "ix_picking_recebimento_odoo_picking_id",
+      "name": "idx_picking_rec_po",
       "columns": [
-        "odoo_picking_id"
+        "odoo_purchase_order_id"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "idx_picking_rec_write",

@@ -222,16 +222,16 @@
   ],
   "indices": [
     {
-      "name": "ix_embarque_itens_carvia_cotacao_id",
+      "name": "ix_embarque_itens_separacao_lote_id",
       "columns": [
-        "carvia_cotacao_id"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_embarque_itens_separacao_lote_id",
+      "name": "ix_embarque_itens_carvia_cotacao_id",
       "columns": [
-        "separacao_lote_id"
+        "carvia_cotacao_id"
       ],
       "unique": false
     }

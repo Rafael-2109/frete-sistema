@@ -64,6 +64,11 @@
       "type": "numeric(15,2)"
     },
     {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → carvia_fretes.id"
+    },
+    {
       "name": "fatura_transportadora_id",
       "type": "integer",
       "description": "FK → carvia_faturas_transportadora.id"
@@ -130,22 +135,19 @@
       "references": "tabelas_frete.id"
     },
     {
+      "column": "frete_id",
+      "references": "carvia_fretes.id"
+    },
+    {
       "column": "fatura_transportadora_id",
       "references": "carvia_faturas_transportadora.id"
     }
   ],
   "indices": [
     {
-      "name": "ix_carvia_subcontratos_fatura_transportadora_id",
+      "name": "ix_carvia_subcontratos_frete_id",
       "columns": [
-        "fatura_transportadora_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_subcontratos_operacao_id",
-      "columns": [
-        "operacao_id"
+        "frete_id"
       ],
       "unique": false
     },
@@ -160,6 +162,20 @@
       "name": "ix_carvia_subcontratos_cte_numero",
       "columns": [
         "cte_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_subcontratos_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_subcontratos_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     }
