@@ -177,7 +177,9 @@
       "Bash(ps -p 620094 -o pid,etime,rss --no-headers)",
       "Bash(ps -p 620094 --no-headers -o etime)",
       "Bash(openclaw --version)",
-      "Bash(openclaw --help)"
+      "Bash(openclaw --help)",
+      "Bash(for i:*)",
+      "Bash(do grep:*)"
     ],
     "deny": []
   },
