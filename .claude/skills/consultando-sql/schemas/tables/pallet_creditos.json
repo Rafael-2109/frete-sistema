@@ -102,13 +102,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_creditos_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pallet_creditos_nf_remessa_id",
       "columns": [
         "nf_remessa_id"
@@ -142,6 +135,13 @@
       "name": "idx_credito_vencimento",
       "columns": [
         "data_vencimento",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_creditos_status",
+      "columns": [
         "status"
       ],
       "unique": false

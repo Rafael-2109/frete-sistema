@@ -142,16 +142,16 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_titulo_extrato_item_id",
+      "name": "idx_extrato_titulo_pagar",
       "columns": [
-        "extrato_item_id"
+        "titulo_pagar_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_extrato_titulo_pagar",
+      "name": "idx_extrato_titulo_status",
       "columns": [
-        "titulo_pagar_id"
+        "status"
       ],
       "unique": false
     },
@@ -163,9 +163,9 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_titulo_status",
+      "name": "ix_extrato_item_titulo_extrato_item_id",
       "columns": [
-        "status"
+        "extrato_item_id"
       ],
       "unique": false
     },

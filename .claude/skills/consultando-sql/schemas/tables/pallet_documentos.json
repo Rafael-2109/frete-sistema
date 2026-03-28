@@ -128,6 +128,13 @@
       "unique": false
     },
     {
+      "name": "ix_pallet_documentos_credito_id",
+      "columns": [
+        "credito_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pallet_documentos_cnpj_emissor",
       "columns": [
         "cnpj_emissor"
@@ -139,13 +146,6 @@
       "columns": [
         "cnpj_emissor",
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_documentos_credito_id",
-      "columns": [
-        "credito_id"
       ],
       "unique": false
     },
