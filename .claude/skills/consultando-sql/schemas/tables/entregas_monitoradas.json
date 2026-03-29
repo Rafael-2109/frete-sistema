@@ -161,9 +161,23 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_numero_nf",
+      "name": "idx_em_nf_cd",
       "columns": [
-        "numero_nf"
+        "nf_cd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_embarque",
+      "columns": [
+        "data_embarque"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_status_finalizacao",
+      "columns": [
+        "status_finalizacao"
       ],
       "unique": false
     },
@@ -171,6 +185,48 @@
       "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
         "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_transportadora",
+      "columns": [
+        "transportadora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_entregue",
+      "columns": [
+        "entregue"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_reagendar",
+      "columns": [
+        "reagendar"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_agenda",
+      "columns": [
+        "data_agenda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_faturamento",
+      "columns": [
+        "data_faturamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     }

@@ -121,13 +121,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_documentos_credito_id",
-      "columns": [
-        "credito_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_documento_tipo_recebido",
       "columns": [
         "tipo",
@@ -154,6 +147,13 @@
       "columns": [
         "cnpj_emissor",
         "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_documentos_credito_id",
+      "columns": [
+        "credito_id"
       ],
       "unique": false
     }
