@@ -79,6 +79,11 @@ KG_CLEANUP_WEEKDAY = int(os.environ.get("KG_CLEANUP_WEEKDAY", "6"))  # 0=Mon, 6=
 KG_CLEANUP_HOUR = int(os.environ.get("KG_CLEANUP_HOUR", "5"))  # 5h (após segurança 4h)
 _ultimo_kg_cleanup = None  # Timestamp do ultimo cleanup bem-sucedido
 
+# Auditoria diária de inconsistências financeiras Local × Odoo (23º módulo)
+AUDITORIA_FINANCEIRA_ENABLED = os.environ.get("AUDITORIA_FINANCEIRA_ENABLED", "true").lower() == "true"
+AUDITORIA_FINANCEIRA_HOUR = int(os.environ.get("AUDITORIA_FINANCEIRA_HOUR", "6"))  # 6h (após KG cleanup 5h)
+_ultima_auditoria_financeira = None  # Timestamp da ultima auditoria bem-sucedida
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -1605,6 +1610,62 @@ def executar_sincronizacao():
 
         logger.info(f"   [TIMER] Step 22 (KG Cleanup): {time.time() - _t_step:.1f}s")
 
+        # ── 2️⃣3️⃣ AUDITORIA FINANCEIRA LOCAL × ODOO (diário, 23º módulo) ──
+        _t_step = time.time()
+        sucesso_auditoria_fin = False
+        auditoria_fin_executou = False
+
+        if AUDITORIA_FINANCEIRA_ENABLED:
+            hora_aud = agora_utc_naive().hour
+            hoje_aud = agora_utc_naive().date()
+
+            deve_rodar_aud = (
+                hora_aud == AUDITORIA_FINANCEIRA_HOUR
+                and (_ultima_auditoria_financeira is None
+                     or _ultima_auditoria_financeira.date() < hoje_aud)
+            )
+
+            if deve_rodar_aud:
+                auditoria_fin_executou = True
+
+                try:
+                    db.session.remove()
+                    db.engine.dispose()
+                    logger.info("♻️ Reconexão antes de Auditoria Financeira")
+                except Exception:
+                    pass
+
+                try:
+                    logger.info("🔍 Auditoria diária de inconsistências financeiras Local × Odoo...")
+                    from app.financeiro.workers.auditoria_inconsistencias_job import (
+                        executar_auditoria_inconsistencias,
+                        executar_auditoria_inconsistencias_pagar,
+                    )
+
+                    resultado_receber = executar_auditoria_inconsistencias(dry_run=False)
+                    resultado_pagar = executar_auditoria_inconsistencias_pagar(dry_run=False)
+
+                    erros_aud = (resultado_receber or {}).get('erros', 0) + (resultado_pagar or {}).get('erros', 0)
+                    total_incons = (resultado_receber or {}).get('inconsistencias', 0) + (resultado_pagar or {}).get('inconsistencias', 0)
+
+                    if erros_aud == 0:
+                        sucesso_auditoria_fin = True
+                        logger.info(f"✅ Auditoria financeira concluída! Inconsistências: {total_incons}")
+                    else:
+                        logger.warning(f"⚠️ Auditoria financeira: {erros_aud} erro(s)")
+
+                    _ultima_auditoria_financeira = agora_utc_naive()
+
+                except Exception as e:
+                    logger.error(f"❌ Erro na auditoria financeira: {e}")
+                    _ultima_auditoria_financeira = agora_utc_naive()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
+        logger.info(f"   [TIMER] Step 23 (Auditoria Financeira): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1626,6 +1687,9 @@ def executar_sincronizacao():
 
         if kg_cleanup_executou:
             modulos_sync.append(sucesso_kg_cleanup)
+
+        if auditoria_fin_executou:
+            modulos_sync.append(sucesso_auditoria_fin)
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)

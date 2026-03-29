@@ -180,7 +180,8 @@
       "Bash(openclaw --help)",
       "Bash(for i:*)",
       "Bash(do grep:*)",
-      "mcp__sentry__search_issue_events"
+      "mcp__sentry__search_issue_events",
+      "Bash(curl -s \"https://en.wikipedia.org/wiki/Balatro_\\(video_game\\)\")"
     ],
     "deny": []
   },
