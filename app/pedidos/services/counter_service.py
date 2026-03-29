@@ -111,13 +111,19 @@ class PedidosCounterService:
         """
         datas = [hoje + timedelta(days=i) for i in range(4)]
 
-        # Construir as expressoes CASE WHEN
+        # Construir as expressoes CASE WHEN (3 por data: total, pend_embarque, abertos)
         cases = []
         for d in datas:
             # Total da data
             cases.append(
                 func.count(case(
                     (func.date(Pedido.expedicao) == d, 1)
+                ))
+            )
+            # Pend embarque da data (sem data_embarque — inclui NF no CD)
+            cases.append(
+                func.count(case(
+                    ((func.date(Pedido.expedicao) == d) & (Pedido.data_embarque.is_(None)), 1)
                 ))
             )
             # Abertos da data (inclui nf_cd=True)
@@ -133,8 +139,9 @@ class PedidosCounterService:
         for i in range(4):
             contadores_data[f'd{i}'] = {
                 'data': datas[i].isoformat(),
-                'total': resultado[i * 2] or 0,
-                'abertos': resultado[i * 2 + 1] or 0,
+                'total': resultado[i * 3] or 0,
+                'pend_embarque': resultado[i * 3 + 1] or 0,
+                'abertos': resultado[i * 3 + 2] or 0,
             }
         return contadores_data
 
@@ -195,13 +202,9 @@ class PedidosCounterService:
                     1
                 )
             )),
-            # 7: pend_embarque (sem data_embarque, nao nf_cd)
+            # 7: pend_embarque (sem data_embarque — inclui NF no CD)
             func.count(case(
-                (
-                    (Pedido.data_embarque.is_(None)) &
-                    (Pedido.nf_cd == False),
-                    1
-                )
+                (Pedido.data_embarque.is_(None), 1)
             )),
         ).one()
 

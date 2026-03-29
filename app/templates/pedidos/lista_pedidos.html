@@ -258,6 +258,18 @@
                                     {{ dados.data|formatar_data_segura }}
                                     <span class="badge badge-contador-theme">{{ dados.total }}</span>
                                     </a>
+                                    <!-- PEND EMB -->
+                                    <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status='pend_embarque') }}"
+                                    class="btn btn-sm filtro-status mt-1
+                                        {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d')
+                                            and filtro_status_ativo == 'pend_embarque' %}
+                                        btn-warning
+                                        {% elif dados.pend_embarque > 0 %}
+                                        btn-outline-warning
+                                        {% else %}btn-outline-secondary{% endif %}">
+                                    <i class="fas fa-shipping-fast"></i> Pend EMB
+                                    <span class="badge badge-contador-theme">{{ dados.pend_embarque }}</span>
+                                    </a>
                                     <!-- ABERTO -->
                                     <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status='abertos') }}"
                                     class="btn btn-sm filtro-aberto mt-1

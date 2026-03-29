@@ -160,10 +160,9 @@ def lista_pedidos():
             else:
                 query = query.filter(Pedido.separacao_lote_id == 'IMPOSSIVEL')
         elif filtro_status == 'pend_embarque':
-            # Pedidos pendentes de embarque (ABERTO + FATURADO + COTADO, sem data_embarque)
+            # Pedidos pendentes de embarque (tudo que nao saiu do galpao — inclui NF no CD)
             query = query.filter(
                 Pedido.data_embarque.is_(None),
-                Pedido.nf_cd == False,
             )
         # 'todos' não aplica filtro
     
