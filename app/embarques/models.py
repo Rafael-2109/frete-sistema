@@ -4,6 +4,12 @@ from app.utils.timezone import agora_utc_naive
 
 class Embarque(db.Model):
     __tablename__ = 'embarques'
+    __table_args__ = (
+        db.Index('idx_emb_status', 'status'),
+        db.Index('idx_emb_data_embarque', 'data_embarque'),
+        db.Index('idx_emb_transportadora_status', 'transportadora_id', 'status'),
+        db.Index('idx_emb_tipo_carga', 'tipo_carga'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     numero = db.Column(db.Integer, unique=True, nullable=True)
@@ -283,6 +289,12 @@ class Embarque(db.Model):
 
 class EmbarqueItem(db.Model):
     __tablename__ = 'embarque_itens'
+    __table_args__ = (
+        db.Index('idx_ei_embarque_status', 'embarque_id', 'status'),
+        db.Index('idx_ei_nota_fiscal', 'nota_fiscal'),
+        db.Index('idx_ei_cnpj_cliente', 'cnpj_cliente'),
+        db.Index('idx_ei_uf_destino', 'uf_destino'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     embarque_id = db.Column(db.Integer, db.ForeignKey('embarques.id'), nullable=False)

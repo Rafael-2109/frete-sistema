@@ -1122,15 +1122,21 @@ def diagnosticar_monitoramento():
         entregas_sem_data_embarque = EntregaMonitorada.query.filter_by(data_embarque=None).count()
         diagnosticos['entregas_sem_data_embarque'] = entregas_sem_data_embarque
         
-        # 4. Entregas com NF não importada no faturamento
-        todas_entregas = EntregaMonitorada.query.all()
-        nfs_nao_importadas = 0
-        
-        for entrega in todas_entregas:
-            nf_fat = RelatorioFaturamentoImportado.query.filter_by(numero_nf=entrega.numero_nf).first()
-            if not nf_fat:
-                nfs_nao_importadas += 1
-        
+        # 4. Entregas com NF não importada no faturamento (anti-join, 1 query)
+        subquery_nfs_fat = db.session.query(
+            RelatorioFaturamentoImportado.numero_nf
+        ).filter(
+            RelatorioFaturamentoImportado.numero_nf.isnot(None)
+        ).subquery()
+
+        nfs_nao_importadas = db.session.query(
+            db.func.count(EntregaMonitorada.id)
+        ).filter(
+            ~EntregaMonitorada.numero_nf.in_(
+                db.session.query(subquery_nfs_fat.c.numero_nf)
+            )
+        ).scalar() or 0
+
         diagnosticos['nfs_nao_importadas'] = nfs_nao_importadas
         
         # 5. Total de entregas

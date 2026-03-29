@@ -4,6 +4,16 @@ from app.utils.timezone import agora_utc_naive
 
 class EntregaMonitorada(db.Model):
     __tablename__ = 'entregas_monitoradas'
+    __table_args__ = (
+        db.Index('idx_em_status_finalizacao', 'status_finalizacao'),
+        db.Index('idx_em_data_embarque', 'data_embarque'),
+        db.Index('idx_em_data_agenda', 'data_agenda'),
+        db.Index('idx_em_data_faturamento', 'data_faturamento'),
+        db.Index('idx_em_entregue', 'entregue', postgresql_where=db.text('entregue = false')),
+        db.Index('idx_em_nf_cd', 'nf_cd', postgresql_where=db.text('nf_cd = true')),
+        db.Index('idx_em_reagendar', 'reagendar', postgresql_where=db.text('reagendar = true')),
+        db.Index('idx_em_transportadora', 'transportadora'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     numero_nf = db.Column(db.String(20), nullable=False, index=True)

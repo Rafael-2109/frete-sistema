@@ -21,6 +21,10 @@ import math
 from app.transportadoras.models import Transportadora
 from app.fretes.forms import LancamentoFreteirosForm
 from app import db
+from app.utils.memory_cache import TTLCache
+
+# Cache do dashboard (TTL 120s — dados de contagem mudam lentamente)
+_dashboard_cache = TTLCache(ttl=120)
 
 # 🔒 Importar decoradores de permissão
 from app.utils.auth_decorators import require_financeiro, require_profiles
@@ -64,18 +68,26 @@ fretes_bp = Blueprint("fretes", __name__, url_prefix="/fretes")
 @require_financeiro()  # 🔒 BLOQUEADO para vendedores
 def index():
     """Dashboard principal do sistema de fretes"""
-    # Estatísticas gerais
-    total_fretes = Frete.query.count()
-    fretes_pendentes = Frete.query.filter_by(status="PENDENTE").count()
-    aprovacoes_pendentes = AprovacaoFrete.query.filter_by(status="PENDENTE").count()
-    faturas_conferir = FaturaFrete.query.filter_by(status_conferencia="PENDENTE").count()
+    # Estatisticas com cache (evita 5 COUNT queries a cada visita)
+    def _fetch_dashboard_stats():
+        return {
+            'total': Frete.query.count(),
+            'pendentes': Frete.query.filter_by(status="PENDENTE").count(),
+            'aprovacoes': AprovacaoFrete.query.filter_by(status="PENDENTE").count(),
+            'faturas': FaturaFrete.query.filter_by(status_conferencia="PENDENTE").count(),
+            'sem_nfs': Frete.query.filter(
+                or_(Frete.numeros_nfs.is_(None), Frete.numeros_nfs == "", Frete.numeros_nfs == "N/A")
+            ).count(),
+        }
 
-    # Fretes que podem precisar de correção nas NFs
-    fretes_sem_nfs = Frete.query.filter(
-        or_(Frete.numeros_nfs.is_(None), Frete.numeros_nfs == "", Frete.numeros_nfs == "N/A")
-    ).count()
+    stats = _dashboard_cache.get_or_set('dashboard_stats', _fetch_dashboard_stats)
+    total_fretes = stats['total']
+    fretes_pendentes = stats['pendentes']
+    aprovacoes_pendentes = stats['aprovacoes']
+    faturas_conferir = stats['faturas']
+    fretes_sem_nfs = stats['sem_nfs']
 
-    # Fretes recentes
+    # Fretes recentes (sem cache — lista curta, muda frequentemente)
     fretes_recentes = Frete.query.order_by(desc(Frete.criado_em)).limit(10).all()
 
     return render_template(

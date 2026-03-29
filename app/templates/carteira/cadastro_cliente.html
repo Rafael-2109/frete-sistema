@@ -109,7 +109,12 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label>CEP</label>
-                                        <input type="text" class="form-control" name="cep_endereco_ent">
+                                        <input type="text" class="form-control" name="cep_endereco_ent"
+                                               data-cep-lookup
+                                               data-cep-uf="#cod_uf"
+                                               data-cep-cidade="#nome_cidade"
+                                               data-cep-bairro="[name='bairro_endereco_ent']"
+                                               data-cep-logradouro="[name='rua_endereco_ent']">
                                     </div>
                                 </div>
                                 <div class="col-md-2">
@@ -569,4 +574,5 @@ function limparFormulario() {
     $('#endereco_entrega').show(); // Sempre mostra o endereço de entrega
 }
 </script>
+<script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
 {% endblock %}

@@ -102,7 +102,13 @@
                     <div class="col-md-5 mb-3">
                         <label for="cep_cliente" class="form-label">CEP</label>
                         <input type="text" class="form-control" id="cep_cliente" name="cep_cliente"
-                               value="{{ cliente.cep_cliente if cliente else '' }}">
+                               value="{{ cliente.cep_cliente if cliente else '' }}"
+                               data-cep-lookup
+                               data-cep-logradouro="#endereco_cliente"
+                               data-cep-bairro="#bairro_cliente"
+                               data-cep-cidade="#cidade_cliente"
+                               data-cep-uf="#estado_cliente"
+                               data-cep-complemento="#complemento_cliente">
                     </div>
                 </div>
 
@@ -280,4 +286,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
 {% endblock %}

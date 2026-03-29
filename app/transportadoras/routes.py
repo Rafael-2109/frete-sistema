@@ -465,3 +465,74 @@ def excluir_grupo(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro ao excluir grupo: {str(e)}'})
+
+
+# ============================================================
+# API: Consulta CNPJ via ReceitaWS (generica, para qualquer cadastro)
+# ============================================================
+
+@transportadoras_bp.route('/api/consultar-cnpj/<cnpj>')
+@login_required
+def api_consultar_cnpj(cnpj):
+    """
+    Consulta dados de CNPJ na API ReceitaWS (gratuita).
+    Retorna razao social, endereco, UF, cidade, telefone, email.
+
+    Limite: ~3 requisicoes por minuto por IP.
+    Acessivel a qualquer usuario logado (sem restricao de modulo).
+    """
+    import re
+    import requests as http_requests
+
+    try:
+        cnpj_limpo = re.sub(r'\D', '', cnpj)
+        if len(cnpj_limpo) != 14:
+            return jsonify({'success': False, 'message': 'CNPJ deve conter 14 digitos.'}), 400
+
+        url = f'https://www.receitaws.com.br/v1/cnpj/{cnpj_limpo}'
+        response = http_requests.get(url, timeout=10)
+
+        if response.status_code == 429:
+            return jsonify({
+                'success': False,
+                'message': 'Limite de consultas excedido. Aguarde 1 minuto e tente novamente.'
+            }), 429
+
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'message': f'Erro na API ReceitaWS. Status: {response.status_code}'
+            }), response.status_code
+
+        dados = response.json()
+
+        if dados.get('status') == 'ERROR':
+            return jsonify({
+                'success': False,
+                'message': dados.get('message', 'CNPJ nao encontrado ou invalido.')
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'dados': {
+                'razao_social': dados.get('nome', ''),
+                'fantasia': dados.get('fantasia', ''),
+                'logradouro': dados.get('logradouro', ''),
+                'numero': dados.get('numero', ''),
+                'complemento': dados.get('complemento', ''),
+                'bairro': dados.get('bairro', ''),
+                'cidade': dados.get('municipio', ''),
+                'uf': dados.get('uf', ''),
+                'cep': dados.get('cep', ''),
+                'telefone': dados.get('telefone', ''),
+                'email': dados.get('email', ''),
+                'situacao': dados.get('situacao', ''),
+            }
+        })
+
+    except http_requests.exceptions.Timeout:
+        return jsonify({'success': False, 'message': 'Timeout na API ReceitaWS.'}), 408
+    except http_requests.exceptions.ConnectionError:
+        return jsonify({'success': False, 'message': 'Erro de conexao com a API ReceitaWS.'}), 503
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500

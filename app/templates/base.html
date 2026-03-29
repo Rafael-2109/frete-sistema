@@ -769,6 +769,13 @@
 
       // Aplica máscara apenas para campos de texto (não tipo date)
       $('input[name="data_embarque"]').not('[type="date"]').mask('00/00/0000');
+
+      // Máscara CNPJ global — cadastros e formulários
+      // Exclui: filtros (form-control-sm), readonly, hidden, e campos com data-no-mask
+      $('input[name*="cnpj"], input[id*="cnpj"]')
+        .filter(':visible')
+        .not('.form-control-sm, [data-no-mask], [readonly], [type="hidden"]')
+        .mask('00.000.000/0000-00');
     });
   </script>
 
