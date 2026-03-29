@@ -1666,6 +1666,21 @@ def executar_sincronizacao():
 
         logger.info(f"   [TIMER] Step 23 (Auditoria Financeira): {time.time() - _t_step:.1f}s")
 
+        # ── 2️⃣4️⃣ REFRESH MATERIALIZED VIEWS COMERCIAIS (a cada ciclo) ──
+        _t_step = time.time()
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            from app.comercial.services.agregacao_service import refresh_materialized_views
+            refresh_materialized_views()
+        except Exception as e:
+            logger.warning(f"⚠️ Refresh MV comerciais falhou (nao-critico): {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        logger.info(f"   [TIMER] Step 24 (MV Comercial): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1745,6 +1760,50 @@ def executar_sincronizacao():
         else:
             logger.error(f"❌ Sincronização com falhas graves - apenas {total_sucesso}/{total_modulos} módulos OK")
         logger.info("=" * 60)
+
+        # ── REGISTRAR SCHEDULER HEALTH ──
+        duracao_total_ms = int((time.time() - _t_inicio) * 1000)
+        try:
+            from app.scheduler.health_service import registrar_step
+            # Steps core (sempre executam)
+            _steps_info = [
+                (1, 'Faturamento', sucesso_faturamento),
+                (2, 'Carteira', sucesso_carteira),
+                (3, 'Verificacao Exclusoes', sucesso_verificacao),
+                (4, 'Requisicoes', sucesso_requisicoes),
+                (5, 'Pedidos', sucesso_pedidos),
+                (6, 'Alocacoes', sucesso_alocacoes),
+                (7, 'Entradas Materiais', sucesso_entradas),
+                (8, 'CTes', sucesso_ctes),
+                (9, 'Contas Receber', sucesso_contas_receber),
+                (10, 'Baixas Reconciliacoes', sucesso_baixas),
+                (11, 'Extratos Odoo', sucesso_extratos),
+                (12, 'Contas Pagar', sucesso_contas_pagar),
+                (13, 'NFDs Devolucao', sucesso_nfds),
+                (14, 'Pallets', sucesso_pallets),
+                (15, 'Reversoes NF', sucesso_reversoes),
+                (16, 'Monitoramento', sucesso_monitoramento),
+                (17, 'Pickings Recebimento', sucesso_pickings_recebimento),
+            ]
+            for step_num, step_name, sucesso in _steps_info:
+                registrar_step(step_name, step_num, sucesso)
+
+            # Steps diarios/semanais (registrar apenas se executaram)
+            if embeddings_executou:
+                registrar_step('Embeddings', 20, sucesso_embeddings)
+            if seguranca_executou:
+                registrar_step('Seguranca', 21, sucesso_seguranca)
+            if kg_cleanup_executou:
+                registrar_step('KG Cleanup', 22, sucesso_kg_cleanup)
+            if auditoria_fin_executou:
+                registrar_step('Auditoria Financeira', 23, sucesso_auditoria_fin)
+
+            # Resumo geral
+            registrar_step('CICLO_COMPLETO', 0, total_sucesso == total_modulos,
+                           duracao_ms=duracao_total_ms,
+                           detalhes=f'{total_sucesso}/{total_modulos} OK')
+        except Exception as e:
+            logger.warning(f"Falha ao registrar scheduler health: {e}")
 
 
 def executar_inicial():

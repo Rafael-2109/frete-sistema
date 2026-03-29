@@ -298,6 +298,93 @@
     </div>
     {% endif %}
 
+    <!-- Scheduler Health — Card inline com auto-refresh -->
+    {% if current_user.perfil == 'administrador' %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card" id="scheduler-health-card">
+                <div class="card-header card-header-theme py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 fw-bold">
+                            <i class="fas fa-heartbeat text-accent"></i> Scheduler Health
+                        </h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="sh-status-badge" class="badge bg-secondary">Carregando...</span>
+                            <a href="{{ url_for('scheduler.health_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-external-link-alt"></i> Detalhes
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body py-2">
+                    <div id="sh-loading" class="text-center py-2">
+                        <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                        <small class="text-muted ms-2">Carregando status...</small>
+                    </div>
+                    <div id="sh-content" style="display:none;">
+                        <div class="row align-items-center">
+                            <!-- Resumo compacto -->
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div id="sh-icon" class="rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;background:var(--bg-light);">
+                                        <i class="fas fa-check-circle text-success"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" id="sh-resumo-texto">-</div>
+                                        <small class="text-muted" id="sh-ultima-exec">-</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Barra de progresso steps -->
+                            <div class="col-md-5">
+                                <div class="d-flex align-items-center gap-2">
+                                    <small class="text-muted text-nowrap">Steps:</small>
+                                    <div class="progress flex-grow-1" style="height: 8px;">
+                                        <div id="sh-bar-ok" class="progress-bar bg-success" role="progressbar" style="width:0%"></div>
+                                        <div id="sh-bar-erro" class="progress-bar bg-danger" role="progressbar" style="width:0%"></div>
+                                    </div>
+                                    <small class="text-muted text-nowrap" id="sh-contagem">0/0</small>
+                                </div>
+                            </div>
+                            <!-- Duracao -->
+                            <div class="col-md-2 text-center">
+                                <small class="text-muted">Duracao</small>
+                                <div class="fw-bold" id="sh-duracao">-</div>
+                            </div>
+                            <!-- Erros (se houver) -->
+                            <div class="col-md-2">
+                                <div id="sh-erros-container" style="display:none;">
+                                    <small class="text-danger fw-bold" id="sh-erros-count">0 erros</small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Lista de erros expandivel -->
+                        <div id="sh-erros-detalhe" style="display:none;" class="mt-2">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mb-0" style="font-size:.75rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Step</th>
+                                            <th>Erro</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sh-erros-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="sh-indisponivel" style="display:none;">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Scheduler health indisponivel. Execute a migration <code>criar_tabela_scheduler_health.py</code>.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Seção do Workspace de Montagem -->
     <div class="row mb-4">
         <div class="col-12">
@@ -563,4 +650,129 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-{% endblock %} 
+{% if current_user.perfil == 'administrador' %}
+<script>
+(function() {
+    'use strict';
+
+    var API_URL = '{{ url_for("carteira.api_scheduler_health") }}';
+    var REFRESH_MS = 60000; // Auto-refresh a cada 60s
+
+    function carregarSchedulerHealth() {
+        fetch(API_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var loading = document.getElementById('sh-loading');
+                var content = document.getElementById('sh-content');
+                var indisponivel = document.getElementById('sh-indisponivel');
+
+                if (!data.success || data.resumo.status_geral === 'INDISPONIVEL') {
+                    loading.style.display = 'none';
+                    indisponivel.style.display = 'block';
+                    document.getElementById('sh-status-badge').className = 'badge bg-secondary';
+                    document.getElementById('sh-status-badge').textContent = 'Indisponivel';
+                    return;
+                }
+
+                loading.style.display = 'none';
+                content.style.display = 'block';
+                indisponivel.style.display = 'none';
+
+                var r = data.resumo;
+                var badge = document.getElementById('sh-status-badge');
+
+                // Status badge
+                if (r.status_geral === 'OK') {
+                    badge.className = 'badge bg-success';
+                    badge.textContent = 'Operacional';
+                } else if (r.status_geral === 'ERRO') {
+                    badge.className = 'badge bg-danger';
+                    badge.textContent = r.erro + ' erro(s)';
+                } else {
+                    badge.className = 'badge bg-secondary';
+                    badge.textContent = 'Sem dados';
+                }
+
+                // Icone
+                var icon = document.getElementById('sh-icon');
+                if (r.status_geral === 'OK') {
+                    icon.innerHTML = '<i class="fas fa-check-circle text-success fa-lg"></i>';
+                } else if (r.status_geral === 'ERRO') {
+                    icon.innerHTML = '<i class="fas fa-exclamation-triangle text-danger fa-lg"></i>';
+                } else {
+                    icon.innerHTML = '<i class="fas fa-question-circle text-muted fa-lg"></i>';
+                }
+
+                // Resumo texto
+                document.getElementById('sh-resumo-texto').textContent =
+                    r.ok + '/' + r.total_steps + ' steps OK';
+                document.getElementById('sh-ultima-exec').textContent =
+                    r.ultima_execucao ? 'Ultimo ciclo: ' + r.ultima_execucao : 'Nenhum ciclo registrado';
+
+                // Progress bar
+                var pctOk = r.total_steps > 0 ? (r.ok / r.total_steps * 100) : 0;
+                var pctErro = r.total_steps > 0 ? (r.erro / r.total_steps * 100) : 0;
+                document.getElementById('sh-bar-ok').style.width = pctOk + '%';
+                document.getElementById('sh-bar-erro').style.width = pctErro + '%';
+                document.getElementById('sh-contagem').textContent = r.ok + '/' + r.total_steps;
+
+                // Duracao
+                var duracao = '-';
+                if (r.duracao_ms) {
+                    if (r.duracao_ms > 60000) {
+                        duracao = (r.duracao_ms / 60000).toFixed(1) + ' min';
+                    } else {
+                        duracao = (r.duracao_ms / 1000).toFixed(1) + 's';
+                    }
+                }
+                document.getElementById('sh-duracao').textContent = duracao;
+
+                // Erros
+                var errosContainer = document.getElementById('sh-erros-container');
+                var errosDetalhe = document.getElementById('sh-erros-detalhe');
+                if (data.erros && data.erros.length > 0) {
+                    errosContainer.style.display = 'block';
+                    var errosCount = document.getElementById('sh-erros-count');
+                    errosCount.textContent = data.erros.length + ' erro(s)';
+                    errosCount.style.cursor = 'pointer';
+                    errosCount.onclick = function() {
+                        errosDetalhe.style.display = errosDetalhe.style.display === 'none' ? 'block' : 'none';
+                    };
+
+                    // Preencher tabela de erros
+                    var tbody = document.getElementById('sh-erros-tbody');
+                    tbody.innerHTML = '';
+                    data.erros.forEach(function(e) {
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = '<td>' + e.step_number + '</td>' +
+                            '<td><strong>' + escapeHtml(e.step_name) + '</strong></td>' +
+                            '<td class="text-danger">' + escapeHtml(e.erro || 'Erro desconhecido').substring(0, 120) + '</td>';
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    errosContainer.style.display = 'none';
+                    errosDetalhe.style.display = 'none';
+                }
+            })
+            .catch(function() {
+                document.getElementById('sh-loading').style.display = 'none';
+                document.getElementById('sh-indisponivel').style.display = 'block';
+                document.getElementById('sh-status-badge').className = 'badge bg-secondary';
+                document.getElementById('sh-status-badge').textContent = 'Offline';
+            });
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // Carregar imediatamente + auto-refresh
+    carregarSchedulerHealth();
+    setInterval(carregarSchedulerHealth, REFRESH_MS);
+})();
+</script>
+{% endif %}
+
+{% endblock %}

@@ -406,17 +406,19 @@ def resolver_por_semantica(
 
 def prefetch_partner_cnpjs(connection, partner_ids: List[int], cache: dict) -> None:
     """
-    Busca CNPJs de parceiros Odoo em batch e atualiza o cache.
+    Busca CNPJs de parceiros Odoo em batch e atualiza o cache local.
+    Usa OdooCachedLookup (Redis TTL 1h) para evitar chamadas repetidas ao Odoo
+    entre ciclos de sync.
 
     Args:
         connection: Conexão Odoo autenticada
         partner_ids: Lista de IDs de res.partner
-        cache: Dict para atualizar {partner_id: {'cnpj': str, 'name': str}}
+        cache: Dict local para atualizar {partner_id: {'cnpj': str, 'name': str}}
     """
     if not partner_ids:
         return
 
-    # Filtrar IDs que já estão no cache
+    # Filtrar IDs que já estão no cache local
     ids_faltando = [pid for pid in partner_ids if pid not in cache]
 
     if not ids_faltando:
@@ -426,22 +428,33 @@ def prefetch_partner_cnpjs(connection, partner_ids: List[int], cache: dict) -> N
     ids_faltando = list(set(ids_faltando))
 
     try:
-        parceiros = connection.read(
-            'res.partner',
-            ids_faltando,
-            fields=['id', 'l10n_br_cnpj', 'name']
-        )
+        # Usar OdooCachedLookup (Redis) para batch — reduz chamadas Odoo entre ciclos
+        from app.odoo.utils.cached_lookups import OdooCachedLookup
+        lookup = OdooCachedLookup(connection=connection)
+        parceiros = lookup.get_partners_batch(ids_faltando)
 
-        for p in parceiros:
-            pid = p['id']
-            cnpj = p.get('l10n_br_cnpj') or ''
-            nome = p.get('name') or ''
+        for pid, data in parceiros.items():
             cache[pid] = {
-                'cnpj': cnpj.strip() if cnpj else '',
-                'name': nome.strip() if nome else '',
+                'cnpj': data.get('cnpj', ''),
+                'name': data.get('name', ''),
             }
 
-        logger.info(f"Cache de parceiros carregado: {len(ids_faltando)} IDs")
+        logger.info(f"Cache de parceiros carregado: {len(ids_faltando)} IDs ({len(parceiros)} do Redis/Odoo)")
 
     except Exception as e:
-        logger.warning(f"Erro ao buscar parceiros Odoo: {e}")
+        # Fallback direto ao Odoo se Redis indisponivel
+        logger.warning(f"OdooCachedLookup falhou, fallback direto: {e}")
+        try:
+            parceiros_raw = connection.read(
+                'res.partner',
+                ids_faltando,
+                fields=['id', 'l10n_br_cnpj', 'name']
+            )
+            for p in parceiros_raw:
+                pid = p['id']
+                cache[pid] = {
+                    'cnpj': (p.get('l10n_br_cnpj') or '').strip(),
+                    'name': (p.get('name') or '').strip(),
+                }
+        except Exception as e2:
+            logger.warning(f"Erro ao buscar parceiros Odoo (fallback): {e2}")

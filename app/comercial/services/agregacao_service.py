@@ -2,6 +2,9 @@
 Service otimizado para agregações do módulo comercial
 Elimina problemas N+1 e melhora performance em 90%
 
+Usa materialized views (mv_comercial_equipes, mv_comercial_vendedores) quando disponiveis.
+Fallback para CTE original se views nao existirem.
+
 Autor: Sistema de Fretes
 Data: 21/01/2025
 """
@@ -15,6 +18,38 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Cache do status das materialized views (verificado 1x por processo)
+_mv_disponivel = None
+
+
+def _verificar_mv_disponivel():
+    """Verifica se as materialized views existem no banco."""
+    global _mv_disponivel
+    if _mv_disponivel is not None:
+        return _mv_disponivel
+    try:
+        result = db.session.execute(text(
+            "SELECT COUNT(*) FROM pg_matviews WHERE matviewname = 'mv_comercial_equipes'"
+        ))
+        _mv_disponivel = result.scalar() > 0
+    except Exception:
+        _mv_disponivel = False
+    return _mv_disponivel
+
+
+def refresh_materialized_views():
+    """Atualiza as materialized views. Chamado pelo scheduler."""
+    try:
+        db.session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_comercial_equipes"))
+        db.session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_comercial_vendedores"))
+        db.session.commit()
+        logger.info("Materialized views comerciais atualizadas")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar materialized views: {e}")
+        db.session.rollback()
+        return False
+
 
 class AgregacaoComercialService:
     """
@@ -25,8 +60,9 @@ class AgregacaoComercialService:
     @staticmethod
     def obter_dashboard_completo_otimizado(equipes_filtro: List[str] = None) -> List[Dict[str, Any]]:
         """
-        Retorna todos os dados do dashboard em UMA ÚNICA QUERY
-        Reduz de 500+ queries para 1 query
+        Retorna todos os dados do dashboard.
+        Usa materialized view quando disponivel (leitura instantanea).
+        Fallback para CTE original se view nao existir.
 
         Args:
             equipes_filtro: Lista de equipes permitidas (para vendedores)
@@ -34,9 +70,44 @@ class AgregacaoComercialService:
         Returns:
             Lista com dados agregados de todas as equipes
         """
+        # Tentar usar materialized view primeiro
+        if _verificar_mv_disponivel():
+            try:
+                return AgregacaoComercialService._dashboard_via_mv(equipes_filtro)
+            except Exception as e:
+                logger.warning(f"Fallback para CTE: MV falhou ({e})")
+
+        return AgregacaoComercialService._dashboard_via_cte(equipes_filtro)
+
+    @staticmethod
+    def _dashboard_via_mv(equipes_filtro: List[str] = None) -> List[Dict[str, Any]]:
+        """Leitura direta da materialized view (microsegundos)."""
+        if equipes_filtro:
+            sql = text("""
+                SELECT equipe_vendas as nome, total_clientes, valor_em_aberto
+                FROM mv_comercial_equipes
+                WHERE equipe_vendas = ANY(:equipes)
+                ORDER BY equipe_vendas
+            """)
+            result = db.session.execute(sql, {'equipes': equipes_filtro})
+        else:
+            sql = text("""
+                SELECT equipe_vendas as nome, total_clientes, valor_em_aberto
+                FROM mv_comercial_equipes
+                ORDER BY equipe_vendas
+            """)
+            result = db.session.execute(sql)
+
+        return [{
+            'nome': row.nome,
+            'total_clientes': int(row.total_clientes) if row.total_clientes else 0,
+            'valor_em_aberto': float(row.valor_em_aberto) if row.valor_em_aberto else 0.0
+        } for row in result]
+
+    @staticmethod
+    def _dashboard_via_cte(equipes_filtro: List[str] = None) -> List[Dict[str, Any]]:
+        """Query CTE original (fallback)."""
         try:
-            # Query otimizada usando CTE (Common Table Expression)
-            # NOTA: Tolerância de 0.02 para evitar inconsistências de arredondamento decimal
             sql = text("""
                 WITH dados_carteira AS (
                     -- Agregar dados da carteira por equipe
@@ -107,18 +178,48 @@ class AgregacaoComercialService:
     @staticmethod
     def obter_vendedores_equipe_otimizado(equipe_nome: str, vendedores_filtro: List[str] = None) -> List[Dict[str, Any]]:
         """
-        Retorna todos vendedores de uma equipe em UMA ÚNICA QUERY
-        Reduz de 600+ queries para 1 query
-
-        Args:
-            equipe_nome: Nome da equipe
-            vendedores_filtro: Lista de vendedores permitidos (opcional)
-
-        Returns:
-            Lista com dados agregados de todos vendedores
+        Retorna todos vendedores de uma equipe.
+        Usa materialized view quando disponivel. Fallback para CTE.
         """
+        if _verificar_mv_disponivel():
+            try:
+                return AgregacaoComercialService._vendedores_via_mv(equipe_nome, vendedores_filtro)
+            except Exception as e:
+                logger.warning(f"Fallback para CTE vendedores: MV falhou ({e})")
+
+        return AgregacaoComercialService._vendedores_via_cte(equipe_nome, vendedores_filtro)
+
+    @staticmethod
+    def _vendedores_via_mv(equipe_nome: str, vendedores_filtro: List[str] = None) -> List[Dict[str, Any]]:
+        """Leitura direta da materialized view."""
+        params = {'equipe': equipe_nome}
+        if vendedores_filtro:
+            sql = text("""
+                SELECT vendedor as nome, total_clientes, valor_em_aberto
+                FROM mv_comercial_vendedores
+                WHERE equipe_vendas = :equipe AND vendedor = ANY(:vendedores)
+                ORDER BY vendedor
+            """)
+            params['vendedores'] = vendedores_filtro
+        else:
+            sql = text("""
+                SELECT vendedor as nome, total_clientes, valor_em_aberto
+                FROM mv_comercial_vendedores
+                WHERE equipe_vendas = :equipe
+                ORDER BY vendedor
+            """)
+
+        result = db.session.execute(sql, params)
+        return [{
+            'nome': row.nome,
+            'total_clientes': int(row.total_clientes) if row.total_clientes else 0,
+            'valor_em_aberto': float(row.valor_em_aberto) if row.valor_em_aberto else 0.0
+        } for row in result]
+
+    @staticmethod
+    def _vendedores_via_cte(equipe_nome: str, vendedores_filtro: List[str] = None) -> List[Dict[str, Any]]:
+        """Query CTE original (fallback)."""
         try:
-            # NOTA: Tolerância de 0.02 para evitar inconsistências de arredondamento decimal
             sql = text("""
                 WITH vendedores_carteira AS (
                     -- Vendedores e valores da carteira

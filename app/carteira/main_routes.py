@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, flash
+from flask import Blueprint, render_template, flash, jsonify
 from flask_login import login_required
 from app import db
 from app.carteira.models import (
@@ -187,3 +187,41 @@ def index():
                              total_standby_pedidos=0,
                              total_standby_valor=0,
                              sistema_inicializado=False)
+
+
+@carteira_bp.route('/api/scheduler-health')
+@login_required
+def api_scheduler_health():
+    """API JSON com status do scheduler para card inline no dashboard."""
+    try:
+        from app.scheduler.health_service import obter_status_steps
+        steps = obter_status_steps()
+
+        # Resumo compacto
+        ciclo = next((s for s in steps if s['step_name'] == 'CICLO_COMPLETO'), None)
+        steps_sem_ciclo = [s for s in steps if s['step_name'] != 'CICLO_COMPLETO']
+        total_ok = sum(1 for s in steps_sem_ciclo if s['status'] == 'OK')
+        total_erro = sum(1 for s in steps_sem_ciclo if s['status'] == 'ERRO')
+        total_steps = len(steps_sem_ciclo)
+
+        return jsonify({
+            'success': True,
+            'resumo': {
+                'total_steps': total_steps,
+                'ok': total_ok,
+                'erro': total_erro,
+                'ultima_execucao': ciclo['executado_em'] if ciclo else None,
+                'duracao_ms': ciclo['duracao_ms'] if ciclo else None,
+                'status_geral': 'OK' if total_erro == 0 and total_steps > 0 else ('ERRO' if total_erro > 0 else 'SEM_DADOS'),
+            },
+            'steps': steps_sem_ciclo,
+            'erros': [s for s in steps_sem_ciclo if s['status'] == 'ERRO'],
+        })
+    except Exception as e:
+        logger.warning(f"Erro ao buscar scheduler health: {e}")
+        return jsonify({
+            'success': False,
+            'resumo': {'status_geral': 'INDISPONIVEL', 'total_steps': 0, 'ok': 0, 'erro': 0},
+            'steps': [],
+            'erros': [],
+        })

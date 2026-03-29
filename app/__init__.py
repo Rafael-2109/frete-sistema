@@ -888,6 +888,10 @@ def create_app(config_name=None):
     from app.odoo.routes_circuit_breaker import circuit_breaker_bp
     app.register_blueprint(circuit_breaker_bp)
 
+    # 📊 Scheduler Health Dashboard
+    from app.scheduler.routes import scheduler_bp
+    app.register_blueprint(scheduler_bp)
+
     # 📊 Relatórios Fiscais IBS/CBS (Reforma Tributária)
     from app.relatorios_fiscais import relatorios_fiscais_bp
     app.register_blueprint(relatorios_fiscais_bp)
