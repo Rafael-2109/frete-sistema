@@ -124,7 +124,8 @@
                             <div class="col-md-2">
                                 <label class="form-label small">Transportadora</label>
                                 <input type="text" name="transportadora" class="form-control form-control-sm"
-                                       placeholder="Transportadora" value="{{ request.args.get('transportadora', '') }}">
+                                       placeholder="Transportadora" value="{{ request.args.get('transportadora', '') }}"
+                                       data-transportadora-autocomplete>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label small">Canhoto</label>
@@ -1080,6 +1081,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="{{ url_for('static', filename='js/financeiro/extrato.js') }}"></script>
 <script src="{{ url_for('static', filename='js/contas_receber.js') }}"></script>

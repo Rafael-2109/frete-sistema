@@ -157,9 +157,11 @@
                 var cnpjDisplay = t.cnpj ? formatCnpj(t.cnpj) : '';
                 var freteiroBadge = t.freteiro ? ' <span class="badge bg-warning text-dark" style="font-size:.65rem;">Freteiro</span>' : '';
                 var tabelaBadge = t.tem_tabela ? ' <span class="badge bg-success" style="font-size:.65rem;">Tabela</span>' : '';
+                var grupoBadge = t.grupo ? ' <span class="badge bg-info text-dark" style="font-size:.65rem;">' + escapeHtml(t.grupo) + '</span>' : '';
+                var viaGrupoBadge = t.via_grupo ? ' <span class="badge bg-secondary" style="font-size:.65rem;">mesmo grupo</span>' : '';
 
                 html += '<div class="transportadora-ac-item" data-index="' + i + '" style="padding:.5rem .75rem;cursor:pointer;border-bottom:1px solid var(--border-color,#eee);transition:background .15s;">' +
-                    '<div style="font-weight:500;">' + escapeHtml(t.nome) + freteiroBadge + tabelaBadge + '</div>' +
+                    '<div style="font-weight:500;">' + escapeHtml(t.nome) + freteiroBadge + tabelaBadge + grupoBadge + viaGrupoBadge + '</div>' +
                     (cnpjDisplay ? '<small style="color:var(--text-muted,#6c757d);">' + cnpjDisplay + '</small>' : '') +
                     '</div>';
             }

@@ -238,10 +238,21 @@ def register_api_routes(bp):
 
             if busca:
                 busca_like = f'%{busca}%'
+
+                # Buscar tambem por nome de grupo empresarial
+                from app.transportadoras.models import GrupoTransportadora
+                grupos_match = db.session.query(GrupoTransportadora.id).filter(
+                    GrupoTransportadora.nome.ilike(busca_like),
+                    GrupoTransportadora.ativo == True  # noqa: E712
+                ).subquery()
+
                 query = query.filter(
                     db.or_(
                         Transportadora.razao_social.ilike(busca_like),
                         Transportadora.cnpj.ilike(busca_like),
+                        Transportadora.grupo_transportadora_id.in_(
+                            db.session.query(grupos_match.c.id)
+                        ),
                     )
                 )
 
@@ -269,6 +280,7 @@ def register_api_routes(bp):
                 'freteiro': t.freteiro,
                 'tem_tabela': t.id in tabelas_info,
                 'qtd_tabelas': tabelas_info.get(t.id, 0),
+                'grupo': t.grupo.nome if t.grupo_transportadora_id and t.grupo else None,
             } for t in transportadoras]
 
             return jsonify({'sucesso': True, 'transportadoras': resultado})

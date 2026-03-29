@@ -35,7 +35,7 @@ NAO CACHEAR: Saldos, reconciliacoes, dados transacionais.
 
 import json
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
 from app.utils.redis_cache import RedisCache
 

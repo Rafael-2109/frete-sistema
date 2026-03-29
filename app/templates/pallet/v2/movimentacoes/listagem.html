@@ -93,7 +93,8 @@
                 <div class="col-md-2">
                     <label class="form-label">Transportadora</label>
                     <input type="text" name="transportadora" class="form-control form-control-sm"
-                           placeholder="CNPJ/Nome..." value="{{ filtro_transportadora }}">
+                           placeholder="CNPJ/Nome..." value="{{ filtro_transportadora }}"
+                           data-transportadora-autocomplete>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Status</label>
@@ -303,6 +304,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 <script>
 // Auto-submit form on select change
 document.querySelectorAll('.pallet-filtros select').forEach(function(select) {

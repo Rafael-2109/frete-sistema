@@ -104,10 +104,28 @@
                 }
 
                 // Preencher campos via data-cep-* selectors
+                // ORDEM: UF primeiro (pode acionar cascade de cidades), depois cidade com delay
                 fillField(input, 'data-cep-logradouro', data.logradouro);
                 fillField(input, 'data-cep-bairro', data.bairro);
-                fillField(input, 'data-cep-cidade', data.localidade);
                 fillField(input, 'data-cep-uf', data.uf);
+
+                // Cidade com delay — se o alvo e um <select> populado por cascade,
+                // precisa esperar o cascade carregar as opcoes
+                var cidadeSelector = input.getAttribute('data-cep-cidade');
+                if (cidadeSelector) {
+                    var cidadeEl = document.querySelector(cidadeSelector);
+                    if (cidadeEl && cidadeEl.tagName === 'SELECT') {
+                        // Select cascading: tentar 3x com delay crescente
+                        var tentativas = [300, 800, 1500];
+                        tentativas.forEach(function(delay) {
+                            setTimeout(function() {
+                                setCidadeSelect(cidadeEl, data.localidade);
+                            }, delay);
+                        });
+                    } else {
+                        fillField(input, 'data-cep-cidade', data.localidade);
+                    }
+                }
 
                 // Complemento: preenche apenas se campo esta vazio
                 var complSelector = input.getAttribute('data-cep-complemento');
@@ -126,6 +144,22 @@
                 input.placeholder = originalPlaceholder;
                 showFeedback(input, 'Erro ao buscar CEP: ' + err.message, 'error');
             });
+    }
+
+    function setCidadeSelect(selectEl, cidade) {
+        if (!selectEl || !cidade) return;
+        var cidadeUpper = cidade.toUpperCase();
+        // Tentar match exato e parcial nas opcoes disponiveis
+        for (var i = 0; i < selectEl.options.length; i++) {
+            var optText = selectEl.options[i].text.toUpperCase();
+            var optVal = selectEl.options[i].value.toUpperCase();
+            if (optText === cidadeUpper || optVal === cidadeUpper ||
+                optText.indexOf(cidadeUpper) >= 0 || cidadeUpper.indexOf(optText) >= 0) {
+                selectEl.selectedIndex = i;
+                triggerChange(selectEl);
+                return;
+            }
+        }
     }
 
     function fillField(cepInput, attr, value) {

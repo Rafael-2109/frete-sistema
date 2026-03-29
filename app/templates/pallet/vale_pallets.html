@@ -83,7 +83,8 @@
                 <div class="col-md-3">
                     <label class="form-label">Transportadora</label>
                     <input type="text" name="transportadora" class="form-control"
-                           value="{{ filtro_transportadora }}" placeholder="CNPJ ou nome">
+                           value="{{ filtro_transportadora }}" placeholder="CNPJ ou nome"
+                           data-transportadora-autocomplete>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Cliente</label>
@@ -275,4 +276,5 @@
         {% endif %}
     </div>
 </div>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

@@ -23,10 +23,14 @@
                                 <label for="cnpj" class="form-label">
                                     CNPJ <span class="text-danger">*</span>
                                 </label>
-                                <input type="text" class="form-control" id="cnpj" name="cnpj" 
-                                       value="{{ filial.cnpj if filial else '' }}" 
+                                <input type="text" class="form-control" id="cnpj" name="cnpj"
+                                       value="{{ filial.cnpj if filial else '' }}"
                                        placeholder="00.000.000/0000-00"
-                                       required>
+                                       required
+                                       data-cnpj-lookup
+                                       data-cnpj-razao="#nome_filial"
+                                       data-cnpj-cidade="#cidade"
+                                       data-cnpj-uf="#uf">
                                 <small class="text-muted">Formato: 00.000.000/0000-00 ou apenas números</small>
                             </div>
 
@@ -134,6 +138,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/cnpj-lookup.js') }}"></script>
 <script>
 $(document).ready(function() {
     // Máscara para CNPJ

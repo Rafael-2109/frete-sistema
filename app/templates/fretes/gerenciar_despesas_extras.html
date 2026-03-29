@@ -97,7 +97,8 @@
                                     <input type="text" name="filtro_transportadora" id="filtro_transportadora"
                                            class="form-control"
                                            value="{{ filtro_transportadora if filtro_transportadora else '' }}"
-                                           placeholder="Nome ou CNPJ">
+                                           placeholder="Nome ou CNPJ"
+                                           data-transportadora-autocomplete>
                                 </div>
                             </div>
                             <div class="col-md-2">
@@ -525,4 +526,5 @@
         }
     });
 </script>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

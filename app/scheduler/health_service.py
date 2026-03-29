@@ -39,7 +39,7 @@ def registrar_step(step_name: str, step_number: int, sucesso: bool,
 def obter_status_steps():
     """Retorna ultimo status de cada step (para dashboard)."""
     try:
-        from sqlalchemy import func, distinct
+        from sqlalchemy import func
 
         # Subquery: ultima execucao por step
         subq = db.session.query(

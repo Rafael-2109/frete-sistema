@@ -1911,27 +1911,78 @@ def listar_faturas():
 @fretes_bp.route("/api/transportadoras/buscar")
 @login_required
 def api_buscar_transportadoras():
-    """Busca transportadoras para autocomplete (sem exigir sistema_carvia)"""
+    """Busca transportadoras para autocomplete com suporte a grupo empresarial.
+
+    Se a busca encontrar uma transportadora que pertence a um grupo,
+    retorna tambem as demais do mesmo grupo (identificadas por badge).
+    Busca por: razao_social, CNPJ, ou nome do grupo.
+    """
     busca = request.args.get('busca', '')
     try:
+        from app.transportadoras.models import GrupoTransportadora
+
         query = db.session.query(Transportadora).filter(
             Transportadora.ativo == True  # noqa: E712
         )
         if busca:
             busca_like = f'%{busca}%'
+
+            # IDs de grupos cujo nome bate com a busca
+            grupos_match = db.session.query(GrupoTransportadora.id).filter(
+                GrupoTransportadora.nome.ilike(busca_like),
+                GrupoTransportadora.ativo == True  # noqa: E712
+            ).subquery()
+
             query = query.filter(
                 or_(
                     Transportadora.razao_social.ilike(busca_like),
                     Transportadora.cnpj.ilike(busca_like),
+                    Transportadora.grupo_transportadora_id.in_(
+                        db.session.query(grupos_match.c.id)
+                    ),
                 )
             )
+
+        # Buscar resultados primarios
         query = query.order_by(Transportadora.razao_social).limit(50)
         transportadoras = query.all()
-        resultado = [{
-            'id': t.id,
-            'nome': t.razao_social,
-            'cnpj': t.cnpj,
-        } for t in transportadoras]
+
+        # Expandir grupos: se uma transportadora pertence a um grupo,
+        # incluir as demais do grupo (que nao estejam ja no resultado)
+        ids_resultado = {t.id for t in transportadoras}
+        grupo_ids = {t.grupo_transportadora_id for t in transportadoras if t.grupo_transportadora_id}
+
+        membros_grupo = []
+        if grupo_ids:
+            membros_grupo = Transportadora.query.filter(
+                Transportadora.grupo_transportadora_id.in_(grupo_ids),
+                Transportadora.ativo == True,  # noqa: E712
+                ~Transportadora.id.in_(ids_resultado),
+            ).order_by(Transportadora.razao_social).all()
+
+        # Montar resultado com info de grupo
+        resultado = []
+        for t in transportadoras:
+            item = {
+                'id': t.id,
+                'nome': t.razao_social,
+                'cnpj': t.cnpj,
+                'freteiro': getattr(t, 'freteiro', False),
+                'grupo': t.grupo.nome if t.grupo_transportadora_id and t.grupo else None,
+            }
+            resultado.append(item)
+
+        # Adicionar membros do grupo (marcados como expansao)
+        for t in membros_grupo:
+            resultado.append({
+                'id': t.id,
+                'nome': t.razao_social,
+                'cnpj': t.cnpj,
+                'freteiro': getattr(t, 'freteiro', False),
+                'grupo': t.grupo.nome if t.grupo_transportadora_id and t.grupo else None,
+                'via_grupo': True,
+            })
+
         return jsonify({'sucesso': True, 'transportadoras': resultado})
     except Exception as e:
         logging.getLogger(__name__).error(f"Erro ao buscar transportadoras: {e}")

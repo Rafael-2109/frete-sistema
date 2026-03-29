@@ -123,7 +123,7 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             {{ form.cnpj.label(class="form-label") }}
-                            {{ form.cnpj(class="form-control") }}
+                            {{ form.cnpj(class="form-control", **{'data-cnpj-lookup': '', 'data-cnpj-razao': '#razao_social', 'data-cnpj-cidade': '#cidade', 'data-cnpj-uf': '#uf'}) }}
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -465,7 +465,11 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">CNPJ</label>
-                                <input type="text" class="form-control" id="edit_cnpj" name="cnpj" required>
+                                <input type="text" class="form-control" id="edit_cnpj" name="cnpj" required
+                                       data-cnpj-lookup
+                                       data-cnpj-razao="#edit_razao_social"
+                                       data-cnpj-cidade="#edit_cidade"
+                                       data-cnpj-uf="#edit_uf">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -921,5 +925,6 @@ document.getElementById('formEditarTransportadora').addEventListener('submit', f
     });
 });
 </script>
+<script src="{{ url_for('static', filename='js/shared/cnpj-lookup.js') }}"></script>
 
 {% endblock %}

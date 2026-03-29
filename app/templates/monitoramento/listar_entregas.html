@@ -20,8 +20,8 @@
     </div>
     <div class="col-md-2">
       <label class="form-label">Transportadora</label>
-      <input type="text" name="transportadora" class="form-control" placeholder="Transportadora" 
-             value="{{ request.args.get('transportadora', '') }}">
+      <input type="text" name="transportadora" class="form-control" placeholder="Transportadora"
+             value="{{ request.args.get('transportadora', '') }}" data-transportadora-autocomplete>
     </div>
     <div class="col-md-2">
       <label class="form-label">Cliente</label>
@@ -986,6 +986,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 <!-- ✅ CARREGAR SWEETALERT2 PRIMEIRO (NECESSÁRIO PARA MODAIS) -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
