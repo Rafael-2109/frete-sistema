@@ -116,6 +116,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_endereco_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_cliente_enderecos_cliente_id",
       "columns": [
         "cliente_id"
@@ -126,13 +133,6 @@
       "name": "ix_carvia_cliente_enderecos_cnpj",
       "columns": [
         "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_endereco_tipo",
-      "columns": [
-        "tipo"
       ],
       "unique": false
     }
