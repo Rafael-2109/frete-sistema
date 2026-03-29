@@ -12,7 +12,7 @@ from sqlalchemy import func
 
 from app import db
 from app.carvia.models import (
-    CarviaNf, CarviaOperacao,
+    CarviaNf, CarviaOperacao, CarviaOperacaoNf,
     CarviaSubcontrato, CarviaCteComplementar,
     CarviaCustoEntrega, CarviaFaturaCliente,
     CarviaFaturaTransportadora, CarviaDespesa,
@@ -93,6 +93,7 @@ def register_exportacao_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo_fonte', '')
         status_filtro = request.args.get('status', '')
+        uf_filtro = request.args.get('uf_destino', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -110,6 +111,16 @@ def register_exportacao_routes(bp):
 
         if busca:
             busca_like = f'%{busca}%'
+            # Subquery: NF ids vinculadas a CTe com numero matching
+            cte_match_subq = db.session.query(
+                CarviaOperacaoNf.nf_id
+            ).join(
+                CarviaOperacao,
+                CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+            ).filter(
+                CarviaOperacao.cte_numero.ilike(busca_like)
+            ).subquery()
+
             query = query.filter(
                 db.or_(
                     CarviaNf.numero_nf.ilike(busca_like),
@@ -117,8 +128,15 @@ def register_exportacao_routes(bp):
                     CarviaNf.cnpj_emitente.ilike(busca_like),
                     CarviaNf.nome_destinatario.ilike(busca_like),
                     CarviaNf.chave_acesso_nf.ilike(busca_like),
+                    CarviaNf.cidade_destinatario.ilike(busca_like),
+                    CarviaNf.cnpj_destinatario.ilike(busca_like),
+                    CarviaNf.id.in_(cte_match_subq),
                 )
             )
+
+        # Filtro UF destinatario (exact match)
+        if uf_filtro:
+            query = query.filter(CarviaNf.uf_destinatario == uf_filtro.upper())
 
         sortable_columns = {
             'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),

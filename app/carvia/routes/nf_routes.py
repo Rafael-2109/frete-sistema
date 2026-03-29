@@ -36,6 +36,7 @@ def register_nf_routes(bp):
         tipo_filtro = request.args.get('tipo_fonte', '')
         status_filtro = request.args.get('status', '')
         cte_filtro = request.args.get('cte', '')
+        uf_filtro = request.args.get('uf_destino', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -65,6 +66,16 @@ def register_nf_routes(bp):
 
         if busca:
             busca_like = f'%{busca}%'
+            # Subquery: NF ids vinculadas a CTe com numero matching
+            cte_match_subq = db.session.query(
+                CarviaOperacaoNf.nf_id
+            ).join(
+                CarviaOperacao,
+                CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+            ).filter(
+                CarviaOperacao.cte_numero.ilike(busca_like)
+            ).subquery()
+
             query = query.filter(
                 db.or_(
                     CarviaNf.numero_nf.ilike(busca_like),
@@ -72,6 +83,9 @@ def register_nf_routes(bp):
                     CarviaNf.cnpj_emitente.ilike(busca_like),
                     CarviaNf.nome_destinatario.ilike(busca_like),
                     CarviaNf.chave_acesso_nf.ilike(busca_like),
+                    CarviaNf.cidade_destinatario.ilike(busca_like),
+                    CarviaNf.cnpj_destinatario.ilike(busca_like),
+                    CarviaNf.id.in_(cte_match_subq),
                 )
             )
 
@@ -82,6 +96,10 @@ def register_nf_routes(bp):
             query = query.filter(
                 db.or_(subq_ctes.c.qtd_ctes.is_(None), subq_ctes.c.qtd_ctes == 0)
             )
+
+        # Filtro UF destinatario (exact match)
+        if uf_filtro:
+            query = query.filter(CarviaNf.uf_destinatario == uf_filtro.upper())
 
         # Ordenacao dinamica
         sortable_columns = {
@@ -170,6 +188,7 @@ def register_nf_routes(bp):
             tipo_filtro=tipo_filtro,
             status_filtro=status_filtro,
             cte_filtro=cte_filtro,
+            uf_filtro=uf_filtro,
             sort=sort,
             direction=direction,
             faturas_por_nf=faturas_por_nf,
