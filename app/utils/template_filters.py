@@ -131,3 +131,5 @@ def register_template_filters(app):
     app.jinja_env.filters['numero_br'] = numero_br
     app.jinja_env.filters['from_json'] = from_json
     app.jinja_env.filters['asset_url'] = asset_url
+    from app.utils.cnpj_utils import formatar_cnpj
+    app.jinja_env.filters['cnpj_br'] = formatar_cnpj

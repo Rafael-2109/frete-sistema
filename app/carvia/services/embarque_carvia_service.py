@@ -174,6 +174,13 @@ class EmbarqueCarViaService:
             db.session.add(novo_item)
             db.session.flush()
 
+            # Preencher volumes do provisorio se NULL (defensivo: calcula dos motos da cotacao)
+            if item_alvo.volumes is None and carvia_cotacao_id:
+                from app.carvia.models import CarviaCotacaoMoto
+                item_alvo.volumes = db.session.query(
+                    db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0)
+                ).filter_by(cotacao_id=carvia_cotacao_id).scalar() or 1
+
             # Deduzir do provisorio
             item_alvo.volumes = max(0, (item_alvo.volumes or 0) - nf_volumes)
             item_alvo.peso = max(0, (item_alvo.peso or 0) - nf_peso)
@@ -471,8 +478,10 @@ class EmbarqueCarViaService:
         if cotacao.tipo_material == 'MOTO' and not eh_pedido:
             motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all()
 
-        # Veiculos por NF (para itens reais com NF)
+        # Veiculos por NF, peso bruto e cubado (para itens reais com NF)
         veiculos_por_nf = {}
+        peso_bruto_nf = 0
+        volumes_nf = 0
         for item in itens_pedido:
             if item.numero_nf and item.numero_nf not in veiculos_por_nf:
                 nf_obj = CarviaNf.query.filter_by(
@@ -480,6 +489,32 @@ class EmbarqueCarViaService:
                 ).order_by(CarviaNf.id.desc()).first()
                 if nf_obj:
                     veiculos_por_nf[item.numero_nf] = nf_obj.veiculos.all()
+                    peso_bruto_nf += float(nf_obj.peso_bruto or 0)
+                    volumes_nf += int(nf_obj.quantidade_volumes or 0)
+
+        # Cubado real: somar cubado unitario de cada veiculo pelo modelo
+        from app.carvia.models import CarviaModeloMoto
+        # Mapa modelo_nome → cubado unitario (a partir das motos da cotacao)
+        cubado_por_modelo = {}
+        for m in CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all():
+            if m.modelo_moto and m.quantidade and m.quantidade > 0:
+                cubado_por_modelo[m.modelo_moto.nome.upper()] = (
+                    float(m.peso_cubado_total or 0) / int(m.quantidade)
+                )
+        # Somar cubado de cada veiculo das NFs deste pedido
+        peso_cubado_nf = 0
+        for nf_num, veics in veiculos_por_nf.items():
+            for v in veics:
+                modelo_upper = (v.modelo or '').upper()
+                if modelo_upper in cubado_por_modelo:
+                    peso_cubado_nf += cubado_por_modelo[modelo_upper]
+                else:
+                    # Fallback: tentar match parcial (ex: "POP" in "BIKE ELETRICA POP")
+                    for nome, cubado in cubado_por_modelo.items():
+                        if nome in modelo_upper or modelo_upper in nome:
+                            peso_cubado_nf += cubado
+                            break
+        peso_cubado_nf = round(peso_cubado_nf, 2)
 
         # Filial do pedido (SP/RJ)
         filial = pedido.filial if pedido else None
@@ -490,6 +525,8 @@ class EmbarqueCarViaService:
             'itens_pedido': itens_pedido,
             'motos': motos,
             'veiculos_por_nf': veiculos_por_nf,
+            'peso_bruto_nf': peso_bruto_nf,
+            'peso_cubado_nf': peso_cubado_nf,
             'filial': filial,
             'eh_pedido': eh_pedido,
         }

@@ -45,16 +45,27 @@
             <span class="text-bold">{{ cotacao.numero_cotacao }}</span>
         </div>
         <div class="info-row">
-            <span class="info-label">Cliente:</span>
-            {{ cotacao.cliente.razao_social if cotacao.cliente else 'N/A' }}
+            <span class="info-label">Destinatario:</span>
+            {% if cotacao.endereco_destino %}
+                {{ cotacao.endereco_destino.razao_social or 'N/A' }}
+                ({{ cotacao.endereco_destino.cnpj|cnpj_br }})
+            {% else %}N/A{% endif %}
         </div>
         <div class="info-row">
             <span class="info-label">Material:</span>
             {{ cotacao.tipo_material or 'N/A' }}
         </div>
         <div class="info-row">
-            <span class="info-label">Peso:</span>
-            {{ "%.0f"|format(cotacao.peso_total or 0) }} kg
+            <span class="info-label">Peso Bruto:</span>
+            {{ "%.2f"|format(peso_bruto_nf or 0) }} kg
+        </div>
+        <div class="info-row">
+            <span class="info-label">Peso Cubado:</span>
+            {% if eh_pedido %}
+                {{ "%.2f"|format(peso_cubado_nf or 0) }} kg
+            {% else %}
+                {{ "%.2f"|format(cotacao.peso_total_motos or cotacao.peso_cubado or cotacao.peso or 0) }} kg
+            {% endif %}
         </div>
     </div>
     <div class="info-right">
@@ -96,11 +107,13 @@
         </tr>
     </thead>
     <tbody>
-        {% set ns = namespace(total_valor=0, total_veiculos=0) %}
-        {% for item in itens_pedido %}
-            {% set item_veiculos = veiculos_por_nf.get(item.numero_nf, []) if veiculos_por_nf and item.numero_nf else [] %}
-            {% if item_veiculos %}
-                {% for v in item_veiculos %}
+        {% set ns = namespace(total_valor=0, total_veiculos=0, nfs_rendered=[]) %}
+        {# Primeiro: renderizar veiculos por NF unica (evita duplicacao) #}
+        {% set nfs_unicas = itens_pedido | map(attribute='numero_nf') | select | unique | list %}
+        {% for nf_num in nfs_unicas %}
+            {% set nf_veics = veiculos_por_nf.get(nf_num, []) if veiculos_por_nf else [] %}
+            {% if nf_veics %}
+                {% for v in nf_veics %}
                 {% set ns.total_veiculos = ns.total_veiculos + 1 %}
                 {% set ns.total_valor = ns.total_valor + (v.valor or 0) %}
                 <tr>
@@ -109,10 +122,15 @@
                     <td>{{ v.cor or '-' }}</td>
                     <td class="text-right">{{ "%.2f"|format(v.valor or 0) }}</td>
                     <td>{{ v.ano or '-' }}</td>
-                    <td>{{ item.numero_nf or '-' }}</td>
+                    <td>{{ nf_num }}</td>
                 </tr>
                 {% endfor %}
-            {% else %}
+                {% set ns.nfs_rendered = ns.nfs_rendered + [nf_num] %}
+            {% endif %}
+        {% endfor %}
+        {# Depois: itens sem veiculos (NFs sem detalhe de chassi) #}
+        {% for item in itens_pedido %}
+            {% if not item.numero_nf or item.numero_nf not in ns.nfs_rendered %}
                 {% set ns.total_veiculos = ns.total_veiculos + (item.quantidade or 1) %}
                 {% set ns.total_valor = ns.total_valor + (item.valor_total or 0) %}
                 <tr>

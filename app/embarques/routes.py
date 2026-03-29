@@ -426,6 +426,19 @@ def visualizar_embarque(id):
                         print(f"[SINCRONIZAÇÃO EMBARQUE] {count_total} separações atualizadas com expedição {embarque.data_prevista_embarque}")
                         messages_sync.append(f"📅 {count_total} pedidos atualizados com nova data de expedição")
 
+                    # Sincronizar data_expedicao nas cotacoes CarVia do embarque
+                    carvia_cot_ids = {
+                        item.carvia_cotacao_id for item in embarque.itens_ativos
+                        if item.carvia_cotacao_id
+                    }
+                    if carvia_cot_ids:
+                        from app.carvia.models import CarviaCotacao
+                        count_carvia = CarviaCotacao.query.filter(
+                            CarviaCotacao.id.in_(carvia_cot_ids)
+                        ).update({'data_expedicao': embarque.data_prevista_embarque})
+                        if count_carvia > 0:
+                            messages_sync.append(f"📅 {count_carvia} cotação(ões) CarVia atualizada(s) com data de expedição")
+
                 # ✅ CORREÇÃO: Commit ÚNICO após TODAS as operações
                 db.session.commit()
 
@@ -1427,6 +1440,8 @@ def imprimir_embarque_completo(embarque_id):
             'itens_pedido': dados['itens_pedido'],
             'motos': dados['motos'],
             'veiculos_por_nf': dados['veiculos_por_nf'],
+            'peso_bruto_nf': dados.get('peso_bruto_nf', 0),
+            'peso_cubado_nf': dados.get('peso_cubado_nf', 0),
             'filial': dados['filial'],
         })
     
@@ -3004,6 +3019,8 @@ def _imprimir_separacao_carvia(embarque_id, separacao_lote_id):
         motos=dados['motos'],
         eh_pedido=dados['eh_pedido'],
         veiculos_por_nf=dados['veiculos_por_nf'],
+        peso_bruto_nf=dados.get('peso_bruto_nf', 0),
+        peso_cubado_nf=dados.get('peso_cubado_nf', 0),
         separacao_lote_id=separacao_lote_id,
         data_impressao=agora_utc_naive(),
         current_user=current_user,

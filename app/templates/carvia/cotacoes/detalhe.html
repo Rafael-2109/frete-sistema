@@ -233,28 +233,31 @@
                         <table class="table table-sm table-borderless mb-0 small">
                             <thead class="text-muted"><tr><th>Produto</th><th>Cor</th><th class="text-center">Qtd</th><th class="text-end">Valor Unit.</th><th class="text-end">Total</th><th></th></tr></thead>
                             <tbody>
-                                {% set ns_nfs_rendered = namespace(seen=[]) %}
+                                {# Itens do pedido (sem accordion individual) #}
                                 {% for item in todos_itens %}
-                                {# Mostrar veiculos apenas na primeira ocorrencia de cada NF (evita duplicacao) #}
-                                {% set item_veiculos = veiculos_por_nf.get(item.numero_nf, []) if item.numero_nf and item.numero_nf not in ns_nfs_rendered.seen else [] %}
-                                {% if item.numero_nf and item.numero_nf not in ns_nfs_rendered.seen %}
-                                    {% set ns_nfs_rendered.seen = ns_nfs_rendered.seen + [item.numero_nf] %}
-                                {% endif %}
-                                <tr{% if item_veiculos %} class="cursor-pointer" data-bs-toggle="collapse" data-bs-target="#veiculos-{{ ped.id }}-{{ item.id }}" role="button"{% endif %}>
+                                <tr>
                                     <td>{{ item.descricao or '-' }}</td>
                                     <td>{{ item.cor or '-' }}</td>
                                     <td class="text-center">{{ item.quantidade or '-' }}</td>
                                     <td class="text-end">{{ item.valor_unitario|valor_br if item.valor_unitario else '-' }}</td>
                                     <td class="text-end">{{ item.valor_total|valor_br if item.valor_total else '-' }}</td>
-                                    <td class="text-center">{% if item_veiculos %}<i class="fas fa-chevron-down text-muted small"></i>{% endif %}</td>
+                                    <td class="text-center">{% if item.numero_nf %}<span class="badge bg-secondary">{{ item.numero_nf }}</span>{% endif %}</td>
                                 </tr>
-                                {% if item_veiculos %}
-                                <tr class="collapse" id="veiculos-{{ ped.id }}-{{ item.id }}">
+                                {% endfor %}
+                                {# Veiculos agrupados por NF (1 accordion por NF) #}
+                                {% for nf_num in nfs_unicas %}
+                                {% set nf_veics = veiculos_por_nf.get(nf_num, []) if veiculos_por_nf else [] %}
+                                {% if nf_veics %}
+                                <tr class="cursor-pointer table-light" data-bs-toggle="collapse" data-bs-target="#veiculos-{{ ped.id }}-nf-{{ loop.index }}" role="button">
+                                    <td colspan="5" class="text-muted small"><i class="fas fa-motorcycle me-1"></i>NF {{ nf_num }} — {{ nf_veics|length }} veiculo(s)</td>
+                                    <td class="text-center"><i class="fas fa-chevron-down text-muted small"></i></td>
+                                </tr>
+                                <tr class="collapse" id="veiculos-{{ ped.id }}-nf-{{ loop.index }}">
                                     <td colspan="6" class="p-0">
                                         <table class="table table-sm mb-0 table-striped" style="background-color: var(--bg-light);">
                                             <thead><tr class="text-muted"><th style="padding-left: 1.5rem;">Chassi</th><th>Modelo</th><th>Cor</th><th class="text-end">Valor</th><th>Ano</th></tr></thead>
                                             <tbody>
-                                                {% for v in item_veiculos %}
+                                                {% for v in nf_veics %}
                                                 <tr>
                                                     <td style="padding-left: 1.5rem;"><code class="small">{{ v.chassi }}</code></td>
                                                     <td>{{ v.modelo or '-' }}</td>

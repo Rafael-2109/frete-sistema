@@ -1544,6 +1544,17 @@ def fechar_frete():
                     except (ValueError, TypeError):
                         pass
 
+                    # Calcular volumes: total de motos da cotacao
+                    carvia_volumes = None
+                    if carvia_cot_id:
+                        try:
+                            from app.carvia.models import CarviaCotacaoMoto
+                            carvia_volumes = db.session.query(
+                                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0)
+                            ).filter_by(cotacao_id=carvia_cot_id).scalar() or None
+                        except Exception:
+                            pass
+
                     item = EmbarqueItem(
                         embarque_id=embarque.id,
                         separacao_lote_id=pedido.separacao_lote_id,
@@ -1556,7 +1567,7 @@ def fechar_frete():
                         pallets=0,
                         uf_destino=uf_cv,
                         cidade_destino=cidade_cv,
-                        volumes=None,
+                        volumes=carvia_volumes,
                         provisorio=not pedido.nf,
                         carvia_cotacao_id=carvia_cot_id,
                     )
