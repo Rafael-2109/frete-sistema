@@ -917,7 +917,8 @@ def register_cotacao_v2_routes(bp):
                         if chassi:
                             existente = CarviaNfVeiculo.query.filter_by(chassi=chassi).first()
                             if not existente:
-                                item_ref = nf_itens[v_idx] if v_idx < len(nf_itens) else {}
+                                # B2 fix: more vehicles than NF items → fall back to last item (same NF line, multiple chassis)
+                                item_ref = nf_itens[min(v_idx, len(nf_itens) - 1)] if nf_itens else {}
                                 db.session.add(CarviaNfVeiculo(
                                     nf_id=nf_obj.id,
                                     chassi=chassi,
@@ -1649,11 +1650,11 @@ def register_cotacao_v2_routes(bp):
                         descricao=item_data.get('descricao'),
                         ncm=item_data.get('ncm'),
                         cfop=item_data.get('cfop'),
-                    unidade=item_data.get('unidade'),
-                    quantidade=item_data.get('quantidade'),
-                    valor_unitario=item_data.get('valor_unitario'),
-                    valor_total_item=item_data.get('valor_total_item'),
-                ))
+                        unidade=item_data.get('unidade'),
+                        quantidade=item_data.get('quantidade'),
+                        valor_unitario=item_data.get('valor_unitario'),
+                        valor_total_item=item_data.get('valor_total_item'),
+                    ))
 
                 # Criar veiculos (motos: chassi, cor, modelo)
                 # Enriquecer com dados do item da NF (valor/modelo que LLM nao extrai)
@@ -1663,7 +1664,8 @@ def register_cotacao_v2_routes(bp):
                     if chassi:
                         existente = CarviaNfVeiculo.query.filter_by(chassi=chassi).first()
                         if not existente:
-                            item_nf_ref = itens_nf_ref[v_idx] if v_idx < len(itens_nf_ref) else {}
+                            # B2 fix: more vehicles than NF items → fall back to last item (same NF line, multiple chassis)
+                            item_nf_ref = itens_nf_ref[min(v_idx, len(itens_nf_ref) - 1)] if itens_nf_ref else {}
                             db.session.add(CarviaNfVeiculo(
                                 nf_id=nf.id,
                                 chassi=chassi,
@@ -1674,10 +1676,13 @@ def register_cotacao_v2_routes(bp):
                                 numero_motor=veiculo.get('numero_motor'),
                             ))
 
-            # 4. Buscar ou criar pedido para filial
+            # 4. Buscar pedido existente com esta NF (dedup) ou criar novo
+            # B3 fix: lookup by NF number, not just filial — avoids merging different NFs into same pedido
             pedido = CarviaPedido.query.filter_by(
-                cotacao_id=cotacao_id, filial=filial,
-            ).filter(CarviaPedido.status != 'CANCELADO').first()
+                cotacao_id=cotacao_id,
+            ).filter(CarviaPedido.status != 'CANCELADO').join(
+                CarviaPedidoItem
+            ).filter(CarviaPedidoItem.numero_nf == numero_nf).first()
 
             pedido_criado = False
             if not pedido:

@@ -25,8 +25,8 @@
                                 <th class="text-end">Comprimento (cm)</th>
                                 <th class="text-end">Largura (cm)</th>
                                 <th class="text-end">Altura (cm)</th>
-                                <th class="text-end">Peso Medio (kg)</th>
-                                <th class="text-end">Cubagem Min (kg/m3)</th>
+                                <th class="text-end">Cubagem (m³)</th>
+                                <th class="text-end">Peso Cubado (kg)</th>
                                 <th>Regex</th>
                                 <th class="text-center">Ativo</th>
                                 <th class="text-center">Acoes</th>
@@ -46,8 +46,8 @@
                                 <td class="text-end">{{ modelo.comprimento|numero_br(0) }}</td>
                                 <td class="text-end">{{ modelo.largura|numero_br(0) }}</td>
                                 <td class="text-end">{{ modelo.altura|numero_br(0) }}</td>
-                                <td class="text-end">{{ modelo.peso_medio|numero_br(1) if modelo.peso_medio else '-' }}</td>
-                                <td class="text-end">{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '-' }}</td>
+                                <td class="text-end">{{ ((modelo.comprimento * modelo.largura * modelo.altura) / 1000000)|numero_br(4) }}</td>
+                                <td class="text-end">{{ ((modelo.comprimento * modelo.largura * modelo.altura) / 1000000 * 300)|numero_br(1) }}</td>
                                 <td>
                                     {% if modelo.regex_pattern %}
                                     <code class="small">{{ modelo.regex_pattern }}</code>
@@ -131,14 +131,14 @@
                                    inputmode="decimal" required placeholder="0">
                         </div>
                         <div class="col-md-6">
-                            <label for="novo_peso_medio" class="form-label">Peso Medio (kg)</label>
-                            <input type="text" class="form-control" id="novo_peso_medio" name="peso_medio"
-                                   inputmode="decimal" placeholder="0,00">
+                            <label class="form-label">Cubagem (m³)</label>
+                            <input type="text" class="form-control bg-light campo-cubagem"
+                                   readonly tabindex="-1" placeholder="-">
                         </div>
                         <div class="col-md-6">
-                            <label for="novo_cubagem_minima" class="form-label">Cubagem Min (kg/m3)</label>
-                            <input type="text" class="form-control" id="novo_cubagem_minima" name="cubagem_minima"
-                                   inputmode="decimal" placeholder="300" value="300">
+                            <label class="form-label">Peso Cubado (kg)</label>
+                            <input type="text" class="form-control bg-light campo-peso-cubado"
+                                   readonly tabindex="-1" placeholder="-">
                         </div>
                         <div class="col-12">
                             <div class="accordion" id="accordionNovoAvancado">
@@ -235,16 +235,14 @@
                                    value="{{ modelo.altura|numero_br(0) }}">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Peso Medio (kg)</label>
-                            <input type="text" class="form-control" name="peso_medio"
-                                   inputmode="decimal"
-                                   value="{{ modelo.peso_medio|numero_br(1) if modelo.peso_medio else '' }}">
+                            <label class="form-label">Cubagem (m³)</label>
+                            <input type="text" class="form-control bg-light campo-cubagem"
+                                   readonly tabindex="-1">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Cubagem Min (kg/m3)</label>
-                            <input type="text" class="form-control" name="cubagem_minima"
-                                   inputmode="decimal"
-                                   value="{{ modelo.cubagem_minima|numero_br(0) if modelo.cubagem_minima else '' }}">
+                            <label class="form-label">Peso Cubado (kg)</label>
+                            <input type="text" class="form-control bg-light campo-peso-cubado"
+                                   readonly tabindex="-1">
                         </div>
                         <div class="col-12">
                             <div class="accordion" id="accordionEditarAvancado{{ modelo.id }}">
@@ -310,10 +308,32 @@ function parseBR(value) {
     return parseFloat(String(value).replace(/\./g, '').replace(',', '.'));
 }
 
+function formatBR(value, decimals) {
+    if (value === null || value === undefined || isNaN(value) || value === 0) return '';
+    var parts = value.toFixed(decimals).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return parts.join(',');
+}
+
+function recalcularCubagem(form) {
+    var comp = parseBR(form.querySelector('[name="comprimento"]').value) || 0;
+    var larg = parseBR(form.querySelector('[name="largura"]').value) || 0;
+    var alt = parseBR(form.querySelector('[name="altura"]').value) || 0;
+
+    var volumeM3 = comp * larg * alt / 1000000;
+    var pesoCubado = volumeM3 * 300;
+
+    var campoCubagem = form.querySelector('.campo-cubagem');
+    var campoPeso = form.querySelector('.campo-peso-cubado');
+
+    if (campoCubagem) campoCubagem.value = volumeM3 > 0 ? formatBR(volumeM3, 4) : '';
+    if (campoPeso) campoPeso.value = pesoCubado > 0 ? formatBR(pesoCubado, 3) : '';
+}
+
 function getFormData(form) {
     const data = {};
-    const fields = ['nome', 'comprimento', 'largura', 'altura', 'peso_medio', 'cubagem_minima', 'regex_pattern'];
-    const numericFields = ['comprimento', 'largura', 'altura', 'peso_medio', 'cubagem_minima'];
+    const fields = ['nome', 'comprimento', 'largura', 'altura', 'regex_pattern'];
+    const numericFields = ['comprimento', 'largura', 'altura'];
 
     fields.forEach(field => {
         const input = form.querySelector(`[name="${field}"]`);
@@ -324,6 +344,14 @@ function getFormData(form) {
             data[field] = input.value || null;
         }
     });
+
+    // Peso e cubagem calculados a partir das dimensoes
+    var comp = data.comprimento || 0;
+    var larg = data.largura || 0;
+    var alt = data.altura || 0;
+    var volumeM3 = comp * larg * alt / 1000000;
+    data.peso_medio = Math.round(volumeM3 * 300 * 1000) / 1000;
+    data.cubagem_minima = 300;
 
     const catSelect = form.querySelector('[name="categoria_moto_id"]');
     if (catSelect) {
@@ -392,6 +420,19 @@ function excluirModelo(id, nome) {
     })
     .catch(err => alert(err.message));
 }
+
+// Bind dimensoes para recalcular cubagem/peso automaticamente
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form').forEach(function(form) {
+        ['comprimento', 'largura', 'altura'].forEach(function(field) {
+            var input = form.querySelector('[name="' + field + '"]');
+            if (input) {
+                input.addEventListener('input', function() { recalcularCubagem(form); });
+            }
+        });
+        recalcularCubagem(form);
+    });
+});
 
 // Carregar categorias nos selects
 document.addEventListener('DOMContentLoaded', function() {

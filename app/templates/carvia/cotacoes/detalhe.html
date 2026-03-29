@@ -233,8 +233,13 @@
                         <table class="table table-sm table-borderless mb-0 small">
                             <thead class="text-muted"><tr><th>Produto</th><th>Cor</th><th class="text-center">Qtd</th><th class="text-end">Valor Unit.</th><th class="text-end">Total</th><th></th></tr></thead>
                             <tbody>
+                                {% set ns_nfs_rendered = namespace(seen=[]) %}
                                 {% for item in todos_itens %}
-                                {% set item_veiculos = veiculos_por_nf.get(item.numero_nf, []) if item.numero_nf else [] %}
+                                {# Mostrar veiculos apenas na primeira ocorrencia de cada NF (evita duplicacao) #}
+                                {% set item_veiculos = veiculos_por_nf.get(item.numero_nf, []) if item.numero_nf and item.numero_nf not in ns_nfs_rendered.seen else [] %}
+                                {% if item.numero_nf and item.numero_nf not in ns_nfs_rendered.seen %}
+                                    {% set ns_nfs_rendered.seen = ns_nfs_rendered.seen + [item.numero_nf] %}
+                                {% endif %}
                                 <tr{% if item_veiculos %} class="cursor-pointer" data-bs-toggle="collapse" data-bs-target="#veiculos-{{ ped.id }}-{{ item.id }}" role="button"{% endif %}>
                                     <td>{{ item.descricao or '-' }}</td>
                                     <td>{{ item.cor or '-' }}</td>

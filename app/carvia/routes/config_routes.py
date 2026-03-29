@@ -81,13 +81,19 @@ def register_config_routes(bp):
 
             cat_id = data.get('categoria_moto_id')
 
+            comp = float(data.get('comprimento', 0) or 0)
+            larg = float(data.get('largura', 0) or 0)
+            alt = float(data.get('altura', 0) or 0)
+            volume_m3 = comp * larg * alt / 1_000_000
+            peso_cubado = round(volume_m3 * 300, 3)
+
             modelo = CarviaModeloMoto(
                 nome=nome,
-                comprimento=data.get('comprimento', 0),
-                largura=data.get('largura', 0),
-                altura=data.get('altura', 0),
-                peso_medio=data.get('peso_medio'),
-                cubagem_minima=data.get('cubagem_minima', 300),
+                comprimento=comp,
+                largura=larg,
+                altura=alt,
+                peso_medio=peso_cubado,
+                cubagem_minima=300,
                 regex_pattern=regex_pattern or None,
                 categoria_moto_id=int(cat_id) if cat_id else None,
                 criado_em=agora_utc_naive(),
@@ -145,10 +151,13 @@ def register_config_routes(bp):
                 modelo.largura = data['largura']
             if 'altura' in data:
                 modelo.altura = data['altura']
-            if 'peso_medio' in data:
-                modelo.peso_medio = data['peso_medio']
-            if 'cubagem_minima' in data:
-                modelo.cubagem_minima = data['cubagem_minima']
+            # Recalcular peso cubado (sempre derivado das dimensoes × 300)
+            comp = float(modelo.comprimento or 0)
+            larg = float(modelo.largura or 0)
+            alt = float(modelo.altura or 0)
+            volume_m3 = comp * larg * alt / 1_000_000
+            modelo.peso_medio = round(volume_m3 * 300, 3)
+            modelo.cubagem_minima = 300
             if 'regex_pattern' in data:
                 regex_val = (data['regex_pattern'] or '').strip()
                 if not regex_val:
