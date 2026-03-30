@@ -38,9 +38,11 @@
                     title="Ver opcoes de cotacao">
                 <i class="fas fa-calculator"></i> Cotacao
             </button>
+            {% if sub.operacao_id %}
             <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-file-invoice"></i> Ver CTe CarVia
             </a>
+            {% endif %}
             {% if current_user.perfil == 'administrador' %}
             <a href="{{ url_for('carvia.admin_editar', tipo='subcontrato', id=sub.id) }}" class="btn carvia-admin-btn"
                title="Edicao completa (admin)">

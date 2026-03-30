@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Raiz CNPJ (8 primeiros dígitos) de clientes excluídos do filtro Agend. Pendente
 CNPJS_EXCLUIR_AGENDAMENTO = ['93209765', '75315333', '00063960', '01157555', '06057223']
 
-CACHE_KEY = "pedidos:contadores:v2"
+CACHE_KEY = "pedidos:contadores:v3"
 CACHE_TTL = 45  # segundos
 
 
@@ -206,6 +206,14 @@ class PedidosCounterService:
             func.count(case(
                 (Pedido.data_embarque.is_(None), 1)
             )),
+            # 8: faturados (tem NF preenchida, nao esta no CD)
+            func.count(case(
+                (
+                    (Pedido.nf.isnot(None)) & (Pedido.nf != "") &
+                    (Pedido.nf_cd == False),
+                    1
+                )
+            )),
         ).one()
 
         return {
@@ -217,6 +225,7 @@ class PedidosCounterService:
             'atrasados_abertos': resultado[5] or 0,
             'sem_data': resultado[6] or 0,
             'pend_embarque': resultado[7] or 0,
+            'faturados': resultado[8] or 0,
         }
 
     @staticmethod

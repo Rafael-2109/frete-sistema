@@ -1,48 +1,42 @@
-"""Routes de listagem de pedidos."""
+"""Routes de listagem de pedidos (Fase 1 — GET-only, sem WTForms)."""
 from flask import render_template, request
 from flask_login import login_required
 from sqlalchemy import distinct
 
 from app import db
 from app.pedidos.models import Pedido
-from app.pedidos.forms import FiltroPedidosForm, CotarFreteForm
+from app.pedidos.forms import CotarFreteForm
 from app.cadastros_agendamento.models import ContatoAgendamento
 from app.embarques.models import Embarque, EmbarqueItem
 from datetime import datetime
 from app.utils.timezone import agora_utc_naive
+from app.utils.ufs import UF_LIST
 
 
 def register_lista_routes(bp):
 
-    @bp.route('/lista_pedidos', methods=['GET','POST']) # type: ignore
+    @bp.route('/lista_pedidos', methods=['GET']) # type: ignore
     @login_required
     def lista_pedidos(): # type: ignore
         from app.pedidos.services.counter_service import PedidosCounterService
         from app.pedidos.services.lista_service import ListaPedidosService as Svc
 
-        # --- Forms ---
-        filtro_form = FiltroPedidosForm()
+        # --- Choices data (sem WTForms) ---
         rotas = db.session.query(distinct(Pedido.rota)).filter(Pedido.rota.isnot(None)).order_by(Pedido.rota).all()
         sub_rotas = db.session.query(distinct(Pedido.sub_rota)).filter(Pedido.sub_rota.isnot(None)).order_by(Pedido.sub_rota).all()
-        filtro_form.rota.choices = [('', 'Todas')] + [(r[0], r[0]) for r in rotas if r[0]]
-        filtro_form.sub_rota.choices = [('', 'Todas')] + [(sr[0], sr[0]) for sr in sub_rotas if sr[0]]
+        rotas_choices = [r[0] for r in rotas if r[0]]
+        sub_rotas_choices = [sr[0] for sr in sub_rotas if sr[0]]
+
+        # CotarFreteForm ainda necessario para CSRF do form de cotacao
         cotar_form = CotarFreteForm()
 
-        # --- Parametros ---
-        filtro_status = request.args.get('status')
-        filtro_data = request.args.get('data')
+        # --- Parametros de ordenacao ---
         sort_by = request.args.get('sort_by', 'expedicao')
         sort_order = request.args.get('sort_order', 'asc')
 
-        # --- Contadores (Redis cache) ---
+        # --- Dados auxiliares (Redis cache) ---
         hoje = agora_utc_naive().date()
         dados_contadores = PedidosCounterService.obter_contadores()
-        contadores_data = dados_contadores['contadores_data']
-        contadores_status = dados_contadores['contadores_status']
-
-        for key, dados in contadores_data.items():
-            if isinstance(dados['data'], str):
-                dados['data'] = datetime.strptime(dados['data'], '%Y-%m-%d').date()
 
         # --- Contatos de agendamento (reusados no enriquecimento) ---
         contatos_agendamento_todos = ContatoAgendamento.query.filter(
@@ -52,58 +46,73 @@ def register_lista_routes(bp):
         ).all()
         contatos_por_cnpj_global = {c.cnpj: c for c in contatos_agendamento_todos if c.cnpj}
 
-        # --- Query base ---
-        query = Pedido.query
+        # --- Contadores facetados (atualizam com filtros ativos) ---
+        _filter_keys = [
+            'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',
+            'cond_agend_pendente', 'cond_ag_pagamento', 'cond_ag_item',
+            'expedicao_de', 'expedicao_ate', 'uf', 'rota', 'sub_rota',
+            'numero_pedido', 'cnpj_cpf', 'cliente', 'data',
+        ]
+        has_filters = any(request.args.get(k) for k in _filter_keys)
 
-        # 1. Filtros de status (botoes rapidos)
-        query, _ = Svc.aplicar_filtros_status(
-            query, filtro_status, filtro_data, hoje,
+        if has_filters:
+            # Contadores calculados no contexto dos filtros ativos (faceted)
+            contadores_calc = Svc.calcular_contadores_filtrados(
+                request.args, hoje,
+                cnpjs_agendamento=dados_contadores['cnpjs_agendamento'],
+                lotes_item=dados_contadores['lotes_falta_item'],
+                lotes_pgto=dados_contadores['lotes_falta_pgto']
+            )
+            contadores_data = contadores_calc['contadores_data']
+            contadores_status = contadores_calc['contadores_status']
+        else:
+            # Sem filtros: usar contadores globais cacheados
+            contadores_data = dados_contadores['contadores_data']
+            contadores_status = dados_contadores['contadores_status']
+
+        # Normalizar datas (Redis retorna strings)
+        for _key, dados in contadores_data.items():
+            if isinstance(dados['data'], str):
+                dados['data'] = datetime.strptime(dados['data'], '%Y-%m-%d').date()
+
+        # --- Query base + filtros compostos unificados ---
+        query = Pedido.query
+        query = Svc.aplicar_filtros_compostos(
+            query, request.args, hoje,
             cnpjs_validos_agendamento=dados_contadores['cnpjs_agendamento'],
             lotes_falta_item_ids=dados_contadores['lotes_falta_item'],
             lotes_falta_pagamento_ids=dados_contadores['lotes_falta_pgto']
         )
 
-        # 2. Filtros de formulario
-        aplicar_form = filtro_form.validate_on_submit() or (request.method == 'GET' and any([
-            request.args.get('numero_pedido'), request.args.get('cnpj_cpf'),
-            request.args.get('cliente'), request.args.get('status_form'),
-            request.args.get('uf'), request.args.get('rota'), request.args.get('sub_rota')
-        ]))
-        if aplicar_form:
-            query = Svc.aplicar_filtros_formulario(query, filtro_form)
-
-        # 3. Ordenacao
+        # --- Ordenacao ---
         query = Svc.aplicar_ordenacao(query, sort_by, sort_order)
 
-        # 4. Paginacao
+        # --- Paginacao ---
         page = request.args.get('page', 1, type=int)
         paginacao = query.paginate(page=page, per_page=50, error_out=False)
         pedidos = paginacao.items
 
-        # 5. Enriquecimento (embarques, contatos, flags)
+        # --- Enriquecimento (embarques, contatos, flags) ---
         Svc.enriquecer_pedidos(pedidos, contatos_por_cnpj_global)
 
-        # 6. URL helpers (closures simplificadas — sem POST branch)
+        # --- URL helper para sort (usado pelo template) ---
         def sort_url(campo):
             return Svc.gerar_sort_url(request.args, campo)
 
-        def filtro_url(**kwargs):
-            return Svc.gerar_filtro_url(request.args, **kwargs)
-
         return render_template(
             'pedidos/lista_pedidos.html',
-            filtro_form=filtro_form,
             cotar_form=cotar_form,
             pedidos=pedidos,
             paginacao=paginacao,
             contadores_data=contadores_data,
             contadores_status=contadores_status,
-            filtro_status_ativo=filtro_status,
-            filtro_data_ativo=filtro_data,
+            filtro_args=request.args.to_dict(),
+            rotas_choices=rotas_choices,
+            sub_rotas_choices=sub_rotas_choices,
+            uf_list=UF_LIST,
             sort_by=sort_by,
             sort_order=sort_order,
-            sort_url=sort_url,
-            filtro_url=filtro_url
+            sort_url=sort_url
         )
 
     @bp.route('/detalhes/<string:lote_id>') # type: ignore
@@ -113,7 +122,7 @@ def register_lista_routes(bp):
         Visualiza detalhes completos de um pedido usando separacao_lote_id
         """
         pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
-    
+
         # Buscar embarque relacionado se existir
         embarque = None
         if pedido.separacao_lote_id:
@@ -128,15 +137,15 @@ def register_lista_routes(bp):
                 .order_by(Embarque.numero.desc())
                 .first()
             )
-        
+
             if item_embarque:
                 embarque = item_embarque[1]
-    
+
         # Buscar contato de agendamento
         contato_agendamento = None
         if pedido.cnpj_cpf:
             contato_agendamento = ContatoAgendamento.query.filter_by(cnpj=pedido.cnpj_cpf).first()
-    
+
         return render_template(
             'pedidos/detalhes_pedido.html',
             pedido=pedido,

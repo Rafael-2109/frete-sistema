@@ -5,10 +5,48 @@ from flask_login import login_required, current_user
 from app import db
 from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
+from app.pedidos.models import Pedido
 from app.utils.timezone import agora_utc_naive
 
 
 def register_api_routes(bp):
+
+    @bp.route('/api/clientes/buscar', methods=['GET']) # type: ignore
+    @login_required
+    def buscar_clientes(): # type: ignore
+        """
+        API autocomplete de clientes para filtro da lista de pedidos.
+        Busca por razao social ou CNPJ, retorna distinct, limit 15.
+
+        Query params:
+            busca: texto de busca (min 2 chars)
+
+        Response:
+            {sucesso: true, clientes: [{nome, cnpj}]}
+        """
+        busca = request.args.get('busca', '').strip()
+        if len(busca) < 2:
+            return jsonify({'sucesso': True, 'clientes': []})
+
+        try:
+            resultados = db.session.query(
+                Pedido.raz_social_red,
+                Pedido.cnpj_cpf
+            ).filter(
+                db.or_(
+                    Pedido.raz_social_red.ilike(f'%{busca}%'),
+                    Pedido.cnpj_cpf.ilike(f'%{busca}%')
+                )
+            ).distinct().limit(15).all()
+
+            clientes = [
+                {'nome': r[0] or '', 'cnpj': r[1] or ''}
+                for r in resultados if r[0]
+            ]
+            return jsonify({'sucesso': True, 'clientes': clientes})
+
+        except Exception as e:
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
     @bp.route('/api/info_separacao/<string:lote_id>', methods=['GET']) # type: ignore
     @login_required

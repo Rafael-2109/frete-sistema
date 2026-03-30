@@ -1,167 +1,495 @@
 /**
- * lista-filtros.js — Geracao de URLs com preservacao de filtros
- * Extraido de lista_pedidos.html (linhas 2434-2621)
- * Usa window.PEDIDOS_URLS.listaPedidos (injetado pelo template)
+ * lista-filtros.js — Navegacao de filtros unificada via URL params (Fase 1).
+ *
+ * Funcao central: navegarComFiltros(overrides)
+ * Tudo via URL, sem form POST.
+ *
+ * Depende de: window.PEDIDOS_URLS.listaPedidos (injetado pelo template)
  */
+(function () {
+    'use strict';
 
-var BASE_URL = ''; // Sera definido por window.PEDIDOS_URLS.listaPedidos
+    var BASE_URL = '';
+    var DEBOUNCE_MS = 300;
+    var MIN_CHARS_AUTOCOMPLETE = 2;
 
-window.sort_url = function(campo) {
-    var urlParams = new URLSearchParams(window.location.search);
-
-    var novaOrdem = 'asc';
-    if (urlParams.get('sort_by') === campo && urlParams.get('sort_order') === 'asc') {
-        novaOrdem = 'desc';
-    }
-
-    urlParams.set('sort_by', campo);
-    urlParams.set('sort_order', novaOrdem);
-
-    return BASE_URL + '?' + urlParams.toString();
-};
-
-window.filtro_url = function(opcoes) {
-    opcoes = opcoes || {};
-    var urlParams = new URLSearchParams(window.location.search);
-
-    if (opcoes.status !== undefined) {
-        if (opcoes.status === null) {
-            urlParams.delete('status');
-        } else {
-            urlParams.set('status', opcoes.status);
-        }
-    }
-
-    if (opcoes.data !== undefined) {
-        if (opcoes.data === null) {
-            urlParams.delete('data');
-        } else {
-            urlParams.set('data', opcoes.data);
-        }
-    }
-
-    return BASE_URL + '?' + urlParams.toString();
-};
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar BASE_URL
-    BASE_URL = window.PEDIDOS_URLS ? window.PEDIDOS_URLS.listaPedidos : '/pedidos/lista_pedidos';
-
-    window.templateHelpers = {
-        sort_url: window.sort_url,
-        filtro_url: window.filtro_url
+    // Labels para chips
+    var PARAM_LABELS = {
+        'status': {
+            'aberto': 'Aberto',
+            'cotado': 'Cotado',
+            'faturado': 'Faturado',
+            'nf_cd': 'NF no CD'
+        },
+        'cond_atrasados': 'Atrasados',
+        'cond_sem_data': 'Sem Data',
+        'cond_pend_embarque': 'Pend. Embarque',
+        'cond_agend_pendente': 'Ag. Pendente',
+        'cond_ag_pagamento': 'Ag. Pagamento',
+        'cond_ag_item': 'Ag. Item',
+        'uf': 'UF',
+        'rota': 'Rota',
+        'sub_rota': 'Sub Rota',
+        'numero_pedido': 'Pedido',
+        'cnpj_cpf': 'CNPJ',
+        'cliente': 'Cliente',
+        'expedicao_de': 'De',
+        'expedicao_ate': 'Ate'
     };
 
-    function capturarTodosFiltros() {
-        var filtros = {};
+    // Params que nao geram chips (controle interno)
+    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order'];
 
-        var urlParams = new URLSearchParams(window.location.search);
-        urlParams.forEach(function(value, key) {
-            filtros[key] = value;
-        });
+    // ═══════════════════════════════════════════════════════════════
+    // CORE: navegarComFiltros
+    // ═══════════════════════════════════════════════════════════════
 
-        var campos = [
-            'numero_pedido', 'cnpj_cpf', 'cliente', 'uf', 'status',
-            'rota', 'sub_rota', 'expedicao_inicio', 'expedicao_fim'
-        ];
+    /**
+     * Constroi URL a partir dos params atuais + overrides, e navega.
+     * @param {Object} overrides - chave:valor para set/delete (null = delete)
+     */
+    function navegarComFiltros(overrides) {
+        var params = new URLSearchParams(window.location.search);
 
-        campos.forEach(function(campo) {
-            var elemento = document.getElementById(campo);
-            if (elemento && elemento.value) {
-                filtros[campo] = elemento.value;
+        Object.keys(overrides).forEach(function (key) {
+            var val = overrides[key];
+            if (val === null || val === undefined || val === '') {
+                params.delete(key);
+            } else {
+                params.set(key, val);
             }
         });
 
-        return filtros;
+        // Reset paginacao ao mudar filtros
+        params.delete('page');
+
+        var qs = params.toString();
+        window.location.href = BASE_URL + (qs ? '?' + qs : '');
     }
 
-    function gerarUrlComFiltros(parametrosNovos) {
-        parametrosNovos = parametrosNovos || {};
-        var filtros = capturarTodosFiltros();
+    // ═══════════════════════════════════════════════════════════════
+    // STATUS TOGGLES (OR)
+    // ═══════════════════════════════════════════════════════════════
 
-        Object.assign(filtros, parametrosNovos);
-
-        Object.keys(filtros).forEach(function(key) {
-            if (filtros[key] === null || filtros[key] === undefined || filtros[key] === '') {
-                delete filtros[key];
-            }
+    function getStatusValue() {
+        var checked = [];
+        document.querySelectorAll('[data-filter-type="status"] input:checked').forEach(function (cb) {
+            checked.push(cb.dataset.value);
         });
-
-        var params = new URLSearchParams(filtros);
-        return BASE_URL + '?' + params.toString();
+        return checked.join(',');
     }
 
-    function atualizarLinksOrdenacao() {
-        document.querySelectorAll('.sortable a').forEach(function(link) {
-            var campo = link.closest('.sortable').dataset.sort;
-            if (campo) {
-                var filtros = capturarTodosFiltros();
+    function onStatusToggle() {
+        var val = getStatusValue();
+        navegarComFiltros({ status: val || null });
+    }
 
-                var novaOrdem = 'asc';
-                if (filtros.sort_by === campo && filtros.sort_order === 'asc') {
-                    novaOrdem = 'desc';
-                }
+    // ═══════════════════════════════════════════════════════════════
+    // CONDITION TOGGLES (AND)
+    // ═══════════════════════════════════════════════════════════════
 
-                link.href = gerarUrlComFiltros({
-                    sort_by: campo,
-                    sort_order: novaOrdem
+    function onConditionToggle(input) {
+        var param = input.dataset.param;
+        var overrides = {};
+        overrides[param] = input.checked ? '1' : null;
+        navegarComFiltros(overrides);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SMART DATES
+    // ═══════════════════════════════════════════════════════════════
+
+    function onSmartDateClick(btn) {
+        var date = btn.dataset.date;
+        var params = new URLSearchParams(window.location.search);
+        var currentDe = params.get('expedicao_de');
+        var currentAte = params.get('expedicao_ate');
+
+        // Toggle: se ja esta ativo, desativa
+        if (currentDe === date && currentAte === date) {
+            navegarComFiltros({ expedicao_de: null, expedicao_ate: null });
+        } else {
+            navegarComFiltros({ expedicao_de: date, expedicao_ate: date });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SELECTS (navegacao imediata)
+    // ═══════════════════════════════════════════════════════════════
+
+    function onSelectChange(select) {
+        var param = select.dataset.param;
+        var overrides = {};
+        overrides[param] = select.value || null;
+        navegarComFiltros(overrides);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TEXT INPUTS (Enter) + DATE INPUTS (change)
+    // ═══════════════════════════════════════════════════════════════
+
+    function onTextEnter(input) {
+        var param = input.dataset.param;
+        var overrides = {};
+        overrides[param] = input.value.trim() || null;
+        navegarComFiltros(overrides);
+    }
+
+    function onDateChange(input) {
+        var param = input.dataset.param;
+        var overrides = {};
+        overrides[param] = input.value || null;
+        navegarComFiltros(overrides);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FILTER CHIPS
+    // ═══════════════════════════════════════════════════════════════
+
+    function renderChips() {
+        var container = document.getElementById('filtros-ativos');
+        if (!container) return;
+
+        var params = new URLSearchParams(window.location.search);
+        var html = '';
+        var hasChips = false;
+
+        params.forEach(function (value, key) {
+            if (SKIP_CHIP_PARAMS.indexOf(key) >= 0) return;
+            if (!value) return;
+
+            if (key === 'status') {
+                // Multi-value: um chip por status
+                value.split(',').forEach(function (s) {
+                    if (!s) return;
+                    var label = (PARAM_LABELS.status && PARAM_LABELS.status[s]) || s;
+                    html += chipHtml('status', s, label);
+                    hasChips = true;
                 });
+                return;
             }
+
+            var label = PARAM_LABELS[key] || key;
+            // Condicoes: nao mostrar valor "1", so o label
+            if (key.indexOf('cond_') === 0) {
+                html += chipHtml(key, value, label);
+            } else {
+                html += chipHtml(key, value, label + ': ' + value);
+            }
+            hasChips = true;
+        });
+
+        if (hasChips) {
+            html += '<span class="pedidos-chip pedidos-chip--clear" data-action="clear-all">' +
+                '<i class="fas fa-times-circle"></i> Limpar todos</span>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    function chipHtml(param, value, displayText) {
+        return '<span class="pedidos-chip">' + escapeHtml(displayText) +
+            ' <span class="pedidos-chip__remove" data-param="' + escapeHtml(param) +
+            '" data-value="' + escapeHtml(value) + '">&times;</span></span>';
+    }
+
+    function onChipRemove(el) {
+        var param = el.dataset.param;
+        var value = el.dataset.value;
+
+        if (param === 'status') {
+            // Remove apenas este status da lista comma-separated
+            var params = new URLSearchParams(window.location.search);
+            var current = (params.get('status') || '').split(',');
+            current = current.filter(function (s) { return s !== value; });
+            navegarComFiltros({ status: current.length ? current.join(',') : null });
+        } else {
+            var overrides = {};
+            overrides[param] = null;
+            navegarComFiltros(overrides);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SORT LINKS
+    // ═══════════════════════════════════════════════════════════════
+
+    function updateSortLinks() {
+        document.querySelectorAll('.sortable a').forEach(function (link) {
+            var campo = link.closest('.sortable').dataset.sort;
+            if (!campo) return;
+
+            var params = new URLSearchParams(window.location.search);
+            var novaOrdem = 'asc';
+            if (params.get('sort_by') === campo && params.get('sort_order') === 'asc') {
+                novaOrdem = 'desc';
+            }
+            params.set('sort_by', campo);
+            params.set('sort_order', novaOrdem);
+            link.href = BASE_URL + '?' + params.toString();
         });
     }
 
-    function atualizarBotoesFiltro() {
-        document.querySelectorAll('.filtro-status').forEach(function(btn) {
-            if (btn.href) {
-                var url = new URL(btn.href);
-                var status = url.searchParams.get('status');
-                btn.href = gerarUrlComFiltros({ status: status });
+    // ═══════════════════════════════════════════════════════════════
+    // AUTOCOMPLETE — Cliente (pattern: transportadora-autocomplete.js)
+    // ═══════════════════════════════════════════════════════════════
+
+    function initClienteAutocomplete() {
+        var input = document.querySelector('[data-pedidos-autocomplete]');
+        if (!input) return;
+
+        var apiUrl = '/pedidos/api/clientes/buscar';
+        var debounceTimer = null;
+        var selectedIndex = -1;
+        var resultados = [];
+
+        // Wrapper + dropdown
+        var wrapper = document.createElement('div');
+        wrapper.className = 'pedidos-ac-wrapper';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+
+        var dropdown = document.createElement('div');
+        dropdown.className = 'pedidos-ac-dropdown';
+        wrapper.appendChild(dropdown);
+
+        // Busca ao digitar
+        input.addEventListener('input', function () {
+            var q = this.value.trim();
+            clearTimeout(debounceTimer);
+            selectedIndex = -1;
+
+            if (q.length < MIN_CHARS_AUTOCOMPLETE) {
+                hideDropdown();
+                return;
+            }
+
+            debounceTimer = setTimeout(function () {
+                buscar(q);
+            }, DEBOUNCE_MS);
+        });
+
+        // Teclado
+        input.addEventListener('keydown', function (e) {
+            if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+                if (e.key === 'Enter') {
+                    // Se dropdown fechado, navegar com filtro texto
+                    return; // Deixa o handler data-navigate-on-enter cuidar
+                }
+                return;
+            }
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = Math.min(selectedIndex + 1, resultados.length - 1);
+                highlightItem();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = Math.max(selectedIndex - 1, 0);
+                highlightItem();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation(); // Evitar que o handler Enter de texto tambem dispare
+                if (selectedIndex >= 0 && resultados[selectedIndex]) {
+                    selecionar(resultados[selectedIndex]);
+                } else {
+                    hideDropdown();
+                    // Navegar com texto digitado
+                    navegarComFiltros({ cliente: input.value.trim() || null });
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
             }
         });
 
-        document.querySelectorAll('.filtro-data').forEach(function(btn) {
-            if (btn.href) {
-                var url = new URL(btn.href);
-                var data = url.searchParams.get('data');
-                var status = url.searchParams.get('status');
-                btn.href = gerarUrlComFiltros({ data: data, status: status });
+        // Fechar ao clicar fora
+        document.addEventListener('click', function (e) {
+            if (!wrapper.contains(e.target)) {
+                hideDropdown();
             }
         });
 
-        document.querySelectorAll('.filtro-aberto').forEach(function(btn) {
-            if (btn.href) {
-                var url = new URL(btn.href);
-                var data = url.searchParams.get('data');
-                var status = url.searchParams.get('status');
-                btn.href = gerarUrlComFiltros({ data: data, status: status });
+        function buscar(query) {
+            fetch(apiUrl + '?busca=' + encodeURIComponent(query), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.sucesso && data.clientes) {
+                        resultados = data.clientes;
+                        renderDropdown();
+                    } else {
+                        resultados = [];
+                        hideDropdown();
+                    }
+                })
+                .catch(function () {
+                    resultados = [];
+                    hideDropdown();
+                });
+        }
+
+        function renderDropdown() {
+            if (resultados.length === 0) {
+                dropdown.innerHTML = '<div class="pedidos-ac-empty">Nenhum cliente encontrado</div>';
+                dropdown.style.display = 'block';
+                return;
             }
-        });
+
+            var html = '';
+            for (var i = 0; i < resultados.length; i++) {
+                var c = resultados[i];
+                html += '<div class="pedidos-ac-item" data-index="' + i + '">' +
+                    '<div class="pedidos-ac-item__nome">' + escapeHtml(c.nome) + '</div>' +
+                    '<div class="pedidos-ac-item__cnpj">' + escapeHtml(c.cnpj) + '</div>' +
+                    '</div>';
+            }
+            dropdown.innerHTML = html;
+            dropdown.style.display = 'block';
+
+            dropdown.querySelectorAll('.pedidos-ac-item').forEach(function (item) {
+                item.addEventListener('click', function () {
+                    var idx = parseInt(this.getAttribute('data-index'), 10);
+                    if (resultados[idx]) selecionar(resultados[idx]);
+                });
+                item.addEventListener('mouseenter', function () {
+                    selectedIndex = parseInt(this.getAttribute('data-index'), 10);
+                    highlightItem();
+                });
+            });
+        }
+
+        function highlightItem() {
+            dropdown.querySelectorAll('.pedidos-ac-item').forEach(function (item, i) {
+                if (i === selectedIndex) {
+                    item.classList.add('highlighted');
+                } else {
+                    item.classList.remove('highlighted');
+                }
+            });
+        }
+
+        function selecionar(c) {
+            hideDropdown();
+            navegarComFiltros({ cliente: c.nome });
+        }
+
+        function hideDropdown() {
+            dropdown.style.display = 'none';
+            selectedIndex = -1;
+            resultados = [];
+        }
     }
 
-    atualizarLinksOrdenacao();
-    atualizarBotoesFiltro();
+    // ═══════════════════════════════════════════════════════════════
+    // SPACER — alinhar status row abaixo das datas
+    // ═══════════════════════════════════════════════════════════════
 
-    var camposFiltro = document.querySelectorAll('#numero_pedido, #cnpj_cpf, #cliente, #uf, #status, #rota, #sub_rota, #expedicao_inicio, #expedicao_fim');
-    camposFiltro.forEach(function(campo) {
-        campo.addEventListener('input', function() {
-            setTimeout(function() {
-                atualizarLinksOrdenacao();
-                atualizarBotoesFiltro();
-            }, 100);
+    function alignDateSpacer() {
+        var spacer = document.querySelector('.pedidos-date-spacer');
+        if (!spacer) return;
+
+        // Medir largura do grupo Atrasados+SemData (primeiro toggle-group conditions do card filtros)
+        var condGroup = document.querySelector('.card .pedidos-toggle-group[data-filter-type="conditions"]');
+        if (!condGroup) return;
+
+        // Pegar o separator que vem logo depois
+        var sep = condGroup.nextElementSibling;
+        var sepWidth = (sep && sep.classList.contains('pedidos-filtros-separator')) ? sep.offsetWidth : 0;
+        var gap = 8; // gap: 0.5rem ≈ 8px
+
+        spacer.style.width = (condGroup.offsetWidth + sepWidth + gap) + 'px';
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // UTILS
+    // ═══════════════════════════════════════════════════════════════
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════════
+
+    function init() {
+        BASE_URL = (window.PEDIDOS_URLS && window.PEDIDOS_URLS.listaPedidos)
+            || '/pedidos/lista_pedidos';
+
+        // Status toggles
+        document.querySelectorAll('[data-filter-type="status"] input').forEach(function (cb) {
+            cb.addEventListener('change', onStatusToggle);
         });
 
-        campo.addEventListener('change', function() {
-            setTimeout(function() {
-                atualizarLinksOrdenacao();
-                atualizarBotoesFiltro();
-            }, 100);
+        // Condition toggles
+        document.querySelectorAll('[data-filter-type="conditions"] input').forEach(function (cb) {
+            cb.addEventListener('change', function () { onConditionToggle(this); });
         });
-    });
 
-    document.querySelectorAll('.filtro-data, .filtro-aberto, .filtro-status').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = this.href;
+        // Smart date buttons
+        document.querySelectorAll('.pedidos-date-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () { onSmartDateClick(this); });
         });
-    });
-});
+
+        // Selects com navegacao imediata
+        document.querySelectorAll('[data-navigate-on-change]').forEach(function (sel) {
+            sel.addEventListener('change', function () { onSelectChange(this); });
+        });
+
+        // Text inputs com Enter
+        document.querySelectorAll('[data-navigate-on-enter]').forEach(function (inp) {
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onTextEnter(this);
+                }
+            });
+        });
+
+        // Date inputs com change
+        document.querySelectorAll('#expedicao_de, #expedicao_ate').forEach(function (inp) {
+            inp.addEventListener('change', function () { onDateChange(this); });
+        });
+
+        // Chips — event delegation
+        var chipsContainer = document.getElementById('filtros-ativos');
+        if (chipsContainer) {
+            chipsContainer.addEventListener('click', function (e) {
+                var removeBtn = e.target.closest('.pedidos-chip__remove');
+                if (removeBtn) {
+                    onChipRemove(removeBtn);
+                    return;
+                }
+                var clearBtn = e.target.closest('[data-action="clear-all"]');
+                if (clearBtn) {
+                    window.location.href = BASE_URL;
+                }
+            });
+        }
+
+        // Sort links
+        updateSortLinks();
+
+        // Chips
+        renderChips();
+
+        // Autocomplete cliente
+        initClienteAutocomplete();
+
+        // Spacer: alinhar status row abaixo das datas
+        alignDateSpacer();
+    }
+
+    // Expor para uso por sort links no template
+    window.navegarComFiltros = navegarComFiltros;
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();

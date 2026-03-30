@@ -1,93 +1,34 @@
 {# _tabela_pedidos.html — Tabela de pedidos + paginacao + form cotacao #}
-{# Variaveis de contexto: pedidos, paginacao, cotar_form, contadores_status, filtro_status_ativo, filtro_url, sort_url, sort_by, sort_order #}
+{# Variaveis de contexto: pedidos, paginacao, cotar_form, contadores_status, filtro_args, sort_url, sort_by, sort_order #}
 
-    <!-- 📋 FORMULÁRIO PARA SELECIONAR PEDIDOS E COTAR FRETE -->
     <div class="card mb-4">
         <div class="card-header">
-            <div class="row align-items-center">
-                <!-- ▸ ESQUERDA: Título + Filtros Especiais -->
-                <div class="col-md-6">
-                    <div class="d-flex align-items-center gap-2">
-                        <h5 class="card-title mb-0 me-3">
-                            <i class="fas fa-tasks"></i> Seleção de Pedidos para Cotação
-                        </h5>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tasks"></i> Pedidos para Cotacao
+                </h5>
 
-                        <!-- ✅ NOVOS: Botões de filtro Ag. Pagamento e Ag. Item -->
-                        <a href="{{ filtro_url(status='ag_pagamento') }}"
-                            class="btn btn-sm
-                            {% if filtro_status_ativo == 'ag_pagamento' %}
-                                {% if contadores_status.ag_pagamento > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
-                            {% else %}
-                                {% if contadores_status.ag_pagamento > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
-                            {% endif %}"
-                            title="Pedidos aguardando pagamento antecipado">
-                            <i class="fas fa-money-bill-wave"></i> Ag. Pagamento
-                            <span class="badge badge-contador-theme">{{ contadores_status.ag_pagamento }}</span>
-                        </a>
-
-                        <a href="{{ filtro_url(status='ag_item') }}"
-                            class="btn btn-sm
-                            {% if filtro_status_ativo == 'ag_item' %}
-                                {% if contadores_status.ag_item > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
-                            {% else %}
-                                {% if contadores_status.ag_item > 0 %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}
-                            {% endif %}"
-                            title="Pedidos aguardando item em estoque">
-                            <i class="fas fa-exclamation-triangle"></i> Ag. Item
-                            <span class="badge badge-contador-theme">{{ contadores_status.ag_item }}</span>
-                        </a>
+                <div class="d-flex align-items-center gap-2">
+                    {# Ag. Pendente, Ag. Pagamento, Ag. Item #}
+                    <div class="pedidos-toggle-group" data-filter-type="conditions">
+                        {% for slug, label, icon, count in [
+                            ('agend_pendente', 'Ag. Pendente', 'fa-calendar-check', contadores_status.agend_pendente),
+                            ('ag_pagamento', 'Ag. Pagamento', 'fa-money-bill-wave', contadores_status.ag_pagamento),
+                            ('ag_item', 'Ag. Item', 'fa-box-open', contadores_status.ag_item),
+                        ] %}
+                        <div class="pedidos-toggle pedidos-toggle--condition">
+                            <input type="checkbox" id="cond-{{ slug }}"
+                                   data-param="cond_{{ slug }}" data-value="1"
+                                   {{ 'checked' if filtro_args.get('cond_' ~ slug) }}>
+                            <label for="cond-{{ slug }}" class="btn btn-sm">
+                                <i class="fas {{ icon }}"></i> {{ label }}
+                                <span class="badge badge-contador-theme">{{ count }}</span>
+                            </label>
+                        </div>
+                        {% endfor %}
                     </div>
-                </div>
-                
-                <!-- ▸ DIREITA: Filtros de Status + Contador -->
-                <div class="col-md-6">
-                    <div class="d-flex justify-content-end align-items-center gap-2">
-                        <!-- Filtros de Status -->
-                        <a href="{{ filtro_url(status='abertos') }}"
-                            class="btn btn-sm filtro-status
-                            {% if filtro_status_ativo == 'abertos' %}
-                                {% if contadores_status.abertos > 0 %}btn-danger{% else %}btn-info{% endif %}
-                            {% else %}
-                                {% if contadores_status.abertos > 0 %}btn-outline-danger{% else %}btn-outline-info{% endif %}
-                            {% endif %}">
-                            <i class="fas fa-clock"></i> Abertos
-                            <span class="badge badge-contador-theme">{{ contadores_status.abertos }}</span>
-                        </a>
-                        <a href="{{ filtro_url(status='cotados') }}"
-                            class="btn btn-sm filtro-status
-                            {% if filtro_status_ativo == 'cotados' %}
-                                {% if contadores_status.cotados > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
-                            {% else %}
-                                {% if contadores_status.cotados > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
-                            {% endif %}">
-                            <i class="fas fa-calculator"></i> Cotados
-                            <span class="badge badge-contador-theme">{{ contadores_status.cotados }}</span>
-                        </a>
-                        <a href="{{ filtro_url(status='nf_cd') }}"
-                            class="btn btn-sm filtro-status
-                            {% if filtro_status_ativo == 'nf_cd' %}
-                                {% if contadores_status.nf_cd > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
-                            {% else %}
-                                {% if contadores_status.nf_cd > 0 %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}
-                            {% endif %}">
-                            <i class="fas fa-undo"></i> NF no CD
-                            <span class="badge badge-contador-theme">{{ contadores_status.nf_cd }}</span>
-                        </a>
-                        <a href="{{ filtro_url(status='pend_embarque') }}"
-                            class="btn btn-sm filtro-status
-                            {% if filtro_status_ativo == 'pend_embarque' %}
-                                {% if contadores_status.pend_embarque > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
-                            {% else %}
-                                {% if contadores_status.pend_embarque > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
-                            {% endif %}"
-                            title="Pedidos pendentes de embarque (sem data de embarque)">
-                            <i class="fas fa-shipping-fast"></i> Pend. Embarque
-                            <span class="badge badge-contador-theme">{{ contadores_status.pend_embarque }}</span>
-                        </a>
 
-                        <!-- Contador de pedidos selecionados -->
-                        <span id="selected-count" class="badge bg-success me-2" style="display: none;"></span>
-                    </div>
+                    <span id="selected-count" class="badge bg-success" style="display: none;"></span>
                 </div>
             </div>
         </div>

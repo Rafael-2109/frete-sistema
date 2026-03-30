@@ -598,24 +598,29 @@ function aplicarDadosNF(d) {
     if (nf.quantidade_volumes) document.querySelector('[name="volumes"]').value = nf.quantidade_volumes;
 
     // Auto-preencher linhas de moto se reconhecidas
+    // Aguardar o change handler criar a secao de motos no DOM
     if (d.tipo_material === 'MOTO' && d.motos_reconhecidas && d.motos_reconhecidas.length > 0) {
-        // Limpar linhas existentes (a troca de tipo ja adicionou 1 vazia)
-        document.getElementById('tbodyMotos').innerHTML = '';
-        motoRowIdx = 0;
+        const _preencherMotos = () => {
+            const tbody = document.getElementById('tbodyMotos');
+            if (!tbody) { setTimeout(_preencherMotos, 200); return; }
+            tbody.innerHTML = '';
+            motoRowIdx = 0;
 
-        d.motos_reconhecidas.forEach((moto) => {
-            adicionarLinhaMotos();
-            const idx = motoRowIdx - 1;
-            if (moto.modelo_moto_id) {
-                document.getElementById(`motoModelo${idx}`).value = moto.modelo_moto_id;
-                onModeloChange(idx);  // preenche peso cubado
-            }
-            document.getElementById(`motoQtd${idx}`).value = Math.round(moto.quantidade || 1);
-            if (moto.valor_unitario) {
-                document.getElementById(`motoValorUnit${idx}`).value = moto.valor_unitario;
-            }
-            recalcularMoto(idx);
-        });
+            d.motos_reconhecidas.forEach((moto) => {
+                adicionarLinhaMotos();
+                const idx = motoRowIdx - 1;
+                if (moto.modelo_moto_id) {
+                    document.getElementById(`motoModelo${idx}`).value = moto.modelo_moto_id;
+                    onModeloChange(idx);
+                }
+                document.getElementById(`motoQtd${idx}`).value = Math.round(moto.quantidade || 1);
+                if (moto.valor_unitario) {
+                    document.getElementById(`motoValorUnit${idx}`).value = moto.valor_unitario;
+                }
+                recalcularMoto(idx);
+            });
+        };
+        setTimeout(_preencherMotos, 300);
     }
 
     // Guardar NF para gravar ao salvar — apenas se NAO e NF existente

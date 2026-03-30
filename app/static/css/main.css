@@ -85,6 +85,7 @@
 @import url('./modules/_comercial.css') layer(modules);
 @import url('./modules/_portaria.css') layer(modules);
 @import url('./modules/_transportadoras.css') layer(modules);
+@import url('./modules/_pedidos.css') layer(modules);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);
