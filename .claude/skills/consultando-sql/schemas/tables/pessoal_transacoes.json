@@ -172,13 +172,6 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_conta",
-      "columns": [
-        "conta_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_pessoal_transacoes_categoria",
       "columns": [
         "categoria_id"
@@ -203,6 +196,13 @@
       "name": "idx_pessoal_transacoes_data",
       "columns": [
         "data"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_conta",
+      "columns": [
+        "conta_id"
       ],
       "unique": false
     }

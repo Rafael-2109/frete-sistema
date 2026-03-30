@@ -145,13 +145,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_subcontratos_operacao_id",
-      "columns": [
-        "operacao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_subcontratos_transportadora_id",
       "columns": [
         "transportadora_id"
@@ -162,6 +155,13 @@
       "name": "ix_carvia_subcontratos_fatura_transportadora_id",
       "columns": [
         "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_subcontratos_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     },
