@@ -101,15 +101,4 @@
     background-color: hsla(220 9% 46% / 0.28) !important;
   }
 
-  /* ---------------------------------------------------------------------------
-     Cards/Badges - text-dark must stay dark on colored backgrounds
-     NOTE: !important kept — overrides Bootstrap dark mode text color inversion
-     --------------------------------------------------------------------------- */
-  .bg-warning .text-dark,
-  .bg-warning .card-title,
-  .bg-warning .card-text,
-  .badge.bg-warning.text-dark {
-    color: var(--text) !important;
-  }
-
 } /* End @layer modules */

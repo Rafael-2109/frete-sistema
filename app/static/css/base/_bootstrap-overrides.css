@@ -242,35 +242,61 @@ td[style*="background-color:#198754"] {
 /* Status badges centralizados em components/_badges.css */
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DARK MODE FIXES
+   DARK MODE FIXES — via custom property injection (sem !important)
+
+   Bootstrap utility classes usam !important no property final. CSS Cascade
+   Layers inverte prioridade !important: @layer bootstrap (primeiro declarado)
+   tem a MAIOR prioridade !important — overrides com !important em layers
+   superiores NUNCA vencem.
+
+   Solucao: overridar a CUSTOM PROPERTY DE INPUT (--bs-*-rgb) que Bootstrap
+   consome. Custom properties seguem cascata normal (layer superior vence).
+   Bootstrap resolve a cor automaticamente com o novo valor.
+
+   Override ESCOPADO ao elemento para nao afetar classes irmas que usam a
+   mesma variavel (ex: --bs-light-rgb serve .bg-light E .text-light).
+   NOTA: custom properties herdam para descendentes. .text-light DENTRO de
+   .bg-light herdaria o valor escuro. Nao ha esse padrao no codebase atual,
+   mas evitar introduzi-lo.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* text-dark no dark mode */
-[data-bs-theme="dark"] .text-dark,
-[data-theme="dark"] .text-dark {
-    color: var(--text) !important;
-}
-
-/* EXCEÇÃO: text-dark em badges warning DEVE permanecer escuro */
-[data-bs-theme="dark"] .badge.bg-warning.text-dark,
-[data-bs-theme="dark"] .bg-warning.text-dark,
-[data-theme="dark"] .badge.bg-warning.text-dark,
-[data-theme="dark"] .bg-warning.text-dark {
-    color: hsl(0 0% 10%) !important;
-}
-
-/* bg-light no dark mode */
+/* .bg-light: override escopado de --bs-light-rgb
+   Nao afeta .text-light irmao/ancestral. Descendentes herdam — evitar
+   .text-light dentro de .bg-light. */
 [data-bs-theme="dark"] .bg-light,
 [data-theme="dark"] .bg-light {
-    background-color: var(--bg-light) !important;
-    color: var(--text) !important;
+    --bs-light-rgb: 25, 25, 25;
 }
 
-/* bg-white no dark mode */
+/* .bg-white: override escopado de --bs-white-rgb */
 [data-bs-theme="dark"] .bg-white,
 [data-theme="dark"] .bg-white {
-    background-color: var(--bg-light) !important;
-    color: var(--text) !important;
+    --bs-white-rgb: 25, 25, 25;
+}
+
+/* .text-dark: override escopado de --bs-dark-rgb (nao afeta .bg-dark) */
+[data-bs-theme="dark"] .text-dark,
+[data-theme="dark"] .text-dark {
+    --bs-dark-rgb: 242, 242, 242;
+}
+
+/* EXCECAO: text-dark em warning DEVE permanecer escuro para contraste.
+   3 variantes: mesmo elemento (.bg-warning.text-dark), badge compound
+   (.badge.bg-warning.text-dark), descendente (.bg-warning .text-dark). */
+[data-bs-theme="dark"] .bg-warning.text-dark,
+[data-bs-theme="dark"] .badge.bg-warning.text-dark,
+[data-bs-theme="dark"] .bg-warning .text-dark,
+[data-theme="dark"] .bg-warning.text-dark,
+[data-theme="dark"] .badge.bg-warning.text-dark,
+[data-theme="dark"] .bg-warning .text-dark {
+    --bs-dark-rgb: 33, 37, 41;
+}
+
+/* .badge.bg-primary: primary e amber neste design system.
+   .text-white em badge amber tem contraste ruim.
+   Override escopado de --bs-white-rgb no badge. */
+.badge.bg-primary {
+    --bs-white-rgb: 26, 26, 26;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

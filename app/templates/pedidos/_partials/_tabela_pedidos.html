@@ -310,9 +310,8 @@
                   {% endif %}
                   {% if p.ultimo_embarque %}
                     <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}"
-                           class="btn btn-xs btn-outline-primary"
-                           title="Ver embarque #{{ p.ultimo_embarque.numero }}"
-                           style="font-size: 0.7rem; padding: 1px 4px;">
+                           class="badge bg-warning text-dark text-decoration-none"
+                           title="Ver embarque #{{ p.ultimo_embarque.numero }}">
                       <i class="fas fa-truck"></i> {{ p.ultimo_embarque.numero }}
                     </a>
                   {% endif %}

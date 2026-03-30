@@ -283,11 +283,12 @@
    UTILITIES
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Backgrounds */
-.bg-light { background-color: var(--bg-light) !important; }
-.bg-dark { background-color: var(--bg-dark) !important; }
-
-/* Texto */
+/* Texto — Nota: Bootstrap utility classes usam !important em @layer bootstrap
+   (primeiro layer = maior prioridade !important). Estes overrides com !important
+   NAO vencem Bootstrap diretamente. Funcionam via --bs-*-rgb token overrides
+   nos blocos dark/light acima. Mantidos como fallback documentacional.
+   .bg-light, .bg-dark, .text-dark, .text-body removidos — corrigidos via
+   custom property injection em _bootstrap-overrides.css */
 .text-muted { color: var(--text-muted) !important; }
 .text-primary { color: var(--amber-55) !important; }
 .text-success { color: var(--semantic-success) !important; }
@@ -295,8 +296,6 @@
 .text-warning { color: var(--amber-40) !important; }
 .text-info { color: var(--text-muted) !important; }
 .text-secondary { color: var(--text-muted) !important; }
-.text-dark { color: var(--text) !important; }
-.text-body { color: var(--text) !important; }
 .text-navy { color: hsl(220 70% 30%) !important; }
 
 [data-bs-theme="dark"] .text-navy,
