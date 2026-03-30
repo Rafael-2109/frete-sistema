@@ -562,6 +562,7 @@ function wizConcluir() {
         destino: {
             cnpj: document.getElementById('wizDestCnpj').value,
             razao_social: document.getElementById('wizDestRazao').value,
+            provisorio: document.getElementById('wizDestProvisorio').checked,
             receita: _setupData.receita_destinatario || {},
             fisico: {
                 logradouro: document.getElementById('wizDestLogradouro').value,

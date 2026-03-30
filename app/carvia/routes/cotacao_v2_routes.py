@@ -226,21 +226,36 @@ def register_cotacao_v2_routes(bp):
             endereco_origem_id = None
             endereco_destino_id = None
             if cliente_id:
-                # Buscar origem (emitente)
+                # Buscar origem: primeiro global (cliente_id=NULL), depois do cliente
                 if cnpj_emit_limpo:
-                    orig = CarviaClienteEndereco.query.filter_by(
-                        cliente_id=cliente_id, cnpj=cnpj_emit_limpo, tipo='ORIGEM'
+                    orig = CarviaClienteEndereco.query.filter(
+                        CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
+                        CarviaClienteEndereco.tipo == 'ORIGEM',
+                        db.or_(
+                            CarviaClienteEndereco.cliente_id.is_(None),
+                            CarviaClienteEndereco.cliente_id == cliente_id,
+                        ),
                     ).first()
                     if orig:
                         endereco_origem_id = orig.id
 
-                # Buscar destino (destinatario)
+                # Buscar destino (destinatario — sempre do cliente)
                 if cnpj_dest_limpo:
                     dest = CarviaClienteEndereco.query.filter_by(
                         cliente_id=cliente_id, cnpj=cnpj_dest_limpo, tipo='DESTINO'
                     ).first()
                     if dest:
                         endereco_destino_id = dest.id
+
+            # Buscar origem global mesmo se cliente nao foi encontrado
+            if not endereco_origem_id and cnpj_emit_limpo:
+                orig_global = CarviaClienteEndereco.query.filter(
+                    CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
+                    CarviaClienteEndereco.tipo == 'ORIGEM',
+                    CarviaClienteEndereco.cliente_id.is_(None),
+                ).first()
+                if orig_global:
+                    endereco_origem_id = orig_global.id
 
             # 4. Detectar tipo material (MOTO se NCM comeca com 8711)
             itens = dados.get('itens', [])
@@ -600,41 +615,73 @@ def register_cotacao_v2_routes(bp):
             return jsonify({'erro': 'Nome comercial obrigatorio.'}), 400
 
         try:
-            # 1. Criar cliente
-            cliente, erro = CarviaClienteService.criar_cliente(
-                nome_comercial=nome,
-                criado_por=current_user.email,
-            )
-            if erro:
-                return jsonify({'erro': erro}), 400
+            # Guard: verificar se cliente ja existe pelo CNPJ do emitente
+            cliente_existente = None
+            orig_data = data.get('origem', {})
+            cnpj_orig = orig_data.get('cnpj', '')
+            if cnpj_orig:
+                import re as _re
+                cnpj_limpo = _re.sub(r'\D', '', cnpj_orig)
+                enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_limpo)
+                for end in enderecos_existentes:
+                    if end.cliente_id:
+                        from app.carvia.models import CarviaCliente
+                        cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
+                        break
+
+            if cliente_existente:
+                # Ajuste 1: retornar cliente existente sem criar novo ou sobrescrever nome
+                cliente = cliente_existente
+                logger.info(
+                    "api_criar_cliente_rapido: cliente ja existe (id=%s, nome=%s), nao criando novo.",
+                    cliente.id, cliente.nome_comercial,
+                )
+            else:
+                # 1. Criar cliente
+                cliente, erro = CarviaClienteService.criar_cliente(
+                    nome_comercial=nome,
+                    criado_por=current_user.email,
+                )
+                if erro:
+                    return jsonify({'erro': erro}), 400
 
             resultado = {
                 'cliente_id': cliente.id,
                 'nome_comercial': cliente.nome_comercial,
             }
 
-            # 2. Criar endereco ORIGEM
-            orig_data = data.get('origem', {})
+            # 2. Criar/reutilizar endereco ORIGEM (global — compartilhado)
             if orig_data.get('cnpj'):
                 fisico = orig_data.get('fisico', {})
-                endereco, erro_end = CarviaClienteService.adicionar_endereco(
-                    cliente_id=cliente.id,
+                # Origens sao globais (Ajuste 2)
+                endereco, erro_end = CarviaClienteService.adicionar_origem_global(
                     cnpj=orig_data['cnpj'],
-                    tipo='ORIGEM',
                     criado_por=current_user.email,
                     razao_social=orig_data.get('razao_social'),
                     dados_receita=orig_data.get('receita', {}),
                     dados_fisico=fisico if fisico else None,
-                    principal=True,
                 )
                 if endereco:
                     resultado['endereco_origem_id'] = endereco.id
                 elif erro_end:
-                    logger.warning("Erro endereco origem: %s", erro_end)
+                    logger.warning("Erro endereco origem global: %s", erro_end)
 
-            # 3. Criar endereco DESTINO
+            # 3. Criar endereco DESTINO (por cliente)
             dest_data = data.get('destino', {})
-            if dest_data.get('cnpj'):
+            if dest_data.get('provisorio'):
+                # Ajuste 5: destino provisorio sem CNPJ
+                fisico = dest_data.get('fisico', {})
+                endereco, erro_end = CarviaClienteService.adicionar_destino_provisorio(
+                    cliente_id=cliente.id,
+                    criado_por=current_user.email,
+                    razao_social=dest_data.get('razao_social'),
+                    dados_fisico=fisico if fisico else None,
+                )
+                if endereco:
+                    resultado['endereco_destino_id'] = endereco.id
+                elif erro_end:
+                    logger.warning("Erro endereco destino provisorio: %s", erro_end)
+            elif dest_data.get('cnpj'):
                 fisico = dest_data.get('fisico', {})
                 endereco, erro_end = CarviaClienteService.adicionar_endereco(
                     cliente_id=cliente.id,

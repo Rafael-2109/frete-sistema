@@ -1067,12 +1067,20 @@ class CarteiraService:
                 'created_by', 'updated_by'
             ]
             
+            # Campos boolean-like onde "sim"/"não" é valor válido
+            # Demais campos: False do Odoo XML-RPC = campo vazio, converter para ''
+            campos_boolean_like = {'cliente_nec_agendamento'}
+
             # Converter campos de texto
             for campo in campos_texto:
                 if campo in item_sanitizado:
                     valor = item_sanitizado[campo]
                     if isinstance(valor, bool):
-                        item_sanitizado[campo] = 'sim' if valor else 'não'
+                        if campo in campos_boolean_like:
+                            item_sanitizado[campo] = 'sim' if valor else 'não'
+                        else:
+                            # Odoo retorna False para campos vazios via XML-RPC
+                            item_sanitizado[campo] = ''
                     elif valor is None:
                         item_sanitizado[campo] = ''
                     else:
