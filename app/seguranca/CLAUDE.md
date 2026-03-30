@@ -1,6 +1,6 @@
 # Seguranca — Guia de Desenvolvimento
 
-**14 arquivos** | **~2K LOC** | **8 templates** | **Atualizado**: 08/03/2026
+**14 arquivos** | **~2K LOC** | **8 templates** | **Atualizado**: 30/03/2026
 
 Monitoramento de vulnerabilidades de colaboradores: email breaches (HIBP),
 forca de senhas (zxcvbn + HIBP k-anonymity), seguranca DNS (SPF/DMARC/MX),

@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~24.8K | **Arquivos**: 46 | **Atualizado**: 28/03/2026
+**LOC**: ~25.6K | **Arquivos**: 46 | **Atualizado**: 30/03/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -251,7 +251,7 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (12 arquivos, 5.8K LOC)
+### Services (12 arquivos, 7.1K LOC)
 Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
 Todos controlados por feature flags em `config/feature_flags.py`.
 

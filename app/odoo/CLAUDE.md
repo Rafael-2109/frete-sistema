@@ -1,6 +1,6 @@
 # Odoo — Guia de Desenvolvimento
 
-**42 arquivos** | **~18.1K LOC** | **Atualizado**: 28/03/2026
+**42 arquivos** | **~18.3K LOC** | **Atualizado**: 30/03/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
@@ -29,7 +29,8 @@ app/odoo/
   │   ├── alocacao_compras_service.py      # Sync purchase.request.allocation (~23K)
   │   ├── sincronizacao_integrada_service.py # Orquestra sync completa (fat→cart) (~19K)
   │   └── pedido_sync_service.py           # Sync individual de pedido (~19K)
-  ├── utils/                   # 10 utils
+  ├── utils/                   # 11 utils
+  │   ├── cached_lookups.py        # Cache de lookups frequentes (metodos entrega, etc.) (~267 LOC)
   │   ├── carteira_mapper.py       # Mapeia sale.order → dict CarteiraPrincipal (~21K)
   │   ├── connection.py            # OdooConnection XML-RPC + timeout adaptativo (~16K)
   │   ├── cte_xml_parser.py        # Parser XML de CTe (~21K)

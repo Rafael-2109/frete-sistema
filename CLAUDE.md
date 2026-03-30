@@ -1,6 +1,6 @@
 # Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 28/03/2026
+**Ultima Atualizacao**: 30/03/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
@@ -119,6 +119,7 @@ Gotchas rapidos:
 | Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/README.md` |
 | Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |
 | Producao | `app/producao/routes.py`, `app/producao/models.py` |
+| Pedidos | `app/pedidos/routes/`, `app/pedidos/services/`, `app/pedidos/workers/` |
 | **OBSOLETO** | `app/carteira/main_routes.py` — NAO usar |
 
 > Para lista completa de modulos e rotas: `.claude/references/INDEX.md`

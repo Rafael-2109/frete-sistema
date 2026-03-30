@@ -1,6 +1,6 @@
 # Financeiro — Guia de Desenvolvimento
 
-**76 arquivos** | **~43.8K LOC** | **Atualizado**: 28/03/2026
+**70 arquivos** | **~43.8K LOC** | **Atualizado**: 30/03/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 
@@ -14,7 +14,7 @@ Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprova
 ```
 app/financeiro/
   ├── routes/       # 18 blueprints (financeiro_bp + cnab400_bp)
-  ├── services/     # 26 services (matching, conciliacao, sync, parsers)
+  ├── services/     # 27 services (matching, conciliacao, sync, parsers)
   ├── workers/      # 8 RQ jobs (batch processing via Redis)
   ├── parsers/      # 4 parsers (PIX Sicoob, dispatcher)
   ├── models.py     # 40+ models (117K LOC — MAIOR arquivo do projeto)

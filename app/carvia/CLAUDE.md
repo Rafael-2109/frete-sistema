@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**50 arquivos** | **~32.5K LOC** | **76 templates** | **Atualizado**: 28/03/2026
+**52 arquivos** | **~33.3K LOC** | **77 templates** | **Atualizado**: 30/03/2026
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
@@ -64,13 +64,14 @@ CarviaCustoEntrega (Custo de Entrega)
 
 ```
 app/carvia/
-  ├── routes/          # 21 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
-  │                    #   despesa, fluxo_caixa, sessao_cotacao, conciliacao, config, cte_complementar,
-  │                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, exportacao, tabela_carvia, receita)
-  ├── services/        # 24 services (parsers, matching, importacao, cotacao, cotacao_v2, conferencia,
+  ├── routes/          # 22 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
+  │                    #   despesa, fluxo_caixa, conciliacao, config, cte_complementar,
+  │                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, exportacao, tabela_carvia, receita, frete, gerencial)
+  ├── services/        # 26 services (parsers, matching, importacao, cotacao, cotacao_v2, conferencia,
   │                    #   fatura_pdf_parser, linking, fluxo_caixa, carvia_conciliacao, dacte_pdf_parser,
   │                    #   admin, carvia_frete, embarque_carvia, cliente, config, margem, carvia_tabela,
-  │                    #   carvia_csv_razao, carvia_ofx, dacte_generator, moto_recognition)
+  │                    #   carvia_csv_razao, carvia_ofx, dacte_generator, moto_recognition, gerencial,
+  │                    #   nfe_xml_parser, danfe_pdf_parser)
   ├── models.py        # 36 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
   │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao,
   │                    #   CteComplementar, CustoEntrega, CustoEntregaAnexo,
